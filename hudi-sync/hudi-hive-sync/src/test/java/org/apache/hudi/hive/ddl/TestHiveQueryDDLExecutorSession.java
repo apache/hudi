@@ -28,11 +28,14 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
+import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.MockedStatic;
 
@@ -158,7 +161,7 @@ class TestHiveQueryDDLExecutorSession {
     when(driver.run(anyString())).thenAnswer(invocation -> {
       sessionsSeenByDriver.add(SessionState.get());
       loadersSeenByDriver.add(Thread.currentThread().getContextClassLoader());
-      return null;
+      return new CommandProcessorResponse(0);
     });
     HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
     SessionState.detachSession();
@@ -175,6 +178,39 @@ class TestHiveQueryDDLExecutorSession {
         "detachSession() leaves the session's class loader on the thread, so the operation must take it off");
   }
 
+  @Test
+  void detachesCachedClientOnceBeforeRunningStatements() throws Exception {
+    Driver driver = mock(Driver.class);
+    HiveQueryDDLExecutor executor = executorWith(driver, mock(SessionState.class));
+    setField(executor, "threadCachingClient", Option.of(Thread.currentThread()));
+
+    try (MockedStatic<Hive> hive = mockStatic(Hive.class)) {
+      when(driver.run(anyString())).thenAnswer(invocation -> {
+        hive.verify(() -> Hive.set(null), times(1));
+        return new CommandProcessorResponse(0);
+      });
+      hive.verifyNoInteractions();
+      executor.runSQL("SHOW TABLES");
+      executor.runSQL("SHOW DATABASES");
+      hive.verify(() -> Hive.set(null), times(1));
+      hive.verifyNoMoreInteractions();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void leavesCacheAloneWhenClientIsNotCachedOnCallingThread(boolean cachedOnAnotherThread) throws Exception {
+    Driver driver = mock(Driver.class);
+    when(driver.run(anyString())).thenReturn(new CommandProcessorResponse(0));
+    HiveQueryDDLExecutor executor = executorWith(driver, mock(SessionState.class));
+    setField(executor, "threadCachingClient", cachedOnAnotherThread ? Option.of(new Thread()) : Option.empty());
+
+    try (MockedStatic<Hive> hive = mockStatic(Hive.class)) {
+      executor.runSQL("SHOW TABLES");
+      hive.verifyNoInteractions();
+    }
+  }
+
   /**
    * The thread belongs to the caller, which may be another executor or an application that embeds
    * the sync and holds a session of its own. Leaving this executor's session behind would silently
@@ -186,6 +222,7 @@ class TestHiveQueryDDLExecutorSession {
     when(otherSession.getConf()).thenReturn(new HiveConf());
     SessionState sessionState = mock(SessionState.class);
     Driver driver = mock(Driver.class);
+    when(driver.run(anyString())).thenReturn(new CommandProcessorResponse(0));
     HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
     SessionState.setCurrentSessionState(otherSession);
     ClassLoader callerLoader = Thread.currentThread().getContextClassLoader();
@@ -196,6 +233,37 @@ class TestHiveQueryDDLExecutorSession {
     assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
         "The class loader held before the statements must be put back");
     verify(driver, times(1)).run("SHOW TABLES");
+  }
+
+  /**
+   * Driver.run() reports a statement Hive rejects through its response rather than by throwing.
+   * The sync has to stop there: the statements after it assume it was applied, and a sync that
+   * carries on records the commit as synced to a table that never received it.
+   */
+  @Test
+  void statementHiveRejectsFailsTheSyncAndHandsTheThreadBack() throws Exception {
+    SessionState otherSession = mock(SessionState.class);
+    when(otherSession.getConf()).thenReturn(new HiveConf());
+    SessionState sessionState = mock(SessionState.class);
+    Driver driver = mock(Driver.class);
+    String rejected = "ALTER TABLE `tbl` ADD IF NOT EXISTS PARTITION (`datestr`='2026-09-13')";
+    when(driver.run(rejected)).thenReturn(new CommandProcessorResponse(10,
+        "FAILED: ValidationFailureSemanticException Partition spec {datestr=2026-09-13} contains non-partition columns",
+        "42000"));
+    HiveQueryDDLExecutor executor = executorWith(driver, sessionState);
+    SessionState.setCurrentSessionState(otherSession);
+    ClassLoader callerLoader = Thread.currentThread().getContextClassLoader();
+
+    HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
+        () -> executor.runSQLs(Arrays.asList(rejected, "ALTER TABLE `tbl` SET TBLPROPERTIES ('k'='v')")));
+
+    String message = ex.getCause().getMessage();
+    assertTrue(message.contains("contains non-partition columns"), message);
+    assertTrue(message.contains(rejected), "The error must name the statement; was " + message);
+    verify(driver, times(1)).run(anyString());
+    assertSame(otherSession, SessionState.get(), "The session held before the statements must be put back");
+    assertSame(callerLoader, Thread.currentThread().getContextClassLoader(),
+        "The class loader held before the statements must be put back");
   }
 
   /**
@@ -420,6 +488,7 @@ class TestHiveQueryDDLExecutorSession {
     setField(executor, "driverPool", Option.empty());
     setField(executor, "metaStoreClientPool", Option.empty());
     setField(executor, "metaStoreClient", null);
+    setField(executor, "threadCachingClient", Option.empty());
     setField(executor, "hiveDriver", driver);
     setField(executor, "sessionState", sessionState);
     return executor;

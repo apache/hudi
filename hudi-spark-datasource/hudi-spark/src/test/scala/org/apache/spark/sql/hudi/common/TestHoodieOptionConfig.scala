@@ -30,6 +30,55 @@ import org.scalatest.Matchers.intercept
 class TestHoodieOptionConfig extends SparkClientFunctionalTestHarness {
 
   @Test
+  def testMakeOptionsCaseInsensitive(): Unit = {
+    val options = Map(
+      "PRIMARYKEY" -> "Id",
+      "OrderingFields" -> "EventTime",
+      "PRECOMBINEFIELD" -> "LegacyTime",
+      "TYPE" -> "mor",
+      "PayloadClass" -> "org.example.CustomPayload",
+      "RECORDMERGESTRATEGYID" -> "custom-strategy",
+      "recordmergemode" -> "CUSTOM"
+    )
+    val expected = Map(
+      "primaryKey" -> "Id",
+      "orderingFields" -> "EventTime",
+      "preCombineField" -> "LegacyTime",
+      "type" -> "mor",
+      "payloadClass" -> "org.example.CustomPayload",
+      "recordMergeStrategyId" -> "custom-strategy",
+      "recordMergeMode" -> "CUSTOM"
+    )
+
+    assertEquals(expected, HoodieOptionConfig.makeOptionsCaseInsensitive(options))
+    assertEquals(expected, HoodieOptionConfig.makeOptionsCaseInsensitive(expected))
+  }
+
+  @Test
+  def testMakeOptionsCaseInsensitivePreservesSubstringKeys(): Unit = {
+    val customOptions = Map(
+      "key" -> "business_tag",
+      "field" -> "custom_field",
+      "mode" -> "custom_mode",
+      "hoodie.datasource.write.recordkey.field" -> "id",
+      "CustomProperty" -> "CustomValue"
+    )
+    val options = customOptions ++ Map(
+      "PRIMARYKEY" -> "id",
+      "ORDERINGFIELDS" -> "ts",
+      "RECORDMERGEMODE" -> "EVENT_TIME_ORDERING"
+    )
+    val expected = customOptions ++ Map(
+      "primaryKey" -> "id",
+      "orderingFields" -> "ts",
+      "recordMergeMode" -> "EVENT_TIME_ORDERING"
+    )
+
+    assertEquals(customOptions, HoodieOptionConfig.makeOptionsCaseInsensitive(customOptions))
+    assertEquals(expected, HoodieOptionConfig.makeOptionsCaseInsensitive(options))
+  }
+
+  @Test
   def testWithDefaultSqlOptions(): Unit = {
     val ops1 = Map("primaryKey" -> "id")
     val with1 = HoodieOptionConfig.withDefaultSqlOptions(ops1)

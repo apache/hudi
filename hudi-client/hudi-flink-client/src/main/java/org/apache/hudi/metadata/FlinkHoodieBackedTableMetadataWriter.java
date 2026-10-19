@@ -142,7 +142,8 @@ public class FlinkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
     // this method will be invoked during compaction of data table, here table services for mdt is
     // not performed if streaming writes mdt is enabled, since the compaction/clean will be performed
     // asynchronously in the dedicated compaction pipeline.
-    if (!dataWriteConfig.getMetadataConfig().isStreamingWriteEnabled()) {
+    if (!dataWriteConfig.getMetadataConfig().isStreamingWriteEnabled()
+        && dataWriteConfig.getMetadataConfig().isInlineTableServicesEnabled()) {
       performTableServices(Option.ofNullable(instantTime), false);
     }
     metadataMetaClient.reloadActiveTimeline();

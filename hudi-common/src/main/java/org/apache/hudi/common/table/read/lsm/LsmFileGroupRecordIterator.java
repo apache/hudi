@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
@@ -83,7 +84,7 @@ import static org.apache.hudi.io.util.FileIOUtils.getDefaultSpillableMapBasePath
 public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedRecord<T>> {
 
   private final HoodieReaderContext<T> readerContext;
-  private final HoodieTableMetaClient metaClient;
+  private final TableState tableState;
   private final HoodieStorage storage;
   private final InputSplit inputSplit;
   private final HoodieSchema readerSchema;
@@ -104,12 +105,29 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
                                     HoodieStorage storage,
                                     InputSplit inputSplit,
                                     List<String> orderingFieldNames,
+                                    TableState tableState,
+                                    TypedProperties props,
+                                    ReaderParameters readerParameters,
+                                    HoodieReadStats readStats,
+                                    Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) throws IOException {
+    this(readerContext, storage, inputSplit, orderingFieldNames, tableState, props, readerParameters, readStats, fileGroupUpdateCallback, true);
+  }
+
+  /**
+   * @deprecated use the constructor that takes a {@link TableState}.
+   */
+  @Deprecated
+  public LsmFileGroupRecordIterator(HoodieReaderContext<T> readerContext,
+                                    HoodieStorage storage,
+                                    InputSplit inputSplit,
+                                    List<String> orderingFieldNames,
                                     HoodieTableMetaClient metaClient,
                                     TypedProperties props,
                                     ReaderParameters readerParameters,
                                     HoodieReadStats readStats,
                                     Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback) throws IOException {
-    this(readerContext, storage, inputSplit, orderingFieldNames, metaClient, props, readerParameters, readStats, fileGroupUpdateCallback, true);
+    this(readerContext, storage, inputSplit, orderingFieldNames, TableState.fromMetaClient(metaClient), props,
+        readerParameters, readStats, fileGroupUpdateCallback, true);
   }
 
   /**
@@ -122,14 +140,14 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
                                     HoodieStorage storage,
                                     InputSplit inputSplit,
                                     List<String> orderingFieldNames,
-                                    HoodieTableMetaClient metaClient,
+                                    TableState tableState,
                                     TypedProperties props,
                                     ReaderParameters readerParameters,
                                     HoodieReadStats readStats,
                                     Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback,
                                     boolean includeBaseFile) throws IOException {
     this.readerContext = readerContext;
-    this.metaClient = metaClient;
+    this.tableState = tableState;
     this.storage = storage;
     this.inputSplit = inputSplit;
     this.readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
@@ -140,9 +158,27 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
     this.spillBasePath = props.getString(SPILLABLE_MAP_BASE_PATH.key(), getDefaultSpillableMapBasePath());
     this.bufferedRecordMerger = BufferedRecordMergerFactory.create(
         readerContext, readerContext.getMergeMode(), false, readerContext.getRecordMerger(),
-        readerSchema, readerContext.getPayloadClasses(props), props, metaClient.getTableConfig().getPartialUpdateMode());
+        readerSchema, readerContext.getPayloadClasses(props), props, tableState.getTableConfig().getPartialUpdateMode());
     this.updateProcessor = UpdateProcessor.create(readStats, readerContext, readerParameters.isEmitDeletes(), fileGroupUpdateCallback, props);
     this.readers = new LoserTree<>(initializeReaders());
+  }
+
+  /**
+   * @deprecated use the constructor that takes a {@link TableState}.
+   */
+  @Deprecated
+  public LsmFileGroupRecordIterator(HoodieReaderContext<T> readerContext,
+                                    HoodieStorage storage,
+                                    InputSplit inputSplit,
+                                    List<String> orderingFieldNames,
+                                    HoodieTableMetaClient metaClient,
+                                    TypedProperties props,
+                                    ReaderParameters readerParameters,
+                                    HoodieReadStats readStats,
+                                    Option<BaseFileUpdateCallback<T>> fileGroupUpdateCallback,
+                                    boolean includeBaseFile) throws IOException {
+    this(readerContext, storage, inputSplit, orderingFieldNames, TableState.fromMetaClient(metaClient), props,
+        readerParameters, readStats, fileGroupUpdateCallback, includeBaseFile);
   }
 
   /**
@@ -175,7 +211,7 @@ public class LsmFileGroupRecordIterator<T> implements ClosableIterator<BufferedR
       Set<Integer> directLogMergeOrders = selectDirectLogMergeOrders(logReaderSpecs, readBaseFile);
       for (LogReaderSpec spec : logReaderSpecs) {
         ClosableIterator<BufferedRecord<T>> iterator = LsmFileIterators.createLogFileIterator(
-            readerContext, metaClient, storage, spec.logFile, orderingFieldNames);
+            readerContext, storage, spec.logFile, orderingFieldNames);
         addReader(sortedRunReaders, spec.mergeOrder, maybeSpillIterator(directLogMergeOrders.contains(spec.mergeOrder), iterator));
       }
     } catch (Throwable e) {

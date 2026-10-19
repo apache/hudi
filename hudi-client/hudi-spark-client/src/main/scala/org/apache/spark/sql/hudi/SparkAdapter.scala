@@ -528,14 +528,16 @@ trait SparkAdapter extends Serializable {
   }
 
   /**
-   * Fails the read when `requiredSchema` carries a variant projection struct this Spark version
-   * cannot evaluate. Spark 4.0 rewrites a variant column exactly as 4.1 does once the conf is on,
-   * but its readers do not evaluate the projection and Hudi does not align log records to it, so
-   * a read there would fall through to the schema-change path instead of failing. The Spark 4.0
-   * adapter overrides this to throw; every other version reads the shape (4.1+) or never sees it
-   * (3.x). See https://github.com/apache/hudi/issues/20032.
+   * Fails the read when `schema`, the data schema of a scan, carries a variant projection struct
+   * this Spark version cannot evaluate. Spark 4.0 rewrites a variant column exactly as 4.1 does
+   * once the conf is on, but its readers do not evaluate the projection and Hudi does not align
+   * log records to it, so a read there would fall through to the schema-change path instead of
+   * failing. The data schema rather than the required one: the rule rewrites every variant column
+   * of the relation, requested or not. The Spark 4.0 adapter overrides this to throw; every other
+   * version reads the shape (4.1+) or never sees it (3.x). See
+   * https://github.com/apache/hudi/issues/20032.
    */
-  def validateVariantProjectionReadable(requiredSchema: StructType): Unit = ()
+  def validateVariantProjectionReadable(schema: StructType): Unit = ()
 
   /**
    * If `sparkRequiredSchema` contains any Spark 4.1 variant projection struct (i.e., the

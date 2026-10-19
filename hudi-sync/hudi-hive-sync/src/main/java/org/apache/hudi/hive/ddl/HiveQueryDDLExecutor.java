@@ -26,6 +26,7 @@ import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.util.HiveDriverPool;
 import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
 import org.apache.hudi.hive.util.HivePartitionUtil;
+import org.apache.hudi.hive.util.HiveStatementExecutor;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.conf.HiveConf;
@@ -34,7 +35,6 @@ import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
 import org.apache.hadoop.hive.ql.metadata.Hive;
-import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.apache.hadoop.hive.ql.session.SessionState;
 import org.apache.hadoop.security.UserGroupInformation;
 
@@ -65,18 +65,22 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
   // Owned by HoodieHiveSyncClient; close() is delegated through there. See
   // HiveMetaStoreClientPool javadoc for the usage contract (partition-row ops only).
   private final Option<HiveMetaStoreClientPool> metaStoreClientPool;
+  // Present while the sync client's metastore client is cached on this thread.
+  private volatile Option<Thread> threadCachingClient;
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient) {
-    this(config, metaStoreClient, Option.empty(), Option.empty());
+    this(config, metaStoreClient, Option.empty(), Option.empty(), Option.empty());
   }
 
   public HiveQueryDDLExecutor(HiveSyncConfig config, IMetaStoreClient metaStoreClient,
                               Option<HiveDriverPool> driverPool,
-                              Option<HiveMetaStoreClientPool> metaStoreClientPool) {
+                              Option<HiveMetaStoreClientPool> metaStoreClientPool,
+                              Option<Thread> threadCachingClient) {
     super(config);
     this.metaStoreClient = metaStoreClient;
     this.driverPool = driverPool;
     this.metaStoreClientPool = metaStoreClientPool;
+    this.threadCachingClient = threadCachingClient;
     // SessionState.start() binds the session it starts to this thread, displacing the caller's.
     // Statements and the teardown bind ours themselves, so the thread is handed back once the
     // Driver is built -- its constructor is what reads SessionState.get().
@@ -100,15 +104,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       } catch (Exception teardownException) {
         log.error("Error while closing Hive Driver and SessionState", teardownException);
       }
-      // driverPool (if present) was already constructed by the caller before this
-      // ctor ran; since we're about to throw, no one else will call close() on it.
-      driverPool.ifPresent(pool -> {
-        try {
-          pool.close();
-        } catch (Exception poolCloseException) {
-          log.error("Error while closing HiveDriverPool", poolCloseException);
-        }
-      });
+      // The caller closes the supplied pools if construction fails.
       throw new HoodieHiveSyncException("Failed to create HiveQueryDDL object", e);
     } finally {
       restoreThread(previousSession, previousLoader);
@@ -181,17 +177,21 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
    * bound for the duration, and the thread handed back as found: it may belong to another executor
    * or to an application that embeds this sync and holds a session of its own.
    */
-  private List<CommandProcessorResponse> updateHiveSQLs(List<String> sqls) {
-    List<CommandProcessorResponse> responses = new ArrayList<>();
+  private void updateHiveSQLs(List<String> sqls) {
     HoodieTimer timer = HoodieTimer.start();
+    // Authorization can replace Hive's cached instance and close its client. Detach without
+    // closing, only on the owning thread and only once. A sync with no statements stays cached
+    // so session teardown can reuse its connection.
+    if (threadCachingClient.map(thread -> thread == Thread.currentThread()).orElse(false)) {
+      Hive.set(null);
+      threadCachingClient = Option.empty();
+    }
     SessionState previousSession = SessionState.get();
     ClassLoader previousLoader = Thread.currentThread().getContextClassLoader();
     try {
       SessionState.setCurrentSessionState(sessionState);
       for (String sql : sqls) {
-        if (hiveDriver != null) {
-          responses.add(hiveDriver.run(sql));
-        }
+        HiveStatementExecutor.executeOrThrow(hiveDriver, sql);
       }
     } catch (Exception e) {
       throw new HoodieHiveSyncException("Failed in executing SQL", e);
@@ -199,7 +199,6 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       restoreThread(previousSession, previousLoader);
     }
     log.info("Executed {} SQL statements sequentially in {} ms", sqls.size(), timer.endTimer());
-    return responses;
   }
 
   //TODO Duplicating it here from HMSDLExecutor as HiveQueryQL has no way of doing it on its own currently. Need to refactor it
@@ -319,6 +318,7 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
 
   @Override
   public void close() {
+    threadCachingClient = Option.empty();
     // Close the pool first so the worker threads stop dispatching against their
     // Drivers before we tear down anything else. The pool's close() runs
     // Driver/SessionState cleanup on each worker's own thread.
@@ -377,6 +377,10 @@ public class HiveQueryDDLExecutor extends QueryBasedDDLExecutor {
       if (previousSession != sessionState) {
         restoreThread(previousSession, previousLoader);
       }
+      // HiveSyncTool closes after a sync and again when its caller does, and closing the session a
+      // second time would open a metastore connection just to uncache the class loaders again
+      hiveDriver = null;
+      sessionState = null;
     }
   }
 

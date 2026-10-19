@@ -21,6 +21,8 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.io.util.FileIOUtils;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -42,6 +44,31 @@ import static org.junit.jupiter.api.Assertions.fail;
  * Tests file I/O utils.
  */
 public class TestFileIOUtils extends HoodieCommonTestHarness {
+
+  // getConfiguredLocalDirs()/getDefaultSpillableMapBasePath() consult these env vars, so every
+  // test in this class needs them cleared to avoid depending on the developer's/CI's shell.
+  private String originalContainerId;
+  private String originalLocalDirs;
+  private String originalSparkLocalDirs;
+
+  @BeforeEach
+  public void clearLocalDirEnv() {
+    Map<String, String> envMaps = mutableEnv();
+    originalContainerId = envMaps.get("CONTAINER_ID");
+    originalLocalDirs = envMaps.get("LOCAL_DIRS");
+    originalSparkLocalDirs = envMaps.get("SPARK_LOCAL_DIRS");
+    envMaps.remove("CONTAINER_ID");
+    envMaps.remove("LOCAL_DIRS");
+    envMaps.remove("SPARK_LOCAL_DIRS");
+  }
+
+  @AfterEach
+  public void restoreLocalDirEnv() {
+    Map<String, String> envMaps = mutableEnv();
+    restoreEnv(envMaps, "CONTAINER_ID", originalContainerId);
+    restoreEnv(envMaps, "LOCAL_DIRS", originalLocalDirs);
+    restoreEnv(envMaps, "SPARK_LOCAL_DIRS", originalSparkLocalDirs);
+  }
 
   @Test
   public void testMkdirAndDelete() throws IOException {
@@ -80,22 +107,58 @@ public class TestFileIOUtils extends HoodieCommonTestHarness {
   
   @Test
   public void testGetConfiguredLocalDirs() {
-    Map<String, String> env = System.getenv();
-    Class<?> clazz = env.getClass();
-    Map<String, String> envMaps = null;
-    try {
-      Field field = clazz.getDeclaredField("m");
-      field.setAccessible(true);
-      envMaps = (Map<String, String>) field.get(env);
-      envMaps.put("CONTAINER_ID", "xxxxx");
-    } catch (NoSuchFieldException | IllegalAccessException e) {
-      throw new IllegalArgumentException(e);
-    }
+    Map<String, String> envMaps = mutableEnv();
     assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
             System.getProperty("java.io.tmpdir"));
+    envMaps.put("CONTAINER_ID", "xxxxx");
     envMaps.put("LOCAL_DIRS", "/xxx");
     assertEquals(String.join("", FileIOUtils.getConfiguredLocalDirs()),
             envMaps.get("LOCAL_DIRS"));
+  }
+
+  @Test
+  public void testGetConfiguredLocalDirsPrefersSparkLocalDirs() {
+    Map<String, String> envMaps = mutableEnv();
+
+    // Not under YARN: SPARK_LOCAL_DIRS is used in preference to java.io.tmpdir.
+    envMaps.put("SPARK_LOCAL_DIRS", "/spark-dir-1");
+    assertEquals("/spark-dir-1", String.join("", FileIOUtils.getConfiguredLocalDirs()));
+
+    // Comma separated values are split, as they are for YARN.
+    envMaps.put("SPARK_LOCAL_DIRS", "/spark-dir-1,/spark-dir-2");
+    assertEquals(Arrays.asList("/spark-dir-1", "/spark-dir-2"),
+        Arrays.asList(FileIOUtils.getConfiguredLocalDirs()));
+
+    // YARN keeps precedence when both are present.
+    envMaps.put("CONTAINER_ID", "container_xxx");
+    envMaps.put("LOCAL_DIRS", "/yarn-dir");
+    assertEquals("/yarn-dir", String.join("", FileIOUtils.getConfiguredLocalDirs()));
+
+    // Neither set: unchanged fallback to java.io.tmpdir.
+    envMaps.remove("CONTAINER_ID");
+    envMaps.remove("LOCAL_DIRS");
+    envMaps.remove("SPARK_LOCAL_DIRS");
+    assertEquals(System.getProperty("java.io.tmpdir"),
+        String.join("", FileIOUtils.getConfiguredLocalDirs()));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Map<String, String> mutableEnv() {
+    try {
+      Field field = System.getenv().getClass().getDeclaredField("m");
+      field.setAccessible(true);
+      return (Map<String, String>) field.get(System.getenv());
+    } catch (NoSuchFieldException | IllegalAccessException e) {
+      throw new IllegalArgumentException(e);
+    }
+  }
+
+  private static void restoreEnv(Map<String, String> envMaps, String key, String original) {
+    if (original == null) {
+      envMaps.remove(key);
+    } else {
+      envMaps.put(key, original);
+    }
   }
 
   @Test

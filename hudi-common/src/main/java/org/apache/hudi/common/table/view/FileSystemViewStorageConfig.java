@@ -239,33 +239,33 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public long getMaxMemoryForPendingCompaction() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return new Double(totalMemory * getDouble(SPILLABLE_COMPACTION_MEM_FRACTION))
+    return Double.valueOf(totalMemory * getDouble(SPILLABLE_COMPACTION_MEM_FRACTION))
         .longValue();
   }
 
   public long getMaxMemoryForPendingLogCompaction() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return new Double(totalMemory * getDouble(SPILLABLE_LOG_COMPACTION_MEM_FRACTION))
+    return Double.valueOf(totalMemory * getDouble(SPILLABLE_LOG_COMPACTION_MEM_FRACTION))
         .longValue();
   }
 
   public long getMaxMemoryForBootstrapBaseFile() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
     long reservedForExternalDataFile =
-        new Double(totalMemory * getDouble(BOOTSTRAP_BASE_FILE_MEM_FRACTION))
+        Double.valueOf(totalMemory * getDouble(BOOTSTRAP_BASE_FILE_MEM_FRACTION))
             .longValue();
     return reservedForExternalDataFile;
   }
 
   public long getMaxMemoryForReplacedFileGroups() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return new Double(totalMemory * getDouble(SPILLABLE_REPLACED_MEM_FRACTION))
+    return Double.valueOf(totalMemory * getDouble(SPILLABLE_REPLACED_MEM_FRACTION))
         .longValue();
   }
 
   public long getMaxMemoryForPendingClusteringFileGroups() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return new Double(totalMemory * getDouble(SPILLABLE_CLUSTERING_MEM_FRACTION))
+    return Double.valueOf(totalMemory * getDouble(SPILLABLE_CLUSTERING_MEM_FRACTION))
         .longValue();
   }
 

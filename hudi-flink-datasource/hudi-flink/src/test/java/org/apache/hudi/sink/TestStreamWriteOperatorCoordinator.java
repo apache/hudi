@@ -18,18 +18,25 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
@@ -39,7 +46,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.event.Correspondent;
@@ -59,6 +68,11 @@ import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.metrics.groups.OperatorCoordinatorMetricGroup;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
@@ -82,14 +96,17 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
@@ -104,6 +121,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -142,6 +161,86 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat("Instant should be complete", lastCompleted, is(instant));
     assertNotEquals("", inflight, "Should start a new instant");
     assertNotEquals(instant, inflight, "Should start a new instant");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"upsert", "insert", "bulk_insert", "insert_overwrite", "insert_overwrite_table", "delete"})
+  void testValidationOncePerInstant(String operation) throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, operation);
+    coordinator = startCoordinator(conf, 2);
+    HoodieFlinkWriteClient writeClient = Mockito.spy(coordinator.getWriteClient());
+    Field writeClientField = StreamWriteOperatorCoordinator.class.getDeclaredField("writeClient");
+    writeClientField.setAccessible(true);
+    writeClientField.set(coordinator, writeClient);
+
+    String firstInstant = requestInstantTime(1);
+    assertEquals(firstInstant, requestInstantTime(1));
+    Mockito.verify(writeClient, Mockito.times(1)).preTxn(Mockito.eq(WriteOperationType.fromValue(operation)), Mockito.any());
+    Mockito.verify(writeClient, Mockito.times(1)).validateAgainstTableProperties(Mockito.any(), Mockito.any(), Mockito.eq(WriteOperationType.fromValue(operation)));
+
+    // Complete the first checkpoint so the next request can create a new instant.
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1, firstInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1, firstInstant, "par2", false, true, 0.2));
+    coordinator.notifyCheckpointComplete(2);
+    assertNull(coordinator.getEventBuffer(1));
+    String nextInstant = requestInstantTime(2);
+    assertNotEquals(firstInstant, nextInstant);
+    Mockito.verify(writeClient, Mockito.times(2)).preTxn(Mockito.eq(WriteOperationType.fromValue(operation)), Mockito.any());
+    Mockito.verify(writeClient, Mockito.times(2)).validateAgainstTableProperties(Mockito.any(), Mockito.any(), Mockito.eq(WriteOperationType.fromValue(operation)));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"upsert", "insert", "bulk_insert", "insert_overwrite", "insert_overwrite_table", "delete"})
+  void testColumnDropFailsBeforeInstantIsPublished(String operation) throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, operation);
+    coordinator = startCoordinator(conf, 2);
+    HoodieWriteConfig writeConfig = coordinator.getWriteClient().getConfig();
+    assertFalse(writeConfig.shouldValidateAvroSchema());
+    assertFalse(writeConfig.shouldAllowAutoEvolutionColumnDrop());
+
+    // Complete an instant using the original schema, then drop a column for the next instant.
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, writeConfig.getSchema());
+    HoodieTestTable.of(StreamerUtil.createMetaClient(conf)).addCommit("001", Option.of(metadata));
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+        getClass().getClassLoader().getResource("test_read_schema_dropped_age.avsc").toString());
+    writeConfig.setSchema(StreamerUtil.getSourceSchema(conf).toString());
+
+    assertInstantCreationFails(conf, MissingSchemaFieldException.class, "age");
+  }
+
+  @Test
+  void testTablePropertyChangesAreValidatedBeforeInstantIsPublished() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    Properties updatedProperties = new Properties();
+    updatedProperties.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
+    updatedProperties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProperties);
+
+    assertInstantCreationFails(conf, HoodieException.class, HoodieTableConfig.META_FIELDS_MODE.key());
+  }
+
+  private void assertInstantCreationFails(Configuration conf, Class<? extends Throwable> causeType, String message) throws Exception {
+    Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(1))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(response.getInstant());
+    assertNull(coordinator.getEventBuffer(1));
+    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
+    assertTrue(context.isJobFailed());
+    Throwable cause = context.getJobFailureReason();
+    while (cause != null && !(causeType.isInstance(cause) && cause.getMessage() != null && cause.getMessage().contains(message))) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause, "Expected " + causeType.getSimpleName() + " containing: " + message);
+    HoodieTimeline pending = StreamerUtil.createMetaClient(conf).reloadActiveTimeline().filterPendingExcludingCompaction();
+    assertTrue(pending.empty(), "Validation must fail before a new instant is created");
   }
 
   @Test
@@ -443,6 +542,90 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @ParameterizedTest
+  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
+  void testLateBootstrapAfterNormalCommit(String tableType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, tableType);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1_000L);
+    coordinator.close();
+    reset();
+    coordinator = startCoordinator(conf, 2);
+    String instant = requestInstantTime(41);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 41, instant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 41, instant, "par2", false, true, 0.1));
+
+    // The restored writer observes a pending instant, but its event is handled after the normal commit.
+    WriteMetadataEvent delayed = createBootstrapEvent(0, 41, instant, "par1");
+    coordinator.notifyCheckpointComplete(42);
+    assertEquals(instant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(41));
+    coordinator.handleEventFromOperator(0, delayed);
+    assertNull(coordinator.getEventBuffer(41), "A late bootstrap must not recreate a normally committed buffer");
+
+    // COW instant creation must not block on a buffer recreated by the late event.
+    String nextInstant = requestInstantTime(42);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 42, nextInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 42, nextInstant, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(43);
+    assertEquals(nextInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(((MockOperatorCoordinatorContext) coordinator.getContext()).getJobFailureReason());
+  }
+
+  @Test
+  void testDuplicateBootstrapEvents() {
+    String instant = requestInstantTime(-1);
+    WriteMetadataEvent partial = createOperatorEvent(0, -1, instant, "par1", false, false, 0.1);
+    partial.setLastBatch(false);
+    coordinator.handleEventFromOperator(0, partial);
+    WriteMetadataEvent first = createBootstrapEvent(0, -1, instant, "par1");
+    coordinator.handleEventFromOperator(0, first);
+    assertSame(first, coordinator.getEventBuffer(-1).getDataWriteEventBuffer()[0],
+        "Recovery must replace an incomplete ordinary event");
+    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, -1, instant, "par1"));
+    assertSame(first, coordinator.getEventBuffer(-1).getDataWriteEventBuffer()[0],
+        "A retry must preserve the existing bootstrap event");
+    assertEquals(1, coordinator.getEventBuffer(-1).collectDataWriteStatuses().size(),
+        "A retry must not accumulate write statuses");
+    assertNull(TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+
+    // The other task's first delivery was lost; its retry completes the recovered batch.
+    coordinator.handleEventFromOperator(1, createBootstrapEvent(1, -1, instant, "par2"));
+    assertEquals(instant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(-1));
+    coordinator.handleEventFromOperator(0, first);
+    assertNull(coordinator.getEventBuffer(-1), "A late retry must not recreate a committed buffer");
+
+    String nextInstant = requestInstantTime(1);
+    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, 1, nextInstant, "par1"));
+    coordinator.handleEventFromOperator(1, createBootstrapEvent(1, 1, nextInstant, "par2"));
+    assertEquals(nextInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    coordinator.handleEventFromOperator(0, first);
+    assertNull(coordinator.getEventBuffer(-1), "Older retries must remain ignored after a newer checkpoint");
+  }
+
+  @Test
+  void testBootstrapDeduplicationSeparatesDataAndIndexWriters() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_WRITE_TASKS, 2);
+    coordinator.close();
+    coordinator = startCoordinator(conf, 2);
+    String instant = requestInstantTime(-1);
+    WriteMetadataEvent dataEvent = createBootstrapEvent(0, -1, instant, "par1");
+    WriteMetadataEvent indexEvent = createOperatorEvent(0, -1, instant, "record_index", true, true, 0.1, true);
+    coordinator.handleEventFromOperator(0, dataEvent);
+    coordinator.handleEventFromOperator(0, indexEvent);
+    EventBuffers.EventBuffer buffer = coordinator.getEventBuffer(-1);
+    assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0]);
+    assertEquals(indexEvent, buffer.getIndexWriteEventBuffer()[0]);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, -1, instant, "record_index", true, true, 0.1, true));
+    assertSame(indexEvent, buffer.getIndexWriteEventBuffer()[0], "An index retry must preserve the existing bootstrap event");
+    assertEquals(1, buffer.collectIndexWriteStatuses().size(), "An index retry must not accumulate write statuses");
+    assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0], "An index retry must not replace the data writer's slot");
+    assertFalse(buffer.allBootstrapEventsReceived());
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"GLOBAL_RECORD_LEVEL_INDEX", "RECORD_LEVEL_INDEX"})
   public void testRecordLevelIndexFlag(String indexType) throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(new File(tempFile, indexType).getAbsolutePath());
@@ -514,6 +697,60 @@ public class TestStreamWriteOperatorCoordinator {
 
     // never throw for hive synchronization now
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1));
+  }
+
+  @Test
+  void testHiveSyncMetricsNotRegisteredWhenHiveSyncDisabled() throws Exception {
+    coordinator.close();
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), metricGroup);
+
+    assertTrue(metricGroup.counters.isEmpty());
+    assertTrue(metricGroup.histograms.isEmpty());
+    assertTrue(metricGroup.gauges.isEmpty());
+  }
+
+  @Test
+  void testHiveSyncFailureUpdatesMetrics() throws Exception {
+    coordinator.close();
+    Configuration conf = getUnreachableMetastoreConf();
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(conf, metricGroup);
+
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+
+    assertEquals(0, metricGroup.counters.get("hiveSyncSuccessCount").getCount());
+    assertEquals(2, metricGroup.counters.get("hiveSyncFailureCount").getCount());
+    assertEquals(2, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+  }
+
+  @Test
+  void testHiveSyncWithIgnoredClientFailureCountsAsFailure() throws Exception {
+    coordinator.close();
+    Configuration conf = getUnreachableMetastoreConf();
+    conf.set(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, true);
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(conf, metricGroup);
+
+    assertDoesNotThrow(() -> coordinator.doSyncHive());
+
+    assertEquals(0, metricGroup.counters.get("hiveSyncSuccessCount").getCount());
+    assertEquals(1, metricGroup.counters.get("hiveSyncFailureCount").getCount());
+    assertEquals(1, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+  }
+
+  private Configuration getUnreachableMetastoreConf() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.HIVE_SYNC_ENABLED, true);
+    // nothing listens on port 1, so creating the metastore client fails on its only attempt
+    conf.set(FlinkOptions.HIVE_SYNC_METASTORE_URIS, "thrift://localhost:1");
+    conf.setString(HadoopConfigurations.HADOOP_PREFIX + "hive.metastore.connect.retries", "0");
+    return conf;
   }
 
   @Test
@@ -598,6 +835,48 @@ public class TestStreamWriteOperatorCoordinator {
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("The pending compaction should be recommitted",
         completedTimeline.nthFromLastInstant(3).get(), is(compactionInstant));
+  }
+
+  @Test
+  void testSkipInlineMetadataTableServices() throws Exception {
+    coordinator.close();
+    reset();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    int metadataCompactionDeltaCommits = 5;
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
+    conf.setString(HoodieMetadataConfig.INLINE_TABLE_SERVICES_ENABLED.key(), "false");
+    coordinator = startCoordinator(conf, 1);
+
+    final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), metadataTableBasePath);
+    List<HoodieInstant> before = metadataTableMetaClient.getActiveTimeline().getInstants();
+
+    // Commits past the compaction threshold only add their own deltacommits: no clean, compaction or archival.
+    List<String> instants = new ArrayList<>();
+    for (int ckp = 0; ckp <= metadataCompactionDeltaCommits; ckp++) {
+      instants.add(mockWriteWithMetadata(ckp));
+    }
+    List<HoodieInstant> afterWrites = metadataTableMetaClient.reloadActiveTimeline().getInstants();
+    assertTrue(afterWrites.containsAll(before), "nothing should have been archived");
+    List<HoodieInstant> added = afterWrites.stream().filter(i -> !before.contains(i)).collect(Collectors.toList());
+    assertTrue(added.stream().allMatch(i -> i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)),
+        "unexpected metadata instants " + added);
+    assertEquals(instants, added.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()));
+
+    // Restarting the coordinator does not run them either.
+    coordinator.close();
+    coordinator = startCoordinator(conf, 1);
+    assertEquals(afterWrites, metadataTableMetaClient.reloadActiveTimeline().getInstants());
+
+    // The same restart with the services enabled compacts, so the checks above cannot pass vacuously.
+    coordinator.close();
+    conf.setString(HoodieMetadataConfig.INLINE_TABLE_SERVICES_ENABLED.key(), "true");
+    coordinator = startCoordinator(conf, 1);
+    assertTrue(metadataTableMetaClient.reloadActiveTimeline().getInstants().stream()
+            .anyMatch(i -> i.getAction().equals(HoodieTimeline.COMMIT_ACTION) && !afterWrites.contains(i)),
+        "a compaction was due and should have run");
   }
 
   @Test
@@ -910,6 +1189,20 @@ public class TestStreamWriteOperatorCoordinator {
     return coordinator;
   }
 
+  private static StreamWriteOperatorCoordinator startCoordinator(
+      Configuration conf, OperatorCoordinatorMetricGroup metricGroup) throws Exception {
+    MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1) {
+      @Override
+      public OperatorCoordinatorMetricGroup metricGroup() {
+        return metricGroup;
+      }
+    };
+    StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+    coordinator.start();
+    setSynchronousExecutors(coordinator);
+    return coordinator;
+  }
+
   private static void setSynchronousExecutors(StreamWriteOperatorCoordinator coordinator) throws Exception {
     MockOperatorCoordinatorContext coordinatorContext = (MockOperatorCoordinatorContext) coordinator.getContext();
     coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
@@ -919,6 +1212,34 @@ public class TestStreamWriteOperatorCoordinator {
   private static StreamWriteOperatorCoordinator createCoordinator(Configuration conf, int subTasks) {
     MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), subTasks);
     return new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+  }
+
+  /**
+   * A coordinator metric group that keeps what is registered on it.
+   */
+  private static final class CapturingCoordinatorMetricGroup extends UnregisteredMetricsGroup
+      implements OperatorCoordinatorMetricGroup {
+    private final Map<String, Counter> counters = new HashMap<>();
+    private final Map<String, Histogram> histograms = new HashMap<>();
+    private final Map<String, Gauge<?>> gauges = new HashMap<>();
+
+    @Override
+    public <C extends Counter> C counter(String name, C counter) {
+      counters.put(name, counter);
+      return counter;
+    }
+
+    @Override
+    public <H extends Histogram> H histogram(String name, H histogram) {
+      histograms.put(name, histogram);
+      return histogram;
+    }
+
+    @Override
+    public <T, G extends Gauge<T>> G gauge(String name, G gauge) {
+      gauges.put(name, gauge);
+      return gauge;
+    }
   }
 
   /**

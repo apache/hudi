@@ -22,7 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.{MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD_OPT_KEY, PRECOMBINE_FIELD_OPT_KEY, RECORDKEY_FIELD_OPT_KEY}
 import org.apache.hudi.QuickstartUtils.getQuickstartWriteConfigs
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.table.cdc.{HoodieCDCOperation, HoodieCDCSupplementalLoggingMode}
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils.schemaBySupplementalLoggingMode
@@ -33,11 +33,13 @@ import org.apache.hudi.exception.HoodieException
 
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.{Row, SaveMode}
-import org.apache.spark.sql.types.{ArrayType, IntegerType, LongType, MapType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DateType, DecimalType, IntegerType, LongType, MapType, StringType, StructField, StructType, TimestampType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
+
+import java.time.{Instant, LocalDate}
 
 import scala.collection.JavaConverters._
 
@@ -479,14 +481,17 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
    */
   @ParameterizedTest
   @CsvSource(Array(
-    "COPY_ON_WRITE,data_before_after", "MERGE_ON_READ,data_before_after",
-    "COPY_ON_WRITE,data_before", "MERGE_ON_READ,data_before",
-    "COPY_ON_WRITE,op_key_only", "MERGE_ON_READ,op_key_only"))
-  def testDataSourceWriteWithPartitionField(tableType: String, loggingMode: String): Unit = {
+    "COPY_ON_WRITE,data_before_after,TEN", "MERGE_ON_READ,data_before_after,TEN",
+    "COPY_ON_WRITE,data_before,TEN", "MERGE_ON_READ,data_before,TEN",
+    "COPY_ON_WRITE,op_key_only,TEN", "MERGE_ON_READ,op_key_only,TEN",
+    "COPY_ON_WRITE,data_before_after,SIX", "COPY_ON_WRITE,data_before,SIX", "COPY_ON_WRITE,op_key_only,SIX"))
+  def testDataSourceWriteWithPartitionField(tableType: String, loggingMode: String, tableVersion: HoodieTableVersion): Unit = {
     val options = commonOpts ++ Map(
       DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
       DataSourceWriteOptions.TABLE_TYPE.key -> tableType,
-      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.versionCode().toString,
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false"
     )
 
     var totalInsertedCnt = 0L
@@ -1019,5 +1024,85 @@ class TestCDCDataFrameSuite extends HoodieCDCTestBase {
         }
       }
     }
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array("COPY_ON_WRITE,earliest", "MERGE_ON_READ,earliest", "COPY_ON_WRITE,EARLIEST", "MERGE_ON_READ,EARLIEST"))
+  def testCDCReadFromEarliest(tableType: String, beginInstant: String): Unit = {
+    val options = commonOpts ++ Map(DataSourceWriteOptions.TABLE_TYPE.key() -> tableType)
+
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    spark.read.json(spark.sparkContext.parallelize(records1, 2))
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+    val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+
+    val records2 = recordsToStrings(dataGen.generateUniqueUpdates("001", 30)).asScala.toList
+    spark.read.json(spark.sparkContext.parallelize(records2, 2))
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val cdcFromEarliest = cdcDataFrame(beginInstant)
+    assertCDCOpCnt(cdcFromEarliest, 100, 30, 0)
+    assertEquals(
+      cdcDataFrame(instantBefore(commitTime1)).collect().map(_.toString).sorted.toSeq,
+      cdcFromEarliest.collect().map(_.toString).sorted.toSeq)
+  }
+
+  @ParameterizedTest
+  @CsvSource(Array(
+    "COPY_ON_WRITE,data_before_after,TEN", "MERGE_ON_READ,data_before_after,TEN",
+    "COPY_ON_WRITE,data_before,TEN", "MERGE_ON_READ,data_before,TEN",
+    "COPY_ON_WRITE,op_key_only,TEN", "MERGE_ON_READ,op_key_only,TEN",
+    "COPY_ON_WRITE,data_before_after,NINE", "MERGE_ON_READ,data_before_after,NINE",
+    "COPY_ON_WRITE,data_before,NINE", "MERGE_ON_READ,data_before,NINE",
+    "COPY_ON_WRITE,op_key_only,NINE", "MERGE_ON_READ,op_key_only,NINE"))
+  def testCDCImagesWithLogicalTypes(tableType: String, loggingMode: String, tableVersion: HoodieTableVersion): Unit = {
+    val schema = StructType(Seq(
+      StructField("_row_key", StringType, nullable = false),
+      StructField("timestamp", LongType, nullable = false),
+      StructField("amt", DecimalType(7, 2), nullable = true),
+      StructField("d", DateType, nullable = true),
+      StructField("ts", TimestampType, nullable = true)
+    ))
+    val options = commonOpts ++ Map(
+      HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key -> loggingMode,
+      DataSourceWriteOptions.TABLE_TYPE.key() -> tableType,
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.versionCode().toString,
+      HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false"
+    )
+    val day = LocalDate.of(2026, 10, 13)
+    val ts = Instant.parse("2026-10-13T17:00:00.123456Z")
+
+    val inserts = (1 to 3).map(i => Row(i.toString, 1L, new java.math.BigDecimal("1.25"), day, ts))
+    spark.createDataFrame(inserts.asJava, schema)
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    metaClient = createMetaClient(spark, basePath)
+    val commitTime1 = metaClient.reloadActiveTimeline.lastInstant().get().requestedTime
+
+    val update = Seq(Row("1", 2L, new java.math.BigDecimal("9.99"), day, ts))
+    spark.createDataFrame(update.asJava, schema)
+      .write.format("org.apache.hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val cdcData = cdcDataFrame(instantBefore(commitTime1))
+    assertCDCOpCnt(cdcData, 3, 1, 0)
+    val updateRow = cdcData.where("op = 'u'").select("before", "after").head()
+    assertEquals(
+      """{"_row_key":"1","timestamp":1,"amt":1.25,"d":"2026-10-13","ts":"2026-10-13T17:00:00.123456Z"}""",
+      updateRow.getString(0))
+    assertEquals(
+      """{"_row_key":"1","timestamp":2,"amt":9.99,"d":"2026-10-13","ts":"2026-10-13T17:00:00.123456Z"}""",
+      updateRow.getString(1))
   }
 }

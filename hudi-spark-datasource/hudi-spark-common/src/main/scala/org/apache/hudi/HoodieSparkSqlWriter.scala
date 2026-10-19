@@ -51,8 +51,8 @@ import org.apache.hudi.hive.{HiveSyncConfigHolder, HiveSyncTool}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils
-import org.apache.hudi.keygen.{BaseKeyGenerator, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
-import org.apache.hudi.keygen.constant.KeyGeneratorType
+import org.apache.hudi.keygen.{BaseKeyGenerator, KeyGenUtils, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.keygen.constant.{ComplexKeyGenEncoding, KeyGeneratorType}
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.metrics.Metrics
 import org.apache.hudi.storage.HoodieStorage
@@ -321,6 +321,7 @@ class HoodieSparkSqlWriterInternal {
           .setPopulateMetaFields(populateMetaFields)
           .setMetaFieldsModeFromString(metaFieldsMode)
           .setRecordKeyFields(hoodieConfig.getString(RECORDKEY_FIELD))
+          .setComplexKeyGenEncoding(explicitComplexKeyGenEncoding(hoodieConfig))
           .setSecondaryKeyFields(hoodieConfig.getString(SECONDARYKEY_COLUMN_NAME))
           .setCDCEnabled(hoodieConfig.getBooleanOrDefault(HoodieTableConfig.CDC_ENABLED))
           .setCDCSupplementalLoggingMode(hoodieConfig.getStringOrDefault(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE))
@@ -402,20 +403,6 @@ class HoodieSparkSqlWriterInternal {
         operation match {
           case WriteOperationType.DELETE | WriteOperationType.DELETE_PREPPED =>
             mayBeValidateParamsForAutoGenerationOfRecordKeys(parameters, hoodieConfig)
-            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
-            // Convert to RDD[HoodieKey]
-            val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
-              val keyGenerator: Option[BaseKeyGenerator] = if (preppedSparkSqlWrites || preppedWriteOperation) {
-                None
-              } else {
-                Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(TypedProperties.copy(hoodieConfig.getProps))
-                  .asInstanceOf[BaseKeyGenerator])
-              }
-              it.map { avroRec =>
-                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation)
-              }
-            }).toJavaRDD()
-
             if (!tableExists) {
               throw new HoodieException(s"hoodie table at $basePath does not exist")
             }
@@ -434,8 +421,24 @@ class HoodieSparkSqlWriterInternal {
               streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.get.apply(client))
             }
 
-            // Issue deletes
             instantTime = client.startCommit(commitActionType)
+            // Ingestion setup may have recorded the encoding, and commit start may have upgraded the table.
+            tableMetaClient.reloadTableConfig()
+            val deleteKeyGenProps = KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(hoodieConfig.getProps), tableMetaClient.getTableConfig)
+            val genericRecords = HoodieSparkUtils.createRdd(df, avroRecordName, avroRecordNamespace)
+            // Convert to RDD[HoodieKey]
+            val hoodieKeysAndLocationsToDelete = genericRecords.mapPartitions(it => {
+              val keyGenerator: Option[BaseKeyGenerator] = if (preppedSparkSqlWrites || preppedWriteOperation) {
+                None
+              } else {
+                Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(deleteKeyGenProps).asInstanceOf[BaseKeyGenerator])
+              }
+              it.map { avroRec =>
+                HoodieCreateRecordUtils.getHoodieKeyAndMaybeLocationFromAvroRecord(keyGenerator, avroRec, preppedSparkSqlWrites || preppedWriteOperation, preppedSparkSqlWrites || preppedSparkSqlMergeInto || preppedWriteOperation)
+              }
+            }).toJavaRDD()
+
+            // Issue deletes
             val writeStatuses = DataSourceUtils.doDeleteOperation(client, hoodieKeysAndLocationsToDelete, instantTime, preppedSparkSqlWrites || preppedWriteOperation)
             (writeStatuses, client)
 
@@ -531,7 +534,7 @@ class HoodieSparkSqlWriterInternal {
 
             val writeConfig = client.getConfig
             instantTime = client.startCommit(commitActionType)
-            // if table has undergone upgrade, we need to reload table config
+            // Ingestion setup may have recorded the encoding, and commit start may have upgraded the table.
             tableMetaClient.reloadTableConfig()
             tableConfig = tableMetaClient.getTableConfig
             // Convert to RDD[HoodieRecord] and force type immediately
@@ -780,6 +783,7 @@ class HoodieSparkSqlWriterInternal {
           .setTableType(HoodieTableType.valueOf(tableType))
           .setTableName(tableName)
           .setRecordKeyFields(recordKeyFields)
+          .setComplexKeyGenEncoding(explicitComplexKeyGenEncoding(hoodieConfig))
           .setTableVersion(tableVersion)
           .setTableFormat(tableFormat)
           .setTableStorageLayout(hoodieConfig.getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
@@ -1100,6 +1104,15 @@ class HoodieSparkSqlWriterInternal {
           .setConf(HadoopFSUtils.getStorageConfWithCopy(sparkContext.hadoopConfiguration))
           .setBasePath(tablePath)
           .build().getTableConfig)
+    } else {
+      null
+    }
+  }
+
+  /** The record key encoding explicitly requested for a new single-field complex keygen table, if any. */
+  private def explicitComplexKeyGenEncoding(hoodieConfig: HoodieConfig): ComplexKeyGenEncoding = {
+    if (hoodieConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+      ComplexKeyGenEncoding.fromString(hoodieConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING))
     } else {
       null
     }

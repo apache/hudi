@@ -134,9 +134,9 @@ public class SparkRDDReadClient<T> implements Serializable {
 
   private Option<String> convertToDataFilePath(Option<Pair<String, String>> partitionPathFileIDPair) {
     if (partitionPathFileIDPair.isPresent()) {
-      HoodieBaseFile dataFile = hoodieTable.getBaseFileOnlyView()
+      HoodieBaseFile baseFile = hoodieTable.getBaseFileOnlyView()
           .getLatestBaseFile(partitionPathFileIDPair.get().getLeft(), partitionPathFileIDPair.get().getRight()).get();
-      return Option.of(dataFile.getPath());
+      return Option.of(baseFile.getPath());
     } else {
       return Option.empty();
     }

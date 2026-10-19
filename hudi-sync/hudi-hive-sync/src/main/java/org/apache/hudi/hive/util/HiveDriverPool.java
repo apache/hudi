@@ -122,7 +122,7 @@ public class HiveDriverPool implements AutoCloseable {
     for (Worker worker : workers) {
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
         for (String sql : setupSqls) {
-          worker.driver.run(sql);
+          HiveStatementExecutor.executeOrThrow(worker.driver, sql);
         }
         return null;
       }, "Skipped after an earlier setup statement failed")));
@@ -153,7 +153,7 @@ public class HiveDriverPool implements AutoCloseable {
       String sql = sqls.get(i);
       Worker worker = workers.get(i % workers.size());
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
-        worker.driver.run(sql);
+        HiveStatementExecutor.executeOrThrow(worker.driver, sql);
         return null;
       }, "Skipped after an earlier statement failed")));
     }

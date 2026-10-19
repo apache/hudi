@@ -56,7 +56,7 @@ final class TestHudiSharedMetastore
         Path dataDirectory = queryRunner.getCoordinator().getBaseDataDir().resolve("hudi_data");
         dataDirectory.toFile().deleteOnExit();
 
-        queryRunner.installPlugin(new HudiPlugin());
+        queryRunner.installPlugin(new TestingHudiPlugin());
         queryRunner.createCatalog(
                 "hudi",
                 "hudi",

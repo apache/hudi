@@ -143,12 +143,12 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     float bucket0Weight = 0.2f;
     InsertBucketCumulativeWeightPair pair = insertBuckets.remove(0);
     pair.getKey().weight = bucket0Weight;
-    pair.setValue(new Double(bucket0Weight));
+    pair.setValue(Double.valueOf(bucket0Weight));
     insertBuckets.add(0, pair);
 
     InsertBucketCumulativeWeightPair pair1 = insertBuckets.remove(1);
     pair1.getKey().weight = 1 - bucket0Weight;
-    pair1.setValue(new Double(1));
+    pair1.setValue(Double.valueOf(1));
     insertBuckets.add(1, pair1);
 
     Map<Integer, Integer> partition2numRecords = new HashMap<Integer, Integer>();

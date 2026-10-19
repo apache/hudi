@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -35,6 +36,7 @@ import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncTool;
+import org.apache.hudi.metrics.FlinkHiveSyncMetrics;
 import org.apache.hudi.sink.common.AbstractStreamWriteFunction;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -96,16 +98,21 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  *
  * <p>Task failover workflow:
  * <pre>
- *             task failover
- *                  |
- *           initially started ?
- *            /(yes)     \(no)
- *           /            \
- *       has pending      send an empty
- *     instant event ?    bootstrap event
- *        /(yes)  \(no)
- *       /         \
- *    resend      no-op
+ *                task failover
+ *                     |
+ *       restored pending instant event ?
+ *               /(yes)     \(no)
+ *              /            \
+ *       resend metadata     |
+ *       on every attempt    |
+ *              \           /
+ *               \         /
+ *               attempt > 0 ?
+ *               /(yes)     \(no)
+ *              /           \
+ *       send an empty      no-op
+ *       bootstrap event
+ *       to clear legacy events
  * </pre>
  *
  * @see StreamWriteFunction         for the data inputs checkpointing and semantics
@@ -189,6 +196,11 @@ public class StreamWriteOperatorCoordinator
    * Context that holds variables for asynchronous hive sync.
    */
   private HiveSyncContext hiveSyncContext;
+
+  /**
+   * Metrics for hive sync, registered on the coordinator's metric group when hive sync is enabled.
+   */
+  private FlinkHiveSyncMetrics hiveSyncMetrics;
 
   /**
    * The table state.
@@ -457,6 +469,8 @@ public class StreamWriteOperatorCoordinator
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
+    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup());
+    this.hiveSyncMetrics.registerMetrics();
   }
 
   private void syncHiveAsync() {
@@ -476,9 +490,18 @@ public class StreamWriteOperatorCoordinator
    * Sync hoodie table metadata to Hive metastore.
    */
   public void doSyncHive() {
+    HoodieTimer timer = HoodieTimer.start();
     try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+      if (!syncTool.isSyncClientInitialized()) {
+        hiveSyncMetrics.markSyncFailed(timer.endTimer());
+        return;
+      }
       syncTool.syncHoodieTable();
+    } catch (Throwable t) {
+      hiveSyncMetrics.markSyncFailed(timer.endTimer());
+      throw t;
     }
+    hiveSyncMetrics.markSyncSucceeded(timer.endTimer());
   }
 
   private void scheduleTableServices(Boolean committed) {
@@ -518,9 +541,9 @@ public class StreamWriteOperatorCoordinator
   }
 
   private String startInstant() {
-    // refresh the meta client which is reused
-    metaClient.reloadActiveTimeline();
-    // refresh the last txn metadata
+    // Refresh table properties and the timeline before validating the new write.
+    this.metaClient.reload();
+    // Validate the write and refresh the last txn metadata.
     this.writeClient.preTxn(tableState.operationType, this.metaClient);
     // put the assignment in front of metadata generation,
     // because the instant request from write task is asynchronous.
@@ -569,11 +592,17 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.cleanLegacyEvents(event);
       return;
     }
-    EventBuffer eventBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
-    eventBuffer.addBootstrapEvent(event);
-    if (eventBuffer.allBootstrapEventsReceived()) {
+    // The writer may have observed a pending instant before its normal commit finished.
+    // Do not recreate the committed buffer when that bootstrap event arrives later.
+    if (this.eventBuffers.getEventBuffer(event.getCheckpointId()) == null
+        && this.metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(event.getInstantTime())) {
+      return;
+    }
+    EventBuffer bootstrapBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
+    bootstrapBuffer.addBootstrapEvent(event);
+    if (bootstrapBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
-      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
+      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), bootstrapBuffer);
       if (committed && tableState.isRecordLevelIndex) {
         context.failJob(new HoodieException("There are pending instants recommitted on job restart,"
             + "triggering a global failover so that RLI bootstrap operator can load the record level index completely."));

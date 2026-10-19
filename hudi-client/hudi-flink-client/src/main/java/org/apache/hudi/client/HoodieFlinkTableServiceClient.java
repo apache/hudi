@@ -206,7 +206,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
             }
             // Do not perform table service for mdt when streaming write is enabled, since the compaction/clean
             // will be performed asynchronously in the dedicated compaction pipeline.
-            if (!this.config.getMetadataConfig().isStreamingWriteEnabled()) {
+            if (!this.config.getMetadataConfig().isStreamingWriteEnabled()
+                && this.config.getMetadataConfig().isInlineTableServicesEnabled()) {
               metadataWriter.performTableServices(Option.empty());
             }
           }

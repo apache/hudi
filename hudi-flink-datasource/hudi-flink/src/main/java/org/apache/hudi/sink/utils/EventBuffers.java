@@ -206,11 +206,12 @@ public class EventBuffers implements Serializable {
     }
 
     public void addBootstrapEvent(WriteMetadataEvent event) {
-      if (event.isMetadataTable()) {
-        indexWriteEventBuffer[event.getTaskID()] = event;
-      } else {
-        dataWriteEventBuffer[event.getTaskID()] = event;
+      WriteMetadataEvent[] eventBuffer = event.isMetadataTable() ? indexWriteEventBuffer : dataWriteEventBuffer;
+      WriteMetadataEvent existing = eventBuffer[event.getTaskID()];
+      if (existing != null && existing.isBootstrap()) {
+        return;
       }
+      eventBuffer[event.getTaskID()] = event;
     }
 
     /**

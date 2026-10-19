@@ -51,6 +51,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -178,6 +179,62 @@ class TestHoodieVariantReconstructionRoundTrip {
         toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD)),
         toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD)));
     assertEquals(original.toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC));
+  }
+
+  @Test
+  void requiredShreddedColumnReadsThroughANullableRequest(@TempDir Path tmp) throws Exception {
+    // Spark 4.1 writes a non-null variant column REQUIRED (a DataFrame insert of a non-null
+    // parse_json, or a vanilla Spark file brought in by bootstrap) while the table schema the merge
+    // requests has it nullable (#20349). parquet-avro must read the REQUIRED group through the
+    // nullable shredded read schema, and every row must rebuild into the requested schema.
+    Map<String, HoodieSchema> shreddedFields = new LinkedHashMap<>();
+    shreddedFields.put("a", HoodieSchema.create(HoodieSchemaType.STRING));
+    shreddedFields.put("b", HoodieSchema.create(HoodieSchemaType.LONG));
+    HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(null, null, null, shreddedFields);
+    HoodieSchema.Variant unshreddedVariant = HoodieSchema.createVariant();
+    HoodieSchema fileSchema = HoodieSchema.createRecord("r", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+        HoodieSchemaField.of("v", shreddedVariant)));
+
+    // Fully typed, partly residual (b missing, c extra), a scalar and a variant null.
+    Spark4VariantShreddingProvider provider = new Spark4VariantShreddingProvider();
+    String[] jsons = {"{\"a\":\"x\",\"b\":5}", "{\"a\":\"y\",\"c\":true}", "42", "null"};
+    Path file = tmp.resolve("required.parquet");
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new org.apache.hadoop.fs.Path(file.toString()), fileSchema.getAvroSchema())) {
+      for (int i = 0; i < jsons.length; i++) {
+        Variant variant = VariantBuilder.parseJson(jsons[i], false);
+        GenericRecord unshreddedV = new GenericData.Record(unshreddedVariant.getAvroSchema());
+        unshreddedV.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(variant.getMetadata()));
+        unshreddedV.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, ByteBuffer.wrap(variant.getValue()));
+        GenericRecord record = new GenericData.Record(fileSchema.getAvroSchema());
+        record.put("id", (long) i);
+        record.put("v", provider.shredVariantRecord(unshreddedV, shreddedVariant.getAvroSchema(), shreddedVariant));
+        writer.write(record);
+      }
+    }
+
+    HoodieStorage storage = HoodieTestUtils.getStorage(tmp.toString());
+    HoodieAvroParquetReader reader = new HoodieAvroParquetReader(storage, new StoragePath(file.toUri().toString()));
+    assertFalse(reader.getSchema().getField("v").get().schema().isNullable(), "the file must hold v REQUIRED");
+    HoodieSchema requestedSchema = HoodieSchema.createRecord("r", "org.apache.hudi.test", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.LONG)),
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(unshreddedVariant), null, HoodieSchema.NULL_VALUE)));
+    try (ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(requestedSchema, requestedSchema)) {
+      for (int i = 0; i < jsons.length; i++) {
+        assertTrue(iterator.hasNext());
+        IndexedRecord out = iterator.next();
+        assertEquals(requestedSchema.getAvroSchema(), out.getSchema());
+        assertEquals((long) i, out.get(0));
+        GenericRecord rebuiltV = (GenericRecord) out.get(1);
+        Variant rebuilt = new Variant(
+            toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_VALUE_FIELD)),
+            toBytes(rebuiltV.get(HoodieSchema.Variant.VARIANT_METADATA_FIELD)));
+        assertEquals(VariantBuilder.parseJson(jsons[i], false).toJson(ZoneOffset.UTC), rebuilt.toJson(ZoneOffset.UTC));
+      }
+      assertFalse(iterator.hasNext());
+    }
+    reader.close();
   }
 
   private static byte[] toBytes(Object byteBuffer) {

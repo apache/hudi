@@ -20,12 +20,14 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -34,22 +36,31 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for delta stream write.
@@ -59,6 +70,67 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   @Override
   protected void setUp(Configuration conf) {
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "COMMIT_TIME_ORDERING, false, false", "COMMIT_TIME_ORDERING, true, false",
+      "EVENT_TIME_ORDERING, false, false", "EVENT_TIME_ORDERING, true, false",
+      "EVENT_TIME_ORDERING, false, true", "EVENT_TIME_ORDERING, true, true"
+  })
+  void testLsmDuplicateKeysRespectMergeMode(RecordMergeMode mergeMode, boolean preCombine, boolean equalOrderingValues) throws Exception {
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), "LSM_TREE");
+    conf.set(FlinkOptions.RECORD_MERGE_MODE, mergeMode.name());
+    conf.set(FlinkOptions.PRE_COMBINE, preCombine);
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, 256.0);
+    boolean commitTimeOrdering = mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING;
+    boolean lastArrivalWins = commitTimeOrdering || equalOrderingValues;
+    List<RowData> records = new ArrayList<>();
+    Map<String, Integer> expectedWinners = new HashMap<>();
+    for (int i = 0; i < 1000; i++) {
+      String key = "id" + i % 17;
+      // Decreasing event times distinguish event-time merging from commit-time merging.
+      // Equal event times must retain the last arrival, just like commit-time merging.
+      records.add(insertRow(StringData.fromString(key), StringData.fromString("name"), i,
+          TimestampData.fromEpochMillis(equalOrderingValues ? 1000 : 1000 - i), StringData.fromString("par1")));
+      if (lastArrivalWins) {
+        expectedWinners.put(key, i);
+      } else {
+        expectedWinners.putIfAbsent(key, i);
+      }
+    }
+    String expected = expectedWinners.entrySet().stream().sorted(Map.Entry.comparingByKey())
+        .map(entry -> entry.getKey() + ",par1," + entry.getKey() + ",name," + entry.getValue()
+            + "," + (equalOrderingValues ? 1000 : 1000 - entry.getValue()) + ",par1")
+        .collect(Collectors.joining(", ", "[", "]"));
+    preparePipeline(conf)
+        .consume(records)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(Collections.singletonMap("par1", expected), 1)
+        .end();
+
+    // With pre-combine off, all versions must reach one native log file in arrival order
+    // within each key, including event-time ties resolved during subsequent reads.
+    File[] logFiles = new File(tempFile, "par1").listFiles(file -> file.getName().endsWith(".log.parquet"));
+    assertNotNull(logFiles);
+    assertEquals(1, logFiles.length, "duplicate versions must be tested within a single native log file");
+    List<GenericRecord> written = TestData.readAllData(tempFile, TestConfigurations.ROW_TYPE, 1);
+    assertEquals(preCombine ? expectedWinners.size() : records.size(), written.size());
+    Map<String, Integer> previous = new HashMap<>();
+    Map<String, Integer> actualWinners = new HashMap<>();
+    for (GenericRecord record : written) {
+      String key = record.get("uuid").toString();
+      int arrival = (Integer) record.get("age");
+      Integer oldArrival = previous.put(key, arrival);
+      assertTrue(oldArrival == null || arrival > oldArrival, "file order must preserve arrivals for " + key);
+      actualWinners.merge(key, arrival, (oldValue, newValue) ->
+          lastArrivalWins ? Math.max(oldValue, newValue) : Math.min(oldValue, newValue));
+    }
+    assertEquals(expectedWinners, actualWinners);
   }
 
   @Test

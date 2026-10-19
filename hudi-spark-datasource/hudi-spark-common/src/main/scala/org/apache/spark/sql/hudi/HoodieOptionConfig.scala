@@ -267,7 +267,7 @@ object HoodieOptionConfig {
       .flatMap(key => (List(key.sqlKeyName) ++ key.alternatives).toStream)
 
     sqlOptions.map(option => {
-      standardOptions.find(x => x.toLowerCase().contains(option._1.toLowerCase())) match {
+      standardOptions.find(_.equalsIgnoreCase(option._1)) match {
         case Some(standardKey) => (standardKey, option._2)
         case None => (option._1, option._2)
       }

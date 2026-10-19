@@ -1,0 +1,85 @@
+{
+  "contract_schema": 3,
+  "baseline_id": "hudi-1.2.0-flink-1.20",
+  "hudi_version": "1.2.0",
+  "flink_version": "1.20.1",
+  "safety": {
+    "table_lifecycle": "new",
+    "writer_model": "single_writer",
+    "external_catalog": false,
+    "mutability": "mutable",
+    "replay_behavior": "must_collapse"
+  },
+  "table": {
+    "name": "orders_mutable_mor_hudi",
+    "path": "file:///tmp/hudi-architect-mutable-mor-orders",
+    "columns": [
+      {"name": "id", "type": "STRING", "nullable": false},
+      {"name": "name", "type": "STRING", "nullable": true},
+      {"name": "event_version", "type": "BIGINT", "nullable": false},
+      {"name": "partition_date", "type": "DATE", "nullable": false}
+    ],
+    "partition_fields": ["partition_date"],
+    "partition_fields_mutable": false
+  },
+  "identity": {
+    "mode": "stable_key",
+    "record_key_fields": ["id"],
+    "record_key_option_fields": []
+  },
+  "ordering": {
+    "mode": "event_time",
+    "fields": ["event_version"]
+  },
+  "source": {
+    "table": "orders_mutable_source",
+    "columns": [
+      {"name": "id", "type": "STRING", "nullable": false},
+      {"name": "name", "type": "STRING", "nullable": true},
+      {"name": "event_version", "type": "BIGINT", "nullable": false},
+      {"name": "partition_date", "type": "DATE", "nullable": false}
+    ],
+    "primary_key_fields": ["id"],
+    "changelog_mode": "UPSERT",
+    "emits_deletes": true,
+    "delete_payload": "FULL_ROW"
+  },
+  "write": {
+    "table_type": "MERGE_ON_READ",
+    "operation": "upsert",
+    "record_merge_mode": "EVENT_TIME_ORDERING",
+    "index": {
+      "type": "FLINK_STATE",
+      "global": true,
+      "state_ttl_days": 0,
+      "bootstrap_enabled": true
+    },
+    "changelog_enabled": false,
+    "clustering": {
+      "schedule_enabled": false,
+      "async_enabled": false
+    },
+    "connector_options": {}
+  },
+  "table_services": {
+    "compaction": {
+      "owner": "flink_writer",
+      "mode": "async",
+      "schedule_enabled": true,
+      "async_enabled": true,
+      "operation_execute_async_enabled": true,
+      "trigger_strategy": "num_commits",
+      "delta_commits": 5
+    }
+  },
+  "read": {
+    "query_modes": ["snapshot", "read_optimized"],
+    "read_optimized_freshness": "after_compaction"
+  },
+  "runtime": {
+    "execution_mode": "STREAMING",
+    "checkpointing_enabled": true,
+    "checkpoint_interval_ms": 60000,
+    "target_commit_freshness_ms": 120000
+  }
+}

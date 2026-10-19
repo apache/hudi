@@ -44,10 +44,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
@@ -188,10 +188,12 @@ public class IncrementalQueryAnalyzer {
         }
       }
       if (!archivedInstantTimes.isEmpty()) {
-        archivedReadTimeline = getArchivedReadTimeline(metaClient, archivedInstantTimes.get(0));
+        archivedReadTimeline = getArchivedReadTimeline(metaClient, archivedInstantTimes.stream().min(String::compareTo).get());
         archivedInstants = archivedReadTimeline.getInstantsAsStream().filter(instant -> instantTimeSet.contains(instant.requestedTime())).collect(Collectors.toList());
       }
-      List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream()).map(HoodieInstant::requestedTime).collect(Collectors.toList());
+      // archived and active instants can interleave (see #splitInstantByActiveness), so order them by instant time.
+      List<String> instants = Stream.concat(archivedInstants.stream(), activeInstants.stream()).map(HoodieInstant::requestedTime)
+          .sorted().collect(Collectors.toList());
       if (instants.isEmpty()) {
         // no instants completed within the give time range, returns early.
         return QueryContext.EMPTY;
@@ -216,14 +218,11 @@ public class IncrementalQueryAnalyzer {
    * Splits the given instant time list into a pair of archived instant list and active instant list.
    */
   private static Pair<List<String>, List<String>> splitInstantByActiveness(List<String> instantTimeList, CompletionTimeQueryView completionTimeQueryView) {
-    int firstActiveIdx = IntStream.range(0, instantTimeList.size()).filter(i -> !completionTimeQueryView.isArchived(instantTimeList.get(i))).findFirst().orElse(-1);
-    if (firstActiveIdx == -1) {
-      return Pair.of(instantTimeList, Collections.emptyList());
-    } else if (firstActiveIdx == 0) {
-      return Pair.of(Collections.emptyList(), instantTimeList);
-    } else {
-      return Pair.of(instantTimeList.subList(0, firstActiveIdx), instantTimeList.subList(firstActiveIdx, instantTimeList.size()));
-    }
+    // with archival beyond savepoint, a savepointed commit stays active while the commits after it are archived,
+    // so the archived instants are not always a prefix of the list: check each instant on its own.
+    Map<Boolean, List<String>> instantTimesByArchived = instantTimeList.stream()
+        .collect(Collectors.partitioningBy(completionTimeQueryView::isArchived));
+    return Pair.of(instantTimesByArchived.get(true), instantTimesByArchived.get(false));
   }
 
   private HoodieTimeline getFilteredTimeline(HoodieTableMetaClient metaClient) {

@@ -2942,6 +2942,41 @@ public class ITTestHoodieDataSource {
             + "+I[id3, id3, Julian, 43, 1970-01-01T00:00:03, par1]]");
   }
 
+  @Test
+  void testDataSkippingWithMissingColumnStatsAfterIndexExpansion() throws Exception {
+    TableEnvironment tableEnv = batchTableEnv;
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE)
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true)
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), false)
+        .option(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age")
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, false)
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+
+    // The name column exists in the old data file, but only age is indexed.
+    tableEnv.executeSql("insert into t1 values "
+        + "('id1', 'alice', 25, TIMESTAMP '1970-01-01 00:00:01', 'par1')").await();
+
+    tableEnv.executeSql("alter table t1 set ('hoodie.metadata.index.column.stats.column.list' = 'age,name')");
+    // A new partition leaves the old file and its incomplete column statistics untouched.
+    tableEnv.executeSql("insert into t1 values "
+        + "('id2', 'bob', 30, TIMESTAMP '1970-01-01 00:00:02', 'par2')").await();
+
+    String query = "select * from t1 where age >= 0 and name = 'alice'";
+    String expected = "[+I[id1, alice, 25, 1970-01-01T00:00:01, par1]]";
+    List<Row> withoutSkipping = execSelectSql(tableEnv, query);
+    assertRowsEquals(withoutSkipping, expected);
+
+    tableEnv.executeSql("alter table t1 set ('read.data.skipping.enabled' = 'true')");
+    assertRowsEquals(execSelectSql(tableEnv, "select * from t1 where name = 'alice'"), expected);
+    // Adding a matching age predicate must not cause the old file to be skipped.
+    assertRowsEquals(execSelectSql(tableEnv, query), expected);
+  }
+
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   void testDataSkippingByFilteringFileSlice(HoodieTableType tableType) {
@@ -3161,14 +3196,15 @@ public class ITTestHoodieDataSource {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testBucketPruning(HoodieTableType tableType) {
+  @MethodSource("tableTypeAndBooleanTrueFalseParams")
+  void testBucketPruning(HoodieTableType tableType, boolean useSourceV2) {
     TableEnvironment tableEnv = batchTableEnv;
     String hoodieTableDDL = sql("t1")
         .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
         .options(getDefaultKeys())
         .option(FlinkOptions.INDEX_TYPE, "BUCKET")
         .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
         .end();
     tableEnv.executeSql(hoodieTableDDL);
 

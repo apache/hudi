@@ -62,6 +62,7 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -413,6 +414,18 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
+  public static final ConfigProperty<String> COMPLEX_KEYGEN_ENCODING = ConfigProperty
+      .key("hoodie.table.complex.keygenerator.encoding")
+      .noDefaultValue()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Encoding of the _hoodie_record_key meta field for a ComplexKeyGenerator configured with a "
+          + "single record key field: FIELD_PREFIXED (`<field_name>:<field_value>`) or VALUE_ONLY (bare `<field_value>`). "
+          + "New tables are created with FIELD_PREFIXED. An existing table without this property gets it backfilled "
+          + "by the next write or upgrade, from the encoding found in its data. Once present it is authoritative for "
+          + "writers and readers on every table version, and is kept across upgrades and downgrades. The backfill "
+          + "inspects the most recently written data file only, so a table that already contains both encodings is "
+          + "not repaired by it.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
   public static final ConfigProperty<String> SLASH_SEPARATED_DATE_PARTITIONING = KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING;
@@ -431,7 +444,9 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final Set<String> CONFIGS_REQUIRED_FOR_OLDER_VERSIONED_TABLES = new HashSet<>(Arrays.asList(
       KEY_GENERATOR_CLASS_NAME.key(),
-      KEY_GENERATOR_TYPE.key()
+      KEY_GENERATOR_TYPE.key(),
+      // records what the data of a table at any version carries, so it must survive on older versions too
+      COMPLEX_KEYGEN_ENCODING.key()
   ));
 
   public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty
@@ -1395,6 +1410,26 @@ public class HoodieTableConfig extends HoodieConfig {
       // For table version <= 8, partial update is not supported.
       return Option.empty();
     }
+  }
+
+  /**
+   * @return the persisted record key encoding of a single-field complex key generator table
+   * ({@link #COMPLEX_KEYGEN_ENCODING}), or empty when the property has not been set on the table.
+   */
+  public Option<ComplexKeyGenEncoding> getComplexKeyGenEncoding() {
+    return contains(COMPLEX_KEYGEN_ENCODING)
+        ? Option.of(ComplexKeyGenEncoding.fromString(getString(COMPLEX_KEYGEN_ENCODING)))
+        : Option.empty();
+  }
+
+  /**
+   * @return whether the table uses the complex key generator with exactly one record key field, the shape
+   * whose {@code _hoodie_record_key} encoding is tracked by {@link #COMPLEX_KEYGEN_ENCODING}.
+   */
+  public boolean isComplexKeyGenWithSingleRecordKeyField() {
+    Option<String[]> recordKeyFields = getRecordKeyFields();
+    return KeyGeneratorType.isComplexKeyGenerator(this)
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
   }
 
   /**

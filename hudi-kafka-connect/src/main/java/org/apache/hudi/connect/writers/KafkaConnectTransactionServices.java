@@ -119,22 +119,41 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
 
   @Override
   public boolean endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
-    boolean success = javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
+    boolean success;
+    try {
+      success = javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
+    } catch (RuntimeException exception) {
+      // Once the instant is completed, its data and Kafka offsets are visible, so a failure after that point inside the
+      // commit (e.g. in cleaning or archiving) must not fail it, or the participants would write the same records again
+      if (!isCommitCompleted(commitTime)) {
+        throw exception;
+      }
+      log.error("Commit {} completed, but a post-commit action failed", commitTime, exception);
+      success = true;
+    }
     if (success) {
       log.info("Ending Hudi commit {}", commitTime);
-
-      // Schedule clustering and compaction as needed.
-      if (writeConfig.isAsyncClusteringEnabled()) {
-        javaClient.scheduleClustering(Option.empty()).ifPresent(
-            instantTs -> log.info("Scheduled clustering at instant time:{}", instantTs));
+      try {
+        scheduleTableServicesAndSyncMeta();
+      } catch (RuntimeException exception) {
+        // Likewise, these follow-up actions must not fail the commit; they run again after the next one
+        log.error("Commit {} succeeded, but scheduling table services or meta sync failed", commitTime, exception);
       }
-      if (isAsyncCompactionEnabled()) {
-        javaClient.scheduleCompaction(Option.empty()).ifPresent(
-            instantTs -> log.info("Scheduled compaction at instant time:{}", instantTs));
-      }
-      syncMeta();
     }
     return success;
+  }
+
+  private void scheduleTableServicesAndSyncMeta() {
+    // Schedule clustering and compaction as needed.
+    if (writeConfig.isAsyncClusteringEnabled()) {
+      javaClient.scheduleClustering(Option.empty()).ifPresent(
+          instantTs -> log.info("Scheduled clustering at instant time:{}", instantTs));
+    }
+    if (isAsyncCompactionEnabled()) {
+      javaClient.scheduleCompaction(Option.empty()).ifPresent(
+          instantTs -> log.info("Scheduled compaction at instant time:{}", instantTs));
+    }
+    syncMeta();
   }
 
   @Override
@@ -151,10 +170,25 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
     throw new HoodieException("Fatal error retrieving Hoodie Extra Metadata since Table Meta Client is absent");
   }
 
+  @Override
+  public void close() {
+    javaClient.close();
+  }
+
   private boolean isAsyncCompactionEnabled() {
     return tableMetaClient.isPresent()
         && HoodieTableType.MERGE_ON_READ.equals(tableMetaClient.get().getTableType())
         && connectConfigs.isAsyncCompactEnabled();
+  }
+
+  private boolean isCommitCompleted(String commitTime) {
+    try {
+      return tableMetaClient.isPresent()
+          && tableMetaClient.get().reloadActiveTimeline().filterCompletedInstants().containsInstant(commitTime);
+    } catch (RuntimeException exception) {
+      log.warn("Failed to check whether commit {} completed", commitTime, exception);
+      return false;
+    }
   }
 
   private void syncMeta() {

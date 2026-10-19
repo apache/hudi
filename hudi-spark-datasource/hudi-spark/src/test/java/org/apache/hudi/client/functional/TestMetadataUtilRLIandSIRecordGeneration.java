@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -53,6 +54,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
+import org.apache.hudi.metadata.EmptyHoodieRecordPayloadWithPartition;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -298,6 +300,52 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // no RLI records should be generated for compaction operation.
       assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
           metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get()).isEmpty());
+    }
+  }
+
+  /**
+   * A file id is only unique within a partition for files written outside Hudi and for the buckets of a table under
+   * non-blocking concurrency control. The deletes written to log files of two partitions under one file id must each
+   * carry their own partition in a partitioned record index.
+   */
+  @Test
+  public void testRecordIndexRecordsForLogFilesWithTheSameFileIdInDifferentPartitions() throws IOException {
+    cleanupClients();
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+    initMetaClient(HoodieTableType.MERGE_ON_READ, props);
+    cleanupTimelineService();
+    initTimelineService();
+
+    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER).build();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      String commitTime = client.startCommit();
+      List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, 30);
+      List<WriteStatus> insertStatuses = client.insert(jsc.parallelize(inserts, 1), commitTime).collect();
+      assertNoWriteErrors(insertStatuses);
+      client.commit(commitTime, jsc.parallelize(insertStatuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+      // delete one record in each of two partitions, which writes one log file in each
+      List<HoodieKey> deletedKeys = inserts.stream().map(HoodieRecord::getKey)
+          .collect(Collectors.toMap(HoodieKey::getPartitionPath, key -> key, (first, second) -> first)).values().stream()
+          .limit(2).collect(Collectors.toList());
+      commitTime = client.startCommit();
+      List<WriteStatus> deleteStatuses = client.delete(jsc.parallelize(deletedKeys, 1), commitTime).collect();
+      assertNoWriteErrors(deleteStatuses);
+      client.commit(commitTime, jsc.parallelize(deleteStatuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+      // register both log files under one file id
+      List<HoodieWriteStat> writeStats = deleteStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      assertEquals(2, writeStats.size());
+      writeStats.forEach(writeStat -> assertTrue(FSUtils.isLogFile(new StoragePath(writeStat.getPath()))));
+      String sharedFileId = writeStats.get(0).getFileId();
+      writeStats.forEach(writeStat -> writeStat.setFileId(sharedFileId));
+
+      HoodieMetadataConfig partitionedRecordIndexConfig = HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordLevelIndex(true).build();
+      Map<String, String> deletedKeyToPartition = convertMetadataToRecordIndexRecords(context, toCommitMetadata(writeStats), partitionedRecordIndexConfig,
+          metaClient, writeConfig.getWritesFileIdEncoding(), commitTime).collectAsList().stream()
+          .collect(Collectors.toMap(HoodieRecord::getRecordKey, record -> ((EmptyHoodieRecordPayloadWithPartition) record.getData()).getPartitionPath()));
+      assertEquals(deletedKeys.stream().collect(Collectors.toMap(HoodieKey::getRecordKey, HoodieKey::getPartitionPath)), deletedKeyToPartition);
     }
   }
 

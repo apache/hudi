@@ -36,7 +36,7 @@ import org.apache.parquet.schema.MessageType;
  */
 public class HoodieAvroParquetReaderBuilder<T> extends ParquetReader.Builder<T> {
 
-  private GenericData model = null;
+  private GenericData model = GenericData.get();
   private boolean enableCompatibility = true;
   private boolean isReflect = true;
   private Option<MessageType> tableSchema = Option.empty();

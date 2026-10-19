@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.RetryHelper;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
@@ -42,6 +43,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.COMMIT_TIME_KEY;
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
 /**
  * The metadata that goes into the meta file in each partition.
@@ -95,9 +97,14 @@ public class HoodiePartitionMetadata {
   }
 
   /**
-   * Write the metadata safely into partition atomically.
+   * Write missing partition metadata safely and atomically, validating the original relative partition path
+   * immediately before creating the file. Existing metadata files are not revalidated.
+   *
+   * @param relativePartitionPath partition path before StoragePath normalization, including any key-generator URL encoding;
+   *                              use an empty string for non-partitioned tables
    */
-  public void trySave() throws HoodieIOException {
+  public void trySave(String relativePartitionPath) throws HoodieIOException {
+    checkArgument(relativePartitionPath != null, "Relative partition path must not be null");
     StoragePath metaPath = new StoragePath(
         partitionPath, HOODIE_PARTITION_METAFILE_PREFIX + getMetafileExtension());
 
@@ -106,6 +113,7 @@ public class HoodiePartitionMetadata {
     RetryHelper<Void, HoodieIOException>  retryHelper = new RetryHelper(1000, 3, 1000, HoodieIOException.class.getName())
         .tryWith(() -> {
           if (!storage.exists(metaPath)) {
+            PartitionPathEncodeUtils.validateNoPathTraversal(relativePartitionPath);
             if (format.isPresent()) {
               writeMetafileInFormat(metaPath, format.get());
             } else {

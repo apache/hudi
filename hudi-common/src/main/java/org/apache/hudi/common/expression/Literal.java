@@ -33,7 +33,7 @@ import java.util.UUID;
 
 @AllArgsConstructor
 @Getter
-@EqualsAndHashCode
+@EqualsAndHashCode(callSuper = false)
 public class Literal<T> extends LeafExpression {
 
   public static <V> Literal from(V value) {
