@@ -25,7 +25,7 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
-import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InSet, Left, Literal, Not, StartsWith}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -33,8 +33,10 @@ import org.apache.spark.sql.functions.{col, date_format, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
+import org.apache.spark.unsafe.types.UTF8String
+import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -143,6 +145,48 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
   }
 
 
+  @Test
+  def testPrefixPruningFallsBackForTransformedColumn(): Unit = {
+    val sourceExpr = StartsWith(Left(AttributeReference("B", StringType)(), Literal(1)), Literal("a"))
+    assertEquals(Literal.TrueLiteral,
+      DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(sourceExpr, indexedCols = indexedCols))
+  }
+
+  @Test
+  def testPrefixPruningFallsBackForNonBinaryCollation(): Unit = {
+    assumeTrue(spark.version.startsWith("4."))
+    val collatedType = DataType.fromDDL("STRING COLLATE UTF8_LCASE")
+    val sourceExpr = StartsWith(AttributeReference("B", collatedType)(),
+      Literal.create(UTF8String.fromString("ABC"), collatedType))
+    assertEquals(Literal.TrueLiteral,
+      DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(sourceExpr, indexedCols = indexedCols))
+  }
+
+  @Test
+  def testPrefixPruningPreservesMatchingValues(): Unit = {
+    val values = Seq("", "A", "a", "ab", "aba", "abb", "abc", "abc1", "abc9", "abd", "b",
+      "中文", "中文1", "😀", "😀1", "\uffff", "\uffff1")
+    val prefixes = Seq("", "a", "ab", "abc", "b", "中文", "😀", "\uffff")
+    val filters = prefixes.map { prefix =>
+      val sourceExpr = resolveExpr(spark, sparkAdapter.getExpressionFromColumn(col("B").startsWith(prefix)), sourceTableSchema)
+      prefix -> DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(sourceExpr, indexedCols = indexedCols)
+    }
+    def compare(left: String, right: String): Int = UTF8String.fromString(left).compareTo(UTF8String.fromString(right))
+
+    for {
+      minimum <- values
+      maximum <- values if compare(minimum, maximum) <= 0
+      (prefix, filter) <- filters
+      if values.exists(value => compare(minimum, value) <= 0 && compare(value, maximum) <= 0 && value.startsWith(prefix))
+    } {
+      val boundFilter = filter.transformDown {
+        case attribute: UnresolvedAttribute if attribute.name == "B_minValue" => Literal(minimum)
+        case attribute: UnresolvedAttribute if attribute.name == "B_maxValue" => Literal(maximum)
+      }
+      assertTrue(boundFilter.eval().asInstanceOf[Boolean], s"Incorrectly pruned [$minimum, $maximum] for prefix $prefix")
+    }
+  }
+
   private def optimize(expr: Expression): Expression = {
     val rules: Seq[Rule[LogicalPlan]] =
       OptimizeIn ::
@@ -176,9 +220,62 @@ object TestDataSkippingUtils {
         Seq(
           IndexRow("file_1", valueCount = 1, B_minValue = "aba", B_maxValue = "adf", B_nullCount = 1), // may contain strings starting w/ "abc"
           IndexRow("file_2", valueCount = 1, B_minValue = "adf", B_maxValue = "azy", B_nullCount = 0),
-          IndexRow("file_3", valueCount = 1, B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0)
+          IndexRow("file_3", valueCount = 1, B_minValue = "aaa", B_maxValue = "aba", B_nullCount = 0),
+          IndexRow("file_4", valueCount = 2, B_minValue = "abc1", B_maxValue = "abc9", B_nullCount = 0),
+          IndexRow("file_5", valueCount = 1, B_minValue = "abc1", B_maxValue = "abc1", B_nullCount = 0),
+          IndexRow("file_6", valueCount = 1, B_minValue = "abc", B_maxValue = "abc", B_nullCount = 0),
+          IndexRow("file_7", valueCount = 2, B_minValue = "ab", B_maxValue = "abc1", B_nullCount = 0),
+          IndexRow("file_8", valueCount = 1, B_minValue = "ab", B_maxValue = "ab", B_nullCount = 0),
+          IndexRow("file_9", valueCount = 2, B_minValue = null, B_maxValue = "abc9"),
+          IndexRow("file_10", valueCount = 2, B_minValue = "abc1", B_maxValue = null),
+          IndexRow("file_11", valueCount = 2, B_minValue = null, B_maxValue = null)
+        ),
+        Seq("file_1", "file_4", "file_5", "file_6", "file_7", "file_9", "file_10", "file_11")),
+      arguments(
+        sparkAdapter.getExpressionFromColumn(col("B").startsWith("")),
+        Seq(
+          IndexRow("file_1", B_minValue = "", B_maxValue = ""),
+          IndexRow("file_2", B_minValue = "abc1", B_maxValue = "abc9"),
+          IndexRow("file_3", B_minValue = null, B_maxValue = null)
+        ),
+        Seq("file_1", "file_2", "file_3")),
+      arguments(
+        sparkAdapter.getExpressionFromColumn(col("B").startsWith("中文")),
+        Seq(
+          IndexRow("file_1", B_minValue = "中文1", B_maxValue = "中文9"),
+          IndexRow("file_2", B_minValue = "甲", B_maxValue = "甲")
         ),
         Seq("file_1")),
+      arguments(
+        sparkAdapter.getExpressionFromColumn(col("B").startsWith("😀")),
+        Seq(
+          IndexRow("file_1", B_minValue = "😀1", B_maxValue = "😀9"),
+          IndexRow("file_2", B_minValue = "😁", B_maxValue = "😁")
+        ),
+        Seq("file_1")),
+      arguments(
+        sparkAdapter.getExpressionFromColumn(col("B").startsWith("\uffff")),
+        Seq(
+          IndexRow("file_1", B_minValue = "\uffff1", B_maxValue = "\uffff9"),
+          IndexRow("file_2", B_minValue = "😀", B_maxValue = "😀")
+        ),
+        Seq("file_1")),
+      arguments(
+        sparkAdapter.getExpressionFromColumn((col("A") === 1) && col("B").startsWith("abc")),
+        Seq(
+          IndexRow("file_1", A_minValue = 1, A_maxValue = 1, B_minValue = "abc1", B_maxValue = "abc9"),
+          IndexRow("file_2", A_minValue = 0, A_maxValue = 0, B_minValue = "abc1", B_maxValue = "abc9"),
+          IndexRow("file_3", A_minValue = 1, A_maxValue = 1, B_minValue = "abd", B_maxValue = "azy")
+        ),
+        Seq("file_1")),
+      arguments(
+        sparkAdapter.getExpressionFromColumn((col("A") === 1) || col("B").startsWith("abc")),
+        Seq(
+          IndexRow("file_1", A_minValue = 1, A_maxValue = 1, B_minValue = "abd", B_maxValue = "azy"),
+          IndexRow("file_2", A_minValue = 0, A_maxValue = 0, B_minValue = "abc1", B_maxValue = "abc9"),
+          IndexRow("file_3", A_minValue = 0, A_maxValue = 0, B_minValue = "abd", B_maxValue = "azy")
+        ),
+        Seq("file_1", "file_2")),
       arguments(
         Not(sparkAdapter.getExpressionFromColumn(col("B").startsWith("abc"))),
         Seq(

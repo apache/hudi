@@ -128,6 +128,56 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("prefix predicates return the same results with and without data skipping") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.metadata.index.column.stats.column.list" -> "name",
+          "hoodie.metadata.index.partition.stats.enable" -> "false"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (id int, name string, dt string)
+               |using hudi
+               |tblproperties (primaryKey = 'id', type = '$tableType')
+               |partitioned by (dt)
+               |location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+          spark.sql(
+            s"""
+               |insert into $tableName values
+               |(1, 'abc1', 'matching'),
+               |(2, 'abc9', 'matching'),
+               |(3, 'abd', 'nonmatching'),
+               |(4, null, 'nulls')
+               |""".stripMargin)
+
+          Seq(
+            "name like 'abc%'" -> Seq(1, 2),
+            "startswith(name, 'abc')" -> Seq(1, 2),
+            "name like '%'" -> Seq(1, 2, 3),
+            "name like 'abc%' and id = 1" -> Seq(1),
+            "name like 'abc%' or id = 3" -> Seq(1, 2, 3),
+            "name not like 'abc%'" -> Seq(3)
+          ).foreach { case (predicate, expectedIds) =>
+            val query = s"select id from $tableName where $predicate order by id"
+            val expected = withSQLConf("hoodie.enable.data.skipping" -> "false") {
+              spark.sql(query).collect().toSeq
+            }
+            val actual = withSQLConf("hoodie.enable.data.skipping" -> "true") {
+              spark.sql(query).collect().toSeq
+            }
+            assert(expected.map(_.getInt(0)) == expectedIds)
+            assert(actual == expected, s"Incorrect prefix pruning for $tableType: $predicate")
+          }
+        }
+      }
+    }
+  }
+
   test("bucket index query") {
     Seq("cow", "mor").foreach { tableType =>
       // table bucket prop can not be read in the query sql now, so need to set these configs

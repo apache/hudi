@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
+import org.apache.spark.sql.types.StringType
 import org.apache.spark.unsafe.types.UTF8String
 
 import java.util.concurrent.atomic.AtomicBoolean
@@ -320,20 +321,10 @@ object DataSkippingUtils extends Logging {
           Option.empty
         })
 
-      // Filter "colA like 'xxx%'"
-      // Translates to "colA_minValue <= xxx AND xxx <= colA_maxValue" for index lookup
-      //
-      // NOTE: Since a) this operator matches strings by prefix and b) given that this column is going to be ordered
-      //       lexicographically, we essentially need to check that provided literal falls w/in min/max bounds of the
-      //       given column
-      case StartsWith(sourceExpr @ AllowedTransformationExpression(attrRef), v @ Literal(_: UTF8String, _)) =>
+      case StartsWith(attrRef: AttributeReference, prefix @ Literal(_: UTF8String, _))
+          if attrRef.dataType == StringType && prefix.dataType == StringType =>
         getTargetIndexedColumnName(attrRef, indexedCols)
-          .map { colName =>
-            val targetExprBuilder: Expression => Expression = swapAttributeRefInExpr(sourceExpr, attrRef, _)
-            genColumnValuesEqualToExpression(colName, v, targetExprBuilder)
-          }.orElse({
-          Option.empty
-        })
+          .map(colName => genColumnStartsWithExpression(colName, prefix))
 
       // Filter "expr(colA) not like 'xxx%'"
       // Translates to "NOT(expr(colA_minValue) like 'xxx%' AND expr(colA_maxValue) like 'xxx%')" for index lookup
@@ -499,6 +490,16 @@ object ColumnStatsExpressionUtils {
     val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
     // Only case when column C contains value V is when min(C) <= V <= max(c)
     And(LessThanOrEqual(minValueExpr, value), GreaterThanOrEqual(maxValueExpr, value))
+  }
+
+  def genColumnStartsWithExpression(colName: String, prefix: Expression): Expression = {
+    val minValueExpr = genColMinValueExpr(colName)
+    val maxValueExpr = genColMaxValueExpr(colName)
+    Or(
+      Or(IsNull(minValueExpr), IsNull(maxValueExpr)),
+      And(
+        GreaterThanOrEqual(maxValueExpr, prefix),
+        Or(LessThanOrEqual(minValueExpr, prefix), StartsWith(minValueExpr, prefix))))
   }
 
   def genColumnOnlyValuesEqualToExpression(colName: String,
