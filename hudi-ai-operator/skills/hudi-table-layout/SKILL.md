@@ -35,7 +35,7 @@ layout from memory; every number and verdict you give traces back to a field in 
 | `tableSizeStats`, `fileCountPerPartition` | How big are the base files, and how many does each partition hold? |
 | `skew` | Is data spread evenly across partitions, or concentrated in a few? |
 | `partitions` | Which partitions are largest, and what do their files look like? |
-| `micro-partition` detector | Are there too many partitions, or partitions full of tiny files? |
+| `micro-partition` detector | Are there too many partitions, or do most partitions hold too little data to fill a base file? |
 | `small-files` detector | What share of partitions is piling up small base files? |
 | `hot-partitions` detector | Which partitions absorb most recent writes? |
 

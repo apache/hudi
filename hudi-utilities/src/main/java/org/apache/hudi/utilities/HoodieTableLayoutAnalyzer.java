@@ -204,18 +204,18 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
         required = false)
     public int microPartitionCountThreshold = 10000;
 
-    @Parameter(names = {"--micro-partition-min-files"},
-        description = "Per-partition file count gate for the size-based micro-partition rule. Default 25.",
+    @Parameter(names = {"--micro-partition-max-partition-bytes"},
+        description = "A partition whose base files total under this many bytes is tiny for the tiny-partition rule. Default 52428800 (50 MB).",
         required = false)
-    public int microPartitionMinFiles = 25;
+    public long microPartitionMaxPartitionBytes = 50L * 1024 * 1024;
 
-    @Parameter(names = {"--micro-partition-max-avg-bytes"},
-        description = "Per-partition avg-file-size threshold (bytes) for the size-based rule. Default 52428800 (50 MB).",
+    @Parameter(names = {"--micro-partition-tiny-pct"},
+        description = "Fraction of examined partitions that must be tiny for the tiny-partition rule to flag the table. Default 0.5.",
         required = false)
-    public long microPartitionMaxAvgBytes = 50L * 1024 * 1024;
+    public double microPartitionTinyPct = 0.5;
 
     @Parameter(names = {"--micro-partition-min-age-days"},
-        description = "Minimum table age before applying the size-based micro-partition rule. Default 30.",
+        description = "Minimum table age before applying the tiny-partition rule. Default 30.",
         required = false)
     public int microPartitionMinAgeDays = 30;
 
@@ -284,8 +284,8 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
           + "   --analyze-table-characteristics " + analyzeTableCharacteristics + ", \n"
           + "   --print-top-k " + printTopK + ", \n"
           + "   --micro-partition-count-threshold " + microPartitionCountThreshold + ", \n"
-          + "   --micro-partition-min-files " + microPartitionMinFiles + ", \n"
-          + "   --micro-partition-max-avg-bytes " + microPartitionMaxAvgBytes + ", \n"
+          + "   --micro-partition-max-partition-bytes " + microPartitionMaxPartitionBytes + ", \n"
+          + "   --micro-partition-tiny-pct " + microPartitionTinyPct + ", \n"
           + "   --micro-partition-min-age-days " + microPartitionMinAgeDays + ", \n"
           + "   --small-files-min-files-per-partition " + smallFilesMinFilesPerPartition + ", \n"
           + "   --small-files-threshold-bytes " + smallFilesThresholdBytes + ", \n"
@@ -322,8 +322,8 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
           && Objects.equals(analyzeTableCharacteristics, config.analyzeTableCharacteristics)
           && Objects.equals(printTopK, config.printTopK)
           && Objects.equals(microPartitionCountThreshold, config.microPartitionCountThreshold)
-          && Objects.equals(microPartitionMinFiles, config.microPartitionMinFiles)
-          && Objects.equals(microPartitionMaxAvgBytes, config.microPartitionMaxAvgBytes)
+          && Objects.equals(microPartitionMaxPartitionBytes, config.microPartitionMaxPartitionBytes)
+          && Objects.equals(microPartitionTinyPct, config.microPartitionTinyPct)
           && Objects.equals(microPartitionMinAgeDays, config.microPartitionMinAgeDays)
           && Objects.equals(smallFilesMinFilesPerPartition, config.smallFilesMinFilesPerPartition)
           && Objects.equals(smallFilesThresholdBytes, config.smallFilesThresholdBytes)
@@ -341,7 +341,7 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     @Override
     public int hashCode() {
       return Objects.hash(basePath, numDays, startDate, endDate, tableStats, partitionStats, output, topN, includeRowCounts,
-          analyzeTableCharacteristics, printTopK, microPartitionCountThreshold, microPartitionMinFiles, microPartitionMaxAvgBytes,
+          analyzeTableCharacteristics, printTopK, microPartitionCountThreshold, microPartitionMaxPartitionBytes, microPartitionTinyPct,
           microPartitionMinAgeDays, smallFilesMinFilesPerPartition, smallFilesThresholdBytes, smallFilesModeratePct,
           smallFilesSeverePct, smallFilesMinTableCommits, hotWindowCommits, hotPartitionCommitShare,
           parallelism, sparkMaster, sparkMemory, propsFilePath, help);
@@ -568,29 +568,40 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
   }
 
   /**
-   * Micro-partition verdict: table is "micro" when partition count exceeds the count threshold,
-   * OR (on mature tables) any partition has many small files. The size rule is gated by
-   * table age, since new tables legitimately have small partitions.
+   * Micro-partition verdict: the table is "micro" when its partition count exceeds the count
+   * threshold, OR (on mature, partitioned tables) at least {@code --micro-partition-tiny-pct}
+   * of the examined partitions are tiny, holding under {@code --micro-partition-max-partition-bytes}
+   * of base-file data in total.
+   *
+   * <p>Total bytes per partition, not average file size, is what separates this signal from
+   * small-file pile-up. A partition holding 25 files of 2 MB has a small-file problem that
+   * clustering fixes; a partition holding 2 MB in total can never fill a well-sized base file
+   * no matter how it is clustered, and only a coarser partitioning scheme helps. The small-file
+   * detector owns the first shape; this rule owns the second.
+   *
+   * <p>The tiny rule is gated by table age, since the partitions of a new table are still
+   * filling, and judged by prevalence rather than "any partition", since the newest partition
+   * of a time-partitioned table is always still filling. It is skipped on single-partition
+   * tables, where the question does not apply.
    */
   private void runMicroPartitionDetector(List<PartitionRow> rows, TableCharacteristics tc) {
-    boolean countTrigger = tc.numPartitions > cfg.microPartitionCountThreshold;
-    boolean sizeTriggerEligible = tc.tableAgeDays >= cfg.microPartitionMinAgeDays;
-    int sizeMatches = 0;
-    if (sizeTriggerEligible) {
+    tc.microCountTrigger = tc.numPartitions > cfg.microPartitionCountThreshold;
+    if (tc.tinyRuleEligible(cfg)) {
+      int tiny = 0;
       for (PartitionRow r : rows) {
-        if (r.fileCount >= cfg.microPartitionMinFiles && r.avgFileSize() < cfg.microPartitionMaxAvgBytes) {
-          sizeMatches++;
+        if (r.totalBytes < cfg.microPartitionMaxPartitionBytes) {
+          tiny++;
         }
       }
+      tc.microTinyPartitionCount = tiny;
+      tc.microTinyPct = rows.isEmpty() ? 0.0 : (double) tiny / rows.size();
+      tc.microTinyTrigger = tiny > 0 && tc.microTinyPct >= cfg.microPartitionTinyPct;
     }
-    tc.microCountTrigger = countTrigger;
-    tc.microSizeTrigger = sizeMatches > 0;
-    tc.microSizeMatchCount = sizeMatches;
-    tc.microPartitioned = countTrigger || tc.microSizeTrigger;
-    // Top-K evidence: partitions with the smallest avg file size among those satisfying the
-    // micro file-count gate. Independent of the verdict; useful even when the verdict is "no".
+    tc.microPartitioned = tc.microCountTrigger || tc.microTinyTrigger;
+    // Top-K evidence: the partitions holding the least data in total. Independent of the
+    // verdict; useful even when the verdict is "no".
     if (cfg.printTopK > 0) {
-      tc.microTopKSmallest.addAll(collectTopKSmallest(rows, cfg.microPartitionMinFiles, cfg.printTopK));
+      tc.microTopKSmallest.addAll(collectTopKByTotalBytes(rows, cfg.printTopK));
     }
   }
 
@@ -644,6 +655,17 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     qualifying.sort(Comparator.comparingLong((SmallestPartition p) -> p.avgFileSize)
         .thenComparingLong(p -> p.totalBytes));
     return qualifying.subList(0, Math.min(k, qualifying.size()));
+  }
+
+  /** Returns the top-K partitions holding the least base-file data in total, in ascending order. */
+  private static List<SmallestPartition> collectTopKByTotalBytes(List<PartitionRow> rows, int k) {
+    List<SmallestPartition> all = new ArrayList<>(rows.size());
+    for (PartitionRow r : rows) {
+      all.add(new SmallestPartition(r.partition, r.fileCount, r.totalBytes, r.avgFileSize()));
+    }
+    all.sort(Comparator.comparingLong((SmallestPartition p) -> p.totalBytes)
+        .thenComparingLong(p -> p.avgFileSize));
+    return all.subList(0, Math.min(k, all.size()));
   }
 
   private SmallFileVerdict classifySmallFileVerdict(int qualifying, double flaggedPct) {
@@ -1141,13 +1163,16 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     } else {
       System.out.printf("    count rule:  numPartitions=%d (threshold=%d)%n", tc.numPartitions, cfg.microPartitionCountThreshold);
     }
-    if (tc.sizeRuleEligible(cfg)) {
-      System.out.printf("    size rule:   %d partition(s) match (files>=%d AND avgSize<%s)  tableAge=%dd%n",
-          tc.microSizeMatchCount, cfg.microPartitionMinFiles, formatBytes(cfg.microPartitionMaxAvgBytes), tc.tableAgeDays);
+    if (tc.tinyRuleEligible(cfg)) {
+      System.out.printf("    tiny rule:   %d of %d examined partition(s) hold < %s in total (%.1f%%; flagged at >= %.0f%%)  tableAge=%dd%n",
+          tc.microTinyPartitionCount, tc.partitionsExamined, formatBytes(cfg.microPartitionMaxPartitionBytes),
+          100.0 * tc.microTinyPct, 100.0 * cfg.microPartitionTinyPct, tc.tableAgeDays);
+    } else if (tc.numPartitions <= 1) {
+      System.out.println("    tiny rule:   skipped, table has a single partition");
     } else {
-      System.out.printf("    size rule:   skipped, table age %dd < %dd minimum%n", tc.tableAgeDays, cfg.microPartitionMinAgeDays);
+      System.out.printf("    tiny rule:   skipped, table age %dd < %dd minimum%n", tc.tableAgeDays, cfg.microPartitionMinAgeDays);
     }
-    emitTopKSmallest("    top-" + cfg.printTopK + " smallest (files>=" + cfg.microPartitionMinFiles + ")", tc.microTopKSmallest);
+    emitTopKSmallest("    top-" + cfg.printTopK + " smallest partitions by total bytes", tc.microTopKSmallest);
 
     // Small files (table-level verdict based on prevalence)
     if (tc.smallFileVerdict == SmallFileVerdict.SKIPPED
@@ -1223,8 +1248,12 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
   }
 
   private String microPartitionDetectorJson(TableCharacteristics tc) {
-    boolean sizeRuleEligible = tc.sizeRuleEligible(cfg);
-    String sizeThreshold = formatBytes(cfg.microPartitionMaxAvgBytes);
+    boolean tinyRuleEligible = tc.tinyRuleEligible(cfg);
+    String tinyThreshold = formatBytes(cfg.microPartitionMaxPartitionBytes);
+    String tinyPct = String.format(Locale.ROOT, "%.1f%%", 100.0 * tc.microTinyPct);
+    String tinyGate = String.format(Locale.ROOT, "%.0f%%", 100.0 * cfg.microPartitionTinyPct);
+    String tinyObservation = tc.microTinyPartitionCount + " of " + tc.partitionsExamined + " examined partitions hold under "
+        + tinyThreshold + " in total (" + tinyPct + "; flagged at >= " + tinyGate + ")";
 
     List<String> summaryParts = new ArrayList<>();
     List<String> findings = new ArrayList<>();
@@ -1236,17 +1265,18 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     } else {
       summaryParts.add(tc.numPartitions + " partitions (count threshold " + cfg.microPartitionCountThreshold + ")");
     }
-    if (!sizeRuleEligible) {
-      summaryParts.add("size rule skipped because the table is " + tc.tableAgeDays + " days old (needs " + cfg.microPartitionMinAgeDays + ")");
-    } else if (tc.microSizeTrigger) {
-      summaryParts.add(tc.microSizeMatchCount + " partitions hold >= " + cfg.microPartitionMinFiles
-          + " base files averaging under " + sizeThreshold);
-      findings.add(tc.microSizeMatchCount + " partitions hold at least " + cfg.microPartitionMinFiles
-          + " base files averaging under " + sizeThreshold + " on a table " + tc.tableAgeDays
-          + " days old; run clustering (HoodieClusteringJob) to merge them, and check that the writer's small-file limit "
-          + "and max file size let ingestion bin-pack new records into existing files.");
+    if (!tinyRuleEligible && tc.numPartitions <= 1) {
+      summaryParts.add("tiny-partition rule skipped because the table has a single partition");
+    } else if (!tinyRuleEligible) {
+      summaryParts.add("tiny-partition rule skipped because the table is " + tc.tableAgeDays + " days old (needs " + cfg.microPartitionMinAgeDays + ")");
     } else {
-      summaryParts.add("no partition holds >= " + cfg.microPartitionMinFiles + " base files averaging under " + sizeThreshold);
+      summaryParts.add(tinyObservation);
+      if (tc.microTinyTrigger) {
+        findings.add(tc.microTinyPartitionCount + " of " + tc.partitionsExamined + " examined partitions (" + tinyPct + ") hold under "
+            + tinyThreshold + " of base-file data in total on a table " + tc.tableAgeDays + " days old. A partition this small can never "
+            + "fill a well-sized base file, so clustering will not help; revisit the partitioning scheme (coarser partition columns, or "
+            + "bucketing / clustering on the column instead of partitioning by it).");
+      }
     }
 
     StringBuilder sb = new StringBuilder("{");
@@ -1256,15 +1286,17 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     sb.append(", \"findings\": ").append(stringArrayToJson(findings));
     sb.append(", \"effectiveConfigs\": {");
     sb.append("\"effective.micro.partition.count.threshold\": ").append(cfg.microPartitionCountThreshold);
-    sb.append(", \"effective.micro.partition.min.files\": ").append(cfg.microPartitionMinFiles);
-    sb.append(", \"effective.micro.partition.max.avg.bytes\": ").append(cfg.microPartitionMaxAvgBytes);
+    sb.append(", \"effective.micro.partition.max.partition.bytes\": ").append(cfg.microPartitionMaxPartitionBytes);
+    sb.append(", \"effective.micro.partition.tiny.pct\": ").append(cfg.microPartitionTinyPct);
     sb.append(", \"effective.micro.partition.min.age.days\": ").append(cfg.microPartitionMinAgeDays);
     sb.append(", \"observed.num.partitions\": ").append(tc.numPartitions);
+    sb.append(", \"observed.partitions.examined\": ").append(tc.partitionsExamined);
     sb.append(", \"observed.table.age.days\": ").append(tc.tableAgeDays);
     sb.append(", \"observed.count.rule.triggered\": ").append(tc.microCountTrigger);
-    sb.append(", \"observed.size.rule.eligible\": ").append(sizeRuleEligible);
-    sb.append(", \"observed.size.rule.triggered\": ").append(tc.microSizeTrigger);
-    sb.append(", \"observed.size.rule.matching.partitions\": ").append(tc.microSizeMatchCount);
+    sb.append(", \"observed.tiny.rule.eligible\": ").append(tinyRuleEligible);
+    sb.append(", \"observed.tiny.rule.triggered\": ").append(tc.microTinyTrigger);
+    sb.append(", \"observed.tiny.partitions\": ").append(tc.microTinyPartitionCount);
+    sb.append(", \"observed.tiny.partition.pct\": ").append(String.format(Locale.ROOT, "%.4f", tc.microTinyPct));
     sb.append("}");
     appendTopKSmallestJson(sb, tc.microTopKSmallest);
     sb.append("}");
@@ -1675,9 +1707,10 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     // Micro-partition verdict.
     boolean microPartitioned;
     boolean microCountTrigger;
-    boolean microSizeTrigger;
-    int microSizeMatchCount;
-    // Top-K partitions (by lowest avg file size) satisfying the micro size-rule file-count gate.
+    boolean microTinyTrigger;
+    int microTinyPartitionCount;
+    double microTinyPct;
+    // Top-K partitions holding the least base-file data in total.
     // Populated when --print-top-k > 0. Empty otherwise.
     final List<SmallestPartition> microTopKSmallest = new ArrayList<>();
 
@@ -1697,8 +1730,8 @@ public class HoodieTableLayoutAnalyzer implements Serializable {
     boolean hotPartitionDetectionFailed;
     final List<HotPartition> hotPartitions = new ArrayList<>();
 
-    boolean sizeRuleEligible(Config cfg) {
-      return tableAgeDays >= cfg.microPartitionMinAgeDays;
+    boolean tinyRuleEligible(Config cfg) {
+      return numPartitions > 1 && tableAgeDays >= cfg.microPartitionMinAgeDays;
     }
 
     DetectorStatus hotPartitionStatus() {

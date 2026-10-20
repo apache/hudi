@@ -65,12 +65,13 @@ it used, and findings:
 
 | Detector | Verdict | Fires when |
 |---|---|---|
-| `micro-partition` | `CLEAN` / `FLAGGED` | `numPartitions > --micro-partition-count-threshold`, **or** (once the table is at least `--micro-partition-min-age-days` old) any partition holds `>= --micro-partition-min-files` base files averaging under `--micro-partition-max-avg-bytes`. |
+| `micro-partition` | `CLEAN` / `FLAGGED` | `numPartitions > --micro-partition-count-threshold`, **or** (once the table is at least `--micro-partition-min-age-days` old and has more than one partition) at least `--micro-partition-tiny-pct` of the examined partitions hold under `--micro-partition-max-partition-bytes` of base-file data in total. Average file size is deliberately not measured here; that is the `small-files` detector's signal. |
 | `small-files` | `CLEAN` / `MODERATE` / `SEVERE` / `SKIPPED` | Among partitions with `>= --small-files-min-files-per-partition` base files ("qualifying"), the share whose average base file is under `--small-files-threshold-bytes` reaches `--small-files-moderate-pct` (MODERATE) or `--small-files-severe-pct` (SEVERE). `SKIPPED` when the table has fewer than `--small-files-min-table-commits` ingest commits. |
 | `hot-partitions` | `CLEAN` / `FLAGGED` / `SKIPPED` | A partition was written by at least `--hot-partition-commit-share` of the last `--hot-window-commits` completed ingest commits (`commit`, `deltacommit`, and `replacecommit` from insert-overwrite; compaction and clustering are excluded). `SKIPPED` when no ingest commit is on the active timeline. |
 
-`--print-top-k K` adds, under the micro-partition and small-files detectors, the K partitions
-with the smallest average base file size among those passing the detector's file-count gate.
+`--print-top-k K` adds the K partitions holding the least data in total under the micro-partition
+detector, and the K partitions with the smallest average base file size among those passing the
+file-count gate under the small-files detector.
 
 ## Options
 
@@ -110,9 +111,9 @@ contain date"; drop the date flags. `--start-date` wins over `--num-days` when b
 | Flag | Default | Meaning |
 |---|---|---|
 | `--micro-partition-count-threshold` | `10000` | Partition count above which the table is micro-partitioned |
-| `--micro-partition-min-files` | `25` | File-count gate for the size-based micro-partition rule |
-| `--micro-partition-max-avg-bytes` | `52428800` (50 MB) | Average base file size below which the size rule matches |
-| `--micro-partition-min-age-days` | `30` | Table age before the size rule applies; younger tables legitimately have small partitions |
+| `--micro-partition-max-partition-bytes` | `52428800` (50 MB) | Total base-file bytes below which a partition is tiny |
+| `--micro-partition-tiny-pct` | `0.5` | Share of examined partitions that must be tiny for the tiny rule to fire |
+| `--micro-partition-min-age-days` | `30` | Table age before the tiny rule applies; the partitions of a younger table are still filling |
 | `--small-files-min-files-per-partition` | `5` | File-count gate for a partition to count toward the small-files ratio |
 | `--small-files-threshold-bytes` | `52428800` (50 MB) | Average base file size below which a qualifying partition is flagged |
 | `--small-files-moderate-pct` | `0.10` | Flagged / qualifying ratio for `MODERATE` |
@@ -153,9 +154,9 @@ contain date"; drop the date flags. `--start-date` wins over `--num-days` when b
     "overallStatus": "FLAGGED",
     "detectors": [
       {"name": "micro-partition", "status": "FLAGGED",
-       "summary": "2 partitions (count threshold 10000); 2 partitions hold >= 5 base files averaging under 50.00 MB.",
-       "findings": ["2 partitions hold at least 5 base files averaging under 50.00 MB on a table 271 days old; run clustering (HoodieClusteringJob) to merge them, and check that the writer's small-file limit and max file size let ingestion bin-pack new records into existing files."],
-       "effectiveConfigs": {"effective.micro.partition.count.threshold": 10000, "effective.micro.partition.min.files": 5, "effective.micro.partition.max.avg.bytes": 52428800, "effective.micro.partition.min.age.days": 0, "observed.num.partitions": 2, "observed.table.age.days": 271, "observed.count.rule.triggered": false, "observed.size.rule.eligible": true, "observed.size.rule.triggered": true, "observed.size.rule.matching.partitions": 2},
+       "summary": "2 partitions (count threshold 10000); 2 of 2 examined partitions hold under 50.00 MB in total (100.0%; flagged at >= 50%).",
+       "findings": ["2 of 2 examined partitions (100.0%) hold under 50.00 MB of base-file data in total on a table 271 days old. A partition this small can never fill a well-sized base file, so clustering will not help; revisit the partitioning scheme (coarser partition columns, or bucketing / clustering on the column instead of partitioning by it)."],
+       "effectiveConfigs": {"effective.micro.partition.count.threshold": 10000, "effective.micro.partition.max.partition.bytes": 52428800, "effective.micro.partition.tiny.pct": 0.5, "effective.micro.partition.min.age.days": 0, "observed.num.partitions": 2, "observed.partitions.examined": 2, "observed.table.age.days": 271, "observed.count.rule.triggered": false, "observed.tiny.rule.eligible": true, "observed.tiny.rule.triggered": true, "observed.tiny.partitions": 2, "observed.tiny.partition.pct": 1.0000},
        "topKSmallestPartitions": []},
       {"name": "small-files", "status": "SEVERE",
        "summary": "2 of 2 partitions with >= 5 base files average under 50.00 MB (100.0%; MODERATE at >= 10%, SEVERE at >= 30%).",

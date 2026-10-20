@@ -94,13 +94,13 @@ tables with a long tail of old, small partitions are legitimately skewed.
 
 | | |
 |---|---|
-| Measures | Whether the table has too many partitions, or partitions that hold many tiny base files. |
+| Measures | Whether the table has too many partitions, or whether most partitions hold too little data to ever fill a well-sized base file. |
 | Count rule | `observed.num.partitions` above `effective.micro.partition.count.threshold` (`--micro-partition-count-threshold`, default 10000). |
-| Size rule | Any partition with at least `effective.micro.partition.min.files` base files (`--micro-partition-min-files`, default 25) averaging under `effective.micro.partition.max.avg.bytes` (`--micro-partition-max-avg-bytes`, default 50 MB). Only applied once the table is `effective.micro.partition.min.age.days` old (`--micro-partition-min-age-days`, default 30); `observed.size.rule.eligible` says whether it ran. |
-| `FLAGGED` | Either rule fired; `observed.count.rule.triggered` and `observed.size.rule.triggered` say which. |
-| `CLEAN` | Neither rule fired. When `observed.size.rule.eligible` is false the verdict rests on the count rule alone; say so. |
-| Remedy, count rule | Revisit the partition key: coarser partition columns (month instead of day, region instead of city), or keep the column as a clustering / bucketing key instead of a partition. This means a new table; it cannot be changed in place. |
-| Remedy, size rule | Schedule clustering (`HoodieClusteringJob`, or inline / async clustering on the writer) to merge files, and check that `hoodie.parquet.small.file.limit` and `hoodie.parquet.max.file.size` let ingestion bin-pack into existing files. Clustering rewrites data; it does not lose it. |
+| Tiny rule | A partition is tiny when its base files total under `effective.micro.partition.max.partition.bytes` (`--micro-partition-max-partition-bytes`, default 50 MB). The rule fires when the tiny share of the examined partitions (`observed.tiny.partition.pct`) reaches `effective.micro.partition.tiny.pct` (`--micro-partition-tiny-pct`, default 0.5). Prevalence, not "any partition", so the newest partition of a time-partitioned table, which is still filling, cannot flag the table on its own. Only applied once the table is `effective.micro.partition.min.age.days` old (`--micro-partition-min-age-days`, default 30) and has more than one partition; `observed.tiny.rule.eligible` says whether it ran. |
+| Not measured | Average file size. A partition holding many small files is a small-file problem and belongs to the `small-files` detector, whatever its partition count. The two detectors are independent and can both fire. |
+| `FLAGGED` | Either rule fired; `observed.count.rule.triggered` and `observed.tiny.rule.triggered` say which. |
+| `CLEAN` | Neither rule fired. When `observed.tiny.rule.eligible` is false the verdict rests on the count rule alone; say so. |
+| Remedy, either rule | Revisit the partition key: coarser partition columns (month instead of day, region instead of city), or keep the column as a clustering / bucketing key instead of a partition. This means a new table; it cannot be changed in place. Clustering does not help a tiny partition: there is not enough data in it to fill a file. |
 
 ### small-files
 

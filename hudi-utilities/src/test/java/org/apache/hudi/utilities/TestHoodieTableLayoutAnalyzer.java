@@ -571,17 +571,17 @@ class TestHoodieTableLayoutAnalyzer {
     createPartition("b", 1, 1024, 0);
     completeFixtureCommit("a", "b");
 
-    // when the count threshold is 1 and the age gate disables the size rule
+    // when the count threshold is 1 and the age gate disables the tiny rule
     HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
     cfg.microPartitionCountThreshold = 1;
     cfg.microPartitionMinAgeDays = 99999;
     runAnalyzer(cfg);
     String out = capturedAsString();
 
-    // then the verdict is YES via the count rule and the size rule is reported as skipped
+    // then the verdict is YES via the count rule and the tiny rule is reported as skipped
     assertTrue(out.contains("Micro-partitioned:  YES"), out);
     assertTrue(out.contains("count rule:  numPartitions=2 > threshold=1"), out);
-    assertTrue(out.contains("size rule:   skipped"), out);
+    assertTrue(out.contains("tiny rule:   skipped, table age"), out);
   }
 
   @Test
@@ -608,24 +608,86 @@ class TestHoodieTableLayoutAnalyzer {
   }
 
   @Test
-  void microSizeRuleFiresAtExactMinFilesGate() throws Exception {
-    // given a partition with exactly microPartitionMinFiles small files
-    createPartition("edge", 5, 1024, 0);
-    completeFixtureCommit("edge");
+  void microTinyRuleFlagsWhenMostExaminedPartitionsAreTiny() throws Exception {
+    // given two partitions holding 1 KB in total and one holding 100 KB
+    createPartition("tiny1", 1, 1024, 0);
+    createPartition("tiny2", 1, 1024, 0);
+    createPartition("full", 1, 100 * 1024, 0);
+    completeFixtureCommit("tiny1", "tiny2", "full");
 
-    // when the size rule runs with the gate at 5
+    // when the tiny threshold is 10 KB and the prevalence gate is the default 50%
     HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
     cfg.microPartitionCountThreshold = 1000;
     cfg.microPartitionMinAgeDays = 0;
-    cfg.microPartitionMinFiles = 5;
-    cfg.microPartitionMaxAvgBytes = 50L * 1024 * 1024;
+    cfg.microPartitionMaxPartitionBytes = 10 * 1024;
     runAnalyzer(cfg);
     String out = capturedAsString();
 
-    // then the gate is inclusive and the partition matches
+    // then 2 of 3 partitions are tiny (67% >= 50%) and the table is flagged
     assertTrue(out.contains("Micro-partitioned:  YES"), out);
-    assertTrue(out.contains("size rule:   1 partition(s) match"),
-        "expected size rule to fire at exactly fileCount=microPartitionMinFiles, output:\n" + out);
+    assertTrue(out.contains("tiny rule:   2 of 3 examined partition(s) hold < 10.00 KB in total"), out);
+  }
+
+  @Test
+  void microTinyRuleStaysCleanBelowPrevalenceGate() throws Exception {
+    // given one tiny partition and two full ones
+    createPartition("tiny", 1, 1024, 0);
+    createPartition("full1", 1, 100 * 1024, 0);
+    createPartition("full2", 1, 100 * 1024, 0);
+    completeFixtureCommit("tiny", "full1", "full2");
+
+    // when the tiny threshold is 10 KB and the prevalence gate is the default 50%
+    HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
+    cfg.microPartitionCountThreshold = 1000;
+    cfg.microPartitionMinAgeDays = 0;
+    cfg.microPartitionMaxPartitionBytes = 10 * 1024;
+    runAnalyzer(cfg);
+    String out = capturedAsString();
+
+    // then 1 of 3 (33%) is below the gate, so the still-filling newest partition does not flag the table
+    assertTrue(out.contains("Micro-partitioned:  no"), out);
+    assertTrue(out.contains("tiny rule:   1 of 3 examined partition(s) hold < 10.00 KB in total"), out);
+  }
+
+  @Test
+  void microTinyRuleDoesNotFireOnSmallFilePileUp() throws Exception {
+    // given a partition holding 25 KB across 25 tiny files (a small-file problem, not a tiny partition)
+    // and a second full partition so the table is partitioned
+    createPartition("piled", 25, 1024, 0);
+    createPartition("full", 1, 100 * 1024, 0);
+    completeFixtureCommit("piled", "full");
+
+    // when the tiny threshold is 10 KB and the small-file detector is allowed to run
+    HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
+    cfg.microPartitionCountThreshold = 1000;
+    cfg.microPartitionMinAgeDays = 0;
+    cfg.microPartitionMaxPartitionBytes = 10 * 1024;
+    cfg.smallFilesMinTableCommits = 1;
+    runAnalyzer(cfg);
+    String out = capturedAsString();
+
+    // then the micro-partition detector stays clean and the small-file detector carries the signal
+    assertTrue(out.contains("Micro-partitioned:  no"), out);
+    assertTrue(out.contains("tiny rule:   0 of 2 examined partition(s)"), out);
+    assertTrue(out.contains("Small-file pile-up: SEVERE"), out);
+  }
+
+  @Test
+  void microTinyRuleSkippedOnSinglePartitionTable() throws Exception {
+    // given a table with a single tiny partition
+    createPartition("only", 1, 1024, 0);
+    completeFixtureCommit("only");
+
+    // when the age gate is open
+    HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
+    cfg.microPartitionCountThreshold = 1000;
+    cfg.microPartitionMinAgeDays = 0;
+    runAnalyzer(cfg);
+    String out = capturedAsString();
+
+    // then the tiny rule does not apply and the table is not called micro-partitioned
+    assertTrue(out.contains("Micro-partitioned:  no"), out);
+    assertTrue(out.contains("tiny rule:   skipped, table has a single partition"), out);
   }
 
   @Test
@@ -705,15 +767,13 @@ class TestHoodieTableLayoutAnalyzer {
     HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
     cfg.microPartitionCountThreshold = 10000;
     cfg.microPartitionMinAgeDays = 0;
-    cfg.microPartitionMinFiles = 5;
-    cfg.microPartitionMaxAvgBytes = 50L * 1024 * 1024;
     cfg.smallFilesMinFilesPerPartition = 5;
     cfg.printTopK = 2;
     runAnalyzer(cfg);
     String out = capturedAsString();
 
-    // then the two smallest are listed and the largest is not
-    assertTrue(out.contains("top-2 smallest"), "top-K subsection missing:\n" + out);
+    // then the two smallest are listed under the micro-partition detector and the largest is not
+    assertTrue(out.contains("top-2 smallest partitions by total bytes"), "micro top-K subsection missing:\n" + out);
     assertTrue(out.contains("small  files="), "'small' partition should be in top-K:\n" + out);
     assertTrue(out.contains("medium  files="), "'medium' partition should be in top-K:\n" + out);
     assertFalse(out.contains("large  files="), "'large' should NOT be in top-2 smallest:\n" + out);
@@ -721,7 +781,7 @@ class TestHoodieTableLayoutAnalyzer {
 
   @Test
   void detectorJsonCarriesStatusSummaryFindingsAndThresholds() throws Exception {
-    // given a table whose partitions trip the size rule and the small-file SEVERE tier
+    // given a table whose partitions trip the tiny rule and the small-file SEVERE tier
     createPartition("p0", 10, 1024, 0);
     createPartition("p1", 8, 2048, 0);
     completeFixtureCommit("p0", "p1");
@@ -735,7 +795,6 @@ class TestHoodieTableLayoutAnalyzer {
     HoodieTableLayoutAnalyzer.Config cfg = detectorConfig();
     cfg.output = "JSON";
     cfg.microPartitionMinAgeDays = 0;
-    cfg.microPartitionMinFiles = 5;
     runAnalyzer(cfg);
     String json = extractJsonObject(capturedAsString());
 
@@ -744,8 +803,10 @@ class TestHoodieTableLayoutAnalyzer {
     assertTrue(json.contains("\"name\": \"micro-partition\", \"status\": \"FLAGGED\""), json);
     assertTrue(json.contains("\"name\": \"small-files\", \"status\": \"SEVERE\""), json);
     assertTrue(json.contains("\"name\": \"hot-partitions\", \"status\": \"FLAGGED\""), json);
-    assertTrue(json.contains("\"effective.micro.partition.min.files\": 5"), json);
-    assertTrue(json.contains("\"observed.size.rule.matching.partitions\": 2"), json);
+    assertTrue(json.contains("\"effective.micro.partition.tiny.pct\": 0.5"), json);
+    assertTrue(json.contains("\"observed.tiny.partitions\": 2"), json);
+    assertTrue(json.contains("\"observed.tiny.partition.pct\": 1.0000"), json);
+    assertTrue(json.contains("revisit the partitioning scheme"), "tiny-rule finding should point at re-partitioning:\n" + json);
     assertTrue(json.contains("\"effective.small.files.threshold.bytes\": 52428800"), json);
     assertTrue(json.contains("\"observed.flagged.partitions\": 2"), json);
     assertTrue(json.contains("\"observed.hot.window.effective.commits\": 10"), json);
@@ -1055,13 +1116,13 @@ class TestHoodieTableLayoutAnalyzer {
     assertNotEquals(a, b, "microPartitionCountThreshold differs");
     b.microPartitionCountThreshold = a.microPartitionCountThreshold;
 
-    b.microPartitionMinFiles = a.microPartitionMinFiles + 1;
-    assertNotEquals(a, b, "microPartitionMinFiles differs");
-    b.microPartitionMinFiles = a.microPartitionMinFiles;
+    b.microPartitionMaxPartitionBytes = a.microPartitionMaxPartitionBytes + 1;
+    assertNotEquals(a, b, "microPartitionMaxPartitionBytes differs");
+    b.microPartitionMaxPartitionBytes = a.microPartitionMaxPartitionBytes;
 
-    b.microPartitionMaxAvgBytes = a.microPartitionMaxAvgBytes + 1;
-    assertNotEquals(a, b, "microPartitionMaxAvgBytes differs");
-    b.microPartitionMaxAvgBytes = a.microPartitionMaxAvgBytes;
+    b.microPartitionTinyPct = a.microPartitionTinyPct + 0.1;
+    assertNotEquals(a, b, "microPartitionTinyPct differs");
+    b.microPartitionTinyPct = a.microPartitionTinyPct;
 
     b.microPartitionMinAgeDays = a.microPartitionMinAgeDays + 1;
     assertNotEquals(a, b, "microPartitionMinAgeDays differs");
