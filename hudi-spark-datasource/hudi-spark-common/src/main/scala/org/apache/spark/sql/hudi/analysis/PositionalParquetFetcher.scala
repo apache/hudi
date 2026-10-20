@@ -116,6 +116,7 @@ private[analysis] final class PositionalParquetFetcher(
     var rangedGets = 0L
     var rowsDecoded = 0L
     var rowsMaterialized = 0L
+    var nullEmbeddingsSkipped = 0L
     var offsetIndexMs = 0L
     var decodeMs = 0L
     scoreMs = 0L
@@ -197,7 +198,10 @@ private[analysis] final class PositionalParquetFetcher(
           val row = recordReader.read()
           rowsDecoded += 1
           candidateByRelativeRow.get(relativeRow).foreach { candidate =>
-            if (verifyKeys && decodedRecordKey(row) != candidate.getRecordKey) {
+            if (row == null) {
+              // The live row has a NULL embedding: brute force filters it out, so skip it too.
+              nullEmbeddingsSkipped += 1
+            } else if (verifyKeys && decodedRecordKey(row) != candidate.getRecordKey) {
               keyMismatches += candidate
             } else {
               fillSyntheticFields(row, candidate)
@@ -225,6 +229,7 @@ private[analysis] final class PositionalParquetFetcher(
       pageBytesFetched = pageBytesFetched,
       rowsDecoded = rowsDecoded,
       rowsMaterialized = rowsMaterialized,
+      nullEmbeddingsSkipped = nullEmbeddingsSkipped,
       fetchKeyMismatch = keyMismatches.size,
       physicalBytesRead = math.max(0L, physicalAfter - physicalBefore),
       footerReads = if (footerResult.cacheHit) 0 else 1,
@@ -331,13 +336,15 @@ private[analysis] final class PositionalParquetFetcher(
       }
 
       override def end(): Unit = {
-        if (vectorBytes == null) {
-          throw new IllegalStateException(s"Vector column '$embeddingCol' was not decoded for positional exact fetch.")
+        // A NULL embedding (row upserted to NULL after indexing) yields no record; the caller skips it.
+        current = if (vectorBytes == null) {
+          null
+        } else {
+          val scoreStartNs = System.nanoTime()
+          values(distanceOrdinal) = scoreVector(vectorBytes)
+          scoreMs += elapsedMs(scoreStartNs)
+          new GenericInternalRow(values.clone())
         }
-        val scoreStartNs = System.nanoTime()
-        values(distanceOrdinal) = scoreVector(vectorBytes)
-        scoreMs += elapsedMs(scoreStartNs)
-        current = new GenericInternalRow(values.clone())
       }
     }
 
@@ -415,6 +422,7 @@ private[analysis] object PositionalParquetFetcher {
       pageBytesFetched: Long = 0L,
       rowsDecoded: Long = 0L,
       rowsMaterialized: Long = 0L,
+      nullEmbeddingsSkipped: Long = 0L,
       fetchKeyMismatch: Long = 0L,
       physicalBytesRead: Long = 0L,
       footerReads: Long = 0L,
@@ -438,6 +446,7 @@ private[analysis] object PositionalParquetFetcher {
       pageBytesFetched + other.pageBytesFetched,
       rowsDecoded + other.rowsDecoded,
       rowsMaterialized + other.rowsMaterialized,
+      nullEmbeddingsSkipped + other.nullEmbeddingsSkipped,
       fetchKeyMismatch + other.fetchKeyMismatch,
       physicalBytesRead + other.physicalBytesRead,
       footerReads + other.footerReads,

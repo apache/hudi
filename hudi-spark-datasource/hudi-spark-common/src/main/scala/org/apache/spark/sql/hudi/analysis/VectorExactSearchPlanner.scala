@@ -305,6 +305,7 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
             s"[vector_search][stage][exact_read] rerankCandidates=$candidateKeys candidateFileCount=$resolvedSlices " +
               s"fetchBatches=$batchCount resolvedSlices=$resolvedSlices missingSlices=$missingSlices " +
               s"rowsDecoded=${metrics.rowsDecoded} rowsMaterialized=${metrics.rowsMaterialized} " +
+              s"nullEmbeddingsSkipped=${metrics.nullEmbeddingsSkipped} " +
               s"keyLookupRowsDecoded=$keyLookupRowsDecoded fetchKeyMismatch=$fetchKeyMismatch " +
               s"fetchSkippedLogResident=$fetchSkippedLogResident " +
               s"rowGroupsTotal=${metrics.rowGroupsTotal} rowGroupsSelected=${metrics.rowGroupsSelected} " +

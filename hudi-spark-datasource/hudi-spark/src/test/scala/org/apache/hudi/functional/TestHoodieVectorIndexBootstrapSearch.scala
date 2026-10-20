@@ -173,6 +173,24 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
     }
   }
 
+  /**
+   * A row whose embedding is upserted to NULL after indexing can still be an index candidate. Exact
+   * rerank must skip it, as brute force does, instead of failing the query.
+   */
+  @Test
+  def testExactSearchSkipsRowsWithNullEmbedding(): Unit = {
+    val (tableName, _) = createTableWithRows("null_embedding", GlobalRecordIndex)
+    createIndex(tableName, Map("vector.metric" -> "l2", "vector.rabitq.bits" -> "4"))
+    spark.sql(s"UPDATE $tableName SET embedding = NULL, ts = 2 WHERE id = 'right-1'")
+
+    val query = Array(10.0, 10.0)
+    val bruteForce = search(tableName, query, 5, "l2", "brute_force", "")
+    assertFalse(bruteForce.map(_._1).contains("right-1"), "brute force must filter the NULL embedding")
+    val exact = search(tableName, query, 5, "l2", "ivf_rabitq_mdt",
+      s"vector.query.nprobes=$NumClusters,vector.query.mode=exact_rerank,vector.freshness.policy=warn")
+    assertEquals(bruteForce.map(_._1), exact.map(_._1))
+  }
+
   @Test
   def testCreateIndexRequiresRecordIndex(): Unit = {
     val (tableName, tablePath) = createTableWithRows("no_record_index", NoRecordIndex)
@@ -218,7 +236,7 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
     val schema = StructType(Seq(
       StructField("id", StringType, nullable = false),
       StructField("ts", LongType, nullable = false),
-      StructField("embedding", ArrayType(FloatType, containsNull = false), nullable = false, metadata),
+      StructField("embedding", ArrayType(FloatType, containsNull = false), nullable = true, metadata),
       StructField("label", StringType, nullable = false)))
     val rows = Seq(
       Row("left-1", 1L, Seq(-10.2f, -10.1f), "left"),

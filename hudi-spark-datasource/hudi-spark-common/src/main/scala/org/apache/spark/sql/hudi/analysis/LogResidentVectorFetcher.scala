@@ -103,7 +103,8 @@ private[analysis] final class LogResidentVectorFetcher(
         val recordKey = record.getRecordKey
         if (remaining.contains(recordKey)) {
           remaining.remove(recordKey)
-          rows += materialize(record.getData, recordKey)
+          // A NULL embedding (row upserted to NULL after indexing) is skipped, as brute force does.
+          rows ++= materialize(record.getData)
         }
       }
     } finally {
@@ -112,15 +113,19 @@ private[analysis] final class LogResidentVectorFetcher(
     rows.toSeq
   }
 
-  private def materialize(data: IndexedRecord, recordKey: String): InternalRow = {
+  private def materialize(data: IndexedRecord): Option[InternalRow] = {
     val avroSchema = data.getSchema
+    embeddingBytes(data, avroSchema).map(bytes => materialize(data, avroSchema, bytes))
+  }
+
+  private def materialize(data: IndexedRecord, avroSchema: org.apache.avro.Schema, vectorBytes: Array[Byte]): InternalRow = {
     val values = new Array[Any](outputSchema.length)
     var ordinal = 0
     while (ordinal < outputSchema.length) {
       val field = outputSchema.fields(ordinal)
       values(ordinal) = field.name match {
         case HoodieVectorSearchPlanBuilder.DISTANCE_COL =>
-          scorer.scoreBytes(embeddingBytes(data, avroSchema))
+          scorer.scoreBytes(vectorBytes)
         case name if name == embeddingCol =>
           // Match the positional materializer, which never projects the raw embedding into output.
           null
@@ -134,23 +139,21 @@ private[analysis] final class LogResidentVectorFetcher(
     new GenericInternalRow(values)
   }
 
-  private def embeddingBytes(data: IndexedRecord, avroSchema: org.apache.avro.Schema): Array[Byte] = {
+  private def embeddingBytes(data: IndexedRecord, avroSchema: org.apache.avro.Schema): Option[Array[Byte]] = {
     val field = avroSchema.getField(embeddingCol)
     if (field == null) {
       throw new IllegalStateException(
         s"Vector column '$embeddingCol' is absent from the merged log-resident record for exact fetch.")
     }
     data.get(field.pos()) match {
-      case null =>
-        throw new IllegalStateException(
-          s"Vector column '$embeddingCol' was null in a merged log-resident record for exact fetch.")
+      case null => None
       case bb: ByteBuffer =>
         val dup = bb.duplicate()
         val arr = new Array[Byte](dup.remaining())
         dup.get(arr)
-        arr
-      case fixed: GenericFixed => fixed.bytes()
-      case bytes: Array[Byte] => bytes
+        Some(arr)
+      case fixed: GenericFixed => Some(fixed.bytes())
+      case bytes: Array[Byte] => Some(bytes)
       case other =>
         throw new UnsupportedOperationException(
           s"Unsupported embedding representation for log-resident exact fetch: ${other.getClass.getName}")

@@ -65,11 +65,12 @@ class TestIvfRaBitQMdtSearchAlgorithm {
   }
 
   @Test
-  def testFetchMetricsAddPreservesFetchKeyMismatchAccounting(): Unit = {
-    val total = PositionalParquetFetcher.FetchMetrics(fetchKeyMismatch = 2L)
-      .add(PositionalParquetFetcher.FetchMetrics(fetchKeyMismatch = 3L))
+  def testFetchMetricsAddPreservesSkipAccounting(): Unit = {
+    val total = PositionalParquetFetcher.FetchMetrics(fetchKeyMismatch = 2L, nullEmbeddingsSkipped = 1L)
+      .add(PositionalParquetFetcher.FetchMetrics(fetchKeyMismatch = 3L, nullEmbeddingsSkipped = 4L))
 
     assertEquals(5L, total.fetchKeyMismatch)
+    assertEquals(5L, total.nullEmbeddingsSkipped)
   }
 
   @Test
