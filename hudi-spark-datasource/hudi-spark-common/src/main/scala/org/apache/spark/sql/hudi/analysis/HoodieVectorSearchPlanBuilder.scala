@@ -452,9 +452,12 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
 
   private case class MetadataCacheKey(basePath: String, indexPartition: String)
 
+  // Guards loads and replacement of metadataCaches. The map itself is immutable and reassigned, so it
+  // cannot be its own monitor: threads would lock different map instances.
+  private val metadataCachesLock = new Object
   @volatile private var metadataCaches: Map[MetadataCacheKey, VectorIndexMetadataCache] = Map.empty
 
-  private[analysis] def resetMetadataCaches(): Unit = {
+  private[analysis] def resetMetadataCaches(): Unit = metadataCachesLock.synchronized {
     metadataCaches = Map.empty
   }
 
@@ -468,7 +471,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       currentInstant: String): VectorIndexMetadataCache = {
     val cacheKey = MetadataCacheKey(metaClient.getBasePath.toString, indexPartition)
 
-    metadataCaches.synchronized {
+    metadataCachesLock.synchronized {
       metadataCaches.get(cacheKey) match {
         case Some(existing) if !existing.isStaleFor(currentInstant) => existing
         case existingOpt =>
