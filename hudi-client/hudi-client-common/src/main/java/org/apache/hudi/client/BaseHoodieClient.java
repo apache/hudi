@@ -209,7 +209,7 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
     }
   }
 
-  private static Exception appendFailure(Exception previousFailure, Exception failure) {
+  protected static Exception appendFailure(Exception previousFailure, Exception failure) {
     if (previousFailure == null) {
       return failure;
     }

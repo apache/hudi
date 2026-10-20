@@ -1717,14 +1717,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
   }
 
-  private static Exception appendFailure(Exception previousFailure, Exception failure) {
-    if (previousFailure == null) {
-      return failure;
-    }
-    previousFailure.addSuppressed(failure);
-    return previousFailure;
-  }
-
   public void setWriteTimer(String commitType) {
     if (commitType.equals(HoodieTimeline.COMMIT_ACTION)) {
       writeTimer = metrics.getCommitCtx();
