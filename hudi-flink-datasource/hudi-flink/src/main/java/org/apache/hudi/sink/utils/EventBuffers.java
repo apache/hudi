@@ -131,13 +131,6 @@ public class EventBuffers implements Serializable {
     this.eventBuffers.put(checkpointId, Pair.of(instantTime, new EventBuffer(dataWriteParallelism, indexWriteParallelism)));
   }
 
-  /**
-   * Returns whether any instant is pending, even if its write metadata events have not arrived yet.
-   */
-  public boolean hasPendingInstants() {
-    return !this.eventBuffers.isEmpty();
-  }
-
   public void reset(long checkpointId) {
     this.eventBuffers.remove(checkpointId);
   }

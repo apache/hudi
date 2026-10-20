@@ -23,8 +23,10 @@ import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.flink.configuration.Configuration;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,13 +36,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestEventBuffers {
 
   @Test
-  void testPendingInstantsIncludeBuffersWithoutEvents() {
+  void testPendingInstantsBeforeIncludeBuffersWithoutEvents() {
     EventBuffers buffers = EventBuffers.getInstance(new Configuration(), 1);
-    assertFalse(buffers.hasPendingInstants());
+    assertTrue(buffers.getPendingInstantsBefore(3L).isEmpty());
 
     buffers.initNewEventBuffer(1L, "001");
-    assertTrue(buffers.hasPendingInstants());
+    assertEquals(Collections.singletonList("001"), buffers.getPendingInstantsBefore(2L));
     assertFalse(buffers.nonEmpty());
+    assertTrue(buffers.getPendingInstantsBefore(1L).isEmpty());
 
     buffers.addEventToBuffer(WriteMetadataEvent.builder()
         .taskID(0)
@@ -49,15 +52,17 @@ public class TestEventBuffers {
         .writeStatus(Collections.emptyList())
         .lastBatch(true)
         .build());
-    assertTrue(buffers.hasPendingInstants());
+    assertEquals(Collections.singletonList("001"), buffers.getPendingInstantsBefore(2L));
     assertTrue(buffers.nonEmpty());
 
     buffers.initNewEventBuffer(2L, "002");
+    assertEquals(Arrays.asList("001", "002"), buffers.getPendingInstantsBefore(3L));
     buffers.reset(1L);
-    assertTrue(buffers.hasPendingInstants());
+    assertTrue(buffers.getPendingInstantsBefore(2L).isEmpty());
+    assertEquals(Collections.singletonList("002"), buffers.getPendingInstantsBefore(3L));
     assertFalse(buffers.nonEmpty());
 
     buffers.reset(2L);
-    assertFalse(buffers.hasPendingInstants());
+    assertTrue(buffers.getPendingInstantsBefore(3L).isEmpty());
   }
 }

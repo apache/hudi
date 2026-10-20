@@ -1163,9 +1163,8 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(longs = {0L, 2L})
-  void testPendingInstantDefersOtherCheckpointsUntilRetry(long requestedCheckpointId) throws Exception {
+  @Test
+  void testEarlierPendingInstantDefersCreationUntilRetry() throws Exception {
     String instant1 = requestInstantTime(1L);
     MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
     NonThrownExecutor worker = Mockito.spy(NonThrownExecutor.builder(Mockito.mock(Logger.class))
@@ -1173,9 +1172,9 @@ public class TestStreamWriteOperatorCoordinator {
         .build());
     coordinator.setInstantRequestExecutor(worker);
 
-    // An empty event buffer still represents a pending instant. Older requests must not roll it back either.
+    // An earlier checkpoint with an empty event buffer still represents a pending instant.
     Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
-        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(requestedCheckpointId))
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
             .get(1, TimeUnit.SECONDS));
     assertNull(pending.getInstant());
     Mockito.verify(worker, Mockito.never()).execute(Mockito.any(), Mockito.eq("request instant time"));
@@ -1187,7 +1186,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.notifyCheckpointComplete(2L);
     assertEquals(instant1, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
     assertFalse(worker.hasRunningTasks(), "Commit completion must not create an instant for a previously deferred request");
-    assertNull(coordinator.getEventBuffer(requestedCheckpointId));
+    assertNull(coordinator.getEventBuffer(2L));
 
     assertNotEquals(instant1, requestInstantTime(2L), "A new task-side poll must create the next instant");
     assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
@@ -1217,6 +1216,39 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.notifyCheckpointComplete(2L);
     assertNotEquals(instant1, requestInstantTime(2L));
     assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"regional", "global"})
+  void testRecoveredWriterRollsBackLaterInstantAndContinues(String failover) throws Exception {
+    CompletableFuture<byte[]> checkpoint = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1L, checkpoint);
+    String abandonedInstant = requestInstantTime(2L);
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 2L, abandonedInstant, "par2", false, true, 0.1));
+
+    if ("regional".equals(failover)) {
+      coordinator.subtaskReset(0, 1L);
+      coordinator.subtaskReset(1, 1L);
+    } else {
+      coordinator.resetToCheckpoint(1L, checkpoint.get());
+    }
+    // One restored writer requests its instant before the other writer clears its old metadata.
+    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0, 1L, false));
+
+    String recoveredInstant = requestInstantTime(1L);
+    assertNotEquals(abandonedInstant, recoveredInstant);
+    assertEquals(recoveredInstant, requestInstantTime(1L));
+    assertEquals(1, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertEquals(recoveredInstant, TestUtils.getLastPendingInstant(tempFile.getAbsolutePath()));
+
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1, 1L, false));
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, recoveredInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, recoveredInstant, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(3L);
+    assertEquals(recoveredInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(2L), "Checkpoint completion must remove the abandoned empty buffer");
+    assertNotEquals(recoveredInstant, requestInstantTime(3L));
     assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
   }
 
