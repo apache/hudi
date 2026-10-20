@@ -199,7 +199,8 @@ public class TestCoalescingPartitioner extends HoodieClientTestBase {
     // trimming this list to powers of two would stop it exercising the fix.
     for (int numPartitions : new int[] {1, 2, 3, 4, 5, 6, 7, 8, 16}) {
       HashPartitioner oracle = new HashPartitioner(numPartitions);
-      for (Object key : new Object[] {minValueHashKey, -1, -2, -3, -5, -100, 0, 1, 100}) {
+      // null is the key of a write status whose records all failed, which has no file path
+      for (Object key : new Object[] {minValueHashKey, -1, -2, -3, -5, -100, 0, 1, 100, null}) {
         int partition = new CoalescingPartitioner(numPartitions).getPartition(key);
         assertTrue(partition >= 0 && partition < numPartitions,
             "partition " + partition + " out of range for numPartitions " + numPartitions);

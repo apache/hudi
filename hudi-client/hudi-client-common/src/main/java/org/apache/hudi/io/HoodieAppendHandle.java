@@ -27,9 +27,11 @@ import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieWriteStat.RuntimeStats;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.model.MetadataValues;
@@ -220,6 +222,14 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
             statuses.get(statuses.size() - 1), hoodieTable, secondaryIndexDefns, config, instantTime, writeSchemaWithMetaFields);
       }
 
+      // Publish the write status even when no block was appended, so record failures reach the caller.
+      if (statuses.isEmpty() && writeStatus.hasErrors()) {
+        statuses.add(writeStatus);
+      }
+      // Table services check the stats for record failures.
+      for (WriteStatus status : statuses) {
+        status.getStat().setTotalWriteErrors(status.getTotalErrorRecords());
+      }
       return statuses;
     } catch (IOException e) {
       closeLogWriterQuietly(e);
@@ -391,7 +401,8 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
 
       boolean isUpdateRecord = isUpdateRecord(hoodieRecord);
       recordProperties.put(HoodiePayloadProps.PAYLOAD_IS_UPDATE_RECORD_FOR_MOR, String.valueOf(isUpdateRecord));
-      if (config.allowOperationMetadataField() || !hoodieRecord.isDelete(deleteContext, recordProperties)) {
+      if (!hoodieRecord.isDelete(deleteContext, recordProperties)
+          || (config.allowOperationMetadataField() && canMarkDeleteByOperation(hoodieRecord, schema))) {
         writeInsertAndUpdate(schema, hoodieRecord, isUpdateRecord);
       } else {
         writeDelete(schema, hoodieRecord);
@@ -412,6 +423,21 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
       writeStatus.markFailure(hoodieRecord, e, recordMetadata);
       return false;
     }
+  }
+
+  /**
+   * Returns whether a delete can be written as a data record whose operation field marks it as a delete: the record
+   * must carry an operation and its row. Deletes without a row, e.g. a delete merged during deduplication, go to the
+   * delete block.
+   */
+  private boolean canMarkDeleteByOperation(HoodieRecord<T> hoodieRecord, HoodieSchema schema) throws IOException {
+    if (hoodieRecord.getOperation() == null || hoodieRecord.getData() == null) {
+      return false;
+    }
+    if (hoodieRecord.getData() instanceof HoodieRecordPayload) {
+      return ((HoodieRecordPayload<?>) hoodieRecord.getData()).getInsertValue(schema.toAvroSchema(), recordProperties).isPresent();
+    }
+    return true;
   }
 
   /**
@@ -437,7 +463,7 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
    * <p>Log compaction preserves commit metadata from input records, while normal append writes generate new
    * commit time and sequence number values for the current instant.
    */
-  protected MetadataValues populateMetadataFields(HoodieRecord<T> hoodieRecord) {
+  protected MetadataValues populateMetadataFields(HoodieRecord<T> hoodieRecord, boolean isUpdateRecord) {
     MetadataValues metadataValues = new MetadataValues();
     if (config.populateMetaFields()) {
       String seqId = HoodieRecord.generateSequenceId(instantTime, getPartitionId(), RECORD_COUNTER.getAndIncrement());
@@ -450,7 +476,13 @@ public abstract class HoodieAppendHandle<T, I, K, O> extends HoodieWriteHandle<T
       }
     }
     if (config.allowOperationMetadataField()) {
-      metadataValues.setOperation(hoodieRecord.getOperation().getName());
+      // Without an operation, log compaction keeps the value stored with the record, and records from writers that
+      // do not track the operation (e.g. Spark) get it from the record location.
+      if (hoodieRecord.getOperation() != null) {
+        metadataValues.setOperation(hoodieRecord.getOperation().getName());
+      } else if (!isLogCompaction) {
+        metadataValues.setOperation((isUpdateRecord ? HoodieOperation.UPDATE_AFTER : HoodieOperation.INSERT).getName());
+      }
     }
     return metadataValues;
   }
