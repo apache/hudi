@@ -2,14 +2,54 @@
 title: "Release 1.1"
 layout: releases
 toc: true
-last_modified_at: 2024-05-02T18:00:00-08:00
+last_modified_at: 2026-10-19T17:27:22
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 This page contains release notes for all Apache Hudi 1.1.x releases, including:
 
+- [Release 1.1.2](#release-112)
 - [Release 1.1.1](#release-111)
+
+---
+
+## [Release 1.1.2](https://github.com/apache/hudi/releases/tag/release-1.1.2) {#release-112}
+
+## Migration Guide
+
+* This release (1.1.2) keeps the same table version (`9`) as [1.1.1](#release-111), so no table upgrade is needed if you are on 1.1.1.
+* If migrating from an older release, please check the [1.1.1 release notes](#release-111) and the upgrade instructions from each older release in sequence.
+
+## Bundle Updates
+
+The same engine versions as 1.1.1 are supported: Spark 3.3–4.0 and Flink 1.17–1.20 and 2.0. See the [downloads](/releases/download#release-112) for the 1.1.2 bundles.
+
+## Behavior Changes
+
+* Flink upserts with CDC enabled now use blocking instant generation to preserve instant ordering, including on Merge-on-Read tables ([#18206](https://github.com/apache/hudi/pull/18206)).
+* Compaction and log-compaction planning now limit concurrent partition scans with `hoodie.compaction.plan.parallelism`. The default is `200`, capped by the number of selected partitions; the value must be positive ([#20024](https://github.com/apache/hudi/pull/20024)).
+* Timeline compaction adds `hoodie.timeline.compaction.target.file.max.bytes`, defaulting to `1048576000` bytes (1000 MiB), to limit each archived timeline file ([#17784](https://github.com/apache/hudi/pull/17784)).
+* The new common writer option `hoodie.write.ignore.failed` defaults to `true` for backward compatibility. Flink's existing `write.ignore.failed` still defaults to `false` and now accepts the common option as a fallback key. With the Flink option set to `false`, record write exceptions fail the task eagerly instead of being recorded in the write status. Since 1.1.2, the Flink coordinator no longer rolls back an instant because its write statuses contain errors: it logs those errors and commits the instant regardless of this flag ([#12150](https://github.com/apache/hudi/pull/12150)). Errors recorded without throwing, such as a partition-path mismatch in `HoodieAppendHandle`, can therefore be committed even when the flag is `false`.
+
+See the [1.1.2 configuration reference](/docs/1.1.2/configurations) for the added settings.
+
+### Bug fixes
+
+1.1.2 is a bug-fix release focused on streaming reliability and stability. The fixes and improvements span several components, including:
+
+* **Flink writes:** data-loss fixes during global failover, checkpoint and write-metadata recovery on retries, earlier failure propagation, and buffer handling under memory pressure.
+* **Flink reads:** lookup-table refresh efficiency and incremental Merge-on-Read reads of tables older than table version 8.
+* **Flink performance:** fewer timeline reloads and schema validations, coordinator metadata refresh, and asynchronous instant-time requests.
+* **Timeline and table services:** oversized archived files, temporary LSM timeline manifests, completion-time queries for layout-version-1 timelines, and compaction planning.
+
+## Raw Release Notes
+
+The full list of changes is available in the [GitHub comparison with 1.1.1](https://github.com/apache/hudi/compare/release-1.1.1...release-1.1.2).
+
+:::tip
+1.1.2 also contains all the new features and bug fixes from 1.1.1, whose release notes are [here](#release-111).
+:::
 
 ---
 
