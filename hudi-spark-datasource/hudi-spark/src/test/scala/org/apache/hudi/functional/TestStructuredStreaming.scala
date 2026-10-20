@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.DataSourceWriteOptions.{STREAMING_CHECKPOINT_IDENTIFIER, UPSERT_OPERATION_OPT_VAL}
-import org.apache.hudi.HoodieStreamingSink.{SINK_CHECKPOINT_KEY, resolveCheckpointIdentifier}
+import org.apache.hudi.HoodieStreamingSink.{resolveCheckpointIdentifier, SINK_CHECKPOINT_KEY}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}

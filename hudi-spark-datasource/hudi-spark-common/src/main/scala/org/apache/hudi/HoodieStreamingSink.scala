@@ -18,7 +18,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
-import org.apache.hudi.HoodieStreamingSink.{QUERY_ID_KEY, SINK_CHECKPOINT_KEY, resolveCheckpointIdentifier}
+import org.apache.hudi.HoodieStreamingSink.{resolveCheckpointIdentifier, QUERY_ID_KEY, SINK_CHECKPOINT_KEY}
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
