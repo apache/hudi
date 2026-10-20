@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, InstantComparison}
 import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
+import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.data.HoodieJavaRDD
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
@@ -116,8 +117,11 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       tuningOptions: Map[String, String],
       metric: DistanceMetric.Value)
 
+  /** Same detection as [[org.apache.hudi.RecordLevelIndexSupport.create]]: the RLI index definition's isPartitioned option. */
   private[analysis] def isPartitionedRecordIndex(ctx: VectorSearchPlanContext): Boolean =
-    false
+    ctx.metaClient.getIndexForMetadataPartition(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)
+      .map[Boolean](indexDefinition => HoodieRecordIndex.isPartitioned(indexDefinition))
+      .orElse(false)
 
   private val STRUCTURAL_OPTION_KEYS: Set[String] = Set(
     VectorIndexOptions.METRIC,

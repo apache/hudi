@@ -21,7 +21,9 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.exception.HoodieMetadataIndexException
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
@@ -47,6 +49,7 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
   private val IndexPartition = s"vector_index_$IndexName"
   private val NumClusters = 2
   private val DistanceEpsilon = 1e-4
+  private val PartitionedRliFileGroups = 4
 
   private var spark: SparkSession = _
 
@@ -103,6 +106,31 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
     assertTrue(metadataPartitions(tablePath).contains(IndexPartition))
   }
 
+  /**
+   * Partitioned record index with several RLI file groups per data partition: a partitioned RLI
+   * lookup reads one file group per batch, so finalists must be grouped by partition AND RLI file
+   * group or live rows are dropped as deleted.
+   */
+  @Test
+  def testSearchWithPartitionedRecordIndex(): Unit = {
+    val (tableName, tablePath) = createTableWithRows("partitioned_rli", withRecordIndex = true, partitionedRecordIndex = true)
+    assertTrue(HoodieTestUtils.createMetaClient(storageConf, tablePath)
+      .getIndexForMetadataPartition(PARTITION_NAME_RECORD_INDEX)
+      .map[Boolean](indexDefinition => HoodieRecordIndex.isPartitioned(indexDefinition)).orElse(false),
+      "fixture must build a partitioned record index")
+    createIndex(tableName, Map("vector.metric" -> "l2", "vector.rabitq.bits" -> "4"))
+
+    Seq(Array(10.0, 10.0), Array(-10.0, -10.0)).foreach { query =>
+      val bruteForce = search(tableName, query, 6, "l2", "brute_force", "")
+      val exact = search(tableName, query, 6, "l2", "ivf_rabitq_mdt",
+        s"vector.query.nprobes=$NumClusters,vector.query.mode=exact_rerank")
+      assertEquals(bruteForce.map(_._1), exact.map(_._1))
+      val approximate = search(tableName, query, 3, "l2", "ivf_rabitq_mdt",
+        s"vector.query.nprobes=$NumClusters,vector.query.mode=approximate")
+      assertEquals(bruteForce.take(3).map(_._1).toSet, approximate.map(_._1).toSet)
+    }
+  }
+
   @Test
   def testCreateIndexRequiresRecordIndex(): Unit = {
     val (tableName, tablePath) = createTableWithRows("no_record_index", withRecordIndex = false)
@@ -111,9 +139,24 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
     assertFalse(indexDefinitions(tablePath).contains(IndexPartition))
   }
 
-  private def createTableWithRows(suffix: String, withRecordIndex: Boolean): (String, String) = {
+  private def createTableWithRows(
+      suffix: String,
+      withRecordIndex: Boolean,
+      partitionedRecordIndex: Boolean = false): (String, String) = {
     val tableName = s"vector_search_$suffix"
     val tablePath = s"$basePath/$tableName"
+    // A partitioned RLI is keyed by (partition, record key), so the table is partitioned by label
+    // and each partition gets several RLI file groups to exercise the per-file-group lookup.
+    val recordIndexOptions: Map[String, String] =
+      if (partitionedRecordIndex) {
+        Map(
+          HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
+          HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> PartitionedRliFileGroups.toString)
+      } else {
+        Map(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> withRecordIndex.toString)
+      }
+    val tableOptionSql = recordIndexOptions.map { case (key, value) => s"$key = '$value'" }.mkString(",\n  ")
+    val partitionClause = if (partitionedRecordIndex) "PARTITIONED BY (label)" else ""
     spark.sql(
       s"""
          |CREATE TABLE $tableName (
@@ -127,8 +170,9 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
          |  preCombineField = 'ts',
          |  type = 'cow',
          |  hoodie.metadata.enable = 'true',
-         |  ${HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key} = '$withRecordIndex'
+         |  $tableOptionSql
          |)
+         |$partitionClause
          |LOCATION '$tablePath'
          |""".stripMargin)
 
@@ -145,6 +189,7 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
       Row("right-1", 1L, Seq(10.0f, 9.7f), "right"),
       Row("right-2", 1L, Seq(9.4f, 10.0f), "right"),
       Row("right-3", 1L, Seq(10.6f, 10.3f), "right"))
+    val partitionOptions = if (partitionedRecordIndex) Map(PARTITIONPATH_FIELD.key -> "label") else Map.empty[String, String]
     spark.createDataFrame(spark.sparkContext.parallelize(rows), schema)
       .write.format("hudi")
       .option(TABLE_NAME.key, tableName)
@@ -152,7 +197,7 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "ts")
       .option(HoodieMetadataConfig.ENABLE.key, "true")
-      .option(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key, withRecordIndex.toString)
+      .options(recordIndexOptions ++ partitionOptions)
       .mode(SaveMode.Append)
       .save(tablePath)
     (tableName, tablePath)

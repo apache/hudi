@@ -21,9 +21,13 @@ package org.apache.hudi.common.index.vector;
 
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.MetadataPartitionType;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,7 +35,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -68,27 +71,17 @@ final class VectorIndexRliArbitrator {
       HoodieTableMetadata metadataTable,
       HoodieData<ScoredVectorPostingMatch> finalists,
       boolean partitionedRecordIndex) {
-    if (!partitionedRecordIndex) {
-      return arbitrateFinalistsForPartition(metadataTable, finalists, Option.empty());
+    if (partitionedRecordIndex) {
+      Map<String, Set<String>> keysByPartition = groupKeysByPartition(
+          finalists.map(candidate -> Pair.of(candidate.getPartitionPath(), candidate.getRecordKey()))
+              .distinct()
+              .collectAsList());
+      Map<String, Map<String, HoodieRecordGlobalLocation>> locations =
+          readPartitionedRecordIndexLocations(metadataTable, keysByPartition);
+      return finalists.map(candidate -> arbitrateCandidate(candidate, locations
+          .getOrDefault(candidate.getPartitionPath(), Collections.emptyMap())
+          .get(candidate.getRecordKey())));
     }
-    List<String> partitions = finalists.map(ScoredVectorPostingMatch::getPartitionPath)
-        .distinct()
-        .collectAsList();
-    HoodieData<ScoredVectorPostingMatch> arbitrated = null;
-    for (String partition : partitions) {
-      HoodieData<ScoredVectorPostingMatch> partitionFinalists = finalists
-          .filter(candidate -> Objects.equals(partition, candidate.getPartitionPath()));
-      HoodieData<ScoredVectorPostingMatch> partitionResult = arbitrateFinalistsForPartition(
-          metadataTable, partitionFinalists, Option.ofNullable(partition));
-      arbitrated = arbitrated == null ? partitionResult : arbitrated.union(partitionResult);
-    }
-    return arbitrated == null ? HoodieListData.eager(Collections.emptyList()) : arbitrated;
-  }
-
-  private static HoodieData<ScoredVectorPostingMatch> arbitrateFinalistsForPartition(
-      HoodieTableMetadata metadataTable,
-      HoodieData<ScoredVectorPostingMatch> finalists,
-      Option<String> dataTablePartition) {
     // Resolve current RLI locations for the finalist keys into a bounded driver-side map, then
     // attach per candidate via map(...). The finalist set is a bounded candidate pool and
     // {@code finalists} is already persisted upstream, so the two passes are cache hits.
@@ -103,8 +96,7 @@ final class VectorIndexRliArbitrator {
         .collectAsList();
     Map<String, HoodieRecordGlobalLocation> currentLocations = new HashMap<>();
     if (!distinctKeys.isEmpty()) {
-      metadataTable.readRecordIndexLocationsWithKeys(
-              HoodieListData.eager(distinctKeys), dataTablePartition)
+      metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(distinctKeys))
           .collectAsList()
           .forEach(pair -> currentLocations.put(pair.getKey(), pair.getValue()));
     }
@@ -198,19 +190,17 @@ final class VectorIndexRliArbitrator {
       List<ScoredVectorPostingMatch> serve = new ArrayList<>();
       List<ScoredVectorPostingMatch> stale = new ArrayList<>();
       long deleted = 0L;
-      Map<String, List<ScoredVectorPostingMatch>> byPartition = finalists.stream()
-          .collect(Collectors.groupingBy(ScoredVectorPostingMatch::getPartitionPath));
+      Map<String, List<ScoredVectorPostingMatch>> byPartition = new HashMap<>();
+      for (ScoredVectorPostingMatch candidate : finalists) {
+        byPartition.computeIfAbsent(candidate.getPartitionPath(), p -> new ArrayList<>()).add(candidate);
+      }
+      Map<String, Map<String, HoodieRecordGlobalLocation>> locations = readPartitionedRecordIndexLocations(
+          metadataTable, groupKeysByPartition(finalists.stream()
+              .map(candidate -> Pair.of(candidate.getPartitionPath(), candidate.getRecordKey()))
+              .collect(Collectors.toList())));
       for (Map.Entry<String, List<ScoredVectorPostingMatch>> entry : byPartition.entrySet()) {
-        List<ScoredVectorPostingMatch> partitionFinalists = entry.getValue();
-        Set<String> partitionKeys = partitionFinalists.stream()
-            .map(ScoredVectorPostingMatch::getRecordKey)
-            .collect(Collectors.toSet());
-        Map<String, HoodieRecordGlobalLocation> partitionLocations = new HashMap<>();
-        metadataTable.readRecordIndexLocationsWithKeys(
-                HoodieListData.eager(new ArrayList<>(partitionKeys)), Option.of(entry.getKey()))
-            .collectAsList()
-            .forEach(pair -> partitionLocations.put(pair.getKey(), pair.getValue()));
-        VectorIndexMdtSearchUtils.ArbitrationResult result = arbitrateMaterializedFinalists(partitionFinalists, partitionLocations);
+        VectorIndexMdtSearchUtils.ArbitrationResult result = arbitrateMaterializedFinalists(
+            entry.getValue(), locations.getOrDefault(entry.getKey(), Collections.emptyMap()));
         serve.addAll(result.serve());
         stale.addAll(result.stale());
         deleted += result.deletedCount();
@@ -226,5 +216,47 @@ final class VectorIndexRliArbitrator {
         .collectAsList()
         .forEach(pair -> currentLocations.put(pair.getKey(), pair.getValue()));
     return arbitrateMaterializedFinalists(finalists, currentLocations);
+  }
+
+  private static Map<String, Set<String>> groupKeysByPartition(List<Pair<String, String>> partitionKeys) {
+    Map<String, Set<String>> keysByPartition = new HashMap<>();
+    partitionKeys.forEach(pk -> keysByPartition.computeIfAbsent(pk.getLeft(), p -> new HashSet<>()).add(pk.getRight()));
+    return keysByPartition;
+  }
+
+  /**
+   * Partitioned-RLI lookup: data partition -> (record key -> current location).
+   *
+   * <p>{@code readRecordIndexLocationsWithKeys(keys, partition)} reads the single RLI file group the
+   * first key hashes to, so every batch must hold keys of one partition AND one RLI file group.
+   * Keys are therefore bucketed with {@link HoodieTableMetadataUtil#mapRecordKeyToFileGroupIndex}
+   * over the partition's file groups, the same grouping {@code SparkMetadataTableRecordLevelIndex}
+   * and {@code PartitionedRecordLevelIndexSupport} use. A partition without RLI file groups has no
+   * indexed keys, so its candidates resolve to an RLI miss (DELETED).
+   */
+  static Map<String, Map<String, HoodieRecordGlobalLocation>> readPartitionedRecordIndexLocations(
+      HoodieTableMetadata metadataTable,
+      Map<String, Set<String>> keysByPartition) {
+    Map<String, Map<String, HoodieRecordGlobalLocation>> locations = new HashMap<>();
+    if (keysByPartition.isEmpty()) {
+      return locations;
+    }
+    Map<String, List<FileSlice>> fileGroupsByPartition =
+        metadataTable.getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType.RECORD_INDEX);
+    keysByPartition.forEach((partition, keys) -> {
+      int numFileGroups = fileGroupsByPartition.getOrDefault(partition, Collections.emptyList()).size();
+      if (numFileGroups == 0 || keys.isEmpty()) {
+        return;
+      }
+      Map<String, HoodieRecordGlobalLocation> partitionLocations = locations.computeIfAbsent(partition, p -> new HashMap<>());
+      keys.stream()
+          .collect(Collectors.groupingBy(key -> HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, numFileGroups)))
+          .values()
+          .forEach(fileGroupKeys -> metadataTable
+              .readRecordIndexLocationsWithKeys(HoodieListData.eager(fileGroupKeys), Option.of(partition))
+              .collectAsList()
+              .forEach(pair -> partitionLocations.put(pair.getKey(), pair.getValue())));
+    });
+    return locations;
   }
 }
