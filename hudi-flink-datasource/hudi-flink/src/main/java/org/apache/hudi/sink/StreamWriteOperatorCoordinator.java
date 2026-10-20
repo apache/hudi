@@ -427,11 +427,9 @@ public class StreamWriteOperatorCoordinator
     long checkpointId = request.getCheckpointId();
     // Existing instants must remain available while another checkpoint's creation is blocked.
     Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-    if (instantTimeAndEventBuffer == null && !instantRequestExecutor.hasRunningTasks()) {
+    if (instantTimeAndEventBuffer == null && !isInstantCreationBlocked(checkpointId) && !instantRequestExecutor.hasRunningTasks()) {
       instantRequestExecutor.execute(() -> {
-        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
-          // Wait until previous instants are committed.
-          eventBuffers.awaitAllInstantsToCompleteIfNecessary();
+        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null && !isInstantCreationBlocked(checkpointId)) {
           this.eventBuffers.initNewEventBuffer(checkpointId, startInstant());
         }
       }, "request instant time");
@@ -439,6 +437,14 @@ public class StreamWriteOperatorCoordinator
     }
     String instantTime = instantTimeAndEventBuffer == null ? null : instantTimeAndEventBuffer.getLeft();
     return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
+  }
+
+  /**
+   * Defers new instant creation while an earlier checkpoint has a pending instant, even without write metadata events.
+   * Later checkpoints belong to an abandoned attempt when a writer requests an earlier checkpoint after recovery.
+   */
+  private boolean isInstantCreationBlocked(long checkpointId) {
+    return OptionsResolver.isBlockingInstantGeneration(conf) && !eventBuffers.getPendingInstantsBefore(checkpointId).isEmpty();
   }
 
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
