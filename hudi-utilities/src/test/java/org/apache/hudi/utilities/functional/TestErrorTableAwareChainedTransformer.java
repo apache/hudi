@@ -93,45 +93,25 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   @Test
   void testColumnProjectionReAddsNullCorruptRecordColumn() {
     // A custom transformer projecting columns drops _corrupt_record while it is still all null.
-    Dataset<Row> original = getTestDataset();
-
-    Transformer columnFilter = getErrorRecordColumnDropTransformer();
-    TypedProperties properties = new TypedProperties();
-    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
-    ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(columnFilter));
-    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
-
-    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
-    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
+    Dataset<Row> transformed = applyWithErrorTableEnabled(getTestDataset(), getErrorRecordColumnDropTransformer());
+    assertCorruptRecordColumnAllNull(transformed);
   }
 
   @Test
   void testColumnProjectionAfterTransformerKeepingNullCorruptRecordColumn() {
     // t1 keeps _corrupt_record without marking rows, so t2 may drop it.
-    Dataset<Row> original = getTestDataset();
-
     Transformer t1 = (jsc, sparkSession, dataset, props) -> dataset.withColumn("foo", dataset.col("foo").cast(IntegerType));
     Transformer t2 = getErrorRecordColumnDropTransformer();
-    TypedProperties properties = new TypedProperties();
-    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
-    ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(t1, t2));
-    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
-
-    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
-    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
+    Dataset<Row> transformed = applyWithErrorTableEnabled(getTestDataset(), t1, t2);
+    assertCorruptRecordColumnAllNull(transformed);
   }
 
   @Test
   void testErrorRecordsMarkedAfterColumnProjection() {
     // t1 drops _corrupt_record, t2 marks error records in the re-added column.
-    Dataset<Row> original = getTestDataset();
-
     Transformer t1 = getErrorRecordColumnDropTransformer();
     Transformer t2 = getErrorEventHandlerTransformer();
-    TypedProperties properties = new TypedProperties();
-    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
-    ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(t1, t2));
-    Dataset<Row> transformed = transformer.apply(jsc(), spark(), original, properties);
+    Dataset<Row> transformed = applyWithErrorTableEnabled(getTestDataset(), t1, t2);
 
     assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
     assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).equalTo("true")).count());
@@ -141,19 +121,25 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
   void testColumnProjectionWithSourceSuppliedCorruptRecordColumn() {
     // The source supplies _corrupt_record: dropping it is allowed only while it holds no values.
     Transformer columnFilter = getErrorRecordColumnDropTransformer();
-    TypedProperties properties = new TypedProperties();
-    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
-    ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(columnFilter));
 
     Dataset<Row> withoutErrors = getTestDataset().withColumn(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, functions.lit(null).cast(StringType));
-    Dataset<Row> transformed = transformer.apply(jsc(), spark(), withoutErrors, properties);
-    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
-    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
+    assertCorruptRecordColumnAllNull(applyWithErrorTableEnabled(withoutErrors, columnFilter));
 
     Dataset<Row> withErrors = getTestDataset().withColumn(ERROR_TABLE_CURRUPT_RECORD_COL_NAME,
         functions.when(new Column("foo").equalTo("100"), functions.lit("{bad json")).otherwise(functions.lit(null).cast(StringType)));
-    HoodieValidationException e = assertThrows(HoodieValidationException.class, () -> transformer.apply(jsc(), spark(), withErrors, properties));
+    HoodieValidationException e = assertThrows(HoodieValidationException.class, () -> applyWithErrorTableEnabled(withErrors, columnFilter));
     assertTrue(e.getMessage().contains(ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
+  }
+
+  private Dataset<Row> applyWithErrorTableEnabled(Dataset<Row> input, Transformer... transformers) {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
+    return new ErrorTableAwareChainedTransformer(Arrays.asList(transformers)).apply(jsc(), spark(), input, properties);
+  }
+
+  private static void assertCorruptRecordColumnAllNull(Dataset<Row> transformed) {
+    assertArrayEquals(new String[]{"foo", ERROR_TABLE_CURRUPT_RECORD_COL_NAME}, transformed.columns());
+    assertEquals(2, transformed.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNull()).count());
   }
 
   private Dataset<Row> getTestDataset() {

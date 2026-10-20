@@ -64,15 +64,16 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
       Transformer transformer = transformerInfo.getTransformer();
       Dataset<Row> input = dataset;
       dataset = transformer.apply(jsc, sparkSession, input, transformerInfo.getProperties(properties, transformers));
-      boolean keptCorruptRecordColumn = ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset);
-      if (!keptCorruptRecordColumn) {
+      if (ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset)) {
+        corruptRecordMayHaveValues = true;
+      } else {
         if (corruptRecordMayHaveValues) {
           validateNoErrorRecordsDropped(input, transformer);
         }
         // The column held no values, so re-adding it as null loses nothing.
         dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
+        corruptRecordMayHaveValues = false;
       }
-      corruptRecordMayHaveValues = keptCorruptRecordColumn;
     }
     return dataset;
   }
