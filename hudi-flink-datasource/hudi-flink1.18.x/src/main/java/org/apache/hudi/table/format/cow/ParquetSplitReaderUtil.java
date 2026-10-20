@@ -666,9 +666,11 @@ public class ParquetSplitReaderUtil {
 
   /**
    * Returns whether the repeated type of a list is the synthetic wrapper of a three-level list,
-   * rather than the element itself. Type-based counterpart of the check in
-   * {@link #getArrayElementColumn}, where {@code parentName} is the name of the group that contains
-   * the repeated type, as {@code columnIO.getParent().getName()} is there.
+   * rather than the element itself. Shared by {@link #unwrapListElementType} and
+   * {@link #getArrayElementColumn}, so that the vectors and the {@code ParquetField} tree pick the
+   * same element.
+   *
+   * @param parentName name of the group that contains {@code repeatedType}
    */
   private static boolean isThreeLevelListRepeatedType(Type repeatedType, String parentName) {
     return !repeatedType.isPrimitive()
@@ -879,10 +881,7 @@ public class ParquetSplitReaderUtil {
 
     // Three-level list: skip the synthetic `element` / `list` wrapper when present.
     if (columnIO instanceof GroupColumnIO
-        && columnIO.getType().getLogicalTypeAnnotation() == null
-        && ((GroupColumnIO) columnIO).getChildrenCount() == 1
-        && !columnIO.getName().equals("array")
-        && !columnIO.getName().equals(columnIO.getParent().getName() + "_tuple")) {
+        && isThreeLevelListRepeatedType(columnIO.getType(), columnIO.getParent().getName())) {
       return ((GroupColumnIO) columnIO).getChild(0);
     }
     return columnIO;
