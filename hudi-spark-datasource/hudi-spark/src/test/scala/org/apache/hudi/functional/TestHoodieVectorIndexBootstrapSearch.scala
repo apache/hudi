@@ -18,11 +18,16 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.WriteConcurrencyMode
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.config.{HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.exception.HoodieMetadataIndexException
+import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
@@ -32,6 +37,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+
+import java.io.File
 
 import scala.collection.JavaConverters._
 
@@ -49,7 +56,19 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
   private val IndexPartition = s"vector_index_$IndexName"
   private val NumClusters = 2
   private val DistanceEpsilon = 1e-4
-  private val PartitionedRliFileGroups = 4
+  private val GlobalRecordIndex = Map(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true")
+  private val NoRecordIndex = Map(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false")
+  // A partitioned RLI is keyed by (partition, record key); several RLI file groups per partition
+  // exercise the per-file-group lookup.
+  private val PartitionedRecordIndex = Map(
+    HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
+    HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "4")
+  // NBCC with a single bucket writes every partition's bucket under the same fixed file id.
+  private val NbccSingleBucketIndex = Map(
+    HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.BUCKET.name,
+    HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> "1",
+    HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL.name,
+    HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> classOf[InProcessLockProvider].getName)
 
   private var spark: SparkSession = _
 
@@ -76,7 +95,7 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
     "cosine, 1",
     "dot_product, 1"))
   def testSearchAfterBootstrap(metric: String, bits: String): Unit = {
-    val (tableName, tablePath) = createTableWithRows(s"bootstrap_${metric}_$bits", withRecordIndex = true)
+    val (tableName, tablePath) = createTableWithRows(s"bootstrap_${metric}_$bits", GlobalRecordIndex)
     createIndex(tableName, Map("vector.metric" -> metric, "vector.rabitq.bits" -> bits))
     assertTrue(metadataPartitions(tablePath).contains(IndexPartition))
 
@@ -101,7 +120,7 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
 
   @Test
   def testCreateIndexWithDefaultOptions(): Unit = {
-    val (tableName, tablePath) = createTableWithRows("defaults", withRecordIndex = true)
+    val (tableName, tablePath) = createTableWithRows("defaults", GlobalRecordIndex)
     createIndex(tableName, Map.empty)
     assertTrue(metadataPartitions(tablePath).contains(IndexPartition))
   }
@@ -113,7 +132,7 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
    */
   @Test
   def testSearchWithPartitionedRecordIndex(): Unit = {
-    val (tableName, tablePath) = createTableWithRows("partitioned_rli", withRecordIndex = true, partitionedRecordIndex = true)
+    val (tableName, tablePath) = createTableWithRows("partitioned_rli", PartitionedRecordIndex, partitioned = true)
     assertTrue(HoodieTestUtils.createMetaClient(storageConf, tablePath)
       .getIndexForMetadataPartition(PARTITION_NAME_RECORD_INDEX)
       .map[Boolean](indexDefinition => HoodieRecordIndex.isPartitioned(indexDefinition)).orElse(false),
@@ -131,32 +150,51 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
     }
   }
 
+  /**
+   * NBCC bucket-index tables reuse one fixed file id per bucket in every partition, so exact rerank
+   * must resolve file slices by partition-qualified file group id, not by bare file id.
+   */
+  @Test
+  def testExactSearchWithFileIdsReusedAcrossPartitions(): Unit = {
+    val (tableName, tablePath) = createTableWithRows("nbcc_bucket", GlobalRecordIndex ++ NbccSingleBucketIndex,
+      partitioned = true, tableType = "mor", writeOptions = Map(OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL))
+    val sharedFileIds = Seq("label=left", "label=right").map(baseFileIds(tablePath, _)).reduce(_ intersect _)
+    assertTrue(sharedFileIds.nonEmpty, "fixture must reuse a file id across partitions")
+    createIndex(tableName, Map("vector.metric" -> "l2", "vector.rabitq.bits" -> "4"))
+
+    Seq(Array(10.0, 10.0), Array(-10.0, -10.0)).foreach { query =>
+      val bruteForce = search(tableName, query, 6, "l2", "brute_force", "")
+      val exact = search(tableName, query, 6, "l2", "ivf_rabitq_mdt",
+        s"vector.query.nprobes=$NumClusters,vector.query.mode=exact_rerank")
+      assertEquals(bruteForce.map(_._1), exact.map(_._1))
+      bruteForce.zip(exact).foreach { case ((_, expected), (_, actual)) =>
+        assertEquals(expected, actual, DistanceEpsilon)
+      }
+    }
+  }
+
   @Test
   def testCreateIndexRequiresRecordIndex(): Unit = {
-    val (tableName, tablePath) = createTableWithRows("no_record_index", withRecordIndex = false)
+    val (tableName, tablePath) = createTableWithRows("no_record_index", NoRecordIndex)
     val exception = assertThrows(classOf[Exception], () => createIndex(tableName, Map.empty))
     assertTrue(causes(exception).exists(_.isInstanceOf[HoodieMetadataIndexException]), s"unexpected failure: $exception")
     assertFalse(indexDefinitions(tablePath).contains(IndexPartition))
   }
 
+  /**
+   * Creates a table partitioned by `label` when `partitioned`, applying `tableOptions` to both the
+   * table definition and the write, and `writeOptions` to the write only.
+   */
   private def createTableWithRows(
       suffix: String,
-      withRecordIndex: Boolean,
-      partitionedRecordIndex: Boolean = false): (String, String) = {
+      tableOptions: Map[String, String],
+      partitioned: Boolean = false,
+      tableType: String = "cow",
+      writeOptions: Map[String, String] = Map.empty): (String, String) = {
     val tableName = s"vector_search_$suffix"
     val tablePath = s"$basePath/$tableName"
-    // A partitioned RLI is keyed by (partition, record key), so the table is partitioned by label
-    // and each partition gets several RLI file groups to exercise the per-file-group lookup.
-    val recordIndexOptions: Map[String, String] =
-      if (partitionedRecordIndex) {
-        Map(
-          HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
-          HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> PartitionedRliFileGroups.toString)
-      } else {
-        Map(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> withRecordIndex.toString)
-      }
-    val tableOptionSql = recordIndexOptions.map { case (key, value) => s"$key = '$value'" }.mkString(",\n  ")
-    val partitionClause = if (partitionedRecordIndex) "PARTITIONED BY (label)" else ""
+    val tableOptionSql = tableOptions.map { case (key, value) => s"$key = '$value'" }.mkString(",\n  ")
+    val partitionClause = if (partitioned) "PARTITIONED BY (label)" else ""
     spark.sql(
       s"""
          |CREATE TABLE $tableName (
@@ -168,7 +206,7 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
          |OPTIONS (
          |  primaryKey = 'id',
          |  preCombineField = 'ts',
-         |  type = 'cow',
+         |  type = '$tableType',
          |  hoodie.metadata.enable = 'true',
          |  $tableOptionSql
          |)
@@ -189,15 +227,16 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
       Row("right-1", 1L, Seq(10.0f, 9.7f), "right"),
       Row("right-2", 1L, Seq(9.4f, 10.0f), "right"),
       Row("right-3", 1L, Seq(10.6f, 10.3f), "right"))
-    val partitionOptions = if (partitionedRecordIndex) Map(PARTITIONPATH_FIELD.key -> "label") else Map.empty[String, String]
+    val partitionOptions = if (partitioned) Map(PARTITIONPATH_FIELD.key -> "label") else Map.empty[String, String]
+    val writeTableType = if (tableType == "mor") MOR_TABLE_TYPE_OPT_VAL else COW_TABLE_TYPE_OPT_VAL
     spark.createDataFrame(spark.sparkContext.parallelize(rows), schema)
       .write.format("hudi")
       .option(TABLE_NAME.key, tableName)
-      .option(TABLE_TYPE.key, "COPY_ON_WRITE")
+      .option(TABLE_TYPE.key, writeTableType)
       .option(RECORDKEY_FIELD.key, "id")
       .option(PRECOMBINE_FIELD.key, "ts")
       .option(HoodieMetadataConfig.ENABLE.key, "true")
-      .options(recordIndexOptions ++ partitionOptions)
+      .options(tableOptions ++ partitionOptions ++ writeOptions)
       .mode(SaveMode.Append)
       .save(tablePath)
     (tableName, tablePath)
@@ -235,6 +274,10 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
       .sortBy { case (key, distance) => (distance, key) }
       .toSeq
   }
+
+  private def baseFileIds(tablePath: String, partition: String): Set[String] =
+    Option(new File(s"${tablePath.stripPrefix("file:")}/$partition").listFiles()).toSeq.flatten
+      .map(_.getName).filter(_.endsWith(".parquet")).map(FSUtils.getFileId).toSet
 
   private def metadataPartitions(tablePath: String): Set[String] =
     HoodieTestUtils.createMetaClient(storageConf, tablePath).getTableConfig.getMetadataPartitions.asScala.toSet

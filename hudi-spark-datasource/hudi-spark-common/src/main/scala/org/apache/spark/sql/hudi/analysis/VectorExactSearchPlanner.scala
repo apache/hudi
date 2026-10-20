@@ -22,7 +22,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.index.vector.{ScoredVectorPostingMatch, VectorDistanceMetric, VectorIndexArbiter, VectorIndexMdtSearchUtils, VectorIndexMetadataCache, VectorIndexOptions, VectorPostingMatch, VectorStalePolicy}
-import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieFileGroupId, HoodieIndexDefinition, HoodieRecord, HoodieRecordGlobalLocation}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, InstantComparison}
@@ -148,10 +148,9 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
         emptyDf
       } else {
         val candidatesByPartition = serveCandidates
-          .groupBy(candidate => Option(candidate.getLocation).map(_.getPartitionPath).getOrElse(""))
-          .map { case (partitionPath, candidates) =>
-            partitionPath -> candidates.flatMap(candidate => Option(candidate.getLocation).map(_.getFileId)).toSet
-          }
+          .flatMap(candidate => Option(candidate.getLocation).map(fileGroupIdOf))
+          .groupBy(_.getPartitionPath)
+          .map { case (partitionPath, fileGroupIds) => partitionPath -> fileGroupIds.toSet }
         val fileSliceMap = preResolveFileSlices(
           ctx.metadataTable, ctx.metaClient, ctx.timeline, ctx.latestInstantTime, candidatesByPartition)
         if (fileSliceMap.isEmpty) {
@@ -165,23 +164,23 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
         // file, so the positional fetcher cannot read them. Split them out and materialize them via a
         // merged (base + log) read; base-resident candidates keep the fast positional path.
         val (logResidentCandidates, baseCandidates) = serveCandidates.partition { candidate =>
-          bFileSliceMap.value.get(candidate.getLocation.getFileId).exists { slice =>
+          bFileSliceMap.value.get(fileGroupIdOf(candidate.getLocation)).exists { slice =>
             isLogResidentCandidate(candidate, slice.getBaseInstantTime, slice.getLogFiles.findAny().isPresent)
           }
         }
         val exactFetchParallelism = math.max(
           1,
           math.min(refineK, math.max(1, spark.sparkContext.defaultParallelism * 4)))
-        val groupedCandidates = baseCandidates.groupBy(_.getLocation.getFileId).toSeq.sortBy(_._1)
+        val groupedCandidates = baseCandidates.groupBy(candidate => fileGroupIdOf(candidate.getLocation)).toSeq.sortBy(_._1)
         val targetBatchesPerGroup = math.max(1, exactFetchParallelism / math.max(1, groupedCandidates.size))
         val fetchBatches = groupedCandidates.flatMap { case (fgId, candidates) =>
           val sorted = candidates.sortBy(candidate => candidate.getLocation.getPosition)
           val batchSize = math.max(1, math.ceil(sorted.size.toDouble / targetBatchesPerGroup).toInt)
           sorted.grouped(batchSize).map(batch => (fgId, batch)).toSeq
         }
-        val byFetchBatch: RDD[(String, Seq[ScoredVectorPostingMatch])] =
+        val byFetchBatch: RDD[(HoodieFileGroupId, Seq[ScoredVectorPostingMatch])] =
           if (fetchBatches.isEmpty) {
-            spark.sparkContext.emptyRDD[(String, Seq[ScoredVectorPostingMatch])]
+            spark.sparkContext.emptyRDD[(HoodieFileGroupId, Seq[ScoredVectorPostingMatch])]
           } else {
             spark.sparkContext.parallelize(fetchBatches, math.min(exactFetchParallelism, fetchBatches.size))
           }
@@ -329,15 +328,14 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
               storageConf, ctx.metaClient, dataSchema, ctx.latestInstantTime,
               embeddingCol, outputSchema, scorer)
             val fetched = logResidentCandidates
-              .groupBy(candidate =>
-                (Option(candidate.getLocation.getPartitionPath).getOrElse(""), candidate.getLocation.getFileId))
-              .flatMap { case ((partitionPath, fgId), candidates) =>
-                logFetcher.fetchSlice(partitionPath, fileSliceMap(fgId), candidates.map(_.getRecordKey).toSet)
+              .groupBy(candidate => fileGroupIdOf(candidate.getLocation))
+              .flatMap { case (fgId, candidates) =>
+                logFetcher.fetchSlice(fgId.getPartitionPath, fileSliceMap(fgId), candidates.map(_.getRecordKey).toSet)
               }.toSeq
             LOG.info(
               s"[vector_search][exact][log_resident] candidates=${logResidentCandidates.size} " +
                 s"materialized=${fetched.size} " +
-                s"fileGroups=${logResidentCandidates.map(_.getLocation.getFileId).distinct.size}")
+                s"fileGroups=${logResidentCandidates.map(candidate => fileGroupIdOf(candidate.getLocation)).distinct.size}")
             fetched
           }
         val combinedRows: RDD[InternalRow] =
@@ -349,16 +347,24 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
     }
   }
 
+  /**
+   * File slices are keyed by partition-qualified [[HoodieFileGroupId]]: NBCC bucket-index tables reuse the
+   * same fixed file id ({bucket}-0000-0000-0000-000000000000-0) in every partition, so a bare file id is
+   * not unique across partitions.
+   */
+  private[analysis] def fileGroupIdOf(location: HoodieRecordGlobalLocation): HoodieFileGroupId =
+    new HoodieFileGroupId(Option(location.getPartitionPath).getOrElse(""), location.getFileId)
+
   private def preResolveFileSlices(
       metadataTable: HoodieTableMetadata,
       metaClient: HoodieTableMetaClient,
       timeline: HoodieTimeline,
       latestInstantTime: String,
-      candidatesByPartition: Map[String, Set[String]]): Map[String, FileSlice] = {
+      candidatesByPartition: Map[String, Set[HoodieFileGroupId]]): Map[HoodieFileGroupId, FileSlice] = {
     val startNs = System.nanoTime()
     val fsView = new HoodieTableFileSystemView(metadataTable, metaClient, timeline)
     try {
-      val result = scala.collection.mutable.Map.empty[String, FileSlice]
+      val result = scala.collection.mutable.Map.empty[HoodieFileGroupId, FileSlice]
       var baseFiles = 0
       var logFiles = 0L
       var totalSliceBytes = 0L
@@ -366,7 +372,7 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
         val sliceIter = fsView.getLatestFileSlicesBeforeOrOn(partitionPath, latestInstantTime, true).iterator()
         while (sliceIter.hasNext) {
           val slice = sliceIter.next()
-          val fgId = slice.getFileGroupId.getFileId
+          val fgId = slice.getFileGroupId
           if (candidateFgIds.contains(fgId)) {
             result(fgId) = slice
             if (slice.getBaseFile.isPresent) {
