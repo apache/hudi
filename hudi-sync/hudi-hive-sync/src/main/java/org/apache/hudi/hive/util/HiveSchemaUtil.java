@@ -430,7 +430,7 @@ public class HiveSchemaUtil {
       sb.append(" WITH SERDEPROPERTIES (").append(propertyToString(serdeProperties)).append(")");
     }
     sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
-    sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(config.getAbsoluteBasePath()).append("'");
+    sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(escapeSqlString(config.getAbsoluteBasePath())).append("'");
 
     if (tableProperties != null && !tableProperties.isEmpty()) {
       sb.append(" TBLPROPERTIES(").append(propertyToString(tableProperties)).append(")");
