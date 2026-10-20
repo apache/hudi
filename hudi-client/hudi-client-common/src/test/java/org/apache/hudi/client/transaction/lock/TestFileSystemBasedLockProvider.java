@@ -187,9 +187,127 @@ public class TestFileSystemBasedLockProvider {
           "a missing lock file must clear the owner info rather than leave the previous owner's payload");
       assertTrue(contender.tryLock(1, TimeUnit.SECONDS), "contender acquires after holder releases");
     } finally {
+      contender.unlock();
+      holder.unlock();
+      holder.close();
+      contender.close();
+    }
+  }
+
+  @Test
+  public void testFailedContenderCloseDoesNotReleaseOwnerLock() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    LockConfiguration config = lockConfiguration(lockDir("failed-contender-close"), 0);
+    FileSystemBasedLockProvider holder = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider contender = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider observer = new FileSystemBasedLockProvider(config, storageConf);
+    boolean contenderClosed = false;
+    try {
+      assertTrue(holder.tryLock(1, TimeUnit.SECONDS));
+      Path lockPath = Paths.get(holder.getLock());
+      byte[] holderPayload = Files.readAllBytes(lockPath);
+
+      assertFalse(contender.tryLock(1, TimeUnit.SECONDS));
+      contender.close();
+      contenderClosed = true;
+
+      assertArrayEquals(holderPayload, Files.readAllBytes(lockPath),
+          "closing a failed contender must leave the holder's lock untouched");
+      assertFalse(observer.tryLock(1, TimeUnit.SECONDS),
+          "the holder must still exclude other providers after the contender closes");
+
+      holder.unlock();
+      assertTrue(observer.tryLock(1, TimeUnit.SECONDS),
+          "another provider may acquire only after the holder releases the lock");
+    } finally {
+      observer.unlock();
+      holder.unlock();
+      observer.close();
+      holder.close();
+      if (!contenderClosed) {
+        contender.close();
+      }
+    }
+  }
+
+  @Test
+  public void testFailedContenderUnlockDoesNotReleaseOwnerLock() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    LockConfiguration config = lockConfiguration(lockDir("failed-contender-unlock"), 0);
+    FileSystemBasedLockProvider holder = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider contender = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider observer = new FileSystemBasedLockProvider(config, storageConf);
+    try {
+      assertTrue(holder.tryLock(1, TimeUnit.SECONDS));
+      Path lockPath = Paths.get(holder.getLock());
+      byte[] holderPayload = Files.readAllBytes(lockPath);
+
+      assertFalse(contender.tryLock(1, TimeUnit.SECONDS));
+      contender.unlock();
+
+      assertArrayEquals(holderPayload, Files.readAllBytes(lockPath),
+          "unlocking a failed contender must leave the holder's lock untouched");
+      assertFalse(observer.tryLock(1, TimeUnit.SECONDS),
+          "the holder must still exclude other providers after the contender unlocks");
+    } finally {
       holder.unlock();
       contender.unlock();
+      observer.unlock();
       holder.close();
+      contender.close();
+      observer.close();
+    }
+  }
+
+  @Test
+  public void testRepeatedUnlockDoesNotReleaseSuccessorLock() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    LockConfiguration config = lockConfiguration(lockDir("repeated-unlock"), 0);
+    FileSystemBasedLockProvider firstHolder = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider successor = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider observer = new FileSystemBasedLockProvider(config, storageConf);
+    try {
+      assertTrue(firstHolder.tryLock(1, TimeUnit.SECONDS));
+      firstHolder.unlock();
+      assertTrue(successor.tryLock(1, TimeUnit.SECONDS));
+      Path lockPath = Paths.get(successor.getLock());
+      byte[] successorPayload = Files.readAllBytes(lockPath);
+
+      firstHolder.unlock();
+
+      assertArrayEquals(successorPayload, Files.readAllBytes(lockPath),
+          "a repeated unlock must not delete a successor's lock");
+      assertFalse(observer.tryLock(1, TimeUnit.SECONDS),
+          "the successor must remain the exclusive holder");
+    } finally {
+      successor.unlock();
+      firstHolder.unlock();
+      observer.unlock();
+      successor.close();
+      firstHolder.close();
+      observer.close();
+    }
+  }
+
+  @Test
+  public void testOwnerCloseReleasesLock() {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    LockConfiguration config = lockConfiguration(lockDir("owner-close"), 0);
+    FileSystemBasedLockProvider holder = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider successor = new FileSystemBasedLockProvider(config, storageConf);
+    boolean holderClosed = false;
+    try {
+      assertTrue(holder.tryLock(1, TimeUnit.SECONDS));
+      holder.close();
+      holderClosed = true;
+      assertTrue(successor.tryLock(1, TimeUnit.SECONDS),
+          "closing the holder must release its lock");
+    } finally {
+      successor.unlock();
+      successor.close();
+      if (!holderClosed) {
+        holder.close();
+      }
     }
   }
 
@@ -381,9 +499,10 @@ public class TestFileSystemBasedLockProvider {
       // The expired lock file is deleted and the contender acquires it.
       assertTrue(contender.tryLock(1, TimeUnit.SECONDS), "expired lock should be reclaimable");
     } finally {
-      holder.unlock();
       contender.unlock();
+      holder.unlock();
       contender.close();
+      holder.close();
     }
   }
 

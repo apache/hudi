@@ -76,8 +76,8 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    * <p>Kept static so that, within a classloader, the mutual-exclusion scope is unchanged by this fix.
    * The interned literal was additionally shared across classloaders. Losing that wider scope matters
    * only for what the exclusive create does not protect: the expiry-reclaim sequence in
-   * {@code tryLock} (exists, checkIfExpired, delete, create), the release path ({@code unlock}'s
-   * exists-then-delete and {@code close}'s unconditional delete), plus the exists-then-create window
+   * {@code tryLock} (exists, checkIfExpired, delete, create), a stale holder's release path after
+   * another process reclaims an expired lock, plus the exists-then-create window
    * on a store whose create is not atomic. All are already unsafe across processes, the normal
    * multi-writer deployment; the monitor never made them safe. Cross-process mutual exclusion rests
    * entirely on the exclusive-mode {@code storage.create(path, false)} in {@code acquireLock} being
@@ -99,6 +99,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   // storage and lockFile are transient with no readObject to rebuild them, as before this change.
   private transient SimpleDateFormat sdf;
   private transient LockInfo lockInfo;
+  private transient boolean lockAcquired;
   /**
    * Written under {@link #LOCK_FILE_MONITOR} on the {@code tryLock} path, with no monitor at all when
    * {@code reloadCurrentOwnerLockInfo()} is called directly, and exposed through the generated getter
@@ -134,7 +135,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public void close() {
     synchronized (LOCK_FILE_MONITOR) {
       try {
-        storage.deleteFile(this.lockFile);
+        releaseLockIfHeld();
       } catch (IOException e) {
         throw new HoodieLockException(generateLogStatement(LockState.FAILED_TO_RELEASE), e);
       } finally {
@@ -156,6 +157,9 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public boolean tryLock(long time, TimeUnit unit) {
     try {
       synchronized (LOCK_FILE_MONITOR) {
+        if (lockAcquired) {
+          return false;
+        }
         // Check whether lock is already expired, if so try to delete lock file
         if (storage.exists(this.lockFile)) {
           if (checkIfExpired()) {
@@ -167,7 +171,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
           }
         }
         acquireLock();
-        return storage.exists(this.lockFile);
+        return true;
       }
     } catch (IOException | HoodieIOException e) {
       log.info(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
@@ -179,9 +183,7 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
   public void unlock() {
     synchronized (LOCK_FILE_MONITOR) {
       try {
-        if (storage.exists(this.lockFile)) {
-          storage.deleteFile(this.lockFile);
-        }
+        releaseLockIfHeld();
       } catch (IOException io) {
         throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_RELEASE), io);
       }
@@ -221,12 +223,30 @@ public class FileSystemBasedLockProvider implements LockProvider<String>, Serial
    */
   @VisibleForTesting
   void acquireLock() {
-    try (OutputStream os = storage.create(this.lockFile, false)) {
-      initLockInfo();
-      os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
-    } catch (IOException e) {
-      throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
+    synchronized (LOCK_FILE_MONITOR) {
+      try (OutputStream os = storage.create(this.lockFile, false)) {
+        initLockInfo();
+        os.write(StringUtils.getUTF8Bytes(lockInfo.toString()));
+      } catch (IOException e) {
+        throw new HoodieIOException(generateLogStatement(LockState.FAILED_TO_ACQUIRE), e);
+      }
+      lockAcquired = true;
+      currentOwnerLockInfo = "";
     }
+  }
+
+  private void releaseLockIfHeld() throws IOException {
+    if (!lockAcquired) {
+      return;
+    }
+
+    if (storage.exists(this.lockFile)) {
+      boolean deleted = storage.deleteFile(this.lockFile);
+      if (!deleted && storage.exists(this.lockFile)) {
+        throw new IOException("Failed to delete lock file: " + this.lockFile);
+      }
+    }
+    lockAcquired = false;
   }
 
   public void initLockInfo() {
