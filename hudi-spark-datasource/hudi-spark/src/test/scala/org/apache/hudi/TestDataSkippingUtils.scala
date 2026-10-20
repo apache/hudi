@@ -33,7 +33,7 @@ import org.apache.spark.sql.functions.{col, date_format, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
-import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.unsafe.types.{ByteArray, UTF8String}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -171,7 +171,8 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
       val sourceExpr = resolveExpr(spark, sparkAdapter.getExpressionFromColumn(col("B").startsWith(prefix)), sourceTableSchema)
       prefix -> DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(sourceExpr, indexedCols = indexedCols)
     }
-    def compare(left: String, right: String): Int = UTF8String.fromString(left).compareTo(UTF8String.fromString(right))
+    def compare(left: String, right: String): Int =
+      ByteArray.compareBinary(UTF8String.fromString(left).getBytes, UTF8String.fromString(right).getBytes)
 
     for {
       minimum <- values
