@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[9066],{57824:t=>{t.exports=JSON.parse('{"tag":{"label":"trino","permalink":"/videos/tags/trino","allTagsPath":"/videos/tags","count":4,"unlisted":false},"listMetadata":{"permalink":"/videos/tags/trino","page":1,"postsPerPage":10,"totalPages":1,"totalCount":4,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);

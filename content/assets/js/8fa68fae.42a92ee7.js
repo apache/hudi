@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[11716],{68480:t=>{t.exports=JSON.parse('{"tag":{"label":"oltp","permalink":"/videos/tags/oltp","allTagsPath":"/videos/tags","count":3,"unlisted":false},"listMetadata":{"permalink":"/videos/tags/oltp","page":1,"postsPerPage":10,"totalPages":1,"totalCount":3,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);

@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[72011],{67038:a=>{a.exports=JSON.parse('{"tag":{"label":"bloom","permalink":"/videos/tags/bloom","allTagsPath":"/videos/tags","count":1,"unlisted":false},"listMetadata":{"permalink":"/videos/tags/bloom","page":1,"postsPerPage":10,"totalPages":1,"totalCount":1,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);

@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[26833],{32082:a=>{a.exports=JSON.parse('{"tag":{"label":"join","permalink":"/videos/tags/join","allTagsPath":"/videos/tags","count":1,"unlisted":false},"listMetadata":{"permalink":"/videos/tags/join","page":1,"postsPerPage":10,"totalPages":1,"totalCount":1,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);

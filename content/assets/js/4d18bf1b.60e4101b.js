@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkhudi=self.webpackChunkhudi||[]).push([[60965],{1987:e=>{e.exports=JSON.parse('{"tag":{"label":"hue","permalink":"/videos/tags/hue","allTagsPath":"/videos/tags","count":1,"unlisted":false},"listMetadata":{"permalink":"/videos/tags/hue","page":1,"postsPerPage":10,"totalPages":1,"totalCount":1,"blogDescription":"Blog","blogTitle":"Blog"}}')}}]);
