@@ -20,6 +20,7 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.client.model.HoodieFlinkRecord;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -29,9 +30,13 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 
+import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.columnar.ColumnarRowData;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
@@ -42,10 +47,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
@@ -74,14 +83,53 @@ class TestFlinkRecordContext {
     assertSame(row, record.getData());
     assertEquals(HoodieOperation.DELETE, record.getOperation());
     assertTrue(record.isDelete(null, new Properties()));
-    if (hasRowData) {
-      assertEquals(60L, record.getOrderingValueAsJava(schema, new Properties(), new String[] {"ts"}));
-    }
+    assertEquals(60L, record.getOrderingValueAsJava(schema, new Properties(), new String[] {"ts"}));
     assertSame(orderingValue, record.getOrderingValue(schema, new Properties(), new String[] {"ts"}));
     BufferedRecord<RowData> roundTrip = BufferedRecords.fromHoodieRecord(record, schema, context, new Properties(), new String[] {"ts"}, true);
     assertTrue(roundTrip.isDelete());
     assertSame(row, roundTrip.getRecord());
     assertSame(orderingValue, roundTrip.getOrderingValue());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testEmptyRecordOrderingConversion(boolean utcTimezone) {
+    TimeZone previousTimezone = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"));
+    try {
+      HoodieSchema nested = HoodieSchema.createRecord("nested_ordering", null, null, Arrays.asList(
+          HoodieSchemaField.of("amount", HoodieSchema.createDecimal(10, 2)),
+          HoodieSchemaField.of("ts", HoodieSchema.createTimestampMicros())));
+      HoodieSchema schema = HoodieSchema.createRecord("ordering", null, null, Arrays.asList(
+          HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("amount", HoodieSchema.createDecimal(10, 2)),
+          HoodieSchemaField.of("ts", HoodieSchema.createTimestampMicros()),
+          HoodieSchemaField.of("millis", HoodieSchema.createTimestampMillis()),
+          HoodieSchemaField.of("nested", HoodieSchema.createNullable(nested))));
+      StringData stringValue = StringData.fromString("060");
+      BigDecimal decimalValue = new BigDecimal("60.25");
+      DecimalData engineDecimal = DecimalData.fromBigDecimal(decimalValue, 10, 2);
+      TimestampData timestamp = TimestampData.fromLocalDateTime(LocalDateTime.of(2024, 1, 2, 3, 4, 5, 123456000));
+      Instant instant = utcTimezone ? timestamp.toInstant() : timestamp.toTimestamp().toInstant();
+      long micros = instant.getEpochSecond() * 1_000_000 + instant.getNano() / 1_000;
+      long millis = instant.toEpochMilli();
+      Comparable<?>[] engineValues = {stringValue, engineDecimal, timestamp, timestamp, null, OrderingValues.getDefault(),
+          new ArrayComparable(new Comparable[] {timestamp, stringValue, engineDecimal, null, OrderingValues.getDefault()})};
+      Comparable<?>[] javaValues = {"060", decimalValue, micros, millis, null, OrderingValues.getDefault(),
+          new ArrayComparable(new Comparable[] {micros, "060", decimalValue, null, OrderingValues.getDefault()})};
+      String[][] fields = {{"name"}, {"nested.amount"}, {"nested.ts"}, {"millis"}, {"ts"}, {"amount"},
+          {"nested.ts", "name", "nested.amount", "ts", "amount"}};
+      Properties props = new Properties();
+      props.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), Boolean.toString(utcTimezone));
+      for (int i = 0; i < engineValues.length; i++) {
+        HoodieRecord<RowData> record = FlinkRecordContext.getDeleteCheckingInstance().constructHoodieRecord(
+            new BufferedRecord<>("key", engineValues[i], null, null, HoodieOperation.DELETE), "partition");
+        assertEquals(javaValues[i], record.getOrderingValueAsJava(schema, props, fields[i]));
+        assertSame(engineValues[i], record.getOrderingValue(schema, props, fields[i]));
+      }
+    } finally {
+      TimeZone.setDefault(previousTimezone);
+    }
   }
 
   @Test

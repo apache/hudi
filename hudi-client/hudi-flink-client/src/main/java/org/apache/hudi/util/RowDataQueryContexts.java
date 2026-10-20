@@ -133,12 +133,16 @@ public class RowDataQueryContexts {
       return new FieldQueryContext(logicalType, fieldGetter, utcTimezone);
     }
 
+    public Object convertToJavaType(Object value) {
+      return javaTypeConverter.apply(value);
+    }
+
     public Object getValAsJava(RowData rowData) {
       return getValAsJava(rowData, true);
     }
 
     public Object getValAsJava(RowData rowData, boolean allowsNull) {
-      Object val = this.javaTypeConverter.apply(fieldGetter.getFieldOrNull(rowData));
+      Object val = convertToJavaType(fieldGetter.getFieldOrNull(rowData));
       if (val == null && !allowsNull) {
         throw new HoodieException("The field value can not be null");
       }

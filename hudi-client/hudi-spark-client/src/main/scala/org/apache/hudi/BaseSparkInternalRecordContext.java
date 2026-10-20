@@ -99,9 +99,11 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     return convertToJavaType ? sparkTypeToJavaType(value) : value;
   }
 
-  private static Object sparkTypeToJavaType(Object value) {
+  static Object sparkTypeToJavaType(Object value) {
     if (value == null) {
       return null;
+    } else if (value instanceof HoodieUTF8String) {
+      return ((HoodieUTF8String) value).getUtf8String().toString();
     } else if (value instanceof UTF8String) {
       return ((UTF8String) value).toString();
     } else if (value instanceof Decimal) {
@@ -136,7 +138,8 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
           bufferedRecord.getOrderingValue(),
-          HoodieRecord.HoodieRecordType.SPARK);
+          HoodieRecord.HoodieRecordType.SPARK,
+          SparkOrderingValueJavaTypeConverter.INSTANCE);
     }
 
     HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);

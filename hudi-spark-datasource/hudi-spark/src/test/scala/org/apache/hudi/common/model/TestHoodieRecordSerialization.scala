@@ -18,11 +18,12 @@
 
 package org.apache.hudi.common.model
 
-import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport, SparkRowSerDe}
+import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkUtils, SparkAdapterSupport, SparkOrderingValueJavaTypeConverter, SparkRowSerDe}
 import org.apache.hudi.AvroConversionUtils.createInternalRowToAvroConverter
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.TestHoodieRecordSerialization.{cloneUsingKryo, convertToAvroRecord, toUnsafeRow, OverwriteWithLatestAvroPayloadWithEquality}
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.util.collection.ArrayComparable
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
 import org.apache.avro.generic.GenericRecord
@@ -33,7 +34,7 @@ import org.apache.spark.sql.catalyst.expressions.objects.SerializerSupport
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.addMetaFields
 import org.apache.spark.sql.types.{Decimal, StructType}
 import org.apache.spark.unsafe.types.UTF8String
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertSame}
 import org.junit.jupiter.api.Test
 
 import java.nio.ByteBuffer
@@ -139,7 +140,8 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     }
 
     val key = new HoodieKey("rec-key", "part-path")
-    val expectedEmptyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 35 else 32
+    // One additional byte encodes the absent ordering-value converter.
+    val expectedEmptyRecordSize = if (HoodieSparkUtils.gteqSpark3_4) 36 else 33
     Seq(
       (new HoodieEmptyRecord[GenericRecord](key, HoodieOperation.INSERT, 1, HoodieRecordType.AVRO),
         expectedEmptyRecordSize),
@@ -148,6 +150,25 @@ class TestHoodieRecordSerialization extends SparkClientFunctionalTestHarness {
     ) foreach { case (record, expectedSize) => routine(record, expectedSize) }
   }
 
+  @Test
+  def testEmptyRecordConverterWithSparkKryo(): Unit = {
+    val engineOrdering = new ArrayComparable(Array[Comparable[_]](
+      SparkAdapterSupport.sparkAdapter.getUTF8StringFactory.wrapUTF8String(UTF8String.fromString("060")),
+      Decimal.apply(new java.math.BigDecimal("60.25"))))
+    val expected = new ArrayComparable(Array[Comparable[_]]("060", new java.math.BigDecimal("60.25")))
+    val original = new HoodieEmptyRecord[InternalRow](new HoodieKey("key", "partition"),
+      HoodieOperation.DELETE, engineOrdering, HoodieRecordType.SPARK, SparkOrderingValueJavaTypeConverter.INSTANCE)
+    // Compare serialization with the same ordering cache state on both records.
+    original.getOrderingValue(null, new Properties(), Array("name", "amount"))
+    val (restored, originalBytes) = cloneUsingKryo(original)
+    val converter = classOf[HoodieEmptyRecord[_]].getDeclaredField("orderingValueJavaTypeConverter")
+    converter.setAccessible(true)
+    assertSame(SparkOrderingValueJavaTypeConverter.INSTANCE, converter.get(restored))
+    assertEquals(expected, restored.getOrderingValueAsJava(null, new Properties(), Array("name", "amount")))
+    assertEquals(engineOrdering, restored.getOrderingValue(null, new Properties(), Array("name", "amount")))
+    val (_, restoredBytes) = cloneUsingKryo(restored)
+    assertEquals(ByteBuffer.wrap(originalBytes), ByteBuffer.wrap(restoredBytes))
+  }
 
   private def toLegacyAvroRecord(avroRecord: GenericRecord, key: HoodieKey): HoodieAvroRecord[OverwriteWithLatestAvroPayload] = {
     val avroRecordPayload = new OverwriteWithLatestAvroPayloadWithEquality(avroRecord, 0)

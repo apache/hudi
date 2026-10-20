@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -69,6 +70,11 @@ public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends Hoodi
     // Treating it as a regular append would prepend another meta-field overlay and shift all data ordinals.
     this.isLogCompaction = true;
     this.useWriterSchema = true;
+  }
+
+  @Override
+  protected RecordContext<?> getRecordContextForWrite() {
+    return readerContext.getRecordContext();
   }
 
   @Override

@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -35,11 +36,13 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.cdc.HoodieNativeLogFormatWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -48,9 +51,11 @@ import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -104,6 +109,30 @@ public class TestFileGroupReaderBasedNativeLogAppendHandle {
       assertEquals(11L, first.getStat().getRuntimeStats().getTotalScanTime());
       assertEquals(0L, second.getStat().getTotalLogReadTimeMs());
       verify(reader).close();
+    }
+  }
+
+  @Test
+  public void testNativeWriterUsesProducingRecordContext() {
+    HoodieWriteConfig config = config();
+    HoodieTable table = table(config);
+    RecordContext tableContext = mock(RecordContext.class);
+    RecordContext producingContext = mock(RecordContext.class);
+    HoodieReaderContext readerContext = mock(HoodieReaderContext.class);
+    when(table.getRecordContextForWrite()).thenReturn(tableContext);
+    when(readerContext.getRecordContext()).thenReturn(producingContext);
+
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) ->
+            assertSame(context.getCount() == 1 ? tableContext : producingContext, context.arguments().get(14)))) {
+      HoodieNativeLogAppendHandle ordinary = new HoodieNativeLogAppendHandle(
+          config, "100", table, "partition", "file-1", new LocalTaskContextSupplier());
+      ordinary.createLogWriterForAppend("100", Option.empty());
+      TestableFileGroupReaderHandle compaction = new TestableFileGroupReaderHandle(config, table, operation(), readerContext);
+      compaction.createLogWriterForAppend("100", Option.empty());
+      assertEquals(2, writers.constructed().size());
+      ordinary.closeLogWriter();
+      compaction.closeLogWriter();
     }
   }
 

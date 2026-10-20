@@ -22,26 +22,33 @@ package org.apache.hudi;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericRow;
 import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.Collections;
+import java.util.Properties;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestDefaultSparkRecordMerger {
@@ -151,6 +158,25 @@ class TestDefaultSparkRecordMerger {
     assertEquals(
         InternalRow.apply(newValue.toSeq()),
         result.getRecord());
+  }
+
+  @Test
+  void testEmptyRecordOrderingConversion() {
+    HoodieUTF8String stringValue = SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String(UTF8String.fromString("060"));
+    BigDecimal decimalValue = new BigDecimal("60.25");
+    Decimal engineDecimal = Decimal.apply(decimalValue);
+    Comparable<?>[] engineValues = {stringValue, UTF8String.fromString("060"), engineDecimal, 60L, null, OrderingValues.getDefault(),
+        new ArrayComparable(new Comparable[] {stringValue, engineDecimal, 60L, OrderingValues.getDefault(), OrderingValues.getDefault()})};
+    Comparable<?>[] javaValues = {"060", "060", decimalValue, 60L, null, OrderingValues.getDefault(),
+        new ArrayComparable(new Comparable[] {"060", decimalValue, 60L, OrderingValues.getDefault(), OrderingValues.getDefault()})};
+    Properties props = new Properties();
+    String[] orderingFields = {"name", "amount", "ts", "missing", "default"};
+    for (int i = 0; i < engineValues.length; i++) {
+      HoodieRecord<InternalRow> record = recordContext.constructHoodieRecord(
+          new BufferedRecord<>("key", engineValues[i], null, null, HoodieOperation.DELETE), "partition");
+      assertEquals(javaValues[i], record.getOrderingValueAsJava(null, props, orderingFields));
+      assertSame(engineValues[i], record.getOrderingValue(null, props, orderingFields));
+    }
   }
 
   static Row getSpecificValue(

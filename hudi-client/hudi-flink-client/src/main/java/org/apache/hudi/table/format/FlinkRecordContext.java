@@ -33,6 +33,7 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.AvroToRowDataConverters;
+import org.apache.hudi.util.FlinkOrderingValueJavaTypeConverter;
 import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.hudi.util.RowDataQueryContexts;
@@ -140,7 +141,8 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   public HoodieRecord<RowData> constructHoodieRecord(BufferedRecord<RowData> bufferedRecord, String partitionPath) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete() && bufferedRecord.isEmpty()) {
-      return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
+      return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(),
+          HoodieRecord.HoodieRecordType.FLINK, FlinkOrderingValueJavaTypeConverter.INSTANCE);
     }
     RowData rowData = bufferedRecord.getRecord();
     return new HoodieFlinkRecord(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), rowData, bufferedRecord.isDelete());

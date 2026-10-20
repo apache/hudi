@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
@@ -113,13 +114,17 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
           hoodieTable.getBaseFileFormat(),
           writeSchemaWithMetaFields,
           taskContextSupplier,
-          hoodieTable.getRecordContextForWrite(),
+          getRecordContextForWrite(),
           orderingFields,
           baseFileInstantTimeOfPositions);
     } catch (IOException e) {
       throw new HoodieException("Creating native log writer with fileId: " + fileId + ", "
           + "delta commit time: " + instantTime + " error", e);
     }
+  }
+
+  protected RecordContext<?> getRecordContextForWrite() {
+    return hoodieTable.getRecordContextForWrite();
   }
 
   @Override
