@@ -215,7 +215,9 @@ final class HoodieVariantReconstruction {
     /**
      * The element type of a parquet LIST group, by the same rules the file schema's Avro conversion
      * applied (AvroSchemaConverter.isElementType): the repeated field itself in the legacy 2-level
-     * layouts, otherwise the single field of the repeated group (3-level layout).
+     * layouts, otherwise the single field of the repeated group (3-level layout). Applies only to
+     * lists around a variant column; Spark4VariantShreddingProvider.listElementType reads the
+     * typed_value list inside one under Spark's rules, so the two are not meant to agree.
      */
     private Type listElementType(GroupType list) {
       if (list.getFieldCount() != 1) {

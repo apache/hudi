@@ -570,7 +570,9 @@ public class Spark4VariantShreddingProvider implements VariantShreddingProvider 
 
   /**
    * The element type of a parquet LIST group under Spark's list rules
-   * (ParquetToSparkSchemaConverter.isElementType), or null for a malformed list.
+   * (ParquetToSparkSchemaConverter.isElementType), or null for a malformed list. Applies only to the
+   * typed_value list inside a variant; HoodieVariantReconstruction's planner walks the lists around
+   * a variant column under parquet-avro's rules instead, so the two are not meant to agree.
    */
   private static Type listElementType(GroupType list) {
     if (list.getFieldCount() != 1 || !list.getType(0).isRepetition(Type.Repetition.REPEATED)) {
