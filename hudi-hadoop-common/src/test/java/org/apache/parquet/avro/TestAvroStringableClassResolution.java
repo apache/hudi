@@ -37,11 +37,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 /**
  * Verifies that Hudi's parquet-avro readers never instantiate classes named by the
@@ -66,7 +68,10 @@ class TestAvroStringableClassResolution {
   void writeFile() throws IOException {
     Schema stringSchema = Schema.create(Schema.Type.STRING);
     stringSchema.addProp("java-class", StringableProbe.class.getName());
-    Schema schema = SchemaBuilder.record("rec").fields().name("f").type(stringSchema).noDefault().endRecord();
+    Schema schema = SchemaBuilder.record("rec").fields()
+        .name("f").type(stringSchema).noDefault()
+        .name("a").type().array().items().stringType().noDefault()
+        .endRecord();
 
     filePath = new Path(tempDir.resolve("stringable.parquet").toUri());
     try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(filePath)
@@ -76,6 +81,7 @@ class TestAvroStringableClassResolution {
         .build()) {
       GenericRecord record = new GenericData.Record(schema);
       record.put("f", "value");
+      record.put("a", Arrays.asList("x", "y"));
       writer.write(record);
     }
     StringableProbe.INSTANCES.set(0);
@@ -91,6 +97,7 @@ class TestAvroStringableClassResolution {
       IndexedRecord record = reader.read();
       assertEquals("value", record.get(0).toString());
       assertFalse(record.get(0) instanceof StringableProbe);
+      assertArrayField(record.get(1));
     }
     assertEquals(0, StringableProbe.INSTANCES.get());
   }
@@ -103,6 +110,14 @@ class TestAvroStringableClassResolution {
     List<GenericRecord> records = new ParquetUtils().readAvroRecords(new HoodieHadoopStorage(filePath, conf), storagePath);
     assertEquals(1, records.size());
     assertEquals("value", records.get(0).get("f").toString());
+    assertArrayField(records.get(0).get("a"));
     assertEquals(0, StringableProbe.INSTANCES.get());
+  }
+
+  private static void assertArrayField(Object value) {
+    List<?> list = assertInstanceOf(List.class, value);
+    assertEquals(2, list.size());
+    assertEquals("x", list.get(0).toString());
+    assertEquals("y", list.get(1).toString());
   }
 }
