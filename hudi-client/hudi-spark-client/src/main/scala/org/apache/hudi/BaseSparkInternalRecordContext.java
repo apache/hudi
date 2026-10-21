@@ -76,6 +76,10 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     return getFieldValueFromInternalRowInternal(row, recordSchema, fieldName, true);
   }
 
+  public static Object getFieldValueFromInternalRowAsJava(InternalRow row, HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath) {
+    return getFieldValueFromInternalRowInternal(row, nestedFieldPath, true);
+  }
+
   private static Object getFieldValueFromInternalRowInternal(InternalRow row, HoodieSchema recordSchema, String fieldName, boolean convertToJavaType) {
     return getFieldValueFromInternalRowInternal(row, getCachedSchema(recordSchema), fieldName, convertToJavaType);
   }
@@ -84,12 +88,15 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     scala.Option<HoodieUnsafeRowUtils.NestedFieldPath> cachedNestedFieldPath =
         HoodieInternalRowUtils.getCachedPosList(structType, fieldName);
     if (cachedNestedFieldPath.isDefined()) {
-      HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath = cachedNestedFieldPath.get();
-      Object value = HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);
-      return convertToJavaType ? sparkTypeToJavaType(value) : value;
+      return getFieldValueFromInternalRowInternal(row, cachedNestedFieldPath.get(), convertToJavaType);
     } else {
       return null;
     }
+  }
+
+  private static Object getFieldValueFromInternalRowInternal(InternalRow row, HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath, boolean convertToJavaType) {
+    Object value = HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);
+    return convertToJavaType ? sparkTypeToJavaType(value) : value;
   }
 
   private static Object sparkTypeToJavaType(Object value) {
