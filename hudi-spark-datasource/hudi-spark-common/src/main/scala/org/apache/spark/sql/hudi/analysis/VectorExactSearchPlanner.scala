@@ -317,29 +317,27 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
               s"fetchWaitMs=${metrics.fetchWaitMs} decodeMs=${metrics.decodeMs} scoreMs=${metrics.scoreMs} elapsedMs=${elapsedMs(startNs)}")
           rows.iterator
         }
-        val logResidentRows: Seq[InternalRow] =
+        val combinedRows: RDD[InternalRow] =
           if (logResidentCandidates.isEmpty) {
-            Seq.empty
+            exactRows
           } else {
             val dataSchema = new TableSchemaResolver(ctx.metaClient).getTableSchema(true)
-            val scorer = new VectorExactScorer(vectorSchema, exactQueryVector, ctx.metric)
+            val scorer = new VectorExactScorer(vectorSchema, exactQueryVector, distanceMetric)
             val logFetcher = new LogResidentVectorFetcher(
               storageConf, ctx.metaClient, dataSchema, ctx.latestInstantTime,
               embeddingCol, outputSchema, scorer)
-            val fetched = logResidentCandidates
+            val logSlices = logResidentCandidates
               .groupBy(candidate => fileGroupIdOf(candidate.getLocation))
-              .flatMap { case (fgId, candidates) =>
-                logFetcher.fetchSlice(fgId.getPartitionPath, fileSliceMap(fgId), candidates.map(_.getRecordKey).toSet)
+              .map { case (fgId, candidates) =>
+                (fgId.getPartitionPath, fileSliceMap(fgId), candidates.map(_.getRecordKey).toSet)
               }.toSeq
             LOG.info(
-              s"[vector_search][exact][log_resident] candidates=${logResidentCandidates.size} " +
-                s"materialized=${fetched.size} " +
-                s"fileGroups=${logResidentCandidates.map(candidate => fileGroupIdOf(candidate.getLocation)).distinct.size}")
-            fetched
+              s"[vector_search][exact][log_resident] candidates=${logResidentCandidates.size} fileGroups=${logSlices.size}")
+            // One task per file group: each merged read is bounded by that slice's base+log size.
+            val logResidentRows = spark.sparkContext.parallelize(logSlices, logSlices.size)
+              .flatMap { case (partitionPath, slice, keys) => logFetcher.fetchSlice(partitionPath, slice, keys) }
+            exactRows.union(logResidentRows)
           }
-        val combinedRows: RDD[InternalRow] =
-          if (logResidentRows.isEmpty) exactRows
-          else exactRows.union(spark.sparkContext.parallelize(logResidentRows))
         LOG.info(s"[vector_search][plan] exact candidate DF planned in ${elapsedMs(planStartNs)} ms")
         sparkAdapter.getUnsafeUtils.createDataFrameFromRDD(spark, combinedRows, outputSchema)
       }

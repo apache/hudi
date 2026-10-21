@@ -49,8 +49,8 @@ import scala.collection.mutable.ArrayBuffer
  * the merged (base + log) file slice as Avro records, then scores only the log-resident candidate keys
  * with the SAME {@link VectorExactScorer} the positional path uses so exact-vs-brute-force stays equal.
  *
- * Runs on the driver: the candidate set is bounded by refineK and the driver already holds the meta
- * client and resolved file slices, which avoids reconstructing them inside an executor closure.
+ * Serializable so each file group's merged read runs in its own Spark task: the cost of a merged read
+ * scales with base+log size per touched file group, not with refineK, so it must not run on the driver.
  */
 private[analysis] final class LogResidentVectorFetcher(
     storageConf: StorageConfiguration[_],
@@ -59,7 +59,7 @@ private[analysis] final class LogResidentVectorFetcher(
     latestInstantTime: String,
     embeddingCol: String,
     outputSchema: StructType,
-    scorer: VectorExactScorer) {
+    scorer: VectorExactScorer) extends Serializable {
 
   import LogResidentVectorFetcher._
 
