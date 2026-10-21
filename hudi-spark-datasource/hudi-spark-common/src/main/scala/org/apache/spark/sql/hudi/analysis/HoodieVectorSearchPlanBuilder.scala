@@ -130,6 +130,10 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     VectorIndexOptions.RABITQ_SEED,
     VectorIndexOptions.RABITQ_ASSUME_NORMALIZED)
 
+  /** Every key a query may pass: the index's query options plus the exact-fetch tuning knobs. */
+  private val RUNTIME_OPTION_KEYS: Set[String] = VectorIndexOptions.QUERY_OPTIONS.asScala.toSet ++
+    Set(HoodieVectorSearchPlanBuilder.VECTOR_ONLY_PROJECTION_OPT, HoodieVectorSearchPlanBuilder.OFFSET_INDEX_MISSING_POLICY_OPT)
+
   private[analysis] def resolvedTuningOptions(
       indexOptions: Map[String, String],
       runtimeOptions: Map[String, String]): Map[String, String] = {
@@ -146,6 +150,22 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     inherited ++ runtimeOptions
   }
 
+  /** Rejects structural keys (fixed at index build) and unknown keys, e.g. typos or retired options. */
+  private[analysis] def validateRuntimeOptions(runtimeOptions: Map[String, String]): Unit = {
+    val illegal = runtimeOptions.keySet.intersect(STRUCTURAL_OPTION_KEYS)
+    if (illegal.nonEmpty) {
+      throw new HoodieAnalysisException(
+        s"Options ${illegal.toSeq.sorted.mkString(", ")} describe vector index structure and cannot be set at query time; " +
+          "they are read from the active index generation.")
+    }
+    val unknown = runtimeOptions.keySet -- RUNTIME_OPTION_KEYS
+    if (unknown.nonEmpty) {
+      throw new HoodieAnalysisException(
+        s"Unsupported vector search options: ${unknown.toSeq.sorted.mkString(", ")}. " +
+          s"Supported: ${RUNTIME_OPTION_KEYS.toSeq.sorted.mkString(", ")}")
+    }
+  }
+
   private def resolvePlanContext(
       spark: SparkSession,
       basePath: String,
@@ -153,12 +173,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       vectorSchema: HoodieSchema.Vector,
       callerMetric: DistanceMetric.Value,
       runtimeOptions: Map[String, String]): VectorSearchPlanContext = {
-    val illegal = runtimeOptions.keySet.intersect(STRUCTURAL_OPTION_KEYS)
-    if (illegal.nonEmpty) {
-      throw new HoodieAnalysisException(
-        s"Options ${illegal.toSeq.sorted.mkString(", ")} describe vector index structure and cannot be set at query time; " +
-          "they are read from the active index generation.")
-    }
+    validateRuntimeOptions(runtimeOptions)
 
     val storageConf = HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())
     val metaClient = HoodieTableMetaClient.builder()
@@ -357,7 +372,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     val topCandidates = VectorIndexMdtSearchUtils.scanPostingCandidates(
       ctx.metadataTable, ctx.indexPartition, cache.getGenerationId, shardCounts,
       queryVector, cache.getDimension, cache.getQuantizerSeed, cache.getRaBitQBits, cache.isAssumeNormalized,
-      metric, VectorIndexOptions.isRaBitQAsymmetricScoring(mergedOptions.asJava),
+      metric, VectorIndexOptions.RABITQ_ASYMMETRIC_SCORING,
       residualEncoding, if (residualEncoding) cache.getCentroids else null, candidateHeapSize)
     val postingPlanMs = elapsedMs(postingPlanStartNs)
     val resultRddPlanStartNs = System.nanoTime()
@@ -367,36 +382,31 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
       StructField(FILE_GROUP_ID_COL, org.apache.spark.sql.types.DataTypes.StringType, nullable = true, Metadata.empty),
       StructField(DISTANCE_COL, org.apache.spark.sql.types.DataTypes.DoubleType, nullable = false, Metadata.empty)
     ))
-    // RFC-109 RLI finalist arbiter (freshness gate). Default-off: dormant until the commit-time
-    // delta writer lands. When enabled, exclude STALE (rewritten/moved) and DELETED finalists so
-    // approx candidate-gen never serves a posting that no longer faithfully represents a live row.
-    val arbiterEnabled = VectorIndexOptions.isFinalistArbiterEnabled(mergedOptions.asJava)
+    // RFC-109 RLI finalist arbiter, mandatory for correctness: exclude STALE (rewritten/moved) and
+    // DELETED finalists so approximate search never serves a posting that no longer faithfully
+    // represents a live row.
+    val arbitrated = VectorIndexMdtSearchUtils.arbitrateFinalists(
+      ctx.metadataTable, topCandidates, isPartitionedRecordIndex(ctx))
+    val staleAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_arbiter_stale")
+    val deletedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_arbiter_deleted")
     val candidateRdd: RDD[ScoredVectorPostingMatch] =
-      if (arbiterEnabled) {
-        val arbitrated = VectorIndexMdtSearchUtils.arbitrateFinalists(
-          ctx.metadataTable, topCandidates, isPartitionedRecordIndex(ctx))
-        val staleAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_arbiter_stale")
-        val deletedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_arbiter_deleted")
-        HoodieJavaRDD.getJavaRDD(arbitrated).rdd.mapPartitions { it =>
-          var stale = 0L
-          var deleted = 0L
-          val kept = ArrayBuffer.empty[ScoredVectorPostingMatch]
-          it.foreach { c =>
-            approximateArbitratedCandidate(c) match {
-              case Some(candidate) => kept += candidate
-              case None if c.getArbiterDecision == VectorIndexArbiter.Decision.STALE => stale += 1L
-              case None => deleted += 1L
-            }
+      HoodieJavaRDD.getJavaRDD(arbitrated).rdd.mapPartitions { it =>
+        var stale = 0L
+        var deleted = 0L
+        val kept = ArrayBuffer.empty[ScoredVectorPostingMatch]
+        it.foreach { c =>
+          approximateArbitratedCandidate(c) match {
+            case Some(candidate) => kept += candidate
+            case None if c.getArbiterDecision == VectorIndexArbiter.Decision.STALE => stale += 1L
+            case None => deleted += 1L
           }
-          staleAcc.add(stale)
-          deletedAcc.add(deleted)
-          if (stale > 0L || deleted > 0L) {
-            LOG.info(s"[vector_search][approximate][arbiter] arbiterExclusions{stale=$stale, deleted=$deleted} kept=${kept.size}")
-          }
-          kept.iterator
         }
-      } else {
-        HoodieJavaRDD.getJavaRDD(topCandidates).rdd
+        staleAcc.add(stale)
+        deletedAcc.add(deleted)
+        if (stale > 0L || deleted > 0L) {
+          LOG.info(s"[vector_search][approximate][arbiter] arbiterExclusions{stale=$stale, deleted=$deleted} kept=${kept.size}")
+        }
+        kept.iterator
       }
     val resultRows = candidateRdd.map { c =>
       val liveLocation = Option(c.getLocation)
@@ -416,7 +426,7 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
     val sparkAnalysisMs = elapsedMs(sparkAnalysisStartNs)
     LOG.info(
       s"[vector_search][approximate] basePath=${ctx.basePath} probedClusters=${topClusters.length} " +
-        s"candidateHeapSize=$candidateHeapSize residualEncoding=$residualEncoding arbiter=$arbiterEnabled " +
+        s"candidateHeapSize=$candidateHeapSize residualEncoding=$residualEncoding " +
         s"centroidProbeMs=$centroidProbeMs shardLookupMs=$shardLookupMs postingPlanMs=$postingPlanMs " +
         s"resultRddPlanMs=$resultRddPlanMs sparkAnalysisMs=$sparkAnalysisMs planMs=${elapsedMs(planStartNs)}")
     analyzedPlan

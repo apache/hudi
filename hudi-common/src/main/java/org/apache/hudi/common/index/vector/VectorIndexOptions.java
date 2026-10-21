@@ -98,7 +98,17 @@ public final class VectorIndexOptions {
     return new ResolvedOptions(validateAndNormalize(options));
   }
 
-  private static final Set<String> SUPPORTED_OPTIONS = Collections.unmodifiableSet(
+  /** Options a query may override; the remaining supported options are fixed when the index is built. */
+  public static final Set<String> QUERY_OPTIONS = Collections.unmodifiableSet(
+      new HashSet<>(Arrays.asList(
+          QUERY_NUM_PROBES,
+          QUERY_REFINE_FACTOR,
+          QUERY_MODE,
+          FRESHNESS_POLICY,
+          STALE_LOCATOR_POLICY,
+          FETCH_VERIFY_KEYS)));
+
+  private static final Set<String> BUILD_OPTIONS = Collections.unmodifiableSet(
       new HashSet<>(Arrays.asList(
           METRIC,
           QUANTIZER,
@@ -106,13 +116,15 @@ public final class VectorIndexOptions {
           MAX_ITER,
           RABITQ_BITS,
           RABITQ_SEED,
-          RABITQ_ASSUME_NORMALIZED,
-          QUERY_NUM_PROBES,
-          QUERY_REFINE_FACTOR,
-          QUERY_MODE,
-          FRESHNESS_POLICY,
-          STALE_LOCATOR_POLICY,
-          FETCH_VERIFY_KEYS)));
+          RABITQ_ASSUME_NORMALIZED)));
+
+  private static final Set<String> SUPPORTED_OPTIONS = union(BUILD_OPTIONS, QUERY_OPTIONS);
+
+  private static Set<String> union(Set<String> first, Set<String> second) {
+    Set<String> all = new HashSet<>(first);
+    all.addAll(second);
+    return Collections.unmodifiableSet(all);
+  }
 
   private VectorIndexOptions() {
   }
@@ -276,15 +288,8 @@ public final class VectorIndexOptions {
     return getQueryMode(options) == VectorQueryMode.APPROXIMATE;
   }
 
-  /** The current posting format uses symmetric scoring. */
-  public static boolean isRaBitQAsymmetricScoring(Map<String, String> options) {
-    return false;
-  }
-
-  /** RLI arbitration is mandatory for correctness in both query modes. */
-  public static boolean isFinalistArbiterEnabled(Map<String, String> options) {
-    return true;
-  }
+  /** The current posting format uses symmetric scoring; asymmetric is not configurable. */
+  public static final boolean RABITQ_ASYMMETRIC_SCORING = false;
 
   public static boolean isStaleLocatorPolicyFail(Map<String, String> options) {
     return getStaleLocatorPolicy(options) == VectorStalePolicy.FAIL;

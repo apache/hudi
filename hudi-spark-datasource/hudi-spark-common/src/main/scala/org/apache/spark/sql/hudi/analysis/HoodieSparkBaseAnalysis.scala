@@ -341,7 +341,8 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
 
   /**
    * Resolves a table reference to a DataFrame. Accepts either a table identifier
-   * (including multi-part identifiers like catalog.db.table) or a file path.
+   * (including multi-part identifiers like catalog.db.table) or a file path. The base path comes
+   * from the resolved Hudi catalog table, so any catalog Spark can resolve is supported.
    */
   private def resolveTableToDf(table: String, funcName: String): VectorSearchTable = {
     try {
@@ -349,12 +350,8 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
         VectorSearchTable(spark.read.format("hudi").load(table), Some(table))
       } else {
         val tableDf = spark.table(table)
-        val basePathOpt = try {
-          val tableId = spark.sessionState.sqlParser.parseTableIdentifier(table)
-          Some(spark.sessionState.catalog.getTableMetadata(tableId).location.toString)
-        } catch {
-          case _: Exception => None
-        }
+        val basePathOpt = ResolvesToHudiTable.unapply(tableDf.queryExecution.analyzed)
+          .map(catalogTable => catalogTable.location.toString)
         VectorSearchTable(tableDf, basePathOpt)
       }
     } catch {

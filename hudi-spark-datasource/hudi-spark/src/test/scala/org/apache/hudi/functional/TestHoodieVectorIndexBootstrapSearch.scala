@@ -191,6 +191,20 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
     assertEquals(bruteForce.map(_._1), exact.map(_._1))
   }
 
+  /** The TVF documents catalog.db.table; the index must resolve through a catalog-qualified name too. */
+  @Test
+  def testSearchResolvesCatalogQualifiedTableName(): Unit = {
+    val (tableName, _) = createTableWithRows("catalog_qualified", GlobalRecordIndex)
+    createIndex(tableName, Map("vector.metric" -> "l2", "vector.rabitq.bits" -> "4"))
+
+    val query = Array(10.0, 10.0)
+    val options = s"vector.query.nprobes=$NumClusters,vector.query.mode=exact_rerank"
+    val byName = search(tableName, query, 3, "l2", "ivf_rabitq_mdt", options)
+    val qualified = search(s"spark_catalog.default.$tableName", query, 3, "l2", "ivf_rabitq_mdt", options)
+    assertEquals(byName.map(_._1), qualified.map(_._1))
+    assertEquals(3, qualified.size)
+  }
+
   @Test
   def testCreateIndexRequiresRecordIndex(): Unit = {
     val (tableName, tablePath) = createTableWithRows("no_record_index", NoRecordIndex)

@@ -75,4 +75,24 @@ class TestVectorSearchTvfArguments {
       HoodieVectorSearchTableValuedFunction.parseArgs(
         single ++ Seq(Literal("brute_force"), Literal("id > 3"), Literal("0.5"))))
   }
+
+  @Test
+  def testIvfAcceptsNullOptionsAsDocumented(): Unit = {
+    assertTrue(HoodieVectorSearchTableValuedFunction.parseArgs(
+      single ++ Seq(Literal("ivf_rabitq_mdt"), Literal(null))).runtimeOptions.isEmpty)
+    assertTrue(HoodieVectorSearchBatchTableValuedFunction.parseArgs(
+      batch ++ Seq(Literal("ivf_rabitq_mdt"), Literal(null))).runtimeOptions.isEmpty)
+  }
+
+  @Test
+  def testIvfRejectsUnknownAndStructuralRuntimeOptions(): Unit = {
+    IvfRaBitQMdtSearchAlgorithm.validateRuntimeOptions(Map(
+      "vector.query.nprobes" -> "16", "vector.query.mode" -> "approximate",
+      HoodieVectorSearchPlanBuilder.VECTOR_ONLY_PROJECTION_OPT -> "true"))
+    val typo = assertThrows(classOf[HoodieAnalysisException], () =>
+      IvfRaBitQMdtSearchAlgorithm.validateRuntimeOptions(Map("vector.query.nprobe" -> "16")))
+    assertTrue(typo.getMessage.contains("vector.query.nprobe"), typo.getMessage)
+    assertThrows(classOf[HoodieAnalysisException], () =>
+      IvfRaBitQMdtSearchAlgorithm.validateRuntimeOptions(Map("vector.rabitq.bits" -> "1")))
+  }
 }

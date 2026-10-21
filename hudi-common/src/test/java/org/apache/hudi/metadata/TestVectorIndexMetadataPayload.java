@@ -149,13 +149,9 @@ class TestVectorIndexMetadataPayload {
   }
 
   @Test
-  void testQuantizerMetadataRecordCarriesRaBitQConfig() {
+  void testQuantizerMetadataRecordCarriesQuantizerConfig() {
     HoodieRecord<HoodieMetadataPayload> record = HoodieMetadataPayload.createVectorIndexQuantizerMetadataRecord(
-        "IVF_RABITQ",
-        96,
-        42L,
-        true,
-        "vector_index_demo");
+        1, 0, "IVF_RABITQ", 42L, null, "vector_index_demo");
 
     assertTrue(record.getData().getVectorIndexMetadata().isPresent());
     HoodieVectorIndexQuantizer quantizer =

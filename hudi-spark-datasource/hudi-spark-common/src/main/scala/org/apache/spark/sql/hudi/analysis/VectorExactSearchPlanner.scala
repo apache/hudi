@@ -102,7 +102,7 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
       val topCandidates = VectorIndexMdtSearchUtils.scanPostingCandidates(
         ctx.metadataTable, ctx.indexPartition, cache.getGenerationId, shardCounts,
         queryVector, cache.getDimension, cache.getQuantizerSeed, cache.getRaBitQBits, cache.isAssumeNormalized,
-        metric, VectorIndexOptions.isRaBitQAsymmetricScoring(mergedOptions.asJava),
+        metric, VectorIndexOptions.RABITQ_ASYMMETRIC_SCORING,
         residualEncoding, if (residualEncoding) cache.getCentroids else null, refineK)
       val topCandidateMaterializeStartNs = System.nanoTime()
       val materializedCandidates = try {
@@ -123,26 +123,21 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
             s"Exact rerank requires per-candidate posting locators.")
       }
 
-      // RFC-109 RLI finalist arbiter. Exact mode uses refreshed RLI locations for every live
-      // candidate: SERVE retains positional trust; STALE is resolved by key in the live base file.
-      val arbiterEnabled = VectorIndexOptions.isFinalistArbiterEnabled(mergedOptions.asJava)
-      val serveCandidates: Seq[ScoredVectorPostingMatch] =
-        if (arbiterEnabled) {
-          val arb = VectorIndexMdtSearchUtils.arbitrateMaterializedFinalists(
-            ctx.metadataTable, topCandidateList.asJava, isPartitionedRecordIndex(ctx))
-          val staleFailPolicy = VectorIndexOptions.isStaleLocatorPolicyFail(mergedOptions.asJava)
-          LOG.info(
-            s"[vector_search][exact][arbiter] arbiterExclusions{stale=${arb.staleCount}, deleted=${arb.deletedCount}} " +
-              s"serve=${arb.serve.size} stalePolicy=${if (staleFailPolicy) "fail" else "fallback"}")
-          if (staleFailPolicy && !arb.stale.isEmpty) {
-            throw new HoodieAnalysisException(
-              s"Vector exact search rejected ${arb.staleCount} stale finalist(s) because " +
-                "vector.stale.locator.policy=FAIL.")
-          }
-          arb.serve.asScala.toSeq ++ arb.stale.asScala.toSeq
-        } else {
-          topCandidateList
-        }
+      // RFC-109 RLI finalist arbiter, mandatory for correctness. Exact mode uses refreshed RLI
+      // locations for every live candidate: SERVE retains positional trust; STALE is resolved by
+      // key in the live base file.
+      val arb = VectorIndexMdtSearchUtils.arbitrateMaterializedFinalists(
+        ctx.metadataTable, topCandidateList.asJava, isPartitionedRecordIndex(ctx))
+      val staleFailPolicy = VectorIndexOptions.isStaleLocatorPolicyFail(mergedOptions.asJava)
+      LOG.info(
+        s"[vector_search][exact][arbiter] arbiterExclusions{stale=${arb.staleCount}, deleted=${arb.deletedCount}} " +
+          s"serve=${arb.serve.size} stalePolicy=${if (staleFailPolicy) "fail" else "fallback"}")
+      if (staleFailPolicy && !arb.stale.isEmpty) {
+        throw new HoodieAnalysisException(
+          s"Vector exact search rejected ${arb.staleCount} stale finalist(s) because " +
+            "vector.stale.locator.policy=FAIL.")
+      }
+      val serveCandidates: Seq[ScoredVectorPostingMatch] = arb.serve.asScala.toSeq ++ arb.stale.asScala.toSeq
 
       if (serveCandidates.isEmpty) {
         emptyDf
@@ -196,6 +191,9 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
           spark.sparkContext.longAccumulator("vector_fetch_skipped_log_resident")
         val fetchKeyMismatchAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_fetch_key_mismatch")
         val rowsMaterializedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_rows_materialized")
+        // Hoisted so the executor closure captures only the metric, not the driver-side plan context
+        // (meta client, metadata table, index cache).
+        val distanceMetric = ctx.metric
         val exactRows: RDD[InternalRow] = byFetchBatch.mapPartitions { batches =>
           val startNs = System.nanoTime()
           val rows = ArrayBuffer.empty[InternalRow]
@@ -216,9 +214,9 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
             embeddingCol,
             vectorSchema,
             exactQueryVector,
-            ctx.metric,
+            distanceMetric,
             outputSchema,
-            mergedOptions.getOrElse("vector.exact_fetch.offset_index_missing_policy", "fallback").equalsIgnoreCase("fail"),
+            mergedOptions.getOrElse(OFFSET_INDEX_MISSING_POLICY_OPT, "fallback").equalsIgnoreCase("fail"),
             vectorOnlyProjection,
             VectorIndexOptions.shouldVerifyFetchKeys(mergedOptions.asJava))
           val keyLocator = new ParquetRecordKeyLocator(storageConf.newInstance().unwrap())

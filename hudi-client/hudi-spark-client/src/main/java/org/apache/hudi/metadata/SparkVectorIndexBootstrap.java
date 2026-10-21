@@ -87,6 +87,11 @@ public final class SparkVectorIndexBootstrap {
   /** Upper bound for percentile-driven sampling: 1% of total vectors. */
   private static final double MAX_SAMPLE_PERCENT = 0.01d;
 
+  /** Postings are always encoded as residuals against their cluster centroid. */
+  private static final boolean RESIDUAL_ENCODING = true;
+  private static final int TARGET_ROWS_PER_SHARD = 100_000;
+  private static final int MAX_SHARDS_PER_CLUSTER = 64;
+
   private SparkVectorIndexBootstrap() {
   }
 
@@ -122,9 +127,6 @@ public final class SparkVectorIndexBootstrap {
     long quantizerSeed = resolvedOptions.rabitqSeed;
     int rabitqBits = resolvedOptions.rabitqBits;
     boolean assumeNormalized = resolvedOptions.assumeNormalized;
-    boolean storeInMdt = true;
-    int targetRowsPerShard = 100_000;
-    int maxShardsPerCluster = 64;
     if ("IVF_RABITQ".equals(quantizerType) && rabitqBits > 1 && metric != VectorDistanceMetric.L2) {
       throw new IllegalArgumentException("Multibit RaBitQ currently supports L2 metric only. Requested: " + metric);
     }
@@ -200,24 +202,17 @@ public final class SparkVectorIndexBootstrap {
 
         Map<Integer, Long> clusterVectorCounts = assignedRows.countByKey();
         int generationShardCount = generationShardCount(
-            clusterVectorCounts, targetRowsPerShard, maxShardsPerCluster);
+            clusterVectorCounts, TARGET_ROWS_PER_SHARD, MAX_SHARDS_PER_CLUSTER);
 
         log.info("Cluster stats collected: {} clusters, total {} vectors", clusterVectorCounts.size(), totalVectors);
 
         // ---- Phase 2b: Single-pass encode + emit canonical posting records ----
 
         Broadcast<Integer> bShardCount = jsc.broadcast(generationShardCount);
-        boolean residualEncoding = true;
-
-        JavaRDD<HoodieRecord> dataRecords;
-        if (storeInMdt) {
-          dataRecords = SparkVectorIndexPostingWriter.buildPostingRecords(
-              assignedRows, bDimension, bVectorType, bCentroids,
-              bShardCount, quantizerSeed, rabitqBits, assumeNormalized, residualEncoding,
-              metric, vectorsPerBlock, generation, indexName);
-        } else {
-          dataRecords = jsc.emptyRDD();
-        }
+        JavaRDD<HoodieRecord> dataRecords = SparkVectorIndexPostingWriter.buildPostingRecords(
+            assignedRows, bDimension, bVectorType, bCentroids,
+            bShardCount, quantizerSeed, rabitqBits, assumeNormalized, RESIDUAL_ENCODING,
+            metric, vectorsPerBlock, generation, indexName);
 
         // ---- Driver-side: emit singleton + cluster metadata records ----
 
@@ -240,65 +235,63 @@ public final class SparkVectorIndexBootstrap {
         driverRecords.add(HoodieMetadataPayload.createVectorIndexQuantizerMetadataRecord(
             generation, 0, quantizerType, quantizerSeed, null, indexName));
 
-        if (storeInMdt) {
-          // Manifest: preserve the legacy flat path without inventing two-level geometry.
-          HoodieRecord<HoodieMetadataPayload> manifestRecord = HoodieMetadataPayload.createVectorIndexManifestRecord(
-              generation,
-              String.valueOf(generation),
-              "ACTIVE",
-              dimension,
-              dimension,
-              codeRowBytes,
-              rabitqBits,
-              Math.max(0, rabitqBits - 1),
-              actualK,
-              generationShardCount,
-              Math.max(1, actualK),
-              manifestMetricName(metric),
-              assumeNormalized,
-              residualEncoding,
-              vectorColumn,
-              targetBlockBytes,
-              vectorsPerBlock,
-              1,
-              1,
-              0.0d,
-              0.0d,
-              0.0d,
-              0.0d,
-              1,
-              "",
-              0,
-              0,
-              sourceInstant,
-              sourceInstant,
-              lastUpdatedTs,
-              indexName);
-          if (routingModel != null) {
-            manifestRecord = HoodieMetadataPayload.createVectorIndexRoutedManifestRecord(
-                manifestRecord, VectorRoutingArtifacts.ROUTING_VERSION,
-                VectorRoutingArtifacts.serializeFloatMatrix(coarseCentroids),
-                VectorRoutingArtifacts.serializeIntArray(leafOffsets), assignmentExpandRatio,
-                VectorRoutingArtifacts.digest(coarseCentroids, persistedCentroids, leafOffsets, assignmentExpandRatio));
-          }
-          driverRecords.add(manifestRecord);
-          driverRecords.add(HoodieMetadataPayload.createVectorIndexActiveManifestRecord(
-              generation, indexName));
+        // Manifest: preserve the legacy flat path without inventing two-level geometry.
+        HoodieRecord<HoodieMetadataPayload> manifestRecord = HoodieMetadataPayload.createVectorIndexManifestRecord(
+            generation,
+            String.valueOf(generation),
+            "ACTIVE",
+            dimension,
+            dimension,
+            codeRowBytes,
+            rabitqBits,
+            Math.max(0, rabitqBits - 1),
+            actualK,
+            generationShardCount,
+            Math.max(1, actualK),
+            manifestMetricName(metric),
+            assumeNormalized,
+            RESIDUAL_ENCODING,
+            vectorColumn,
+            targetBlockBytes,
+            vectorsPerBlock,
+            1,
+            1,
+            0.0d,
+            0.0d,
+            0.0d,
+            0.0d,
+            1,
+            "",
+            0,
+            0,
+            sourceInstant,
+            sourceInstant,
+            lastUpdatedTs,
+            indexName);
+        if (routingModel != null) {
+          manifestRecord = HoodieMetadataPayload.createVectorIndexRoutedManifestRecord(
+              manifestRecord, VectorRoutingArtifacts.ROUTING_VERSION,
+              VectorRoutingArtifacts.serializeFloatMatrix(coarseCentroids),
+              VectorRoutingArtifacts.serializeIntArray(leafOffsets), assignmentExpandRatio,
+              VectorRoutingArtifacts.digest(coarseCentroids, persistedCentroids, leafOffsets, assignmentExpandRatio));
+        }
+        driverRecords.add(manifestRecord);
+        driverRecords.add(HoodieMetadataPayload.createVectorIndexActiveManifestRecord(
+            generation, indexName));
 
-          // Cluster manifests
-          for (Map.Entry<Integer, Long> entry : clusterVectorCounts.entrySet()) {
-            int clusterId = entry.getKey();
-            driverRecords.add(HoodieMetadataPayload.createVectorIndexClusterManifestRecord(
-                generation,
-                clusterId,
-                generationShardCount,
-                // Exact rerank uses per-candidate posting locators, not cluster-wide file-group sets.
-                // Keep this reserved metadata empty to avoid stale routing state and driver-side collection.
-                Collections.emptySet(),
-                entry.getValue(),
-                lastUpdatedTs,
-                indexName));
-          }
+        // Cluster manifests
+        for (Map.Entry<Integer, Long> entry : clusterVectorCounts.entrySet()) {
+          int clusterId = entry.getKey();
+          driverRecords.add(HoodieMetadataPayload.createVectorIndexClusterManifestRecord(
+              generation,
+              clusterId,
+              generationShardCount,
+              // Exact rerank uses per-candidate posting locators, not cluster-wide file-group sets.
+              // Keep this reserved metadata empty to avoid stale routing state and driver-side collection.
+              Collections.emptySet(),
+              entry.getValue(),
+              lastUpdatedTs,
+              indexName));
         }
 
         JavaRDD<HoodieRecord> driverRdd = jsc.parallelize(driverRecords, 1);

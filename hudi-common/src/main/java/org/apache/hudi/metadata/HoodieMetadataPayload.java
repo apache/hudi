@@ -350,33 +350,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   /**
-   * Create the generation-one quantizer metadata record for the given index partition.
+   * Quantizer metadata record. Bit width, code size and normalization live on the generation
+   * manifest, which is the single source of truth for posting geometry.
    */
-  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexQuantizerMetadataRecord(
-      String quantizerType,
-      int quantizedCodeBytes,
-      long randomSeed,
-      boolean assumeNormalized,
-      String partitionPath) {
-    return createVectorIndexQuantizerMetadataRecord(
-        quantizerType,
-        quantizedCodeBytes,
-        1,
-        randomSeed,
-        assumeNormalized,
-        partitionPath);
-  }
-
-  public static HoodieRecord<HoodieMetadataPayload> createVectorIndexQuantizerMetadataRecord(
-      String quantizerType,
-      int quantizedCodeBytes,
-      int rabitqBits,
-      long randomSeed,
-      boolean assumeNormalized,
-      String partitionPath) {
-    return createVectorIndexQuantizerMetadataRecord(1, 0, quantizerType, randomSeed, null, partitionPath);
-  }
-
   public static HoodieRecord<HoodieMetadataPayload> createVectorIndexQuantizerMetadataRecord(
       int generation,
       int chunk,

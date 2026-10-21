@@ -21,6 +21,7 @@ import org.apache.hudi.common.index.vector.{ScoredVectorPostingMatch, VectorInde
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
 
+import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.parquet.column.page.PageReadStore
@@ -39,7 +40,6 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.slf4j.LoggerFactory
 
 import java.util.PrimitiveIterator
-import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -401,8 +401,14 @@ private[analysis] final class PositionalParquetFetcher(
 
 private[analysis] object PositionalParquetFetcher {
   private val LOG = LoggerFactory.getLogger(getClass)
-  private val FOOTER_CACHE = new ConcurrentHashMap[String, ParquetMetadata]()
-  private val OFFSET_INDEX_CACHE = new ConcurrentHashMap[String, Option[OffsetIndex]]()
+  // Executor-lifetime caches keyed by path+length (immutable once written). Bounded so a long-lived
+  // executor serving many tables cannot grow them without limit; entries are cheap to rebuild.
+  private val FOOTER_CACHE_MAX_ENTRIES = 4096L
+  private val OFFSET_INDEX_CACHE_MAX_ENTRIES = 65536L
+  private val FOOTER_CACHE: Cache[String, ParquetMetadata] =
+    Caffeine.newBuilder().maximumSize(FOOTER_CACHE_MAX_ENTRIES).build[String, ParquetMetadata]()
+  private val OFFSET_INDEX_CACHE: Cache[String, Option[OffsetIndex]] =
+    Caffeine.newBuilder().maximumSize(OFFSET_INDEX_CACHE_MAX_ENTRIES).build[String, Option[OffsetIndex]]()
   private val RANGE_MERGE_GAP_BYTES = 512L * 1024L
 
   final case class FetchResult(
@@ -464,12 +470,12 @@ private[analysis] object PositionalParquetFetcher {
   private final case class PageRange(start: Long, end: Long)
 
   private def footer(conf: Configuration, path: Path, cacheKey: String): FooterResult = {
-    val cached = FOOTER_CACHE.get(cacheKey)
+    val cached = FOOTER_CACHE.getIfPresent(cacheKey)
     if (cached != null) {
       FooterResult(cached, cacheHit = true)
     } else {
       val metadata = ParquetFileReader.readFooter(conf, path)
-      val prior = FOOTER_CACHE.putIfAbsent(cacheKey, metadata)
+      val prior = FOOTER_CACHE.asMap().putIfAbsent(cacheKey, metadata)
       FooterResult(if (prior == null) metadata else prior, cacheHit = prior != null)
     }
   }
@@ -480,7 +486,7 @@ private[analysis] object PositionalParquetFetcher {
       rowGroupOrdinal: Int,
       chunk: ColumnChunkMetaData): OffsetIndex = {
     val key = s"$fileCacheKey#$rowGroupOrdinal#${chunk.getPath.toDotString}"
-    OFFSET_INDEX_CACHE.computeIfAbsent(key, _ => Option(reader.readOffsetIndex(chunk))).orNull
+    OFFSET_INDEX_CACHE.get(key, _ => Option(reader.readOffsetIndex(chunk))).orNull
   }
 
   private def configureRandomRead(conf: Configuration): Unit = {

@@ -17,25 +17,10 @@
 
 package org.apache.spark.sql.hudi.analysis
 
-import org.apache.hudi.SparkAdapterSupport
-import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.config.TypedProperties
-import org.apache.hudi.common.index.vector.{ScoredVectorPostingMatch, VectorDistanceMetric, VectorIndexArbiter, VectorIndexMdtSearchUtils, VectorIndexMetadataCache, VectorIndexOptions, VectorPostingMatch, VectorStalePolicy}
-import org.apache.hudi.common.model.{FileSlice, HoodieIndexDefinition, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.timeline.{HoodieTimeline, InstantComparison}
-import org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps
-import org.apache.hudi.common.table.view.HoodieTableFileSystemView
-import org.apache.hudi.data.HoodieJavaRDD
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil}
 
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SparkSession}
-import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.plans.logical.HoodieVectorSearchTableValuedFunction
 import org.apache.spark.sql.catalyst.plans.logical.HoodieVectorSearchTableValuedFunction.{DistanceMetric, SearchAlgorithm}
@@ -43,12 +28,9 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{broadcast, col, monotonically_increasing_id, row_number}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
-import org.apache.spark.sql.types.{ArrayType, ByteType, DataType, DoubleType, FloatType, Metadata, StructField, StructType}
-import org.apache.spark.util.LongAccumulator
+import org.apache.spark.sql.types.{ArrayType, ByteType, DataType, DoubleType, FloatType}
 import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 
 case class VectorSearchTable(df: DataFrame, basePath: Option[String])
@@ -137,6 +119,7 @@ object HoodieVectorSearchPlanBuilder {
   val FILE_GROUP_ID_COL = "_hudi_file_group_id"
   val VECTOR_ONLY_PROJECTION_OPT = "vector.exact_fetch.vector_only_projection"
   val VECTOR_ONLY_PROJECTION_SPARK_CONF = "spark.hudi.vector.exact_fetch.vector_only_projection"
+  val OFFSET_INDEX_MISSING_POLICY_OPT = "vector.exact_fetch.offset_index_missing_policy"
   private[analysis] val QUERY_ID_COL = "_hudi_query_index"
   private[analysis] val QUERY_EMB_ALIAS = "_hudi_query_emb"
   private[analysis] val RANK_COL = "_hudi_rank"
@@ -306,11 +289,18 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
     }
   }
 
-  private def filterOption(runtimeOptions: Map[String, String]): Option[String] =
+  /** Non-null embeddings, narrowed by the optional brute-force pre-filter. */
+  private def filterCorpus(df: DataFrame, embeddingCol: String, runtimeOptions: Map[String, String]): DataFrame = {
+    val nonNull = df.filter(col(embeddingCol).isNotNull)
     runtimeOptions.get(HoodieVectorSearchTableValuedFunction.BRUTE_FORCE_FILTER_OPT)
+      .fold(nonNull)(filter => applyFilter(nonNull, filter))
+  }
 
-  private def maxDistanceOption(runtimeOptions: Map[String, String]): Option[Double] =
-    runtimeOptions.get(HoodieVectorSearchTableValuedFunction.BRUTE_FORCE_MAX_DISTANCE_OPT).map(_.toDouble)
+  /** Applies the optional brute-force distance cutoff. */
+  private def withinMaxDistance(scored: DataFrame, runtimeOptions: Map[String, String]): DataFrame =
+    runtimeOptions.get(HoodieVectorSearchTableValuedFunction.BRUTE_FORCE_MAX_DISTANCE_OPT)
+      .map(_.toDouble)
+      .fold(scored)(distance => scored.filter(col(DISTANCE_COL) <= distance))
 
   override def buildSingleQueryPlan(
       spark: SparkSession,
@@ -325,8 +315,7 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
     validateQueryVectorDimension(corpusDf, embeddingCol, queryVector.length)
 
     val elemType = getElementType(corpusDf, embeddingCol)
-    var filteredDf = corpusDf.filter(col(embeddingCol).isNotNull)
-    filterOption(runtimeOptions).foreach(filter => filteredDf = applyFilter(filteredDf, filter))
+    val filteredDf = filterCorpus(corpusDf, embeddingCol, runtimeOptions)
 
     // Validate byte corpus query vector values before creating the UDF.
     if (elemType == ByteType) {
@@ -345,11 +334,9 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
     // so only the corpus column is passed per row.
     val distanceUdf = VectorDistanceUtils.createSingleQueryDistanceUdf(metric, elemType, queryVector)
 
-    var scored = filteredDf
-      .withColumn(DISTANCE_COL, distanceUdf(col(embeddingCol)))
-      .drop(embeddingCol)
-    maxDistanceOption(runtimeOptions).foreach(distance =>
-      scored = scored.filter(col(DISTANCE_COL) <= distance))
+    val scored = withinMaxDistance(
+      filteredDf.withColumn(DISTANCE_COL, distanceUdf(col(embeddingCol))).drop(embeddingCol),
+      runtimeOptions)
     val result = scored
       .orderBy(col(DISTANCE_COL).asc)
       .limit(k)
@@ -374,8 +361,7 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
 
     val corpusElemType = getElementType(corpusDf, corpusEmbeddingCol)
     val distanceUdf = VectorDistanceUtils.createDistanceUdf(metric, corpusElemType)
-    var filteredCorpus = corpusDf.filter(col(corpusEmbeddingCol).isNotNull)
-    filterOption(runtimeOptions).foreach(filter => filteredCorpus = applyFilter(filteredCorpus, filter))
+    val filteredCorpus = filterCorpus(corpusDf, corpusEmbeddingCol, runtimeOptions)
 
     // Prefix clashing query columns with "_hudi_query_" to avoid cross-join ambiguity when
     // corpus and query share column names (e.g. both have "id" or "embedding").
@@ -392,13 +378,12 @@ object BruteForceSearchAlgorithm extends VectorSearchAlgorithm {
     }: _*)
 
     // Cross join corpus with broadcast queries, compute distance, then rank
-    var scored = filteredCorpus.crossJoin(broadcast(renamedQuery))
-      .withColumn(DISTANCE_COL,
-        distanceUdf(col(corpusEmbeddingCol), col(QUERY_EMB_ALIAS)))
-      .drop(corpusEmbeddingCol)
-      .drop(QUERY_EMB_ALIAS)
-    maxDistanceOption(runtimeOptions).foreach(distance =>
-      scored = scored.filter(col(DISTANCE_COL) <= distance))
+    val scored = withinMaxDistance(
+      filteredCorpus.crossJoin(broadcast(renamedQuery))
+        .withColumn(DISTANCE_COL, distanceUdf(col(corpusEmbeddingCol), col(QUERY_EMB_ALIAS)))
+        .drop(corpusEmbeddingCol)
+        .drop(QUERY_EMB_ALIAS),
+      runtimeOptions)
 
     val window = Window.partitionBy(QUERY_ID_COL).orderBy(col(DISTANCE_COL).asc)
     val result = scored

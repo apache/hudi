@@ -102,7 +102,7 @@ object HoodieVectorSearchTableValuedFunction {
           throw new HoodieAnalysisException(
             s"Function '$FUNC_NAME': max_distance is supported only by brute_force")
         }
-        if (exprs.size >= 7) parseKvOptions(requireStringLiteral(exprs(6), "options"))
+        if (exprs.size >= 7) parseOptionalKvOptions(FUNC_NAME, exprs(6))
         else Map.empty[String, String]
     }
     ParsedArgs(table, embeddingCol, queryVectorExpr, k, metric, algorithm, runtimeOptions)
@@ -137,6 +137,10 @@ object HoodieVectorSearchTableValuedFunction {
         s"Function '$funcName': argument '$argName' has unexpected runtime type: ${other.getClass.getName}")
     }
   }
+
+  /** Parses the ivf_rabitq_mdt option list; NULL, like an empty string, means no options. */
+  private[logical] def parseOptionalKvOptions(funcName: String, expr: Expression): Map[String, String] =
+    parseOptionalString(funcName, expr, "options").map(parseKvOptions).getOrElse(Map.empty)
 
   private[logical] def parseKvOptions(raw: String): Map[String, String] = {
     if (raw == null || raw.trim.isEmpty) {
@@ -259,8 +263,7 @@ object HoodieVectorSearchBatchTableValuedFunction {
           throw new HoodieAnalysisException(
             s"Function '$FUNC_NAME': max_distance is supported only by brute_force")
         }
-        if (exprs.size >= 8)
-          HoodieVectorSearchTableValuedFunction.parseKvOptions(requireStringLiteral(exprs(7), "options"))
+        if (exprs.size >= 8) HoodieVectorSearchTableValuedFunction.parseOptionalKvOptions(FUNC_NAME, exprs(7))
         else Map.empty[String, String]
     }
     ParsedArgs(corpusTable, corpusEmbeddingCol, queryTable, queryEmbeddingCol,
