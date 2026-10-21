@@ -63,19 +63,27 @@ public class InternalSchemaConverter {
   static final int BLOB_DATA_FIELD_ID = -11;
   static final int BLOB_REFERENCE_FIELD_ID = -12;
 
+  // The four fields of the out-of-line reference record nested in a Blob are tagged with sentinel ids as
+  // well. Ids of table columns are allocated from 0 upwards, so a non-negative id here would shadow a table
+  // column in the id-keyed lookups of the InternalSchema. Releases 1.2.0 and 1.2.1 used the ids 0..3.
+  static final int BLOB_REFERENCE_PATH_FIELD_ID = -13;
+  static final int BLOB_REFERENCE_OFFSET_FIELD_ID = -14;
+  static final int BLOB_REFERENCE_LENGTH_FIELD_ID = -15;
+  static final int BLOB_REFERENCE_IS_MANAGED_FIELD_ID = -16;
+
   // The BLOB internal-schema record is fully determined by the BLOB type definition, so we build
   // it once and reuse it on every HoodieSchema -> InternalSchema conversion.
   private static final Types.RecordType BLOB_INTERNAL_RECORD_TYPE = buildBlobInternalRecordType();
 
   private static Types.RecordType buildBlobInternalRecordType() {
     List<Types.Field> referenceFields = new ArrayList<>(4);
-    referenceFields.add(Types.Field.get(0, false,
+    referenceFields.add(Types.Field.get(BLOB_REFERENCE_PATH_FIELD_ID, false,
         HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, Types.StringType.get()));
-    referenceFields.add(Types.Field.get(1, true,
+    referenceFields.add(Types.Field.get(BLOB_REFERENCE_OFFSET_FIELD_ID, true,
         HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, Types.LongType.get()));
-    referenceFields.add(Types.Field.get(2, true,
+    referenceFields.add(Types.Field.get(BLOB_REFERENCE_LENGTH_FIELD_ID, true,
         HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, Types.LongType.get()));
-    referenceFields.add(Types.Field.get(3, false,
+    referenceFields.add(Types.Field.get(BLOB_REFERENCE_IS_MANAGED_FIELD_ID, false,
         HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, Types.BooleanType.get()));
     List<Types.Field> blobFields = new ArrayList<>(3);
     blobFields.add(Types.Field.get(BLOB_TYPE_FIELD_ID, false,
@@ -85,6 +93,54 @@ public class InternalSchemaConverter {
     blobFields.add(Types.Field.get(BLOB_REFERENCE_FIELD_ID, true,
         HoodieSchema.Blob.EXTERNAL_REFERENCE, Types.RecordType.get(referenceFields), "Out-of-line blob reference"));
     return Types.RecordType.get(blobFields);
+  }
+
+  /**
+   * Whether the fields are the fixed layout of a Blob: the type, data and reference children, in that
+   * order, carrying the sentinel ids and names.
+   */
+  private static boolean isBlobRecord(List<Types.Field> fields) {
+    if (fields.size() != 3) {
+      return false;
+    }
+    Types.Field f0 = fields.get(0);
+    Types.Field f1 = fields.get(1);
+    Types.Field f2 = fields.get(2);
+    boolean hasBlobIds = f0.fieldId() == BLOB_TYPE_FIELD_ID
+        && f1.fieldId() == BLOB_DATA_FIELD_ID
+        && f2.fieldId() == BLOB_REFERENCE_FIELD_ID;
+    boolean hasBlobNames = f0.name().equals(HoodieSchema.Blob.TYPE)
+        && f1.name().equals(HoodieSchema.Blob.INLINE_DATA_FIELD)
+        && f2.name().equals(HoodieSchema.Blob.EXTERNAL_REFERENCE);
+    return hasBlobIds && hasBlobNames;
+  }
+
+  /**
+   * Re-tags a Blob record that was persisted by release 1.2.0 or 1.2.1 with the current sentinel ids.
+   *
+   * <p>Those releases gave the fields of the nested reference record the ids 0..3, which are also the ids
+   * of the first table columns. Field equality includes the id, so a schema read back with the old ids
+   * would never equal the one converted from the same HoodieSchema today. Any other record, including a
+   * Blob that already carries the sentinel ids, is returned as is.</p>
+   *
+   * @param record a record type read from a persisted InternalSchema
+   * @return the current Blob record type if {@code record} is a Blob with the legacy reference ids, otherwise {@code record}
+   */
+  public static Types.RecordType upgradeLegacyBlobRecord(Types.RecordType record) {
+    List<Types.Field> fields = record.fields();
+    if (!isBlobRecord(fields) || !(fields.get(2).type() instanceof Types.RecordType)) {
+      return record;
+    }
+    List<Types.Field> referenceFields = ((Types.RecordType) fields.get(2).type()).fields();
+    if (referenceFields.size() != 4) {
+      return record;
+    }
+    for (int i = 0; i < referenceFields.size(); i++) {
+      if (referenceFields.get(i).fieldId() != i) {
+        return record;
+      }
+    }
+    return BLOB_INTERNAL_RECORD_TYPE;
   }
 
   /**
@@ -523,20 +579,9 @@ public class InternalSchemaConverter {
     }
 
     // Detect Blob round-trip: 3 sentinel-tagged children (type / data / reference)
-    if (fields.size() == 3) {
-      Types.Field f0 = fields.get(0);
-      Types.Field f1 = fields.get(1);
-      Types.Field f2 = fields.get(2);
-      boolean hasBlobIds = f0.fieldId() == BLOB_TYPE_FIELD_ID
-          && f1.fieldId() == BLOB_DATA_FIELD_ID
-          && f2.fieldId() == BLOB_REFERENCE_FIELD_ID;
-      boolean hasBlobNames = f0.name().equals(HoodieSchema.Blob.TYPE)
-          && f1.name().equals(HoodieSchema.Blob.INLINE_DATA_FIELD)
-          && f2.name().equals(HoodieSchema.Blob.EXTERNAL_REFERENCE);
-      if (hasBlobIds && hasBlobNames) {
-        // TODO: Schema evolution for Blob types follows the same path as Variant — fixed shape.
-        return HoodieSchema.createBlob();
-      }
+    if (isBlobRecord(fields)) {
+      // TODO: Schema evolution for Blob types follows the same path as Variant — fixed shape.
+      return HoodieSchema.createBlob();
     }
 
     // Create regular record

@@ -25,6 +25,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.schema.internal.Type;
 import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 
 import org.junit.jupiter.api.Test;
 
@@ -293,5 +294,34 @@ public class TestInternalSchemaConverter {
     assertEquals(64, rtVec.getDimension());
     assertEquals(HoodieSchema.Vector.VectorElementType.DOUBLE, rtVec.getVectorElementType());
     assertEquals(HoodieSchema.Vector.StorageBacking.FIXED_BYTES, rtVec.getStorageBacking());
+  }
+
+  @Test
+  public void testBlobReferenceFieldsDoNotShadowTableColumns() {
+    HoodieSchema schema = createRecord("blobRecord",
+        createPrimitiveField("id", HoodieSchemaType.INT),
+        createPrimitiveField("name", HoodieSchemaType.STRING),
+        HoodieSchemaField.of("payload", HoodieSchema.createNullable(HoodieSchema.createBlob()), null, null),
+        createPrimitiveField("ts", HoodieSchemaType.LONG));
+
+    InternalSchema internalSchema = InternalSchemaConverter.convert(schema);
+
+    // every table column is found under its own id, wherever the blob sits between them
+    for (Types.Field column : internalSchema.columns()) {
+      assertEquals(column.name(), internalSchema.findField(column.fieldId()).name());
+    }
+    // the fields nested in the blob carry ids of their own and stay reachable by name
+    for (String referenceField : Arrays.asList("external_path", "offset", "length", "managed")) {
+      Types.Field nested = internalSchema.findField("payload.reference." + referenceField);
+      assertEquals(referenceField, nested.name());
+      assertTrue(nested.fieldId() < 0);
+    }
+
+    // the blob still survives the round trip back to a HoodieSchema, and the persisted form
+    HoodieSchema roundTripped = InternalSchemaConverter.convert(internalSchema, "blobRecord");
+    assertEquals(Arrays.asList("id", "name", "payload", "ts"),
+        roundTripped.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+    assertEquals(HoodieSchemaType.BLOB, roundTripped.getFields().get(2).schema().getNonNullType().getType());
+    assertEquals(internalSchema, SerDeHelper.fromJson(SerDeHelper.toJson(internalSchema)).get());
   }
 }

@@ -2485,4 +2485,36 @@ public class TestHoodieSchemaUtils {
         () -> HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Collections.singletonList("not_a_field")));
     assertEquals("Ordering field not_a_field not found in table schema", exception.getMessage());
   }
+
+  @Test
+  public void testAsNullableKeepsColumnsBesideNullableBlob() {
+    HoodieSchema schema = HoodieSchema.createRecord("blobRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("payload", HoodieSchema.createNullable(HoodieSchema.createBlob()), null, null)));
+
+    HoodieSchema nullable = HoodieSchemaUtils.asNullable(schema);
+
+    assertEquals(Arrays.asList("id", "payload"),
+        nullable.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+    HoodieSchema idSchema = nullable.getFields().get(0).schema();
+    assertTrue(idSchema.isNullable());
+    assertEquals(HoodieSchemaType.INT, idSchema.getNonNullType().getType());
+    assertEquals(HoodieSchemaType.BLOB, nullable.getFields().get(1).schema().getNonNullType().getType());
+  }
+
+  @Test
+  public void testAsNullableMakesRequiredBlobNullable() {
+    HoodieSchema schema = HoodieSchema.createRecord("blobRecord", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+        HoodieSchemaField.of("payload", HoodieSchema.createBlob(), null, null)));
+
+    HoodieSchema nullable = HoodieSchemaUtils.asNullable(schema);
+
+    assertEquals(Arrays.asList("id", "payload"),
+        nullable.getFields().stream().map(HoodieSchemaField::name).collect(Collectors.toList()));
+    assertTrue(nullable.getFields().get(0).schema().isNullable());
+    HoodieSchema payloadSchema = nullable.getFields().get(1).schema();
+    assertTrue(payloadSchema.isNullable());
+    assertEquals(HoodieSchemaType.BLOB, payloadSchema.getNonNullType().getType());
+  }
 }
