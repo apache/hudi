@@ -1894,6 +1894,14 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       case ROLLBACK_FAILED_WRITES:
         rollbackFailedWrites(metaClient);
         break;
+      case ASYNC_ROLLBACK_FAILED_WRITES:
+        // Intentionally a no-op: the rollback is driven on a background thread by the engine so that
+        // starting a commit never blocks on marker listing and file deletion. Engines that do not
+        // drive it (anything other than the Flink stream write coordinator today) perform no
+        // pre-write rollback at all under this policy.
+        log.info("Pre-write cleaner policy is {}; skipping inline rollback of failed writes, "
+            + "it is expected to run asynchronously.", HoodiePreWriteCleanerPolicy.ASYNC_ROLLBACK_FAILED_WRITES);
+        break;
       default:
         break;
     }

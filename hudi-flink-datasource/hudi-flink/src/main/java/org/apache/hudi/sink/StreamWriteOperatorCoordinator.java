@@ -20,6 +20,7 @@ package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -76,7 +77,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -193,6 +197,40 @@ public class StreamWriteOperatorCoordinator
   private NonThrownExecutor hiveSyncExecutor;
 
   /**
+   * A single-thread executor that rolls back failed writes off the instant request path.
+   *
+   * <p>Only instantiated when the pre-write cleaner policy is
+   * {@link HoodiePreWriteCleanerPolicy#ASYNC_ROLLBACK_FAILED_WRITES}, in which case the inline
+   * rollback inside {@code startCommit} is a no-op and this executor drives it instead.
+   *
+   * <p>A plain executor with a daemon thread rather than a {@link NonThrownExecutor}: closing the
+   * latter awaits termination, and {@link #close()} runs on the JobManager main thread, where any
+   * wait stalls every JobMaster RPC.
+   */
+  private ExecutorService rollbackExecutor;
+
+  /**
+   * A dedicated write client for the asynchronous rollback.
+   *
+   * <p>It must not be shared with {@link #writeClient}: the rollback runs through the table service
+   * client whose {@code TransactionManager} tracks a single state-change owner, so driving it from
+   * two threads can leave the table lock held after the losing thread ends its state change.
+   */
+  private HoodieFlinkWriteClient<?> rollbackWriteClient;
+
+  /**
+   * Guards {@link #rollbackWriteClient} against a double close: on shutdown the client is closed by
+   * whichever of {@link #close()} and the abandoned rollback task gets there last.
+   */
+  private final AtomicBoolean rollbackWriteClientClosed = new AtomicBoolean();
+
+  /**
+   * Flag that keeps at most one asynchronous rollback in flight; a skipped round is retried on the
+   * next checkpoint rather than queued.
+   */
+  private volatile boolean rollbackInFlight;
+
+  /**
    * Context that holds variables for asynchronous hive sync.
    */
   private HiveSyncContext hiveSyncContext;
@@ -256,6 +294,17 @@ public class StreamWriteOperatorCoordinator
           .threadFactory(getThreadFactory("instant-request"))
           .exceptionHook((errMsg, t) -> this.context.failJob(new HoodieException(errMsg, t)))
           .build();
+      if (this.writeClient.getConfig().getPreWriteCleanerPolicy().isAsyncRollbackFailedWrites()) {
+        // A daemon thread, so an abandoned rollback never holds up JVM exit. A rollback failure is
+        // logged and retried on the next checkpoint, the same way the clean sink treats a failed
+        // clean, so the task swallows its own errors rather than failing the job.
+        this.rollbackExecutor = Executors.newSingleThreadExecutor(
+            daemonThreadFactory("prewrite-rollback"));
+        this.rollbackWriteClient = FlinkWriteClients.createWriteClient(conf);
+        // Roll back leftovers from a previous run right away rather than waiting for the first
+        // checkpoint to complete; this is the case the pre-write rollback exists for.
+        scheduleAsyncRollback();
+      }
       // start the executor if required
       if (tableState.syncHive) {
         initHiveSync();
@@ -287,6 +336,17 @@ public class StreamWriteOperatorCoordinator
     if (hiveSyncExecutor != null) {
       hiveSyncExecutor.close();
     }
+    if (rollbackExecutor != null) {
+      // Deliberately no awaitTermination: close() runs on the JobManager main thread, so waiting for
+      // an in-flight rollback stalls every JobMaster RPC and can fail the application during a
+      // restart. Rollback is idempotent and marker based, so abandoning one is safe: whatever is
+      // left behind is picked up by the next coordinator that starts.
+      // shutdown() rather than shutdownNow(): an interrupt lands inside the listing and deletion
+      // the rollback is doing, where a ClosedByInterruptException aborts the cleanup half way and
+      // leaves the rollback heartbeat behind, blocking the retry until that heartbeat expires.
+      // There is nothing to gain by interrupting: the thread is a daemon and nothing waits on it.
+      rollbackExecutor.shutdown();
+    }
     // the write client must close after the executor service
     // because the task in the service may send requests to the embedded timeline service.
     if (writeClient != null) {
@@ -294,6 +354,10 @@ public class StreamWriteOperatorCoordinator
     }
     if (metadataWriteClient != null) {
       metadataWriteClient.close();
+    }
+    if (!rollbackInFlight) {
+      // An in-flight rollback is still using the client; it closes the client itself when it ends.
+      closeRollbackWriteClient();
     }
     this.eventBuffers = null;
     if (this.clientIds != null) {
@@ -334,6 +398,8 @@ public class StreamWriteOperatorCoordinator
             // sync Hive if is enabled
             syncHiveAsync();
           }
+          // rolls back failed writes off the instant request path
+          scheduleAsyncRollback();
         }, "commits the instant %s", this.instant
     );
   }
@@ -470,6 +536,15 @@ public class StreamWriteOperatorCoordinator
     return new ExplicitClassloaderThreadFactory(threadName, context.getUserCodeClassloader());
   }
 
+  private ThreadFactory daemonThreadFactory(String threadName) {
+    final ThreadFactory delegate = getThreadFactory(threadName);
+    return runnable -> {
+      Thread thread = delegate.newThread(runnable);
+      thread.setDaemon(true);
+      return thread;
+    };
+  }
+
   private void initHiveSync() {
     this.hiveSyncExecutor = NonThrownExecutor.builder(log)
         .threadFactory(getThreadFactory("hive-sync"))
@@ -563,6 +638,51 @@ public class StreamWriteOperatorCoordinator
     log.info("Create instant [{}] for table [{}] with type [{}]", this.instant,
         this.conf.get(FlinkOptions.TABLE_NAME), conf.get(FlinkOptions.TABLE_TYPE));
     return this.instant;
+  }
+
+  /**
+   * Submits a rollback of failed writes to the dedicated rollback executor, if one is configured.
+   *
+   * <p>This is deliberately fire-and-forget: nothing on the instant request path or the checkpoint
+   * path ever waits for it. When a rollback is still running, this round is skipped and the next
+   * checkpoint retries, so slow rollbacks cannot queue up behind each other.
+   *
+   * <p>Under the LAZY failed writes cleaning policy the instants picked up here are selected by
+   * expired heartbeat, so an instant that is still being written by a live writer is never a
+   * candidate and running late is harmless. For the same reason {@link #close()} abandons a running
+   * rollback instead of waiting for it.
+   */
+  private void scheduleAsyncRollback() {
+    if (rollbackExecutor == null || rollbackInFlight) {
+      return;
+    }
+    rollbackInFlight = true;
+    rollbackExecutor.execute(() -> {
+      try {
+        rollbackWriteClient.rollbackFailedWrites(rollbackWriteClient.getHoodieTable().getMetaClient());
+      } catch (Throwable throwable) {
+        // The thread factory installs a fatal uncaught exception handler, so the task must not let
+        // anything escape: a failed rollback is retried on the next checkpoint instead.
+        log.error("Error rolling back failed writes for table {}",
+            conf.get(FlinkOptions.TABLE_NAME), throwable);
+      } finally {
+        rollbackInFlight = false;
+        if (rollbackExecutor.isShutdown()) {
+          // The coordinator closed while this rollback was running and left the client to us.
+          closeRollbackWriteClient();
+        }
+      }
+    });
+  }
+
+  /**
+   * Closes the rollback write client at most once, whichever of {@link #close()} and an abandoned
+   * rollback task reaches it last.
+   */
+  private void closeRollbackWriteClient() {
+    if (rollbackWriteClient != null && rollbackWriteClientClosed.compareAndSet(false, true)) {
+      rollbackWriteClient.close();
+    }
   }
 
   /**
