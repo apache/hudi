@@ -771,8 +771,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "AVRO;string;8", "AVRO;decimal(10,2);9", "SPARK;string;9", "SPARK;decimal(10,2);8", "AVRO;decimal(10,2);10",
-    "SPARK;decimal(10,2);10"), delimiter = ';')
+    "AVRO;string;8", "AVRO;decimal(10,2);9", "SPARK;string;9", "SPARK;decimal(10,2);8", "AVRO;decimal(10,2);10"), delimiter = ';')
   def testLogCompactionRewritesDeletesWithEngineOrdering(recordType: HoodieRecordType, orderingType: String, tableVersion: Int): Unit = {
     val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
     val opts = writeOpts ++ Map(

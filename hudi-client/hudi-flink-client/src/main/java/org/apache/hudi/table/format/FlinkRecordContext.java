@@ -33,7 +33,6 @@ import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.DefaultJavaTypeConverter;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.util.AvroToRowDataConverters;
-import org.apache.hudi.util.FlinkOrderingValueJavaTypeConverter;
 import org.apache.hudi.util.OrderingValueEngineTypeConverter;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
 import org.apache.hudi.util.RowDataQueryContexts;
@@ -69,8 +68,12 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   private OrderingValueEngineTypeConverter orderingValueConverter;
 
   public FlinkRecordContext(HoodieTableConfig tableConfig, StorageConfiguration<?> storageConf) {
+    this(tableConfig, storageConf.getBoolean("read.utc-timezone", true));
+  }
+
+  public FlinkRecordContext(HoodieTableConfig tableConfig, boolean utcTimezone) {
     super(tableConfig, new DefaultJavaTypeConverter());
-    this.utcTimezone = storageConf.getBoolean("read.utc-timezone",true);
+    this.utcTimezone = utcTimezone;
   }
 
   private FlinkRecordContext(boolean utcTimezone) {
@@ -105,7 +108,12 @@ public class FlinkRecordContext extends RecordContext<RowData> {
 
   @Override
   public Comparable convertOrderingValueToEngineType(Comparable value) {
-    return orderingValueConverter.convert(value);
+    return orderingValueConverter.convertToEngineType(value);
+  }
+
+  @Override
+  public Comparable convertOrderingValueToJava(Comparable value) {
+    return orderingValueConverter.convertToJava(value);
   }
 
   @Override
@@ -141,8 +149,7 @@ public class FlinkRecordContext extends RecordContext<RowData> {
   public HoodieRecord<RowData> constructHoodieRecord(BufferedRecord<RowData> bufferedRecord, String partitionPath) {
     HoodieKey hoodieKey = new HoodieKey(bufferedRecord.getRecordKey(), partitionPath);
     if (bufferedRecord.isDelete() && bufferedRecord.isEmpty()) {
-      return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(),
-          HoodieRecord.HoodieRecordType.FLINK, FlinkOrderingValueJavaTypeConverter.INSTANCE);
+      return new HoodieEmptyRecord<>(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), HoodieRecord.HoodieRecordType.FLINK);
     }
     RowData rowData = bufferedRecord.getRecord();
     return new HoodieFlinkRecord(hoodieKey, bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), rowData, bufferedRecord.isDelete());
@@ -214,7 +221,10 @@ public class FlinkRecordContext extends RecordContext<RowData> {
     return rowProjection::project;
   }
 
+  @Override
   public void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
-    this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames, utcTimezone);
+    if (orderingValueConverter == null) {
+      this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames, utcTimezone);
+    }
   }
 }

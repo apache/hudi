@@ -37,12 +37,9 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
-import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -96,28 +93,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
 
   private static Object getFieldValueFromInternalRowInternal(InternalRow row, HoodieUnsafeRowUtils.NestedFieldPath nestedFieldPath, boolean convertToJavaType) {
     Object value = HoodieUnsafeRowUtils.getNestedInternalRowValue(row, nestedFieldPath);
-    return convertToJavaType ? sparkTypeToJavaType(value) : value;
-  }
-
-  static Object sparkTypeToJavaType(Object value) {
-    if (value == null) {
-      return null;
-    } else if (value instanceof HoodieUTF8String) {
-      return ((HoodieUTF8String) value).getUtf8String().toString();
-    } else if (value instanceof UTF8String) {
-      return ((UTF8String) value).toString();
-    } else if (value instanceof Decimal) {
-      return ((Decimal) value).toJavaBigDecimal();
-    } else if (value instanceof byte[]) {
-      return ByteBuffer.wrap((byte[]) value);
-    } else if (value instanceof CalendarInterval
-        || value instanceof InternalRow
-        || value instanceof org.apache.spark.sql.catalyst.util.MapData
-        || value instanceof org.apache.spark.sql.catalyst.util.ArrayData) {
-      throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", value.getClass().getName()));
-    } else {
-      return value;
-    }
+    return convertToJavaType ? OrderingValueEngineTypeConverter.convertValueToJava(value) : value;
   }
 
   @Override
@@ -138,8 +114,7 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
           hoodieKey,
           bufferedRecord.getHoodieOperation(),
           bufferedRecord.getOrderingValue(),
-          HoodieRecord.HoodieRecordType.SPARK,
-          SparkOrderingValueJavaTypeConverter.INSTANCE);
+          HoodieRecord.HoodieRecordType.SPARK);
     }
 
     HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
@@ -195,6 +170,11 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
   @Override
   public Comparable convertOrderingValueToEngineType(Comparable value) {
     return orderingValueConverter.convert(value);
+  }
+
+  @Override
+  public Comparable convertOrderingValueToJava(Comparable value) {
+    return OrderingValueEngineTypeConverter.convertToJava(value);
   }
 
   @Override
@@ -271,7 +251,10 @@ public abstract class BaseSparkInternalRecordContext extends RecordContext<Inter
     return row -> (InternalRow) unsafeRowWriter.apply(row);
   }
 
-  void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
-    this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames);
+  @Override
+  public void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
+    if (orderingValueConverter == null) {
+      this.orderingValueConverter = OrderingValueEngineTypeConverter.create(dataSchema, orderingFieldNames);
+    }
   }
 }

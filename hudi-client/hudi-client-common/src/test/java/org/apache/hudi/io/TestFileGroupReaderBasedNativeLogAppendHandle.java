@@ -126,7 +126,7 @@ public class TestFileGroupReaderBasedNativeLogAppendHandle {
         HoodieNativeLogFormatWriter.class, (writer, context) ->
             assertSame(context.getCount() == 1 ? tableContext : producingContext, context.arguments().get(14)))) {
       HoodieNativeLogAppendHandle ordinary = new HoodieNativeLogAppendHandle(
-          config, "100", table, "partition", "file-1", new LocalTaskContextSupplier());
+          config, "100", table, "partition", "file-1", null, new LocalTaskContextSupplier());
       ordinary.createLogWriterForAppend("100", Option.empty());
       TestableFileGroupReaderHandle compaction = new TestableFileGroupReaderHandle(config, table, operation(), readerContext);
       compaction.createLogWriterForAppend("100", Option.empty());

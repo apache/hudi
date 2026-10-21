@@ -161,7 +161,7 @@ class TestDefaultSparkRecordMerger {
   }
 
   @Test
-  void testEmptyRecordOrderingConversion() {
+  void testOrderingValueConversion() {
     HoodieUTF8String stringValue = SparkAdapterSupport$.MODULE$.sparkAdapter().getUTF8StringFactory().wrapUTF8String(UTF8String.fromString("060"));
     BigDecimal decimalValue = new BigDecimal("60.25");
     Decimal engineDecimal = Decimal.apply(decimalValue);
@@ -174,7 +174,8 @@ class TestDefaultSparkRecordMerger {
     for (int i = 0; i < engineValues.length; i++) {
       HoodieRecord<InternalRow> record = recordContext.constructHoodieRecord(
           new BufferedRecord<>("key", engineValues[i], null, null, HoodieOperation.DELETE), "partition");
-      assertEquals(javaValues[i], record.getOrderingValueAsJava(null, props, orderingFields));
+      assertEquals(javaValues[i], recordContext.convertOrderingValueToJava(
+          record.getOrderingValue(null, props, orderingFields)));
       assertSame(engineValues[i], record.getOrderingValue(null, props, orderingFields));
     }
   }

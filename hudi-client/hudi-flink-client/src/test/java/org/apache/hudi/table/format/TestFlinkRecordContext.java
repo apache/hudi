@@ -28,10 +28,12 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
@@ -43,6 +45,7 @@ import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.columnar.vector.heap.HeapBytesVector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapIntVector;
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -58,6 +61,7 @@ import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -74,7 +78,8 @@ class TestFlinkRecordContext {
         Collections.singletonList(HoodieSchemaField.of("ts", HoodieSchema.createTimestampMillis())));
     TimestampData orderingValue = TimestampData.fromEpochMillis(60);
     RowData row = hasRowData ? GenericRowData.of(orderingValue) : null;
-    FlinkRecordContext context = FlinkRecordContext.getDeleteCheckingInstance();
+    FlinkRecordContext context = new FlinkRecordContext(new HoodieTableConfig(), new HadoopStorageConfiguration(new Configuration()));
+    context.initOrderingValueConverter(schema, Collections.singletonList("ts"));
     BufferedRecord<RowData> buffered = new BufferedRecord<>("id1", orderingValue, row, context.encodeSchema(schema), HoodieOperation.DELETE);
 
     HoodieRecord<RowData> record = context.constructHoodieRecord(buffered, "par1").newInstance(new HoodieKey("id1", "par2"));
@@ -83,7 +88,8 @@ class TestFlinkRecordContext {
     assertSame(row, record.getData());
     assertEquals(HoodieOperation.DELETE, record.getOperation());
     assertTrue(record.isDelete(null, new Properties()));
-    assertEquals(60L, record.getOrderingValueAsJava(schema, new Properties(), new String[] {"ts"}));
+    assertEquals(60L, context.convertOrderingValueToJava(
+        record.getOrderingValue(schema, new Properties(), new String[] {"ts"})));
     assertSame(orderingValue, record.getOrderingValue(schema, new Properties(), new String[] {"ts"}));
     BufferedRecord<RowData> roundTrip = BufferedRecords.fromHoodieRecord(record, schema, context, new Properties(), new String[] {"ts"}, true);
     assertTrue(roundTrip.isDelete());
@@ -93,7 +99,7 @@ class TestFlinkRecordContext {
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  void testEmptyRecordOrderingConversion(boolean utcTimezone) {
+  void testOrderingValueJavaConversion(boolean utcTimezone) {
     TimeZone previousTimezone = TimeZone.getDefault();
     TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"));
     try {
@@ -113,20 +119,27 @@ class TestFlinkRecordContext {
       Instant instant = utcTimezone ? timestamp.toInstant() : timestamp.toTimestamp().toInstant();
       long micros = instant.getEpochSecond() * 1_000_000 + instant.getNano() / 1_000;
       long millis = instant.toEpochMilli();
-      Comparable<?>[] engineValues = {stringValue, engineDecimal, timestamp, timestamp, null, OrderingValues.getDefault(),
-          new ArrayComparable(new Comparable[] {timestamp, stringValue, engineDecimal, null, OrderingValues.getDefault()})};
-      Comparable<?>[] javaValues = {"060", decimalValue, micros, millis, null, OrderingValues.getDefault(),
-          new ArrayComparable(new Comparable[] {micros, "060", decimalValue, null, OrderingValues.getDefault()})};
-      String[][] fields = {{"name"}, {"nested.amount"}, {"nested.ts"}, {"millis"}, {"ts"}, {"amount"},
-          {"nested.ts", "name", "nested.amount", "ts", "amount"}};
-      Properties props = new Properties();
-      props.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), Boolean.toString(utcTimezone));
-      for (int i = 0; i < engineValues.length; i++) {
-        HoodieRecord<RowData> record = FlinkRecordContext.getDeleteCheckingInstance().constructHoodieRecord(
-            new BufferedRecord<>("key", engineValues[i], null, null, HoodieOperation.DELETE), "partition");
-        assertEquals(javaValues[i], record.getOrderingValueAsJava(schema, props, fields[i]));
-        assertSame(engineValues[i], record.getOrderingValue(schema, props, fields[i]));
-      }
+      ArrayComparable engineValue = new ArrayComparable(new Comparable[] {timestamp, stringValue, engineDecimal, null, OrderingValues.getDefault()});
+      FlinkRecordContext context = new FlinkRecordContext(new HoodieTableConfig(), utcTimezone);
+      context.initOrderingValueConverter(schema, Arrays.asList("nested.ts", "name", "nested.amount", "ts", "amount"));
+      assertEquals(new ArrayComparable(new Comparable[] {micros, "060", decimalValue, null, OrderingValues.getDefault()}),
+          context.convertOrderingValueToJava(engineValue));
+      assertNull(context.convertOrderingValueToJava(null));
+      assertEquals(OrderingValues.getDefault(), context.convertOrderingValueToJava(OrderingValues.getDefault()));
+      Configuration conf = new Configuration();
+      conf.setBoolean("read.utc-timezone", utcTimezone);
+      conf.setBoolean(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), !utcTimezone);
+      FlinkRecordContext readerContext = new FlinkRecordContext(new HoodieTableConfig(), new HadoopStorageConfiguration(conf));
+      readerContext.initOrderingValueConverter(schema, Collections.singletonList("millis"));
+      Comparable readValue = readerContext.convertOrderingValueToEngineType(millis);
+      // Inline compaction must retain the converter that produced the ordering value.
+      readerContext.initOrderingValueConverter(schema, Collections.singletonList("ts"));
+      assertEquals(millis, readerContext.convertOrderingValueToJava(readValue));
+      FlinkRecordContext commitTimeContext = new FlinkRecordContext(new HoodieTableConfig(), utcTimezone);
+      commitTimeContext.initOrderingValueConverter(schema, Collections.emptyList());
+      commitTimeContext.initOrderingValueConverter(schema, Collections.singletonList("ts"));
+      assertEquals(millis, commitTimeContext.convertOrderingValueToJava(millis));
+      assertSame(engineValue, commitTimeContext.convertOrderingValueToJava(engineValue));
     } finally {
       TimeZone.setDefault(previousTimezone);
     }

@@ -23,7 +23,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.CompactionOperation;
@@ -63,18 +62,15 @@ public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends Hoodi
   public FileGroupReaderBasedNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                    CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                                    HoodieReaderContext<T> readerContext) {
-    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier);
+    // The native writer must use the same engine types as the reader's delete records.
+    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), null, taskContextSupplier,
+        false, readerContext.getRecordContext());
     this.operation = operation;
     this.readerContext = readerContext;
     // File-group reader output is materialized with the writer schema, including Hudi meta fields.
     // Treating it as a regular append would prepend another meta-field overlay and shift all data ordinals.
     this.isLogCompaction = true;
     this.useWriterSchema = true;
-  }
-
-  @Override
-  protected RecordContext<?> getRecordContextForWrite() {
-    return readerContext.getRecordContext();
   }
 
   @Override

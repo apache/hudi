@@ -19,9 +19,15 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieEmptyRecord;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieOperation;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -33,6 +39,7 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -53,8 +60,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -69,6 +80,9 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
 
   @Mock
   private HoodieTable<Object, Object, Object, Object> mockHoodieTable;
+
+  @Mock
+  private RecordContext<?> recordContext;
 
   private HoodieWriteConfig writeConfig;
 
@@ -97,6 +111,7 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
   private void mockMethodsNeededByConstructor() {
     when(mockHoodieTable.getConfig()).thenReturn(writeConfig);
     when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
+    doReturn(recordContext).when(mockHoodieTable).getRecordContextForWrite();
   }
 
   @ParameterizedTest
@@ -109,7 +124,7 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     when(mockHoodieTable.getStorage()).thenReturn(metaClient.getStorage());
     HoodieInlineLogAppendHandle<Object, Object, Object, Object> handle = spy(
         new HoodieInlineLogAppendHandle<>(writeConfig, TEST_INSTANT_TIME, mockHoodieTable,
-            TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier));
+            TEST_PARTITION_PATH, TEST_FILE_ID, null, taskContextSupplier));
     HoodieLogFormat.Writer writer = mock(HoodieLogFormat.Writer.class);
     handle.writer = writer;
     handle.recordItr = Collections.emptyIterator();
@@ -128,6 +143,31 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     assertDoesNotThrow(handle::close);
     verify(handle, times(1)).flushAppend();
     verify(writer, times(1)).close();
+  }
+
+  @Test
+  void testInlineDeleteConvertsOrderingThroughRecordContext() {
+    writeConfig = HoodieWriteConfig.newBuilder().withProps(writeConfig.getProps()).withWriteRecordPositionsEnabled(false).build();
+    when(mockHoodieTable.getStorage()).thenReturn(metaClient.getStorage());
+    RecordContext<?> context = recordContext;
+    when(context.convertOrderingValueToJava("engine")).thenReturn("java");
+    HoodieInlineLogAppendHandle<Object, Object, Object, Object> handle = new HoodieInlineLogAppendHandle<>(
+        writeConfig, TEST_INSTANT_TIME, mockHoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, null, taskContextSupplier);
+    HoodieRecord<Object> record = new HoodieEmptyRecord<>(new HoodieKey("key", TEST_PARTITION_PATH),
+        HoodieOperation.DELETE, "engine", HoodieRecord.HoodieRecordType.SPARK);
+    HoodieSchema schema = HoodieSchema.parse(TRIP_EXAMPLE_SCHEMA);
+
+    verify(mockHoodieTable, times(1)).getRecordContextForWrite();
+    verify(context, never()).initOrderingValueConverter(any(), any());
+
+    handle.writeDelete(schema, record);
+    handle.writeDelete(schema, record);
+
+    assertEquals("java", handle.recordsToDeleteWithPositions.get(0).getLeft().getOrderingValue());
+    assertEquals("engine", record.getOrderingValue(schema, writeConfig.getProps(), new String[] {"ts"}));
+    verify(mockHoodieTable, times(1)).getRecordContextForWrite();
+    verify(context, times(1)).initOrderingValueConverter(eq(schema), any());
+    verify(context, times(2)).convertOrderingValueToJava("engine");
   }
 
   private static Stream<Arguments> versionsSixAndAbove() {
@@ -158,7 +198,7 @@ public class TestHoodieAppendHandle extends HoodieCommonTestHarness {
     }
 
     HoodieInlineLogAppendHandle<Object, Object, Object, Object> appendHandle =
-        new HoodieInlineLogAppendHandle<>(writeConfig, TEST_INSTANT_TIME, mockHoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, taskContextSupplier);
+        new HoodieInlineLogAppendHandle<>(writeConfig, TEST_INSTANT_TIME, mockHoodieTable, TEST_PARTITION_PATH, TEST_FILE_ID, null, taskContextSupplier);
 
     FileSlice mockFileSlice = mock(FileSlice.class);
     if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {

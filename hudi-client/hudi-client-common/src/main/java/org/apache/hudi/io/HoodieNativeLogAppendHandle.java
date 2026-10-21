@@ -62,6 +62,7 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
  */
 public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<T, I, K, O> {
 
+  private final RecordContext<?> recordContext;
   private HoodieNativeLogFormatWriter writer;
 
   @VisibleForTesting
@@ -72,13 +73,14 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
   public HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
                                      TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, false, Collections.emptyMap());
+    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, false, hoodieTable.getRecordContextForWrite());
   }
 
   public HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
                                      TaskContextSupplier taskContextSupplier, Map<HeaderMetadataType, String> header) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, true, header);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, true, hoodieTable.getRecordContextForWrite());
+    this.header.putAll(header);
   }
 
   public HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
@@ -86,12 +88,11 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     this(config, instantTime, hoodieTable, partitionPath, fileId, null, taskContextSupplier);
   }
 
-  private HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+  protected HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                       String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
-                                      TaskContextSupplier taskContextSupplier, boolean preserveMetadata,
-                                      Map<HeaderMetadataType, String> header) {
+                                      TaskContextSupplier taskContextSupplier, boolean preserveMetadata, RecordContext<?> recordContext) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, preserveMetadata);
-    this.header.putAll(header);
+    this.recordContext = recordContext;
   }
 
   @Override
@@ -114,17 +115,13 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
           hoodieTable.getBaseFileFormat(),
           writeSchemaWithMetaFields,
           taskContextSupplier,
-          getRecordContextForWrite(),
+          recordContext,
           orderingFields,
           baseFileInstantTimeOfPositions);
     } catch (IOException e) {
       throw new HoodieException("Creating native log writer with fileId: " + fileId + ", "
           + "delta commit time: " + instantTime + " error", e);
     }
-  }
-
-  protected RecordContext<?> getRecordContextForWrite() {
-    return hoodieTable.getRecordContextForWrite();
   }
 
   @Override

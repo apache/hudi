@@ -21,7 +21,6 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.OrderingValueJavaTypeConverter;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 
@@ -38,7 +37,6 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
 
   private HoodieRecordType type;
   private Comparable<?> orderingVal;
-  private OrderingValueJavaTypeConverter orderingValueJavaTypeConverter;
 
   public HoodieEmptyRecord(HoodieKey key, HoodieRecordType type) {
     super(key, null);
@@ -50,15 +48,9 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   public HoodieEmptyRecord(HoodieKey key, HoodieOperation operation, Comparable<?> orderingVal, HoodieRecordType type) {
-    this(key, operation, orderingVal, type, null);
-  }
-
-  public HoodieEmptyRecord(HoodieKey key, HoodieOperation operation, Comparable<?> orderingVal, HoodieRecordType type,
-                           OrderingValueJavaTypeConverter orderingValueJavaTypeConverter) {
     super(key, null, operation, Option.empty());
     this.type = type;
     this.orderingVal = orderingVal;
-    this.orderingValueJavaTypeConverter = orderingValueJavaTypeConverter;
   }
 
   @Override
@@ -72,24 +64,18 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   }
 
   @Override
-  public Comparable<?> getOrderingValueAsJava(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
-    return orderingValueJavaTypeConverter == null ? orderingVal
-        : orderingValueJavaTypeConverter.convert(orderingVal, recordSchema, props, orderingFields);
-  }
-
-  @Override
   public HoodieRecord<T> newInstance() {
     return this;
   }
 
   @Override
   public HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op) {
-    return new HoodieEmptyRecord<>(key, op, orderingVal, type, orderingValueJavaTypeConverter);
+    return new HoodieEmptyRecord<>(key, op, orderingVal, type);
   }
 
   @Override
   public HoodieRecord<T> newInstance(HoodieKey key) {
-    return new HoodieEmptyRecord<>(key, operation, orderingVal, type, orderingValueJavaTypeConverter);
+    return new HoodieEmptyRecord<>(key, operation, orderingVal, type);
   }
 
   @Override
@@ -191,7 +177,6 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
     // NOTE: Since [[orderingVal]] is polymorphic we have to write out its class
     //       to be able to properly deserialize it
     kryo.writeClassAndObject(output, orderingVal);
-    kryo.writeClassAndObject(output, orderingValueJavaTypeConverter);
   }
 
   /**
@@ -202,7 +187,6 @@ public class HoodieEmptyRecord<T> extends HoodieRecord<T> {
   protected final T readRecordPayload(Kryo kryo, Input input) {
     this.type = kryo.readObject(input, HoodieRecordType.class);
     this.orderingVal = (Comparable<?>) kryo.readClassAndObject(input);
-    this.orderingValueJavaTypeConverter = (OrderingValueJavaTypeConverter) kryo.readClassAndObject(input);
     // NOTE: [[EmptyRecord]]'s payload is always null
     return null;
   }

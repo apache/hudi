@@ -20,8 +20,10 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -37,6 +39,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.FlinkHoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.format.FlinkRecordContext;
 
 import java.util.List;
 
@@ -93,6 +96,15 @@ public abstract class HoodieFlinkTable<T>
   @Override
   protected HoodieIndex getIndex(HoodieWriteConfig config, HoodieEngineContext context) {
     return FlinkHoodieIndexFactory.createIndex((HoodieFlinkEngineContext) context, config);
+  }
+
+  @Override
+  public RecordContext<?> getRecordContextForWrite() {
+    if (config.getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.FLINK) {
+      // Use the write-side UTC setting for timestamp conversion in this write context.
+      return new FlinkRecordContext(metaClient.getTableConfig(), config.getBooleanOrDefault(HoodieStorageConfig.WRITE_UTC_TIMEZONE));
+    }
+    return super.getRecordContextForWrite();
   }
 
   @Override
