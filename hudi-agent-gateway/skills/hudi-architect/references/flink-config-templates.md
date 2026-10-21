@@ -70,7 +70,7 @@ Writer transition: <same_job_restore | cold_start_new_job | flink_writer_takeove
 cross_engine_takeover | unknown>
 
 Evidence:
-- <evidence ID, kind, observation time, and digest; no raw secrets>
+- <evidence ID, kind, table path, in-scope flag, observation time, and digest; no raw secrets>
 
 Comparisons:
 - <field>: <MATCH | CONFLICT | UNVERIFIED | NOT_APPLICABLE> (<source IDs>)

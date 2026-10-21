@@ -66,6 +66,7 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Existing table property semantics are outside pinned mappings | `FLINK_EXISTING_TABLE_PROPERTY_UNVERIFIED` | `REVIEW_REQUIRED` | No |
 | Existing physical schema is incompatible | `FLINK_EXISTING_SCHEMA_CONFLICT` | `BLOCKED` | No |
 | Existing schema needs an unimplemented evolution decision | `FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED` | `REVIEW_REQUIRED` | No |
+| Timestamp partition settings differ and physical-path compatibility is not established | `FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED` | `REVIEW_REQUIRED` | No |
 | Writer handoff or recovery is unresolved | `FLINK_EXISTING_WRITER_TRANSITION_UNRESOLVED` | `REVIEW_REQUIRED` | No |
 | Recoverable writer configuration differs from the desired contract | `FLINK_EXISTING_WRITER_CONFIG_CONFLICT` | `REVIEW_REQUIRED` | No |
 | Writer takeover crosses engines | `FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED` | `REVIEW_REQUIRED` | No |
@@ -270,7 +271,9 @@ to the executable contract just like `F10_SAFE_APPEND`.
 
 - The explicit desired contract remains schema 1, 2, or 3 and records lifecycle `existing`.
 - Every observed fact has an evidence ID, timezone-bearing observation time, and SHA-256 source
-  digest. Evidence is normalized and confirmed before validation.
+  digest. Evidence is normalized and confirmed before validation. Only evidence whose outer table
+  path matches the desired target contributes authoritative observations; out-of-scope provenance
+  remains visible but cannot establish a target-table conflict.
 - Persisted Hudi table config and the latest physical Hudi schema are authoritative. Flink DDL is
   registration evidence and cannot override either source.
 - Table identity, type, base format, record key, ordering, merge mode, partitioning, key-generator family, and
@@ -282,6 +285,8 @@ to the executable contract just like `F10_SAFE_APPEND`.
   deployment check. Separate-writer and cross-engine takeovers remain `REVIEW_REQUIRED`.
 - Preserve every comparison and finding. `COMPATIBLE`, `CONFLICT`, and `UNVERIFIED` are independent
   of final-status precedence.
+- Timestamp partition type, unit, format, or timezone differences remain `UNVERIFIED` because a
+  deployment-only configuration change cannot rewrite or reconcile existing partition paths.
 - Even a compatible result is assessment-only: executable eligibility remains false, deployment
   must recheck writer and timeline state, and no SQL, mutation, upgrade, or migration command is
   emitted.

@@ -362,6 +362,9 @@ def test_flink_baseline_has_bounded_append_and_mutable_contracts() -> None:
     assert reconciliation["finding_status"][
         "FLINK_EXISTING_WRITER_CONFIG_CONFLICT"
     ] == "REVIEW_REQUIRED"
+    assert reconciliation["finding_status"][
+        "FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED"
+    ] == "REVIEW_REQUIRED"
     assert "first executable" in capability
     assert "`CONFIG_VALIDATED`" in decisions
     assert "Executable eligible: true" in output
@@ -986,6 +989,7 @@ def test_pr5_checked_in_fixture_is_a_compatible_assessment_only_contract() -> No
     assert assessment["reconciliation_result"] == "COMPATIBLE"
     assert assessment["executable_eligible"] is False
     assert "artifacts" not in assessment
+    assert all(item["in_scope"] is True for item in assessment["evidence_summary"])
     assert assessment["deployment_checks"] == [
         {"check": "confirm_single_writer", "required": True},
         {"check": "recheck_pending_instants", "required": True},
@@ -1224,7 +1228,7 @@ def test_pr5_rejects_incompatible_merge_and_partition_semantics(
     assert assessment["finding_codes"] == ["FLINK_EXISTING_TABLE_PROPERTY_CONFLICT"]
 
 
-@pytest.mark.parametrize("output_format", [None, "missing_field", "yyyy-MM-dd"])
+@pytest.mark.parametrize("output_format", [None, "missing_field"])
 def test_pr5_requires_evidence_for_datetime_partition_format(
     tmp_path: Path, output_format: str | None
 ) -> None:
@@ -1234,22 +1238,41 @@ def test_pr5_requires_evidence_for_datetime_partition_format(
         config.pop("timestamp_key_generator")
     elif output_format == "missing_field":
         config["timestamp_key_generator"].pop("output_date_format")
-    else:
-        config["timestamp_key_generator"]["output_date_format"] = output_format
 
     result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
 
     assert result.returncode == 1, result.stderr
     assessment = json.loads(result.stdout)
-    assert assessment["status"] == (
-        "INCOMPLETE" if output_format in (None, "missing_field") else "REVIEW_REQUIRED"
-    )
-    assert assessment["change_disposition"] == (
-        "UNVERIFIED"
-        if output_format in (None, "missing_field")
-        else "DEPLOYMENT_CONFIGURATION_CHANGE"
-    )
-    assert assessment["reconciliation_result"] != "COMPATIBLE"
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("timestamp_type", "UNIX_TIMESTAMP"),
+        ("input_time_unit", "HOURS"),
+        ("output_date_format", "yyyy-MM-dd"),
+        ("output_timezone", "Asia/Shanghai"),
+    ],
+)
+def test_pr5_timestamp_partition_layout_difference_is_not_deployment_only(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"][5]["facts"]["timestamp_key_generator"][field] = value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED"
+    ]
 
 
 def test_pr5_table_path_has_independent_provenance(tmp_path: Path) -> None:
@@ -1268,11 +1291,12 @@ def test_pr5_table_path_has_independent_provenance(tmp_path: Path) -> None:
     assert comparison["source_ids"] == ["identity-1"]
 
 
-def test_pr5_requires_every_evidence_item_to_identify_one_table_path(
+def test_pr5_excludes_another_tables_schema_from_authoritative_comparisons(
     tmp_path: Path,
 ) -> None:
     envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
     envelope["evidence"][1]["table_path"] = "file:///tmp/a-different-table"
+    envelope["evidence"][1]["facts"]["columns"][0]["type"] = "BIGINT"
 
     result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
 
@@ -1280,10 +1304,23 @@ def test_pr5_requires_every_evidence_item_to_identify_one_table_path(
     assessment = json.loads(result.stdout)
     assert assessment["status"] == "REVIEW_REQUIRED"
     assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
     assert assessment["finding_codes"] == [
         "FLINK_EXISTING_EVIDENCE_CONFLICT",
         "FLINK_EXISTING_EVIDENCE_REQUIRED",
     ]
+    schema_comparison = next(
+        item for item in assessment["comparisons"] if item["field"] == "schema.columns"
+    )
+    assert schema_comparison["observed"] is None
+    assert schema_comparison["result"] == "UNVERIFIED"
+    assert schema_comparison["source_ids"] == []
+    schema_summary = next(
+        item
+        for item in assessment["evidence_summary"]
+        if item["evidence_id"] == "table-schema-1"
+    )
+    assert schema_summary["in_scope"] is False
 
 
 @pytest.mark.parametrize("recovery", [None, False, True])

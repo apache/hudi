@@ -79,8 +79,8 @@ digest, or contains a credential-shaped fact.
 
 ## FLINK_EXISTING_EVIDENCE_CONFLICT
 
-**Trigger:** Two observations disagree, or a Flink DDL disagrees with authoritative Hudi table
-config or physical schema.
+**Trigger:** Two observations disagree, an evidence envelope identifies another table path, or a
+Flink DDL disagrees with authoritative Hudi table config or physical schema.
 
 **Message:** Contradictory evidence cannot be silently merged. Persisted table config and the Hudi
 table schema remain authoritative, but the discrepancy needs review.
@@ -143,13 +143,24 @@ is not confirmed stopped, or same-job recovery state is unavailable.
 
 ## FLINK_EXISTING_WRITER_CONFIG_CONFLICT
 
-**Trigger:** Timestamp partition formatting or state restored by the same Flink job differs from
-the bounded desired writer configuration.
+**Trigger:** State restored by the same Flink job differs from the bounded desired writer
+configuration.
 
 **Message:** The durable table may still be compatible, but the writer configuration cannot be
 reused as supplied.
 
 **Action:** `REVIEW_REQUIRED`; return `DEPLOYMENT_CONFIGURATION_CHANGE` and emit no commands.
+
+## FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED
+
+**Trigger:** The previous writer's timestamp partition type, input unit, output format, or output
+timezone differs from the bounded desired settings.
+
+**Message:** The same logical partition may map to a different physical directory. Changing only
+the next writer's configuration does not reconcile paths already written by the previous writer.
+
+**Action:** `REVIEW_REQUIRED`; retain `UNVERIFIED`, require layout or migration review, and emit no
+commands.
 
 ## FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED
 

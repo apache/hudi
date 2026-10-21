@@ -120,6 +120,10 @@ properties, the observed table path, the physical Hudi schema, writer inventory,
 has an observation time and SHA-256 source digest; contradictory sources remain visible rather
 than being silently merged.
 
+The desired table path is also the authority boundary. Evidence scoped to another table remains in
+the report with its provenance and a review finding, but its facts are excluded before target-table
+observations and comparisons are built.
+
 Persisted `HoodieTableConfig` facts are authoritative for table name, type, version, timeline
 layout, file format, record key, ordering, merge mode, partitioning, and key-generator type.
 The table path has separate identity evidence; it is not a persisted table-config key. Datetime
@@ -137,8 +141,10 @@ type suffixes in Hudi table config are normalized before comparison.
 The manifest also pins the required and conditional fact names, every comparison field, comparison
 and reconciliation vocabularies, finding-to-status mapping, and the four change dispositions. A
 custom key generator outside the pinned built-in mappings is unverified rather than treated as a
-proven conflict. A writer-only mismatch yields `DEPLOYMENT_CONFIGURATION_CHANGE`; it does not imply
-that table migration is required.
+proven conflict. A recoverable writer-state-only mismatch yields
+`DEPLOYMENT_CONFIGURATION_CHANGE`; it does not imply that table migration is required. Timestamp
+partition-setting differences instead remain `UNVERIFIED`, because changing the next writer cannot
+reconcile physical partition paths already produced by another format or timezone.
 
 Writer transition is explicit. Same-job restore requires recoverable checkpoint or savepoint
 evidence plus matching design schema, operation, mutable index state, and MOR compaction ownership.

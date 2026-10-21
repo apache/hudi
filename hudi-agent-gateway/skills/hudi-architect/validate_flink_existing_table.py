@@ -329,7 +329,9 @@ def _normalize_fact(
 
 
 def _parse_evidence(
-    raw_evidence: Any, assessment: Assessment
+    raw_evidence: Any,
+    target_table_path: str | None,
+    assessment: Assessment,
 ) -> tuple[dict[str, dict[str, Observation]], list[dict[str, Any]]]:
     observations: dict[str, dict[str, Observation]] = {}
     summaries: list[dict[str, Any]] = []
@@ -339,7 +341,7 @@ def _parse_evidence(
 
     evidence_ids: set[str] = set()
     collected: dict[tuple[str, str], list[tuple[Any, str]]] = {}
-    scoped_paths: list[tuple[str, str]] = []
+    in_scope_ids: list[str] = []
     for index, raw_item in enumerate(raw_evidence):
         field = f"evidence[{index}]"
         if not isinstance(raw_item, dict):
@@ -407,7 +409,14 @@ def _parse_evidence(
         if not valid_header or not isinstance(kind, str) or not isinstance(evidence_id, str):
             continue
         assert isinstance(table_path, str)
-        scoped_paths.append((table_path, evidence_id))
+        in_scope = target_table_path is not None and table_path == target_table_path
+        if target_table_path is not None and not in_scope:
+            assessment.add(
+                "FLINK_EXISTING_EVIDENCE_CONFLICT",
+                f"Evidence {evidence_id} is scoped to {table_path}, not {target_table_path}",
+            )
+        if in_scope:
+            in_scope_ids.append(evidence_id)
         normalized_facts: list[str] = []
         for name in sorted(facts):
             if name not in ALLOWED_EVIDENCE_FACTS[kind]:
@@ -417,13 +426,15 @@ def _parse_evidence(
             )
             if normalized is None:
                 continue
-            collected.setdefault((kind, name), []).append((normalized, evidence_id))
+            if in_scope:
+                collected.setdefault((kind, name), []).append((normalized, evidence_id))
             normalized_facts.append(name)
         summaries.append(
             {
                 "evidence_id": evidence_id,
                 "fact_names": normalized_facts,
                 "kind": kind,
+                "in_scope": in_scope,
                 "observed_at": observed_at,
                 "sha256": digest,
                 "table_path": table_path,
@@ -440,18 +451,10 @@ def _parse_evidence(
             )
             continue
         observations.setdefault(kind, {})[name] = Observation(first_value, source_ids)
-    if scoped_paths:
-        first_path = scoped_paths[0][0]
-        source_ids = tuple(item[1] for item in scoped_paths)
-        if any(item[0] != first_path for item in scoped_paths[1:]):
-            assessment.add(
-                "FLINK_EXISTING_EVIDENCE_CONFLICT",
-                "Evidence items do not identify one common table path",
-            )
-        else:
-            observations.setdefault("evidence_scope", {})["table_path"] = Observation(
-                first_path, source_ids
-            )
+    if target_table_path is not None and in_scope_ids:
+        observations.setdefault("evidence_scope", {})["table_path"] = Observation(
+            target_table_path, tuple(in_scope_ids)
+        )
     return observations, summaries
 
 
@@ -749,8 +752,16 @@ def assess_reconciliation(
     for advisory in desired_result["advisory_codes"]:
         assessment.advise(advisory)
 
+    desired_table = desired.get("table", {}) if isinstance(desired.get("table"), dict) else {}
+    raw_target_table_path = desired_table.get("path")
+    target_table_path = (
+        raw_target_table_path
+        if _non_empty_string(raw_target_table_path)
+        and _path_validation_error(raw_target_table_path) is None
+        else None
+    )
     observations, evidence_summary = _parse_evidence(
-        envelope.get("evidence"), assessment
+        envelope.get("evidence"), target_table_path, assessment
     )
     for kind in sorted(REQUIRED_EVIDENCE_KINDS - set(observations)):
         assessment.add(
@@ -765,7 +776,6 @@ def assess_reconciliation(
     _compare_ddl_with_authority(observations, assessment)
 
     comparisons: list[dict[str, Any]] = []
-    desired_table = desired.get("table", {}) if isinstance(desired.get("table"), dict) else {}
     desired_identity = (
         desired.get("identity", {}) if isinstance(desired.get("identity"), dict) else {}
     )
@@ -872,7 +882,7 @@ def assess_reconciliation(
                 "writer_config.timestamp_key_generator",
                 timestamp_expected,
                 timestamp_observed,
-                mismatch_code="FLINK_EXISTING_WRITER_CONFIG_CONFLICT",
+                mismatch_code="FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED",
                 mismatch_result="UNVERIFIED",
                 assessment=assessment,
             )
