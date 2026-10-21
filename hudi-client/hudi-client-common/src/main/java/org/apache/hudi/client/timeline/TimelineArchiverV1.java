@@ -141,10 +141,12 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
   @Override
   public int archiveIfRequired(HoodieEngineContext context, boolean acquireLock) throws IOException {
     //NOTE:  We permanently disable merging archive files. This is different from 0.15 behavior.
+    boolean lockAcquired = false;
     try {
       if (acquireLock) {
         // there is no owner or instant time per se for archival.
         txnManager.beginStateChange(Option.empty(), Option.empty());
+        lockAcquired = true;
       }
       List<HoodieInstant> instantsToArchive = getInstantsToArchive();
       addArchivalCommitMetrics(instantsToArchive);
@@ -169,9 +171,17 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       metrics.put(failureMetricName, 1L);
       throw e;
     } finally {
-      close();
-      if (acquireLock) {
-        txnManager.endStateChange(Option.empty());
+      try {
+        close();
+        if (lockAcquired) {
+          txnManager.endStateChange(Option.empty());
+        }
+      } finally {
+        // A no-op after endStateChange; releases the provider when a failed writer close skipped it.
+        // Some providers delete the lock on close, so never close a lock this call did not acquire.
+        if (lockAcquired) {
+          txnManager.close();
+        }
       }
     }
   }
