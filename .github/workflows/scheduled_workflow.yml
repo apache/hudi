@@ -23,7 +23,6 @@ on:
     - cron: '*/5 * * * *'
 
 permissions:
-  statuses: write
   pull-requests: write
   issues: read
   actions: write
@@ -79,8 +78,7 @@ jobs:
             });
             
             const { labelDocsPr, labelPrWithSize } = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/labeler.js`);
-            const checkAzureCiAndCreateCommitStatus = require(`${process.env.GITHUB_WORKSPACE}/.github/workflows/azure_ci.js`);
-            
+
             console.log(`Number of PRs to process: ${openPrs.length}`);
             
             for (const pr of openPrs) {
@@ -111,19 +109,4 @@ jobs:
                 prNumber: pr.number,
                 prData: pullRequest
               });
-            
-              // Check Azure CI and create commit status (targeting "master", "release*", or "branch-0.x" branch)
-              const targetBaseRegex = /^(master|release.*|branch-0\.x)$/;
-              if (targetBaseRegex.test(targetBase)
-                && !pr.body.includes('HOTFIX: SKIP AZURE CI')) {
-                const latestCommitHash = pullRequest.head.sha;
-            
-                // Create commit status based on Azure CI report to PR
-                await checkAzureCiAndCreateCommitStatus({
-                  github,
-                  context,
-                  prNumber: pr.number,
-                  latestCommitHash: latestCommitHash
-                });
-              }
             }
