@@ -26,9 +26,12 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
@@ -109,10 +112,45 @@ public class VectorIndexer extends BaseIndexer {
     List<FileSliceAndPartition> fileSlices = context.latestFileSlices().get();
 
     // Initial bootstrap always allocates generation 1 (no pre-existing MDT partition to advance).
+    int generation = 1;
+    String baseline = contiguousBootstrapBaseline(context.dataInstantTime());
     HoodieData<HoodieRecord> records = engineIndexerSupport.generateVectorIndexRecords(
-        indexDefinition, dataTableMetaClient, fileSlices, tableSchema, 1, context.dataInstantTime());
+        indexDefinition, dataTableMetaClient, fileSlices, tableSchema, generation, baseline);
+    List<HoodieRecord> snapshotMarkers = completedWritesAfterBaseline(baseline, context.dataInstantTime()).stream()
+        .map(instant -> (HoodieRecord) HoodieMetadataPayload.createVectorIndexSourceInstantMarkerRecord(
+            generation, instant, indexName))
+        .collect(Collectors.toList());
+    if (!snapshotMarkers.isEmpty()) {
+      records = records.union(engineContext.parallelize(snapshotMarkers, 1));
+    }
 
     return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, indexName, records));
+  }
+
+  /**
+   * Same cutoff the async indexer plans with ({@code ScheduleIndexActionExecutor}): the last completed
+   * write before the earliest pending one. A write still inflight at bootstrap is excluded from the
+   * snapshot and indexes itself when it commits, so the baseline must not claim it.
+   */
+  private String contiguousBootstrapBaseline(String snapshotInstant) {
+    return dataTableMetaClient.getActiveTimeline().getContiguousCompletedWriteTimeline()
+        .findInstantsBeforeOrEquals(snapshotInstant)
+        .lastInstant()
+        .map(HoodieInstant::requestedTime)
+        .orElse(HoodieTimeline.INIT_INSTANT_TS);
+  }
+
+  /**
+   * Completed writes newer than the baseline that the bootstrap snapshot already contains. They
+   * committed before the index existed, so no commit of theirs will ever write a source marker.
+   */
+  private List<String> completedWritesAfterBaseline(String baseline, String snapshotInstant) {
+    return dataTableMetaClient.getActiveTimeline().getWriteTimeline().filterCompletedInstants()
+        .findInstantsAfter(baseline)
+        .findInstantsBeforeOrEquals(snapshotInstant)
+        .getInstantsAsStream()
+        .map(HoodieInstant::requestedTime)
+        .collect(Collectors.toList());
   }
 
   /**
