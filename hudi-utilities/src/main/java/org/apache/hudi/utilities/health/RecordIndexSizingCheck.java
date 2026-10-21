@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -182,6 +183,8 @@ public class RecordIndexSizingCheck implements HealthCheck {
         .config("observed.base.file.count", footprint.baseFileCount)
         .config("observed.log.file.count", footprint.logFileCount)
         .config("observed.total.size.bytes", footprint.totalSizeBytes)
+        .config("observed.base.file.size.bytes", footprint.baseFileSizeBytes)
+        .config("effective.estimate.basis", footprint.estimateBasis())
         .config("observed.largest.file.group.bytes", footprint.largestFileGroupBytes)
         .config("observed.largest.file.group.id", footprint.largestFileGroupId);
 
@@ -228,13 +231,15 @@ public class RecordIndexSizingCheck implements HealthCheck {
               shortfall.subject(), shortfall.observedFileGroupCount, shortfall.idealFileGroupCount,
               shortfall.minHealthyFileGroupCount()))
           .finding(String.format(
-              "%s was initialized with %d file group(s). Its %d bytes on storage put it at an estimated %d records "
-                  + "(an estimate: index bytes divided by the %d-byte average record the writer sizes with), which "
-                  + "with the configured growth factor and maximum file-group size calls for %d. Each file group "
-                  + "holds roughly %.1fx more keys than intended, so index lookups read larger files and every "
-                  + "index write concentrates on the same few file groups.",
-              shortfall.subject(), shortfall.observedFileGroupCount, shortfall.observedSizeBytes,
+              "%s was initialized with %d file group(s). Its %d bytes of %s put it at an estimated %d records "
+                  + "(an estimate: those bytes divided by the %d-byte average record the writer sizes with), which "
+                  + "with the configured growth factor and maximum file-group size calls for %d. Today each file "
+                  + "group averages %.2fx of the configured maximum file-group size; once the configured growth "
+                  + "factor is applied, each is projected to hold roughly %.1fx more keys than the sizing intends, "
+                  + "so index lookups read larger files and every index write concentrates on the same few file groups.",
+              shortfall.subject(), shortfall.observedFileGroupCount, shortfall.estimateBytes, shortfall.estimateBasis,
               shortfall.estimatedRecordCount, RECORD_INDEX_AVERAGE_RECORD_SIZE, shortfall.idealFileGroupCount,
+              shortfall.averageFileGroupBytes() / (double) sizing.maxFileGroupSizeBytes,
               (double) shortfall.idealFileGroupCount / Math.max(shortfall.observedFileGroupCount, 1)));
     }
     if (oversizedFileGroup) {
@@ -262,8 +267,8 @@ public class RecordIndexSizingCheck implements HealthCheck {
    * did not, into the result. Empty when the writer's configured layout disagrees with the layout
    * on storage, since neither estimate would be comparable to the observed count then.
    */
-  private static Option<CountComparison> compareFileGroupCount(RecordIndexFootprint footprint, boolean partitionedIndex,
-                                                               SizingConfig sizing, HealthCheckResult.Builder result) {
+  static Option<CountComparison> compareFileGroupCount(RecordIndexFootprint footprint, boolean partitionedIndex,
+                                                       SizingConfig sizing, HealthCheckResult.Builder result) {
     boolean layoutKnown = footprint.fileGroupCount > 0;
     if (layoutKnown && footprint.partitionedLayout != partitionedIndex) {
       result.config("effective.count.comparison", String.format(
@@ -279,13 +284,24 @@ public class RecordIndexSizingCheck implements HealthCheck {
     } else {
       result.config("effective.count.comparison", "per data partition (partitioned record index); worst data partition reported")
           .config("observed.data.partition.count", footprint.byDataPartition.size());
-      comparison = CountComparison.of(Option.empty(), footprint, sizing);
+      // The worst data partition is the one the verdict should turn on, which is not the one with the
+      // lowest ratio: a partition that is floor-bound has a low ratio only because the configured
+      // minimum is high, and must not win the pick over a partition with a real shortfall. So an
+      // undersized partition outranks a healthy one, a size-derived ideal outranks a floor-derived
+      // one, and the ratio is the tiebreak within a class.
+      CountComparison worst = null;
+      int undersizedDataPartitions = 0;
       for (Map.Entry<String, RecordIndexFootprint> entry : footprint.byDataPartition.entrySet()) {
         CountComparison candidate = CountComparison.of(Option.of(entry.getKey()), entry.getValue(), sizing);
-        if (candidate.ratio() < comparison.ratio() || comparison.dataPartition.isEmpty()) {
-          comparison = candidate;
+        if (candidate.isUndersized()) {
+          undersizedDataPartitions++;
+        }
+        if (worst == null || candidate.isWorseThan(worst)) {
+          worst = candidate;
         }
       }
+      comparison = worst != null ? worst : CountComparison.of(Option.empty(), footprint, sizing);
+      result.config("observed.undersized.data.partition.count", undersizedDataPartitions);
       if (comparison.dataPartition.isPresent()) {
         result.config("observed.worst.data.partition", comparison.dataPartition.get())
             .config("observed.worst.data.partition.file.group.count", comparison.observedFileGroupCount);
@@ -293,6 +309,7 @@ public class RecordIndexSizingCheck implements HealthCheck {
     }
 
     result.config("effective.ideal.file.group.count", comparison.idealFileGroupCount)
+        .config("effective.ideal.source", comparison.idealIsFloor ? "configured minimum (floor)" : "size estimate")
         .config("effective.min.healthy.file.group.count", comparison.minHealthyFileGroupCount())
         .config("observed.estimated.record.count", comparison.estimatedRecordCount);
     return Option.of(comparison);
@@ -386,7 +403,7 @@ public class RecordIndexSizingCheck implements HealthCheck {
   }
 
   /** The writer's sizing configuration, as supplied or defaulted. */
-  private static final class SizingConfig {
+  static final class SizingConfig {
     final int minFileGroupCount;
     final int maxFileGroupCount;
     final float growthFactor;
@@ -401,10 +418,13 @@ public class RecordIndexSizingCheck implements HealthCheck {
   }
 
   /** One observed-versus-ideal file-group comparison, for the whole index or one data partition. */
-  private static final class CountComparison {
+  static final class CountComparison {
     final Option<String> dataPartition;
     final int observedFileGroupCount;
     final long observedSizeBytes;
+    /** The bytes the record estimate was derived from, and what they were: see {@link RecordIndexFootprint#estimateBytes()}. */
+    final long estimateBytes;
+    final String estimateBasis;
     final long estimatedRecordCount;
     final int idealFileGroupCount;
     /**
@@ -415,22 +435,27 @@ public class RecordIndexSizingCheck implements HealthCheck {
     final boolean idealIsFloor;
 
     private CountComparison(Option<String> dataPartition, int observedFileGroupCount, long observedSizeBytes,
-                            long estimatedRecordCount, int idealFileGroupCount, boolean idealIsFloor) {
+                            long estimateBytes, String estimateBasis, long estimatedRecordCount,
+                            int idealFileGroupCount, boolean idealIsFloor) {
       this.dataPartition = dataPartition;
       this.observedFileGroupCount = observedFileGroupCount;
       this.observedSizeBytes = observedSizeBytes;
+      this.estimateBytes = estimateBytes;
+      this.estimateBasis = estimateBasis;
       this.estimatedRecordCount = estimatedRecordCount;
       this.idealFileGroupCount = idealFileGroupCount;
       this.idealIsFloor = idealIsFloor;
     }
 
     static CountComparison of(Option<String> dataPartition, RecordIndexFootprint footprint, SizingConfig sizing) {
-      long estimatedRecordCount = footprint.totalSizeBytes / RECORD_INDEX_AVERAGE_RECORD_SIZE;
+      long estimateBytes = footprint.estimateBytes();
+      long estimatedRecordCount = estimateBytes / RECORD_INDEX_AVERAGE_RECORD_SIZE;
       int idealFileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(
           MetadataPartitionType.RECORD_INDEX, () -> estimatedRecordCount, RECORD_INDEX_AVERAGE_RECORD_SIZE,
           sizing.minFileGroupCount, sizing.maxFileGroupCount, sizing.growthFactor, sizing.maxFileGroupSizeBytes);
-      return new CountComparison(dataPartition, footprint.fileGroupCount, footprint.totalSizeBytes,
-          estimatedRecordCount, idealFileGroupCount, isFloorBound(estimatedRecordCount, sizing));
+      return new CountComparison(dataPartition, footprint.fileGroupCount, footprint.totalSizeBytes, estimateBytes,
+          footprint.estimateBasis(), estimatedRecordCount, idealFileGroupCount,
+          isFloorBound(estimatedRecordCount, sizing));
     }
 
     /**
@@ -465,6 +490,27 @@ public class RecordIndexSizingCheck implements HealthCheck {
       return (double) observedFileGroupCount / Math.max(idealFileGroupCount, 1);
     }
 
+    long averageFileGroupBytes() {
+      return observedSizeBytes / Math.max(observedFileGroupCount, 1);
+    }
+
+    /**
+     * Orders comparisons by what the verdict depends on. An undersized comparison is worse than one
+     * that is not; between two that agree on that, a size-derived ideal is worse than a floor-derived
+     * one, because only the former says anything about the index; and within a class the lower
+     * observed-to-ideal ratio is worse. Ratio alone would let a floor-bound partition -- low ratio,
+     * no shortfall -- win the pick and hide a partition with a real one.
+     */
+    boolean isWorseThan(CountComparison other) {
+      if (isUndersized() != other.isUndersized()) {
+        return isUndersized();
+      }
+      if (idealIsFloor != other.idealIsFloor) {
+        return !idealIsFloor;
+      }
+      return ratio() < other.ratio();
+    }
+
     String subject() {
       return dataPartition.map(p -> String.format("Data partition '%s' of the record index", p))
           .orElse("Record index");
@@ -472,23 +518,25 @@ public class RecordIndexSizingCheck implements HealthCheck {
   }
 
   /** What the record index occupies on storage, taken from its latest file slices. */
-  private static final class RecordIndexFootprint {
+  static final class RecordIndexFootprint {
     final int fileGroupCount;
     final int baseFileCount;
     final int logFileCount;
     final long totalSizeBytes;
+    final long baseFileSizeBytes;
     final long largestFileGroupBytes;
     final String largestFileGroupId;
     final boolean partitionedLayout;
     final Map<String, RecordIndexFootprint> byDataPartition;
 
     private RecordIndexFootprint(int fileGroupCount, int baseFileCount, int logFileCount, long totalSizeBytes,
-                                 long largestFileGroupBytes, String largestFileGroupId, boolean partitionedLayout,
-                                 Map<String, RecordIndexFootprint> byDataPartition) {
+                                 long baseFileSizeBytes, long largestFileGroupBytes, String largestFileGroupId,
+                                 boolean partitionedLayout, Map<String, RecordIndexFootprint> byDataPartition) {
       this.fileGroupCount = fileGroupCount;
       this.baseFileCount = baseFileCount;
       this.logFileCount = logFileCount;
       this.totalSizeBytes = totalSizeBytes;
+      this.baseFileSizeBytes = baseFileSizeBytes;
       this.largestFileGroupBytes = largestFileGroupBytes;
       this.largestFileGroupId = largestFileGroupId;
       this.partitionedLayout = partitionedLayout;
@@ -499,10 +547,12 @@ public class RecordIndexSizingCheck implements HealthCheck {
       int baseFiles = 0;
       int logFiles = 0;
       long totalBytes = 0;
+      long baseBytes = 0;
       long largestBytes = 0;
       String largestId = "";
       for (FileSlice slice : fileSlices) {
         baseFiles += slice.getBaseFile().isPresent() ? 1 : 0;
+        baseBytes += slice.getBaseFile().map(HoodieBaseFile::getFileSize).orElse(0L);
         logFiles += slice.getLogFileCnt();
         long sliceBytes = slice.getTotalFileSize();
         totalBytes += sliceBytes;
@@ -511,13 +561,35 @@ public class RecordIndexSizingCheck implements HealthCheck {
           largestId = slice.getFileId();
         }
       }
-      return new RecordIndexFootprint(fileSlices.size(), baseFiles, logFiles, totalBytes, largestBytes, largestId,
-          false, new TreeMap<>());
+      return new RecordIndexFootprint(fileSlices.size(), baseFiles, logFiles, totalBytes, baseBytes, largestBytes,
+          largestId, false, new TreeMap<>());
+    }
+
+    /** A footprint with the given measurements and no file slices behind it, for tests. */
+    static RecordIndexFootprint synthetic(int fileGroupCount, int baseFileCount, long baseFileSizeBytes,
+                                          long totalSizeBytes) {
+      return new RecordIndexFootprint(fileGroupCount, baseFileCount, fileGroupCount - baseFileCount, totalSizeBytes,
+          baseFileSizeBytes, totalSizeBytes / Math.max(fileGroupCount, 1), "synthetic", false, new TreeMap<>());
     }
 
     RecordIndexFootprint withLayout(boolean partitioned, Map<String, RecordIndexFootprint> perDataPartition) {
-      return new RecordIndexFootprint(fileGroupCount, baseFileCount, logFileCount, totalSizeBytes,
+      return new RecordIndexFootprint(fileGroupCount, baseFileCount, logFileCount, totalSizeBytes, baseFileSizeBytes,
           largestFileGroupBytes, largestFileGroupId, partitioned, perDataPartition);
+    }
+
+    /**
+     * The bytes the record estimate is derived from. Log files in the record index carry updates
+     * and deletes for keys the base files already hold, so counting them inflates the estimate
+     * without any new records behind it; the base files, written by metadata compaction, are the
+     * deduplicated set. Before the first compaction there are no base files, and the log files are
+     * the only measurement there is.
+     */
+    long estimateBytes() {
+      return baseFileCount > 0 ? baseFileSizeBytes : totalSizeBytes;
+    }
+
+    String estimateBasis() {
+      return baseFileCount > 0 ? "base files" : "log files (the index has no base file yet)";
     }
   }
 }

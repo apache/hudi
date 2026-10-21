@@ -67,6 +67,12 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
   private static final String SIXTEEN_KIB = String.valueOf(16 * 1024);
   /** Smaller still, so the estimate clears the 0.5 healthy ratio rather than sitting on it. */
   private static final String FOUR_KIB = String.valueOf(4 * 1024);
+  /**
+   * Small enough that one data partition's base-file bytes alone call for several file groups. The
+   * estimate is taken from base files, not base plus logs, so the per-partition fixture -- a few
+   * dozen records each -- needs a limit this low to show a real shortfall rather than the floor.
+   */
+  private static final String ONE_KIB = String.valueOf(1024);
 
   private final RecordIndexSizingCheck check = new RecordIndexSizingCheck();
   private HoodieTableMetaClient metaClient;
@@ -212,18 +218,21 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
   }
 
   @Test
-  public void fileGroupsAtHalfTheIdealAreStillHealthy() throws Exception {
-    // given a writer sizing that calls for four file groups, exactly twice what exists
+  public void fixedFileGroupCountAboveWhatExistsIsReportedAsTheFloorNotAsAShortfall() throws Exception {
+    // given a writer that pins the count at four (min == max) while the index has two; the ideal is
+    // the configured floor, not a size estimate, so the 0.5 ratio means nothing about index health
+    // (the exact 0.5 boundary itself is covered on synthetic footprints in TestRecordIndexSizingCheck)
     writeGlobalRecordIndex();
     TypedProperties props = globalSizingProps(4, 4, ONE_GIB);
 
     // when the check runs
     HealthCheckResult result = runCheck(props, false);
 
-    // then the ratio of 0.5 sits on the boundary and is not an alert
+    // then it is healthy, says the ideal came from the floor, and tells the operator why that is not a shortfall
     assertEquals(HealthStatus.HEALTHY, result.getStatus(), result.getSummary());
     assertEquals("4", result.getEffectiveConfigs().get("effective.ideal.file.group.count"));
-    assertEquals("2", result.getEffectiveConfigs().get("effective.min.healthy.file.group.count"));
+    assertEquals("configured minimum (floor)", result.getEffectiveConfigs().get("effective.ideal.source"));
+    assertTrue(result.getSummary().contains("fewer than the configured minimum of 4"), result.getSummary());
   }
 
   @Test
@@ -303,8 +312,13 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     assertEquals("2.0", configs.get(HoodieMetadataConfig.RECORD_INDEX_GROWTH_FACTOR_PROP.key()));
     assertEquals("48", configs.get("effective.average.record.size.bytes"));
     assertEquals("2", configs.get("effective.ideal.file.group.count"));
+    // min == max pins the count, so this fixture's ideal is the floor; the estimate branch is exercised elsewhere
+    assertEquals("configured minimum (floor)", configs.get("effective.ideal.source"));
     assertEquals("1", configs.get("effective.min.healthy.file.group.count"));
     assertEquals(String.valueOf((long) (1.5 * 1024L * 1024 * 1024)), configs.get("effective.max.healthy.file.group.bytes"));
+    assertTrue(configs.containsKey("observed.base.file.size.bytes"), configs.toString());
+    assertTrue(configs.get("effective.estimate.basis").startsWith("base files")
+        || configs.get("effective.estimate.basis").startsWith("log files"), configs.toString());
     assertEquals("2", configs.get("observed.file.group.count"));
     assertTrue(Long.parseLong(configs.get("observed.total.size.bytes")) > 0);
     assertTrue(Long.parseLong(configs.get("observed.largest.file.group.bytes")) > 0);
@@ -371,6 +385,10 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     assertEquals(String.valueOf(DATA_PARTITIONS * FILE_GROUPS_PER_DATA_PARTITION), configs.get("observed.file.group.count"));
     assertEquals("1", configs.get("observed.worst.data.partition.file.group.count"));
     assertEquals("1", configs.get("effective.ideal.file.group.count"));
+    // min == max per data partition, so every partition is floor-bound here; the pick among
+    // size-derived partitions is covered on synthetic footprints in TestRecordIndexSizingCheck
+    assertEquals("configured minimum (floor)", configs.get("effective.ideal.source"));
+    assertEquals("0", configs.get("observed.undersized.data.partition.count"));
     assertTrue(configs.get("effective.count.comparison").startsWith("per data partition"), configs.toString());
     assertTrue(configs.containsKey("observed.worst.data.partition"), configs.toString());
   }
@@ -378,9 +396,9 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
   @Test
   public void partitionedIndexUndersizedInADataPartitionIsUnhealthyAndNamesThePartition() throws Exception {
     // given a partitioned index with one file group per data partition, and a maximum file-group
-    // size small enough that each partition's own bytes call for more than the one it has
+    // size small enough that each partition's own base-file bytes call for more than the one it has
     writePartitionedRecordIndex();
-    TypedProperties props = partitionedSizingProps(1, 64, SIXTEEN_KIB);
+    TypedProperties props = partitionedSizingProps(1, 64, ONE_KIB);
 
     // when the check runs
     HealthCheckResult result = runCheck(props, false);
@@ -394,6 +412,8 @@ public class TestRecordIndexSizingCheckWithSpark extends SparkClientFunctionalTe
     assertEquals(String.valueOf((int) Math.ceil(0.5 * partitionedIdeal)),
         configs.get("effective.min.healthy.file.group.count"));
     assertEquals("1", configs.get("observed.worst.data.partition.file.group.count"));
+    assertEquals("size estimate", configs.get("effective.ideal.source"));
+    assertTrue(Integer.parseInt(configs.get("observed.undersized.data.partition.count")) >= 1, configs.toString());
     String worstPartition = configs.get("observed.worst.data.partition");
     assertTrue(result.getFindings().stream().anyMatch(f -> f.contains(
         String.format("Data partition '%s' of the record index was initialized with 1 file group(s)", worstPartition))),

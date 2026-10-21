@@ -152,7 +152,6 @@ public class HoodieTableHealthChecker implements Serializable {
         new ArchivalCadenceCheck(),
         new MetadataTableSyncCheck(),
         new MetadataCompactionLagCheck(),
-
         new RecordIndexSizingCheck());
   }
 
