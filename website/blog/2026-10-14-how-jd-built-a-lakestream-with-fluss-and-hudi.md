@@ -54,7 +54,7 @@ Teams use only a small fraction of the data, but the platform pays for all of it
 
 ### Separate Lake and Stream Pipelines Duplicate Work
 
-The second problem is architectural: the lake and the stream are separate systems. Take training data for search and recommendation models. Teams have traditionally run two pipelines side by side. The real-time pipeline quickly turns user activity into fresh training samples and features. The batch pipeline handles backfills, corrections, model training, and analysis. Running both meets different freshness needs, but it creates three problems:
+The second problem is architectural: the lake and the stream are separate systems. Take training data for search and recommendation models as an example. Teams have traditionally run two pipelines side by side. The real-time pipeline quickly turns user activity into fresh training samples and features. The batch pipeline handles backfills, corrections, model training, and analysis. Running both meets different freshness needs, but it creates three problems:
 
 - **Duplicate storage.** Much of the same data is stored more than once, in the message queue and in lake tables.
 - **Duplicate compute.** Both pipelines clean the data, join it, assemble features, and generate samples. Only the execution model differs.
