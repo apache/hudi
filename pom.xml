@@ -146,9 +146,9 @@
          for local E2E runs; CI's E2E server image is built from trino.sha); the nightly
          pin-advance job refreshes all three, humans merge its bot/trino-pin branch. Keep each
          property on one line: the workflows and scripts/trino/bootstrap_trino.sh read them with sed. -->
-    <trino.version>484-SNAPSHOT</trino.version>
-    <trino.sha>40b70400a8a67dfcc12cd9192e9050ea09b7c995</trino.sha>
-    <trino.e2e.version>483</trino.e2e.version>
+    <trino.version>485-SNAPSHOT</trino.version>
+    <trino.sha>e1e8098c5945cc14cd8008581400000fef7fbb81</trino.sha>
+    <trino.e2e.version>484</trino.e2e.version>
     <hive.exec.classifier>core</hive.exec.classifier>
     <metrics.version>4.1.1</metrics.version>
     <orc.spark.version>1.6.0</orc.spark.version>
