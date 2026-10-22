@@ -15,6 +15,11 @@
 # limitations under the License.
 
 fullnameOverride: hudi-spark-connect
+hudi:
+  defaults:
+    # Match the local-dev Trino reader; do not impose this on other deployments.
+    hoodie.write.table.version: "8"
+    hoodie.write.auto.upgrade: "false"
 catalog:
   metastoreUri: thrift://hive-metastore.hudi-lakehouse.svc.cluster.local:9083
   warehouse: s3a://warehouse/connect

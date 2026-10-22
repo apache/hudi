@@ -139,9 +139,11 @@ built jars into gitignored `images/*/target/` directories.
 ## Deploying `hudi-spark-connect` against existing infrastructure
 
 Use your existing Kubernetes cluster, Hive Metastore, and S3-compatible storage.
-The chart deploys one shared Spark Connect driver in local mode: SQL execution
+By default the chart deploys one shared Spark Connect driver in local mode: SQL execution
 runs within a single pod, with no distributed executor pods or Spark Operator
 dependency. Compute capacity is limited to that pod's resources.
+The chart also exposes an opt-in Kubernetes executor configuration; see the
+[configuration and validation requirements](charts/hudi-spark-connect/README.md#kubernetes-executor-configuration-opt-in).
 
 From the repository root, build and push the image to your registry:
 
@@ -172,6 +174,8 @@ for connection setup and CRUD/restart validation.
 
 See the [BI client notes](charts/hudi-spark-connect/README.md#spark-connect-client-tutorials)
 for Superset and Zeppelin connection requirements and ADBC limitations.
+Gateway integration and BI adapters/examples for Superset and other tools will follow
+in subsequent PRs, tracked in [#20232](https://github.com/apache/hudi/issues/20232).
 
 ## Version compatibility notes
 

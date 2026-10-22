@@ -16,8 +16,13 @@
 # limitations under the License.
 
 set -euo pipefail
+# Spark's Kubernetes backend starts executor images with the "executor" argument.
+# Preserve the base image's executor bootstrap instead of launching another server.
+if [[ "${1:-}" == "executor" ]]; then
+  exec /opt/entrypoint.sh "$@"
+fi
 # spark-submit replaces itself with the JVM; no daemon/background process,
 # so Kubernetes termination signals reach the Connect server.
 exec /opt/spark/bin/spark-submit \
   --class org.apache.spark.sql.connect.service.SparkConnectServer \
-  /opt/spark/jars/spark-connect_2.13-4.1.3.jar "$@"
+  "$@" /opt/spark/jars/spark-connect_2.13-4.1.3.jar

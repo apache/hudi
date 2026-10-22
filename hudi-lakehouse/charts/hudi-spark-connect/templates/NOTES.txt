@@ -27,5 +27,5 @@ Foundry ADBC URI (client-side driver required):
 This endpoint has no client authentication/TLS configured. Use only on trusted
 networks; ClusterIP alone is not an authorization boundary. Do not publish it
 through an ingress/LoadBalancer without authentication and access controls.
-One shared local-mode Spark driver serves all sessions. Restarting it loses
+One shared Spark driver (master: {{ include "hudi-spark-connect.master" . }}) serves all sessions. Restarting it loses
 sessions, not tables in the external metastore/object store.
