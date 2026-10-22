@@ -25,7 +25,6 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.embedded.{EmbeddedTimelineServerHelper, EmbeddedTimelineService}
 import org.apache.hudi.common.model.HoodieCommitMetadata
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
-import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{ClusteringUtils, CommitUtils, CompactionUtils, Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkArgument
@@ -122,10 +121,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
 
 
-    // Override to use direct markers.
-    var updatedOptions = options.updated(HoodieWriteConfig.MARKERS_TYPE.key(), MarkerType.DIRECT.name())
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
-    updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
+    var updatedOptions = options.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     updatedOptions = updatedOptions.updated(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID, batchId.toString)
 
     retry(retryCnt, retryIntervalMs)(
