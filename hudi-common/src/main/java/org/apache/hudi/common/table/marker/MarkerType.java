@@ -34,7 +34,6 @@ public enum MarkerType {
 
   @EnumFieldDescription("Marker operations are all handled at the timeline service which serves as a proxy. "
     + "New marker entries are batch processed and stored in a limited number of underlying files for efficiency. "
-    + "If HDFS is used or timeline server is disabled, DIRECT markers are used as fallback even if this is configured. "
-    + "This configuration does not take effect for Spark structured streaming; DIRECT markers are always used.")
+    + "If HDFS is used or timeline server is disabled, DIRECT markers are used as fallback even if this is configured.")
   TIMELINE_SERVER_BASED
 }

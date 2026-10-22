@@ -121,6 +121,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
 
 
+    // Markers follow hoodie.write.markers.type: the sink keeps one timeline server running across micro-batches,
+    // so timeline-server-based markers (the default) work for streaming writes too.
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     var updatedOptions = options.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     updatedOptions = updatedOptions.updated(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID, batchId.toString)
