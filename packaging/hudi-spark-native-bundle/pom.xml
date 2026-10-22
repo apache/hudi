@@ -41,6 +41,8 @@
     <hudi.spark.native.bundle.jar.phase>none</hudi.spark.native.bundle.jar.phase>
     <maven.install.skip>${hudi.spark.native.bundle.skip}</maven.install.skip>
     <maven.deploy.skip>${hudi.spark.native.bundle.skip}</maven.deploy.skip>
+    <!-- The javadoc jar puts the module's own jar on its classpath (see the root pom), and a skipped bundle has none. -->
+    <maven.javadoc.skip>${hudi.spark.native.bundle.skip}</maven.javadoc.skip>
   </properties>
 
   <build>
