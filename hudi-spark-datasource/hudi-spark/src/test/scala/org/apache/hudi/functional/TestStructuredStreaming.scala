@@ -25,12 +25,13 @@ import org.apache.hudi.common.config.{HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.engine.RecordContext
 import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.read.BufferedRecord
 import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, FileSystemViewStorageType}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
-import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
+import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, MarkerUtils, Option => HOption}
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider
 import org.apache.hudi.exception.{HoodieException, TableNotFoundException}
@@ -593,7 +594,8 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   /**
    * The sink keeps its write client open across micro-batches, so a micro-batch that fails after its commit started
    * must still stop that instant's heartbeat. Otherwise, with the lazy failed-writes clean policy, the failed instant
-   * looks alive for as long as the query runs and is never rolled back.
+   * looks alive for as long as the query runs and is never rolled back. The failed write's markers also show that
+   * the sink uses timeline-server-based markers.
    */
   @Test
   def testStructuredStreamingReleasesHeartbeatOfFailedBatch(): Unit = {
@@ -622,11 +624,14 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       } finally {
         FailingSparkRecordMerger.shouldFail = false
       }
-      val failedInstant = HoodieTestUtils.createMetaClient(storage, destPath).getActiveTimeline
-        .getCommitsTimeline.filterInflightsAndRequested().lastInstant()
+      val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
+      val failedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterInflightsAndRequested().lastInstant()
       assertTrue(failedInstant.isPresent, "the failed micro-batch must leave an inflight instant")
       assertFalse(storage.exists(new StoragePath(HoodieTableMetaClient.getHeartbeatFolderPath(destPath),
         failedInstant.get().requestedTime())), "the heartbeat of the failed instant must be stopped")
+      // the sink does not force direct markers: the failed write's markers went through the sink's timeline server
+      assertEquals(HOption.of(MarkerType.TIMELINE_SERVER_BASED),
+        MarkerUtils.readMarkerType(storage, metaClient.getMarkerFolderPath(failedInstant.get().requestedTime())))
 
       // the query recovers on the next micro-batch
       spark.read.json(spark.sparkContext.parallelize(
