@@ -14,9 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-FROM --platform=linux/amd64 adoptopenjdk/openjdk8:alpine
+# A glibc image: native libraries the bundles carry (libcomet.so in the Spark native bundle, the
+# Hadoop natives) do not load on musl. Java 8 is the default runtime; validate.sh switches to
+# /usr/lib/jvm/java-11-openjdk and /usr/lib/jvm/java-17-openjdk for the other passes.
+FROM --platform=linux/amd64 eclipse-temurin:8-jdk-jammy
 
-RUN apk add --no-cache --upgrade bash curl jq openjdk11 openjdk17 --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash curl jq wget unzip procps \
+        openjdk-11-jdk-headless openjdk-17-jdk-headless \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/lib/jvm/java-11-openjdk-* /usr/lib/jvm/java-11-openjdk \
+    && ln -s /usr/lib/jvm/java-17-openjdk-* /usr/lib/jvm/java-17-openjdk
 
 RUN mkdir /opt/bundle-validation
 ENV WORKDIR=/opt/bundle-validation
@@ -32,46 +42,47 @@ ARG CONFLUENT_VERSION=5.5.12
 ARG KAFKA_CONNECT_HDFS_VERSION=10.1.13
 ARG SCALA_VERSION=2.12
 
-RUN wget https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
+RUN wget -nv https://archive.apache.org/dist/hadoop/common/hadoop-$HADOOP_VERSION/hadoop-$HADOOP_VERSION.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/hadoop-$HADOOP_VERSION.tar.gz
 ENV HADOOP_HOME=$WORKDIR/hadoop-$HADOOP_VERSION
 
-RUN wget https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz -P "$WORKDIR" \
+RUN wget -nv https://archive.apache.org/dist/hive/hive-$HIVE_VERSION/apache-hive-$HIVE_VERSION-bin.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/apache-hive-$HIVE_VERSION-bin.tar.gz
 ENV HIVE_HOME=$WORKDIR/apache-hive-$HIVE_VERSION-bin
 
-RUN wget https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P "$WORKDIR" \
+RUN wget -nv https://archive.apache.org/dist/db/derby/db-derby-$DERBY_VERSION/db-derby-$DERBY_VERSION-bin.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/db-derby-$DERBY_VERSION-bin.tar.gz
 ENV DERBY_HOME=$WORKDIR/db-derby-$DERBY_VERSION-bin
 
-RUN wget https://archive.apache.org/dist/flink/flink-$FLINK_VERSION/flink-$FLINK_VERSION-bin-scala_2.12.tgz -P "$WORKDIR" \
+RUN wget -nv https://archive.apache.org/dist/flink/flink-$FLINK_VERSION/flink-$FLINK_VERSION-bin-scala_2.12.tgz -P "$WORKDIR" \
     && tar -xf $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz -C $WORKDIR/ \
     && rm $WORKDIR/flink-$FLINK_VERSION-bin-scala_2.12.tgz
 ENV FLINK_HOME=$WORKDIR/flink-$FLINK_VERSION
 
-RUN if [ "$SPARK_VERSION" != 4.* && "$SCALA_VERSION" = "2.13" ]; then \
-      wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz -P "$WORKDIR" \
+# Spark 3.x publishes a separate Scala 2.13 build; Spark 4.x is Scala 2.13 only.
+RUN if [[ "$SPARK_VERSION" != 4.* && "$SCALA_VERSION" == "2.13" ]]; then \
+      wget -nv https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz -P "$WORKDIR" \
         && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz -C $WORKDIR/ \
-        && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz; \
-      mv $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13 $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION; \
+        && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13.tgz \
+        && mv $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION-scala2.13 $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION; \
     else \
-      wget https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -P "$WORKDIR" \
+      wget -nv https://archive.apache.org/dist/spark/spark-$SPARK_VERSION/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -P "$WORKDIR" \
         && tar -xf $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz -C $WORKDIR/ \
         && rm $WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION.tgz; \
     fi
 ENV SPARK_HOME=$WORKDIR/spark-$SPARK_VERSION-bin-hadoop$SPARK_HADOOP_VERSION
 
-RUN wget https://packages.confluent.io/archive/${CONFLUENT_VERSION%.*}/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz -P "$WORKDIR" \
+RUN wget -nv https://packages.confluent.io/archive/${CONFLUENT_VERSION%.*}/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz -P "$WORKDIR" \
     && tar -xf $WORKDIR/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz -C $WORKDIR/ \
     && rm $WORKDIR/confluent-community-$CONFLUENT_VERSION-2.12.tar.gz
 ENV CONFLUENT_HOME=$WORKDIR/confluent-$CONFLUENT_VERSION
 
-RUN wget https://d2p6pa21dvn84.cloudfront.net/api/plugins/confluentinc/kafka-connect-hdfs/versions/$KAFKA_CONNECT_HDFS_VERSION/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -P "$WORKDIR" \
+RUN wget -nv https://d2p6pa21dvn84.cloudfront.net/api/plugins/confluentinc/kafka-connect-hdfs/versions/$KAFKA_CONNECT_HDFS_VERSION/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -P "$WORKDIR" \
     && mkdir $WORKDIR/kafka-connectors \
-    && unzip $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -d $WORKDIR/kafka-connectors/ \
+    && unzip -q $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip -d $WORKDIR/kafka-connectors/ \
     && rm $WORKDIR/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION.zip \
     && printf "\nplugin.path=$WORKDIR/kafka-connectors\n" >> $CONFLUENT_HOME/etc/kafka/connect-distributed.properties
 ENV KAFKA_CONNECT_PLUGIN_PATH_LIB_PATH=$WORKDIR/kafka-connectors/confluentinc-kafka-connect-hdfs-$KAFKA_CONNECT_HDFS_VERSION/lib

@@ -34,7 +34,7 @@ RUN printf "\ntaskmanager.numberOfTaskSlots: 2\n" >> $FLINK_HOME/conf/flink-conf
 RUN printf "\nlocalhost\n" >> $FLINK_HOME/conf/workers
 
 # install maven
-RUN wget -t=3 https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.12/apache-maven-3.9.12-bin.tar.gz
+RUN wget -t 3 https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.12/apache-maven-3.9.12-bin.tar.gz
 RUN mkdir -p /usr/share/maven
 RUN tar xzvf apache-maven-3.9.12-bin.tar.gz -C /usr/share/maven
 ENV MAVEN_HOME=/usr/share/maven/apache-maven-3.9.12
@@ -54,5 +54,5 @@ ENV HDFS_SECONDARYNAMENODE_USER root
 ENV YARN_RESOURCEMANAGER_USER root
 ENV YARN_NODEMANAGER_USER root
 
-# for RocksDb
-RUN apk add --no-cache libstdc++
+# for RocksDb; the glibc base image already carries libstdc++, so this only applies to an Alpine tag
+RUN if command -v apk > /dev/null; then apk add --no-cache libstdc++; fi
