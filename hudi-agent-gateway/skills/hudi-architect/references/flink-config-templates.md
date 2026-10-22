@@ -30,7 +30,7 @@ Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
 Baseline ID: hudi-1.2.0-flink-1.20
 Hudi source revision: f05c83f2b97732de7a558ff9b26959e1139c05f5
 Fixture version: Apache Flink 1.20.1
-Capability manifest schema: 4
+Capability manifest schema: 5
 Design contract schema: <1 append-only COW | 2 mutable COW | 3 mutable MOR>
 
 Confirmed facts:
@@ -55,6 +55,45 @@ Populate evidence from the validators. List every finding in evaluation order. A
 finding remains visible even when another finding determines the summary status. Do not include a
 partial DDL, connector option block, or `INSERT INTO` when executable eligibility is false.
 
+## Existing-table reconciliation envelope
+
+Use only the machine result from `validate_flink_existing_table.py`:
+
+```text
+Flink design status: <CONFIG_VALIDATED | INCOMPLETE | BLOCKED | REVIEW_REQUIRED>
+Reconciliation result: <COMPATIBLE | CONFLICT | UNVERIFIED>
+Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
+Capability manifest schema: 5
+Reconciliation schema: 1
+Desired design contract schema: <1 | 2 | 3>
+Writer transition: <same_job_restore | cold_start_new_job | flink_writer_takeover |
+cross_engine_takeover | unknown>
+
+Evidence:
+- <evidence ID, kind, table path, in-scope flag, observation time, and digest; no raw secrets>
+
+Comparisons:
+- <field>: <MATCH | CONFLICT | UNVERIFIED | NOT_APPLICABLE> (<source IDs>)
+
+Findings:
+- <every finding in evaluation order>
+
+Change disposition: <NO_CHANGE | DEPLOYMENT_CONFIGURATION_CHANGE | MIGRATION_REQUIRED | UNVERIFIED>
+
+Deployment checks:
+- Confirm the single-writer inventory immediately before deployment.
+- Recheck pending instants immediately before deployment.
+- For a mutable cold start, verify index bootstrap before relying on the first checkpoint.
+
+Executable output:
+- Withheld because PR5 is assessment-only, including for COMPATIBLE results.
+
+Executable eligible: false
+```
+
+Do not append SQL, table-property edits, upgrade steps, or migration commands. A compatible static
+report does not prove that time-sensitive writer or timeline evidence remains current.
+
 ## Executable envelope
 
 Only `validate_flink_design.py` may open this envelope:
@@ -65,7 +104,7 @@ Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
 Baseline ID: hudi-1.2.0-flink-1.20
 Hudi source revision: f05c83f2b97732de7a558ff9b26959e1139c05f5
 Fixture version: Apache Flink 1.20.1
-Capability manifest schema: 4
+Capability manifest schema: 5
 Design contract schema: <1 append-only COW | 2 mutable COW | 3 mutable MOR>
 
 Confirmed facts:
@@ -211,7 +250,7 @@ Always retain these outside the static success claim:
 - A Spark fallback.
 - OCC, NBCC, lock-provider, alternative index, catalog, append-only MOR, standalone compaction,
   detailed compaction tuning, or enabled clustering.
-- Existing-table takeover, multi-writer operation, expiring state index, key-only deletes,
+- Existing-table SQL generation or takeover, multi-writer operation, expiring state index, key-only deletes,
   retract-stream normalization, partition movement, custom mergers, or full CDC history.
 - A claim that static validation checked live storage, the deployed JAR, the live source, active
   writers, checkpoint completion, or end-to-end exactly-once behavior.

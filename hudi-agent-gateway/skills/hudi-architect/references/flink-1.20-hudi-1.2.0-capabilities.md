@@ -33,7 +33,7 @@ newer release, or an older supported connector as equivalent without its own ver
 
 `flink-1.20-hudi-1.2.0-capabilities.toml` is the machine-readable validation input. It records the
 full Hudi release commit, pinned Maven fixture artifacts, source paths and hashes, the option
-allowlist, the bounded design contract, and executable-path acceptance evidence.
+allowlist, the bounded design and reconciliation contracts, and acceptance evidence.
 
 Normal validation must read that checked-in manifest. It must not discover accepted Flink options
 by scanning the enclosing checkout: the checkout may be `master` or another release and can contain
@@ -65,7 +65,10 @@ the current checkout contains it.
 | Immutable capability manifest and source revision evidence | Supported |
 | Explicit version mismatch | `REVIEW_REQUIRED` |
 | New-versus-existing detection | Supported |
-| Existing-table design | `BLOCKED`; deferred to PR5 |
+| Existing-table exact-match reconciliation | Supported as a non-executable PR5 assessment |
+| Existing-table SQL generation or automatic mutation | Not supported |
+| Existing-table schema evolution or version upgrade | `REVIEW_REQUIRED`; no commands emitted |
+| Separate-writer or cross-engine takeover | `REVIEW_REQUIRED` |
 | Confirmed single-writer detection | Supported |
 | Multi-writer or unknown writer model | `REVIEW_REQUIRED`; deferred to PR7 |
 | External-catalog requirement detection | Supported |
@@ -108,6 +111,53 @@ the current checkout contains it.
 | Hudi 1.2.0 `HoodieTableFactory` fixture | Supported through pinned release bundle |
 | Flink 1.20.1 planner fixture | Supported with a local declared source contract |
 | Spark and HoodieStreamer behavior | Must remain unchanged |
+
+## Implemented PR5 existing-table reconciliation contract
+
+PR5 reuses the explicit schema-1, schema-2, or schema-3 desired design and changes only the table
+lifecycle to `existing`. It accepts normalized, provenance-bearing evidence for persisted table
+properties, the observed table path, the physical Hudi schema, writer inventory, and timeline state. Every evidence item
+has an observation time and SHA-256 source digest; contradictory sources remain visible rather
+than being silently merged.
+
+The desired table path is also the authority boundary. Evidence scoped to another table remains in
+the report with its provenance and a review finding, but its facts are excluded before target-table
+observations and comparisons are built.
+
+Persisted `HoodieTableConfig` facts are authoritative for table name, type, version, timeline
+layout, file format, record key, ordering, merge mode, partitioning, and key-generator type.
+The table path has separate identity evidence; it is not a persisted table-config key. Datetime
+partition formats also require effective writer-configuration evidence. The latest Hudi
+table schema is authoritative for physical columns. A Flink DDL is only registration evidence.
+This mirrors the pinned `HoodieTableFactory` behavior: existing table config can supply record-key
+and ordering options, and its table type overrides a conflicting Flink table option.
+
+The first bounded compatible result requires current and initial table version 9, timeline layout
+2, PARQUET base files, an exact durable-property match, and an exact physical-schema match. A version difference,
+schema reorder, additional field, pending instant, or evidence disagreement is unverified rather
+than guessed. A durable property or incompatible schema mismatch is a conflict. Partition-field
+type suffixes in Hudi table config are normalized before comparison.
+
+The manifest also pins the required and conditional fact names, every comparison field, comparison
+and reconciliation vocabularies, finding-to-status mapping, and the four change dispositions. A
+custom key generator outside the pinned built-in mappings is unverified rather than treated as a
+proven conflict. A recoverable writer-state-only mismatch yields
+`DEPLOYMENT_CONFIGURATION_CHANGE`; it does not imply that table migration is required. Timestamp
+partition-setting differences instead remain `UNVERIFIED`, because changing the next writer cannot
+reconcile physical partition paths already produced by another format or timezone.
+
+Writer transition is explicit. Same-job restore requires recoverable checkpoint or savepoint
+evidence plus matching design schema, operation, mutable index state, and MOR compaction ownership.
+Cold start requires a stopped previous Flink writer and no concurrent writer; mutable cold start
+also emits an index-bootstrap-before-first-checkpoint deployment check. A distinct Flink writer
+takeover and cross-engine takeover remain review-required. Writer inventory and
+timeline state must be rechecked immediately before deployment because their evidence is
+time-sensitive.
+
+The reconciliation result is `COMPATIBLE`, `CONFLICT`, or `UNVERIFIED`, independently of the
+existing final-status precedence. Even `CONFIG_VALIDATED` plus `COMPATIBLE` has
+`executable_eligible=false`: PR5 emits comparisons, provenance, findings, a bounded change
+disposition, and deployment checks, but no SQL, mutation, upgrade, or migration commands.
 
 ## Implemented PR2 acceptance contract
 
@@ -228,8 +278,9 @@ semantics without claiming that a live job ran.
 - `BLOCKED` — the requested path is known to be outside the currently implemented Flink scope.
 - `REVIEW_REQUIRED` — compatibility, writer topology, catalog behavior, or another operational
   risk requires human confirmation.
-- `CONFIG_VALIDATED` — every applicable gate and all load-bearing PR2, PR3, or PR4 design values passed the
-  pinned static validator. Canonical SQL was emitted without unresolved placeholders.
+- `CONFIG_VALIDATED` — every applicable gate and load-bearing value passed pinned static
+  validation. PR2, PR3, and PR4 also emit canonical SQL; PR5 instead requires a `COMPATIBLE`
+  assessment and always remains non-executable.
 
 No status claims that storage permissions, JAR deployment, source availability, catalog
 connectivity, active writers, checkpoint behavior, or live table state were verified.

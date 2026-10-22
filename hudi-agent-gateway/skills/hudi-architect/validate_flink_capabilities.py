@@ -40,7 +40,7 @@ DEFAULT_MANIFEST = (
     SKILL_DIR / "references" / "flink-1.20-hudi-1.2.0-capabilities.toml"
 )
 
-EXPECTED_SCHEMA_VERSION = 4
+EXPECTED_SCHEMA_VERSION = 5
 EXPECTED_BASELINE_ID = "hudi-1.2.0-flink-1.20"
 EXPECTED_HUDI_VERSION = "1.2.0"
 EXPECTED_HUDI_SOURCE_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
@@ -222,6 +222,118 @@ EXPECTED_RUNTIME_CONSTRAINTS = {
     "checkpoint_interval_min_ms": 1000,
     "flink_checkpoint_interval_min_ms": 10,
 }
+EXPECTED_EXISTING_TABLE_RECONCILIATION_CONTRACT = {
+    "reconciliation_schema": 1,
+    "supported_design_contract_schemas": [1, 2, 3],
+    "assessment_only": True,
+    "executable_sql": False,
+    "allowed_evidence_kinds": [
+        "flink_table_ddl",
+        "flink_writer_config",
+        "hoodie_properties",
+        "hudi_table_identity",
+        "hudi_table_schema",
+        "timeline_summary",
+        "writer_inventory",
+    ],
+    "required_evidence_kinds": [
+        "hoodie_properties",
+        "hudi_table_identity",
+        "hudi_table_schema",
+        "timeline_summary",
+        "writer_inventory",
+    ],
+    "allowed_writer_transitions": [
+        "cold_start_new_job",
+        "cross_engine_takeover",
+        "flink_writer_takeover",
+        "same_job_restore",
+        "unknown",
+    ],
+    "supported_table_versions": [9],
+    "supported_initial_table_versions": [9],
+    "supported_timeline_layout_versions": [2],
+    "supported_base_file_formats": ["PARQUET"],
+    "required_hoodie_property_facts": [
+        "base_file_format",
+        "key_generator_type",
+        "initial_table_version",
+        "ordering_fields",
+        "partition_fields",
+        "record_key_fields",
+        "table_name",
+        "table_type",
+        "table_version",
+        "timeline_layout_version",
+    ],
+    "conditional_hoodie_property_facts": [
+        "hive_style_partitioning",
+        "record_merge_mode",
+        "url_encode_partitioning",
+    ],
+    "required_identity_facts": ["table_path"],
+    "required_schema_facts": ["columns"],
+    "required_timeline_facts": ["pending_instants"],
+    "required_writer_inventory_facts": ["concurrent_writers"],
+    "conditional_writer_inventory_facts": [
+        "previous_writer_engine",
+        "previous_writer_stopped",
+    ],
+    "comparison_fields": [
+        "schema.columns",
+        "table_config.base_file_format",
+        "table_config.hive_style_partitioning",
+        "table_config.initial_table_version",
+        "table_config.key_generator_type",
+        "table_config.ordering_fields",
+        "table_config.partition_fields",
+        "table_config.record_key_fields",
+        "table_config.record_merge_mode",
+        "table_config.table_name",
+        "table_config.table_type",
+        "table_config.table_version",
+        "table_config.timeline_layout_version",
+        "table_config.url_encode_partitioning",
+        "evidence_scope.table_path",
+        "table_identity.table_path",
+        "timeline.pending_instants",
+        "writer_config.checkpoint_recovery_available",
+        "writer_config.compaction_owner",
+        "writer_config.design_contract_schema",
+        "writer_config.index_bootstrap_enabled",
+        "writer_config.index_global",
+        "writer_config.index_state_ttl_days",
+        "writer_config.index_type",
+        "writer_config.operation",
+        "writer_config.timestamp_key_generator",
+        "writer_inventory.concurrent_writers",
+        "writer_inventory.previous_writer_engine",
+        "writer_inventory.previous_writer_stopped",
+    ],
+    "comparison_results": ["CONFLICT", "MATCH", "NOT_APPLICABLE", "UNVERIFIED"],
+    "reconciliation_results": ["COMPATIBLE", "CONFLICT", "UNVERIFIED"],
+    "change_dispositions": [
+        "DEPLOYMENT_CONFIGURATION_CHANGE",
+        "MIGRATION_REQUIRED",
+        "NO_CHANGE",
+        "UNVERIFIED",
+    ],
+    "finding_status": {
+        "FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED": "REVIEW_REQUIRED",
+        "FLINK_EXISTING_EVIDENCE_CONFLICT": "REVIEW_REQUIRED",
+        "FLINK_EXISTING_EVIDENCE_INVALID": "INCOMPLETE",
+        "FLINK_EXISTING_EVIDENCE_REQUIRED": "INCOMPLETE",
+        "FLINK_EXISTING_SCHEMA_CONFLICT": "BLOCKED",
+        "FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED": "REVIEW_REQUIRED",
+        "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT": "BLOCKED",
+        "FLINK_EXISTING_TABLE_PROPERTY_UNVERIFIED": "REVIEW_REQUIRED",
+        "FLINK_EXISTING_TABLE_VERSION_UNVERIFIED": "REVIEW_REQUIRED",
+        "FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED": "REVIEW_REQUIRED",
+        "FLINK_EXISTING_TIMELINE_UNRESOLVED": "REVIEW_REQUIRED",
+        "FLINK_EXISTING_WRITER_CONFIG_CONFLICT": "REVIEW_REQUIRED",
+        "FLINK_EXISTING_WRITER_TRANSITION_UNRESOLVED": "REVIEW_REQUIRED",
+    },
+}
 EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
         "test_pr2_rejects_insert_clustering_override",
@@ -254,6 +366,10 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
     "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": (
         "test_pr2_enforces_checkpoint_interval_safety_floor",
         "testPinnedRuntimeCheckpointIntervalBoundary",
+    ),
+    "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT": (
+        "test_pr5_property_and_schema_conflicts_are_blocked_and_preserved",
+        "testPinnedExistingTableTypeOverridesConflictingOption",
     ),
     "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED": (
         "test_pr3_rejects_unsupported_source_changelog",
@@ -311,7 +427,7 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     expected_scalars = {
         "schema_version": EXPECTED_SCHEMA_VERSION,
         "baseline_id": EXPECTED_BASELINE_ID,
-        "validation_surface": "initial-flink-sql-sink",
+        "validation_surface": "flink-sql-sink-and-existing-table-reconciliation",
     }
     for key, expected in expected_scalars.items():
         if manifest.get(key) != expected:
@@ -511,6 +627,12 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     if mutable_mor_executable_contract != expected_mutable_mor_contract:
         errors.append(
             "mutable_mor_executable_contract does not match the bounded PR4 path"
+        )
+
+    existing_reconciliation = manifest.get("existing_table_reconciliation_contract")
+    if existing_reconciliation != EXPECTED_EXISTING_TABLE_RECONCILIATION_CONTRACT:
+        errors.append(
+            "existing_table_reconciliation_contract does not match the bounded PR5 path"
         )
 
     physical_types = manifest.get("physical_types")

@@ -52,12 +52,132 @@ baseline can be reused or rejected.
 
 ## FLINK_EXISTING_TABLE_DEFERRED
 
-**Trigger:** The target is an existing table.
+**Trigger:** An existing-table contract is sent to the new-table design validator or SQL renderer.
 
 **Message:** Existing table facts must be treated as authoritative evidence and cannot be replaced
-with a new-table recommendation. Evidence comparison is deferred to PR5.
+with a new-table recommendation. Route the request through the PR5 reconciler.
 
-**Action:** `BLOCKED`; request only non-secret evidence if the user wants it recorded for later.
+**Action:** `BLOCKED`; render no SQL. Collect non-secret evidence through the PR5 contract.
+
+## FLINK_EXISTING_EVIDENCE_REQUIRED
+
+**Trigger:** A required existing-table evidence kind or load-bearing fact is absent.
+
+**Message:** Compatibility cannot be established without provenance-bearing table identity, config,
+physical schema, writer inventory, and timeline evidence.
+
+**Action:** `INCOMPLETE`; name the missing facts and emit no SQL.
+
+## FLINK_EXISTING_EVIDENCE_INVALID
+
+**Trigger:** An evidence item is malformed, has unknown fields, lacks a valid observation time or
+digest, or contains a credential-shaped fact.
+
+**Message:** The evidence cannot be used deterministically or safely in the comparison.
+
+**Action:** `INCOMPLETE`; reject the malformed item without executing or echoing its content.
+
+## FLINK_EXISTING_EVIDENCE_CONFLICT
+
+**Trigger:** Two observations disagree, an evidence envelope identifies another table path, or a
+Flink DDL disagrees with authoritative Hudi table config or physical schema.
+
+**Message:** Contradictory evidence cannot be silently merged. Persisted table config and the Hudi
+table schema remain authoritative, but the discrepancy needs review.
+
+**Action:** `REVIEW_REQUIRED`; retain provenance for every conflicting source.
+
+## FLINK_EXISTING_TABLE_VERSION_UNVERIFIED
+
+**Trigger:** The table version or timeline layout differs from the pinned Hudi 1.2.0 values.
+
+**Message:** PR5 does not infer upgrade or downgrade compatibility from a different table version.
+
+**Action:** `REVIEW_REQUIRED`; do not authorize a table upgrade.
+
+## FLINK_EXISTING_TABLE_PROPERTY_CONFLICT
+
+**Trigger:** Table identity, type, file format, record key, ordering, merge mode, partitioning, or key-generator
+facts conflict with the explicit desired contract.
+
+**Message:** The desired writer cannot safely reinterpret a durable existing-table property.
+
+**Action:** `BLOCKED`; report the conflicting comparison fields and emit no mutation commands.
+
+## FLINK_EXISTING_TABLE_PROPERTY_UNVERIFIED
+
+**Trigger:** An existing table property, such as a custom key generator, is outside the pinned
+built-in semantic mappings.
+
+**Message:** The property may be valid, but PR5 cannot prove that it matches the desired contract.
+
+**Action:** `REVIEW_REQUIRED`; preserve the observed value and its provenance without calling it a
+known conflict.
+
+## FLINK_EXISTING_SCHEMA_CONFLICT
+
+**Trigger:** A required field is absent or its type or nullability conflicts with the physical
+Hudi table schema.
+
+**Message:** The existing physical schema cannot accept the bounded desired contract as supplied.
+
+**Action:** `BLOCKED`; do not infer casts or apply schema evolution.
+
+## FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED
+
+**Trigger:** The schemas differ only by order or additional fields, or otherwise need an evolution
+decision outside the exact-match path.
+
+**Message:** PR5 does not turn a plausible schema evolution into a compatibility claim.
+
+**Action:** `REVIEW_REQUIRED`; record the difference and emit no evolution commands.
+
+## FLINK_EXISTING_WRITER_TRANSITION_UNRESOLVED
+
+**Trigger:** Writer transition is unknown, a separate Flink writer will take over, the prior writer
+is not confirmed stopped, or same-job recovery state is unavailable.
+
+**Message:** Table compatibility alone does not prove that writer state can be handed over safely.
+
+**Action:** `REVIEW_REQUIRED`; resolve ownership and recovery evidence before deployment.
+
+## FLINK_EXISTING_WRITER_CONFIG_CONFLICT
+
+**Trigger:** State restored by the same Flink job differs from the bounded desired writer
+configuration.
+
+**Message:** The durable table may still be compatible, but the writer configuration cannot be
+reused as supplied.
+
+**Action:** `REVIEW_REQUIRED`; return `DEPLOYMENT_CONFIGURATION_CHANGE` and emit no commands.
+
+## FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED
+
+**Trigger:** The previous writer's timestamp partition type, input unit, output format, or output
+timezone differs from the bounded desired settings.
+
+**Message:** The same logical partition may map to a different physical directory. Changing only
+the next writer's configuration does not reconcile paths already written by the previous writer.
+
+**Action:** `REVIEW_REQUIRED`; retain `UNVERIFIED`, require layout or migration review, and emit no
+commands.
+
+## FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED
+
+**Trigger:** A writer from another engine will hand over the table, or the previous engine is not
+confirmed as Flink for a bounded Flink restore/cold start.
+
+**Message:** Cross-engine writer-state and operational handoff are outside PR5.
+
+**Action:** `REVIEW_REQUIRED`; do not invent a takeover procedure.
+
+## FLINK_EXISTING_TIMELINE_UNRESOLVED
+
+**Trigger:** The observed table timeline contains requested or inflight instants.
+
+**Message:** A timestamped timeline snapshot with pending work cannot prove a clean handoff.
+
+**Action:** `REVIEW_REQUIRED`; resolve the pending work and recheck immediately before deployment.
 
 ## FLINK_TABLE_LIFECYCLE_REQUIRED
 

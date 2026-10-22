@@ -15,7 +15,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 -->
-# Flink decision overrides — bounded executable SQL paths
+# Flink decision overrides — bounded SQL and reconciliation paths
 
 These rules constrain the shared Hudi Architect decisions after the Flink route is selected. They
 do not replace the shared table-design rules and do not form a standalone planner API.
@@ -30,7 +30,8 @@ do not replace the shared table-design rules and do not form a standalone planne
 - Do not enter the Spark writer-selection flow. HoodieStreamer, Spark DataSource, and Spark submit
   templates are not Flink fallbacks.
 - Do not load Flink references for a Spark request.
-- Do not route an existing table through a new-table flow.
+- Do not route an existing table through the new-table SQL renderer. Build the desired contract,
+  then use the assessment-only PR5 reconciler.
 - Do not infer `SINGLE_WRITER`; it must be confirmed by the user.
 - Do not infer that no external catalog is needed; ask the outcome gate.
 - Do not infer a physical schema.
@@ -56,7 +57,20 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Capability manifest or its pinned evidence is invalid | `FLINK_BASELINE_EVIDENCE_INVALID` | `BLOCKED` | No |
 | Explicit non-baseline Hudi or Flink version | `FLINK_VERSION_UNVERIFIED` | `REVIEW_REQUIRED` | No |
 | Supplied version remains ambiguous after clarification | `FLINK_VERSION_REQUIRED` | `INCOMPLETE` | No |
-| Existing table | `FLINK_EXISTING_TABLE_DEFERRED` | `BLOCKED` | No |
+| Existing contract sent to the new-table renderer | `FLINK_EXISTING_TABLE_DEFERRED` | `BLOCKED` | No |
+| Required existing-table evidence is absent | `FLINK_EXISTING_EVIDENCE_REQUIRED` | `INCOMPLETE` | No |
+| Existing-table evidence is malformed or unsafe | `FLINK_EXISTING_EVIDENCE_INVALID` | `INCOMPLETE` | No |
+| Existing-table sources contradict each other | `FLINK_EXISTING_EVIDENCE_CONFLICT` | `REVIEW_REQUIRED` | No |
+| Existing table or timeline version is outside the pinned PR5 values | `FLINK_EXISTING_TABLE_VERSION_UNVERIFIED` | `REVIEW_REQUIRED` | No |
+| Durable existing-table property conflicts with the desired contract | `FLINK_EXISTING_TABLE_PROPERTY_CONFLICT` | `BLOCKED` | No |
+| Existing table property semantics are outside pinned mappings | `FLINK_EXISTING_TABLE_PROPERTY_UNVERIFIED` | `REVIEW_REQUIRED` | No |
+| Existing physical schema is incompatible | `FLINK_EXISTING_SCHEMA_CONFLICT` | `BLOCKED` | No |
+| Existing schema needs an unimplemented evolution decision | `FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED` | `REVIEW_REQUIRED` | No |
+| Timestamp partition settings differ and physical-path compatibility is not established | `FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED` | `REVIEW_REQUIRED` | No |
+| Writer handoff or recovery is unresolved | `FLINK_EXISTING_WRITER_TRANSITION_UNRESOLVED` | `REVIEW_REQUIRED` | No |
+| Recoverable writer configuration differs from the desired contract | `FLINK_EXISTING_WRITER_CONFIG_CONFLICT` | `REVIEW_REQUIRED` | No |
+| Writer takeover crosses engines | `FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED` | `REVIEW_REQUIRED` | No |
+| Timeline contains pending work | `FLINK_EXISTING_TIMELINE_UNRESOLVED` | `REVIEW_REQUIRED` | No |
 | Table lifecycle unknown | `FLINK_TABLE_LIFECYCLE_REQUIRED` | `INCOMPLETE` | No |
 | Independent writer exists | `FLINK_MULTI_WRITER_REVIEW` | `REVIEW_REQUIRED` | No |
 | Writer model unknown | `FLINK_WRITER_MODEL_UNRESOLVED` | `REVIEW_REQUIRED` | No |
@@ -108,6 +122,7 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Design-contract structure is malformed or contains an ignored field | `FLINK_DESIGN_CONTRACT_INVALID` | `INCOMPLETE` | No |
 | A connector option is outside the pinned allowlist | `FLINK_OPTION_NOT_VERIFIED` | `REVIEW_REQUIRED` | No |
 | Complete PR2, PR3, or PR4 contract passes deterministic validation | — | `CONFIG_VALIDATED` | Yes |
+| Complete PR5 exact-match reconciliation passes deterministic validation | — | `CONFIG_VALIDATED` with `COMPATIBLE` | No |
 
 ## Final-status precedence
 
@@ -121,8 +136,9 @@ After collection, choose one final status with this precedence:
 1. A known unsupported or not-yet-implemented path makes the result `BLOCKED`.
 2. Otherwise, an unverified compatibility or operational risk makes it `REVIEW_REQUIRED`.
 3. Otherwise, a missing required fact makes it `INCOMPLETE`.
-4. Only if no finding exists, every applicable safety gate passed, and the design validator emitted
-   canonical SQL, return `CONFIG_VALIDATED` with executable eligibility `true`.
+4. Only if no finding exists and every applicable safety gate passed, return `CONFIG_VALIDATED`.
+   The new-table design validator also emits canonical SQL with executable eligibility `true`;
+   the PR5 reconciler returns `COMPATIBLE` with executable eligibility `false` and no SQL.
 
 Status precedence changes only the single summary status; it never removes a lower-precedence
 reason. `CONFIG_VALIDATED` is a success state, not another precedence contribution. It proves
@@ -250,6 +266,30 @@ to the executable contract just like `F10_SAFE_APPEND`.
   sink option and is not rendered into the DDL.
 - Clustering is disabled. Detailed compaction tuning, append-only MOR, existing tables, catalogs,
   multi-writer operation, and live service validation remain outside this path.
+
+## PR5 existing-table reconciliation invariants
+
+- The explicit desired contract remains schema 1, 2, or 3 and records lifecycle `existing`.
+- Every observed fact has an evidence ID, timezone-bearing observation time, and SHA-256 source
+  digest. Evidence is normalized and confirmed before validation. Only evidence whose outer table
+  path matches the desired target contributes authoritative observations; out-of-scope provenance
+  remains visible but cannot establish a target-table conflict.
+- Persisted Hudi table config and the latest physical Hudi schema are authoritative. Flink DDL is
+  registration evidence and cannot override either source.
+- Table identity, type, base format, record key, ordering, merge mode, partitioning, key-generator family, and
+  physical schema are compared deterministically. Version 9 and timeline layout 2 are the pinned
+  Hudi 1.2.0 values.
+- Same-job restore requires recoverable checkpoint/savepoint evidence plus matching design schema,
+  operation, mutable index posture, and MOR compaction ownership. Cold start requires the previous
+  Flink writer stopped and no concurrent writer; mutable cold start also carries an index-bootstrap
+  deployment check. Separate-writer and cross-engine takeovers remain `REVIEW_REQUIRED`.
+- Preserve every comparison and finding. `COMPATIBLE`, `CONFLICT`, and `UNVERIFIED` are independent
+  of final-status precedence.
+- Timestamp partition type, unit, format, or timezone differences remain `UNVERIFIED` because a
+  deployment-only configuration change cannot rewrite or reconcile existing partition paths.
+- Even a compatible result is assessment-only: executable eligibility remains false, deployment
+  must recheck writer and timeline state, and no SQL, mutation, upgrade, or migration command is
+  emitted.
 
 ## Evidence and secret handling
 
