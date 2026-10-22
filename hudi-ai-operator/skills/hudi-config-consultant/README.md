@@ -36,6 +36,14 @@ where the real questions live:
 
 Every answer the Skill gives points at `file:line` in the Hudi source, so you can check it.
 
+## Scope
+
+`hoodie.*` keys only: Java `ConfigProperty` declarations, the Scala datasource options, and Flink
+`ConfigOptions` that name a `hoodie.*` key. Flink's unprefixed `FlinkOptions` namespace
+(`write.tasks`, `index.type`, ...) is not catalogued; the skill says so when asked about one rather
+than guessing. Covering it is a follow-up for the Flink maintainers, since it is a second key space
+with its own defaults and collisions.
+
 ## Files
 
 - `SKILL.md` — the Skill itself.
