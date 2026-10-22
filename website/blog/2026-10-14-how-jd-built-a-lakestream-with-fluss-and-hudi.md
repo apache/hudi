@@ -129,7 +129,7 @@ _Figure 7: Hudi TieringSourceEnumerator_
 
 **Instant coordination: one Hudi instant per round.** When a TieringSourceReader receives a split, it passes the round metadata to HudiLakeWriter. Several splits write in parallel but must be part of the same Hudi commit, so we added round-level coordination of the Hudi instant.
 
-Each writer reads its splitIndex from the metadata. The writer for split 0 acts as the coordinator for the round: it creates the Hudi instant, marks it INFLIGHT, and records it in the checkpoint metadata. The other writers reuse that instant instead of creating their own, so every writer in the round writes to the same INFLIGHT instant.
+Each writer reads its splitIndex from the metadata. The writer for split 0 acts as the coordinator for the round: it creates the Hudi instant, marks it INFLIGHT, and records it as the pending instant in the checkpoint metadata (CkpMetadata in the figures). The other writers read that pending instant from the checkpoint metadata and reuse it instead of creating their own. They look it up by the round's timestamp, so they never pick up the previous round's instant, and every writer in the round writes to the same INFLIGHT instant.
 
 ![Hudi TieringSourceReader](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/08-tiering-source-reader.jpg)
 _Figure 8: Hudi TieringSourceReader_
@@ -148,7 +148,7 @@ _Figure 9: HudiLakeWriter_
 
 **Commit: aggregate the results and report the lake snapshot.** TieringCommitter collects the results from all writers and checks that they belong to the same round and the same Hudi instant. It then prepares the Fluss bucket offsets file. Once the Hudi instant is completed on the timeline and the checkpoint metadata is marked COMPLETED, it sends the snapshot, including offsets and manifests, to the Fluss Coordinator, the server that manages cluster metadata.
 
-The Hudi instant time serves as the Fluss lake snapshot ID and is reported to Fluss together with the bucket offsets. One Hudi commit per round makes all of the round's writes visible atomically. The reported lake snapshot is what Fluss uses to track tiering progress, recover from failures, and keep the lake and the stream consistent.
+The Hudi commit also stores the Fluss snapshot metadata in its commit metadata. The Hudi instant time serves as the Fluss lake snapshot ID and is reported to Fluss together with the bucket offsets. One Hudi commit per round makes all of the round's writes visible atomically. The reported lake snapshot is what Fluss uses to track tiering progress, recover from failures, and keep the lake and the stream consistent.
 
 ![Hudi TieringCommitter](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/10-tiering-committer.jpg)
 _Figure 10: Hudi TieringCommitter_
@@ -157,7 +157,7 @@ _Figure 10: Hudi TieringCommitter_
 
 Tracking consumer offsets is a basic feature of any messaging system. The Fluss version we started from did not store consumer offsets on the server. Flink jobs kept offsets in their checkpoints, so a job restarted without its state lost its place. Clients outside Flink, in Java, Python, or Rust, also needed somewhere to store offsets. We therefore added consumer offset management to the Fluss server.
 
-The offsets live in a primary key system table, `consumer_offset`, keyed by group, table_id, partition_id, and bucket_num. An offset record holds the offset, leader epoch, metadata, and commit timestamp. A group metadata record holds the protocol, generation, group leader, members, and so on.
+The offsets live in a primary key system table, `consumer_offsets`, keyed by group, table_id, partition_id, and bucket_num. An offset record holds the offset, leader epoch, metadata, and commit timestamp. A group metadata record holds the protocol, generation, group leader, members, and so on.
 
 The table holds two kinds of records, told apart by the partition and bucket fields:
 
@@ -169,7 +169,7 @@ _Figure 11: The consumer offset system table_
 
 On top of the system table we added client-server RPCs to join a group, leave a group, commit offsets, and describe offsets.
 
-**JoinGroup: join a group and get buckets assigned.** A consumer locates its group coordinator by hashing the groupId against the bucket count, then talks to the Fluss server that hosts it. For Consumer1 in the figure:
+**JoinGroup: join a group and get buckets assigned.** A consumer locates its group coordinator by hashing the groupId against the bucket count of the `consumer_offsets` table, then talks to the Fluss server that hosts it. For Consumer1 in the figure:
 
 Consumer1 sends a JoinGroup request to the group coordinator. The coordinator starts a rebalance by telling existing members in their heartbeat responses, then hands the member list to the group leader. The group leader assigns buckets and submits the assignment in a SyncGroup request, and the coordinator returns each member's buckets in its SyncGroup response.
 
@@ -181,7 +181,7 @@ _Figure 12: JoinGroup flow_
 ![LeaveGroup flow](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/13-leave-group-flow.jpg)
 _Figure 13: LeaveGroup flow_
 
-**CommitOffset: save progress.** The consumer sends its partition, bucket, and offset to the Fluss server in a CommitOffset request, and the server writes them to the `consumer_offset` table. Offset commits are sent independently of heartbeats, JoinGroup, and other requests.
+**CommitOffset: save progress.** The consumer sends its partition, bucket, and offset to the Fluss server in a CommitOffset request, and the server writes them to the `consumer_offsets` table. Offset commits are sent independently of heartbeats, JoinGroup, and other requests.
 
 ![CommitOffset flow](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/14-commit-offset-flow.jpg)
 _Figure 14: CommitOffset flow_
@@ -219,7 +219,7 @@ _Figure 18: Community contributions and future plans_
 Our next steps:
 
 - **User-level quotas.** Add per-user quotas to control resource use by tenant and by team more precisely, so a traffic spike in one place does not cause jitter across the cluster.
-- **Faster consumer group rebalances.** Reduce rebalance time for groups that consume many buckets.
+- **Offset management tuning.** Reduce consumer group rebalance time for groups that consume many buckets.
 - **Feature parity with JD's Hudi stack.** Keep closing the gaps with what JD's Hudi stack already supports, such as schema evolution and dynamic bucketing. The goal is for teams to use lake and stream data through one table, one access method, and one set of governance controls.
 
 To learn more and connect with other developers, join the [Apache Fluss community](https://fluss.apache.org/community/welcome/).
