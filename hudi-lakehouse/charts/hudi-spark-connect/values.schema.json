@@ -6,6 +6,10 @@
     "spark": {
       "type": "object",
       "properties": {
+        "master": {
+          "type": "string",
+          "pattern": "^$|^local(\\[([1-9][0-9]*|\\*)\\])?$|^spark://[^\\s]+$|^k8s://https?://[^\\s]+$"
+        },
         "cores": {
           "type": "integer",
           "minimum": 1
@@ -27,6 +31,24 @@
               "boolean"
             ]
           }
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "automountToken": {"type": "boolean"}
+      }
+    },
+    "hudi": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "defaults": {
+          "type": "object",
+          "additionalProperties": {"type": ["string", "number", "boolean"]}
         }
       }
     },
@@ -52,6 +74,13 @@
           "minimum": 1,
           "maximum": 65535
         }
+      }
+    },
+    "scratch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sizeLimit": {"type": "string"}
       }
     },
     "storage": {

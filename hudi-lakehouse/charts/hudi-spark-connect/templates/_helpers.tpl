@@ -16,6 +16,39 @@ limitations under the License.
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
+{{- define "hudi-spark-connect.master" -}}
+{{- default (printf "local[%v]" .Values.spark.cores) .Values.spark.master -}}
+{{- end -}}
+
+{{/* Preserve decimal integer spelling before applying each loader's rules. */}}
+{{- define "hudi-spark-connect.propertyText" -}}
+{{- $text := toString . -}}
+{{- if or (kindIs "float64" .) (kindIs "float32" .) -}}
+{{- if eq (float64 .) (floor .) -}}
+{{- $text = printf "%.0f" (float64 .) -}}
+{{- end -}}
+{{- end -}}
+{{- if regexMatch "[\r\n]" $text -}}
+{{- fail "property values must be a single line" -}}
+{{- end -}}
+{{- $text -}}
+{{- end -}}
+
+{{/* Spark uses java.util.Properties, which consumes backslash escapes. */}}
+{{- define "hudi-spark-connect.propertyValue" -}}
+{{- include "hudi-spark-connect.propertyText" . | replace "\\" "\\\\" | replace " " "\\ " | replace "\t" "\\t" | replace "\f" "\\f" -}}
+{{- end -}}
+
+{{/* Hudi 1.2 DFSPropertiesConfiguration keeps backslashes literally but folds
+     whitespace. Reject values it cannot preserve instead of silently changing them. */}}
+{{- define "hudi-spark-connect.hudiPropertyValue" -}}
+{{- $text := include "hudi-spark-connect.propertyText" . -}}
+{{- if ne $text (trim (regexReplaceAll "\\s+" $text " ")) -}}
+{{- fail "Hudi defaults cannot preserve leading/trailing or repeated whitespace" -}}
+{{- end -}}
+{{- $text -}}
+{{- end -}}
+
 {{- define "hudi-spark-connect.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}

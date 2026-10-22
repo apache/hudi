@@ -23,13 +23,25 @@ image:
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
-# v1 runs one shared Spark driver with local worker threads in the same pod.
-# This is NOT a Kubernetes executor deployment or a multi-tenant service.
+# One shared driver. Empty master preserves local[cores]; cluster mode is opt-in.
+# This is not a multi-tenant service.
 spark:
+  master: ""
   cores: 2
   driverMemory: 2g
   shufflePartitions: 2
   extraConf: {}
+
+# Existing account with executor-management RBAC; required for a k8s:// master.
+# This chart does not create cluster permissions.
+serviceAccount:
+  name: ""
+  automountToken: false
+
+# Server-side defaults, not enforced policy: session/table properties can override.
+# Keep credentials in Secrets, never in this ConfigMap.
+hudi:
+  defaults: {}
 
 catalog:
   # Required for durable metadata; no embedded Derby catalog in the endpoint.
@@ -53,6 +65,11 @@ storage:
 # No public ingress or unauthenticated LoadBalancer is provisioned.
 service:
   port: 15002
+
+# Disk-backed /tmp on the driver; empty means no volume-specific limit.
+# Use a Kubernetes quantity, e.g. "20Gi". This does not reserve node disk.
+scratch:
+  sizeLimit: ""
 
 resources:
   requests:

@@ -28,7 +28,7 @@ RUNNER = pathlib.Path(__file__).resolve().parents[1] / "local-dev/scripts/test-s
 
 
 class ConnectRunnerTest(unittest.TestCase):
-    def run_fixture(self, failure, cleanup_failure=False):
+    def run_fixture(self, failure, cleanup_failure=False, extra_args=()):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             kubectl = root / "kubectl"
@@ -57,6 +57,8 @@ if phase == 'prepare':
         sys.exit(23)
 if phase == 'cleanup' and os.environ['TEST_CLEANUP_FAILURE'] == '1':
     sys.exit(31)
+if phase in ('sql', 'freshness', 'trino') and os.environ['TEST_FAILURE'] == phase:
+    sys.exit(37)
 """)
             kubectl.chmod(0o755)
             client.chmod(0o755)
@@ -65,9 +67,9 @@ if phase == 'cleanup' and os.environ['TEST_CLEANUP_FAILURE'] == '1':
                        TMPDIR=str(root), PYTHON=str(client), PORT="15002", SERVICE_PORT="15002",
                        TEST_CALLS=str(calls), TEST_FAILURE=failure,
                        TEST_CLEANUP_FAILURE="1" if cleanup_failure else "0")
-            result = subprocess.run(["bash", str(RUNNER), "--restart-endpoint"], env=env,
+            result = subprocess.run(["bash", str(RUNNER), "--restart-endpoint", *extra_args], env=env,
                                     capture_output=True, text=True, timeout=20)
-            return result, calls.read_text().splitlines()
+            return result, calls.read_text().splitlines() if calls.exists() else []
 
     def test_failed_create_does_not_attempt_cleanup(self):
         result, calls = self.run_fixture("create")
@@ -89,6 +91,25 @@ if phase == 'cleanup' and os.environ['TEST_CLEANUP_FAILURE'] == '1':
         result, calls = self.run_fixture("")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(calls, ["prepare", "verify", "cleanup"])
+
+    def test_extended_checks_precede_restart_verification(self):
+        result, calls = self.run_fixture("", extra_args=("--trino", "--freshness"))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, ["prepare", "sql", "trino", "freshness", "verify", "cleanup"])
+
+    def test_failed_extended_check_cleans_up_and_fails(self):
+        for phase, option in (("sql", "--sql-matrix"), ("trino", "--trino"), ("freshness", "--freshness")):
+            with self.subTest(phase=phase):
+                result, calls = self.run_fixture(phase, extra_args=(option,))
+                self.assertEqual(result.returncode, 37, result.stderr)
+                self.assertEqual(calls[-1], "cleanup")
+                self.assertNotIn("verify", calls)
+
+    def test_refresh_requires_freshness(self):
+        result, calls = self.run_fixture("", extra_args=("--refresh",))
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, [])
+        self.assertIn("--refresh requires --freshness", result.stderr)
 
 
 class ConnectQuickstartTest(unittest.TestCase):

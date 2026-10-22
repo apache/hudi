@@ -35,7 +35,10 @@ spec:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
-      automountServiceAccountToken: false
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
+      {{- with .Values.serviceAccount.name }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
       terminationGracePeriodSeconds: 60
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -50,6 +53,14 @@ spec:
         - name: spark-connect
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if hasPrefix "k8s://" (include "hudi-spark-connect.master" .) }}
+          # In client mode executors connect directly to this driver pod.
+          args:
+            - --conf
+            - spark.driver.host=$(POD_IP)
+            - --conf
+            - spark.kubernetes.driver.pod.name=$(POD_NAME)
+          {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -58,6 +69,18 @@ spec:
             - name: connect
               containerPort: 15002
           env:
+            - name: HUDI_CONF_DIR
+              value: /opt/hudi/conf
+            {{- if hasPrefix "k8s://" (include "hudi-spark-connect.master" .) }}
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            {{- end }}
             - name: SPARK_LOCAL_DIRS
               value: /tmp/spark-local
             - name: AWS_REGION
@@ -83,6 +106,9 @@ spec:
             {{- end }}
           volumeMounts:
             - name: config
+              mountPath: /opt/hudi/conf
+              readOnly: true
+            - name: config
               mountPath: /opt/spark/conf/spark-defaults.conf
               subPath: spark-defaults.conf
               readOnly: true
@@ -106,7 +132,12 @@ spec:
           configMap:
             name: {{ include "hudi-spark-connect.fullname" . }}-config
         - name: scratch
+          {{- if .Values.scratch.sizeLimit }}
+          emptyDir:
+            sizeLimit: {{ .Values.scratch.sizeLimit | quote }}
+          {{- else }}
           emptyDir: {}
+          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

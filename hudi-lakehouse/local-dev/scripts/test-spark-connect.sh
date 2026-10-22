@@ -32,11 +32,30 @@ LOG_DIR="$(mktemp -d)"
 PF_PID=""
 CREATED_MARKER="$LOG_DIR/database-created"
 
-if [[ "${1:-}" != "--restart-endpoint" || $# != 1 ]]; then
-  echo "Usage: $0 --restart-endpoint" >&2
+if [[ "${1:-}" != "--restart-endpoint" ]]; then
+  echo "Usage: $0 --restart-endpoint [--sql-matrix] [--freshness] [--refresh] [--trino]" >&2
   echo "Runs CRUD and restarts $NAMESPACE/$DEPLOYMENT; active sessions will be lost." >&2
   exit 1
 fi
+shift
+SQL_MATRIX=0
+FRESHNESS=0
+TRINO=0
+REFRESH=0
+for arg in "$@"; do
+  case "$arg" in
+    --sql-matrix) SQL_MATRIX=1 ;;
+    --freshness) FRESHNESS=1 ;;
+    --refresh) REFRESH=1 ;;
+    --trino) TRINO=1; SQL_MATRIX=1 ;;
+    *) echo "Unknown option: $arg" >&2; exit 1 ;;
+  esac
+done
+if [[ "$REFRESH" == 1 && "$FRESHNESS" != 1 ]]; then
+  echo "--refresh requires --freshness" >&2
+  exit 1
+fi
+export NAMESPACE DEPLOYMENT
 [[ "$PORT" =~ ^[0-9]+$ && "$SERVICE_PORT" =~ ^[0-9]+$ ]] || { echo "ports must be integers" >&2; exit 1; }
 
 stop_forward() {
@@ -84,6 +103,17 @@ kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=300s
 start_forward
 echo "Test database: $DATABASE (use connect_smoke.py cleanup if prepare is interrupted)"
 smoke prepare --created-marker "$CREATED_MARKER"
+if [[ "$SQL_MATRIX" == 1 ]]; then
+  smoke sql --expected-table-version "${EXPECTED_TABLE_VERSION:-8}"
+fi
+if [[ "$TRINO" == 1 ]]; then
+  smoke trino --trino-deployment "${TRINO_DEPLOYMENT:-hudi-trino}"
+fi
+if [[ "$FRESHNESS" == 1 ]]; then
+  freshness_args=(freshness)
+  if [[ "$REFRESH" == 1 ]]; then freshness_args+=(--refresh); fi
+  smoke "${freshness_args[@]}" --external-writer "$PYTHON" "$HERE/example/connect_external_writer.py"
+fi
 stop_forward
 kubectl -n "$NAMESPACE" rollout restart "deployment/$DEPLOYMENT"
 kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=300s
@@ -91,4 +121,4 @@ start_forward
 smoke verify
 smoke cleanup
 rm "$CREATED_MARKER"
-echo "PASS: ADBC CRUD and persistence across endpoint restart"
+echo "PASS: ADBC CRUD/MERGE and persistence across endpoint restart (sql=$SQL_MATRIX freshness=$FRESHNESS trino=$TRINO)"

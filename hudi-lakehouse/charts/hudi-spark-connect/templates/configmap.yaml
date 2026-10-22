@@ -17,7 +17,7 @@
 {{- $uri := required "catalog.metastoreUri is required (use an external Hive Metastore)" .Values.catalog.metastoreUri -}}
 {{- $warehouse := required "catalog.warehouse is required (use durable object storage)" .Values.catalog.warehouse -}}
 {{- $conf := dict
-  "spark.master" (printf "local[%v]" .Values.spark.cores)
+  "spark.master" (include "hudi-spark-connect.master" .)
   "spark.driver.memory" .Values.spark.driverMemory
   "spark.connect.grpc.binding.address" "0.0.0.0"
   "spark.connect.grpc.binding.port" "15002"
@@ -45,9 +45,28 @@
 {{- end -}}
 {{- $_ := set $conf $key $value -}}
 {{- end -}}
-{{- range $key, $value := $conf -}}
-{{- if regexMatch "[\r\n]" (toString $value) -}}
-{{- fail (printf "Spark property %s must be a single line" $key) -}}
+{{- if hasPrefix "k8s://" (include "hudi-spark-connect.master" .) -}}
+{{- if or (not .Values.serviceAccount.name) (not .Values.serviceAccount.automountToken) -}}
+{{- fail "a k8s:// master requires serviceAccount.name and serviceAccount.automountToken=true" -}}
+{{- end -}}
+{{- $k8sDefaults := dict
+  "spark.kubernetes.namespace" .Release.Namespace
+  "spark.kubernetes.executor.container.image" (printf "%s:%s" .Values.image.repository .Values.image.tag)
+  "spark.kubernetes.container.image.pullPolicy" .Values.image.pullPolicy
+  "spark.driver.bindAddress" "0.0.0.0"
+  "spark.executorEnv.AWS_REGION" .Values.storage.s3.region
+-}}
+{{- with .Values.storage.s3.existingSecret -}}
+{{- $_ := set $k8sDefaults "spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID" (printf "%s:%s" . $.Values.storage.s3.accessKeyKey) -}}
+{{- $_ := set $k8sDefaults "spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY" (printf "%s:%s" . $.Values.storage.s3.secretKeyKey) -}}
+{{- if $.Values.storage.s3.sessionTokenKey -}}
+{{- $_ := set $k8sDefaults "spark.kubernetes.executor.secretKeyRef.AWS_SESSION_TOKEN" (printf "%s:%s" . $.Values.storage.s3.sessionTokenKey) -}}
+{{- end -}}
+{{- end -}}
+{{- range $key, $value := $k8sDefaults -}}
+{{- if not (hasKey $conf $key) -}}
+{{- $_ := set $conf $key $value -}}
+{{- end -}}
 {{- end -}}
 {{- end }}
 apiVersion: v1
@@ -56,16 +75,15 @@ metadata:
   name: {{ include "hudi-spark-connect.fullname" . }}-config
   labels:
     {{- include "hudi-spark-connect.labels" . | nindent 4 }}
-{{- /* Java Properties consumes escapes, so preserve literal backslashes. */}}
 data:
   spark-defaults.conf: |
     {{- range $key, $value := $conf }}
-    {{- $text := toString $value }}
-    {{- /* YAML/JSON numbers become floats; Spark integer/byte-size parsers reject %g notation. */}}
-    {{- if or (kindIs "float64" $value) (kindIs "float32" $value) }}
-    {{- if eq (float64 $value) (floor $value) }}
-    {{- $text = printf "%.0f" (float64 $value) }}
+    {{ $key }} {{ include "hudi-spark-connect.propertyValue" $value }}
     {{- end }}
+  hudi-defaults.conf: |
+    {{- range $key, $value := .Values.hudi.defaults }}
+    {{- if not (regexMatch "^hoodie\\.[A-Za-z0-9_.-]+$" $key) }}
+    {{- fail (printf "invalid Hudi property key: %s" $key) }}
     {{- end }}
-    {{ $key }} {{ $text | replace "\\" "\\\\" }}
+    {{ $key }}={{ include "hudi-spark-connect.hudiPropertyValue" $value }}
     {{- end }}

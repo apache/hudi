@@ -21,6 +21,8 @@ limitations under the License.
 Deploys Spark Connect 4.1.3 with Hudi 1.2.0, Scala 2.13, and Java 17.
 Tables use an external Hive Metastore and S3-compatible storage.
 See the [Dockerfile](../../images/spark-connect/Dockerfile) for dependency versions.
+The delivery scope is interactive SQL reads and writes, not general Spark job
+submission or a required DataFrame-write integration.
 
 ## Local-dev quickstart
 
@@ -73,16 +75,120 @@ Other settings in [values.yaml](values.yaml):
 |---|---|
 | `storage.s3.endpoint`, `region`, `pathStyleAccess` | MinIO or custom S3 endpoints |
 | `spark.cores` | Local worker threads |
+| `spark.master` | Empty means `local[cores]`; opt in to a remote master explicitly |
 | `spark.driverMemory` | JVM heap; keep the pod memory limit higher |
-| `resources` | Pod CPU and memory requests/limits |
+| `resources` | Driver pod CPU, memory, and optional ephemeral-storage requests/limits |
+| `scratch.sizeLimit` | Optional disk-backed `/tmp` volume limit, e.g. `20Gi`; empty by default |
 | `spark.extraConf` | Additional Spark properties; no credentials or overrides of chart-owned settings |
+| `hudi.defaults` | Server-side `hoodie.*` defaults loaded from `HUDI_CONF_DIR/hudi-defaults.conf` |
+| `serviceAccount.name`, `automountToken` | Existing driver account and token mounting; required for Kubernetes executors |
 
-The endpoint runs one shared driver in local mode, without separate executors.
+By default the endpoint runs one shared driver in local mode, without separate executors.
 Keep one replica. Restarting it ends active sessions; tables remain in the
 external metastore and object store.
 
+Size `/tmp` for peak concurrent shuffle/spill and temporary write data, with headroom.
+For example, `--set scratch.sizeLimit=20Gi` caps the driver's scratch volume; it does
+not reserve disk. Set `resources.requests.ephemeral-storage` for scheduling and
+`resources.limits.ephemeral-storage` for the pod budget, allowing for logs and the
+writable container layer as well. Node disk pressure can evict the pod before the
+volume reaches its limit. Scratch data is lost with the pod; this is not table storage.
+In cluster mode, size executor scratch separately; this setting applies only to the driver.
+
 The service has no authentication or TLS. Keep it on a trusted network:
 any client that can connect can read and write using the server's storage credentials.
+
+## Hudi writer defaults and table services
+
+The generic chart does not pin a table version. The local-dev values set:
+
+```yaml
+hudi:
+  defaults:
+    hoodie.write.table.version: "8"
+    hoodie.write.auto.upgrade: "false"
+```
+
+This keeps new tables compatible with the local-dev Trino reader. Hudi 1.2.0
+otherwise defaults to table version 9. These are defaults, not enforcement:
+explicit session/table settings can override them. Changing them does not downgrade
+existing tables. Verify the versions supported by every reader before changing the pin.
+The smoke test deliberately does not repeat the pin in `CREATE TABLE`.
+
+Use `hudi.defaults` for deployment-wide defaults, `TBLPROPERTIES` for table-specific
+settings, and session `SET` for a writer operation. For example:
+
+```sql
+CREATE TABLE orders (id INT, amount INT, ts BIGINT) USING hudi
+TBLPROPERTIES (type = 'cow', primaryKey = 'id', preCombineField = 'ts',
+               'hoodie.clustering.inline' = 'false');
+
+SET hoodie.clean.automatic = true;
+INSERT INTO orders VALUES (1, 100, 1);
+RESET hoodie.clean.automatic;
+```
+
+Table properties and session settings take precedence over global defaults in
+the Spark SQL write configuration; consult the relevant Hudi operation's settings
+when overriding them. Quote Helm property values when exact numeric text matters.
+Do not store credentials in `spark.extraConf` or `hudi.defaults`: both are ConfigMaps.
+Configuration changes roll the driver and end existing sessions.
+Hudi's defaults-file parser keeps backslashes literally but normalizes whitespace;
+the chart rejects leading/trailing or repeated whitespace rather than silently
+changing such values. This differs from Spark's Java-properties escaping.
+
+The endpoint does not schedule separate table-service jobs. Services enabled on a
+SQL writer run according to Hudi's configuration in the shared Spark application.
+In Hudi 1.2.0 inline compaction and inline clustering default to **off**; automatic
+cleaning is enabled by default. Enabling inline compaction/clustering adds work to
+the write path and can affect interactive-query latency. For example, a MoR writer
+can set `hoodie.compact.inline=true` and `hoodie.compact.inline.max.delta.commits=2`.
+For externally managed compaction/clustering, the operator must arrange both
+scheduling and execution; this chart creates neither a scheduler nor a worker job.
+
+The caller/operator owns writer configuration, concurrency mode and lock provider
+across **all** writers, including external Spark/Flink jobs. Separate Connect sessions
+do not provide multi-writer coordination. This endpoint adds no locking policy,
+workload isolation, or custom recovery guarantees. Embedded timeline-server reuse
+(`hoodie.embed.timeline.server.reuse.enabled`) is not enabled here and needs separate
+evaluation before changing its lifecycle in a long-running driver.
+
+## Kubernetes executor configuration (opt-in)
+
+The chart exposes the configuration needed for a shared driver with separate
+executors. Local mode remains the tested default; rendering this configuration is
+**not** evidence of a validated cluster deployment.
+
+```yaml
+spark:
+  master: k8s://https://kubernetes.default.svc:443
+  extraConf:
+    spark.executor.instances: "2"
+    spark.executor.cores: "1"
+    spark.executor.memory: 1g
+serviceAccount:
+  name: spark-connect-driver
+  automountToken: true
+```
+
+Provision this ServiceAccount and its executor-management RBAC in the release
+namespace first. The chart does not grant permissions. In Kubernetes client mode,
+it advertises the driver's Pod IP and Pod name, selects the release namespace,
+and defaults the executor image to the same Hudi-enabled image. The image delegates
+executor startup to Spark's base entrypoint. Rebuild it when updating the entrypoint;
+an older image will not provide that behavior. Executors receive the configured S3
+Secret references, including a session token when present, without embedding values
+in Spark properties. The Hudi defaults file is loaded by the SQL driver; the resolved
+write configuration is passed by Hudi to tasks.
+
+Before using this mode, validate driver/executor networking, resource capacity,
+image availability/pull credentials, and storage access from executor pods. Use
+`spark.kubernetes.executor.container.image` for a different compatible executor image,
+and Spark's executor settings for pull secrets, placement, workload identity, or
+credentials other than the chart's S3 Secret. Driver pod settings do not automatically
+apply to executors. Keep executors in the release namespace when using its Secrets.
+Dynamic allocation/autoscaling is not enabled by this example and needs separate
+configuration and validation. Keep one driver replica; this is not a tenant-isolated service.
 
 ## Connect and validate with ADBC
 
@@ -117,13 +223,56 @@ PYTHON="$VIRTUAL_ENV/bin/python" \
   ./hudi-lakehouse/local-dev/scripts/test-spark-connect.sh --restart-endpoint
 ```
 
-The test creates a temporary table, checks INSERT/UPDATE/DELETE, restarts the
+The test creates a temporary table, checks INSERT/UPDATE/DELETE/MERGE, restarts the
 endpoint, verifies persistence, and cleans up. It interrupts active sessions.
 On failure, follow the printed cleanup instructions.
+
+Additional checks against a local-dev deployment:
+
+```bash
+PYTHON="$VIRTUAL_ENV/bin/python" \
+  ./hudi-lakehouse/local-dev/scripts/test-spark-connect.sh \
+  --restart-endpoint --sql-matrix --freshness --trino
+```
+
+- `--sql-matrix`: CoW time travel and incremental TVF, partitioned CoW with HMS
+  sync, MoR snapshot/read-optimized reads and a completed inline compaction. Checks
+  stored table version 8 without statement-level version overrides; set
+  `EXPECTED_TABLE_VERSION=9` when deliberately testing a v9 deployment.
+- `--trino`: implies `--sql-matrix`; compares CoW and partitioned-table rows through
+  an **already running** `hudi-trino` deployment (override `TRINO_DEPLOYMENT` if needed).
+  Connect-only quickstart does not install Trino. An unavailable/incompatible Trino
+  fails the check rather than skipping it. This tests Connect-created tables, not
+  just external-writer tables queried by both engines.
+- `--freshness`: keeps one ADBC connection open while a separate Spark JVM commits
+  data, adds a column, and then recreates its test table. The supplied fixture creates
+  short-lived writer pods using the same pinned image and shared catalog/storage;
+  it is **not** another Connect session and does not test Spark 3.5/Flink compatibility.
+  Allow an additional 1 GiB memory request (1.5 GiB limit), CPU, and permissions to
+  create/delete pods and ConfigMaps. Only uniquely named test resources are touched.
+
+Freshness checks do not automatically refresh or reconnect. If they fail on stale
+metadata, rerun with `--freshness --refresh` to test explicit `REFRESH TABLE` after
+each external change. Record which mode passes for your version combination;
+do not claim automatic visibility based on a refresh-assisted run. The fixture
+does not alter shared example tables, and cleanup never uses `DROP DATABASE CASCADE`.
+Other external writers can use the Python CLI's `--external-writer <command argv>`
+hook; it receives the test database and `commit-schema` / `recreate` action.
+
+These acceptance paths require live Spark/ADBC (and optionally Trino). Offline
+tests validate their assertions, configuration and cleanup, not engine behavior.
+The full live SQL/Trino matrix and same-session freshness checks remain pending
+in [#20233](https://github.com/apache/hudi/issues/20233). Adding the test entrypoints
+does not establish that these paths pass.
 
 <a id="spark-connect-client-tutorials"></a>
 
 ## BI clients
+
+Gateway integration and BI adapters/examples for Superset and other tools are tracked
+in [#20232](https://github.com/apache/hudi/issues/20232) and will be delivered in follow-up PRs.
+The initial SQLAlchemy adapter is planned under `hudi-lakehouse`; upstreaming can
+be evaluated separately after the integration stabilizes.
 
 - **Superset 5.0:** requires a custom SQLAlchemy dialect and engine spec for ADBC;
   neither is included here. The built-in PyHive connector uses Thrift, not Connect.
@@ -132,9 +281,7 @@ On failure, follow the printed cleanup instructions.
   packages above installed in its Python environment. See the
   [Python interpreter guide](https://zeppelin.apache.org/docs/0.12.0/interpreter/python.html).
 
-[Foundry Spark ADBC 0.2.1](https://adbc-drivers.org/drivers/spark/) uses autocommit,
-buffers results before fetching, and does not support statement cancellation.
-Use `LIMIT` for interactive queries and check table state before retrying writes.
+[Foundry Spark ADBC 0.2.1](https://adbc-drivers.org/drivers/spark/) uses autocommit.
 
 ## Troubleshooting
 
