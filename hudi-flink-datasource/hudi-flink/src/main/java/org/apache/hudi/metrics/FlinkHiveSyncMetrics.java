@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.hive.HoodieHiveSyncMetrics;
+import org.apache.hudi.hive.HoodieHiveSyncStats;
 
 import com.codahale.metrics.SlidingWindowReservoir;
 import org.apache.flink.dropwizard.metrics.DropwizardHistogramWrapper;
@@ -77,22 +77,22 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
    * Recorded whether building it succeeds or fails, so the time spent failing to reach the
    * metastore shows here.
    */
-  private final Histogram initDurationMs = newHistogram();
+  private final Histogram initDurationMs;
 
   /** Time a sync spent reading the table schema from storage, for syncs that read it. */
-  private final Histogram schemaReadDurationMs = newHistogram();
+  private final Histogram schemaReadDurationMs;
 
   /**
    * Time a sync spent finding the partitions to sync, from the timeline or by listing storage, for
    * syncs that looked for them. This grows with the number of commits a sync has to catch up on.
    */
-  private final Histogram partitionScanDurationMs = newHistogram();
+  private final Histogram partitionScanDurationMs;
 
   /**
    * Time a sync spent on everything but reading the schema and finding partitions: mostly metastore
    * calls, plus the local work between them, such as comparing the partitions and schemas found.
    */
-  private final Histogram remainingDurationMs = newHistogram();
+  private final Histogram remainingDurationMs;
 
   /**
    * Number of partitions added to the metastore, counting for each sync the most added to any one of
@@ -117,6 +117,11 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   public FlinkHiveSyncMetrics(MetricGroup metricGroup, boolean detailedMetricsEnabled) {
     super(metricGroup);
     this.detailedMetricsEnabled = detailedMetricsEnabled;
+    // Detailed histograms are only accessed when detailed metrics are enabled.
+    this.initDurationMs = detailedMetricsEnabled ? newHistogram() : null;
+    this.schemaReadDurationMs = detailedMetricsEnabled ? newHistogram() : null;
+    this.partitionScanDurationMs = detailedMetricsEnabled ? newHistogram() : null;
+    this.remainingDurationMs = detailedMetricsEnabled ? newHistogram() : null;
   }
 
   @Override
@@ -145,7 +150,7 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   /**
    * Records what a sync did, after it completed or failed.
    */
-  public void updateSyncMetrics(HoodieHiveSyncMetrics syncMetrics) {
+  public void updateSyncMetrics(HoodieHiveSyncStats syncMetrics) {
     if (!detailedMetricsEnabled) {
       return;
     }

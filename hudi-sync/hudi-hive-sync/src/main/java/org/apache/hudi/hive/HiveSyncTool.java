@@ -114,7 +114,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   private final boolean detailedMetricsEnabled;
 
   // never null, so getSyncMetrics() also works when no sync ran, e.g. when the metastore client could not be created
-  private HoodieHiveSyncMetrics syncMetrics;
+  private HoodieHiveSyncStats syncMetrics;
 
   public HiveSyncTool(Properties props, Configuration hadoopConf) {
     this(props, hadoopConf, Option.empty());
@@ -136,7 +136,7 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
 
     this.config = new HiveSyncConfig(props, hadoopConfForSync);
     this.detailedMetricsEnabled = config.getBooleanOrDefault(HIVE_SYNC_DETAILED_METRICS_ENABLED);
-    this.syncMetrics = new HoodieHiveSyncMetrics(detailedMetricsEnabled);
+    this.syncMetrics = new HoodieHiveSyncStats(detailedMetricsEnabled);
     HoodieTableMetaClient metaClient = metaClientOption.orElseGet(() -> buildMetaClient(config));
     initSyncClient(config, metaClient);
     // initSyncClient leaves syncClient as null
@@ -209,13 +209,13 @@ public class HiveSyncTool extends HoodieSyncTool implements AutoCloseable {
   /**
    * Returns what the last {@link #syncHoodieTable()} did, including when it failed.
    */
-  public HoodieHiveSyncMetrics getSyncMetrics() {
+  public HoodieHiveSyncStats getSyncMetrics() {
     return syncMetrics;
   }
 
   protected void doSync() {
     // the durations add up across the Hive tables of one sync, so start fresh rather than adding to the previous sync's
-    syncMetrics = new HoodieHiveSyncMetrics(detailedMetricsEnabled);
+    syncMetrics = new HoodieHiveSyncStats(detailedMetricsEnabled);
     syncMetrics.timeTotal(this::syncTables);
   }
 

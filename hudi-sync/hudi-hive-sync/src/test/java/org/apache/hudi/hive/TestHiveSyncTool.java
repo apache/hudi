@@ -1226,7 +1226,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.createCOWTable("100", 5, true);
     reInitHiveSyncClient();
 
-    HoodieHiveSyncMetrics stats = syncAndGetMetrics();
+    HoodieHiveSyncStats stats = syncAndGetMetrics();
     assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
     assertFalse(stats.getSchemaReadMs().isPresent());
     assertFalse(stats.getPartitionScanMs().isPresent());
@@ -1243,7 +1243,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.createCOWTable("100", 5, true);
     reInitHiveSyncClient();
 
-    HoodieHiveSyncMetrics stats = syncAndGetMetrics();
+    HoodieHiveSyncStats stats = syncAndGetMetrics();
     assertTrue(stats.getSchemaReadMs().isPresent());
     assertTrue(stats.getPartitionScanMs().isPresent());
     assertTrue(stats.getRemainingMs().isPresent());
@@ -1272,7 +1272,7 @@ public class TestHiveSyncTool {
     HiveTestUtil.createMORTable("100", "101", 5, true, true);
     reInitHiveSyncClient();
 
-    HoodieHiveSyncMetrics stats = syncAndGetMetrics();
+    HoodieHiveSyncStats stats = syncAndGetMetrics();
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE));
     assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE));
     assertEquals(5, stats.getPartitionsAdded(),
@@ -1297,7 +1297,7 @@ public class TestHiveSyncTool {
     hiveSyncProps.setProperty(META_SYNC_INCREMENTAL.key(), "false");
     reInitHiveSyncClient();
 
-    HoodieHiveSyncMetrics stats = syncAndGetMetrics();
+    HoodieHiveSyncStats stats = syncAndGetMetrics();
     assertEquals(5, hiveClient.getAllPartitions(roTable).size());
     assertEquals(5, hiveClient.getAllPartitions(rtTable).size());
     assertEquals(2, stats.getPartitionsAdded(),
@@ -1311,7 +1311,7 @@ public class TestHiveSyncTool {
 
     try (GlobalHiveSyncTool tool = new GlobalHiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())) {
       tool.syncHoodieTable();
-      HoodieHiveSyncMetrics stats = tool.getSyncMetrics();
+      HoodieHiveSyncStats stats = tool.getSyncMetrics();
       assertTrue(stats.getRemainingMs().isPresent());
       assertEquals(5, stats.getPartitionsAdded());
     }
@@ -1339,7 +1339,7 @@ public class TestHiveSyncTool {
     reInitHiveSyncClient();
     assertEquals(2, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
 
-    HoodieHiveSyncMetrics retryMetrics = syncAndGetMetrics();
+    HoodieHiveSyncStats retryMetrics = syncAndGetMetrics();
     assertEquals(3, retryMetrics.getPartitionsAdded(), "The retry adds only the partitions the failed sync did not");
     assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
   }
@@ -2974,9 +2974,9 @@ public class TestHiveSyncTool {
     assertEquals(updatedTable, hiveClient.getTableName(), "Table name in sync client should match");
   }
 
-  private HoodieHiveSyncMetrics syncAndGetMetrics() {
+  private HoodieHiveSyncStats syncAndGetMetrics() {
     hiveSyncTool.syncHoodieTable();
-    HoodieHiveSyncMetrics stats = hiveSyncTool.getSyncMetrics();
+    HoodieHiveSyncStats stats = hiveSyncTool.getSyncMetrics();
     reInitHiveSyncClient();
     return stats;
   }

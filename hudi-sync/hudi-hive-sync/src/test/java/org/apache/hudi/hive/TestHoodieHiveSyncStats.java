@@ -26,13 +26,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Tests for {@link HoodieHiveSyncMetrics}.
+ * Tests for {@link HoodieHiveSyncStats}.
  */
-class TestHoodieHiveSyncMetrics {
+class TestHoodieHiveSyncStats {
 
   @Test
   void testNothingRecordedBeforeASync() {
-    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    HoodieHiveSyncStats stats = new HoodieHiveSyncStats(true);
     assertFalse(stats.getSchemaReadMs().isPresent());
     assertFalse(stats.getPartitionScanMs().isPresent());
     assertFalse(stats.getRemainingMs().isPresent());
@@ -42,7 +42,7 @@ class TestHoodieHiveSyncMetrics {
 
   @Test
   void testMetastoreTimeIsWhatTheOtherStepsLeave() {
-    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    HoodieHiveSyncStats stats = new HoodieHiveSyncStats(true);
     stats.addSchemaReadMs(10);
     stats.addSchemaReadMs(5);
     stats.addPartitionScanMs(30);
@@ -55,7 +55,7 @@ class TestHoodieHiveSyncMetrics {
 
   @Test
   void testMetastoreTimeWithoutOtherSteps() {
-    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    HoodieHiveSyncStats stats = new HoodieHiveSyncStats(true);
     stats.setTotalMs(40);
 
     assertFalse(stats.getSchemaReadMs().isPresent());
@@ -65,7 +65,7 @@ class TestHoodieHiveSyncMetrics {
 
   @Test
   void testPartitionsAddedAndSchemaEvolvedDescribeOneTable() {
-    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    HoodieHiveSyncStats stats = new HoodieHiveSyncStats(true);
     stats.recordPartitionsAdded(3);
     stats.recordPartitionsAdded(3);
     stats.markSchemaEvolved();
@@ -77,7 +77,7 @@ class TestHoodieHiveSyncMetrics {
 
   @Test
   void testPartitionsAddedIsTheMostAddedToOneTable() {
-    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    HoodieHiveSyncStats stats = new HoodieHiveSyncStats(true);
     stats.recordPartitionsAdded(2);
     stats.recordPartitionsAdded(3);
     stats.recordPartitionsAdded(1);
@@ -87,7 +87,7 @@ class TestHoodieHiveSyncMetrics {
 
   @Test
   void testTimedStepsRecordTheirDurations() {
-    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    HoodieHiveSyncStats stats = new HoodieHiveSyncStats(true);
     stats.timeTotal(() -> {
       assertEquals("schema", stats.timeSchemaRead(() -> "schema"));
       assertEquals("partitions", stats.timePartitionScan(() -> "partitions"));
@@ -100,7 +100,7 @@ class TestHoodieHiveSyncMetrics {
 
   @Test
   void testTimedStepsThatFailAreStillRecorded() {
-    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(true);
+    HoodieHiveSyncStats stats = new HoodieHiveSyncStats(true);
     assertThrows(IllegalStateException.class, () -> stats.timeTotal(() -> stats.timePartitionScan(() -> {
       throw new IllegalStateException("listing fails");
     })));
@@ -111,7 +111,7 @@ class TestHoodieHiveSyncMetrics {
 
   @Test
   void testDisabledStatsRunTheStepsAndRecordNothing() {
-    HoodieHiveSyncMetrics stats = new HoodieHiveSyncMetrics(false);
+    HoodieHiveSyncStats stats = new HoodieHiveSyncStats(false);
     stats.timeTotal(() -> {
       assertEquals("schema", stats.timeSchemaRead(() -> "schema"));
       assertEquals("partitions", stats.timePartitionScan(() -> "partitions"));

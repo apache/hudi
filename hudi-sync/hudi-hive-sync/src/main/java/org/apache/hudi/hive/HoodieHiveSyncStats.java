@@ -36,7 +36,7 @@ import java.util.function.Supplier;
  * <p>Unless {@code hoodie.datasource.hive_sync.detailed_metrics.enabled} is set, the sync steps run
  * untimed and nothing is recorded, so the metrics stay empty.
  */
-public class HoodieHiveSyncMetrics {
+public class HoodieHiveSyncStats {
 
   private final boolean detailedMetricsEnabled;
   private long totalMs = -1;
@@ -49,7 +49,7 @@ public class HoodieHiveSyncMetrics {
    * @param detailedMetricsEnabled whether to time the sync steps and keep what is recorded; disabled
    *     metrics run the steps untimed and stay empty
    */
-  public HoodieHiveSyncMetrics(boolean detailedMetricsEnabled) {
+  public HoodieHiveSyncStats(boolean detailedMetricsEnabled) {
     this.detailedMetricsEnabled = detailedMetricsEnabled;
   }
 

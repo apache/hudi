@@ -19,7 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.hive.HoodieHiveSyncMetrics;
+import org.apache.hudi.hive.HoodieHiveSyncStats;
 
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Gauge;
@@ -259,9 +259,9 @@ class TestFlinkHiveSyncMetrics {
     return metricGroup.counters.get(name).getCount();
   }
 
-  private static HoodieHiveSyncMetrics stats(Option<Long> schemaReadMs, Option<Long> partitionScanMs,
+  private static HoodieHiveSyncStats stats(Option<Long> schemaReadMs, Option<Long> partitionScanMs,
                                      Option<Long> remainingMs, int partitionsAdded, boolean schemaEvolved) {
-    HoodieHiveSyncMetrics stats = mock(HoodieHiveSyncMetrics.class);
+    HoodieHiveSyncStats stats = mock(HoodieHiveSyncStats.class);
     when(stats.getSchemaReadMs()).thenReturn(schemaReadMs);
     when(stats.getPartitionScanMs()).thenReturn(partitionScanMs);
     when(stats.getRemainingMs()).thenReturn(remainingMs);
