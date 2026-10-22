@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{RelationTimeTravel, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException, ParserInterface}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation, UnresolvedWith}
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.types.{DataType, StructType}
 
@@ -56,6 +56,12 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
     plan.transformDownWithSubqueries {
       case RelationTimeTravel(relation: UnresolvedRelation, timestamp, version) =>
         TimeTravelRelation(relation, timestamp, version)
+      // The CTE definitions of a WITH clause are not children of UnresolvedWith, so the transform does
+      // not reach them; rewrite them separately.
+      case withClause: UnresolvedWith =>
+        withClause.copy(cteRelations = withClause.cteRelations.map { case (name, cte) =>
+          name -> cte.copy(child = convertNativeTimeTravel(cte.child))
+        })
     }
   }
 
