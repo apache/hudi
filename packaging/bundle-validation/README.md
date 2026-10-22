@@ -35,11 +35,9 @@ to the Docker Hub.
 
 The `Dockerfile` for the image is under `base/`. It is a glibc image (Ubuntu with Java 8 as the default runtime and
 Java 11 and 17 under `/usr/lib/jvm/java-11-openjdk` and `/usr/lib/jvm/java-17-openjdk`), so bundles that carry native
-libraries, such as the Spark native bundle with `libcomet.so`, run in it. Tags built before this change are Alpine
-(musl); rebuilding a tag with its `build_*.sh` script and pushing it under the same name moves that lane to glibc
-without any workflow change, since CI pulls the image by tag when a job starts. The `Dockerfile` in this directory
-has to be on every branch that runs bundle validation against that tag before it is pushed, because the per-run
-image is built from the branch under test. Prove one tag in CI before rebuilding the rest.
+libraries, such as the Spark native bundle with `libcomet.so`, run in it. CI pulls the image by tag when a job starts,
+so pushing a rebuilt image under an existing tag changes what every lane using that tag runs on; rebuild one tag and
+check it in CI before the others.
 
 To build the image with updated `Dockerfile`, you may use the script in
 the folder. Here are the docker commands to build the image by specifying different versions:

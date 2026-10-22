@@ -54,5 +54,5 @@ ENV HDFS_SECONDARYNAMENODE_USER root
 ENV YARN_RESOURCEMANAGER_USER root
 ENV YARN_NODEMANAGER_USER root
 
-# for RocksDb; the glibc base image already carries libstdc++, so this only applies to an Alpine tag
+# for RocksDb on base images that install packages with apk; the glibc base image already carries libstdc++
 RUN if command -v apk > /dev/null; then apk add --no-cache libstdc++; fi
