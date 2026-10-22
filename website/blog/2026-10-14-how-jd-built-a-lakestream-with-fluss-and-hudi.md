@@ -18,7 +18,7 @@ _This blog was translated from the [original blog in Chinese](https://mp.weixin.
 
 ---
 
-JD.com runs a large Apache Hudi data lake alongside a large Apache Kafka deployment. This post describes how JD links streaming data and lake data with a **Lakestream**: fresh data lives in [Apache Fluss](https://fluss.apache.org/) tables, and a tiering service continuously writes it into Hudi tables. Readers can then query both together. The Fluss community calls this storage foundation a Lakestream: it unifies fresh data in streams with historical data in open lakehouse tables.
+JD.com runs a large Apache Hudi lakehouse alongside a large Apache Kafka deployment. This post describes how JD links streaming data and lake data with a **Lakestream**: fresh data lives in [Apache Fluss](https://fluss.apache.org/) tables, and a tiering service continuously writes it into Hudi tables. Readers can then query both together. The Fluss community calls this storage foundation a Lakestream: it unifies fresh data in streams with historical data in open lakehouse tables.
 
 :::tip TL;DR
 
@@ -33,10 +33,10 @@ The rest of the post covers the challenges, the recommendation ranking redesign,
 
 ## Challenges at JD's Scale
 
-Our data lake and streaming platforms have grown over many years. The lake runs on Apache Hudi, with **more than 5,000 tables** and **more than 700 PB** of data migrated into it, and a single job peaks at **more than 600 million records per minute**. The streaming platform runs on Apache Kafka, with **more than 8,000 nodes** in production, peak writes of **500 million records per second**, and peak egress of **2 TB/s**.
+Our lakehouse and streaming platforms have grown over many years. The lake runs on Apache Hudi, with **more than 5,000 tables** and **more than 700 PB** of data migrated into it, and a single job peaks at **more than 600 million records per minute**. The streaming platform runs on Apache Kafka, with **more than 8,000 nodes** in production, peak writes of **500 million records per second**, and peak egress of **2 TB/s**.
 
-![JD's data lake and data streaming scale](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/01-jd-lake-stream-scale.jpg)
-_Figure 1: Scale of JD's data lake and streaming platforms_
+![JD's lakehouse and data streaming scale](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/01-jd-lake-stream-scale.jpg)
+_Figure 1: Scale of JD's lakehouse and streaming platforms_
 
 At this scale, small inefficiencies get expensive. An extra copy of the data, a few fields read but never used, or one more pipeline to maintain each turns directly into cost, stability risk, and engineering time.
 
@@ -64,7 +64,7 @@ The second problem is architectural: the lake and the stream are separate system
 
 So we set out to connect streaming data and lake data in one architecture, covering writes, storage, consumption, and lake ingestion. That is why we adopted Fluss.
 
-The goal is to gradually bring real-time streams and the data lake onto **the same data model, the same service interfaces, and the same way of consuming data**. One copy of data serves real-time jobs through Fluss streaming and batch reads, and is also written to Hudi tables for long-term analysis, model training, and historical replay with engines such as Apache Spark. Jobs that need both use union reads, which query the Hudi table and the newest Fluss data as one table.
+The goal is to gradually bring real-time streams and the lakehouse onto **the same data model, the same service interfaces, and the same way of consuming data**. One copy of data serves real-time jobs through Fluss streaming and batch reads, and is also written to Hudi tables for long-term analysis, model training, and historical replay with engines such as Apache Spark. Jobs that need both use union reads, which query the Hudi table and the newest Fluss data as one table.
 
 For the platform team, this reduces duplicate pipelines and wasted resources, and puts table metadata, schemas, metric definitions, lake ingestion, and operations under one set of controls.
 
