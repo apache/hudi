@@ -157,6 +157,25 @@ public class VectorPostingMatch implements Serializable {
         -1L, null, null, null, null, null, null, true, true);
   }
 
+  /** Packed match for row {@code vectorIndex} of a posting block stored under {@code keyComponents}. */
+  static VectorPostingMatch fromBlockRow(PostingBlockView view, int vectorIndex, int[] keyComponents) {
+    PostingBlockView.RowLocator rowLocator = view.rowLocator(vectorIndex);
+    return new VectorPostingMatch(
+        view.recordKey(vectorIndex),
+        keyComponents[0],
+        keyComponents[1],
+        rowLocator.getFileGroupId(),
+        rowLocator.getPartitionPath(),
+        rowLocator.getInstantTime(),
+        rowLocator.getRowPosition(),
+        VectorPostingSerde.copyBuffer(view.signPlaneRow(vectorIndex)),
+        VectorPostingSerde.packExtendedLevels(view, vectorIndex),
+        view.scalarFactor(PostingBlockView.ScalarFactor.RESIDUAL_NORM, vectorIndex),
+        view.scalarFactor(PostingBlockView.ScalarFactor.F_ADD_EX, vectorIndex),
+        view.scalarFactor(PostingBlockView.ScalarFactor.F_RESCALE_EX, vectorIndex),
+        view.hasVectorNorm() ? view.scalarFactor(PostingBlockView.ScalarFactor.VECTOR_NORM, vectorIndex) : null);
+  }
+
   public String getRecordKey() {
     return recordKey;
   }

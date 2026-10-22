@@ -275,21 +275,7 @@ final class VectorPostingBlockScanner {
         }
         continue;
       }
-      PostingBlockView.RowLocator rowLocator = view.rowLocator(vectorIndex);
-      VectorPostingMatch match = new VectorPostingMatch(
-          recordKey,
-          keyComponents[0],
-          keyComponents[1],
-          rowLocator.getFileGroupId(),
-          rowLocator.getPartitionPath(),
-          rowLocator.getInstantTime(),
-          rowLocator.getRowPosition(),
-          VectorPostingSerde.copyBuffer(view.signPlaneRow(vectorIndex)),
-          VectorPostingSerde.packExtendedLevels(view, vectorIndex),
-          view.scalarFactor(PostingBlockView.ScalarFactor.RESIDUAL_NORM, vectorIndex),
-          view.scalarFactor(PostingBlockView.ScalarFactor.F_ADD_EX, vectorIndex),
-          view.scalarFactor(PostingBlockView.ScalarFactor.F_RESCALE_EX, vectorIndex),
-          view.hasVectorNorm() ? view.scalarFactor(PostingBlockView.ScalarFactor.VECTOR_NORM, vectorIndex) : null);
+      VectorPostingMatch match = VectorPostingMatch.fromBlockRow(view, vectorIndex, keyComponents);
       scored.add(new ScoredVectorPostingMatch(match, entry.score, match.toLocation().orElse(null)));
     }
     long partitionElapsedMs = System.currentTimeMillis() - partitionStartMs;

@@ -45,6 +45,9 @@ public final class VectorIndexMetadataKey {
   public static final long LAST_RESERVED_BLOCK_ID = 0xFFFEFFFFL;
   public static final long DELTA_BLOCK_ID = 0xFFFFFFFFL;
 
+  /** Length of the {@code family | generation | cluster} prefix shared by every posting key of a cluster. */
+  public static final int POSTING_CLUSTER_PREFIX_LENGTH = 9;
+
   private VectorIndexMetadataKey() {
   }
 
@@ -97,6 +100,11 @@ public final class VectorIndexMetadataKey {
 
   public static String postingPrefix(int generation, int clusterId, int shard) {
     return encode(postingPrefixBuffer(generation, clusterId, shard, 0));
+  }
+
+  /** Prefix covering every shard and block of one posting cluster. */
+  public static String postingClusterPrefix(int generation, int clusterId) {
+    return postingPrefix(generation, clusterId, 0).substring(0, POSTING_CLUSTER_PREFIX_LENGTH);
   }
 
   public static String sourceInstantMarker(int generation, String dataInstant) {

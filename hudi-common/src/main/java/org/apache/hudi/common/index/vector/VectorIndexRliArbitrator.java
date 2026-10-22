@@ -145,19 +145,15 @@ final class VectorIndexRliArbitrator {
     List<ScoredVectorPostingMatch> stale = new ArrayList<>();
     long deleted = 0L;
     for (ScoredVectorPostingMatch candidate : finalists) {
-      HoodieRecordGlobalLocation current = currentLocations.get(candidate.getRecordKey());
-      VectorIndexArbiter.Decision decision = VectorIndexArbiter.classify(
-          candidate.getPartitionPath(),
-          candidate.getFileGroupId(),
-          candidate.getBaseInstantTime(),
-          current);
-      switch (decision) {
+      // Verdict and resolved location are defined once, in arbitrateCandidate; this only buckets.
+      ScoredVectorPostingMatch verdict =
+          arbitrateCandidate(candidate, currentLocations.get(candidate.getRecordKey()));
+      switch (verdict.getArbiterDecision()) {
         case SERVE:
-          serve.add(candidate.withArbiterVerdict(
-              decision, candidate.getLocation() != null ? candidate.getLocation() : current));
+          serve.add(verdict);
           break;
         case STALE:
-          stale.add(candidate.withArbiterVerdict(decision, current));
+          stale.add(verdict);
           break;
         case DELETED:
         default:

@@ -52,36 +52,6 @@ final class VectorPostingReader {
   private VectorPostingReader() {
   }
 
-  static Map<Integer, Integer> readClusterShardCounts(
-      HoodieTableMetadata metadataTable,
-      String indexPartition,
-      int generationId,
-      Collection<Integer> clusterIds) {
-    if (clusterIds == null || clusterIds.isEmpty()) {
-      return Collections.emptyMap();
-    }
-
-    Map<Integer, Integer> shardCounts = new HashMap<>();
-    for (Integer clusterId : clusterIds) {
-      shardCounts.put(clusterId, 1);
-    }
-    return shardCounts;
-  }
-
-  static Map<Integer, Set<String>> readClusterFileGroups(
-      HoodieTableMetadata metadataTable,
-      String indexPartition,
-      int generationId,
-      Collection<Integer> clusterIds,
-      Collection<String> partitionPaths,
-      boolean shouldLoadInMemory) {
-    if (clusterIds == null || clusterIds.isEmpty()) {
-      return Collections.emptyMap();
-    }
-
-    return Collections.emptyMap();
-  }
-
   static List<VectorPostingPrefixRawKey> buildPostingPrefixes(
       int generationId,
       Map<Integer, Integer> clusterShardCounts) {
@@ -141,21 +111,7 @@ final class VectorPostingReader {
             PostingBlockView view = new PostingBlockView(VectorIndexMdtSearchUtils.asPostingBlock(info));
             List<VectorPostingMatch> blockMatches = new ArrayList<>(view.numVectors());
             for (int vectorIndex = 0; vectorIndex < view.numVectors(); vectorIndex++) {
-              PostingBlockView.RowLocator rowLocator = view.rowLocator(vectorIndex);
-              blockMatches.add(new VectorPostingMatch(
-                  view.recordKey(vectorIndex),
-                  keyComponents[0],
-                  keyComponents[1],
-                  rowLocator.getFileGroupId(),
-                  rowLocator.getPartitionPath(),
-                  rowLocator.getInstantTime(),
-                  rowLocator.getRowPosition(),
-                  VectorPostingSerde.copyBuffer(view.signPlaneRow(vectorIndex)),
-                  VectorPostingSerde.packExtendedLevels(view, vectorIndex),
-                  view.scalarFactor(PostingBlockView.ScalarFactor.RESIDUAL_NORM, vectorIndex),
-                  view.scalarFactor(PostingBlockView.ScalarFactor.F_ADD_EX, vectorIndex),
-                  view.scalarFactor(PostingBlockView.ScalarFactor.F_RESCALE_EX, vectorIndex),
-                  view.hasVectorNorm() ? view.scalarFactor(PostingBlockView.ScalarFactor.VECTOR_NORM, vectorIndex) : null));
+              blockMatches.add(VectorPostingMatch.fromBlockRow(view, vectorIndex, keyComponents));
             }
             return blockMatches.iterator();
           }

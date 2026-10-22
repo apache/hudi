@@ -34,7 +34,7 @@ public class VectorPostingPrefixRawKey implements RawKey {
   @Override
   public String encode() {
     return shardId == null
-        ? VectorIndexMetadataKey.postingPrefix(generationId, clusterId, 0).substring(0, 9)
+        ? VectorIndexMetadataKey.postingClusterPrefix(generationId, clusterId)
         : VectorIndexMetadataKey.postingPrefix(generationId, clusterId, shardId);
   }
 }

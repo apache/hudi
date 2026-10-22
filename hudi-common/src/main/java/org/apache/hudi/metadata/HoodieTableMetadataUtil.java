@@ -245,7 +245,7 @@ public class HoodieTableMetadataUtil {
   }
 
   public static String getVectorIndexPostingPrefix(int generationId, int clusterId) {
-    return VectorIndexMetadataKey.postingPrefix(generationId, clusterId, 0).substring(0, 9);
+    return VectorIndexMetadataKey.postingClusterPrefix(generationId, clusterId);
   }
 
   public static int toVectorGenerationId(String generationId) {
@@ -1062,7 +1062,8 @@ public class HoodieTableMetadataUtil {
     if (!isVectorIndexPostingKey(metadataRecordKey)) {
       return metadataRecordKey;
     }
-    return metadataRecordKey.length() >= 9 ? metadataRecordKey.substring(0, 9) : metadataRecordKey;
+    int prefixLength = VectorIndexMetadataKey.POSTING_CLUSTER_PREFIX_LENGTH;
+    return metadataRecordKey.length() >= prefixLength ? metadataRecordKey.substring(0, prefixLength) : metadataRecordKey;
   }
 
   /**

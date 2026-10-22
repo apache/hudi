@@ -49,26 +49,6 @@ public final class VectorIndexMdtSearchUtils {
   private VectorIndexMdtSearchUtils() {
   }
 
-  public static Map<Integer, Integer> readClusterShardCounts(
-      HoodieTableMetadata metadataTable,
-      String indexPartition,
-      int generationId,
-      Collection<Integer> clusterIds) {
-    return VectorPostingReader.readClusterShardCounts(
-        metadataTable, indexPartition, generationId, clusterIds);
-  }
-
-  public static Map<Integer, Set<String>> readClusterFileGroups(
-      HoodieTableMetadata metadataTable,
-      String indexPartition,
-      int generationId,
-      Collection<Integer> clusterIds,
-      Collection<String> partitionPaths,
-      boolean shouldLoadInMemory) {
-    return VectorPostingReader.readClusterFileGroups(
-        metadataTable, indexPartition, generationId, clusterIds, partitionPaths, shouldLoadInMemory);
-  }
-
   public static List<VectorPostingPrefixRawKey> buildPostingPrefixes(
       int generationId,
       Map<Integer, Integer> clusterShardCounts) {
