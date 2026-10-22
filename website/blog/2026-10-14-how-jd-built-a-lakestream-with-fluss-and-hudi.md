@@ -18,7 +18,7 @@ _This blog was translated from the [original blog in Chinese](https://mp.weixin.
 
 ---
 
-JD.com runs a large Apache Hudi lakehouse alongside a large Apache Kafka deployment. This post describes how JD links streaming data and lake data with a **Lakestream**: fresh data lives in [Apache Fluss](https://fluss.apache.org/) tables, and a tiering service continuously writes it into Hudi tables. Readers can then query both together. The Fluss community calls this storage foundation a Lakestream: it unifies fresh data in streams with historical data in open lakehouse tables.
+JD.com runs a large Apache Hudi lakehouse alongside a large Apache Kafka deployment. This post describes how JD links streaming data and lakehouse data with a **Lakestream**: fresh data lives in [Apache Fluss](https://fluss.apache.org/) tables, and a tiering service continuously writes it into Hudi tables. Readers can then query both together. The Fluss community calls this storage foundation a Lakestream: it unifies fresh data in streams with historical data in open lakehouse tables.
 
 :::tip TL;DR
 
@@ -33,7 +33,7 @@ The rest of the post covers the challenges, the recommendation ranking redesign,
 
 ## Challenges at JD's Scale
 
-Our lakehouse and streaming platforms have grown over many years. The lake runs on Apache Hudi, with **more than 5,000 tables** and **more than 700 PB** of data migrated into it, and a single job peaks at **more than 600 million records per minute**. The streaming platform runs on Apache Kafka, with **more than 8,000 nodes** in production, peak writes of **500 million records per second**, and peak egress of **2 TB/s**.
+Our lakehouse and streaming platforms have grown over many years. The lakehouse runs on Apache Hudi, with **more than 5,000 tables** and **more than 700 PB** of data migrated into it, and a single job peaks at **more than 600 million records per minute**. The streaming platform runs on Apache Kafka, with **more than 8,000 nodes** in production, peak writes of **500 million records per second**, and peak egress of **2 TB/s**.
 
 ![JD's lakehouse and data streaming scale](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/01-jd-lake-stream-scale.jpg)
 _Figure 1: Scale of JD's lakehouse and streaming platforms_
@@ -52,21 +52,21 @@ That wastes resources in three places:
 
 Teams use only a small fraction of the data, but the platform pays for all of it.
 
-### Separate Lake and Stream Pipelines Duplicate Work
+### Separate Lakehouse and Stream Pipelines Duplicate Work
 
-The second problem is architectural: the lake and the stream are separate systems. Take training data for search and recommendation models as an example. Teams have traditionally run two pipelines side by side. The real-time pipeline quickly turns user activity into fresh training samples and features. The batch pipeline handles backfills, corrections, model training, and analysis. Running both meets different freshness needs, but it creates three problems:
+The second problem is architectural: the lakehouse and the stream are separate systems. Take training data for search and recommendation models as an example. Teams have traditionally run two pipelines side by side. The real-time pipeline quickly turns user activity into fresh training samples and features. The batch pipeline handles backfills, corrections, model training, and analysis. Running both meets different freshness needs, but it creates three problems:
 
-- **Duplicate storage.** Much of the same data is stored more than once, in the message queue and in lake tables.
+- **Duplicate storage.** Much of the same data is stored more than once, in the message queue and in lakehouse tables.
 - **Duplicate compute.** Both pipelines clean the data, join it, assemble features, and generate samples. Only the execution model differs.
 - **Inconsistent metric definitions.** The two pipelines evolve separately, so field definitions, filters, error handling, and backfill logic drift apart. When a metric moves, teams often have to work out how the real-time and batch numbers are defined before they can investigate.
 
 ### Why We Adopted Fluss
 
-So we set out to connect streaming data and lake data in one architecture, covering writes, storage, consumption, and lake ingestion. That is why we adopted Fluss.
+So we set out to connect streaming data and lakehouse data in one architecture, covering writes, storage, consumption, and lakehouse ingestion. That is why we adopted Fluss.
 
 The goal is to gradually bring real-time streams and the lakehouse onto **the same data model, the same service interfaces, and the same way of consuming data**. One copy of data serves real-time jobs through Fluss streaming and batch reads, and is also written to Hudi tables for long-term analysis, model training, and historical replay with engines such as Apache Spark. Jobs that need both use union reads, which query the Hudi table and the newest Fluss data as one table.
 
-For the platform team, this reduces duplicate pipelines and wasted resources, and puts table metadata, schemas, metric definitions, lake ingestion, and operations under one set of controls.
+For the platform team, this reduces duplicate pipelines and wasted resources, and puts table metadata, schemas, metric definitions, lakehouse ingestion, and operations under one set of controls.
 
 ![Fluss Lakestream architecture](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/02-fluss-lake-stream-architecture.jpg)
 _Figure 2: A Lakestream on Fluss and Hudi_
@@ -109,7 +109,7 @@ _Figure 5: Recommendation ranking results_
 
 ### Tiering Fluss Data into Hudi
 
-Fluss already tiers data into Apache Paimon, Apache Iceberg, and Lance. Our lake runs on Hudi, so we extended Fluss to support it. We built a Hudi plugin for the Fluss tiering service, adapting the three stages of the tiering job: the source enumerator, the source reader, and the committer.
+Fluss already tiers data into Apache Paimon, Apache Iceberg, and Lance. Our lakehouse runs on Hudi, so we extended Fluss to support it. We built a Hudi plugin for the Fluss tiering service, adapting the three stages of the tiering job: the source enumerator, the source reader, and the committer.
 
 The tiering service has three layers:
 
@@ -148,7 +148,7 @@ _Figure 9: HudiLakeWriter_
 
 **Commit: aggregate the results and report the lake snapshot.** TieringCommitter collects the results from all writers and checks that they belong to the same round and the same Hudi instant. It then prepares the Fluss bucket offsets file. Once the Hudi instant is completed on the timeline and the checkpoint metadata is marked COMPLETED, it sends the snapshot, including offsets and manifests, to the Fluss Coordinator, the server that manages cluster metadata.
 
-The Hudi commit also stores the Fluss snapshot metadata in its commit metadata. The Hudi instant time serves as the Fluss lake snapshot ID and is reported to Fluss together with the bucket offsets. One Hudi commit per round makes all of the round's writes visible atomically. The reported lake snapshot is what Fluss uses to track tiering progress, recover from failures, and keep the lake and the stream consistent.
+The Hudi commit also stores the Fluss snapshot metadata in its commit metadata. The Hudi instant time serves as the Fluss lake snapshot ID and is reported to Fluss together with the bucket offsets. One Hudi commit per round makes all of the round's writes visible atomically. The reported lake snapshot is what Fluss uses to track tiering progress, recover from failures, and keep the lakehouse and the stream consistent.
 
 ![Hudi TieringCommitter](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/10-tiering-committer.jpg)
 _Figure 10: Hudi TieringCommitter_
@@ -220,6 +220,6 @@ Our next steps:
 
 - **User-level quotas.** Add per-user quotas to control resource use by tenant and by team more precisely, so a traffic spike in one place does not cause jitter across the cluster.
 - **Offset management tuning.** Reduce consumer group rebalance time for groups that consume many buckets.
-- **Feature parity with JD's Hudi stack.** Keep closing the gaps with what JD's Hudi stack already supports, such as schema evolution and dynamic bucketing. The goal is for teams to use lake and stream data through one table, one access method, and one set of governance controls.
+- **Feature parity with JD's Hudi stack.** Keep closing the gaps with what JD's Hudi stack already supports, such as schema evolution and dynamic bucketing. The goal is for teams to use lakehouse and stream data through one table, one access method, and one set of governance controls.
 
 To learn more and connect with other developers, join the [Apache Fluss community](https://fluss.apache.org/community/welcome/).
