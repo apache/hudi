@@ -145,17 +145,8 @@ public final class RaBitQEncoder implements Serializable {
           ipResidual1,
           dimension,
           FACTOR_CONFIG);
-      return new QuantizedVector(
-          binaryCode,
-          new byte[0],
-          factors.residualNorm,
-          factors.centerRip,
-          factors.fRescale1,
-          factors.centerRip,
-          factors.fRescale1,
-          factors.err1,
-          factors.vectorNorm,
-          bits);
+      // Single-bit: no extended planes, and the sign-plane rescale doubles as the total rescale.
+      return fromNeutralFactors(binaryCode, new byte[0], factors, factors.fRescale1);
     }
 
     int exBits = bits - 1;
@@ -193,12 +184,21 @@ public final class RaBitQEncoder implements Serializable {
         ipResidual,
         dimension,
         FACTOR_CONFIG);
+    return fromNeutralFactors(binaryCode, packUnsignedLevels(exCode, exBits), factors, factors.fRescaleEx);
+  }
+
+  /**
+   * Builds a residual code from metric-neutral factors. The additive factor is {@code centerRip} for
+   * both the total and the sign-plane estimator; only the total rescale differs by bit width.
+   */
+  private QuantizedVector fromNeutralFactors(
+      byte[] binaryCode, byte[] extendedCode, RaBitQNeutralFactors.Factors factors, float totalRescale) {
     return new QuantizedVector(
         binaryCode,
-        packUnsignedLevels(exCode, exBits),
+        extendedCode,
         factors.residualNorm,
         factors.centerRip,
-        factors.fRescaleEx,
+        totalRescale,
         factors.centerRip,
         factors.fRescale1,
         factors.err1,
