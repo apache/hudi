@@ -115,8 +115,8 @@ public class TestCompletionTimeQueryView {
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     prepareTimeline(tablePath, metaClient, (lsmTimelineWriter, activeActions) -> {
       // archive [1, 2], [3, 6] specifically to create corner cases
-      lsmTimelineWriter.write(activeActions.subList(0, 2), Option.empty(), Option.empty());
-      lsmTimelineWriter.write(activeActions.subList(2, 6), Option.empty(), Option.empty());
+      lsmTimelineWriter.write(activeActions.subList(0, 2), Option.empty());
+      lsmTimelineWriter.write(activeActions.subList(2, 6), Option.empty());
     });
     try (CompletionTimeQueryView view =
              metaClient.getTableFormat().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
@@ -165,13 +165,8 @@ public class TestCompletionTimeQueryView {
     ActiveAction activeAction = new DummyActiveAction(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, "commit", archivedInstantTime, null),
         convertMetadataToByteArray(archivedMetadata));
-    List<Exception> archiveFailures = new ArrayList<>();
-    // LSMTimelineWriter#write swallows per-instant failures, so surface them rather than
-    // silently archiving nothing and leaving the assertion below to pass vacuously.
     LSMTimelineWriter.getInstance(writeConfig, getMockHoodieTable(metaClient))
-        .write(Collections.singletonList(activeAction), Option.empty(), Option.of(archiveFailures::add));
-    assertTrue(archiveFailures.isEmpty(),
-        "Archiving an instant without a completion time should not fail: " + archiveFailures);
+        .write(Collections.singletonList(activeAction), Option.empty());
 
     metaClient.reloadActiveTimeline();
     try (CompletionTimeQueryView view =
@@ -247,7 +242,7 @@ public class TestCompletionTimeQueryView {
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     // archive 2 to 6, while 1 is savepointed and stays active
-    prepareTimeline(tablePath, metaClient, (writer, activeActions) -> writer.write(activeActions.subList(1, 6), Option.empty(), Option.empty()));
+    prepareTimeline(tablePath, metaClient, (writer, activeActions) -> writer.write(activeActions.subList(1, 6), Option.empty()));
     String savepointed = String.format("%08d", 1);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     testTable.addCommit(savepointed, Option.of(String.format("%08d", 1001)),
@@ -355,9 +350,9 @@ public class TestCompletionTimeQueryView {
   private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient, List<Pair<String, String>> instantRequestedAndCompletionTime, String requestedInstantTime) throws Exception {
     prepareTimeline(tablePath, metaClient, instantRequestedAndCompletionTime, requestedInstantTime, (writer, activeActions) -> {
       // archive [1,2], [3,4], [5,6] separately
-      writer.write(activeActions.subList(0, 2), Option.empty(), Option.empty());
-      writer.write(activeActions.subList(2, 4), Option.empty(), Option.empty());
-      writer.write(activeActions.subList(4, 6), Option.empty(), Option.empty());
+      writer.write(activeActions.subList(0, 2), Option.empty());
+      writer.write(activeActions.subList(2, 4), Option.empty());
+      writer.write(activeActions.subList(4, 6), Option.empty());
     });
   }
 

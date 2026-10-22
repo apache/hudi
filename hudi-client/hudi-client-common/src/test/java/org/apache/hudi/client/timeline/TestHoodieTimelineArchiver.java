@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
+import org.apache.hudi.common.table.timeline.versioning.v1.ArchivedTimelineV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.HoodieStorageUtils;
@@ -137,6 +138,43 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
   }
 
   @Test
+  void archiveV1RetryAfterPartialFlushIsLogicallyIdempotent() throws Exception {
+    HoodieWriteConfig writeConfig = createArchivalConfig(false, 1);
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    addCommits(context, 5);
+
+    HoodieInstant oldestCompletedInstant = metaClient.reloadActiveTimeline().filterCompletedInstants().firstInstant().get();
+    byte[] originalInstantContent = metaClient.getActiveTimeline().getInstantDetails(oldestCompletedInstant).get();
+    StoragePath instantPath = new StoragePath(
+        metaClient.getTimelinePath(), metaClient.getInstantFileNameGenerator().getFileName(oldestCompletedInstant));
+    assertTrue(metaClient.getStorage().deleteFile(instantPath));
+    metaClient.getStorage().createImmutableFileInPath(
+        instantPath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(new byte[] {1, 2, 3})));
+    long activeInstantCount = new ActiveTimelineV1(metaClient, false).countInstants();
+
+    TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+
+    assertEquals(0, archiver.archiveIfRequired(context));
+    assertEquals(activeInstantCount, new ActiveTimelineV1(metaClient, false).countInstants());
+    assertEquals(2, new ArchivedTimelineV1(metaClient)
+        .filter(instant -> instant.requestedTime().equals(oldestCompletedInstant.requestedTime()))
+        .countInstants());
+
+    assertTrue(metaClient.getStorage().deleteFile(instantPath));
+    metaClient.getStorage().createImmutableFileInPath(
+        instantPath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(originalInstantContent)));
+
+    archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+    assertEquals(3, archiver.archiveIfRequired(context));
+
+    ArchivedTimelineV1 archivedTimeline = new ArchivedTimelineV1(metaClient);
+    assertEquals(3, archivedTimeline
+        .filter(instant -> instant.requestedTime().equals(oldestCompletedInstant.requestedTime()))
+        .countInstants());
+    assertEquals(4, metaClient.reloadActiveTimeline().countInstants());
+  }
+
+  @Test
   void archiveV1CloseFailureDoesNotDeleteActiveInstantsWhenFailureIsTolerated() throws Exception {
     HoodieWriteConfig writeConfig = createArchivalConfig(false);
     HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
@@ -221,12 +259,20 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
   }
 
   private HoodieWriteConfig createArchivalConfig(boolean failOnTimelineArchiving) {
+    return createArchivalConfig(
+        failOnTimelineArchiving, Integer.parseInt(HoodieArchivalConfig.COMMITS_ARCHIVAL_BATCH_SIZE.defaultValue()));
+  }
+
+  private HoodieWriteConfig createArchivalConfig(boolean failOnTimelineArchiving, int archivalBatchSize) {
     TypedProperties properties = new TypedProperties();
     properties.put(TimelineArchiverV1.ARCHIVE_LIMIT_INSTANTS, 1L);
     properties.put(HoodieWriteConfig.FAIL_ON_TIMELINE_ARCHIVING_ENABLE.key(), String.valueOf(failOnTimelineArchiving));
     return HoodieWriteConfig.newBuilder()
         .withPath(tempDir.toString())
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(2, 3)
+            .withCommitsArchivalBatchSize(archivalBatchSize)
+            .build())
         .withMarkersType("DIRECT")
         .withProperties(properties)
         .build();

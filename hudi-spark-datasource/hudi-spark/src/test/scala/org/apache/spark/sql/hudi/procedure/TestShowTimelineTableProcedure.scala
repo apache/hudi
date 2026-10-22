@@ -261,7 +261,7 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
     }
 
     if (!instantBuffer.isEmpty) {
-      writer.write(instantBuffer, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())
+      writer.write(instantBuffer, org.apache.hudi.common.util.Option.empty())
       writer.compactAndClean(engineContext)
     }
   }

@@ -2124,7 +2124,7 @@ public class TestHoodieTimelineArchiver extends HoodieSparkClientTestHarness {
 
     // Use reflection to inject a mock LSMTimelineWriter that throws OOM
     LSMTimelineWriter mockWriter = mock(LSMTimelineWriter.class);
-    doThrow(new OutOfMemoryError("Simulated OOM")).when(mockWriter).write(any(), any(), any());
+    doThrow(new OutOfMemoryError("Simulated OOM")).when(mockWriter).write(any(), any());
 
     Field writerField = TimelineArchiverV2.class.getDeclaredField("timelineWriter");
     writerField.setAccessible(true);

@@ -104,7 +104,7 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
       }
     };
     createTimelineWriter().write(
-        Collections.singletonList(activeAction), Option.empty(), Option.empty());
+        Collections.singletonList(activeAction), Option.empty());
 
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     HoodieInstant archivedInstant = archivedTimeline.firstInstant().get();
@@ -123,7 +123,7 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
         HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime, "10000002");
     createTimelineWriter().write(
         Collections.singletonList(new DummyActiveAction(completed, commitMetadata)),
-        Option.empty(), Option.empty());
+        Option.empty());
 
     HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
     HoodieInstant archivedInstant = archivedTimeline.firstInstant().get();
@@ -141,7 +141,7 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testFailedActionDoesNotPublishPartialArchiveFile() {
+  void testFailedActionDoesNotPublishPartialArchiveFile() throws Exception {
     ActiveAction firstAction = createActiveAction("10000001");
     ActiveAction failedAction = new DummyActiveAction(
         INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "10000002", "10000102"),
@@ -155,10 +155,11 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
     LSMTimelineWriter writer = createTimelineWriter();
 
     assertThrows(HoodieCommitException.class,
-        () -> writer.write(Arrays.asList(firstAction, failedAction, lastAction), Option.empty(), Option.empty()));
+        () -> writer.write(Arrays.asList(firstAction, failedAction, lastAction), Option.empty()));
     assertTrue(metaClient.getArchivedTimeline().empty());
+    assertEquals(1, LSMTimeline.listAllMetaFiles(metaClient, metaClient.getArchivePath()).size());
 
-    writer.write(Arrays.asList(firstAction, createActiveAction("10000002"), lastAction), Option.empty(), Option.empty());
+    writer.write(Arrays.asList(firstAction, createActiveAction("10000002"), lastAction), Option.empty());
     assertEquals(3, metaClient.getArchivedTimeline().reload().countInstants());
   }
 
@@ -169,10 +170,10 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
     ActiveAction lastAction = createActiveAction("10000003");
     LSMTimelineWriter writer = createTimelineWriter();
 
-    writer.write(Arrays.asList(firstAction, lastAction), Option.empty(), Option.empty());
+    writer.write(Arrays.asList(firstAction, lastAction), Option.empty());
 
     assertThrows(HoodieCommitException.class,
-        () -> writer.write(Arrays.asList(firstAction, middleAction, lastAction), Option.empty(), Option.empty()));
+        () -> writer.write(Arrays.asList(firstAction, middleAction, lastAction), Option.empty()));
     assertEquals(2, metaClient.getArchivedTimeline().reload().countInstants());
   }
   // -------------------------------------------------------------------------
@@ -200,7 +201,7 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
       instantBuffer.add(new DummyActiveAction(instant, serializedMetadata));
       if (i % batchSize == 0) {
         // archive 10 instants each time
-        writer.write(instantBuffer, Option.empty(), Option.empty());
+        writer.write(instantBuffer, Option.empty());
         writer.compactAndClean(engineContext);
         instantBuffer.clear();
       }

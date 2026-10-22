@@ -111,7 +111,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       if (!instantsToArchive.isEmpty()) {
         log.info("Archiving and deleting instants {}", instantsToArchive);
         try {
-          this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.empty());
+          this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)));
         } catch (Exception e) {
           if (this.config.isFailOnTimelineArchivingEnabled()) {
             throw e;

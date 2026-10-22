@@ -294,7 +294,7 @@ public class TestArchivedCommitsCommand extends CLIFunctionalTestHarness {
     LSMTimelineWriter.getInstance(cfg, new LocalTaskContextSupplier(), metaClient).write(
         Collections.singletonList(ActiveActionWithDetails.fromInstantAndDetails(
             Collections.singletonList(Pair.of(savepoint, Option.of(payload))))),
-        Option.empty(), Option.empty());
+        Option.empty());
 
     Object cmdResult = shell.evaluate(() -> "show archived commits --skipMetadata false --limit 0");
     assertTrue(ShellEvaluationResultUtil.isSuccess(cmdResult));

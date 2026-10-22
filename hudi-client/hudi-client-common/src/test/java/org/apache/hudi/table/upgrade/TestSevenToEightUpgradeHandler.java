@@ -32,6 +32,8 @@ import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieCommitException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -51,6 +53,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_ENABLE;
@@ -63,9 +66,12 @@ import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -177,7 +183,7 @@ class TestSevenToEightUpgradeHandler {
     // A single batch large enough to hold all actions should result in exactly one write() call,
     // proving the migration batch size config (not the regular archival batch size) drives batching.
     LSMTimelineWriter writer = runMigration(500, 4);
-    verify(writer, times(1)).write(any(), any(), any());
+    verify(writer, times(1)).write(any(), any());
     verify(writer, never()).compactAndClean(any());
   }
 
@@ -187,8 +193,19 @@ class TestSevenToEightUpgradeHandler {
     // 4 actions with a batch size of 2 -> [2, 2] -> 2 write() calls. This pins that the configured
     // migration batch size (not just "all actions in one batch") actually governs batching.
     LSMTimelineWriter writer = runMigration(2, 4);
-    verify(writer, times(2)).write(any(), any(), any());
+    verify(writer, times(2)).write(any(), any());
     verify(writer, never()).compactAndClean(any());
+  }
+
+  @Test
+  void testUpgradeToLSMTimelinePropagatesWriterFailureWhenConfigured() {
+    HoodieCommitException writerFailure = new HoodieCommitException("injected archive failure");
+    when(config.isFailOnTimelineArchivingEnabled()).thenReturn(true);
+
+    HoodieException upgradeFailure = assertThrows(HoodieException.class,
+        () -> runMigration(500, 4, writer -> doThrow(writerFailure).when(writer).write(any(), any())));
+
+    assertSame(writerFailure, upgradeFailure.getCause());
   }
 
   /**
@@ -196,6 +213,11 @@ class TestSevenToEightUpgradeHandler {
    * over the given number of archived actions, and returns the (mocked) LSM timeline writer for verification.
    */
   private LSMTimelineWriter runMigration(int migrationBatchSize, int totalActions) {
+    return runMigration(migrationBatchSize, totalActions, writer -> { });
+  }
+
+  private LSMTimelineWriter runMigration(
+      int migrationBatchSize, int totalActions, Consumer<LSMTimelineWriter> writerSetup) {
     HoodieTable table = mock(HoodieTable.class);
     HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
@@ -214,6 +236,7 @@ class TestSevenToEightUpgradeHandler {
     }
 
     LSMTimelineWriter writer = mock(LSMTimelineWriter.class);
+    writerSetup.accept(writer);
     try (MockedStatic<LSMTimelineWriter> mockedWriterStatic = mockStatic(LSMTimelineWriter.class);
          MockedConstruction<LegacyArchivedMetaEntryReader> mockedReader = Mockito.mockConstruction(
              LegacyArchivedMetaEntryReader.class,

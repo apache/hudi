@@ -75,7 +75,7 @@ object LSMTimelineReadBenchmark extends HoodieBenchmarkBase {
         instantBuffer.add(new DummyActiveAction(instant, convertMetadataToByteArray(metadata)))
         if (i % batchSize == 0) {
           // archive 10 instants each time
-          writer.write(instantBuffer, org.apache.hudi.common.util.Option.empty(), org.apache.hudi.common.util.Option.empty())
+          writer.write(instantBuffer, org.apache.hudi.common.util.Option.empty())
           writer.compactAndClean(engineContext)
           instantBuffer.clear()
         }

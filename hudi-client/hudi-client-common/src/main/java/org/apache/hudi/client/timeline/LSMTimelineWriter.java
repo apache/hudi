@@ -112,12 +112,10 @@ public class LSMTimelineWriter {
    *
    * @param activeActions    The active actions
    * @param preWriteCallback The callback before writing each action
-   * @param exceptionHandler The callback notified before an exception aborts the batch
    */
   public void write(
       List<ActiveAction> activeActions,
-      Option<Consumer<ActiveAction>> preWriteCallback,
-      Option<Consumer<Exception>> exceptionHandler) {
+      Option<Consumer<ActiveAction>> preWriteCallback) {
     ValidationUtils.checkArgument(!activeActions.isEmpty(), "The instant actions to write should not be empty");
     StoragePath filePath = new StoragePath(this.archivePath,
         newFileName(activeActions.get(0).getInstantTime(), activeActions.get(activeActions.size() - 1).getInstantTime(), FILE_LAYER_ZERO));
@@ -153,16 +151,10 @@ public class LSMTimelineWriter {
           writer.write(metaEntry.getInstantTime(), new HoodieAvroIndexedRecord(metaEntry), schema);
         } catch (Exception e) {
           log.error("Failed to write instant: {}", activeAction.getInstantTime(), e);
-          exceptionHandler.ifPresent(handler -> handler.accept(e));
           throw e;
         }
       }
     } catch (Exception e) {
-      try {
-        deleteIfExists(filePath);
-      } catch (Exception cleanupException) {
-        e.addSuppressed(cleanupException);
-      }
       throw new HoodieCommitException("Failed to write commits", e);
     }
     try {
