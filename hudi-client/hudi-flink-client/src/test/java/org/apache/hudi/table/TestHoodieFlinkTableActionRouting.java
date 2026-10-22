@@ -21,17 +21,11 @@ package org.apache.hudi.table;
 
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.model.EventTimeFlinkRecordMerger;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
-import org.apache.hudi.common.engine.HoodieLocalEngineContext;
-import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
@@ -62,7 +56,6 @@ import org.apache.hudi.table.action.compact.ScheduleCompactionActionExecutor;
 import org.apache.hudi.table.action.rollback.BaseRollbackPlanActionExecutor;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
-import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -70,10 +63,8 @@ import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
-import java.util.TimeZone;
 import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -96,36 +87,6 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
   @AfterEach
   void tearDown() throws IOException {
     cleanupResources();
-  }
-
-  @Test
-  void testWriteRecordContextWithoutEngineContext() throws IOException {
-    initMetaClient(HoodieTableType.MERGE_ON_READ);
-    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withProps(config().getProps())
-        .withEngineType(EngineType.FLINK)
-        .withRecordMergeImplClasses(EventTimeFlinkRecordMerger.class.getName())
-        .withRecordMergeStrategyId(new EventTimeFlinkRecordMerger().getMergingStrategy())
-        .build();
-    HoodieFlinkMergeOnReadTable table = new HoodieFlinkMergeOnReadTable(
-        writeConfig, new HoodieLocalEngineContext(metaClient.getStorageConf()), metaClient);
-
-    TimeZone previousTimezone = TimeZone.getDefault();
-    TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"));
-    try {
-      HoodieSchema schema = HoodieSchema.createRecord("ordering", null, null,
-          Collections.singletonList(HoodieSchemaField.of("ts", HoodieSchema.createTimestampMillis())));
-      TimestampData timestamp = TimestampData.fromLocalDateTime(LocalDateTime.of(2024, 1, 2, 3, 4, 5));
-      for (boolean writeUtc : new boolean[] {false, true}) {
-        writeConfig.setValue(HoodieStorageConfig.WRITE_UTC_TIMEZONE, Boolean.toString(writeUtc));
-        RecordContext<?> recordContext = table.getRecordContextForWrite();
-        assertEquals(HoodieRecord.HoodieRecordType.FLINK, recordContext.getEngineRecordType());
-        recordContext.initOrderingValueConverter(schema, Collections.singletonList("ts"));
-        assertEquals(writeUtc ? timestamp.getMillisecond() : timestamp.toTimestamp().getTime(),
-            recordContext.convertOrderingValueToJava(timestamp));
-      }
-    } finally {
-      TimeZone.setDefault(previousTimezone);
-    }
   }
 
   @Test

@@ -46,17 +46,20 @@ public class OrderingValueEngineTypeConverter {
   private volatile List<Function<Comparable, Comparable>> javaConverters;
   private final HoodieSchema dataSchema;
   private final List<String> orderingFieldNames;
-  private final boolean utcTimezone;
+  private final boolean readUtcTimezone;
+  private final boolean writeUtcTimezone;
 
-  private OrderingValueEngineTypeConverter(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
+  private OrderingValueEngineTypeConverter(HoodieSchema dataSchema, List<String> orderingFieldNames,
+                                          boolean readUtcTimezone, boolean writeUtcTimezone) {
     this.dataSchema = dataSchema;
     this.orderingFieldNames = new ArrayList<>(orderingFieldNames);
-    this.utcTimezone = utcTimezone;
+    this.readUtcTimezone = readUtcTimezone;
+    this.writeUtcTimezone = writeUtcTimezone;
   }
 
   public Comparable convertToEngineType(Comparable value) {
     if (engineTypeConverters == null) {
-      engineTypeConverters = createConverters(dataSchema, orderingFieldNames, utcTimezone);
+      engineTypeConverters = createConverters(dataSchema, orderingFieldNames, readUtcTimezone);
     }
     return value instanceof ArrayComparable
         ? ((ArrayComparable) value).apply(engineTypeConverters)
@@ -65,7 +68,8 @@ public class OrderingValueEngineTypeConverter {
 
   public Comparable convertToJava(Comparable value) {
     if (javaConverters == null) {
-      javaConverters = createJavaConverters(dataSchema, orderingFieldNames, utcTimezone);
+      // Delete ordering values must use the same timestamp encoding as written data rows.
+      javaConverters = createJavaConverters(dataSchema, orderingFieldNames, writeUtcTimezone);
     }
     // With no ordering fields, apply identity to the whole value, including composite values.
     return value instanceof ArrayComparable && !orderingFieldNames.isEmpty()
@@ -109,7 +113,8 @@ public class OrderingValueEngineTypeConverter {
     }).collect(Collectors.toList());
   }
 
-  public static OrderingValueEngineTypeConverter create(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean utcTimezone) {
-    return new OrderingValueEngineTypeConverter(dataSchema, orderingFieldNames, utcTimezone);
+  public static OrderingValueEngineTypeConverter create(HoodieSchema dataSchema, List<String> orderingFieldNames,
+                                                       boolean readUtcTimezone, boolean writeUtcTimezone) {
+    return new OrderingValueEngineTypeConverter(dataSchema, orderingFieldNames, readUtcTimezone, writeUtcTimezone);
   }
 }

@@ -55,7 +55,7 @@ public class TestOrderingValueEngineTypeConverter {
     boolean utcTimezone = true;
 
     OrderingValueEngineTypeConverter converter =
-        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone);
+        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone, utcTimezone);
 
     Assertions.assertNull(converter.getEngineTypeConverters());
     Assertions.assertNull(converter.getJavaConverters());
@@ -82,7 +82,7 @@ public class TestOrderingValueEngineTypeConverter {
     boolean utcTimezone = true;
 
     OrderingValueEngineTypeConverter converter =
-        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone);
+        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone, utcTimezone);
 
     String originalValue = "test";
     Comparable converted = converter.convertToEngineType(originalValue);
@@ -99,7 +99,7 @@ public class TestOrderingValueEngineTypeConverter {
     List<String> orderingFieldNames = Collections.singletonList("timestamp");
 
     OrderingValueEngineTypeConverter converter =
-        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone);
+        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone, utcTimezone);
 
     Long originalValue = 1234567890000L;
     Comparable converted = converter.convertToEngineType(originalValue);
@@ -118,7 +118,7 @@ public class TestOrderingValueEngineTypeConverter {
     boolean utcTimezone = true;
 
     OrderingValueEngineTypeConverter converter =
-        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone);
+        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone, utcTimezone);
 
     Comparable[] originalValues = {"test", 1234567890000L};
     ArrayComparable originalArray = new ArrayComparable(originalValues);
@@ -166,7 +166,7 @@ public class TestOrderingValueEngineTypeConverter {
     boolean utcTimezone = true;
 
     OrderingValueEngineTypeConverter converter =
-        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone);
+        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone, utcTimezone);
 
     BigDecimal originalValue = new BigDecimal("123.45");
     Comparable converted = converter.convertToEngineType(originalValue);
@@ -182,7 +182,7 @@ public class TestOrderingValueEngineTypeConverter {
     List<String> orderingFieldNames = Collections.singletonList("birth_date");
 
     OrderingValueEngineTypeConverter converter =
-        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, true);
+        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, true, true);
 
     LocalDate originalValue = LocalDate.of(2020, 1, 1); // 2020-01-01
     Comparable converted = converter.convertToEngineType(originalValue);
@@ -200,7 +200,7 @@ public class TestOrderingValueEngineTypeConverter {
     boolean utcTimezone = true;
 
     OrderingValueEngineTypeConverter converter =
-        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone);
+        OrderingValueEngineTypeConverter.create(schema, orderingFieldNames, utcTimezone, utcTimezone);
 
     Comparable converted = converter.convertToEngineType(null);
     Assertions.assertNull(converted);

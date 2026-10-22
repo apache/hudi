@@ -83,11 +83,6 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     this.header.putAll(header);
   }
 
-  public HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                     String partitionPath, String fileId, TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, null, taskContextSupplier);
-  }
-
   protected HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                       String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
                                       TaskContextSupplier taskContextSupplier, boolean preserveMetadata, RecordContext<?> recordContext) {
