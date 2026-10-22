@@ -102,7 +102,10 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.1' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   SPARK_HADOOP_VERSION=3
   CONFLUENT_VERSION=5.5.12
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
-  if [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
+  if [[ ${FLINK_PROFILE} == 'flink1.20' ]]; then
+    IMAGE_TAG=flink1200hive313spark351
+    FLINK_VERSION=1.20.1
+  elif [[ ${FLINK_PROFILE} == 'flink2.0' ]]; then
     IMAGE_TAG=flink200hive313spark351
     FLINK_VERSION=2.0.0
   elif [[ ${FLINK_PROFILE} == 'flink2.1' ]]; then
