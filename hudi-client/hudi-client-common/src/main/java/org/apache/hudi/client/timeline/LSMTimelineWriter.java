@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
@@ -56,6 +57,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -110,7 +112,7 @@ public class LSMTimelineWriter {
    *
    * @param activeActions    The active actions
    * @param preWriteCallback The callback before writing each action
-   * @param exceptionHandler The handle for exception
+   * @param exceptionHandler The callback notified before an exception aborts the batch
    */
   public void write(
       List<ActiveAction> activeActions,
@@ -125,6 +127,10 @@ public class LSMTimelineWriter {
         // 1. the file was created but did not flush/close correctly and left as corrupt;
         // 2. the file was in complete state but the archiving fails during the deletion of active metadata files.
         if (isFileCommitted(filePath.getName())) {
+          // A writer from an older version may have committed a partial file after skipping a failed action.
+          if (!containsAllActions(filePath, activeActions)) {
+            throw new HoodieCommitException("Committed archive file does not contain all expected actions: " + filePath);
+          }
           // case2: the last archiving succeeded for committing to the archive timeline, just returns early.
           log.info("Skip archiving for the redundant file: {}", filePath);
           return;
@@ -148,9 +154,15 @@ public class LSMTimelineWriter {
         } catch (Exception e) {
           log.error("Failed to write instant: {}", activeAction.getInstantTime(), e);
           exceptionHandler.ifPresent(handler -> handler.accept(e));
+          throw e;
         }
       }
     } catch (Exception e) {
+      try {
+        deleteIfExists(filePath);
+      } catch (Exception cleanupException) {
+        e.addSuppressed(cleanupException);
+      }
       throw new HoodieCommitException("Failed to write commits", e);
     }
     try {
@@ -366,6 +378,24 @@ public class LSMTimelineWriter {
     HoodieLSMTimelineManifest latestManifest = LSMTimeline.latestSnapshotManifest(metaClient, archivePath);
     return latestManifest.getFiles()
         .stream().anyMatch(fileEntry -> fileEntry.getFileName().equals(fileName));
+  }
+
+  private boolean containsAllActions(StoragePath filePath, List<ActiveAction> activeActions) throws IOException {
+    Set<Pair<String, String>> expectedActions = activeActions.stream()
+        .map(action -> Pair.of(action.getInstantTime(), action.getAction()))
+        .collect(Collectors.toSet());
+    Set<Pair<String, String>> archivedActions = new HashSet<>();
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
+    try (HoodieAvroParquetReader reader = (HoodieAvroParquetReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(config, filePath);
+         ClosableIterator<IndexedRecord> iterator = reader.getIndexedRecordIterator(schema, schema)) {
+      while (iterator.hasNext()) {
+        IndexedRecord record = iterator.next();
+        archivedActions.add(Pair.of(record.get(0).toString(), record.get(2).toString()));
+      }
+    }
+    return archivedActions.containsAll(expectedActions);
   }
 
   private HoodieLSMTimelineManifest.LSMFileEntry getFileEntry(String fileName) throws IOException {

@@ -25,6 +25,8 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
@@ -32,20 +34,35 @@ import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
+import java.io.IOException;
 import java.util.Collections;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.RETURNS_SELF;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
 class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
@@ -98,6 +115,73 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
     assertEquals(9, rawActiveTimeline.countInstants());
   }
 
+  @Test
+  void archiveV1FailureDoesNotDeleteActiveInstantsWhenFailureIsTolerated() throws Exception {
+    HoodieWriteConfig writeConfig = createArchivalConfig(false);
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    addCommits(context, 5);
+
+    HoodieInstant oldestCompletedInstant = metaClient.reloadActiveTimeline().filterCompletedInstants().firstInstant().get();
+    StoragePath instantPath = new StoragePath(
+        metaClient.getTimelinePath(), metaClient.getInstantFileNameGenerator().getFileName(oldestCompletedInstant));
+    assertTrue(metaClient.getStorage().deleteFile(instantPath));
+    metaClient.getStorage().createImmutableFileInPath(
+        instantPath, Option.of(HoodieInstantWriter.convertByteArrayToWriter(new byte[] {1, 2, 3})));
+    long activeInstantCount = new ActiveTimelineV1(metaClient, false).countInstants();
+
+    TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+
+    assertEquals(0, archiver.archiveIfRequired(context));
+    assertEquals(activeInstantCount, new ActiveTimelineV1(metaClient, false).countInstants());
+    assertEquals(-1L, archiver.getMetrics().get(ArchivalMetrics.ARCHIVAL_STATUS));
+  }
+
+  @Test
+  void archiveV1CloseFailureDoesNotDeleteActiveInstantsWhenFailureIsTolerated() throws Exception {
+    HoodieWriteConfig writeConfig = createArchivalConfig(false);
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    addCommits(context, 5);
+    long activeInstantCount = new ActiveTimelineV1(metaClient, false).countInstants();
+    HoodieLogFormatWriter.HoodieLogFormatWriterBuilder writerBuilder =
+        mock(HoodieLogFormatWriter.HoodieLogFormatWriterBuilder.class, RETURNS_SELF);
+    HoodieLogFormatWriter writer = mock(HoodieLogFormatWriter.class);
+    when(writerBuilder.build()).thenReturn(writer);
+    doThrow(new IOException("injected close failure")).when(writer).close();
+
+    try (MockedStatic<HoodieLogFormatWriter> writerFactory = mockStatic(HoodieLogFormatWriter.class)) {
+      writerFactory.when(HoodieLogFormatWriter::builder).thenReturn(writerBuilder);
+      TimelineArchiverV1 archiver = new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig));
+
+      assertEquals(0, archiver.archiveIfRequired(context));
+      assertEquals(-1L, archiver.getMetrics().get(ArchivalMetrics.ARCHIVAL_STATUS));
+    }
+
+    assertEquals(activeInstantCount, new ActiveTimelineV1(metaClient, false).countInstants());
+  }
+
+  @Test
+  void archiveV2FailureDoesNotDeleteActiveInstantsWhenFailureIsTolerated() throws Exception {
+    HoodieWriteConfig writeConfig = createArchivalConfig(false);
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    addCommits(context, 5);
+    HoodieTable hoodieTable = setupMockHoodieTable(context, writeConfig);
+    TimelineArchiverV2 archiver = new TimelineArchiverV2<>(writeConfig, hoodieTable);
+    long activeInstantCount = new ActiveTimelineV1(metaClient, false).countInstants();
+    WriteMarkers writeMarkers = mock(WriteMarkers.class);
+    doThrow(new HoodieException("injected archive failure"))
+        .when(writeMarkers).deleteMarkerDir(any(HoodieEngineContext.class), anyInt());
+
+    try (MockedStatic<WriteMarkersFactory> markersFactory = mockStatic(WriteMarkersFactory.class)) {
+      markersFactory.when(() -> WriteMarkersFactory.get(eq(writeConfig.getMarkersType()), eq(hoodieTable), anyString()))
+          .thenReturn(writeMarkers);
+
+      assertEquals(0, archiver.archiveIfRequired(context));
+    }
+
+    assertEquals(activeInstantCount, new ActiveTimelineV1(metaClient, false).countInstants());
+    assertEquals(-1L, archiver.getMetrics().get(ArchivalMetrics.ARCHIVAL_STATUS));
+  }
+
   /**
    * The LSM writer must build its config on a table upgraded to version 10.
    *
@@ -136,11 +220,34 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
     assertFalse(lsmConfig.populateMetaFields());
   }
 
+  private HoodieWriteConfig createArchivalConfig(boolean failOnTimelineArchiving) {
+    TypedProperties properties = new TypedProperties();
+    properties.put(TimelineArchiverV1.ARCHIVE_LIMIT_INSTANTS, 1L);
+    properties.put(HoodieWriteConfig.FAIL_ON_TIMELINE_ARCHIVING_ENABLE.key(), String.valueOf(failOnTimelineArchiving));
+    return HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.toString())
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withMarkersType("DIRECT")
+        .withProperties(properties)
+        .build();
+  }
+
+  private void addCommits(HoodieEngineContext context, int commits) throws Exception {
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, metaClient.getStorageConf());
+    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(
+        basePath, hoodieStorage, metaClient, SCHEMA, null, null, Option.of(context));
+    for (int i = 0; i < commits; i++) {
+      testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
+    }
+  }
+
   private HoodieTable setupMockHoodieTable(HoodieEngineContext context, HoodieWriteConfig writeConfig) {
     HoodieTable hoodieTable = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
     when(hoodieTable.getContext()).thenReturn(context);
     when(hoodieTable.getConfig()).thenReturn(writeConfig);
     when(hoodieTable.getMetaClient()).thenReturn(metaClient);
+    when(hoodieTable.getStorage()).thenReturn(metaClient.getStorage());
+    when(hoodieTable.getTaskContextSupplier()).thenReturn(context.getTaskContextSupplier());
     when(hoodieTable.getActiveTimeline()).thenReturn(metaClient.getActiveTimeline());
     when(hoodieTable.getCompletedCommitsTimeline()).thenReturn(metaClient.getCommitsTimeline().filterCompletedInstants());
     when(hoodieTable.getCompletedCleanTimeline()).thenReturn(metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants());

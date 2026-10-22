@@ -55,7 +55,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -111,12 +110,16 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       boolean success = true;
       if (!instantsToArchive.isEmpty()) {
         log.info("Archiving and deleting instants {}", instantsToArchive);
-        Consumer<Exception> exceptionHandler = e -> {
+        try {
+          this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.empty());
+        } catch (Exception e) {
           if (this.config.isFailOnTimelineArchivingEnabled()) {
-            throw new HoodieException(e);
+            throw e;
           }
-        };
-        this.timelineWriter.write(instantsToArchive, Option.of(action -> deleteAnyLeftOverMarkers(context, action)), Option.of(exceptionHandler));
+          recordArchivalFailure(e);
+          log.warn("Failed to archive instants for table {}; active timeline files will not be deleted", config.getBasePath(), e);
+          return 0;
+        }
         log.debug("Deleting archived instants");
         success = deleteArchivedActions(instantsToArchive, context);
         // triggers compaction and cleaning only after archiving action
@@ -135,8 +138,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
       metrics.put(ArchivalMetrics.ARCHIVAL_OOM_FAILURE, 1L);
       throw oom;
     } catch (Exception e) {
-      String failureMetricName = String.join(".", ArchivalMetrics.ARCHIVAL_FAILURE, e.getClass().getSimpleName());
-      metrics.put(failureMetricName, 1L);
+      recordArchivalFailure(e);
       throw e;
     } finally {
       if (acquireLock) {
@@ -148,6 +150,12 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
   @Override
   public Map<String, Long> getMetrics() {
     return metrics;
+  }
+
+  private void recordArchivalFailure(Exception e) {
+    metrics.put(ArchivalMetrics.ARCHIVAL_STATUS, -1L);
+    String failureMetricName = String.join(".", ArchivalMetrics.ARCHIVAL_FAILURE, e.getClass().getSimpleName());
+    metrics.put(failureMetricName, 1L);
   }
 
   private void addArchivalCommitMetrics(List<ActiveAction> instantsToArchive) {

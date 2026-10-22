@@ -32,6 +32,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.index.HoodieIndex;
 
 import org.junit.jupiter.api.AfterEach;
@@ -50,8 +51,11 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link org.apache.hudi.common.table.timeline.versioning.v2.ArchivedTimelineV2}.
@@ -135,9 +139,51 @@ public class TestArchivedTimelineV2 extends HoodieCommonTestHarness {
     HoodieArchivedTimeline timeline = TIMELINE_FACTORY.createArchivedTimeline(metaClient);
     assertSame(timeline, timeline.getInstantReader());
   }
+
+  @Test
+  void testFailedActionDoesNotPublishPartialArchiveFile() {
+    ActiveAction firstAction = createActiveAction("10000001");
+    ActiveAction failedAction = new DummyActiveAction(
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "10000002", "10000102"),
+        new byte[0]) {
+      @Override
+      public Option<byte[]> getCommitMetadata(HoodieTableMetaClient metaClient) {
+        throw new IllegalStateException("injected archive failure");
+      }
+    };
+    ActiveAction lastAction = createActiveAction("10000003");
+    LSMTimelineWriter writer = createTimelineWriter();
+
+    assertThrows(HoodieCommitException.class,
+        () -> writer.write(Arrays.asList(firstAction, failedAction, lastAction), Option.empty(), Option.empty()));
+    assertTrue(metaClient.getArchivedTimeline().empty());
+
+    writer.write(Arrays.asList(firstAction, createActiveAction("10000002"), lastAction), Option.empty(), Option.empty());
+    assertEquals(3, metaClient.getArchivedTimeline().reload().countInstants());
+  }
+
+  @Test
+  void testCommittedArchiveFileMustContainAllExpectedActions() {
+    ActiveAction firstAction = createActiveAction("10000001");
+    ActiveAction middleAction = createActiveAction("10000002");
+    ActiveAction lastAction = createActiveAction("10000003");
+    LSMTimelineWriter writer = createTimelineWriter();
+
+    writer.write(Arrays.asList(firstAction, lastAction), Option.empty(), Option.empty());
+
+    assertThrows(HoodieCommitException.class,
+        () -> writer.write(Arrays.asList(firstAction, middleAction, lastAction), Option.empty(), Option.empty()));
+    assertEquals(2, metaClient.getArchivedTimeline().reload().countInstants());
+  }
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  private ActiveAction createActiveAction(String instantTime) {
+    HoodieInstant completed = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, instantTime, instantTime + "1");
+    return new DummyActiveAction(completed, new byte[] {1, 2, 3});
+  }
 
   private void writeArchivedTimeline(int batchSize, long startTs) throws Exception {
     HoodieTestTable testTable = HoodieTestTable.of(this.metaClient);
