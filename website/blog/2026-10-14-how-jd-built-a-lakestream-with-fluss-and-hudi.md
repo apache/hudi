@@ -22,7 +22,7 @@ JD.com runs a large Apache Hudi lakehouse alongside a large Apache Kafka deploym
 
 :::tip TL;DR
 
-- **The problem**: separate real-time and batch pipelines for the same data meant duplicated storage and compute and metric definitions that drifted apart. Consumers of one impression log topic had to read 195 GB/min to get the 6 GB/min of data they actually needed.
+- **The problem**: separate real-time and batch pipelines for the same data meant duplicated storage and compute and metric definitions that drifted apart. Consumers of one impression log topic had to read 195 GB/min to get the 6 GB/min of selective columns they actually needed.
 - **The approach**: a Lakestream on Fluss and Hudi, so one copy of data serves both real-time and batch workloads.
 - **The results in recommendation ranking**: batch compute cost down more than 80%, storage cost down more than 50%, end-to-end training-data freshness improved by more than 30%, three training-data sources merged into one, and better click-through and conversion rates in A/B tests.
 - **The Fluss integration**: Hudi support for Fluss tiering (being contributed upstream as Fluss Improvement Proposal 24, FIP-24), server-side consumer offset management, and high availability for the Fluss Coordinator.
