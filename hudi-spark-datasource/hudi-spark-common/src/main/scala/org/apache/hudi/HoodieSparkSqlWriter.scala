@@ -76,7 +76,7 @@ import org.apache.spark.sql.types.StructType
 import org.slf4j.LoggerFactory
 
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.function.BiConsumer
+import java.util.function.{BiConsumer, BiFunction}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -87,7 +87,10 @@ object HoodieSparkSqlWriter {
   case class StreamingWriteParams(hoodieTableConfigOpt: Option[HoodieTableConfig] = Option.empty,
                                   asyncCompactionTriggerFn: Option[SparkRDDWriteClient[_] => Unit] = Option.empty,
                                   asyncClusteringTriggerFn: Option[SparkRDDWriteClient[_] => Unit] = Option.empty,
-                                  extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]] = Option.empty)
+                                  extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]] = Option.empty,
+                                  // When set, the caller constructs the write client from the resolved write config and owns
+                                  // its lifecycle: the writer does not close it after the write.
+                                  writeClientFactory: Option[(HoodieSparkEngineContext, HoodieWriteConfig) => SparkRDDWriteClient[_]] = Option.empty)
 
   /**
    * Controls whether incoming batch's schema's nullability constraints should be canonicalized
@@ -165,6 +168,7 @@ class HoodieSparkSqlWriterInternal {
   private var tableExists: Boolean = false
   private var asyncCompactionTriggerFnDefined: Boolean = false
   private var asyncClusteringTriggerFnDefined: Boolean = false
+  private var writeClientOwnedByCaller: Boolean = false
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
@@ -236,6 +240,7 @@ class HoodieSparkSqlWriterInternal {
 
     asyncCompactionTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncCompactionTriggerFn.isDefined).orElse(Some(false)).get
     asyncClusteringTriggerFnDefined = streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.isDefined).orElse(Some(false)).get
+    writeClientOwnedByCaller = streamingWritesParamsOpt.exists(_.writeClientFactory.isDefined)
     // re-use table configs and inject defaults.
     var (parameters, hoodieConfig) = mergeParamsAndGetHoodieConfig(optParams, tableConfig, mode, streamingWritesParamsOpt.isDefined)
     val databaseName = hoodieConfig.getStringOrDefault(HoodieTableConfig.DATABASE_NAME, "")
@@ -409,9 +414,9 @@ class HoodieSparkSqlWriterInternal {
 
             // Create a HoodieWriteClient & issue the delete.
             val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
-            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
+            val client = hoodieWriteClient.getOrElse(createWriteClient(jsc,
                 null, path, tblName,
-                addSchemaEvolutionParameters(parameters, internalSchemaOpt).asJava))
+                addSchemaEvolutionParameters(parameters, internalSchemaOpt).asJava, streamingWritesParamsOpt))
               .asInstanceOf[SparkRDDWriteClient[_]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -464,9 +469,9 @@ class HoodieSparkSqlWriterInternal {
 
             // Issue the delete.
             val schemaStr = new TableSchemaResolver(tableMetaClient).getTableSchema(false).toString
-            val client = hoodieWriteClient.getOrElse(DataSourceUtils.createHoodieClient(jsc,
+            val client = hoodieWriteClient.getOrElse(createWriteClient(jsc,
                 schemaStr, path, tblName,
-                parameters.asJava))
+                parameters.asJava, streamingWritesParamsOpt))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
             instantTime = client.startDeletePartitionCommit(tableMetaClient)
@@ -514,7 +519,7 @@ class HoodieSparkSqlWriterInternal {
             val client = hoodieWriteClient.getOrElse {
               val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema))
               // TODO(HUDI-4772) proper writer-schema has to be specified here
-              DataSourceUtils.createHoodieClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava)
+              createWriteClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava, streamingWritesParamsOpt)
             }
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -581,12 +586,29 @@ class HoodieSparkSqlWriterInternal {
     }
   }
 
+  private def createWriteClient(jsc: JavaSparkContext, schemaStr: String, path: String, tblName: String,
+                                parameters: java.util.Map[String, String],
+                                streamingWritesParamsOpt: Option[StreamingWriteParams]): SparkRDDWriteClient[_] = {
+    streamingWritesParamsOpt.flatMap(_.writeClientFactory) match {
+      case Some(factory) =>
+        DataSourceUtils.createHoodieClient(jsc, schemaStr, path, tblName, parameters,
+          new BiFunction[HoodieSparkEngineContext, HoodieWriteConfig, SparkRDDWriteClient[_]] {
+            override def apply(context: HoodieSparkEngineContext, writeConfig: HoodieWriteConfig): SparkRDDWriteClient[_] =
+              factory(context, writeConfig)
+          })
+      case None =>
+        DataSourceUtils.createHoodieClient(jsc, schemaStr, path, tblName, parameters)
+    }
+  }
+
   private def closeWriteClient(writeClient: SparkRDDWriteClient[_], tableConfig: HoodieTableConfig, parameters: Map[String, String], configuration: Configuration): Unit = {
-    // close the write client in all cases
-    val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
-    val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
-    if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
-      writeClient.close()
+    // a caller-owned client (streaming sink) is reused across writes and closed by its owner
+    if (!writeClientOwnedByCaller) {
+      val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
+      val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
+      if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
+        writeClient.close()
+      }
     }
   }
 

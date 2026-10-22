@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, FileSystemViewStorageType}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
@@ -506,6 +507,43 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
     assertTrue(metaClient.getActiveTimeline.getCommitAndReplaceTimeline.empty())
     assertEquals(25, metaClient.getActiveTimeline.countInstants())
+  }
+
+  /**
+   * The sink owns one embedded timeline server for the lifetime of the streaming query and reuses it across
+   * micro-batches. With a REMOTE_ONLY file system view and no backup view, every micro-batch after the first used
+   * to fail because the timeline server was stopped along with the first micro-batch's write client
+   * (https://github.com/apache/hudi/issues/12652). Failed batches are ignored here so that a regression shows up
+   * as missing commits rather than the sink exiting the JVM.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testStructuredStreamingReusesTimelineServerAcrossBatches(tableType: HoodieTableType): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val opts = getOptsWithTableType(tableType) ++ Map(
+      HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key -> "true",
+      FileSystemViewStorageConfig.VIEW_TYPE.key -> FileSystemViewStorageType.REMOTE_ONLY.name,
+      FileSystemViewStorageConfig.REMOTE_BACKUP_VIEW_ENABLE.key -> "false",
+      DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key -> "true",
+      DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> "1")
+
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val query = initWritingStreamingQuery(inputDF1.schema, sourcePath, destPath, opts)
+    try {
+      query.processAllAvailable()
+      for (i <- 1 to 2) {
+        val records = recordsToStrings(dataGen.generateUpdates("%03d".format(i), 50)).asScala.toList
+        spark.read.json(spark.sparkContext.parallelize(records, 2)).coalesce(1)
+          .write.mode(SaveMode.Append).json(sourcePath)
+        query.processAllAvailable()
+      }
+    } finally {
+      query.stop()
+    }
+
+    assertEquals(3, HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, destPath).countInstants())
   }
 
   /**
