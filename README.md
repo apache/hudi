@@ -128,42 +128,29 @@ The default Spark 3.x version, corresponding to `spark3` profile is
 
 Refer to the table below for building with different Spark and Scala versions.
 
-| Maven build options       | Expected Spark bundle jar name               | Notes                                            |
-|:--------------------------|:---------------------------------------------|:-------------------------------------------------|
-| (empty)                   | hudi-spark3.5-bundle_2.12                    | For Spark 3.5.x and Scala 2.12 (default options) |
-| `-Dspark3.3`              | hudi-spark3.3-bundle_2.12                    | For Spark 3.3.2+ and Scala 2.12                  |
-| `-Dspark3.4`              | hudi-spark3.4-bundle_2.12                    | For Spark 3.4.x and Scala 2.12                   |
-| `-Dspark3.5 -Dscala-2.12` | hudi-spark3.5-bundle_2.12                    | For Spark 3.5.x and Scala 2.12 (same as default) |
-| `-Dspark3.5 -Dscala-2.13` | hudi-spark3.5-bundle_2.13                    | For Spark 3.5.x and Scala 2.13                   |
-| `-Dspark4.0`              | hudi-spark4.0-bundle_2.13                    | For Spark 4.0 and Scala 2.13 (Needs java 17)     |
-| `-Dspark4.1`              | hudi-spark4.1-bundle_2.13                    | For Spark 4.1 and Scala 2.13 (Needs java 17)     |
-| `-Dspark4.2`              | hudi-spark4.2-bundle_2.13                    | For Spark 4.2 and Scala 2.13 (Needs java 17)     |
-| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.5.x and Scala 2.12                   |
+| Maven build options       | Expected Spark bundle jar name               | Expected Spark native bundle jar name | Notes                                            |
+|:--------------------------|:---------------------------------------------|:--------------------------------------|:-------------------------------------------------|
+| (empty)                   | hudi-spark3.5-bundle_2.12                    | hudi-spark3.5-native-bundle_2.12      | For Spark 3.5.x and Scala 2.12 (default options) |
+| `-Dspark3.3`              | hudi-spark3.3-bundle_2.12                    | none                                  | For Spark 3.3.2+ and Scala 2.12                  |
+| `-Dspark3.4`              | hudi-spark3.4-bundle_2.12                    | hudi-spark3.4-native-bundle_2.12      | For Spark 3.4.x and Scala 2.12                   |
+| `-Dspark3.5 -Dscala-2.12` | hudi-spark3.5-bundle_2.12                    | hudi-spark3.5-native-bundle_2.12      | For Spark 3.5.x and Scala 2.12 (same as default) |
+| `-Dspark3.5 -Dscala-2.13` | hudi-spark3.5-bundle_2.13                    | hudi-spark3.5-native-bundle_2.13      | For Spark 3.5.x and Scala 2.13                   |
+| `-Dspark4.0`              | hudi-spark4.0-bundle_2.13                    | hudi-spark4.0-native-bundle_2.13      | For Spark 4.0 and Scala 2.13 (Needs java 17)     |
+| `-Dspark4.1`              | hudi-spark4.1-bundle_2.13                    | hudi-spark4.1-native-bundle_2.13      | For Spark 4.1 and Scala 2.13 (Needs java 17)     |
+| `-Dspark4.2`              | hudi-spark4.2-bundle_2.13                    | none                                  | For Spark 4.2 and Scala 2.13 (Needs java 17)     |
+| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | none                                  | For Spark 3.5.x and Scala 2.12                   |
+
+`hudi-spark-native-bundle` is `hudi-spark-bundle` plus [Apache DataFusion Comet](https://datafusion.apache.org/comet/)
+for native vectorized execution, built by the same Maven options. Comet publishes one artifact per
+Spark minor version, so the native bundle exists only where that artifact does, and `-Dspark3` is a
+legacy alias that selects none. It builds on Java 11 but needs Java 17 and Linux with glibc at runtime.
+See `packaging/hudi-spark-native-bundle/README.md`.
 
 Hudi uses ZSTD as the default Parquet compression codec with Spark 3.5 and newer. Spark 3.3 and 3.4
 retain GZIP because Hudi's non-vectorized file-group reader uses parquet-java 1.12.x and can leak
 off-heap memory when reading ZSTD files ([PARQUET-2160](https://issues.apache.org/jira/browse/PARQUET-2160)).
 Upgrade to Spark 3.5 or newer before using ZSTD. Keeping GZIP as the write default does not remove the
 risk when an older Spark runtime reads ZSTD files produced by another engine.
-
-### Spark native bundle
-
-`hudi-spark-native-bundle` is `hudi-spark-bundle` plus [Apache DataFusion Comet](https://datafusion.apache.org/comet/)
-for native vectorized execution. It is built alongside the Spark bundle for the Spark versions Comet
-publishes artifacts for, and produces nothing for the others.
-
-| Maven build options       | Expected native bundle jar name | Notes                                          |
-|:--------------------------|:--------------------------------|:-----------------------------------------------|
-| `-Dspark3.4`              | hudi-spark3.4-native-bundle_2.12 | For Spark 3.4.x and Scala 2.12                 |
-| `-Dspark3.5 -Dscala-2.12` | hudi-spark3.5-native-bundle_2.12 | For Spark 3.5.x and Scala 2.12                 |
-| `-Dspark3.5 -Dscala-2.13` | hudi-spark3.5-native-bundle_2.13 | For Spark 3.5.x and Scala 2.13                 |
-| `-Dspark4.0`              | hudi-spark4.0-native-bundle_2.13 | For Spark 4.0 and Scala 2.13                   |
-| `-Dspark4.1`              | hudi-spark4.1-native-bundle_2.13 | For Spark 4.1 and Scala 2.13                   |
-| `-Dspark3.3`, `-Dspark4.2` | none                            | Comet publishes no artifact for these versions |
-| `-Dspark3`                | none                            | Legacy alias; does not activate the Comet profile for 3.5 |
-
-The bundle can be built on Java 11, but requires Java 17 at runtime, and Comet ships Linux native
-libraries only. See `packaging/hudi-spark-native-bundle/README.md`.
 
 Please note that only Spark-related bundles, i.e., `hudi-spark-bundle`, `hudi-utilities-bundle`,
 `hudi-utilities-slim-bundle`, can be built using `scala-2.13` profile. Hudi Flink bundle cannot be built

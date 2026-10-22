@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.hudi.spark.bundle;
+package org.apache.hudi.spark.nativebundle;
 
 import org.apache.hudi.common.util.ReflectionUtils;
 
@@ -26,7 +26,9 @@ import org.apache.hudi.common.util.ReflectionUtils;
  * This is a workaround for generating sources and javadoc jars for packaging modules. The maven plugins for generating
  * javadoc and sources plugins do not generate corresponding jars if there are no source files.
  *
- * This class does not have anything to do with Hudi but is there to keep mvn javadocs/source plugin happy.
+ * This class does not have anything to do with Hudi but is there to keep mvn javadocs/source plugin happy. It
+ * lives in its own package because the shaded hudi-spark-bundle jar already carries
+ * org.apache.hudi.spark.bundle.Main.
  */
 public class Main {
 

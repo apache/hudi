@@ -59,7 +59,7 @@ declare -a ALL_VERSION_OPTS=(
 # hudi-spark4.1-native-bundle_2.13
 "-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.1 -pl hudi-spark-datasource/hudi-spark4.1.x,packaging/hudi-spark-bundle,packaging/hudi-spark-native-bundle -am"
 # For Spark 4.2, Scala 2.13:
-# (no hudi-spark4.2-native-bundle: Apache DataFusion Comet has no Spark 4.2 release yet)
+# (no hudi-spark4.2-native-bundle: Comet supports Spark 4.2 only experimentally and publishes no artifact for it)
 # hudi-spark4-common
 # hudi-spark4.2.x_2.13
 # hudi-spark4.2-bundle_2.13

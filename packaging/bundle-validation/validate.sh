@@ -79,17 +79,20 @@ use_default_java_runtime () {
 ##
 # Function to test the spark native bundle, which carries Apache DataFusion Comet.
 #
-# Comet ships class file version 61 bytecode and a glibc linked libcomet.so, so this only runs on
-# the Java 17 pass.
-#
-# A Hudi path read looks its table up in the session catalog, and the Hive metastore configured in
-# hive-site.xml only runs inside test_spark_hadoop_mr_bundles, so the session uses the in-memory
-# catalog.
+# Comet needs Java 17 and a glibc JVM for libcomet.so, so this runs on the Java 17 pass and skips on
+# a musl image (the Alpine based image's Java 17 is musl too). Comet's plugin is inert without
+# off-heap memory, and nativeLoadRequired makes a libcomet.so load failure an error instead of a
+# silent fallback to Spark. The session uses the in-memory catalog because a Hudi path read looks
+# the table up in the catalog and the Hive metastore only runs inside test_spark_hadoop_mr_bundles.
 #
 # env vars (defined in container):
 #   SPARK_HOME: path to the spark directory
 ##
 test_spark_native_bundle () {
+    if ls /lib/ld-musl-*.so.1 > /dev/null 2>&1; then
+        echo "::warning::validate.sh skip validating spark native bundle, libcomet.so needs glibc and this image is musl"
+        return 0
+    fi
     local outputDir=/tmp/spark-native-bundle
     rm -rf $outputDir
     change_java_runtime_version
@@ -98,8 +101,11 @@ test_spark_native_bundle () {
       --conf 'spark.plugins=org.apache.spark.CometPlugin' \
       --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension,org.apache.comet.CometSparkSessionExtensions' \
       --conf 'spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager' \
+      --conf 'spark.memory.offHeap.enabled=true' \
+      --conf 'spark.memory.offHeap.size=1g' \
       --conf 'spark.comet.enabled=true' \
       --conf 'spark.comet.exec.enabled=true' \
+      --conf 'spark.comet.nativeLoadRequired=true' \
       --conf 'spark.comet.convert.parquet.enabled=true' \
       --conf 'spark.comet.explain.fallback.enabled=true' \
       --conf 'spark.comet.metrics.enabled=true' \
@@ -469,6 +475,22 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
+if [ -e $JARS_DIR/spark-native.jar ] && [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
+  echo "::warning::validate.sh validating spark native bundle"
+  test_spark_native_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  # The slim utilities bundle takes Hudi's relocated third-party classes from the Spark bundle it is
+  # paired with, so it has to work with this one too. No Comet config is set here, so this runs on
+  # musl images as well.
+  echo "::warning::validate.sh validating utilities slim bundle with spark native bundle"
+  test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark-native.jar
+  echo "::warning::validate.sh done validating spark native bundle"
+else
+  echo "::warning::validate.sh skip validating spark native bundle, needs openjdk17 and a Spark version Comet releases for"
+fi
+
 if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* || $SPARK_HOME == *"spark-4.1"* ]]
 then
   echo "::warning::validate.sh validating cli bundle"
@@ -523,16 +545,4 @@ if [[ ${SCALA_PROFILE} != 'scala-2.13' ]]; then
       exit 1
   fi
   echo "::warning::validate.sh done validating metaserver bundle"
-fi
-
-# Runs last, so a failure here cannot skip the validation of another bundle.
-if [ -e $JARS_DIR/spark-native.jar ] && [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
-  echo "::warning::validate.sh validating spark native bundle"
-  test_spark_native_bundle
-  if [ "$?" -ne 0 ]; then
-      exit 1
-  fi
-  echo "::warning::validate.sh done validating spark native bundle"
-else
-  echo "::warning::validate.sh skip validating spark native bundle, needs openjdk17 and a Spark version Comet releases for"
 fi
