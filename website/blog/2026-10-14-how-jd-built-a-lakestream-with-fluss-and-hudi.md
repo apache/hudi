@@ -1,7 +1,7 @@
 ---
 title: "How JD.com Built a Lakestream with Apache Fluss and Apache Hudi"
-excerpt: "JD.com keeps fresh data in Apache Fluss and tiers it into Apache Hudi tables, so one copy of data serves both real-time and offline workloads. In recommendation ranking, this cut offline compute cost by more than 80% and storage cost by more than 50%."
-description: "JD.com keeps fresh data in Apache Fluss and tiers it into Apache Hudi tables, so one copy of data serves both real-time and offline workloads. In recommendation ranking, this cut offline compute cost by more than 80% and storage cost by more than 50%."
+excerpt: "JD.com keeps fresh data in Apache Fluss and tiers it into Apache Hudi tables, so one copy of data serves both real-time and batch workloads. In recommendation ranking, this cut batch compute cost by more than 80% and storage cost by more than 50%."
+description: "JD.com keeps fresh data in Apache Fluss and tiers it into Apache Hudi tables, so one copy of data serves both real-time and batch workloads. In recommendation ranking, this cut batch compute cost by more than 80% and storage cost by more than 50%."
 author: "Hou Zhong, Technical Expert at JD.com"
 category: case-study
 image: /assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/02-fluss-lake-stream-architecture.jpg
@@ -22,9 +22,9 @@ JD.com runs a large Apache Hudi lakehouse alongside a large Apache Kafka deploym
 
 :::tip TL;DR
 
-- **The problem**: separate real-time and offline pipelines for the same data meant duplicated storage and compute and metric definitions that drifted apart. Consumers of one impression log topic read 195 GB/min to use 6 GB/min.
-- **The approach**: a Lakestream on Fluss and Hudi, so one copy of data serves real-time and offline workloads.
-- **The results in recommendation ranking**: offline compute cost down more than 80%, storage cost down more than 50%, end-to-end training-data freshness improved by more than 30%, three training-data sources merged into one, and better click-through and conversion rates in A/B tests.
+- **The problem**: separate real-time and batch pipelines for the same data meant duplicated storage and compute and metric definitions that drifted apart. Consumers of one impression log topic had to read 195 GB/min to get the 6 GB/min of data they actually needed.
+- **The approach**: a Lakestream on Fluss and Hudi, so one copy of data serves both real-time and batch workloads.
+- **The results in recommendation ranking**: batch compute cost down more than 80%, storage cost down more than 50%, end-to-end training-data freshness improved by more than 30%, three training-data sources merged into one, and better click-through and conversion rates in A/B tests.
 - **The engineering work**: Hudi support for Fluss tiering (being contributed upstream as Fluss Improvement Proposal 24, FIP-24), server-side consumer offset management, and high availability for the Fluss Coordinator.
 
 :::
@@ -54,11 +54,11 @@ Teams use only a small fraction of the data, but the platform pays for all of it
 
 ### Separate Lake and Stream Pipelines Duplicate Work
 
-The second problem is architectural: the lake and the stream are separate systems. Take training data for search and recommendation models. Teams have traditionally run two pipelines side by side. The real-time pipeline quickly turns user activity into fresh training samples and features. The offline pipeline handles backfills, corrections, model training, and analysis. Running both meets different freshness needs, but it creates three problems:
+The second problem is architectural: the lake and the stream are separate systems. Take training data for search and recommendation models. Teams have traditionally run two pipelines side by side. The real-time pipeline quickly turns user activity into fresh training samples and features. The batch pipeline handles backfills, corrections, model training, and analysis. Running both meets different freshness needs, but it creates three problems:
 
 - **Duplicate storage.** Much of the same data is stored more than once, in the message queue and in lake tables.
 - **Duplicate compute.** Both pipelines clean the data, join it, assemble features, and generate samples. Only the execution model differs.
-- **Inconsistent metric definitions.** The two pipelines evolve separately, so field definitions, filters, error handling, and backfill logic drift apart. When a metric moves, teams often have to work out how the real-time and offline numbers are defined before they can investigate.
+- **Inconsistent metric definitions.** The two pipelines evolve separately, so field definitions, filters, error handling, and backfill logic drift apart. When a metric moves, teams often have to work out how the real-time and batch numbers are defined before they can investigate.
 
 ### Why We Adopted Fluss
 
@@ -77,27 +77,27 @@ We chose recommendation ranking as a key production use case. Ranking is the sta
 
 ### Pain Points Before the Redesign
 
-- **Training samples came from scattered sources, which made them hard to build and operate.** Offline and real-time samples came from different pipelines. Teams had to know two tech stacks, keep both pipelines correct and stable, and make every logic change twice. Offline and real-time metric definitions easily diverged between upstream and downstream teams.
+- **Training samples came from scattered sources, which made them hard to build and operate.** Batch and real-time samples came from different pipelines. Teams had to know two tech stacks, keep both pipelines correct and stable, and make every logic change twice. Batch and real-time metric definitions easily diverged between upstream and downstream teams.
 - **Samples were expensive to store and compute.** The same features and labels were stored and computed several times across systems, and neither pipeline could update samples incrementally.
-- **Teams had to trade sample quality against freshness.** The real-time pipeline had a short join window, slow row-based reads, and no shuffle, which limited sample quality. The offline pipeline was slow and hard to backfill, yet fixing real-time samples still depended on it.
+- **Teams had to trade sample quality against freshness.** The real-time pipeline had a short join window, slow row-based reads, and no shuffle, which limited sample quality. The batch pipeline was slow and hard to backfill, yet fixing real-time samples still depended on it.
 
 ![Recommendation ranking background and pain points](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/03-ranking-before.jpg)
 _Figure 3: Recommendation ranking before the redesign_
 
 ### The New Architecture
 
-The redesign gradually consolidates several parallel pipelines into **one copy of data, consumed in different ways**. Real-time features and labels stream into Fluss first, which supports low-latency writes and minute-level online learning. The tiering service then writes the same data into Hudi tables, where Hudi's efficient backfills support offline analysis, base model training, and catch-up training (training on recently accumulated data to bring a model up to date).
+The redesign gradually consolidates several parallel pipelines into **one copy of data, consumed in different ways**. Real-time features and labels stream into Fluss first, which supports low-latency writes and minute-level online learning. The tiering service then writes the same data into Hudi tables, where Hudi's efficient backfills support batch analysis, base model training, and catch-up training (training on recently accumulated data to bring a model up to date).
 
-Real-time samples now come from Fluss and offline training data from Hudi, and their sources and metric definitions are converging. Field definitions, write paths, and data lifecycle are all managed through Fluss. Engineers no longer have to check whether a field exists in both pipelines and means the same thing in each, and they can spend that time on model quality and product strategy.
+Real-time samples now come from Fluss and batch training data from Hudi, and their sources and metric definitions are converging. Field definitions, write paths, and data lifecycle are all managed through Fluss. Engineers no longer have to check whether a field exists in both pipelines and means the same thing in each, and they can spend that time on model quality and product strategy.
 
 ![Recommendation ranking redesigned on Fluss](/assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/04-ranking-on-fluss.jpg)
 _Figure 4: Recommendation ranking on Fluss and Hudi_
 
 ### Results
 
-- **Cost**: offline compute cost **down more than 80%**, storage cost **down more than 50%**.
+- **Cost**: batch compute cost **down more than 80%**, storage cost **down more than 50%**.
 - **Freshness**: end-to-end training-data pipeline freshness **improved by more than 30%**.
-- **Engineering effort**: three training-data sources (offline, catch-up, and real-time) merged into one, and two APIs (offline and real-time) merged into one.
+- **Engineering effort**: three training-data sources (batch, catch-up, and real-time) merged into one, and two APIs (batch and real-time) merged into one.
 - **Business metrics**: core recommendation metrics, including user click-through rate (UCTR) and order conversion rate (UCVR), improved in A/B tests.
 
 The deployment showed that a Lakestream works for this use case. A simpler training-data pipeline, shared metric definitions, and fresher data also shorten the cycle for running and validating model experiments.
