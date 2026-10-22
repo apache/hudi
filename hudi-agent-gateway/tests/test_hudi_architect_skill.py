@@ -1275,7 +1275,9 @@ def test_pr5_timestamp_partition_layout_difference_is_not_deployment_only(
     ]
 
 
-def test_pr5_table_path_has_independent_provenance(tmp_path: Path) -> None:
+def test_pr5_identity_path_disagreement_is_unverified_evidence_conflict(
+    tmp_path: Path,
+) -> None:
     envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
     envelope["evidence"][4]["facts"]["table_path"] = "file:///tmp/another-table"
 
@@ -1283,11 +1285,17 @@ def test_pr5_table_path_has_independent_provenance(tmp_path: Path) -> None:
 
     assert result.returncode == 1, result.stderr
     assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["finding_codes"] == ["FLINK_EXISTING_EVIDENCE_CONFLICT"]
     comparison = next(
         item for item in assessment["comparisons"]
         if item["field"] == "table_identity.table_path"
     )
-    assert comparison["result"] == "CONFLICT"
+    assert comparison["desired"] == envelope["desired_contract"]["table"]["path"]
+    assert comparison["observed"] == "file:///tmp/another-table"
+    assert comparison["result"] == "UNVERIFIED"
     assert comparison["source_ids"] == ["identity-1"]
 
 
