@@ -49,26 +49,22 @@ public class TestSparkSqlHudiPackageStructure {
 
   private static final String BASE_PACKAGE = "org.apache.spark.sql.hudi";
   private static final String PACKAGE_PATH = "org/apache/spark/sql/hudi";
-  private static final String AZURE_PIPELINE_FILE = "azure-pipelines-20230430.yml";
+  private static final String SPARK35_WORKFLOW_FILE = ".github/workflows/spark35_ci.yml";
   private static final String SPARK_DATASOURCE_DIR = "hudi-spark-datasource";
 
-  private static final Pattern PARAM_NAME = Pattern.compile("^\\s*- name:\\s*(\\S+)\\s*$");
-  private static final Pattern LIST_ITEM = Pattern.compile("^\\s*- '([^']*)'\\s*$");
-  /** A {@code variables:} entry that is just a join over a parameter list, e.g. {@code
-   * JOB3456_MODULES: ${{ join(',',parameters.job3456UTModules) }}}. */
-  private static final Pattern VARIABLE_JOIN =
-      Pattern.compile("^\\s*([A-Za-z0-9_]+):\\s*\\$\\{\\{\\s*join\\('[^']*',\\s*parameters\\.([A-Za-z0-9_]+)\\)\\s*\\}\\}\\s*$");
+  /** An {@code env:} entry, e.g. {@code SCALA_TEST_DML_FILTER: -DwildcardSuites=...}. */
+  private static final Pattern ENV_ENTRY = Pattern.compile("^\\s*([A-Z][A-Z0-9_]*):\\s*(\\S.*?)\\s*$");
+  /** A shell variable reference, {@code $NAME} or {@code ${NAME}}. */
+  private static final Pattern SHELL_VAR_REF =
+      Pattern.compile("\\$\\{([A-Za-z_][A-Za-z0-9_]*)\\}|\\$([A-Za-z_][A-Za-z0-9_]*)");
   private static final Pattern WILDCARD_CLI_ARG = Pattern.compile("-DwildcardSuites=\"?([^\" ]+)");
   private static final Pattern PL_CLI_ARG = Pattern.compile("-pl\\s+\"?([^\" ]+)");
-  private static final Pattern VAR_REF = Pattern.compile("\\$\\(([A-Za-z0-9_]+)\\)");
 
   /**
    * Allowed sub-packages under org.apache.spark.sql.hudi for Scala test classes.
-   * This list **MUST** be kept in sync with:
-   * (1) The 'job6HudiSparkDdlOthersWildcardSuites' list in azure-pipelines-20230430.yml for Azure
-   * CI (excluding org.apache.spark.sql.hudi.dml and org.apache.spark.sql.hudi.feature)
-   * (2) the Scala other test filter (SCALA_TEST_OTHERS_FILTER) in .github/workflows/bot.yml
-   * for GitHub actions (excluding org.apache.spark.sql.hudi.dml)
+   * This list **MUST** be kept in sync with the Scala test filters (SCALA_TEST_OTHERS_FILTER,
+   * plus SCALA_TEST_DML_FILTER for org.apache.spark.sql.hudi.dml) in both
+   * .github/workflows/bot.yml and .github/workflows/spark35_ci.yml.
    */
   private static final Set<String> ALLOWED_PACKAGES = new HashSet<>(Arrays.asList(
       "org.apache.spark.sql.hudi.analysis",
@@ -99,8 +95,9 @@ public class TestSparkSqlHudiPackageStructure {
       message.append("\nViolating classes:\n");
       violatingClasses.forEach(cls -> message.append("  - ").append(cls).append("\n"));
       message.append("\nPlease move these test classes to one of the allowed packages, ")
-          .append("or add the new package to the allowed list in both this test ")
-          .append("and azure-pipelines-20230430.yml (job6HudiSparkDdlOthersWildcardSuites).");
+          .append("or add the new package to the allowed list in this test and to ")
+          .append("SCALA_TEST_OTHERS_FILTER in both .github/workflows/bot.yml and ")
+          .append(SPARK35_WORKFLOW_FILE).append(".");
       fail(message.toString());
     }
 
@@ -109,24 +106,18 @@ public class TestSparkSqlHudiPackageStructure {
   }
 
   /**
-   * Every Scala test class under {@link #BASE_PACKAGE} must be run by at least one Azure step:
-   * some step whose {@code -pl} builds the module holding the class must also pass a
-   * {@code -DwildcardSuites} prefix matching it. Otherwise the class silently never runs on Azure.
-   *
-   * <p>The Azure jobs deliberately name leaf packages ({@code dml.others}, {@code dml.insert},
-   * {@code dml.schema}) rather than the recursive {@code dml} parent, because ScalaTest's
-   * {@code -w} is a plain prefix match with no exclusion primitive: pointing one job at
-   * {@code ...hudi.dml} would re-run the whole {@code dml.insert} set that already has its own
-   * job. That split is what makes a newly added {@code dml.*} package start out dark, so this
-   * test is the guard for it - the other, non-recursive {@code testSparkSqlHudi...} check above
-   * lets {@code dml.*} through because it treats {@code dml} as one allowed package.
+   * Guarantees that no Scala test class under {@link #BASE_PACKAGE} is left out of the Spark 3.5
+   * run in {@link #SPARK35_WORKFLOW_FILE}: some {@code mvn test} step whose {@code -pl} builds the
+   * module holding the class must also pass a {@code -DwildcardSuites} prefix matching it. That
+   * workflow is read because its filters are spelled out in {@code env:}; a class matched by no
+   * filter would never run on Spark 3.5.
    */
   @Test
-  public void testScalaTestPackagesAreRunByAnAzureStep() {
-    List<AzureScalaTestStep> steps = readAzureScalaTestSteps();
+  public void testScalaTestPackagesAreRunBySpark35Step() {
+    List<ScalaTestStep> steps = readScalaTestSteps();
     assertFalse(steps.isEmpty(),
-        "Expected to parse at least one -DwildcardSuites step from " + AZURE_PIPELINE_FILE
-            + "; the parsing below has probably drifted from the pipeline's shape");
+        "Expected to parse at least one -DwildcardSuites step from " + SPARK35_WORKFLOW_FILE
+            + "; the parsing below has probably drifted from the workflow's shape");
 
     Map<String, List<String>> classesByModule = findScalaTestClassesByModule();
     List<String> uncovered = new ArrayList<>();
@@ -142,27 +133,27 @@ public class TestSparkSqlHudiPackageStructure {
 
     if (!uncovered.isEmpty()) {
       StringBuilder message = new StringBuilder();
-      message.append("Found Scala test classes that no Azure step runs - no step both builds ")
-          .append("their module (-pl) and names their package (-DwildcardSuites), so they never ")
-          .append("run on Azure CI.\n\nUncovered classes:\n");
+      message.append("Found Scala test classes that no step of ").append(SPARK35_WORKFLOW_FILE)
+          .append(" runs - no mvn test step both builds their module (-pl) and names their ")
+          .append("package (-DwildcardSuites), so they never run on Spark 3.5.\n\nUncovered classes:\n");
       uncovered.forEach(cls -> message.append("  - ").append(cls).append("\n"));
-      message.append("\nAdd their package to one of the wildcardSuites sets in ")
-          .append(AZURE_PIPELINE_FILE)
-          .append(" (e.g. 'job6HudiSparkDdlOthersWildcardSuites'), balancing against job runtime.");
+      message.append("\nAdd their package to one of the -DwildcardSuites filters in the env: block of ")
+          .append(SPARK35_WORKFLOW_FILE)
+          .append(" (e.g. SCALA_TEST_OTHERS_FILTER); for a new package, also add it to ")
+          .append("SCALA_TEST_OTHERS_FILTER in .github/workflows/bot.yml.");
       fail(message.toString());
     }
   }
 
   /**
-   * One Azure step that runs ScalaTest: the suite prefixes it passes to {@code -DwildcardSuites}
-   * and the module list it passes to {@code -pl}, both with {@code $(VAR)} references resolved
-   * back to the parameter list the {@code variables:} block joins them from.
+   * One workflow step that runs ScalaTest: the suite prefixes it passes to {@code -DwildcardSuites}
+   * and the module list it passes to {@code -pl}, after expanding {@code env:} variables.
    */
-  private static final class AzureScalaTestStep {
+  private static final class ScalaTestStep {
     private final List<String> suitePrefixes;
     private final List<String> modules;
 
-    private AzureScalaTestStep(List<String> suitePrefixes, List<String> modules) {
+    private ScalaTestStep(List<String> suitePrefixes, List<String> modules) {
       this.suitePrefixes = suitePrefixes;
       this.modules = modules;
     }
@@ -190,94 +181,84 @@ public class TestSparkSqlHudiPackageStructure {
   }
 
   /**
-   * Parses the pipeline into the ScalaTest steps it defines. Resolves {@code $(VAR)} tokens
-   * through the {@code variables:} block back to the {@code parameters:} list they join, so a
-   * parameter list that no step actually expands contributes nothing.
+   * Parses the workflow into the ScalaTest steps it defines. {@code $NAME} / {@code ${NAME}}
+   * tokens in {@code mvn test} lines are expanded from the workflow's {@code env:} entries;
+   * entries whose value is a {@code ${{ ... }}} expression (e.g. matrix values) stay unresolved.
    */
-  private List<AzureScalaTestStep> readAzureScalaTestSteps() {
-    List<String> lines = readAzurePipelineLines();
+  private List<ScalaTestStep> readScalaTestSteps() {
+    List<String> lines = readWorkflowLines();
 
-    // parameters: <name> -> its list of values
-    Map<String, List<String>> parameterLists = new HashMap<>();
-    String currentParam = null;
+    Map<String, String> envValues = new HashMap<>();
     for (String line : lines) {
-      Matcher paramName = PARAM_NAME.matcher(line);
-      if (paramName.matches()) {
-        currentParam = paramName.group(1);
-        parameterLists.put(currentParam, new ArrayList<>());
+      Matcher entry = ENV_ENTRY.matcher(line);
+      if (entry.matches() && !entry.group(2).startsWith("${{")) {
+        envValues.put(entry.group(1), entry.group(2));
+      }
+    }
+
+    List<ScalaTestStep> steps = new ArrayList<>();
+    for (String line : lines) {
+      if (!line.contains("mvn test")) {
         continue;
       }
-      Matcher listItem = LIST_ITEM.matcher(line);
-      if (currentParam != null && listItem.matches()) {
-        parameterLists.get(currentParam).add(listItem.group(1).trim());
-      }
-    }
-
-    // variables: <VAR> -> the parameter list it joins
-    Map<String, List<String>> variableValues = new HashMap<>();
-    for (String line : lines) {
-      Matcher variable = VARIABLE_JOIN.matcher(line);
-      if (variable.matches()) {
-        List<String> values = parameterLists.get(variable.group(2));
-        if (values != null) {
-          variableValues.put(variable.group(1), values);
-        }
-      }
-    }
-
-    // steps: every line carrying both a wildcardSuites filter and a -pl module list
-    List<AzureScalaTestStep> steps = new ArrayList<>();
-    for (String line : lines) {
-      Matcher suites = WILDCARD_CLI_ARG.matcher(line);
-      Matcher modules = PL_CLI_ARG.matcher(line);
+      String expanded = expandEnvVars(line, envValues);
+      Matcher suites = WILDCARD_CLI_ARG.matcher(expanded);
+      Matcher modules = PL_CLI_ARG.matcher(expanded);
       if (!suites.find() || !modules.find()) {
         continue;
       }
-      List<String> suitePrefixes = expand(suites.group(1), variableValues).stream()
+      List<String> suitePrefixes = splitList(suites.group(1)).stream()
           .filter(suite -> suite.startsWith("org."))
           .collect(Collectors.toList());
       if (suitePrefixes.isEmpty()) {
         // e.g. the java-only steps, which pass -DwildcardSuites=skipScalaTests
         continue;
       }
-      steps.add(new AzureScalaTestStep(suitePrefixes, expand(modules.group(1), variableValues)));
+      steps.add(new ScalaTestStep(suitePrefixes, splitList(modules.group(1))));
     }
     return steps;
   }
 
-  /**
-   * Splits a comma-separated Azure argument into its entries, replacing any {@code $(VAR)} token
-   * with the entries of the parameter list that variable joins.
-   */
-  private List<String> expand(String argument, Map<String, List<String>> variableValues) {
-    List<String> expanded = new ArrayList<>();
-    for (String token : argument.split(",")) {
-      String trimmed = token.trim();
-      Matcher varRef = VAR_REF.matcher(trimmed);
-      if (varRef.matches()) {
-        expanded.addAll(variableValues.getOrDefault(varRef.group(1), new ArrayList<>()));
-      } else if (!trimmed.isEmpty()) {
-        expanded.add(trimmed);
-      }
+  /** Replaces each shell variable reference whose name is in {@code envValues} with its value. */
+  private String expandEnvVars(String line, Map<String, String> envValues) {
+    Matcher varRef = SHELL_VAR_REF.matcher(line);
+    StringBuffer expanded = new StringBuffer();
+    while (varRef.find()) {
+      String name = varRef.group(1) != null ? varRef.group(1) : varRef.group(2);
+      String value = envValues.getOrDefault(name, varRef.group());
+      varRef.appendReplacement(expanded, Matcher.quoteReplacement(value));
     }
-    return expanded;
+    varRef.appendTail(expanded);
+    return expanded.toString();
   }
 
-  private List<String> readAzurePipelineLines() {
+  /** Splits a comma-separated argument into its non-empty entries. */
+  private List<String> splitList(String argument) {
+    List<String> entries = new ArrayList<>();
+    for (String token : argument.split(",")) {
+      String trimmed = token.trim();
+      if (!trimmed.isEmpty()) {
+        entries.add(trimmed);
+      }
+    }
+    return entries;
+  }
+
+  private List<String> readWorkflowLines() {
     File projectRoot = findProjectRoot();
     if (projectRoot == null) {
       fail("Could not locate project root directory");
       return new ArrayList<>();
     }
-    File pipeline = new File(projectRoot, AZURE_PIPELINE_FILE);
-    if (!pipeline.exists()) {
-      fail("Could not locate " + AZURE_PIPELINE_FILE + " at " + pipeline.getAbsolutePath());
+    File workflow = new File(projectRoot, SPARK35_WORKFLOW_FILE);
+    if (!workflow.exists()) {
+      fail("Could not locate " + SPARK35_WORKFLOW_FILE + " at " + workflow.getAbsolutePath());
       return new ArrayList<>();
     }
     try {
-      return Files.readAllLines(pipeline.toPath(), StandardCharsets.UTF_8);
+      return Files.readAllLines(workflow.toPath(), StandardCharsets.UTF_8);
     } catch (Exception e) {
-      fail("Could not read " + AZURE_PIPELINE_FILE + ": " + e.getMessage());
+      fail("Could not read " + SPARK35_WORKFLOW_FILE + ": " + e.getMessage());
       return new ArrayList<>();
     }
   }
@@ -305,7 +286,7 @@ public class TestSparkSqlHudiPackageStructure {
 
   /**
    * Finds all Scala test classes under org.apache.spark.sql.hudi, keyed by the Maven module path
-   * that holds them (as Azure would name it in {@code -pl}), e.g.
+   * that holds them (as a workflow would name it in {@code -pl}), e.g.
    * {@code hudi-spark-datasource/hudi-spark}.
    */
   private Map<String, List<String>> findScalaTestClassesByModule() {
