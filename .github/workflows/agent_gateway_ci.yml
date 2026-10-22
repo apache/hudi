@@ -23,6 +23,7 @@ on:
       - 'release-*'
     paths:
       - 'hudi-agent-gateway/**'
+      - 'hudi-ai-operator/**'
       - 'hudi-lakehouse/**'
       - '.github/workflows/agent_gateway_ci.yml'
   pull_request:
@@ -30,6 +31,7 @@ on:
       - master
     paths:
       - 'hudi-agent-gateway/**'
+      - 'hudi-ai-operator/**'
       - 'hudi-lakehouse/**'
       - '.github/workflows/agent_gateway_ci.yml'
 
@@ -66,34 +68,34 @@ jobs:
           refs/tags/release-1.2.0:refs/tags/release-1.2.0
       - name: Validate Hudi Architect references
         run: |
-          python skills/hudi-architect/validate_config_keys.py
-          python skills/hudi-architect/validate_flink_capabilities.py --verify-source
-          python skills/hudi-architect/validate_flink_design.py \
+          python ../hudi-ai-operator/skills/hudi-architect/validate_config_keys.py
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py --verify-source
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py \
             --input tests/fixtures/hudi_architect/flink_pr2/stable_key.json \
             --emit-sql > /dev/null
-          python skills/hudi-architect/validate_flink_design.py \
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py \
             --input tests/fixtures/hudi_architect/flink_pr3/mutable_cow.json \
             --emit-sql > /dev/null
-          python skills/hudi-architect/validate_flink_design.py \
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py \
             --input tests/fixtures/hudi_architect/flink_pr4/mutable_mor.json \
             --emit-sql > /dev/null
-          python skills/hudi-architect/validate_flink_existing_table.py \
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py \
             --input tests/fixtures/hudi_architect/flink_pr5/compatible_mutable_cow.json
       - name: Test
         run: python -m pytest tests -q
       - name: Lint
         run: >-
           ruff check src tests
-          skills/hudi-architect/redact_sensitive_values.py
-          skills/hudi-architect/validate_flink_capabilities.py
-          skills/hudi-architect/validate_flink_design.py
-          skills/hudi-architect/validate_flink_existing_table.py
+          ../hudi-ai-operator/skills/hudi-architect/redact_sensitive_values.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py
       - name: Type-check
         run: >-
           mypy src
-          skills/hudi-architect/validate_flink_capabilities.py
-          skills/hudi-architect/validate_flink_design.py
-          skills/hudi-architect/validate_flink_existing_table.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py
 
   flink-sql-fixtures:
     name: Hudi 1.2.0 / Flink 1.20.1 SQL fixtures
