@@ -56,6 +56,17 @@ since/deprecated versions, the advanced flag, the declaring file and line, plus 
 Configs declared in Scala (`DataSourceReadOptions`, `DataSourceWriteOptions` — the
 `hoodie.datasource.*` keys Spark users set most) are included, marked `"language": "scala"`.
 
+**Scope.** The catalog covers the `hoodie.*` namespace: every `ConfigProperty` declared in Java,
+the Scala datasource options, and the Flink `ConfigOptions` that name a `hoodie.*` key. It does
+**not** cover Flink's own option namespace in `FlinkOptions` — `write.tasks`, `index.type`,
+`read.streaming.enabled` and the rest — which uses unprefixed keys and its own defaults. A Flink
+user asking about a `hoodie.*` key gets a correct, engine-aware answer here (the Flink defaults
+for `hoodie.index.type`, `hoodie.metadata.index.secondary.enable` and `hoodie.write.markers.type`
+are all recorded). A Flink user asking about an unprefixed `FlinkOptions` key gets told, in the
+first sentence, that it is outside this catalog, and is pointed at `FlinkOptions.java` and the
+Flink configuration page rather than given a guess. Say this plainly; do not map an unprefixed
+Flink key onto the nearest `hoodie.*` key as if they were the same setting.
+
 Query it with `python3` or `jq`. Do not load the whole file into your reply.
 
 ## Step 0 — always say which version this is
