@@ -32,20 +32,10 @@ import scala.collection.JavaConverters._
 class TestIvfRaBitQMdtSearchAlgorithm {
 
   @Test
-  def testLogResidentCandidateIsSkippedWithoutTerminatingCandidateConsumption(): Unit = {
-    val logResident = scoredCandidate("log-key", isDelta = false, approxDistance = 0.1f)
-      .withLocation(new HoodieRecordGlobalLocation("partition", "002", "file", -1L))
-    val baseFileCandidate = scoredCandidate("base-key", isDelta = false, approxDistance = 0.2f)
-      .withLocation(new HoodieRecordGlobalLocation("partition", "001", "file", 7L))
-    val candidates = Seq(logResident, baseFileCandidate)
-
-    val skipped = candidates.filter(candidate =>
-      IvfRaBitQMdtSearchAlgorithm.isLogResidentCandidate(
-        candidate, currentBaseInstant = "001", sliceHasLogs = true))
-    val retained = candidates.filterNot(skipped.toSet)
-
-    assertEquals(Seq("log-key"), skipped.map(_.getRecordKey))
-    assertEquals(Seq("base-key"), retained.map(_.getRecordKey))
+  def testSlicesWithLogFilesRequireMergedReadForEveryCandidate(): Unit = {
+    // Covers both log-resident rows and base rows whose non-vector columns were updated in a log.
+    assertTrue(IvfRaBitQMdtSearchAlgorithm.requiresMergedRead(sliceHasLogs = true))
+    assertFalse(IvfRaBitQMdtSearchAlgorithm.requiresMergedRead(sliceHasLogs = false))
   }
 
   @Test

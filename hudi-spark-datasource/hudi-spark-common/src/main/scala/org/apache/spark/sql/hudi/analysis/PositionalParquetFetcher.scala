@@ -17,24 +17,27 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.index.vector.{ScoredVectorPostingMatch, VectorIndexMdtSearchUtils, VectorPostingMatch}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.io.storage.VectorConversionUtils
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.parquet.column.page.PageReadStore
 import org.apache.parquet.hadoop.ParquetFileReader
+import org.apache.parquet.hadoop.api.InitContext
 import org.apache.parquet.hadoop.metadata.{BlockMetaData, ColumnChunkMetaData, ParquetMetadata}
 import org.apache.parquet.internal.column.columnindex.OffsetIndex
 import org.apache.parquet.internal.filter2.columnindex.RowRanges
-import org.apache.parquet.io.{ColumnIOFactory, RecordReader}
-import org.apache.parquet.io.api.{Binary, Converter, GroupConverter, PrimitiveConverter, RecordMaterializer}
+import org.apache.parquet.io.ColumnIOFactory
 import org.apache.parquet.schema.MessageType
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.catalyst.plans.logical.HoodieVectorSearchTableValuedFunction.DistanceMetric
+import org.apache.spark.sql.execution.datasources.parquet.SparkParquetReaderBase
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import org.slf4j.LoggerFactory
@@ -68,7 +71,27 @@ private[analysis] final class PositionalParquetFetcher(
   private val partitionPathOrdinal = fieldOrdinal(HoodieRecord.PARTITION_PATH_METADATA_FIELD)
   private val fileGroupIdOrdinal = fieldOrdinal(HoodieVectorSearchPlanBuilder.FILE_GROUP_ID_COL)
   private val scorer = new VectorExactScorer(vectorSchema, queryVector, metric)
-  private var scoreMs: Long = 0L
+
+  // Catalyst columns decoded per candidate: the output's stored columns, then the record key when
+  // it is verified, then the embedding. VECTOR columns are read as binary, as HoodieSparkParquetReader does.
+  private val storedFields: Seq[StructField] =
+    if (vectorOnlyProjection) Seq.empty else outputSchema.fields.toSeq.filterNot(f => isSyntheticOutputField(f.name))
+  private val readsRecordKey = verifyKeys || vectorOnlyProjection
+  private val storedVectorColumns: Map[Int, HoodieSchema.Vector] =
+    VectorConversionUtils.detectVectorColumnsFromMetadata(StructType(storedFields)).asScala
+      .map { case (ordinal, vector) => ordinal.intValue() -> vector }.toMap
+  private val readSchema: StructType = VectorConversionUtils.replaceVectorColumnsWithBinary(
+    StructType(storedFields ++
+      (if (readsRecordKey) Seq(StructField(HoodieRecord.RECORD_KEY_METADATA_FIELD, StringType)) else Seq.empty) :+
+      StructField(embeddingCol, BinaryType)),
+    storedVectorColumns.map { case (ordinal, vector) => Int.box(ordinal) -> vector }.asJava)
+  private val embeddingReadOrdinal = readSchema.fieldIndex(embeddingCol)
+  private val recordKeyReadOrdinal =
+    if (readsRecordKey) Some(readSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)) else None
+  /** For each output field, the read-schema ordinal that supplies it, or -1 (synthetic / not read). */
+  private val outputSources: Array[Int] = outputSchema.fields.map { field =>
+    if (isSyntheticOutputField(field.name)) -1 else storedFields.indexWhere(_.name == field.name)
+  }
 
   def fetch(
       filePath: String,
@@ -98,7 +121,12 @@ private[analysis] final class PositionalParquetFetcher(
     val footerMs = elapsedMs(footerStartNs)
     val metadata = footerResult.metadata
     val fileSchema = metadata.getFileMetaData.getSchema
-    val requestedParquetSchema = requestedSchema(fileSchema)
+    val fileMetadata = metadata.getFileMetaData.getKeyValueMetaData
+    val readSupport = SparkAdapterSupport.sparkAdapter.createParquetReadSupport(
+      None, true, true, SparkAdapterSupport.sparkAdapter.getRebaseSpec("CORRECTED"), HOption.empty[MessageType]())
+    val readContext = readSupport.init(new InitContext(rowReadConf,
+      fileMetadata.asScala.map { case (key, value) => key -> java.util.Collections.singleton(value) }.asJava, fileSchema))
+    val requestedParquetSchema = readContext.getRequestedSchema
 
     val rowGroups = metadata.getBlocks.asScala.toIndexedSeq
     val rowGroupStarts = cumulativeRowGroupStarts(rowGroups)
@@ -119,7 +147,7 @@ private[analysis] final class PositionalParquetFetcher(
     var nullEmbeddingsSkipped = 0L
     var offsetIndexMs = 0L
     var decodeMs = 0L
-    scoreMs = 0L
+    var scoreMs = 0L
 
     val reader = new ParquetFileReader(conf, path, metadata)
     try {
@@ -157,7 +185,7 @@ private[analysis] final class PositionalParquetFetcher(
           pagesSelected += 0L
           rangedGets += 1L
           pageBytesFetched += requestedParquetSchema.getFields.asScala
-            .flatMap(field => findColumn(block, field.getName))
+            .flatMap(field => columnsOf(block, field.getName))
             .map(_.getTotalSize)
             .sum
           (reader.readRowGroup(rgOrdinal), RowRanges.createSingle(block.getRowCount))
@@ -167,7 +195,7 @@ private[analysis] final class PositionalParquetFetcher(
           val selectedVectorPages = selectedPages(embeddingOffsetIndex, block.getRowCount, relativeRows)
           pagesSelected += selectedVectorPages.size
           val selectedRanges = requestedParquetSchema.getFields.asScala
-            .flatMap(field => findColumn(block, field.getName))
+            .flatMap(field => columnsOf(block, field.getName))
             .flatMap { chunk =>
               val oiStartNs = System.nanoTime()
               val chunkOffsetIndex = offsetIndex(reader, fileCacheKey, rgOrdinal, chunk)
@@ -191,21 +219,29 @@ private[analysis] final class PositionalParquetFetcher(
         }
 
         val decodeStartNs = System.nanoTime()
-        val recordReader = parquetRecordReader(fileSchema, requestedParquetSchema, pageStore)
+        val materializer = readSupport.prepareForRead(rowReadConf, fileMetadata, fileSchema, readContext)
+        val recordReader = new ColumnIOFactory().getColumnIO(requestedParquetSchema, fileSchema)
+          .getRecordReader(pageStore, materializer)
         val rowIterator = rowRanges.iterator()
         while (rowIterator.hasNext) {
           val relativeRow = rowIterator.nextLong()
-          val row = recordReader.read()
+          val decoded = recordReader.read()
           rowsDecoded += 1
           candidateByRelativeRow.get(relativeRow).foreach { candidate =>
-            if (row == null) {
+            // The materializer reuses its row and may share page buffers: copy before retaining.
+            val row = decoded.copy()
+            if (row.isNullAt(embeddingReadOrdinal)) {
               // The live row has a NULL embedding: brute force filters it out, so skip it too.
               nullEmbeddingsSkipped += 1
             } else if (verifyKeys && decodedRecordKey(row) != candidate.getRecordKey) {
               keyMismatches += candidate
             } else {
-              fillSyntheticFields(row, candidate)
-              rows += row
+              val scoreStartNs = System.nanoTime()
+              val distance = scorer.scoreBytes(row.getBinary(embeddingReadOrdinal))
+              scoreMs += elapsedMs(scoreStartNs)
+              val output = toOutputRow(row, distance)
+              fillSyntheticFields(output, candidate)
+              rows += output
               rowsMaterialized += 1
             }
           }
@@ -243,32 +279,28 @@ private[analysis] final class PositionalParquetFetcher(
     FetchResult(rows.iterator, keyMismatches.toSeq, metrics)
   }
 
-  private def parquetRecordReader(
-      fileSchema: MessageType,
-      requestedParquetSchema: MessageType,
-      pageStore: PageReadStore): RecordReader[InternalRow] = {
-    val materializer = new InternalRowMaterializer(requestedParquetSchema, outputSchema, embeddingCol, distanceOrdinal)
-    new ColumnIOFactory().getColumnIO(requestedParquetSchema, fileSchema)
-      .getRecordReader(pageStore, materializer)
+  @transient private lazy val rowReadConf: Configuration = {
+    val rowConf = new Configuration(conf)
+    SparkParquetReaderBase.configureRowRead(rowConf, readSchema)
+    rowConf
   }
 
-  private def requestedSchema(fileSchema: MessageType): MessageType = {
-    val parquetFields =
-      if (vectorOnlyProjection) {
-        mutable.ArrayBuffer.empty[org.apache.parquet.schema.Type]
-      } else {
-        outputSchema.fields
-          .filterNot(field => isSyntheticOutputField(field.name))
-          .map(field => fieldByName(fileSchema, field.name))
-          .toBuffer[org.apache.parquet.schema.Type]
+  /** Projects a decoded candidate onto the output schema, restoring VECTOR columns to arrays. */
+  private def toOutputRow(row: InternalRow, distance: Double): GenericInternalRow = {
+    val values = new Array[Any](outputSchema.length)
+    var ordinal = 0
+    while (ordinal < values.length) {
+      val source = outputSources(ordinal)
+      if (source >= 0 && !row.isNullAt(source)) {
+        values(ordinal) = storedVectorColumns.get(source) match {
+          case Some(vector) => VectorConversionUtils.convertBinaryToVectorArray(row.getBinary(source), vector)
+          case None => row.get(source, readSchema(source).dataType)
+        }
       }
-    if ((verifyKeys || vectorOnlyProjection) && !parquetFields.exists(_.getName == HoodieRecord.RECORD_KEY_METADATA_FIELD)) {
-      parquetFields += fieldByName(fileSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)
+      ordinal += 1
     }
-    if (!parquetFields.exists(_.getName == embeddingCol)) {
-      parquetFields += fieldByName(fileSchema, embeddingCol)
-    }
-    new MessageType(fileSchema.getName, parquetFields.asJava)
+    values(distanceOrdinal) = distance
+    new GenericInternalRow(values)
   }
 
   private def isSyntheticOutputField(name: String): Boolean =
@@ -276,10 +308,6 @@ private[analysis] final class PositionalParquetFetcher(
       name == HoodieRecord.RECORD_KEY_METADATA_FIELD ||
       name == HoodieRecord.PARTITION_PATH_METADATA_FIELD ||
       name == HoodieVectorSearchPlanBuilder.FILE_GROUP_ID_COL
-
-  private def fieldByName(schema: MessageType, name: String): org.apache.parquet.schema.Type =
-    schema.getFields.asScala.find(_.getName == name)
-      .getOrElse(throw new IllegalArgumentException(s"Parquet schema is missing requested field '$name'."))
 
   private def rowPosition(candidate: ScoredVectorPostingMatch): Long = {
     val location = candidate.getLocation
@@ -291,7 +319,7 @@ private[analysis] final class PositionalParquetFetcher(
   }
 
   private def decodedRecordKey(row: InternalRow): String =
-    recordKeyOrdinal.flatMap(ordinal => Option(row.getUTF8String(ordinal))).map(_.toString).orNull
+    recordKeyReadOrdinal.flatMap(ordinal => Option(row.getUTF8String(ordinal))).map(_.toString).orNull
 
   private def fillSyntheticFields(row: InternalRow, candidate: ScoredVectorPostingMatch): Unit = {
     val liveLocation = Option(candidate.getLocation)
@@ -307,96 +335,6 @@ private[analysis] final class PositionalParquetFetcher(
       case -1 => None
       case ordinal => Some(ordinal)
     }
-
-  private def scoreVector(bytes: Array[Byte]): Double = scorer.scoreBytes(bytes)
-
-  private final class InternalRowMaterializer(
-      requestedParquetSchema: MessageType,
-      outputSchema: StructType,
-      embeddingCol: String,
-      distanceOrdinal: Int) extends RecordMaterializer[InternalRow] {
-
-    private val values = new Array[Any](outputSchema.length)
-    private var current: InternalRow = _
-    private var vectorBytes: Array[Byte] = _
-
-    private val root = new GroupConverter {
-      private val converters = requestedParquetSchema.getFields.asScala.map(converterFor).toIndexedSeq
-
-      override def getConverter(fieldIndex: Int): Converter =
-        converters(fieldIndex)
-
-      override def start(): Unit = {
-        var idx = 0
-        while (idx < values.length) {
-          values(idx) = null
-          idx += 1
-        }
-        vectorBytes = null
-      }
-
-      override def end(): Unit = {
-        // A NULL embedding (row upserted to NULL after indexing) yields no record; the caller skips it.
-        current = if (vectorBytes == null) {
-          null
-        } else {
-          val scoreStartNs = System.nanoTime()
-          values(distanceOrdinal) = scoreVector(vectorBytes)
-          scoreMs += elapsedMs(scoreStartNs)
-          new GenericInternalRow(values.clone())
-        }
-      }
-    }
-
-    override def getCurrentRecord: InternalRow = current
-
-    override def getRootConverter: GroupConverter = root
-
-    private def converterFor(field: org.apache.parquet.schema.Type): PrimitiveConverter = {
-      val name = field.getName
-      new PrimitiveConverter {
-        override def addBinary(value: Binary): Unit = {
-          if (name == embeddingCol) {
-            vectorBytes = value.getBytes
-          } else {
-            setOutputValue(name, value.getBytes)
-          }
-        }
-
-        override def addInt(value: Int): Unit = setOutputValue(name, value)
-
-        override def addLong(value: Long): Unit = setOutputValue(name, value)
-
-        override def addFloat(value: Float): Unit = setOutputValue(name, value)
-
-        override def addDouble(value: Double): Unit = setOutputValue(name, value)
-
-        override def addBoolean(value: Boolean): Unit = setOutputValue(name, value)
-      }
-    }
-
-    private def setOutputValue(name: String, raw: Any): Unit = {
-      if (name != embeddingCol && name != HoodieVectorSearchPlanBuilder.DISTANCE_COL) {
-        val ordinal = outputSchema.fieldIndex(name)
-        values(ordinal) = outputSchema.fields(ordinal).dataType match {
-          case StringType => raw match {
-            case bytes: Array[Byte] => UTF8String.fromBytes(bytes)
-            case other => UTF8String.fromString(String.valueOf(other))
-          }
-          case BinaryType => raw.asInstanceOf[Array[Byte]]
-          case IntegerType => raw.asInstanceOf[Int]
-          case LongType => raw.asInstanceOf[Long]
-          case FloatType => raw.asInstanceOf[Float]
-          case DoubleType => raw.asInstanceOf[Double]
-          case BooleanType => raw.asInstanceOf[Boolean]
-          case ByteType => raw.asInstanceOf[Int].toByte
-          case ShortType => raw.asInstanceOf[Int].toShort
-          case other => throw new UnsupportedOperationException(
-            s"Unsupported exact positional fetch output type for field '$name': $other")
-        }
-      }
-    }
-  }
 }
 
 private[analysis] object PositionalParquetFetcher {
@@ -541,6 +479,10 @@ private[analysis] object PositionalParquetFetcher {
 
   private def findColumn(block: BlockMetaData, name: String): Option[ColumnChunkMetaData] =
     block.getColumns.asScala.find(_.getPath.toDotString == name)
+
+  /** Every leaf column chunk of a top-level field; nested fields span several chunks. */
+  private def columnsOf(block: BlockMetaData, name: String): Seq[ColumnChunkMetaData] =
+    block.getColumns.asScala.filter(_.getPath.toArray.head == name).toSeq
 
   private def selectedPages(
       offsetIndex: OffsetIndex,

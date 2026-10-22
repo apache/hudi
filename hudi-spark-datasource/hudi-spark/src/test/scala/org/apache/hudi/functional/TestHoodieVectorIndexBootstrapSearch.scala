@@ -32,13 +32,14 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_RECORD_IN
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{Row, SaveMode, SparkSession}
-import org.apache.spark.sql.types.{ArrayType, FloatType, LongType, MetadataBuilder, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DateType, DecimalType, FloatType, IntegerType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType, TimestampType}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.io.File
+import java.sql.{Date, Timestamp}
 
 import scala.collection.JavaConverters._
 
@@ -203,6 +204,72 @@ class TestHoodieVectorIndexBootstrapSearch extends HoodieSparkClientTestBase {
     val qualified = search(s"spark_catalog.default.$tableName", query, 3, "l2", "ivf_rabitq_mdt", options)
     assertEquals(byName.map(_._1), qualified.map(_._1))
     assertEquals(3, qualified.size)
+  }
+
+  /**
+   * Exact rerank must return every corpus column type that brute force does, not only primitives:
+   * timestamp, date, decimal, struct, array and map, from base files (COW) and, after an
+   * uncompacted update, from log files (MOR).
+   */
+  @ParameterizedTest
+  @CsvSource(Array("cow", "mor"))
+  def testExactSearchReturnsNonPrimitiveColumns(tableType: String): Unit = {
+    val tableName = s"vector_search_rich_types_$tableType"
+    val tablePath = s"$basePath/$tableName"
+    val vectorMetadata = new MetadataBuilder().putString(HoodieSchema.TYPE_METADATA_FIELD, "VECTOR(2)").build()
+    val schema = StructType(Seq(
+      StructField("id", StringType, nullable = false),
+      StructField("ts", LongType, nullable = false),
+      StructField("embedding", ArrayType(FloatType, containsNull = false), nullable = true, vectorMetadata),
+      StructField("event_time", TimestampType),
+      StructField("event_date", DateType),
+      StructField("price", DecimalType(10, 2)),
+      StructField("info", StructType(Seq(StructField("name", StringType), StructField("score", IntegerType)))),
+      StructField("tags", ArrayType(StringType)),
+      StructField("attrs", MapType(StringType, IntegerType))))
+    val rowsToWrite = Seq(
+      Row("left-1", 1L, Seq(-10.0f, -10.0f), Timestamp.valueOf("2026-01-01 10:00:00"), Date.valueOf("2026-01-01"),
+        new java.math.BigDecimal("1.50"), Row("a", 1), Seq("x"), Map("k" -> 1)),
+      Row("right-1", 1L, Seq(10.0f, 9.7f), Timestamp.valueOf("2026-01-02 11:00:00"), Date.valueOf("2026-01-02"),
+        new java.math.BigDecimal("2.25"), Row("b", 2), Seq("y", "z"), Map("k" -> 2)),
+      Row("right-2", 1L, Seq(9.4f, 10.0f), null, null, null, null, null, null))
+    def write(rows: Seq[Row], operation: String): Unit =
+      spark.createDataFrame(spark.sparkContext.parallelize(rows), schema)
+        .write.format("hudi")
+        .option(TABLE_NAME.key, tableName)
+        .option(TABLE_TYPE.key, if (tableType == "mor") MOR_TABLE_TYPE_OPT_VAL else COW_TABLE_TYPE_OPT_VAL)
+        .option(RECORDKEY_FIELD.key, "id")
+        .option(PRECOMBINE_FIELD.key, "ts")
+        .option(OPERATION.key, operation)
+        .option(HoodieMetadataConfig.ENABLE.key, "true")
+        .options(GlobalRecordIndex)
+        .mode(SaveMode.Append)
+        .save(tablePath)
+    write(rowsToWrite, INSERT_OPERATION_OPT_VAL)
+    spark.sql(s"CREATE TABLE $tableName USING hudi LOCATION '$tablePath'")
+    createIndex(tableName, Map("vector.metric" -> "l2", "vector.rabitq.bits" -> "4"))
+    // Changes non-vector values only, so the MOR update lands in a log file with the posting unchanged.
+    write(Seq(Row("right-1", 2L, Seq(10.0f, 9.7f), Timestamp.valueOf("2026-01-02 11:00:00"),
+      Date.valueOf("2026-01-02"), new java.math.BigDecimal("3.75"), Row("b", 2), Seq("updated"), Map("k" -> 2))),
+      UPSERT_OPERATION_OPT_VAL)
+
+    def rows(algorithm: String, options: String): Seq[Row] = {
+      val optionArg = if (options.isEmpty) "" else s", '$options'"
+      spark.sql(
+        s"""
+           |SELECT id, event_time, event_date, price, info, tags, attrs, _hudi_distance
+           |FROM hudi_vector_search('$tableName', 'embedding', ARRAY(10.0, 10.0), 3, 'l2', '$algorithm'$optionArg)
+           |ORDER BY _hudi_distance, id
+           |""".stripMargin).collect().toSeq
+    }
+    val bruteForce = rows("brute_force", "")
+    val exact = rows("ivf_rabitq_mdt",
+      s"vector.query.nprobes=$NumClusters,vector.query.mode=exact_rerank,vector.freshness.policy=warn")
+    assertEquals(bruteForce.map(_.toSeq.dropRight(1)), exact.map(_.toSeq.dropRight(1)))
+    bruteForce.zip(exact).foreach { case (expected, actual) =>
+      assertEquals(expected.getDouble(7), actual.getDouble(7), DistanceEpsilon)
+    }
+    assertEquals(Seq("updated"), exact.find(_.getString(0) == "right-1").get.getSeq[String](5))
   }
 
   @Test

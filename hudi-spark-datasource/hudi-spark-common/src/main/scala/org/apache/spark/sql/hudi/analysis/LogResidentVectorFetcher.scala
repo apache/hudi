@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.analysis
 
+import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.common.avro.HoodieAvroReaderContext
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.expression.Predicate
@@ -30,10 +31,10 @@ import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.storage.StorageConfiguration
 
 import org.apache.avro.generic.{GenericFixed, IndexedRecord}
+import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow
 import org.apache.spark.sql.types._
-import org.apache.spark.unsafe.types.UTF8String
 
 import java.nio.ByteBuffer
 
@@ -60,8 +61,6 @@ private[analysis] final class LogResidentVectorFetcher(
     embeddingCol: String,
     outputSchema: StructType,
     scorer: VectorExactScorer) extends Serializable {
-
-  import LogResidentVectorFetcher._
 
   /** Read a single merged file slice and return output rows for the requested log-resident keys. */
   def fetchSlice(
@@ -119,25 +118,29 @@ private[analysis] final class LogResidentVectorFetcher(
   }
 
   private def materialize(data: IndexedRecord, avroSchema: org.apache.avro.Schema, vectorBytes: Array[Byte]): InternalRow = {
+    val stored = storedDeserializer.deserialize(data).map(_.asInstanceOf[InternalRow]).orNull
     val values = new Array[Any](outputSchema.length)
     var ordinal = 0
     while (ordinal < outputSchema.length) {
-      val field = outputSchema.fields(ordinal)
-      values(ordinal) = field.name match {
-        case HoodieVectorSearchPlanBuilder.DISTANCE_COL =>
-          scorer.scoreBytes(vectorBytes)
-        case name if name == embeddingCol =>
-          // Match the positional materializer, which never projects the raw embedding into output.
-          null
-        case name =>
-          Option(avroSchema.getField(name))
-            .map(f => toCatalyst(field.dataType, data.get(f.pos())))
-            .orNull
+      val source = outputSources(ordinal)
+      if (source >= 0 && stored != null && !stored.isNullAt(source)) {
+        values(ordinal) = stored.get(source, storedSchema(source).dataType)
       }
       ordinal += 1
     }
+    values(outputSchema.fieldIndex(HoodieVectorSearchPlanBuilder.DISTANCE_COL)) = scorer.scoreBytes(vectorBytes)
     new GenericInternalRow(values)
   }
+
+  // Output columns stored in the table, decoded by Spark's Avro deserializer (all types, including
+  // nested and logical types). The embedding is never projected, matching the positional fetcher.
+  private val storedSchema: StructType = StructType(outputSchema.fields.filter { field =>
+    field.name != HoodieVectorSearchPlanBuilder.DISTANCE_COL && field.name != embeddingCol &&
+      dataSchema.getField(field.name).isPresent
+  })
+  private val outputSources: Array[Int] = outputSchema.fields.map(field => storedSchema.fieldNames.indexOf(field.name))
+  @transient private lazy val storedDeserializer: HoodieAvroDeserializer =
+    SparkAdapterSupport.sparkAdapter.createAvroDeserializer(dataSchema, storedSchema)
 
   private def embeddingBytes(data: IndexedRecord, avroSchema: org.apache.avro.Schema): Option[Array[Byte]] = {
     val field = avroSchema.getField(embeddingCol)
@@ -159,48 +162,4 @@ private[analysis] final class LogResidentVectorFetcher(
           s"Unsupported embedding representation for log-resident exact fetch: ${other.getClass.getName}")
     }
   }
-}
-
-private[analysis] object LogResidentVectorFetcher {
-
-  /** Convert an Avro-decoded value to the catalyst representation for the given output field type. */
-  private def toCatalyst(dataType: DataType, raw: Any): Any = {
-    if (raw == null) {
-      null
-    } else {
-      dataType match {
-        case StringType => raw match {
-          case bytes: Array[Byte] => UTF8String.fromBytes(bytes)
-          case bb: ByteBuffer =>
-            val dup = bb.duplicate()
-            val arr = new Array[Byte](dup.remaining())
-            dup.get(arr)
-            UTF8String.fromBytes(arr)
-          case other => UTF8String.fromString(String.valueOf(other))
-        }
-        case BinaryType => raw match {
-          case bb: ByteBuffer =>
-            val dup = bb.duplicate()
-            val arr = new Array[Byte](dup.remaining())
-            dup.get(arr)
-            arr
-          case bytes: Array[Byte] => bytes
-          case fixed: GenericFixed => fixed.bytes()
-          case other => throw unsupported(BinaryType, other)
-        }
-        case IntegerType => raw.asInstanceOf[java.lang.Number].intValue()
-        case LongType => raw.asInstanceOf[java.lang.Number].longValue()
-        case FloatType => raw.asInstanceOf[java.lang.Number].floatValue()
-        case DoubleType => raw.asInstanceOf[java.lang.Number].doubleValue()
-        case BooleanType => raw.asInstanceOf[java.lang.Boolean].booleanValue()
-        case ByteType => raw.asInstanceOf[java.lang.Number].byteValue()
-        case ShortType => raw.asInstanceOf[java.lang.Number].shortValue()
-        case other => throw unsupported(other, raw)
-      }
-    }
-  }
-
-  private def unsupported(dataType: DataType, raw: Any): Throwable =
-    new UnsupportedOperationException(
-      s"Unsupported log-resident exact fetch output type $dataType for value ${raw.getClass.getName}")
 }

@@ -68,17 +68,13 @@ object IvfRaBitQMdtSearchAlgorithm extends VectorSearchAlgorithm with SparkAdapt
 
   import HoodieVectorSearchPlanBuilder._
 
-  private[analysis] def isLogResidentCandidate(
-      candidate: ScoredVectorPostingMatch,
-      currentBaseInstant: String,
-      sliceHasLogs: Boolean): Boolean = {
-    // A negative position is the authoritative log-resident signal: base-file records always carry a
-    // non-negative row position, so a candidate with position < 0 in a slice that still has log files
-    // lives in a log block and cannot be materialized from the base Parquet. The candidate's instant
-    // is NOT a reliable discriminator here -- a log delta can share the slice's base instant time.
-    val location = candidate.getLocation
-    sliceHasLogs && location != null && location.getPosition < 0
-  }
+  /**
+   * In a slice with log files the base Parquet row is not authoritative: besides log-resident rows
+   * (position < 0), an update that leaves the vector unchanged keeps the posting's base position
+   * while its other columns live in a log block. Only a merged base + log read returns what brute
+   * force returns, so every candidate in such a slice takes that path.
+   */
+  private[analysis] def requiresMergedRead(sliceHasLogs: Boolean): Boolean = sliceHasLogs
 
   private[analysis] def approximateArbitratedCandidate(
       candidate: ScoredVectorPostingMatch): Option[ScoredVectorPostingMatch] =

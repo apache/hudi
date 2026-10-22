@@ -54,7 +54,7 @@ import scala.util.{Failure, Success, Try}
 /** Exact reranking and file-slice resolution for the IVF/RaBitQ search plan. */
 private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
   import HoodieVectorSearchPlanBuilder._
-  import IvfRaBitQMdtSearchAlgorithm.{isLogResidentCandidate, isPartitionedRecordIndex, toVectorMetric, VectorSearchPlanContext}
+  import IvfRaBitQMdtSearchAlgorithm.{isPartitionedRecordIndex, requiresMergedRead, toVectorMetric, VectorSearchPlanContext}
 
   private val LOG = LoggerFactory.getLogger(getClass)
 
@@ -155,12 +155,12 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
               s"a file-slice resolution bug or stale vector index.")
         }
         val bFileSliceMap = spark.sparkContext.broadcast(fileSliceMap)
-        // MOR log-resident candidates carry their raw embedding in a log block, not the base Parquet
-        // file, so the positional fetcher cannot read them. Split them out and materialize them via a
-        // merged (base + log) read; base-resident candidates keep the fast positional path.
+        // In MOR slices with log files the base Parquet row may be superseded by a log record (moved
+        // there, or updated with an unchanged vector), so those candidates are materialized via a
+        // merged (base + log) read; slices without logs keep the fast positional path.
         val (logResidentCandidates, baseCandidates) = serveCandidates.partition { candidate =>
           bFileSliceMap.value.get(fileGroupIdOf(candidate.getLocation)).exists { slice =>
-            isLogResidentCandidate(candidate, slice.getBaseInstantTime, slice.getLogFiles.findAny().isPresent)
+            requiresMergedRead(slice.getLogFiles.findAny().isPresent)
           }
         }
         val exactFetchParallelism = math.max(
@@ -187,8 +187,6 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
         val vectorOnlyProjection = mergedOptions.get(VECTOR_ONLY_PROJECTION_OPT)
           .orElse(spark.conf.getOption(VECTOR_ONLY_PROJECTION_SPARK_CONF))
           .exists(_.equalsIgnoreCase("true"))
-        val fetchSkippedLogResidentAcc: LongAccumulator =
-          spark.sparkContext.longAccumulator("vector_fetch_skipped_log_resident")
         val fetchKeyMismatchAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_fetch_key_mismatch")
         val rowsMaterializedAcc: LongAccumulator = spark.sparkContext.longAccumulator("vector_rows_materialized")
         // Hoisted so the executor closure captures only the metric, not the driver-side plan context
@@ -205,7 +203,6 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
           var logFiles = 0L
           var totalSliceBytes = 0L
           var staleCandidates = 0L
-          var fetchSkippedLogResident = 0L
           var fetchKeyMismatch = 0L
           var keyLookupRowsDecoded = 0L
           var metrics = PositionalParquetFetcher.FetchMetrics()
@@ -234,16 +231,8 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
               val fileSlice = fileSliceOpt.get
               val logFileCount = fileSlice.getLogFiles.count()
               val currentBaseInstantTime = fileSlice.getBaseInstantTime
-              val logResident = candidates.filter(candidate =>
-                isLogResidentCandidate(candidate, currentBaseInstantTime, logFileCount > 0))
-              if (logResident.nonEmpty) {
-                fetchSkippedLogResident += logResident.size
-                fetchSkippedLogResidentAcc.add(logResident.size)
-                LOG.warn(
-                  s"Vector exact fetch skipped ${logResident.size} log-resident candidate(s) in file group '$fgId'; " +
-                    "they remain a result shortfall and the retained candidate pool will refill where candidates remain")
-              }
-              val liveCandidates = candidates.filterNot(logResident.toSet)
+              // Slices with log files were routed to the merged read on the driver.
+              val liveCandidates = candidates
               staleCandidates += liveCandidates.count(candidate =>
                 candidate.getArbiterDecision == VectorIndexArbiter.Decision.STALE)
               if (liveCandidates.nonEmpty) {
@@ -259,7 +248,7 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
                 if (fileSlice.getBaseFile.isEmpty) {
                   throw new HoodieAnalysisException(
                     s"Vector exact key fallback requires a base Parquet file for file group '$fgId'; " +
-                      "the remaining candidates are not classified as log-resident.")
+                      "the slice has no log files to read them from.")
                 }
                 baseFiles += 1
                 logFiles += logFileCount
@@ -305,7 +294,6 @@ private[analysis] object VectorExactSearchPlanner extends SparkAdapterSupport {
               s"rowsDecoded=${metrics.rowsDecoded} rowsMaterialized=${metrics.rowsMaterialized} " +
               s"nullEmbeddingsSkipped=${metrics.nullEmbeddingsSkipped} " +
               s"keyLookupRowsDecoded=$keyLookupRowsDecoded fetchKeyMismatch=$fetchKeyMismatch " +
-              s"fetchSkippedLogResident=$fetchSkippedLogResident " +
               s"rowGroupsTotal=${metrics.rowGroupsTotal} rowGroupsSelected=${metrics.rowGroupsSelected} " +
               s"pagesInSelectedRowGroups=${metrics.pagesInSelectedRowGroups} pagesSelected=${metrics.pagesSelected} " +
               s"offsetIndexHits=${metrics.offsetIndexHits} offsetIndexMissing=${metrics.offsetIndexMissing} " +
