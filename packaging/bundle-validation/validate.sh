@@ -80,7 +80,7 @@ use_default_java_runtime () {
 # Function to test the spark native bundle, which carries Apache DataFusion Comet.
 #
 # Comet needs Java 17 and a glibc JVM for libcomet.so, so this runs on the Java 17 pass and skips on
-# a musl image (the Alpine based image's Java 17 is musl too). Comet's plugin is inert without
+# a musl image (the Alpine based image's Java 17 is musl too). Comet's plugin is not enabled without
 # off-heap memory, and nativeLoadRequired makes a libcomet.so load failure an error instead of a
 # silent fallback to Spark. The session uses the in-memory catalog because a Hudi path read looks
 # the table up in the catalog and the Hive metastore only runs inside test_spark_hadoop_mr_bundles.

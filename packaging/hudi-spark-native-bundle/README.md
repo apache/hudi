@@ -61,7 +61,7 @@ spark-shell --jars hudi-spark3.5-native-bundle_2.12-<version>.jar \
   --conf spark.comet.convert.parquet.enabled=true
 ```
 
-- Comet's plugin is inert without off-heap memory, so size `spark.memory.offHeap.size` for the job.
+- Comet's plugin is not enabled without off-heap memory, so size `spark.memory.offHeap.size` for the job.
 - `spark.comet.nativeLoadRequired=true` fails the session when `libcomet.so` cannot load, instead of
   silently running everything on Spark.
 - `spark.comet.convert.parquet.enabled=true` is the switch that lets Comet accelerate anything over a
