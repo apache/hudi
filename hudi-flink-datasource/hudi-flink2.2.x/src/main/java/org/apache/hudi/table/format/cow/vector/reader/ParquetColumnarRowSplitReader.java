@@ -250,6 +250,7 @@ public class ParquetColumnarRowSplitReader implements Closeable {
                 batchSize,
                 requestedTypes[i],
                 types.get(i),
+                requestedSchema.getName(),
                 descriptors);
       } catch (IllegalArgumentException e) {
         String fieldName = requestedSchema.getFieldName(i);
