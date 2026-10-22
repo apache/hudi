@@ -21,6 +21,7 @@ package org.apache.hudi.table.action.index;
 
 import org.apache.hudi.avro.model.HoodieIndexPartitionInfo;
 import org.apache.hudi.avro.model.HoodieIndexPlan;
+import org.apache.hudi.common.config.HoodieIndexingConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -30,6 +31,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.BaseActionExecutor;
@@ -93,6 +95,8 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
         return getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
       } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
         return getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+      } else if (MetadataPartitionType.FULL_TEXT_INDEX.equals(p)) {
+        return getFullTextIndexName();
       }
       return p.getPartitionPath();
     }).collect(Collectors.toSet());
@@ -113,6 +117,8 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
             partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getExpressionIndexName, PARTITION_NAME_EXPRESSION_INDEX_PREFIX, metadataConfig.getExpressionIndexColumn());
           } else if (MetadataPartitionType.SECONDARY_INDEX.equals(p)) {
             partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
+          } else if (MetadataPartitionType.FULL_TEXT_INDEX.equals(p)) {
+            partitionName = getFullTextIndexName();
           } else {
             partitionName = p.getPartitionPath();
           }
@@ -151,7 +157,15 @@ public class ScheduleIndexActionExecutor<T, I, K, O> extends BaseActionExecutor<
     if (MetadataPartitionType.SECONDARY_INDEX.equals(partitionType)) {
       partitionName = getSecondaryOrExpressionIndexName(metadataConfig::getSecondaryIndexName, PARTITION_NAME_SECONDARY_INDEX_PREFIX, metadataConfig.getSecondaryIndexColumn());
     }
+    if (MetadataPartitionType.FULL_TEXT_INDEX.equals(partitionType)) {
+      partitionName = getFullTextIndexName();
+    }
     return new HoodieIndexPartitionInfo(LATEST_INDEX_PLAN_VERSION, partitionName, indexUptoInstant.requestedTime(), Collections.emptyMap());
+  }
+
+  private String getFullTextIndexName() {
+    return getSecondaryOrExpressionIndexName(() -> config.getString(HoodieIndexingConfig.INDEX_NAME),
+        HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX_PREFIX, null);
   }
 
   private void validateBeforeScheduling() {
