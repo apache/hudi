@@ -221,5 +221,3 @@ Our next steps:
 - **User-level quotas.** Add per-user quotas to control resource use by tenant and by team more precisely, so a traffic spike in one place does not cause jitter across the cluster.
 - **Offset management tuning.** Reduce consumer group rebalance time for groups that consume many buckets.
 - **Feature parity with JD's Hudi stack.** Keep closing the gaps with what JD's Hudi stack already supports, such as schema evolution and dynamic bucketing. The goal is for teams to use lakehouse and stream data through one table, one access method, and one set of governance controls.
-
-To learn more and connect with other developers, join the [Apache Fluss community](https://fluss.apache.org/community/welcome/).
