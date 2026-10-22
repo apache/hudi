@@ -42,6 +42,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.Locale;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_INPUT_DATE_FORMAT_LIST_DELIMITER_REGEX;
@@ -274,6 +275,24 @@ class TestTimestampBasedKeyGenerator {
     // test w/ Row
     baseRow = genericRecordToRow(baseRecord);
     assertEquals("2021-04-19", keyGen.getPartitionPath(baseRow));
+  }
+
+  @Test
+  void testScalarMicrosecondsWithTurkishLocale() throws IOException {
+    Locale saved = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+      baseRecord.put("createTime", 1234596690123456L);
+      properties = getBaseKeyConfig("createTime", "SCALAR", "yyyy-MM-dd HH", "UTC", "microseconds");
+      TimestampBasedKeyGenerator keyGen = new TimestampBasedKeyGenerator(properties);
+      assertEquals("2009-02-14 07", keyGen.getKey(baseRecord).getPartitionPath());
+      baseRow = genericRecordToRow(baseRecord);
+      assertEquals("2009-02-14 07", keyGen.getPartitionPath(baseRow));
+      internalRow = KeyGeneratorTestUtilities.getInternalRow(baseRow);
+      assertEquals(UTF8String.fromString("2009-02-14 07"), keyGen.getPartitionPath(internalRow, baseRow.schema()));
+    } finally {
+      Locale.setDefault(saved);
+    }
   }
 
   @Test
