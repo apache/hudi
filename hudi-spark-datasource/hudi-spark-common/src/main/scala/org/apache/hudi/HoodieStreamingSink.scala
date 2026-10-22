@@ -40,6 +40,7 @@ import org.apache.spark.sql.streaming.{OutputMode, StreamingQueryListener}
 import org.apache.spark.sql.streaming.StreamingQueryListener.{QueryProgressEvent, QueryStartedEvent, QueryTerminatedEvent}
 import org.slf4j.LoggerFactory
 
+import java.io.IOException
 import java.lang
 import java.util.function.{BiConsumer, Function}
 
@@ -310,10 +311,18 @@ class HoodieStreamingSink(sqlContext: SQLContext,
         case Some(service) =>
           EmbeddedTimelineServerHelper.updateWriteConfigWithTimelineServer(service, writeConfig)
         case None =>
-          embeddedTimelineService = Some(EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, writeConfig))
-          timelineServiceBasePath = writeConfig.getBasePath
+          try {
+            embeddedTimelineService = Some(EmbeddedTimelineServerHelper.createEmbeddedTimelineService(context, writeConfig))
+            timelineServiceBasePath = writeConfig.getBasePath
+          } catch {
+            case e: IOException =>
+              // same as a client that starts its own server: proceed as if the embedded server is disabled, and
+              // try again for the next write client
+              log.warn("Unable to start the embedded timeline server. Proceeding as if it is disabled", e)
+              writeConfig.setValue(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE, "false")
+          }
       }
-      HOption.of(embeddedTimelineService.get)
+      embeddedTimelineService.map(service => HOption.of(service)).getOrElse(HOption.empty())
     }
   }
 
@@ -325,15 +334,26 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   private def registerQueryTerminationListener(): Unit = {
     if (queryTerminationListener.isEmpty) {
       val queryId = sqlContext.sparkContext.getLocalProperty(QUERY_ID_KEY)
+      // the query id is kept across restarts from the same checkpoint, so also match the run id: a late termination
+      // event of a previous run must not release the resources of this run
+      val runId = Option(queryId).flatMap(id => Option(sqlContext.sparkSession.streams.get(id))).map(_.runId.toString)
       val listener = new StreamingQueryListener {
         override def onQueryStarted(event: QueryStartedEvent): Unit = {}
 
         override def onQueryProgress(event: QueryProgressEvent): Unit = {}
 
         override def onQueryTerminated(event: QueryTerminatedEvent): Unit = {
-          if (event.id.toString == queryId) {
-            log.info(s"Streaming query $queryId terminated, closing the write client and timeline server")
-            reset(true)
+          if (event.id.toString == queryId && runId.forall(_ == event.runId.toString)) {
+            // release on a separate thread: the listener bus is shared by all queries of the session, and a graceful
+            // shutdown waits for in-flight async compaction / clustering before closing the client they use
+            val cleanup = new Thread(new Runnable {
+              override def run(): Unit = {
+                log.info(s"Streaming query $queryId terminated, closing the write client and timeline server")
+                reset(false)
+              }
+            }, s"hudi-streaming-sink-cleanup-$queryId")
+            cleanup.setDaemon(true)
+            cleanup.start()
           }
         }
       }

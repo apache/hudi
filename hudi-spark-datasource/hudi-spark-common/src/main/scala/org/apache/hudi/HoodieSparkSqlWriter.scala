@@ -566,7 +566,7 @@ class HoodieSparkSqlWriterInternal {
             } catch {
               case e: HoodieException =>
                 // close the write client in all cases
-                closeWriteClient(client, tableConfig, parameters, jsc.hadoopConfiguration())
+                closeWriteClient(client, instantTime, tableConfig, parameters, jsc.hadoopConfiguration())
                 throw e
             }
         }
@@ -581,7 +581,7 @@ class HoodieSparkSqlWriterInternal {
 
         (writeSuccessful, common.util.Option.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
       } finally {
-        closeWriteClient(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
+        closeWriteClient(writeClient, instantTime, tableConfig, parameters, jsc.hadoopConfiguration())
       }
     }
   }
@@ -601,9 +601,16 @@ class HoodieSparkSqlWriterInternal {
     }
   }
 
-  private def closeWriteClient(writeClient: SparkRDDWriteClient[_], tableConfig: HoodieTableConfig, parameters: Map[String, String], configuration: Configuration): Unit = {
-    // a caller-owned client (streaming sink) is reused across writes and closed by its owner
-    if (!writeClientOwnedByCaller) {
+  private def closeWriteClient(writeClient: SparkRDDWriteClient[_], instantTime: String, tableConfig: HoodieTableConfig,
+                               parameters: Map[String, String], configuration: Configuration): Unit = {
+    if (writeClientOwnedByCaller) {
+      // a caller-owned client (streaming sink) is reused across writes and closed by its owner. Stop the heartbeat
+      // of this write's instant in case it failed before commit (a no-op after a successful commit), so that the
+      // failed instant can be rolled back while the client lives on.
+      if (instantTime != null) {
+        writeClient.releaseResources(instantTime)
+      }
+    } else {
       val asyncCompactionEnabled = isAsyncCompactionEnabled(writeClient, tableConfig, parameters, configuration)
       val asyncClusteringEnabled = isAsyncClusteringEnabled(writeClient, parameters)
       if (!asyncCompactionEnabled && !asyncClusteringEnabled) {
@@ -898,7 +905,7 @@ class HoodieSparkSqlWriterInternal {
     } catch {
       case e: HoodieException =>
         // close the write client in all cases
-        closeWriteClient(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
+        closeWriteClient(writeClient, instantTime, tableConfig, parameters, jsc.hadoopConfiguration())
         throw e
     }
 
@@ -908,7 +915,7 @@ class HoodieSparkSqlWriterInternal {
         TableInstantInfo(basePath, instantTime, executor.getCommitActionType, executor.getWriteOperationType), Option.empty)
       (writeSuccessful, HOption.ofNullable(instantTime), compactionInstant, clusteringInstant, writeClient, tableConfig)
     } finally {
-      closeWriteClient(writeClient, tableConfig, parameters, jsc.hadoopConfiguration())
+      closeWriteClient(writeClient, instantTime, tableConfig, parameters, jsc.hadoopConfiguration())
     }
   }
 
