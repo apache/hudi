@@ -60,10 +60,11 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -111,16 +112,21 @@ public class ExportCommand {
       Collections.reverse(nonArchivedInstants);
       numCopied = copyNonArchivedInstants(nonArchivedInstants, numExports, localFolder);
       if (numCopied < numExports) {
-        numCopied += copyArchivedInstants(metaClient, actionSet, true, numExports - numCopied, localFolder);
+        numCopied += copyArchivedInstants(metaClient, actionSet, true, remaining(numExports, numCopied), localFolder);
       }
     } else {
       numCopied = copyArchivedInstants(metaClient, actionSet, false, numExports, localFolder);
       if (numCopied < numExports) {
-        numCopied += copyNonArchivedInstants(nonArchivedInstants, numExports - numCopied, localFolder);
+        numCopied += copyNonArchivedInstants(nonArchivedInstants, remaining(numExports, numCopied), localFolder);
       }
     }
 
     return "Exported " + numCopied + " Instants to " + localFolder;
+  }
+
+  private static int remaining(int numExports, int numCopied) {
+    // keep the "no limit" marker, so that the readers can tell an unbounded export
+    return numExports == Integer.MAX_VALUE ? numExports : numExports - numCopied;
   }
 
   private int copyArchivedInstants(HoodieTableMetaClient metaClient,
@@ -236,19 +242,21 @@ public class ExportCommand {
       if (copyCount >= limit) {
         break;
       }
-      // the records of an archive file are in ascending order, so in descending order they are
-      // collected first and then written from the latest one
-      List<String[]> fileEntries = new ArrayList<>();
-      List<byte[]> fileJsons = new ArrayList<>();
+      // The records of an archive file are in ascending order. With a limit in descending order only the
+      // last (limit - copyCount) records can be exported, so a bounded window of them is kept and written
+      // from the latest one. With no limit every record is exported and is written straight away.
+      final boolean buffered = descending && limit != Integer.MAX_VALUE;
+      final int windowSize = buffered ? limit - copyCount : 0;
+      Deque<Object[]> window = new ArrayDeque<>();
       // read the archived file
       try (Reader reader = HoodieLogFormat.newReader(metaClient, new HoodieLogFile(pathInfo.getPath()),
           HoodieSchema.fromAvroSchema(HoodieArchivedMetaEntry.getClassSchema()))) {
 
         // read the avro blocks
-        while (reader.hasNext() && (descending || copyCount < limit)) {
+        while (reader.hasNext() && (buffered || copyCount < limit)) {
           HoodieAvroDataBlock blk = (HoodieAvroDataBlock) reader.next();
           try (ClosableIterator<HoodieRecord<IndexedRecord>> recordItr = blk.getRecordIterator(HoodieRecordType.AVRO)) {
-            while (recordItr.hasNext() && (descending || copyCount < limit)) {
+            while (recordItr.hasNext() && (buffered || copyCount < limit)) {
               IndexedRecord ir = recordItr.next().getData();
               // Archived instants are saved as arvo encoded HoodieArchivedMetaEntry records. We need to get the
               // metadata record from the entry and convert it to json.
@@ -290,9 +298,11 @@ public class ExportCommand {
                 continue;
               }
               byte[] json = HoodieAvroUtils.avroToJson(metadata, true);
-              if (descending) {
-                fileEntries.add(new String[] {instantTime, action});
-                fileJsons.add(json);
+              if (buffered) {
+                window.addLast(new Object[] {instantTime + "." + action, json});
+                if (window.size() > windowSize) {
+                  window.removeFirst();
+                }
               } else {
                 writeToFile(localFolder + StoragePath.SEPARATOR + instantTime + "." + action, json);
                 copyCount++;
@@ -301,9 +311,9 @@ public class ExportCommand {
           }
         }
       }
-      for (int i = fileEntries.size() - 1; i >= 0 && copyCount < limit; i--) {
-        String[] entry = fileEntries.get(i);
-        writeToFile(localFolder + StoragePath.SEPARATOR + entry[0] + "." + entry[1], fileJsons.get(i));
+      while (!window.isEmpty() && copyCount < limit) {
+        Object[] entry = window.removeLast();
+        writeToFile(localFolder + StoragePath.SEPARATOR + entry[0], (byte[]) entry[1]);
         copyCount++;
       }
     }
