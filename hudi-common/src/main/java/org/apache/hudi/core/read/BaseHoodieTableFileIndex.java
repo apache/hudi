@@ -719,7 +719,8 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   protected boolean areAllFileSlicesCached() {
-    // Loop over partition paths to check if all partitions are initialized.
+    // Eviction can make this false immediately after a query has listed every partition.
+    // HoodieFileIndex then reports an unknown (-1) skipping ratio in its log.
     return areAllPartitionPathsCached()
         && cachedAllPartitionPaths.stream().allMatch(p -> cachedAllInputFileSlices.containsKey(p));
   }
