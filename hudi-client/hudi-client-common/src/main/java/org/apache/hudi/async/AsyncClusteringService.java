@@ -76,7 +76,20 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
           final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
             log.info("Starting clustering for instant {}", instant);
-            clusteringClient.cluster(instant);
+            BaseHoodieWriteClient clientAtStart = getClusteringWriteClient();
+            try {
+              clusteringClient.cluster(instant);
+            } catch (Exception e) {
+              if (getClusteringWriteClient() == clientAtStart) {
+                throw e;
+              }
+              // The writer switched this service to a new write client while the clustering ran, e.g. on a schema
+              // change, and closes the previous one: run the instant again with the new client.
+              log.warn("Clustering for instant {} failed after the write client was replaced, retrying it with the new write client",
+                  instant, e);
+              enqueuePendingAsyncServiceInstant(instant);
+              continue;
+            }
             log.info("Finished clustering for instant {}", instant);
           }
         }
@@ -102,5 +115,9 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
    */
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.clusteringClient.updateWriteClient(writeClient);
+  }
+
+  private synchronized BaseHoodieWriteClient getClusteringWriteClient() {
+    return this.clusteringClient.clusteringClient;
   }
 }

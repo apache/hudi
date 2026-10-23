@@ -828,6 +828,7 @@ public class HoodieStreamer implements Serializable {
           while (!isShutdownRequested()) {
             try {
               long start = System.currentTimeMillis();
+              throwIfAsyncTableServiceFailed();
               // Send a heartbeat metrics event to track the active ingestion job for this table.
               streamSync.getMetrics().updateStreamerHeartbeatTimestamp(start);
               // check if deltastreamer need to update the configuration before the sync
@@ -846,10 +847,7 @@ public class HoodieStreamer implements Serializable {
                 log.info("Enqueuing new pending compaction instant ({})", scheduledCompactionInstantAndRDD.get().getLeft());
                 asyncCompactService.get().enqueuePendingAsyncServiceInstant(scheduledCompactionInstantAndRDD.get().getLeft().get());
                 asyncCompactService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingCompactions);
-                if (asyncCompactService.get().hasError()) {
-                  error = true;
-                  throw new HoodieException("Async compaction failed.  Shutting down Delta Sync...");
-                }
+                throwIfAsyncTableServiceFailed();
               }
               if (clusteringConfig.isAsyncClusteringEnabled()) {
                 Option<String> clusteringInstant = streamSync.getClusteringInstantOpt();
@@ -857,10 +855,7 @@ public class HoodieStreamer implements Serializable {
                   log.info("Scheduled async clustering for instant: {}", clusteringInstant.get());
                   asyncClusteringService.get().enqueuePendingAsyncServiceInstant(clusteringInstant.get());
                   asyncClusteringService.get().waitTillPendingAsyncServiceInstantsReducesTo(cfg.maxPendingClustering);
-                  if (asyncClusteringService.get().hasError()) {
-                    error = true;
-                    throw new HoodieException("Async clustering failed.  Shutting down Delta Sync...");
-                  }
+                  throwIfAsyncTableServiceFailed();
                 }
               }
               // check if deltastreamer need to be shutdown
@@ -888,6 +883,23 @@ public class HoodieStreamer implements Serializable {
         }
         return true;
       }, executor), executor);
+    }
+
+    /**
+     * Stops ingestion when an async table service stopped with an error, with that error as the cause. The services
+     * retry a run that failed because the write client was replaced (e.g. on a schema change), so any error here is
+     * one they could not recover from. Checked on every round of ingestion, not only when a new compaction or
+     * clustering is scheduled, so that ingestion does not go on without its table services.
+     */
+    private void throwIfAsyncTableServiceFailed() {
+      if (asyncCompactService.isPresent() && asyncCompactService.get().hasError()) {
+        throw new HoodieException("Async compaction failed.  Shutting down Delta Sync...",
+            asyncCompactService.get().getFailure().orElse(null));
+      }
+      if (asyncClusteringService.isPresent() && asyncClusteringService.get().hasError()) {
+        throw new HoodieException("Async clustering failed.  Shutting down Delta Sync...",
+            asyncClusteringService.get().getFailure().orElse(null));
+      }
     }
 
     private void handleUpsertException(HoodieUpsertException ue) {
