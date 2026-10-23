@@ -59,9 +59,7 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
       // The CTE definitions of a WITH clause are not children of UnresolvedWith, so the transform does
       // not reach them; rewrite them separately.
       case withClause: UnresolvedWith =>
-        withClause.copy(cteRelations = withClause.cteRelations.map { case (name, cte) =>
-          name -> cte.copy(child = convertNativeTimeTravel(cte.child))
-        })
+        sparkAdapter.getCatalystPlanUtils.transformCteDefinitions(withClause, convertNativeTimeTravel)
     }
   }
 
