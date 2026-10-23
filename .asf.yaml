@@ -55,9 +55,9 @@ github:
           # java_ci_engines.yml are path-filtered: on a PR the filter skips, GitHub never
           # instantiates them, so any context of theirs would stay pending forever
           # (#18598 hit exactly this and worked around it with a gating job).
+          # validate-ci-baseline also runs the source release checks and the PR description,
+          # title and commit co-author checks, so each PR event spends one runner on them.
           - validate-ci-baseline
-          # validate-source also runs the PR description, title and commit co-author checks.
-          - validate-source
   collaborators:
     - ad1happy2go
     - rangareddy
