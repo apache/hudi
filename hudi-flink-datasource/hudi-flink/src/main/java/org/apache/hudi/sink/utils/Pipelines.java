@@ -191,7 +191,8 @@ public class Pipelines {
 
     if (isLsmTreeStorageLayout) {
       RowType sortRowType =
-          LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(rowType);
+          LsmBucketBulkInsertWriterHelper.rowTypeWithFileIdAndKey(
+              rowType, needFixedFileIdSuffix);
       InternalTypeInfo<RowData> sortTypeInfo = InternalTypeInfo.of(sortRowType);
       DataStream<RowData> sortInput = routedDataStream
           .map(record -> LsmBucketBulkInsertWriterHelper.rowWithFileIdAndKey(
@@ -207,12 +208,14 @@ public class Pipelines {
           conf,
           sortInput,
           sortTypeInfo,
-          LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(sortRowType),
+          LsmBucketBulkInsertWriterHelper.getFileIdAndKeySorterGen(
+              sortRowType, needFixedFileIdSuffix),
           "lsm_sorter:(file_group, record_key)",
           writeTasks);
     }
 
-    RowType rowTypeWithFileId = BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType);
+    RowType rowTypeWithFileId =
+        BucketBulkInsertWriterHelper.rowTypeWithFileId(rowType, needFixedFileIdSuffix);
     InternalTypeInfo<RowData> typeInfo = InternalTypeInfo.of(rowTypeWithFileId);
     DataStream<RowData> rowsWithFileId = routedDataStream
         .map(record -> BucketBulkInsertWriterHelper.rowWithFileId(
@@ -232,7 +235,8 @@ public class Pipelines {
         conf,
         rowsWithFileId,
         typeInfo,
-        BucketBulkInsertWriterHelper.getFileIdSorterGen(rowTypeWithFileId),
+        BucketBulkInsertWriterHelper.getFileIdSorterGen(
+            rowTypeWithFileId, needFixedFileIdSuffix),
         "file_sorter",
         writeTasks);
   }
