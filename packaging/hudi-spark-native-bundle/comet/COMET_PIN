@@ -18,8 +18,8 @@
 # OVERLAY_MANIFEST (build_comet.sh fails on any overlaid file whose upstream
 # content changed) and re-running the native bundle validation.
 COMET_REPO=https://github.com/apache/datafusion-comet.git
-COMET_COMMIT=3a7a2c437cc771621b6040a308657573dbc1b9c2
-COMET_VERSION=1.0.0-hudi-2
+COMET_COMMIT=992c806a7e38c2e88bd018aa5774164b0850e1fa
+COMET_VERSION=1.1.0-hudi-1
 # The hudi-rs revision is pinned in overlay/native/Cargo.toml (git dependency)
 # and locked with its full transitive graph in overlay/native/Cargo.lock. This
 # line documents it for humans; the Cargo files are the source of truth.

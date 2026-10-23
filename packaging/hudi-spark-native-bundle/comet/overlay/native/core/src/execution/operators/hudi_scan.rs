@@ -27,9 +27,8 @@
 //! Every batch crosses from hudi-rs into this workspace through the Arrow C
 //! data interface, whose layout is fixed by the Arrow specification and is
 //! identical across arrow crate majors; the transfer is pointer-level, not a
-//! copy. hudi-rs currently pins the same arrow major, so the crossing is a
-//! same-crate round trip; if the lines diverge again, only the export side
-//! switches to a renamed dep on hudi-rs's line.
+//! copy. hudi-rs is on an older arrow major, named here as `hudi_arrow`, which
+//! exports the batch that this workspace's arrow then imports.
 
 use std::collections::HashMap;
 use std::fmt;
@@ -38,13 +37,12 @@ use std::sync::Arc;
 use arrow::array::{Array as _, RecordBatch, RecordBatchOptions, StructArray};
 use arrow::compute::cast;
 use arrow::datatypes::SchemaRef;
+use datafusion::common::tree_node::TreeNodeRecursion;
 use datafusion::common::{DataFusionError, Result as DFResult};
 use datafusion::execution::{SendableRecordBatchStream, TaskContext};
-use datafusion::physical_expr::EquivalenceProperties;
+use datafusion::physical_expr::{EquivalenceProperties, PhysicalExpr};
 use datafusion::physical_plan::execution_plan::{Boundedness, EmissionType};
-use datafusion::physical_plan::metrics::{
-    BaselineMetrics, ExecutionPlanMetricsSet, MetricsSet,
-};
+use datafusion::physical_plan::metrics::{BaselineMetrics, ExecutionPlanMetricsSet, MetricsSet};
 use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
 use datafusion::physical_plan::{
     DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties,
@@ -97,14 +95,26 @@ impl HudiScanExec {
 
 /// Moves a batch from hudi-rs's arrow into this workspace's arrow over the
 /// Arrow C data interface.
-fn batch_across_ffi(batch: RecordBatch) -> DFResult<RecordBatch> {
-    let data = StructArray::from(batch).into_data();
-    let (ffi_array, ffi_schema) = arrow::ffi::to_ffi(&data)
+fn batch_across_ffi(batch: hudi_arrow::array::RecordBatch) -> DFResult<RecordBatch> {
+    let data = hudi_arrow::array::Array::into_data(hudi_arrow::array::StructArray::from(batch));
+    let (mut ffi_array, mut ffi_schema) = hudi_arrow::ffi::to_ffi(&data)
         .map_err(|e| DataFusionError::Execution(format!("Hudi scan arrow export failed: {e}")))?;
     // SAFETY: FFI_ArrowArray and FFI_ArrowSchema are the #[repr(C)] structs of
     // the Arrow C data interface; their layout is defined by the Arrow
-    // specification and is identical across arrow crate versions. Ownership
-    // moves with the structs, so the release callbacks fire exactly once.
+    // specification and is identical across arrow crate versions. from_raw
+    // moves each struct out and leaves a released one behind, so the release
+    // callbacks fire exactly once, on this workspace's side.
+    let (ffi_array, ffi_schema) = unsafe {
+        (
+            arrow::ffi::FFI_ArrowArray::from_raw(
+                &mut ffi_array as *mut _ as *mut arrow::ffi::FFI_ArrowArray,
+            ),
+            arrow::ffi::FFI_ArrowSchema::from_raw(
+                &mut ffi_schema as *mut _ as *mut arrow::ffi::FFI_ArrowSchema,
+            ),
+        )
+    };
+    // SAFETY: both structs were just produced by to_ffi and are valid.
     let data = unsafe { arrow::ffi::from_ffi(ffi_array, &ffi_schema) }
         .map_err(|e| DataFusionError::Execution(format!("Hudi scan arrow import failed: {e}")))?;
     Ok(RecordBatch::from(StructArray::from(data)))
@@ -174,6 +184,13 @@ impl ExecutionPlan for HudiScanExec {
         vec![]
     }
 
+    fn apply_expressions(
+        &self,
+        _f: &mut dyn FnMut(&Arc<dyn PhysicalExpr>) -> DFResult<TreeNodeRecursion>,
+    ) -> DFResult<TreeNodeRecursion> {
+        Ok(TreeNodeRecursion::Continue)
+    }
+
     fn with_new_children(
         self: Arc<Self>,
         _children: Vec<Arc<dyn ExecutionPlan>>,
@@ -190,11 +207,7 @@ impl ExecutionPlan for HudiScanExec {
         let options = self.options.clone();
         let schema = Arc::clone(&self.output_schema);
         let slices = self.file_slices.clone();
-        let projection: Vec<String> = schema
-            .fields()
-            .iter()
-            .map(|f| f.name().clone())
-            .collect();
+        let projection: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
         let baseline = BaselineMetrics::new(&self.metrics, 0);
 
         let batches = futures::stream::once(async move {
