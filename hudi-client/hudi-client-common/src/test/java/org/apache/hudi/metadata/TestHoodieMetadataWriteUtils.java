@@ -73,6 +73,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieMetadataWriteUtils {
 
+  @ParameterizedTest
+  @ValueSource(ints = {16384, 65536, 1048576})
+  public void testCreateMetadataWriteConfigPropagatesHFileBlockSize(int blockSize) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/base_path/")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().hfileBlockSize(blockSize).build())
+        .build();
+
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+    assertEquals(blockSize, metadataWriteConfig.getHFileBlockSize());
+  }
+
+  @Test
+  public void testCreateMetadataWriteConfigPreservesDefaultHFileBlockSize() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/base_path/").build();
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+    assertEquals(Integer.parseInt(HoodieStorageConfig.HFILE_BLOCK_SIZE.defaultValue()), metadataWriteConfig.getHFileBlockSize());
+  }
+
   @Test
   void testCreateEmptyNativeLogFile(@TempDir Path tempDir) throws Exception {
     String instantTime = "20260717120000000";
