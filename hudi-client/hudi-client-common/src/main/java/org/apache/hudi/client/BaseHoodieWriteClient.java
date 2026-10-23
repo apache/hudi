@@ -1687,7 +1687,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   /**
    * Upgrades the hoodie table if need be when moving to a new Hudi version, and backfills the table configs
    * that readers of the table version need but the table does not carry.
-   * This method is called within a lock. Try to avoid double locking from within this method.
+   * This method is called within a lock, except when the Flink stream write coordinator calls it on start.
+   * Try to avoid double locking from within this method.
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
    * @param instantTime instant time of interest if we have one.
    */
