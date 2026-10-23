@@ -1252,9 +1252,12 @@ public class StreamSync implements Serializable, Closeable {
     writeClient = new SparkRDDWriteClient<>(hoodieSparkContext, writeConfig, embeddedTimelineService);
     // Switch the async table services to the new client before closing the previous one: a compaction or clustering
     // still running on the previous client is then retried by its service with the new client if it fails.
-    onInitializingHoodieWriteClient.apply(writeClient);
-    if (previousWriteClient != null) {
-      previousWriteClient.close();
+    try {
+      onInitializingHoodieWriteClient.apply(writeClient);
+    } finally {
+      if (previousWriteClient != null) {
+        previousWriteClient.close();
+      }
     }
   }
 
