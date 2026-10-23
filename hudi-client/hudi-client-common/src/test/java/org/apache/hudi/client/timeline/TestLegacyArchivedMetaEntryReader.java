@@ -54,6 +54,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
@@ -87,6 +88,37 @@ public class TestLegacyArchivedMetaEntryReader {
         is("00000001,00000002,00000003,00000004,00000005,00000006,00000007,00000008,00000009,00000010"));
   }
 
+  @Test
+  void testReadLegacyArchivedTimelineSkipsInstantsWithoutCompletedState() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    for (String instantTime : Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000013")) {
+      HoodieCommitMetadata metadata = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
+      testTable.addCommit(instantTime, Option.of(metadata));
+    }
+    // 00000011 is requested only and 00000012 is requested + inflight; neither ever completed
+    testTable.addRequestedCommit("00000011");
+    testTable.addInflightCommit("00000012");
+    List<HoodieInstant> instants = TIMELINE_FACTORY.createActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
+    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000003") < 0));
+    // 00000013 has its requested and inflight records in one block and its completed record in a later block
+    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000011") >= 0 && !i.isCompleted()));
+    archive(metaClient, filter(instants, i -> (i.requestedTime().compareTo("00000003") >= 0 && i.requestedTime().compareTo("00000011") < 0)
+        || (i.requestedTime().equals("00000013") && i.isCompleted())));
+
+    List<ActiveAction> activeActions = new ArrayList<>();
+    try (ClosableIterator<ActiveAction> iterator = new LegacyArchivedMetaEntryReader(metaClient).getActiveActionsIterator()) {
+      while (iterator.hasNext()) {
+        activeActions.add(iterator.next());
+      }
+    }
+    assertThat(activeActions.stream().map(ActiveAction::getInstantTime).sorted().collect(Collectors.joining(",")),
+        is("00000001,00000002,00000003,00000004,00000013"));
+  }
+
   private void prepareLegacyArchivedTimeline(HoodieTableMetaClient metaClient) throws Exception {
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     for (int i = 1; i < 11; i++) {
@@ -98,6 +130,10 @@ public class TestLegacyArchivedMetaEntryReader {
     // archive 2 times to have 2 log files.
     archive(metaClient, instants.subList(0, instants.size() / 2));
     archive(metaClient, instants.subList(instants.size() / 2, instants.size()));
+  }
+
+  private static List<HoodieInstant> filter(List<HoodieInstant> instants, Predicate<HoodieInstant> predicate) {
+    return instants.stream().filter(predicate).collect(Collectors.toList());
   }
 
   private HoodieLogFormat.Writer openWriter(HoodieTableMetaClient metaClient) {
