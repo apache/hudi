@@ -106,6 +106,10 @@ public class TestUnstructuredFileDFSSource extends UtilitiesTestBase {
     Row reference = bigBlob.getStruct(2);
     assertTrue(reference.getString(0).endsWith("big.txt"));
     assertFalse(reference.getBoolean(3)); // managed=false: points at the original file in place
+    assertNull(reference.get(1), "offset is unset, meaning the blob starts at byte 0");
+    // the ingested size, so a reference that stops matching the file is detectable without
+    // reading the blob - the only signal when a replacement preserves the modification time
+    assertEquals(bigRow.getLong(df.schema().fieldIndex("size")), reference.getLong(2));
     // out-of-line files are still parsed (streamed from the source file)
     assertEquals("SUCCESS", bigRow.getString(df.schema().fieldIndex("parse_status")));
 
