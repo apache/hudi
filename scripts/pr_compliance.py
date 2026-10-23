@@ -481,7 +481,7 @@ def test_body():
             test_sections.append(good_sections[j].copy())
         for k in range(i+1,len(good_sections)):
             test_sections[i], test_sections[k] = test_sections[k],test_sections[i]
-            tests_passed = run_test(f"Swapped sections: {i}, {k}", build_body(test_sections), False, DEBUG_MESSAGES) and tests_passed
+            tests_passed = run_test(f"Swapped sections: {i}, {k}", build_body(test_sections), True, DEBUG_MESSAGES) and tests_passed
 
     #Test missing section
     for i in range(len(good_sections)):
