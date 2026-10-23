@@ -1,9 +1,8 @@
 name: Validation
 
-# Both jobs here are required status checks in .asf.yaml. A required check must report on every PR,
-# including docs-only ones, and a path-filtered workflow is never instantiated for PRs that miss the
-# filter, so this workflow is never path-filtered. The PR metadata checks share the validate-source
-# job, so each PR spends one runner, not two, on these short checks.
+# The one job here is the only required status check in .asf.yaml. A required check must report on
+# every PR, including docs-only ones, and a path-filtered workflow is never instantiated for PRs that
+# miss the filter, so this workflow is never path-filtered.
 on:
   push:
     branches:
@@ -23,17 +22,13 @@ concurrency:
   cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
 
 jobs:
-  # [CI-TRIM] to revisit for CI improvement
-  # This only blocks PRs whose checks predate the matrix trim (#19514). Since bot.yml and
-  # java_ci_engines.yml are path-filtered, a green result here no longer means any Java CI
-  # job ran; reviewers gate on the checks the PR shows. Delete under #19535.
+  # [CI-TRIM]
+  # The only required status check in .asf.yaml. The name is historical: PRs whose checks predate
+  # the matrix trim (#19514) never reported it, so they stay blocked until they re-run CI against
+  # the current workflows. Every other short check (PR metadata, source release) is folded in, so
+  # each PR event spends one runner. Renaming it would block every open PR until it re-runs CI,
+  # so keep the name even after #19535.
   validate-ci-baseline:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Confirm CI ran against the reduced matrix
-        run: echo "Ran against the reduced CI matrix."
-
-  validate-source:
     runs-on: ubuntu-24.04
     env:
       # The metadata checks only apply to PRs. release-* PRs (backports, "[DO NOT MERGE] Validate
