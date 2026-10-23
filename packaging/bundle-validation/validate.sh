@@ -269,7 +269,9 @@ test_utilities_bundle () {
     fi
 
     echo "::warning::validate.sh validating deltastreamer in spark shell"
-    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell $OPT_JARS $MAIN_JAR -i $WORKDIR/utilities/validate.scala"
+    # The bundles go in --jars so spark.sql.extensions can load HoodieSparkSessionExtension from them; Spark 3.5.9+
+    # fails the session when the extension class is missing, and a positional jar is not on the driver classpath.
+    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell --jars $MAIN_JAR${EXTRA_JARS:+,$EXTRA_JARS} -i $WORKDIR/utilities/validate.scala"
     echo "::debug::this is the shell command: $SHELL_COMMAND"
     LOGFILE="$WORKDIR/${FUNCNAME[0]}.log"
     $SHELL_COMMAND >> $LOGFILE
