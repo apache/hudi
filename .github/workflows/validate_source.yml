@@ -1,8 +1,9 @@
-name: Source Validation
+name: Validation
 
 # Both jobs here are required status checks in .asf.yaml. A required check must report on every PR,
 # including docs-only ones, and a path-filtered workflow is never instantiated for PRs that miss the
-# filter, so these jobs cannot live in bot.yml once it is path-filtered.
+# filter, so this workflow is never path-filtered. The PR metadata checks share the validate-source
+# job, so each PR spends one runner, not two, on these short checks.
 on:
   push:
     branches:
@@ -10,6 +11,8 @@ on:
       - 'release-*'
       - branch-0.x
   pull_request:
+    # `edited` re-runs the PR metadata checks when the title or description changes.
+    types: [opened, edited, reopened, synchronize]
     branches:
       - master
       - 'release-*'
@@ -32,9 +35,110 @@ jobs:
 
   validate-source:
     runs-on: ubuntu-24.04
+    env:
+      # The metadata checks only apply to PRs. release-* PRs (backports, "[DO NOT MERGE] Validate
+      # rc bundles") were never subject to them.
+      CHECK_PR_METADATA: ${{ github.event_name == 'pull_request' && !startsWith(github.base_ref, 'release-') }}
     steps:
       - uses: actions/checkout@v5
+
+      # PR metadata checks. Each takes seconds, so they share this job instead of spending a runner
+      # of their own. Every step from here on runs even when an earlier one fails, so one run
+      # reports every problem; the failed step's name says which check it was.
+      - name: Check PR description
+        if: ${{ env.CHECK_PR_METADATA == 'true' }}
+        env:
+          REQUEST_BODY: ${{ github.event.pull_request.body }}
+          REQUEST_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 scripts/pr_compliance.py
+
+      # Seconds of stdlib-only unit tests, so they run on every PR instead of path-filtering
+      # on scripts/pr_compliance.py.
+      - name: Test pr_compliance.py
+        if: ${{ !cancelled() && env.CHECK_PR_METADATA == 'true' }}
+        run: python3 scripts/pr_compliance.py run-tests > test.log || { echo "::error::pr_compliance.py $(cat test.log)" && exit 1; }
+
+      - name: Check for legacy PR title format using JIRA or MINOR
+        id: check-legacy-format
+        if: ${{ !cancelled() && env.CHECK_PR_METADATA == 'true' }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          title="$PR_TITLE"
+          echo "Checking PR title: $title"
+
+          # Check for HUDI JIRA format: [HUDI-1234] description
+          if [[ "$title" =~ ^\[HUDI-[0-9]+\]\ .+ ]]; then
+            echo "Title matches HUDI JIRA format"
+            echo "skip_conventional=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Check for MINOR format: [MINOR] description
+          if [[ "$title" =~ ^\[MINOR\]\ .+ ]]; then
+            echo "Title matches MINOR format"
+            echo "skip_conventional=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Title does not match JIRA/MINOR format, will validate as conventional commit"
+          echo "skip_conventional=false" >> $GITHUB_OUTPUT
+
+      - name: Validate PR title with Conventional Commits spec
+        if: ${{ !cancelled() && env.CHECK_PR_METADATA == 'true' && steps.check-legacy-format.outputs.skip_conventional == 'false' }}
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            chore
+          requireScope: false
+          # Disable subject case validation to be more permissive
+          subjectPattern: ^.+$
+          subjectPatternError: |
+            The subject "{subject}" found in the pull request title "{title}"
+            is empty. Please provide a meaningful description.
+          # Allow ignoring certain labels
+          ignoreLabels: |
+            bot
+            ignore-semantic-pull-request
+          validateSingleCommit: false
+          headerPattern: '^(\w+)(?:\(([^)]+)\))?!?: (.+)$'
+          headerPatternCorrespondence: type,scope,subject
+
+      - name: Check commits for Claude co-author trailers
+        if: ${{ !cancelled() && env.CHECK_PR_METADATA == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          echo "Checking commits of PR #${PR_NUMBER} for Claude co-author trailers..."
+          flagged=$(gh api "repos/${REPO}/pulls/${PR_NUMBER}/commits" --paginate \
+            --jq '.[] | select(.commit.message | test("(^|\\n)co-authored-by:\\s*(claude\\s+(opus|sonnet|haiku|fable|mythos|instant|code|[0-9])|[^\\n]*<noreply@anthropic\\.com>)"; "i")) | .sha')
+
+          if [[ -n "$flagged" ]]; then
+            echo "The following commits contain a Claude co-author trailer:"
+            echo "$flagged"
+            echo ""
+            echo "Commits must not credit Claude as a co-author."
+            echo "Remove the 'Co-authored-by: Claude ...' trailer from the commit message(s),"
+            echo "e.g., by amending the commit or rebasing, and force-push the branch."
+            exit 1
+          fi
+
+          echo "No Claude co-author trailers found."
+
+      # Source checks. They run even when a metadata check above fails.
       - name: Set up JDK 11
+        if: ${{ !cancelled() }}
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -59,14 +163,19 @@ jobs:
       # upstream trinodb/trino build; nothing in this repo runs it since RFC-105 dropped the
       # trino-root parent.
       - name: Create source release directory
+        id: source-dir
+        if: ${{ !cancelled() }}
         run: ./scripts/release/create_source_directory.sh "${{ runner.temp }}/hudi-tmp-repo"
       - name: Check Binary Files
+        if: ${{ !cancelled() && steps.source-dir.outcome == 'success' }}
         run: |
           cd "${{ runner.temp }}/hudi-tmp-repo"
           ./scripts/release/validate_source_binary_files.sh
       - name: Check Copyright
+        if: ${{ !cancelled() && steps.source-dir.outcome == 'success' }}
         run: |
           cd "${{ runner.temp }}/hudi-tmp-repo"
           ./scripts/release/validate_source_copyright.sh
       - name: RAT check
+        if: ${{ !cancelled() }}
         run: ./scripts/release/validate_source_rat.sh
