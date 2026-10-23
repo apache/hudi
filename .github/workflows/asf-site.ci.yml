@@ -14,7 +14,7 @@ concurrency:
 jobs:
   hudi-asf-site-ci:
     name: "Apache Hudi asf-site CI"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       DOCS_ROOT: "./website"
     steps:
