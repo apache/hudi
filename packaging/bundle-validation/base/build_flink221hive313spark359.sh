@@ -19,9 +19,9 @@
 #
 docker build \
  --build-arg HIVE_VERSION=3.1.3 \
- --build-arg FLINK_VERSION=2.1.1 \
- --build-arg SPARK_VERSION=3.5.1 \
+ --build-arg FLINK_VERSION=2.2.1 \
+ --build-arg SPARK_VERSION=3.5.9 \
  --build-arg SPARK_HADOOP_VERSION=3 \
  --build-arg HADOOP_VERSION=3.3.5 \
- -t hudi-ci-bundle-validation-base:flink211hive313spark351 .
-docker image tag hudi-ci-bundle-validation-base:flink211hive313spark351 apachehudi/hudi-ci-bundle-validation-base:flink211hive313spark351
+ -t hudi-ci-bundle-validation-base:flink221hive313spark359 .
+docker image tag hudi-ci-bundle-validation-base:flink221hive313spark359 apachehudi/hudi-ci-bundle-validation-base:flink221hive313spark359
