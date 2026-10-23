@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <parent>
+    <artifactId>hudi</artifactId>
+    <groupId>org.apache.hudi</groupId>
+    <version>1.3.0-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+  <modelVersion>4.0.0</modelVersion>
+  <artifactId>hudi-spark${sparkbundle.version}-native-bundle_${scala.binary.version}</artifactId>
+  <packaging>jar</packaging>
+
+  <!-- The shaded hudi-spark-bundle jar plus Apache DataFusion Comet, with no relocation of its own:
+       Hudi keeps its relocated third-party copies (and stays binary compatible with the slim
+       utilities bundle), and Comet keeps the names Spark resolves it by. -->
+
+  <properties>
+    <checkstyle.skip>true</checkstyle.skip>
+    <main.basedir>${project.parent.basedir}</main.basedir>
+    <skipTests>true</skipTests>
+    <!-- Comet releases one artifact per Spark minor version, so by default this module produces
+         no bundle (a sources jar only, nothing installed or deployed) rather than one named "native"
+         with no native code in it. The comet-spark<version> profiles below opt in. -->
+    <hudi.spark.native.bundle.skip>true</hudi.spark.native.bundle.skip>
+    <hudi.spark.native.bundle.jar.phase>none</hudi.spark.native.bundle.jar.phase>
+    <maven.install.skip>${hudi.spark.native.bundle.skip}</maven.install.skip>
+    <maven.deploy.skip>${hudi.spark.native.bundle.skip}</maven.deploy.skip>
+    <!-- The javadoc jar puts the module's own jar on its classpath (see the root pom), and a skipped bundle has none. -->
+    <maven.javadoc.skip>${hudi.spark.native.bundle.skip}</maven.javadoc.skip>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.rat</groupId>
+        <artifactId>apache-rat-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>default-jar</id>
+            <!-- none when this module produces no bundle. Without it maven-jar-plugin still emits
+                 a jar named as if it were a bundle, holding nothing but the generated META-INF.
+                 skipIfEmpty does not help: remote-resources populates target/classes regardless. -->
+            <phase>${hudi.spark.native.bundle.jar.phase}</phase>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-shade-plugin</artifactId>
+        <version>${maven-shade-plugin.version}</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <skip>${hudi.spark.native.bundle.skip}</skip>
+              <createSourcesJar>${shadeSources}</createSourcesJar>
+              <dependencyReducedPomLocation>${project.build.directory}/dependency-reduced-pom.xml
+              </dependencyReducedPomLocation>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheLicenseResourceTransformer" />
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ApacheNoticeResourceTransformer">
+                  <addHeader>true</addHeader>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
+                  <resource>META-INF/LICENSE</resource>
+                  <file>target/classes/META-INF/LICENSE</file>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                  <resource>META-INF/services/org.apache.spark.sql.sources.DataSourceRegister</resource>
+                </transformer>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+              </transformers>
+              <!-- Neither the common includes nor the relocations the parent pom gives every
+                   bundle apply here: the spark bundle jar already carries all of them. Both are
+                   overridden as a whole, so a profile appending to the includes cannot pull the
+                   parent's list back in. -->
+              <artifactSet combine.self="override">
+                <includes>
+                  <include>org.apache.hudi:hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}</include>
+
+                  <!-- NOTE: Comet must never be relocated: libcomet.so binds through JNI symbols
+                             named Java_org_apache_comet_Native_* and is loaded from the
+                             org/apache/comet/<os>/<arch>/ resource path, so a relocated
+                             org.apache.comet builds and then fails on the first native call. The same
+                             holds for org.apache.arrow.c (the Arrow C data interface JNI bindings) and
+                             for org.apache.spark.CometSource, whose metricRegistry() must keep returning
+                             the com.codahale.metrics.MetricRegistry that Spark's Source declares. -->
+                  <include>org.apache.datafusion:*</include>
+                </includes>
+              </artifactSet>
+              <relocations combine.self="override" />
+              <filters>
+                <filter>
+                  <!-- Comet ships Arrow and Guava relocated under org.apache.comet.shaded but keeps
+                       their original META-INF/maven descriptors, which misreports the bundled
+                       versions to anything that probes them. -->
+                  <artifact>org.apache.datafusion:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/maven/org.apache.arrow/**</exclude>
+                    <exclude>META-INF/maven/com.google.guava/**</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/services/javax.*</exclude>
+                    <exclude>**/*.proto</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <finalName>${project.artifactId}-${project.version}</finalName>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
+  </build>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.apache.hudi</groupId>
+      <artifactId>hudi-spark${sparkbundle.version}-bundle_${scala.binary.version}</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
+
+  <profiles>
+    <!-- One profile per Spark version Comet publishes comet-spark-spark<X.Y>_<scala> for. Spark 3.3
+         (dropped after Comet 0.7.0) and 4.2 (experimental in Comet, no published artifact) fall through to the skip above; Spark 3.4
+         is deprecated as of Comet 1.1.0 and goes the same way once Comet drops it. -->
+    <profile>
+      <id>comet-spark3.4</id>
+      <activation>
+        <property>
+          <name>spark3.4</name>
+        </property>
+      </activation>
+      <properties>
+        <hudi.spark.native.bundle.skip>false</hudi.spark.native.bundle.skip>
+        <hudi.spark.native.bundle.jar.phase>package</hudi.spark.native.bundle.jar.phase>
+      </properties>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.datafusion</groupId>
+          <artifactId>comet-spark-spark3.4_${scala.binary.version}</artifactId>
+          <version>${datafusion.comet.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+
+    <profile>
+      <id>comet-spark3.5</id>
+      <activation>
+        <property>
+          <name>spark3.5</name>
+        </property>
+      </activation>
+      <properties>
+        <hudi.spark.native.bundle.skip>false</hudi.spark.native.bundle.skip>
+        <hudi.spark.native.bundle.jar.phase>package</hudi.spark.native.bundle.jar.phase>
+      </properties>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.datafusion</groupId>
+          <artifactId>comet-spark-spark3.5_${scala.binary.version}</artifactId>
+          <version>${datafusion.comet.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+
+    <profile>
+      <id>comet-spark4.0</id>
+      <activation>
+        <property>
+          <name>spark4.0</name>
+        </property>
+      </activation>
+      <properties>
+        <hudi.spark.native.bundle.skip>false</hudi.spark.native.bundle.skip>
+        <hudi.spark.native.bundle.jar.phase>package</hudi.spark.native.bundle.jar.phase>
+      </properties>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.datafusion</groupId>
+          <artifactId>comet-spark-spark4.0_${scala.binary.version}</artifactId>
+          <version>${datafusion.comet.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+
+    <profile>
+      <id>comet-spark4.1</id>
+      <activation>
+        <property>
+          <name>spark4.1</name>
+        </property>
+      </activation>
+      <properties>
+        <hudi.spark.native.bundle.skip>false</hudi.spark.native.bundle.skip>
+        <hudi.spark.native.bundle.jar.phase>package</hudi.spark.native.bundle.jar.phase>
+      </properties>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.datafusion</groupId>
+          <artifactId>comet-spark-spark4.1_${scala.binary.version}</artifactId>
+          <version>${datafusion.comet.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+  </profiles>
+</project>

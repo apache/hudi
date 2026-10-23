@@ -109,3 +109,13 @@ flag and adding the release version:
       HUDI_VERSION: 1.0.0 ## Change to the release version
       MAVEN_BASE_URL: 'https://repo1.maven.org/maven2'  ## Maven Central URL, no need to change unless necessary
 ```
+
+## Spark native bundle
+
+`hudi-spark-native-bundle` is validated on the Java 17 pass in two steps. The Comet query in
+`spark_native/` asserts Comet operators in the plan, not just row counts, because Comet silently falls
+back to Spark for anything it cannot accelerate. It needs a glibc JVM for `libcomet.so`, and the Alpine
+based image's Java 17 is musl, so `validate.sh` skips this step there with a warning; run it on a glibc
+image with the same `SPARK_HOME` and `/usr/lib/jvm/java-17-openjdk` layout. The second step runs the
+utilities slim bundle paired with the native bundle instead of the Spark bundle, with no Comet config,
+so it runs on the Alpine image too.

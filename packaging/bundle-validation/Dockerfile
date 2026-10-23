@@ -30,11 +30,15 @@ RUN cp $DERBY_HOME/lib/derbyclient.jar $SPARK_HOME/jars/
 RUN cp conf/spark-defaults.conf $SPARK_HOME/conf/
 RUN if [[ $SPARK_HOME =~ 'spark-3.2' ]] || [[ $SPARK_HOME =~ 'spark-3.3' ]]; \
     then printf "\nspark.sql.catalog.spark_catalog org.apache.spark.sql.hudi.catalog.HoodieCatalog\n" >> $SPARK_HOME/conf/spark-defaults.conf; fi
-RUN printf "\ntaskmanager.numberOfTaskSlots: 2\n" >> $FLINK_HOME/conf/flink-conf.yaml
+# Flink 1.19+ ships config.yaml and gives a legacy flink-conf.yaml precedence, so adding one that
+# holds only the slot count would start the cluster without any memory settings.
+RUN if [ -f $FLINK_HOME/conf/config.yaml ]; \
+    then sed -i 's/numberOfTaskSlots: 1/numberOfTaskSlots: 2/' $FLINK_HOME/conf/config.yaml; \
+    else printf "\ntaskmanager.numberOfTaskSlots: 2\n" >> $FLINK_HOME/conf/flink-conf.yaml; fi
 RUN printf "\nlocalhost\n" >> $FLINK_HOME/conf/workers
 
 # install maven
-RUN wget -t=3 https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.12/apache-maven-3.9.12-bin.tar.gz
+RUN wget -t 3 https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.9.12/apache-maven-3.9.12-bin.tar.gz
 RUN mkdir -p /usr/share/maven
 RUN tar xzvf apache-maven-3.9.12-bin.tar.gz -C /usr/share/maven
 ENV MAVEN_HOME=/usr/share/maven/apache-maven-3.9.12
@@ -54,5 +58,5 @@ ENV HDFS_SECONDARYNAMENODE_USER root
 ENV YARN_RESOURCEMANAGER_USER root
 ENV YARN_NODEMANAGER_USER root
 
-# for RocksDb
-RUN apk add --no-cache libstdc++
+# for RocksDb on base images that install packages with apk; the glibc base image already carries libstdc++
+RUN if command -v apk > /dev/null; then apk add --no-cache libstdc++; fi

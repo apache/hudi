@@ -231,6 +231,20 @@ jobs:
     strategy:
       matrix:
         include:
+          # validate.sh only runs the Flink test on a Flink 2.x image (HUDI-8608), so the Spark,
+          # utilities, CLI and native bundles are validated on the Flink 1.x entries.
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.1'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.9'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink2.2'
             flinkAvroVersion: '1.11.4'
@@ -275,7 +289,7 @@ jobs:
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-spark-native-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
           else
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
@@ -308,19 +322,18 @@ jobs:
     strategy:
       matrix:
         include:
-          # [CI-TRIM] to revisit for CI improvement
-#          - scalaProfile: 'scala-2.13'
-#            flinkProfile: 'flink1.20'
-#            flinkAvroVersion: '1.11.4'
-#            flinkParquetVersion: '1.13.1'
-#            sparkProfile: 'spark4.0'
-#            sparkRuntime: 'spark4.0.0'
-#          - scalaProfile: 'scala-2.13'
-#            flinkProfile: 'flink1.20'
-#            flinkAvroVersion: '1.11.4'
-#            flinkParquetVersion: '1.13.1'
-#            sparkProfile: 'spark4.1'
-#            sparkRuntime: 'spark4.1.1'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark4.0'
+            sparkRuntime: 'spark4.0.0'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark4.1'
+            sparkRuntime: 'spark4.1.1'
           - scalaProfile: 'scala-2.13'
             flinkProfile: 'flink1.20'
             flinkAvroVersion: '1.11.4'
@@ -343,7 +356,7 @@ jobs:
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
-          mvn clean package -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+          mvn clean package -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-spark-native-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
       - name: Validate Bundle UI Assets
         run: ./scripts/release/validate_bundle_ui_assets.sh
       - name: IT - Spark4 Bundle Validation - OpenJDK 17
