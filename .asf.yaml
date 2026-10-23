@@ -56,9 +56,8 @@ github:
           # instantiates them, so any context of theirs would stay pending forever
           # (#18598 hit exactly this and worked around it with a gating job).
           - validate-ci-baseline
+          # validate-source also runs the PR description, title and commit co-author checks.
           - validate-source
-          # validate-pr also runs the PR title and commit co-author checks.
-          - validate-pr
   collaborators:
     - ad1happy2go
     - rangareddy
