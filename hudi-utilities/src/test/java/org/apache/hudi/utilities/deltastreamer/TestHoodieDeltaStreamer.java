@@ -205,6 +205,7 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREA
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.assertTableConfigs;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
@@ -618,19 +619,69 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @ParameterizedTest
-  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
-  public void testPartitionKeyFieldsBasedOnVersion(HoodieTableVersion version) throws IOException {
-    String tablePath = basePath + "/partition_key_fields_meta_client" + version.versionCode();
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testTableConfigsBasedOnVersion(HoodieTableVersion version) throws IOException {
+    String tablePath = basePath + "/table_configs_v" + version.versionCode();
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
     cfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + version.versionCode());
     cfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + CustomKeyGenerator.class.getName());
     cfg.configs.add("hoodie.datasource.write.partitionpath.field=partition_path:simple");
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.getIngestionService().ingestOnce();
-    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
-    String expectedPartitionFields = version.equals(HoodieTableVersion.SIX) ? "partition_path" : "partition_path:simple";
-    assertEquals(expectedPartitionFields, metaClient.getTableConfig().getString(HoodieTableConfig.PARTITION_FIELDS));
+    assertTableConfigs(storage, tablePath, expectedTableConfigs(version));
     deltaStreamer.shutdownGracefully();
+
+    // the next write backfills the key generator class of a table created without it
+    HoodieTableConfig.delete(storage, new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME),
+        Collections.singleton(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
+    deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamer.getIngestionService().ingestOnce();
+    assertTableConfigs(storage, tablePath, expectedTableConfigs(version));
+    deltaStreamer.shutdownGracefully();
+  }
+
+  private static Map<String, String> expectedTableConfigs(HoodieTableVersion version) {
+    Map<String, String> configs = new HashMap<>();
+    configs.put("hoodie.table.name", "hoodie_trips");
+    configs.put("hoodie.table.type", "COPY_ON_WRITE");
+    configs.put("hoodie.table.version", String.valueOf(version.versionCode()));
+    configs.put("hoodie.table.recordkey.fields", "_row_key");
+    configs.put("hoodie.table.ordering.fields", "timestamp");
+    configs.put("hoodie.table.keygenerator.type", "CUSTOM");
+    configs.put("hoodie.table.base.file.format", "PARQUET");
+    configs.put("hoodie.table.format", "native");
+    configs.put("hoodie.table.cdc.enabled", "false");
+    configs.put("hoodie.table.metadata.partitions.inflight", "");
+    configs.put("hoodie.table.index.defs.path", ".hoodie/.index_defs/index.json");
+    configs.put("hoodie.table.partition_extractor_class", "org.apache.hudi.hive.MultiPartKeysValueExtractor");
+    configs.put("hoodie.meta.fields.mode", "ALL");
+    configs.put("hoodie.partition.metafile.use.base.format", "false");
+    configs.put("hoodie.datasource.write.drop.partition.columns", "false");
+    configs.put("hoodie.datasource.write.hive_style_partitioning", "false");
+    configs.put("hoodie.datasource.write.partitionpath.urlencode", "false");
+    configs.put("hoodie.archivelog.folder", "history");
+    configs.put("hoodie.timeline.path", "timeline");
+    configs.put("hoodie.timeline.history.path", "history");
+    if (version.lesserThan(HoodieTableVersion.EIGHT)) {
+      configs.put("hoodie.table.partition.fields", "partition_path");
+      configs.put("hoodie.table.metadata.partitions", "column_stats,files");
+      configs.put("hoodie.timeline.layout.version", "1");
+      configs.put("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.CustomKeyGenerator");
+    } else {
+      configs.put("hoodie.table.partition.fields", "partition_path:simple");
+      configs.put("hoodie.table.metadata.partitions", "column_stats,files,partition_stats");
+      configs.put("hoodie.timeline.layout.version", "2");
+      configs.put("hoodie.table.initial.version", String.valueOf(version.versionCode()));
+      configs.put("hoodie.record.merge.mode", "COMMIT_TIME_ORDERING");
+    }
+    if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload");
+      configs.put("hoodie.record.merge.strategy.id", "ce9acb64-bde0-424c-9b91-f6ebba25356d");
+    }
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      configs.put("hoodie.populate.meta.fields", "true");
+    }
+    return configs;
   }
 
   @ParameterizedTest
