@@ -4,7 +4,7 @@ excerpt: "JD.com keeps fresh data in Apache Fluss and tiers it into Apache Hudi 
 description: "JD.com keeps fresh data in Apache Fluss and tiers it into Apache Hudi tables, so one copy of data serves both real-time and batch workloads. In recommendation ranking, this cut batch compute cost by more than 80% and storage cost by more than 50%."
 author: "Hou Zhong, Technical Expert at JD.com"
 category: case-study
-image: /assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/02-fluss-lake-stream-architecture.jpg
+image: /assets/images/blog/2026-10-14-how-jd-built-a-lakestream-with-fluss-and-hudi/jd-lakestream-cover.png
 tags:
 - apache fluss
 - streaming
