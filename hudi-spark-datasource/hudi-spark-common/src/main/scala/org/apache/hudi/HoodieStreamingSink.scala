@@ -297,10 +297,12 @@ class HoodieStreamingSink(sqlContext: SQLContext,
    * use. The client does not own the server, so the server keeps running for as long as the sink does.
    */
   private def createWriteClient(context: HoodieSparkEngineContext, writeConfig: HoodieWriteConfig): SparkRDDWriteClient[_] = {
+    // register the release first, so that a timeline server started for a client that then fails to build is
+    // still stopped when the query terminates
+    registerQueryTerminationListener()
     val client = new SparkRDDWriteClient(context, writeConfig, getOrStartTimelineService(context, writeConfig))
     // track the client as soon as it exists so that a failed micro-batch still reuses and eventually closes it
     writeClient = Some(client)
-    registerQueryTerminationListener()
     client
   }
 
@@ -383,7 +385,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
-  private def reset(force: Boolean): Unit = this.synchronized {
+  protected def reset(force: Boolean): Unit = this.synchronized {
     // detach each service before shutting it down, see resetOnAsyncServiceStop
     if (asyncCompactorService != null) {
       val compactorService = asyncCompactorService

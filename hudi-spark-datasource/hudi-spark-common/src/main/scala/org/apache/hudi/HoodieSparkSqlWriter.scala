@@ -169,6 +169,8 @@ class HoodieSparkSqlWriterInternal {
   private var asyncCompactionTriggerFnDefined: Boolean = false
   private var asyncClusteringTriggerFnDefined: Boolean = false
   private var writeClientOwnedByCaller: Boolean = false
+  // instant started by the current write and the client that started it, to stop its heartbeat if the write fails
+  private var startedInstant: Option[(SparkRDDWriteClient[_], String)] = None
 
   def write(sqlContext: SQLContext,
             mode: SaveMode,
@@ -187,6 +189,7 @@ class HoodieSparkSqlWriterInternal {
 
       while (counter <= maxRetry && !succeeded) {
         try {
+          startedInstant = None
           toReturn = writeInternal(sqlContext, mode, optParams, sourceDf, streamingWritesParamsOpt, hoodieWriteClient,
             schemaFromCatalog = schemaFromCatalog)
           if (counter > 0) {
@@ -195,6 +198,7 @@ class HoodieSparkSqlWriterInternal {
           succeeded = true
         } catch {
           case e: HoodieWriteConflictException =>
+            releaseStartedInstant()
             val writeConcurrencyMode = optParams.getOrElse(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), HoodieWriteConfig.WRITE_CONCURRENCY_MODE.defaultValue())
             if (WriteConcurrencyMode.supportsMultiWriter(writeConcurrencyMode) && counter < maxRetry) {
               counter += 1
@@ -202,11 +206,37 @@ class HoodieSparkSqlWriterInternal {
             } else {
               throw e
             }
+          case e: Throwable =>
+            releaseStartedInstant()
+            throw e
         }
       }
       toReturn
     }
     retryWrite()
+  }
+
+  /**
+   * Stops the heartbeat of the instant a failed write started, when the caller owns the write client: the client
+   * lives on, so its heartbeat would otherwise keep the failed instant looking alive and block its rollback under
+   * the lazy failed-writes clean policy. A client the writer owns is closed instead, which stops all its heartbeats.
+   */
+  private def releaseStartedInstant(): Unit = {
+    if (writeClientOwnedByCaller) {
+      startedInstant.foreach { case (client, instant) =>
+        try {
+          client.releaseResources(instant)
+        } catch {
+          case e: Exception => log.warn(s"Failed to release the resources of instant $instant", e)
+        }
+      }
+    }
+    startedInstant = None
+  }
+
+  private def recordStartedInstant(client: SparkRDDWriteClient[_], instant: String): String = {
+    startedInstant = Some((client, instant))
+    instant
   }
 
   private def writeInternal(sqlContext: SQLContext,
@@ -426,7 +456,7 @@ class HoodieSparkSqlWriterInternal {
               streamingWritesParamsOpt.map(_.asyncClusteringTriggerFn.get.apply(client))
             }
 
-            instantTime = client.startCommit(commitActionType)
+            instantTime = recordStartedInstant(client, client.startCommit(commitActionType))
             // Ingestion setup may have recorded the encoding, and commit start may have upgraded the table.
             tableMetaClient.reloadTableConfig()
             val deleteKeyGenProps = KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(hoodieConfig.getProps), tableMetaClient.getTableConfig)
@@ -474,7 +504,7 @@ class HoodieSparkSqlWriterInternal {
                 parameters.asJava, streamingWritesParamsOpt))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
-            instantTime = client.startDeletePartitionCommit(tableMetaClient)
+            instantTime = recordStartedInstant(client, client.startDeletePartitionCommit(tableMetaClient))
             val writeResult =  DataSourceUtils.doDeletePartitionsOperation(client, partitionsToDelete, instantTime)
             (writeResult, client)
 
@@ -538,7 +568,7 @@ class HoodieSparkSqlWriterInternal {
             // scalastyle:on
 
             val writeConfig = client.getConfig
-            instantTime = client.startCommit(commitActionType)
+            instantTime = recordStartedInstant(client, client.startCommit(commitActionType))
             // Ingestion setup may have recorded the encoding, and commit start may have upgraded the table.
             tableMetaClient.reloadTableConfig()
             tableConfig = tableMetaClient.getTableConfig
@@ -884,7 +914,7 @@ class HoodieSparkSqlWriterInternal {
       .orNull
 
     val commitActionType = CommitUtils.getCommitActionType(overwriteOperationType, writeConfig.getTableType)
-    val instantTime = writeClient.startCommit(commitActionType)
+    val instantTime = recordStartedInstant(writeClient, writeClient.startCommit(commitActionType))
     val executor = mode match {
       case _ if overwriteOperationType == null =>
         // Don't need to overwrite
