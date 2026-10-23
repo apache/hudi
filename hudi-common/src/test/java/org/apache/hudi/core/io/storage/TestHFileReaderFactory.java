@@ -81,7 +81,9 @@ class TestHFileReaderFactory {
 
     when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
     when(mockPathInfo.getLength()).thenReturn(fileSizeBelow);
-    when(mockStorage.openSeekable(mockPath, false)).thenReturn(mockInputStream);
+    when(mockStorage.getDefaultBufferSize()).thenReturn(4096);
+    // The read buffer is bounded by the file size rather than the storage default
+    when(mockStorage.openSeekable(mockPath, (int) fileSizeBelow, false)).thenReturn(mockInputStream);
     doAnswer(invocation -> {
       byte[] buffer = invocation.getArgument(0);
       System.arraycopy(testContent, 0, buffer, 0, Math.min(testContent.length, buffer.length));
@@ -100,7 +102,7 @@ class TestHFileReaderFactory {
 
     // Verify that content was downloaded (cache was used)
     verify(mockStorage, times(1)).getPathInfo(mockPath); // Once for size determination, which is reused for download
-    verify(mockStorage, times(1)).openSeekable(mockPath, false); // For content download
+    verify(mockStorage, times(1)).openSeekable(mockPath, (int) fileSizeBelow, false); // For content download
     verify(mockInputStream, times(1)).readFully(any(byte[].class));
   }
 
@@ -201,7 +203,9 @@ class TestHFileReaderFactory {
   void testBuilder_WithoutPropertiesProvided_ShouldUseDefaultProperties() throws IOException {
     when(mockStorage.getPathInfo(mockPath)).thenReturn(mockPathInfo);
     when(mockPathInfo.getLength()).thenReturn(1024L);
-    when(mockStorage.openSeekable(mockPath, false)).thenReturn(mockInputStream);
+    when(mockStorage.getDefaultBufferSize()).thenReturn(512);
+    // The read buffer is bounded by the storage default when the file is larger
+    when(mockStorage.openSeekable(mockPath, 512, false)).thenReturn(mockInputStream);
 
     // Not providing properties, should use defaults
     HFileReaderFactory factory = HFileReaderFactory.builder()

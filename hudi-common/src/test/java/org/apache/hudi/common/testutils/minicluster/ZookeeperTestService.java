@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.testutils.minicluster;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
@@ -65,7 +67,7 @@ public class ZookeeperTestService {
   @Getter
   private Configuration hadoopConf;
   private String workDir;
-  private Integer clientPort = 2828;
+  private Integer clientPort = HoodieTestUtils.toForkUniquePort(2828);
   private String bindIP = "127.0.0.1";
   private Boolean clean = false;
   private int tickTime = 0;
