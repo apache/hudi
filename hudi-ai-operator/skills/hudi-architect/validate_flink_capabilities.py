@@ -40,7 +40,7 @@ DEFAULT_MANIFEST = (
     SKILL_DIR / "references" / "flink-1.20-hudi-1.2.0-capabilities.toml"
 )
 
-EXPECTED_SCHEMA_VERSION = 5
+EXPECTED_SCHEMA_VERSION = 6
 EXPECTED_BASELINE_ID = "hudi-1.2.0-flink-1.20"
 EXPECTED_HUDI_VERSION = "1.2.0"
 EXPECTED_HUDI_SOURCE_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
@@ -222,6 +222,117 @@ EXPECTED_RUNTIME_CONSTRAINTS = {
     "checkpoint_interval_min_ms": 1000,
     "flink_checkpoint_interval_min_ms": 10,
 }
+EXPECTED_CATALOG_COMPOSITION_CONTRACT = {
+    "contract_schema": 1,
+    "supported_design_contract_schemas": [1, 2, 3],
+    "new_table_executable": True,
+    "existing_table_assessment_only": True,
+    "catalog_freshness": "post_commit_eventual",
+    "resolution_modes": ["direct_sql", "hudi_dfs_catalog", "hudi_hms_catalog"],
+    "external_discovery_modes": ["none", "hive_metastore", "aws_glue"],
+    "sync_owners": ["none", "flink_sink", "hudi_hms_catalog"],
+    "data_lifecycle_owners": ["application", "catalog"],
+    "deployment_checks": [
+        "verify_catalog_dependencies",
+        "verify_catalog_path_exists",
+        "verify_catalog_path_permissions",
+        "verify_hive_configuration_available",
+        "verify_hms_connectivity",
+        "verify_catalog_database_registration",
+        "verify_table_registration_after_commit",
+        "verify_partition_registration_after_commit",
+        "verify_mor_catalog_table_names",
+        "verify_external_engine_visibility",
+    ],
+    "finding_status": {
+        "FLINK_CATALOG_COMPOSITION_CONFLICT": "BLOCKED",
+        "FLINK_CATALOG_CONTRACT_INVALID": "INCOMPLETE",
+        "FLINK_CATALOG_CONTRACT_REQUIRED": "INCOMPLETE",
+        "FLINK_CATALOG_CREDENTIAL_REJECTED": "BLOCKED",
+        "FLINK_CATALOG_LIFECYCLE_UNRESOLVED": "REVIEW_REQUIRED",
+        "FLINK_CATALOG_MODE_UNSUPPORTED": "BLOCKED",
+        "FLINK_CATALOG_PATH_CONFLICT": "BLOCKED",
+        "FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED": "REVIEW_REQUIRED",
+        "FLINK_GLUE_CATALOG_UNVERIFIED": "REVIEW_REQUIRED",
+        "FLINK_MOR_CATALOG_NAMING_UNVERIFIED": "REVIEW_REQUIRED",
+    },
+}
+EXPECTED_CATALOG_PROFILES = [
+    {
+        "id": "direct_sql_none",
+        "resolution_mode": "direct_sql",
+        "external_discovery": "none",
+        "sync_owner": "none",
+        "data_lifecycle_owner": "application",
+    },
+    {
+        "id": "direct_sql_hive_metastore",
+        "resolution_mode": "direct_sql",
+        "external_discovery": "hive_metastore",
+        "sync_owner": "flink_sink",
+        "data_lifecycle_owner": "application",
+    },
+    {
+        "id": "hudi_dfs_catalog_none",
+        "resolution_mode": "hudi_dfs_catalog",
+        "external_discovery": "none",
+        "sync_owner": "none",
+        "data_lifecycle_owner": "catalog",
+    },
+    {
+        "id": "hudi_dfs_catalog_hive_metastore",
+        "resolution_mode": "hudi_dfs_catalog",
+        "external_discovery": "hive_metastore",
+        "sync_owner": "flink_sink",
+        "data_lifecycle_owner": "catalog",
+    },
+    {
+        "id": "hudi_hms_catalog_hive_metastore",
+        "resolution_mode": "hudi_hms_catalog",
+        "external_discovery": "hive_metastore",
+        "sync_owner": "hudi_hms_catalog",
+        "data_lifecycle_owner": "application",
+    },
+]
+EXPECTED_CATALOG_EFFECTIVE_DEFAULTS = {
+    "hive_sync_ignore_exceptions": False,
+    "hive_sync_skip_ro_suffix": False,
+    "hive_sync_support_timestamp": True,
+    "meta_sync_snapshot_with_table_name": True,
+    "hive_sync_table_strategy": "ALL",
+}
+EXPECTED_CATALOG_OPTION_TYPES = [
+    {
+        "key": "catalog.path",
+        "value_type": "string",
+        "source_anchors": ["catalog_options", "dfs_catalog"],
+        "source_symbol": "CATALOG_PATH",
+    },
+    {
+        "key": "default-database",
+        "value_type": "string",
+        "source_anchors": ["catalog_options"],
+        "source_symbol": "DEFAULT_DATABASE",
+    },
+    {
+        "key": "hive.conf.dir",
+        "value_type": "string",
+        "source_anchors": ["catalog_options", "catalog_util"],
+        "source_symbol": "HIVE_CONF_DIR",
+    },
+    {
+        "key": "mode",
+        "value_type": "string",
+        "source_anchors": ["catalog_options", "catalog_factory"],
+        "source_symbol": "MODE",
+    },
+    {
+        "key": "table.external",
+        "value_type": "boolean",
+        "source_anchors": ["catalog_options", "hms_catalog"],
+        "source_symbol": "TABLE_EXTERNAL",
+    },
+]
 EXPECTED_EXISTING_TABLE_RECONCILIATION_CONTRACT = {
     "reconciliation_schema": 1,
     "supported_design_contract_schemas": [1, 2, 3],
@@ -343,6 +454,18 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
         "test_pr2_rejects_binary_routing_fields",
         "testPinnedBinaryValuesUseObjectIdentityForRouting",
     ),
+    "FLINK_CATALOG_MODE_UNSUPPORTED": (
+        "test_pr6_rejects_unsupported_catalog_compositions",
+        "testPinnedCatalogFactoryRejectsUnknownMode",
+    ),
+    "FLINK_CATALOG_PATH_CONFLICT": (
+        "test_pr6_rejects_dfs_catalog_path_mismatch",
+        "testPinnedDfsCatalogPathDerivation",
+    ),
+    "FLINK_CATALOG_LIFECYCLE_UNRESOLVED": (
+        "test_pr6_hms_catalog_requires_external_table",
+        "testPinnedHmsCatalogExternalFlag",
+    ),
     "FLINK_RECORD_KEY_FIELD_MISSING": (
         "test_pr2_rejects_record_key_missing_from_append_schema",
         "testPinnedFactorySkipsMissingRecordKeyCheckInAppendMode",
@@ -403,6 +526,10 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
         "test_pr4_rejects_strict_read_optimized_freshness",
         "testPinnedMorQuerySemantics",
     ),
+    "FLINK_MOR_CATALOG_NAMING_UNVERIFIED": (
+        "test_pr6_rejects_mor_catalog_naming_drift",
+        "testPinnedMorHiveSyncNamingDefaults",
+    ),
     "FLINK_PR4_WRITE_PATH_UNSUPPORTED": (
         "test_pr4_valid_mutable_mor_design_renders_exact_executable_sql",
         "testMutableMorSinkAndCompactionPlan",
@@ -427,7 +554,9 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
     expected_scalars = {
         "schema_version": EXPECTED_SCHEMA_VERSION,
         "baseline_id": EXPECTED_BASELINE_ID,
-        "validation_surface": "flink-sql-sink-and-existing-table-reconciliation",
+        "validation_surface": (
+            "flink-sql-sink-existing-table-reconciliation-and-catalog-composition"
+        ),
     }
     for key, expected in expected_scalars.items():
         if manifest.get(key) != expected:
@@ -635,6 +764,33 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
             "existing_table_reconciliation_contract does not match the bounded PR5 path"
         )
 
+    catalog_contract = manifest.get("catalog_composition_contract")
+    if catalog_contract != EXPECTED_CATALOG_COMPOSITION_CONTRACT:
+        errors.append(
+            "catalog_composition_contract does not match the bounded PR6 path"
+        )
+
+    catalog_profiles = manifest.get("catalog_profiles")
+    if catalog_profiles != EXPECTED_CATALOG_PROFILES:
+        errors.append("catalog_profiles must contain exactly the five PR6 profiles")
+
+    catalog_defaults = manifest.get("catalog_effective_defaults")
+    if catalog_defaults != EXPECTED_CATALOG_EFFECTIVE_DEFAULTS:
+        errors.append(
+            "catalog_effective_defaults do not match the pinned Hudi 1.2.0 behavior"
+        )
+
+    catalog_options = manifest.get("catalog_option_types")
+    if catalog_options != EXPECTED_CATALOG_OPTION_TYPES:
+        errors.append("catalog_option_types do not match the pinned catalog surface")
+    else:
+        for index, option in enumerate(catalog_options):
+            unknown = sorted(set(option["source_anchors"]) - anchor_ids)
+            if unknown:
+                errors.append(
+                    f"catalog_option_types[{index}] references unknown source anchors: {unknown}"
+                )
+
     physical_types = manifest.get("physical_types")
     if not isinstance(physical_types, dict):
         errors.append("physical_types must be a table")
@@ -709,13 +865,19 @@ def supported_option_keys(manifest: dict[str, Any]) -> set[str]:
 
 
 def validation_evidence(
-    manifest: dict[str, Any], contract_schema: int | None = None
+    manifest: dict[str, Any],
+    contract_schema: int | None = None,
+    catalog_profile: str = "direct_sql_none",
 ) -> dict[str, Any]:
     """Build the stable baseline evidence included in every Flink assessment."""
 
     return {
         "baseline_id": manifest["baseline_id"],
         "capability_manifest_schema": manifest["schema_version"],
+        "catalog_contract_schema": manifest["catalog_composition_contract"][
+            "contract_schema"
+        ],
+        "catalog_profile": catalog_profile,
         "design_contract_schema": (
             manifest["executable_contract"]["contract_schema"]
             if contract_schema is None
@@ -728,6 +890,9 @@ def validation_evidence(
         ],
         "flink_fixture_version": manifest["flink"]["fixture_version"],
         "hudi_source_revision": manifest["hudi"]["source_revision"],
+        "supported_catalog_profiles": [
+            profile["id"] for profile in manifest["catalog_profiles"]
+        ],
     }
 
 

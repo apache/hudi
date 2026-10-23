@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 5
+schema_version = 6
 baseline_id = "hudi-1.2.0-flink-1.20"
-validation_surface = "flink-sql-sink-and-existing-table-reconciliation"
+validation_surface = "flink-sql-sink-existing-table-reconciliation-and-catalog-composition"
 
 [hudi]
 version = "1.2.0"
@@ -89,6 +89,83 @@ compaction_delta_commits = 5
 query_modes = ["snapshot", "read_optimized"]
 read_optimized_freshness = "after_compaction"
 clustering_enabled = false
+
+[catalog_composition_contract]
+contract_schema = 1
+supported_design_contract_schemas = [1, 2, 3]
+new_table_executable = true
+existing_table_assessment_only = true
+catalog_freshness = "post_commit_eventual"
+resolution_modes = ["direct_sql", "hudi_dfs_catalog", "hudi_hms_catalog"]
+external_discovery_modes = ["none", "hive_metastore", "aws_glue"]
+sync_owners = ["none", "flink_sink", "hudi_hms_catalog"]
+data_lifecycle_owners = ["application", "catalog"]
+deployment_checks = [
+  "verify_catalog_dependencies",
+  "verify_catalog_path_exists",
+  "verify_catalog_path_permissions",
+  "verify_hive_configuration_available",
+  "verify_hms_connectivity",
+  "verify_catalog_database_registration",
+  "verify_table_registration_after_commit",
+  "verify_partition_registration_after_commit",
+  "verify_mor_catalog_table_names",
+  "verify_external_engine_visibility",
+]
+
+[catalog_composition_contract.finding_status]
+FLINK_CATALOG_COMPOSITION_CONFLICT = "BLOCKED"
+FLINK_CATALOG_CONTRACT_INVALID = "INCOMPLETE"
+FLINK_CATALOG_CONTRACT_REQUIRED = "INCOMPLETE"
+FLINK_CATALOG_CREDENTIAL_REJECTED = "BLOCKED"
+FLINK_CATALOG_LIFECYCLE_UNRESOLVED = "REVIEW_REQUIRED"
+FLINK_CATALOG_MODE_UNSUPPORTED = "BLOCKED"
+FLINK_CATALOG_PATH_CONFLICT = "BLOCKED"
+FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED = "REVIEW_REQUIRED"
+FLINK_GLUE_CATALOG_UNVERIFIED = "REVIEW_REQUIRED"
+FLINK_MOR_CATALOG_NAMING_UNVERIFIED = "REVIEW_REQUIRED"
+
+[[catalog_profiles]]
+id = "direct_sql_none"
+resolution_mode = "direct_sql"
+external_discovery = "none"
+sync_owner = "none"
+data_lifecycle_owner = "application"
+
+[[catalog_profiles]]
+id = "direct_sql_hive_metastore"
+resolution_mode = "direct_sql"
+external_discovery = "hive_metastore"
+sync_owner = "flink_sink"
+data_lifecycle_owner = "application"
+
+[[catalog_profiles]]
+id = "hudi_dfs_catalog_none"
+resolution_mode = "hudi_dfs_catalog"
+external_discovery = "none"
+sync_owner = "none"
+data_lifecycle_owner = "catalog"
+
+[[catalog_profiles]]
+id = "hudi_dfs_catalog_hive_metastore"
+resolution_mode = "hudi_dfs_catalog"
+external_discovery = "hive_metastore"
+sync_owner = "flink_sink"
+data_lifecycle_owner = "catalog"
+
+[[catalog_profiles]]
+id = "hudi_hms_catalog_hive_metastore"
+resolution_mode = "hudi_hms_catalog"
+external_discovery = "hive_metastore"
+sync_owner = "hudi_hms_catalog"
+data_lifecycle_owner = "application"
+
+[catalog_effective_defaults]
+hive_sync_ignore_exceptions = false
+hive_sync_skip_ro_suffix = false
+hive_sync_support_timestamp = true
+meta_sync_snapshot_with_table_name = true
+hive_sync_table_strategy = "ALL"
 
 [existing_table_reconciliation_contract]
 reconciliation_schema = 1
@@ -306,6 +383,54 @@ sha256 = "a2b3f87ad44e1475a6f4e06dfd7246436f035af256f28a4ebe2c622672a24aef"
 purpose = "Flink catalog option keys"
 
 [[source_anchors]]
+id = "catalog_factory"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/catalog/HoodieCatalogFactory.java"
+sha256 = "a9af3a20c744cb2d4d3a4236ac739db25e45325e2d57b25f0ea975a7db6a3196"
+purpose = "Hudi DFS and HMS catalog mode selection"
+
+[[source_anchors]]
+id = "catalog_util"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/catalog/HoodieCatalogUtil.java"
+sha256 = "f52c4d415ba8eb29d217b5ecc62795be137255208558b2d5b12cbaed107d3cf3"
+purpose = "Hive configuration directory, classpath, and embedded-metastore behavior"
+
+[[source_anchors]]
+id = "dfs_catalog"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/catalog/HoodieCatalog.java"
+sha256 = "76e9bb3cfc9a1c30630104f9496ee88265b4c6632fcae1f3dec8ff34cda106f4"
+purpose = "DFS catalog path derivation and catalog-owned data lifecycle"
+
+[[source_anchors]]
+id = "hms_catalog"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/table/catalog/HoodieHiveCatalog.java"
+sha256 = "4dedbcded76ee472c721c483ba6a0f69e14aa56510453c0f36ad20808592492c"
+purpose = "HMS external-table lifecycle and effective Hive sync option supplementation"
+
+[[source_anchors]]
+id = "hive_sync_context"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/sink/utils/HiveSyncContext.java"
+sha256 = "4d2eeba0a8403c88707329c0eb26ddaa26dc652c786bdfb22a827fa0255bf929"
+purpose = "Flink-to-Hive sync configuration mapping"
+
+[[source_anchors]]
+id = "stream_write_coordinator"
+path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/sink/StreamWriteOperatorCoordinator.java"
+sha256 = "f6918b1610485e92b3b3d136b0063433515a14a34be79f459501586daa25e69d"
+purpose = "Post-checkpoint-commit asynchronous Hive synchronization"
+
+[[source_anchors]]
+id = "hive_sync_tool"
+path = "hudi-sync/hudi-hive-sync/src/main/java/org/apache/hudi/hive/HiveSyncTool.java"
+sha256 = "a2574227af363fab34e304cc3f65607088fb54b40b93b1091fffa7e1a4841651"
+purpose = "COW and MOR RO, RT, and ALL table registration naming"
+
+[[source_anchors]]
+id = "sync_common_config"
+path = "hudi-sync/hudi-sync-common/src/main/java/org/apache/hudi/sync/common/HoodieSyncConfig.java"
+sha256 = "eb8862397e38332dbd3a61909449df8c94572b7053411f0ba8f058ffc73cda66"
+purpose = "Snapshot-with-base-table-name effective default"
+
+[[source_anchors]]
 id = "key_generator_options"
 path = "hudi-common/src/main/java/org/apache/hudi/keygen/constant/KeyGeneratorOptions.java"
 sha256 = "2686e25676b4d59f8d5a30acb52326aeb74016ed35bb8e73b38757a36521b2cd"
@@ -377,6 +502,37 @@ path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/util/Stre
 sha256 = "c771e137ebcd45c94a941857a246dc741e1dde2c0e0158900fd48fe8884f83e2"
 purpose = "Write-side record merge mode inference and table-property persistence"
 
+# Catalog option types are tracked separately from table connector options.
+[[catalog_option_types]]
+key = "catalog.path"
+value_type = "string"
+source_anchors = ["catalog_options", "dfs_catalog"]
+source_symbol = "CATALOG_PATH"
+
+[[catalog_option_types]]
+key = "default-database"
+value_type = "string"
+source_anchors = ["catalog_options"]
+source_symbol = "DEFAULT_DATABASE"
+
+[[catalog_option_types]]
+key = "hive.conf.dir"
+value_type = "string"
+source_anchors = ["catalog_options", "catalog_util"]
+source_symbol = "HIVE_CONF_DIR"
+
+[[catalog_option_types]]
+key = "mode"
+value_type = "string"
+source_anchors = ["catalog_options", "catalog_factory"]
+source_symbol = "MODE"
+
+[[catalog_option_types]]
+key = "table.external"
+value_type = "boolean"
+source_anchors = ["catalog_options", "hms_catalog"]
+source_symbol = "TABLE_EXTERNAL"
+
 # This is an allowlist for the bounded executable sink paths, not a claim that it
 # enumerates every option available in Hudi 1.2.0.
 [[verified_options]]
@@ -426,6 +582,60 @@ key = "compaction.trigger.strategy"
 value_type = "string"
 source_anchors = ["flink_options"]
 source_symbol = "COMPACTION_TRIGGER_STRATEGY"
+
+[[verified_options]]
+key = "hive_sync.db"
+value_type = "string"
+source_anchors = ["flink_options", "hive_sync_context", "hms_catalog"]
+source_symbol = "HIVE_SYNC_DB"
+
+[[verified_options]]
+key = "hive_sync.enabled"
+value_type = "boolean"
+source_anchors = ["flink_options", "stream_write_coordinator", "hms_catalog"]
+source_symbol = "HIVE_SYNC_ENABLED"
+
+[[verified_options]]
+key = "hive_sync.ignore_exceptions"
+value_type = "boolean"
+source_anchors = ["flink_options", "hive_sync_context"]
+source_symbol = "HIVE_SYNC_IGNORE_EXCEPTIONS"
+
+[[verified_options]]
+key = "hive_sync.metastore.uris"
+value_type = "string"
+source_anchors = ["flink_options", "hive_sync_context", "hms_catalog"]
+source_symbol = "HIVE_SYNC_METASTORE_URIS"
+
+[[verified_options]]
+key = "hive_sync.mode"
+value_type = "string"
+source_anchors = ["flink_options", "hive_sync_context", "hms_catalog"]
+source_symbol = "HIVE_SYNC_MODE"
+
+[[verified_options]]
+key = "hive_sync.skip_ro_suffix"
+value_type = "boolean"
+source_anchors = ["flink_options", "hive_sync_context", "hive_sync_tool"]
+source_symbol = "HIVE_SYNC_SKIP_RO_SUFFIX"
+
+[[verified_options]]
+key = "hive_sync.support_timestamp"
+value_type = "boolean"
+source_anchors = ["flink_options", "hive_sync_context", "hms_catalog"]
+source_symbol = "HIVE_SYNC_SUPPORT_TIMESTAMP"
+
+[[verified_options]]
+key = "hive_sync.table"
+value_type = "string"
+source_anchors = ["flink_options", "hive_sync_context", "hms_catalog"]
+source_symbol = "HIVE_SYNC_TABLE"
+
+[[verified_options]]
+key = "hive_sync.table.strategy"
+value_type = "string"
+source_anchors = ["flink_options", "hive_sync_context", "hive_sync_tool"]
+source_symbol = "HIVE_SYNC_TABLE_STRATEGY"
 
 [[verified_options]]
 key = "hoodie.datasource.write.partitionpath.field"
@@ -736,3 +946,27 @@ id = "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT"
 requirement = "Compare existing-table identity and durable properties using pinned table-version and partition-field semantics."
 python_test = "test_pr5_property_and_schema_conflicts_are_blocked_and_preserved"
 java_test = "testPinnedExistingTableTypeOverridesConflictingOption"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_CATALOG_MODE_UNSUPPORTED"
+requirement = "Reject catalog modes and compositions outside the five pinned PR6 profiles."
+python_test = "test_pr6_rejects_unsupported_catalog_compositions"
+java_test = "testPinnedCatalogFactoryRejectsUnknownMode"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_CATALOG_PATH_CONFLICT"
+requirement = "Require the DFS catalog-derived table path to exactly match the desired table path."
+python_test = "test_pr6_rejects_dfs_catalog_path_mismatch"
+java_test = "testPinnedDfsCatalogPathDerivation"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_CATALOG_LIFECYCLE_UNRESOLVED"
+requirement = "Limit the first HMS Catalog path to explicit external application-owned tables."
+python_test = "test_pr6_hms_catalog_requires_external_table"
+java_test = "testPinnedHmsCatalogExternalFlag"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MOR_CATALOG_NAMING_UNVERIFIED"
+requirement = "Pin MOR Hive registrations to RO, RT, or ALL names derived from query modes."
+python_test = "test_pr6_rejects_mor_catalog_naming_drift"
+java_test = "testPinnedMorHiveSyncNamingDefaults"

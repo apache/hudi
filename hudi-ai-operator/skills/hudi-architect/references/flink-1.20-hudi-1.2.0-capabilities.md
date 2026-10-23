@@ -33,7 +33,8 @@ newer release, or an older supported connector as equivalent without its own ver
 
 `flink-1.20-hudi-1.2.0-capabilities.toml` is the machine-readable validation input. It records the
 full Hudi release commit, pinned Maven fixture artifacts, source paths and hashes, the option
-allowlist, the bounded design and reconciliation contracts, and acceptance evidence.
+allowlist, the bounded design, reconciliation, and catalog-composition contracts, and acceptance
+evidence.
 
 Normal validation must read that checked-in manifest. It must not discover accepted Flink options
 by scanning the enclosing checkout: the checkout may be `master` or another release and can contain
@@ -72,7 +73,13 @@ the current checkout contains it.
 | Confirmed single-writer detection | Supported |
 | Multi-writer or unknown writer model | `REVIEW_REQUIRED`; deferred to PR7 |
 | External-catalog requirement detection | Supported |
-| Catalog or metastore composition | `REVIEW_REQUIRED`; deferred to PR6 |
+| Five direct SQL / DFS Catalog / HMS Catalog profiles | Supported for new tables through PR6 |
+| Direct SQL or DFS Catalog with sink-owned HMS sync | Supported |
+| HMS Catalog | Supported only for external, application-owned tables with HMS discovery |
+| DFS Catalog lifecycle | Catalog-owned; explicit acceptance required |
+| Hive catalog freshness | Post-commit eventual; no atomicity or SLA claim |
+| AWS Glue, embedded HMS, or managed HMS | `REVIEW_REQUIRED`; no executable output |
+| Existing-table catalog registration or mutation | `REVIEW_REQUIRED`; assessment-only |
 | Physical-schema availability detection | Supported |
 | Bounded scalar physical-schema validation | Supported |
 | Binary payload columns | Supported |
@@ -111,6 +118,32 @@ the current checkout contains it.
 | Hudi 1.2.0 `HoodieTableFactory` fixture | Supported through pinned release bundle |
 | Flink 1.20.1 planner fixture | Supported with a local declared source contract |
 | Spark and HoodieStreamer behavior | Must remain unchanged |
+
+## Implemented PR6 catalog composition contract
+
+PR6 adds catalog contract schema 1 alongside design schemas 1, 2, and 3. It supports exactly five
+profiles: direct SQL without discovery, direct SQL plus Hive Metastore discovery, Hudi DFS Catalog
+without discovery, Hudi DFS Catalog plus Hive Metastore discovery, and Hudi HMS Catalog plus Hive
+Metastore discovery. The legacy no-block, `external_catalog=false` path remains direct SQL and
+retains its existing SQL byte-for-byte.
+
+DFS Catalog requires `catalog.path`, derives `${catalog.path}/${database}/${table.name}`, and owns
+the data lifecycle; its generated table DDL omits `path`. HMS Catalog requires non-embedded Hive
+configuration, renders the desired table path, and is limited to `table.external=true` so the
+application owns data. Direct and DFS Hive discovery uses sink-owned `hive_sync.*` options; HMS
+Catalog supplies those values from catalog context and the validator checks their effective
+configuration without duplicating them.
+
+MOR registration derives `RT`, `RO`, or `ALL` from the declared query modes. With the pinned
+defaults (`skip_ro_suffix=false` and snapshot-with-base-name true), ALL registers `base_ro`,
+`base_rt`, and the base snapshot name. Catalog freshness is always recorded as
+`post_commit_eventual`: Hudi invokes Hive sync asynchronously after a successful checkpoint
+commit, so static validation does not claim atomic external visibility.
+
+The released-bundle Java fixture selects DFS and HMS catalog implementations, rejects unknown and
+embedded modes, checks DFS path derivation and external HMS posture, exercises DFS Catalog DDL and
+an insert plan, and verifies Hive sync/naming defaults. It does not start HMS or Glue. Live
+connectivity and visibility are deployment checks rather than static status findings.
 
 ## Implemented PR5 existing-table reconciliation contract
 
@@ -227,7 +260,7 @@ the Python validator tests preserve the 999/1000 ms Architect boundary.
 ## Implemented PR3 mutable COW contract
 
 The schema-2 path is deliberately narrower than the full Hudi upsert surface. It accepts only a
-new table, one writer, no external catalog, streaming checkpoints, stable non-null identity, one
+new table, one writer, streaming checkpoints, stable non-null identity, one
 event-time ordering field, normalized UPSERT input, immutable partitions, and full-row deletes when
 present. All three resolved replay answers are eligible; only an unresolved replay posture blocks
 validation. The exact ordering-field value `no_precombine` is rejected because Hudi 1.2.0 resolves

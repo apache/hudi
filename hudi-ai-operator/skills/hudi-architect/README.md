@@ -41,7 +41,10 @@ Target Hudi version: **1.2.0**.
   partitions, and the fixed global FLINK_STATE/bootstrap/no-TTL contract. MOR additionally fixes
   same-writer asynchronous compaction, records snapshot/read-optimized freshness, and disables
   clustering. It also provides a read-only, non-executable exact-match reconciliation report for
-  an existing table backed by structured evidence. Other Flink designs remain fail-closed.
+  an existing table backed by structured evidence. For new tables, those same design schemas can
+  compose direct Hive sync, Hudi DFS Catalog, or external Hudi HMS Catalog through five pinned
+  profiles. Glue, managed HMS, existing-table catalog mutation, and live connectivity claims
+  remain fail-closed.
 
 ## How to invoke
 
@@ -88,6 +91,8 @@ Even without invoking as a Skill, the files in `references/` are readable design
 - `flink-config-templates.md` — non-executable and bounded executable Flink output envelopes.
 - `flink-existing-table-reconciliation.md` — evidence authority, comparison, and writer-transition
   rules for the assessment-only existing-table path.
+- `flink-catalog-composition.md` — the five PR6 profiles, lifecycle/path rules, Hive sync ownership,
+  MOR naming, freshness boundary, and deployment checks.
 
 The Skill itself is defined in `SKILL.md`.
 
@@ -129,6 +134,8 @@ The mutable schema-2 fixture is
 `hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr3/mutable_cow.json`.
 The mutable MOR schema-3 fixture is
 `hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr4/mutable_mor.json`.
+PR6 profile inputs are recorded in
+`hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr6/catalog_profiles.toml`.
 
 Validate a structured existing-table reconciliation contract without rendering SQL:
 
@@ -158,7 +165,8 @@ This is **Milestone 1 of a longer arc** — meant to be shareable and playable, 
 ## What's out of scope in Milestone 1
 
 - Flink append-only MOR, standalone compaction, detailed compaction tuning, clustering,
-  existing-table SQL generation or takeover, external catalogs, multiple writers, alternative indexes, custom
+  existing-table SQL generation or catalog takeover, AWS Glue, managed/embedded HMS, live catalog
+  probing, multiple writers, alternative indexes, custom
   mergers, retract normalization, partition movement, key-only deletes, full CDC history,
   DataStream API, `HoodieFlinkStreamer`, source connector generation, and submit/deploy commands.
   Those paths do not reuse the bounded SQL output as if it were generally applicable.
