@@ -14,9 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-FROM adoptopenjdk/openjdk8:alpine
+FROM eclipse-temurin:8-jdk-jammy
 
-RUN apk add --no-cache --upgrade bash curl jq openjdk11 openjdk17 --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash curl jq wget unzip procps \
+        openjdk-11-jdk-headless openjdk-17-jdk-headless \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/lib/jvm/java-11-openjdk-* /usr/lib/jvm/java-11-openjdk \
+    && ln -s /usr/lib/jvm/java-17-openjdk-* /usr/lib/jvm/java-17-openjdk
 
 RUN mkdir /opt/bundle-validation
 ENV WORKDIR=/opt/bundle-validation
