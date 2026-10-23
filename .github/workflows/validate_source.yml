@@ -53,10 +53,11 @@ jobs:
         run: python3 scripts/pr_compliance.py
 
       # Seconds of stdlib-only unit tests, so they run on every PR instead of path-filtering
-      # on scripts/pr_compliance.py.
+      # on scripts/pr_compliance.py. The log goes to the runner temp dir: the source checks below
+      # copy and scan the workspace, and a stray test.log has no license header.
       - name: Test pr_compliance.py
         if: ${{ !cancelled() && env.CHECK_PR_METADATA == 'true' }}
-        run: python3 scripts/pr_compliance.py run-tests > test.log || { echo "::error::pr_compliance.py $(cat test.log)" && exit 1; }
+        run: python3 scripts/pr_compliance.py run-tests > "$RUNNER_TEMP/test.log" || { echo "::error::pr_compliance.py $(cat "$RUNNER_TEMP/test.log")" && exit 1; }
 
       - name: Check for legacy PR title format using JIRA or MINOR
         id: check-legacy-format
