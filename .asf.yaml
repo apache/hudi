@@ -55,9 +55,7 @@ github:
           # java_ci_engines.yml are path-filtered: on a PR the filter skips, GitHub never
           # instantiates them, so any context of theirs would stay pending forever
           # (#18598 hit exactly this and worked around it with a gating job).
-          # validate-pr-and-source runs the PR metadata and source release checks in one job. It
-          # replaces validate-ci-baseline (#19535): PRs whose last run predates it never reported
-          # this name, so they cannot merge on stale checks.
+          # validate-pr-and-source runs the PR metadata and source release checks in one job
           - validate-pr-and-source
   collaborators:
     - ad1happy2go
