@@ -603,6 +603,51 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   /**
+   * A micro-batch that exhausts its retries resets the sink, which shuts down the async table services and waits for
+   * them. The services' shutdown callbacks must not block on the sink in turn, otherwise the query hangs.
+   */
+  @Test
+  def testStructuredStreamingFailedBatchWithAsyncClusteringDoesNotHang(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val opts = getClusteringOpts(HoodieTableType.COPY_ON_WRITE, "false", "true", "100", 100) ++ Map(
+      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key -> "CUSTOM",
+      DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key -> FailingSparkRecordMerger.STRATEGY_ID,
+      DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key -> classOf[FailingSparkRecordMerger].getName,
+      DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key -> "true",
+      DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> "1")
+
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val query = initWritingStreamingQuery(inputDF1.schema, sourcePath, destPath, opts)
+    // a hang fails the test instead of blocking the suite
+    def processAllAvailable(): Unit = Await.result(Future(query.processAllAvailable()), Duration(5, "minutes"))
+    try {
+      processAllAvailable()
+
+      FailingSparkRecordMerger.shouldFail = true
+      try {
+        spark.read.json(spark.sparkContext.parallelize(
+          recordsToStrings(dataGen.generateUniqueUpdates("001", 50)).asScala.toList, 2)).coalesce(1)
+          .write.mode(SaveMode.Append).json(sourcePath)
+        processAllAvailable()
+      } finally {
+        FailingSparkRecordMerger.shouldFail = false
+      }
+
+      spark.read.json(spark.sparkContext.parallelize(
+        recordsToStrings(dataGen.generateUniqueUpdates("002", 50)).asScala.toList, 2)).coalesce(1)
+        .write.mode(SaveMode.Append).json(sourcePath)
+      processAllAvailable()
+      assertTrue(query.isActive, "the streaming query must keep running")
+    } finally {
+      query.stop()
+    }
+    assertEquals(2, HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, destPath).countInstants())
+  }
+
+  /**
    * Injects a failing micro-batch into [[HoodieStreamingSink]] by pointing the record key at a
    * non-existent column so that every Hudi write throws. With STREAMING_IGNORE_FAILED_BATCH
    * enabled the sink must swallow the failure (unpersisting the write RDDs), let the streaming

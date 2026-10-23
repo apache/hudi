@@ -82,8 +82,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   private val disableCompaction = options.getOrElse(STREAMING_DISABLE_COMPACTION.key,
     STREAMING_DISABLE_COMPACTION.defaultValue).toBoolean
 
-  private var isAsyncCompactorServiceShutdownAbnormally = false
-  private var isAsyncClusteringServiceShutdownAbnormally = false
+  @volatile private var isAsyncCompactorServiceShutdownAbnormally = false
+  @volatile private var isAsyncClusteringServiceShutdownAbnormally = false
 
   private val mode =
     if (outputMode == OutputMode.Append()) {
@@ -92,8 +92,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
       SaveMode.Overwrite
     }
 
-  private var asyncCompactorService: AsyncCompactService = _
-  private var asyncClusteringService: AsyncClusteringService = _
+  // volatile: read without the sink lock by the services' shutdown callbacks
+  @volatile private var asyncCompactorService: AsyncCompactService = _
+  @volatile private var asyncClusteringService: AsyncClusteringService = _
   private var writeClient: Option[SparkRDDWriteClient[_]] = Option.empty
   // Owned by the sink and handed to every write client it creates, so that one timeline server is reused across
   // micro-batches (same as HoodieStreamer). Stopped on reset or when the streaming query terminates.
@@ -235,14 +236,14 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   protected def triggerAsyncCompactor(client: SparkRDDWriteClient[_]): Unit = {
     if (null == asyncCompactorService) {
       log.info("Triggering Async compaction !!")
-      asyncCompactorService = new SparkStreamingAsyncCompactService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
+      val compactorService = new SparkStreamingAsyncCompactService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
         client)
-      asyncCompactorService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
+      asyncCompactorService = compactorService
+      compactorService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async Compactor shutdown. Errored ? $errored")
           isAsyncCompactorServiceShutdownAbnormally = errored
-          reset(false)
-          log.info("Done resetting write client.")
+          resetOnAsyncServiceStop(asyncCompactorService eq compactorService)
           true
         }
       })
@@ -265,13 +266,14 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   protected def triggerAsyncClustering(client: SparkRDDWriteClient[_]): Unit = {
     if (null == asyncClusteringService) {
       log.info("Triggering async clustering!")
-      asyncClusteringService = new SparkStreamingAsyncClusteringService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
+      val clusteringService = new SparkStreamingAsyncClusteringService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
         client)
-      asyncClusteringService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
+      asyncClusteringService = clusteringService
+      clusteringService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async clustering service shutdown. Errored ? $errored")
           isAsyncClusteringServiceShutdownAbnormally = errored
-          reset(false)
+          resetOnAsyncServiceStop(asyncClusteringService eq clusteringService)
           true
         }
       })
@@ -362,15 +364,37 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
+  /**
+   * Called on an async table service's own thread when the service stops. [[reset]] detaches a service before
+   * shutting it down and waiting for it, so a service that is no longer attached was stopped by the sink and
+   * needs nothing more. A service that stopped on its own (e.g. it failed) resets the sink on a separate thread:
+   * resetting here would wait on the sink lock, and for this service's own executor to terminate.
+   */
+  private def resetOnAsyncServiceStop(stillAttached: Boolean): Unit = {
+    if (stillAttached) {
+      val resetThread = new Thread(new Runnable {
+        override def run(): Unit = {
+          reset(false)
+          log.info("Done resetting write client.")
+        }
+      }, "hudi-streaming-sink-reset")
+      resetThread.setDaemon(true)
+      resetThread.start()
+    }
+  }
+
   private def reset(force: Boolean): Unit = this.synchronized {
+    // detach each service before shutting it down, see resetOnAsyncServiceStop
     if (asyncCompactorService != null) {
-      asyncCompactorService.shutdown(force)
+      val compactorService = asyncCompactorService
       asyncCompactorService = null
+      compactorService.shutdown(force)
     }
 
     if (asyncClusteringService != null) {
-      asyncClusteringService.shutdown(force)
+      val clusteringService = asyncClusteringService
       asyncClusteringService = null
+      clusteringService.shutdown(force)
     }
 
     if (writeClient.isDefined) {
