@@ -34,6 +34,9 @@ public enum MarkerType {
 
   @EnumFieldDescription("Marker operations are all handled at the timeline service which serves as a proxy. "
     + "New marker entries are batch processed and stored in a limited number of underlying files for efficiency. "
-    + "If HDFS is used or timeline server is disabled, DIRECT markers are used as fallback even if this is configured.")
+    + "If HDFS is used, or the embedded timeline server is disabled and the file system view is not remote, DIRECT markers "
+    + "are used as fallback even if this is configured. With a remote file system view (REMOTE_FIRST or REMOTE_ONLY) and the "
+    + "embedded timeline server disabled, markers are created through the configured remote timeline server, which must be "
+    + "reachable; configure DIRECT markers otherwise.")
   TIMELINE_SERVER_BASED
 }
