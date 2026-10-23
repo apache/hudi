@@ -1,4 +1,4 @@
-name: Validation
+name: PR and Source Validation
 
 # The one job here is the only required status check in .asf.yaml. A required check must report on
 # every PR, including docs-only ones, and a path-filtered workflow is never instantiated for PRs that
