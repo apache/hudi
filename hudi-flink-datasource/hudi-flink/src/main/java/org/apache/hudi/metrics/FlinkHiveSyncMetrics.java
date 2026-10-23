@@ -18,6 +18,8 @@
 
 package org.apache.hudi.metrics;
 
+import org.apache.hudi.hive.HoodieHiveSyncStats;
+
 import com.codahale.metrics.SlidingWindowReservoir;
 import org.apache.flink.dropwizard.metrics.DropwizardHistogramWrapper;
 import org.apache.flink.metrics.Counter;
@@ -32,6 +34,9 @@ import org.apache.flink.metrics.ThreadSafeSimpleCounter;
  * <p>A sync runs on the coordinator's Hive sync executor after a checkpoint commit, and on its event
  * executor after the commit that ends a bounded input, so each metric may be updated from either
  * thread.
+ *
+ * <p>The breakdown of each sync, from the init duration to the schema evolved count, is only
+ * registered when {@code hoodie.datasource.hive_sync.detailed_metrics.enabled} is set.
  */
 public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   private static final int HISTOGRAM_WINDOW_SIZE = 100;
@@ -40,6 +45,12 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   static final String HIVE_SYNC_FAILURE_COUNT = "hiveSyncFailureCount";
   static final String HIVE_SYNC_DURATION_MS = "hiveSyncDurationMs";
   static final String HIVE_SYNC_LAST_SUCCESS_TIME_MS = "hiveSyncLastSuccessTimeMs";
+  static final String HIVE_SYNC_INIT_DURATION_MS = "hiveSyncInitDurationMs";
+  static final String HIVE_SYNC_SCHEMA_READ_DURATION_MS = "hiveSyncSchemaReadDurationMs";
+  static final String HIVE_SYNC_PARTITION_SCAN_DURATION_MS = "hiveSyncPartitionScanDurationMs";
+  static final String HIVE_SYNC_REMAINING_DURATION_MS = "hiveSyncRemainingDurationMs";
+  static final String HIVE_SYNC_PARTITIONS_ADDED_COUNT = "hiveSyncPartitionsAddedCount";
+  static final String HIVE_SYNC_SCHEMA_EVOLVED_COUNT = "hiveSyncSchemaEvolvedCount";
 
   /** Number of syncs that completed. */
   private final Counter syncSuccessCount = new ThreadSafeSimpleCounter();
@@ -56,15 +67,61 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
    * Duration of each sync in milliseconds, failed ones included: a sync that fails after retrying
    * an unreachable metastore is the slow case this is meant to show.
    */
-  private final Histogram syncDurationMs;
+  private final Histogram syncDurationMs = newHistogram();
 
   /** Wall-clock time of the last completed sync in epoch milliseconds, or 0 until the first one. */
   private volatile long lastSyncSuccessTimeMs = 0L;
 
-  public FlinkHiveSyncMetrics(MetricGroup metricGroup) {
+  /**
+   * Time to build the sync tool, which creates the Hudi meta client and connects to the metastore.
+   * Recorded whether building it succeeds or fails, so the time spent failing to reach the
+   * metastore shows here.
+   */
+  private final Histogram initDurationMs;
+
+  /** Time a sync spent reading the table schema from storage, for syncs that read it. */
+  private final Histogram schemaReadDurationMs;
+
+  /**
+   * Time a sync spent finding the partitions to sync, from the timeline or by listing storage, for
+   * syncs that looked for them. This grows with the number of commits a sync has to catch up on.
+   */
+  private final Histogram partitionScanDurationMs;
+
+  /**
+   * Time a sync spent on everything but reading the schema and finding partitions: mostly metastore
+   * calls, plus the local work between them, such as comparing the partitions and schemas found.
+   */
+  private final Histogram remainingDurationMs;
+
+  /**
+   * Number of partitions added to the metastore, counting for each sync the most added to any one of
+   * its Hive tables. A MERGE_ON_READ table normally adds the same partitions to each of its Hive
+   * tables, and they are counted once. It staying flat while commits land means the syncs register
+   * nothing.
+   */
+  private final Counter partitionsAddedCount = new ThreadSafeSimpleCounter();
+
+  /**
+   * Number of syncs that found the storage schema changed and pushed it to the metastore, counted
+   * once per sync however many Hive tables the table is registered as.
+   */
+  private final Counter schemaEvolvedCount = new ThreadSafeSimpleCounter();
+
+  private final boolean detailedMetricsEnabled;
+
+  /**
+   * @param detailedMetricsEnabled whether to register and update the breakdown of each sync, which the sync records
+   *     only when its detailed metrics are enabled
+   */
+  public FlinkHiveSyncMetrics(MetricGroup metricGroup, boolean detailedMetricsEnabled) {
     super(metricGroup);
-    this.syncDurationMs = new DropwizardHistogramWrapper(
-        new com.codahale.metrics.Histogram(new SlidingWindowReservoir(HISTOGRAM_WINDOW_SIZE)));
+    this.detailedMetricsEnabled = detailedMetricsEnabled;
+    // Detailed histograms are only accessed when detailed metrics are enabled.
+    this.initDurationMs = detailedMetricsEnabled ? newHistogram() : null;
+    this.schemaReadDurationMs = detailedMetricsEnabled ? newHistogram() : null;
+    this.partitionScanDurationMs = detailedMetricsEnabled ? newHistogram() : null;
+    this.remainingDurationMs = detailedMetricsEnabled ? newHistogram() : null;
   }
 
   @Override
@@ -73,6 +130,37 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
     metricGroup.counter(HIVE_SYNC_FAILURE_COUNT, syncFailureCount);
     metricGroup.histogram(HIVE_SYNC_DURATION_MS, syncDurationMs);
     metricGroup.gauge(HIVE_SYNC_LAST_SUCCESS_TIME_MS, () -> lastSyncSuccessTimeMs);
+    if (detailedMetricsEnabled) {
+      metricGroup.histogram(HIVE_SYNC_INIT_DURATION_MS, initDurationMs);
+      metricGroup.histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS, schemaReadDurationMs);
+      metricGroup.histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS, partitionScanDurationMs);
+      metricGroup.histogram(HIVE_SYNC_REMAINING_DURATION_MS, remainingDurationMs);
+      metricGroup.counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT, partitionsAddedCount);
+      metricGroup.counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT, schemaEvolvedCount);
+    }
+  }
+
+  public void updateInitDuration(long durationMs) {
+    if (!detailedMetricsEnabled) {
+      return;
+    }
+    initDurationMs.update(durationMs);
+  }
+
+  /**
+   * Records what a sync did, after it completed or failed.
+   */
+  public void updateSyncMetrics(HoodieHiveSyncStats syncMetrics) {
+    if (!detailedMetricsEnabled) {
+      return;
+    }
+    syncMetrics.getSchemaReadMs().ifPresent(schemaReadDurationMs::update);
+    syncMetrics.getPartitionScanMs().ifPresent(partitionScanDurationMs::update);
+    syncMetrics.getRemainingMs().ifPresent(remainingDurationMs::update);
+    partitionsAddedCount.inc(syncMetrics.getPartitionsAdded());
+    if (syncMetrics.isSchemaEvolved()) {
+      schemaEvolvedCount.inc();
+    }
   }
 
   public void markSyncSucceeded(long durationMs) {
@@ -84,5 +172,10 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   public void markSyncFailed(long durationMs) {
     syncDurationMs.update(durationMs);
     syncFailureCount.inc();
+  }
+
+  private static Histogram newHistogram() {
+    return new DropwizardHistogramWrapper(
+        new com.codahale.metrics.Histogram(new SlidingWindowReservoir(HISTOGRAM_WINDOW_SIZE)));
   }
 }
