@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.catalog
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
@@ -39,10 +39,10 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
-import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
+import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, RemoveProperty, SetProperty, UpdateColumnComment, UpdateColumnType}
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
-import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
+import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
@@ -56,6 +56,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 class HoodieCatalog extends DelegatingCatalogExtension
+  with HoodieCatalogColumnsSupport
   with StagingTableCatalog
   with SparkAdapterSupport
   with ProvidesHoodieConfig {
@@ -223,7 +224,12 @@ class HoodieCatalog extends DelegatingCatalogExtension
     loadTable(ident) match {
       case HoodieV1OrV2Table(table) => {
         val tableIdent = TableIdentifier(ident.name(), ident.namespace().lastOption)
-        changes.groupBy(c => c.getClass).foreach {
+        val (propertyChanges, otherChanges) = changes.partition {
+          case _: SetProperty | _: RemoveProperty => true
+          case _ => false
+        }
+        val catalogPropertyChanges = catalogPropertyChangesToApply(table, propertyChanges)
+        otherChanges.groupBy(c => c.getClass).foreach {
           case (t, newColumns) if t == classOf[AddColumn] =>
             AlterHoodieTableAddColumnsCommand(
               tableIdent,
@@ -255,10 +261,58 @@ class HoodieCatalog extends DelegatingCatalogExtension
           case (t, _) =>
             throw new UnsupportedOperationException(s"not supported table change: ${t.getName}")
         }
+        if (catalogPropertyChanges.nonEmpty) {
+          super.alterTable(ident, catalogPropertyChanges: _*)
+        }
 
         loadTable(ident)
       }
       case _ => super.alterTable(ident, changes: _*)
+    }
+  }
+
+  /**
+   * Returns the property changes that still have to be applied to the catalog table.
+   *
+   * Callers such as Spark Declarative Pipelines re-send every table property on each run, so changes that keep the
+   * current value are dropped. Properties persisted in hoodie.properties (record key, ordering fields, table type,
+   * ...) can't be changed through the catalog, since the catalog would no longer match the table.
+   */
+  private def catalogPropertyChangesToApply(table: CatalogTable, changes: Seq[TableChange]): Seq[TableChange] = {
+    lazy val tableConfig = HoodieCatalogTable(spark, table).tableConfig
+    def catalogValue(key: String): Option[String] = key match {
+      case TableCatalog.PROP_COMMENT => table.comment.orElse(table.properties.get(key))
+      case _ => table.properties.get(key)
+    }
+    def persistedValue(tableConfigKey: String): Option[String] =
+      if (tableConfigKey == HoodieTableConfig.ORDERING_FIELDS.key) {
+        Option(tableConfig.getOrderingFieldsStr.orElse(null))
+      } else {
+        Option(tableConfig.getString(tableConfigKey))
+      }
+    def normalize(value: String): String = value.split(",").map(_.trim).mkString(",")
+
+    changes.filter {
+      case set: SetProperty if catalogValue(set.property).contains(set.value) => false
+      case set: SetProperty =>
+        HoodieOptionConfig.mapToTableConfig(set.property, set.value) match {
+          case Some((tableConfigKey, value)) =>
+            val persisted = persistedValue(tableConfigKey)
+            if (!persisted.exists(normalize(_).equalsIgnoreCase(normalize(value)))) {
+              throw new HoodieAnalysisException(s"Can't set ${set.property} to '${set.value}' on Hudi table " +
+                s"${table.identifier}: it is persisted in hoodie.properties as $tableConfigKey " +
+                s"(current value: ${persisted.getOrElse("unset")}) and can't be changed by altering the table.")
+            }
+            false
+          case None => true
+        }
+      case remove: RemoveProperty if catalogValue(remove.property).isEmpty => false
+      case remove: RemoveProperty =>
+        if (HoodieOptionConfig.mapToTableConfig(remove.property, "").isDefined) {
+          throw new HoodieAnalysisException(s"Can't remove ${remove.property} from Hudi table ${table.identifier}: " +
+            "it is persisted in hoodie.properties and can't be changed by altering the table.")
+        }
+        true
     }
   }
 

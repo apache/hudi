@@ -182,6 +182,21 @@ object HoodieOptionConfig {
     }
   }
 
+  /**
+   * Map a SQL option, data source write config or table config, given by key and value, to the table config
+   * it is persisted as in hoodie.properties. Returns None if it is not persisted as a table config.
+   */
+  def mapToTableConfig(key: String, value: String): Option[(String, String)] = {
+    val sqlKey = writeConfigKeyToSqlOptionKey.getOrElse(key, tableConfigKeyToSqlOptionKey.getOrElse(key, key))
+    if (sqlOptionKeyToTableConfigKey.contains(sqlKey)) {
+      mapSqlOptionsToTableConfigs(Map(sqlKey -> value)).headOption
+    } else if (key.startsWith("hoodie.table.")) {
+      Some(key -> value)
+    } else {
+      None
+    }
+  }
+
   val defaultSqlOptions: Map[String, String] = {
     HoodieOptionConfig.getClass.getDeclaredFields
       .filter(f => f.getType == classOf[HoodieSQLOption[_]])

@@ -17,16 +17,18 @@
 
 package org.apache.spark.sql.hudi.catalog
 
+import org.apache.hudi.HoodieSparkUtils
+
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
-import org.apache.spark.sql.connector.catalog.{Identifier, TableChange}
+import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog, TableChange}
 import org.apache.spark.sql.connector.catalog.TableCapability.{ACCEPT_ANY_SCHEMA, BATCH_READ, OVERWRITE_BY_FILTER, TRUNCATE, V1_BATCH_WRITE}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.ShowHoodieCreateTableCommand
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.io.File
@@ -89,13 +91,6 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       assertEquals(IntegerType,
         catalog.loadTable(ident).schema().fields.find(_.name == "age").get.dataType)
 
-      // alterTable: any change that is neither AddColumn nor a ColumnChange falls through to the
-      // default arm of HoodieCatalog.alterTable and is reported as unsupported.
-      val unsupportedChange = intercept[UnsupportedOperationException] {
-        catalog.alterTable(ident, TableChange.setProperty("some.key", "v"))
-      }
-      assertTrue(unsupportedChange.getMessage.contains("SetProperty"), unsupportedChange.getMessage)
-
       // renameTable moves the catalog entry.
       val renamed = Identifier.of(Array("default"), s"${tableName}_renamed")
       catalog.renameTable(ident, renamed)
@@ -107,6 +102,109 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       assertFalse(catalog.tableExists(renamed))
       // HoodieCatalog.dropTable passes purge = false, so the external location survives the drop.
       assertTrue(existsPath(tablePath))
+    }
+  }
+
+  test("alterTable ignores re-sent table properties and rejects changes to persisted table configs") {
+    withTempDir { tmp =>
+      val catalog = hoodieCatalog
+      val tableName = generateTableName
+      val ident = Identifier.of(Array("default"), tableName)
+      val tableIdent = TableIdentifier(tableName, Some("default"))
+      val schema = StructType(Seq(
+        StructField("id", IntegerType),
+        StructField("name", StringType),
+        StructField("ts", LongType)))
+      // The properties Spark Declarative Pipelines passes on create and re-sends as SetProperty on every run.
+      val props = Map(
+        "provider" -> "hudi",
+        "comment" -> "a hudi table",
+        "hoodie.datasource.write.recordkey.field" -> "id",
+        "hoodie.datasource.write.precombine.field" -> "ts",
+        "hoodie.table.type" -> "COPY_ON_WRITE")
+      catalog.createTable(ident, schema, Array.empty[Transform],
+        (props + ("location" -> s"${tmp.getCanonicalPath}/$tableName")).asJava)
+      val propertiesBefore = spark.sessionState.catalog.getTableMetadata(tableIdent).properties
+
+      // Re-sending unchanged values, including SQL aliases and differently cased values, is a no-op.
+      catalog.alterTable(ident, props.map { case (k, v) => TableChange.setProperty(k, v) }.toSeq: _*)
+      catalog.alterTable(ident,
+        TableChange.setProperty("primaryKey", "id"),
+        TableChange.setProperty("type", "cow"),
+        TableChange.setProperty("hoodie.table.type", "copy_on_write"),
+        TableChange.setProperty("hoodie.table.ordering.fields", "ts"))
+      assertEquals(propertiesBefore, spark.sessionState.catalog.getTableMetadata(tableIdent).properties)
+
+      // Changing or removing a property persisted in hoodie.properties is rejected.
+      val recordKeyChange = intercept[HoodieAnalysisException] {
+        catalog.alterTable(ident, TableChange.setProperty("hoodie.datasource.write.recordkey.field", "name"))
+      }
+      assertTrue(recordKeyChange.getMessage.contains("hoodie.table.recordkey.fields"), recordKeyChange.getMessage)
+      intercept[HoodieAnalysisException] {
+        catalog.alterTable(ident, TableChange.setProperty("type", "mor"))
+      }
+      intercept[HoodieAnalysisException] {
+        catalog.alterTable(ident, TableChange.setProperty("hoodie.datasource.write.precombine.field", "name"))
+      }
+      intercept[HoodieAnalysisException] {
+        catalog.alterTable(ident, TableChange.removeProperty("primaryKey"))
+      }
+      // A rejected change does not apply the other changes of the same call.
+      intercept[HoodieAnalysisException] {
+        catalog.alterTable(ident,
+          TableChange.setProperty("some.key", "v"), TableChange.setProperty("primaryKey", "name"))
+      }
+      assertEquals(propertiesBefore, spark.sessionState.catalog.getTableMetadata(tableIdent).properties)
+
+      // Other properties and the comment are applied to the catalog table.
+      catalog.alterTable(ident,
+        TableChange.setProperty("some.key", "v"), TableChange.setProperty("comment", "new comment"))
+      val altered = spark.sessionState.catalog.getTableMetadata(tableIdent)
+      assertEquals(Some("v"), altered.properties.get("some.key"))
+      assertEquals(Some("new comment"), altered.comment)
+      catalog.alterTable(ident, TableChange.removeProperty("some.key"))
+      assertFalse(spark.sessionState.catalog.getTableMetadata(tableIdent).properties.contains("some.key"))
+
+      // The table is still writable with its original configuration.
+      spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+    }
+  }
+
+  test("createTable with the Column-based overload initializes Hudi tables") {
+    // The Column-based overload exists from Spark 3.4 on; it is invoked reflectively so that this suite also
+    // compiles against Spark 3.3. Spark 4.1's createTable(Identifier, TableInfo) delegates to it.
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      withTempDir { tmp =>
+        val catalog = hoodieCatalog
+        val columnClass = Class.forName("org.apache.spark.sql.connector.catalog.Column")
+        val createColumn = columnClass.getMethod("create", classOf[String], classOf[DataType])
+        def columns(fields: (String, DataType)*): AnyRef = {
+          val array = java.lang.reflect.Array.newInstance(columnClass, fields.size)
+          fields.zipWithIndex.foreach { case ((name, dataType), i) =>
+            java.lang.reflect.Array.set(array, i, createColumn.invoke(null, name, dataType))
+          }
+          array
+        }
+        val createTable = classOf[TableCatalog].getMethod("createTable", classOf[Identifier],
+          java.lang.reflect.Array.newInstance(columnClass, 0).getClass, classOf[Array[Transform]], classOf[java.util.Map[_, _]])
+        val cols = columns("id" -> IntegerType, "name" -> StringType, "ts" -> LongType)
+
+        val hudiTable = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$hudiTable"
+        createTable.invoke(catalog, Identifier.of(Array("default"), hudiTable), cols, Array.empty[Transform],
+          Map("provider" -> "hudi", "primaryKey" -> "id", "preCombineField" -> "ts", "location" -> tablePath).asJava)
+        assertTrue(new File(s"$tablePath/.hoodie/hoodie.properties").exists())
+        spark.sql(s"insert into $hudiTable values (1, 'a1', 1000)")
+        checkAnswer(s"select id, name, ts from $hudiTable")(Seq(1, "a1", 1000))
+
+        // Non-Hudi tables still go to the session catalog.
+        val parquetTable = generateTableName
+        createTable.invoke(catalog, Identifier.of(Array("default"), parquetTable), cols, Array.empty[Transform],
+          Map("provider" -> "parquet", "location" -> s"${tmp.getCanonicalPath}/$parquetTable").asJava)
+        assertEquals(Some("parquet"),
+          spark.sessionState.catalog.getTableMetadata(TableIdentifier(parquetTable, Some("default"))).provider)
+      }
     }
   }
 
