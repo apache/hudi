@@ -112,6 +112,11 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
         || writeConfig.shouldUseExternalSchemaTransformation();
 
     HoodieExecutor<Void> executor = null;
+    // Tracks whether executor.execute() completed successfully, i.e. whether the consumer's
+    // finish() (which closes mergeHandle) actually ran. Needed because a failure inside
+    // execute() otherwise leaves mergeHandle - and its underlying file writer/output stream -
+    // open indefinitely (see finally block below).
+    boolean mergeSucceeded = false;
 
     try {
       ClosableIterator<HoodieRecord> recordIterator;
@@ -154,6 +159,7 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       }, table.getPreExecuteRunnable());
 
       executor.execute();
+      mergeSucceeded = true;
     } catch (Exception e) {
       throw new HoodieException(e);
     } finally {
@@ -162,6 +168,19 @@ public class HoodieMergeHelper<T> extends BaseMergeHelper {
       if (executor != null) {
         executor.shutdownNow();
         executor.awaitTermination();
+        if (!mergeSucceeded) {
+          // executor.execute() failed before the consumer's finish() (which closes mergeHandle)
+          // could run - e.g. SimpleExecutor.shutdownNow() only closes the producer iterator and
+          // never touches the consumer/mergeHandle. Close it here on a best-effort basis so its
+          // underlying file writer/output stream isn't leaked. Any failure here is logged rather
+          // than thrown, so it doesn't mask the original failure already propagating out of the
+          // catch block above.
+          try {
+            mergeHandle.close();
+          } catch (Exception closeException) {
+            log.warn("Failed to close merge handle for file {} after merge failure", mergeHandle.getOldFilePath(), closeException);
+          }
+        }
       } else {
         baseFileReader.close();
         if (bootstrapFileReader != null) {
