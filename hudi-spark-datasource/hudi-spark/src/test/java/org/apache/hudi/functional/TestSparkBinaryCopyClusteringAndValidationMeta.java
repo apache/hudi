@@ -334,6 +334,30 @@ public class TestSparkBinaryCopyClusteringAndValidationMeta extends HoodieClient
   }
 
   @Test
+  public void testLsmTableFallsBackFromBinaryAndStreamCopy() throws IOException {
+    String lsmPath = basePath + "_lsm_copy_fallback";
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    HoodieTableMetaClient lsmMetaClient = HoodieTestUtils.init(
+        storageConf, lsmPath, HoodieTableType.COPY_ON_WRITE, tableProperties);
+    HoodieWriteConfig lsmWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath(lsmPath)
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withProperties(tableProperties)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+    HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
+    HoodieTable lsmTable = HoodieSparkTable.create(lsmWriteConfig, engineContext, lsmMetaClient);
+
+    Assertions.assertFalse(new SparkBinaryCopyClusteringExecutionStrategy(lsmTable, engineContext, lsmWriteConfig)
+        .supportBinaryStreamCopy(Collections.emptyList(), Collections.emptyMap()));
+    Assertions.assertFalse(new SparkStreamCopyClusteringExecutionStrategy(lsmTable, engineContext, lsmWriteConfig)
+        .supportBinaryStreamCopy(Collections.emptyList(), Collections.emptyMap()));
+  }
+
+  @Test
   public void testStreamCopyClusteringEndToEnd() throws IOException {
     String partitionPath = "2015/03/16";
     Properties properties = new Properties();
