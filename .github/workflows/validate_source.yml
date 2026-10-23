@@ -25,13 +25,13 @@ jobs:
   # java_ci_engines.yml are path-filtered, a green result here no longer means any Java CI
   # job ran; reviewers gate on the checks the PR shows. Delete under #19535.
   validate-ci-baseline:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Confirm CI ran against the reduced matrix
         run: echo "Ran against the reduced CI matrix."
 
   validate-source:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Set up JDK 11

@@ -45,7 +45,7 @@ permissions:
 jobs:
   gateway-tests:
     name: gateway pytest + lint (python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -99,7 +99,7 @@ jobs:
 
   flink-sql-fixtures:
     name: Hudi 1.2.0 / Flink 1.20.1 SQL fixtures
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -116,7 +116,7 @@ jobs:
 
   chart-lint:
     name: helm lint + template
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       # helm is preinstalled on GitHub-hosted ubuntu runners. Do NOT add

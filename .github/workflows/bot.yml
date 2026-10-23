@@ -72,7 +72,7 @@ jobs:
   # this job's build instead of paying for a second one. It stays listed in the catch-all
   # job's UT_MODULES/FT_MODULES exclusions so the tests are not run twice.
   test-spark-client-and-hadoop-common:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     strategy:
       matrix:
@@ -145,7 +145,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-utilities:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       matrix:
@@ -197,7 +197,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-common-and-other-modules:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
       matrix:
@@ -289,7 +289,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-java-tests-part1:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -342,7 +342,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-java-tests-part2:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -408,7 +408,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-java-tests-part3:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -468,7 +468,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-scala-dml-tests:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -528,7 +528,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-scala-other-tests:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -587,7 +587,7 @@ jobs:
 #          token: ${{ secrets.CODECOV_TOKEN }}
 
   test-hudi-hadoop-mr-and-hudi-java-client:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
       matrix:
@@ -632,7 +632,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-java-tests-part1:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -689,7 +689,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-java-tests-part2:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -756,7 +756,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-java-tests-part3:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -817,7 +817,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-scala-dml-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -878,7 +878,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-scala-other-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -940,7 +940,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  build-spark-java17:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
