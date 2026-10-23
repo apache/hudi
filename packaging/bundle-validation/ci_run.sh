@@ -95,7 +95,6 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.0' && ${SCALA_PROFILE} == 'scala-2.13' ]];
   KAFKA_CONNECT_HDFS_VERSION=10.1.13
   IMAGE_TAG=flink1200hive313spark350scala213
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.9' && ${SCALA_PROFILE} == 'scala-2.12' ]]; then
-  # Apache DataFusion Comet 1.1.0 is built against Spark 3.5.9 and needs at least 3.5.2 at runtime.
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
@@ -120,7 +119,6 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.9' && ${SCALA_PROFILE} == 'scala-2.12' ]];
     exit 1
   fi
 elif [[ ${SPARK_RUNTIME} == 'spark3.5.9' && ${SCALA_PROFILE} == 'scala-2.13' ]]; then
-  # Apache DataFusion Comet 1.1.0 is built against Spark 3.5.9 and needs at least 3.5.2 at runtime.
   HADOOP_VERSION=3.3.5
   HIVE_VERSION=3.1.3
   DERBY_VERSION=10.14.1.0
