@@ -73,6 +73,7 @@ case class CometHudiNativeScanExec(
       commonByKey = Map(sourceKey -> commonData),
       perPartitionByKey = Map(sourceKey -> perPartitionData),
       serializedPlan = serializedPlan,
+      planFingerprint = PlanDataInjector.planFingerprint(serializedPlan),
       defaultNumPartitions = perPartitionData.length,
       numOutputCols = output.length,
       nativeMetrics = nativeMetrics,
@@ -121,6 +122,8 @@ object HudiScanDataKey {
  */
 class HudiPlanDataInjector extends PlanDataInjector {
 
+  override type Prepared = OperatorOuterClass.HudiScanCommon
+
   override val opStructCase: Operator.OpStructCase = Operator.OpStructCase.HUDI_SCAN
 
   override def canInject(op: Operator): Boolean =
@@ -131,11 +134,10 @@ class HudiPlanDataInjector extends PlanDataInjector {
     Some(HudiScanDataKey.key(common.getTableBaseUri, common.getScanHashCode))
   }
 
-  override def inject(
-      op: Operator,
-      commonBytes: Array[Byte],
-      partitionBytes: Array[Byte]): Operator = {
-    val common = OperatorOuterClass.HudiScanCommon.parseFrom(commonBytes)
+  override def prepareCommon(commonBytes: Array[Byte]): Prepared =
+    OperatorOuterClass.HudiScanCommon.parseFrom(commonBytes)
+
+  override def inject(op: Operator, common: Prepared, partitionBytes: Array[Byte]): Operator = {
     val partition = OperatorOuterClass.HudiScan.parseFrom(partitionBytes)
     op.toBuilder
       .setHudiScan(

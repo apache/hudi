@@ -66,8 +66,41 @@ message Operator {
     ShuffleScan shuffle_scan = 116;
     BroadcastNestedLoopJoin broadcast_nested_loop_join = 117;
     Sample sample = 118;
-    HudiScan hudi_scan = 119;
+    WindowGroupLimit window_group_limit = 119;
+    IcebergWrite iceberg_write = 120;
+    HudiScan hudi_scan = 121;
+    // Extension point for optional, out-of-tree contrib scans (Delta, Lance, ...). The concrete
+    // scan message (e.g. `DeltaScan`) is packed into this envelope on the JVM side and dispatched
+    // by `type_url` on the native side. Using a single permanent field -- rather than a new oneof
+    // variant per format -- means core's proto never has to change when a contrib is added, and
+    // avoids field-number collisions between independent contrib PRs. Only decoded when core is
+    // built with the matching contrib Cargo feature (e.g. `--features contrib-delta`); default
+    // builds reject any `contrib_scan` with a clear "not compiled in" error, so the contrib has
+    // zero runtime cost.
+    ContribScan contrib_scan = 200;
   }
+}
+
+// A `google.protobuf.Any`-shaped envelope for out-of-tree contrib scan messages. Hand-rolled
+// (rather than importing the well-known `google.protobuf.Any`) so the wire format needs no
+// well-known-type import -- Comet compiles this .proto with two toolchains (Rust `prost-build`
+// and the Maven `protoc-jar` plugin) and the latter cannot reliably resolve the bundled
+// well-known types. Field layout is deliberately identical to `Any` (`type_url` + serialized
+// `value` bytes) so the JVM can populate it from a standard `Any.pack(...)` and the native side
+// routes purely on `type_url`.
+message ContribScan {
+  // Type name of `value`, namespaced to the owning contrib -- e.g.
+  // `type.googleapis.com/comet.contrib.delta.DeltaScan`. The native dispatcher matches on this to
+  // pick the contrib that decodes `value`; core itself names no contrib type.
+  //
+  // This is the contrib's identifier for its own message, NOT necessarily the proto package the
+  // message is compiled under today. Contrib scan messages currently live in this file only
+  // because a contrib proto build pipeline does not exist yet; they are meant to move under
+  // `contrib/<name>/proto`. Keying on a contrib-owned name keeps that relocation invisible on the
+  // wire.
+  string type_url = 1;
+  // The serialized contrib scan message (e.g. an encoded `DeltaScan`).
+  bytes value = 2;
 }
 
 message SparkPartitionedFile {
@@ -131,8 +164,11 @@ message NativeScanCommon {
   // schema actually carries parquet.field.id metadata. When false the native
   // scan keeps its existing name-based path with no extra work.
   bool use_field_id = 15;
-  // True when spark.sql.parquet.fieldId.read.ignoreMissing is set.
-  bool ignore_missing_field_id = 16;
+  // True when the requested schema carries a field id and
+  // spark.sql.parquet.fieldId.read.ignoreMissing is not set. The native scan
+  // then refuses a file whose Parquet schema carries no field id, as Spark's
+  // ParquetReadSupport does whether or not the read flag is set.
+  bool require_field_ids = 16;
   // Whether widening type promotion is allowed (e.g. INT32 -> INT64,
   // FLOAT -> DOUBLE). Set from Comet's per-Spark-version constant in
   // ShimCometConf (false on 3.x, true on 4.x). When false, reading a column
@@ -144,6 +180,9 @@ message NativeScanCommon {
   // SchemaColumnConvertNotSupportedException (Spark 3.x, SPARK-36182). Set
   // from Comet's per-Spark-version constant in ShimCometConf.
   bool allow_timestamp_ltz_to_ntz = 18;
+  // True when Spark supplied a Parquet data filter, including when Comet could
+  // not serialize any of those filters into data_filters.
+  bool has_data_filters = 19;
 }
 
 message NativeScan {
@@ -152,6 +191,12 @@ message NativeScan {
 
   // Single partition's file list (injected at execution time)
   SparkFilePartition file_partition = 2;
+
+  // Hash half of the key under which this scan's planning data is stored and looked up at
+  // execution time; the other half is common.source. Derived once on the driver
+  // (CometNativeScanExec) so executors rebuild the key instead of hashing the common per task.
+  // JVM-consumed only; the native side ignores it.
+  optional int32 source_key_hash = 3;
 }
 
 message CsvScan {
@@ -334,6 +379,12 @@ message IcebergScanCommon {
   // common message from growing with the number of references.
   repeated IcebergDeleteFile delete_file_pool = 14;
 
+  // Flat pool of unique delete-file paths, referenced by index from IcebergDeleteFile. A V3
+  // deletion vector's path is the Puffin file holding it, and every vector written by one commit
+  // shares that file, so the path would otherwise repeat once per data file: delete_file_pool
+  // cannot fold those entries together because each carries a distinct content offset.
+  repeated string delete_file_path_pool = 16;
+
   // Iceberg's SparkScan.hashCode() (folds in pushed filters, snapshot, branch, and read schema).
   // A self-join/self-merge can read the same table (same metadata_location) twice with different
   // projections or filters, so PlanDataInjector keys planning data by
@@ -347,6 +398,32 @@ message IcebergScan {
 
   // Single partition's file scan tasks
   repeated IcebergFileScanTask file_scan_tasks = 2;
+}
+
+// Common data shared by all partitions for native Lance scans.
+message LanceScanCommon {
+  string scan_id = 1;
+  repeated SparkStructField required_schema = 2;
+  string native_scan_plan_class = 3;
+  string dataset_uri = 4;
+  int64 resolved_version = 5;
+  map<string, string> storage_options = 6;
+  repeated SparkStructField projected_schema = 7;
+  optional string filter_sql = 8;
+  optional int64 limit = 9;
+  optional int64 offset = 10;
+  uint32 batch_size = 11;
+  uint32 descriptor_version = 12;
+}
+
+message LanceScanPartition {
+  uint32 partition_index = 1;
+  repeated uint32 fragment_ids = 2;
+}
+
+message LanceScan {
+  LanceScanCommon common = 1;
+  LanceScanPartition partition = 2;
 }
 
 // Helper message for deduplicating field ID lists
@@ -394,8 +471,9 @@ message IcebergFileScanTask {
 // Positional: (file_path, row_position) pairs to skip
 // Equality: Column values to filter out (specified by equality_ids)
 message IcebergDeleteFile {
-  // Delete file path
-  string file_path = 1;
+  // Index into IcebergScanCommon.delete_file_path_pool.
+  uint32 file_path_idx = 11;
+  reserved 1;
 
   // POSITION_DELETES or EQUALITY_DELETES
   string content_type = 2;
@@ -406,14 +484,349 @@ message IcebergDeleteFile {
   // Equality field IDs (empty for positional deletes)
   repeated int32 equality_ids = 4;
 
-  // Fields 5-7 are reserved for the deletion-vector coordinates on the dv-read branch
-  // (referenced_data_file / content_offset / content_size_in_bytes) so the two features can merge
-  // in either order without a tag collision.
-  reserved 5, 6, 7;
+  // Deletion vector coordinates, set only when file_format is PUFFIN. referenced_data_file is the
+  // data file the vector applies to; content_offset and content_size_in_bytes locate the
+  // deletion-vector-v1 blob within its Puffin file. Iceberg also populates referencedDataFile on
+  // file-scoped Parquet position deletes, so file_format, not the presence of this field, is what
+  // identifies a deletion vector.
+  optional string referenced_data_file = 5;
+  optional int64 content_offset = 6;
+  optional int64 content_size_in_bytes = 7;
 
   // Serialized StandardKeyMetadata for an encrypted delete file, from DeleteFile.keyMetadata().
   // Absent for unencrypted tables. Decoded directly by iceberg-rust; no KMS unwrap needed.
   optional bytes key_metadata = 8;
+
+  // Delete-file record count. Required by iceberg-rust for deletion vectors, which check it
+  // against the cardinality decoded from the blob; unused for Parquet delete files.
+  optional int64 record_count = 9;
+
+  // "PARQUET" for a delete file, "PUFFIN" for a deletion vector. iceberg-rust selects its
+  // deletion-vector reader on this.
+  string file_format = 10;
+}
+
+// =====================================================================================
+// Delta Lake scan messages -- consumed by the optional `contrib/delta/` integration.
+// Field numbers must remain stable; older serialised plans encode them on the wire.
+// =====================================================================================
+
+// Per-scan invariants. Lives at the head of every Delta scan operator payload.
+message DeltaScanCommon {
+  // Required (output) schema -- pure-logical at every nesting level. The kernel-read path
+  // physicalises it via `column_mappings`; partition columns are split out by name.
+  repeated SparkStructField required_schema = 1;
+  // Partition columns (stored in add actions, not in file paths).
+  repeated SparkStructField partition_schema = 3;
+  // Fields 2 (data_schema), 4 (data_filters), 5 (projection_vector) belonged to the removed
+  // legacy ParquetSource read path; the kernel-read path reads only `required_schema` +
+  // `column_mappings`. Reserved so the numbers aren't reused.
+  reserved 2, 4, 5;
+  reserved "data_schema", "data_filters", "projection_vector";
+  string session_timezone = 6;
+  bool case_sensitive = 7;
+  // Cloud storage credentials / options, keyed by Hadoop-style names.
+  map<string, string> object_store_options = 8;
+  // Root path of the Delta table (file:// or s3://...).
+  string table_root = 9;
+  // Optional snapshot version; unset = latest.
+  optional uint64 snapshot_version = 10;
+  // Per-file parallelism knob within a single Spark task.
+  uint32 data_file_concurrency_limit = 11;
+  // Informational label for debug output.
+  string source = 12;
+  // Field 13 was `column_mappings` (logical->physical): the executor's only consumer was the
+  // `physicalise_field` schema rebuild, removed once the kernel-read path ships kernel's own
+  // `scan.physical_schema()`/`logical_schema()`. Partition-value key translation happens
+  // driver-side (see `DeltaScanTaskList.column_mappings`), so nothing executor-side needs it.
+  reserved 13;
+  optional string materialized_row_id_column_name = 14;
+  optional string materialized_row_commit_version_column_name = 15;
+  // When true the DataSourceExec swallows object-store NotFound errors as empty
+  // streams; matches Spark's `spark.sql.files.ignoreMissingFiles=true` semantics.
+  bool ignore_missing_files = 16;
+  // When true the native parquet reader matches Spark schema fields to parquet
+  // file fields by `PARQUET:field_id` metadata rather than by name. Used by
+  // Delta tables with `delta.columnMapping.mode = id` (the contrib copies
+  // `delta.columnMapping.id` to `PARQUET:field_id` on each schema field).
+  bool use_field_id = 17;
+  // Delta synthetic columns to append to the scan output via
+  // `DeltaSyntheticColumnsExec`. The corresponding columns must NOT appear in
+  // `data_schema` or `required_schema` -- they're synthesised at exec time
+  // from row positions / DV bitmaps and inserted after the parquet read.
+  bool emit_row_index = 18;
+  bool emit_is_row_deleted = 19;
+  // Row-tracking synthesis (row_id = baseRowId + physical_row_index,
+  // row_commit_version = defaultRowCommitVersion). Per-task baseRowId /
+  // defaultRowCommitVersion travel on `DeltaScanTask` (fields 6 + 7).
+  bool emit_row_id = 20;
+  bool emit_row_commit_version = 21;
+  // When synthetic columns aren't a contiguous suffix of `required_schema`, this
+  // sequence tells the native dispatcher how to project the final output. Each
+  // entry is an index into [parquet_output, appended_synthetics] -- positive
+  // means a column from the (stripped) parquet read at that index; the synthetic
+  // tail comes after, in the canonical row_index, is_row_deleted, row_id,
+  // row_commit_version order. Empty = synthetics are already a suffix; no
+  // reorder needed.
+  repeated int32 final_output_indices = 22;
+  // Override for the row_index column name. Defaults to "__delta_internal_row_index"
+  // when empty. Delta plans that read `_metadata.row_index` from row-tracking-enabled
+  // tables expose the row index as `_tmp_metadata_row_index` (the Delta-internal
+  // physical name from `DeltaParquetFileFormat.TMP_METADATA_ROW_INDEX_COLUMN_NAME`)
+  // rather than the canonical `__delta_internal_row_index`. Setting this lets the
+  // contrib produce a column with the alternate name from the same native synthesis.
+  string row_index_column_alias = 23;
+  // Spark `_metadata.*` virtual columns the scan must surface. Delta's
+  // `PreprocessTableWithDVs` strategy and the row-tracking projection both inject
+  // these into the FileScan output: `file_path`, `file_name`, `file_size`,
+  // `file_block_start`, `file_block_length`, `file_modification_time`. Each
+  // appears as a flat top-level column in the scan's output schema. Native
+  // synthesizes them per-task from `DeltaScanTask` data (file_path, file_size,
+  // modification_time) and per-batch derivations. Empty list = no metadata
+  // columns to emit. Names are emitted in the order given, appended AFTER
+  // synthetic columns (row_index / is_row_deleted / row_id / row_commit_version)
+  // unless `final_output_indices` reorders them.
+  repeated string metadata_column_names = 24;
+  // Field 25 was `bool kernel_read`: a transitional toggle from when the legacy ParquetSource read
+  // path still co-existed with the kernel-read path. The legacy path is gone (#50) and kernel-read
+  // is the only read path, so the toggle (and its `spark.comet.delta.kernelRead.enabled` config)
+  // were removed -- the driver no longer sends it and the native planner no longer gates on it.
+  reserved 25;
+  reserved "kernel_read";
+  // Kernel-built data-column schemas for the kernel-read path, produced by the driver from
+  // `delta-kernel-rs`'s `Scan` (`scan.physical_schema()` / `scan.logical_schema()`), serialized as
+  // Arrow IPC schema messages. The physical schema carries the correct physical names AND field-ids
+  // at EVERY nesting level (kernel's own column-mapping resolution); the logical schema is the
+  // matching pure-logical shape. The executor reads parquet with the physical schema and relabels
+  // physical->logical via the schema pair -- no Comet-side physicalisation. Empty when the driver
+  // didn't build them (e.g. the non-kernel-read add-files path), in which case the executor falls
+  // back to physicalising `required_schema` via `column_mappings`.
+  bytes kernel_physical_schema = 26;
+  bytes kernel_logical_schema = 27;
+  // Stage B/C: when true, DeltaKernelScanExec produces ALL synthetic columns itself (row_index /
+  // row_id / file_path via kernel metadata columns; is_row_deleted by inverting the decoded DV;
+  // row_commit_version + Spark `_metadata.*` as per-file constants) and assembles the full output by
+  // name -- so the standalone DeltaSyntheticColumnsExec is NOT stacked on top and no
+  // `final_output_indices` reorder is needed. Default false (legacy DeltaSyntheticColumnsExec path).
+  // When set, `required_schema` is the FULL output (synthetics NOT stripped) and the per-file
+  // synthesis inputs ride on DeltaScanTask (base_row_id / default_row_commit_version /
+  // modification_time / byte range / dv).
+  bool synthesize_in_worker = 28;
+  // Change Data Feed (CDF / readChangeFeed): when true, DeltaKernelScanExec reads table changes via
+  // delta-kernel-rs's `TableChanges` API (single partition reconstructs TableChanges(start, end) and
+  // calls `execute()`), emitting the data columns plus `_change_type` / `_commit_version` /
+  // `_commit_timestamp`. The version range is below; `required_schema` is the full CDF output
+  // (assembled by name). No per-file tasks -- the worker enumerates + reads the whole range itself
+  // (kernel's CDF per-file API is pub(crate); only execute() is public). Default false.
+  bool cdf_read = 29;
+  // Inclusive start version of the CDF range.
+  uint64 cdf_start_version = 30;
+  // Inclusive end version of the CDF range. `has_cdf_end_version` distinguishes "latest" (unset).
+  optional uint64 cdf_end_version = 31;
+  // Delta's test-only deletion-vector filename prefix
+  // (`spark.databricks.delta.testOnly.dvFileNamePrefix`, default `test%dv%prefix-` under
+  // `Utils.isTesting`, empty in production). Delta prepends it to the DV filename at write time
+  // (`<prefix>deletion_vector_<uuid>.bin`) but delta-kernel-rs resolves the un-prefixed name, so
+  // executor-side DV reads splice it back in for "u"-storage DVs. Empty = no-op (production).
+  string dv_file_name_prefix = 32;
+}
+
+// Operator payload for a Delta scan.
+message DeltaScan {
+  DeltaScanCommon common = 1;
+  repeated DeltaScanTask tasks = 2;
+  // Absolute URL of the Delta table root, used by the executor to resolve relative
+  // ("u" storage-type) DV paths via kernel's `absolute_path` -- kernel joins
+  // `_delta_log/deletion_vectors/<uuid>` onto this, so it MUST end with `/` (the
+  // driver normalises before sending). Empty for tables with no DVs (executor
+  // simply never decodes), but populate it whenever known.
+  string table_root = 3;
+}
+
+message DeltaScanTask {
+  string file_path = 1;
+  uint64 file_size = 2;
+  optional uint64 record_count = 3;
+  repeated DeltaPartitionValue partition_values = 4;
+  // Field 5 (repeated uint64 deleted_row_indexes) removed in the Iceberg-style DV refactor:
+  // the driver used to materialise the FULL deletion-vector bitmap to a Vec<u64> here, which
+  // could reach ~1 GB for a single DV with ~99 M deleted rows (DELETE/MERGE on huge tables).
+  // The executor now resolves the DV itself via the `dv` field below -- matches the contrib's
+  // own Iceberg integration (IcebergScanCommon.delete_files_pool + IcebergFileScanTask.delete_files_idx).
+  reserved 5;
+  reserved "deleted_row_indexes";
+  optional int64 base_row_id = 6;
+  optional int64 default_row_commit_version = 7;
+  // File-splitting byte range. Both unset = read whole file.
+  optional uint64 byte_range_start = 8;
+  optional uint64 byte_range_end = 9;
+  // File modification time in epoch milliseconds. Surfaced through Spark's
+  // `_metadata.file_modification_time` column when emit_metadata_columns
+  // includes "file_modification_time". Unset = 0 (rare; AddFile usually
+  // carries one).
+  optional int64 modification_time = 10;
+  // Deletion-vector descriptor for this file (absent = no DV applies). Mirrors
+  // delta_kernel::actions::deletion_vector::DeletionVectorDescriptor. The executor reads
+  // the actual DV bitmap on-task via dv_reader::read_dv_indexes -- the driver only ships
+  // the path/offset/size, so the per-scan-exec heap stays KB-scale regardless of DV size.
+  optional DeltaDvDescriptor dv = 11;
+  // Kernel's own fully-resolved physical->logical transform for THIS file, serialized as JSON
+  // (serde of `delta_kernel::expressions::Expression`). The driver gets it from kernel's scan
+  // enumeration (`ScanMetadata.scan_file_transforms`, one per scan file), where partition values
+  // and `baseRowId` (for row_id `GenerateRowId`) are already baked in as literals. The executor
+  // deserializes it and applies `transform_to_logical` -- so partition injection, column-mapping
+  // relabel (incl. nested), and row-tracking come from kernel rather than Comet-side reconstruction.
+  // Empty when the driver has no kernel transform for this file (e.g. a plain table with no mapping
+  // / partitions / row-tracking -> identity), in which case the executor uses a pass-through read.
+  bytes transform_json = 12;
+}
+
+// Mirrors delta_kernel::actions::deletion_vector::DeletionVectorDescriptor. Carries everything
+// an executor needs to read + decode the DV bitmap, without materialising it on the driver.
+message DeltaDvDescriptor {
+  // "u" (UUID-named, relative to <table_root>/_delta_log/deletion_vectors/)
+  // "p" (absolute URI in path_or_inline_dv)
+  // "i" (inline -- bytes carried in inline_bytes)
+  string storage_type = 1;
+  // For "u": Delta-encoded UUID path component. For "p": absolute URI. For "i": empty.
+  string path_or_inline_dv = 2;
+  // Byte offset within the DV file ("u"/"p" only). Absent ≡ 0.
+  optional uint64 offset = 3;
+  // Size in bytes of the serialised RoaringBitmap entry.
+  uint64 size_in_bytes = 4;
+  // Number of deleted rows (descriptor metadata; the executor doesn't need to count).
+  uint64 cardinality = 5;
+  // Inline-DV bytes (storage_type="i" only). Empty for "u"/"p".
+  bytes inline_bytes = 6;
+}
+
+message DeltaPartitionValue {
+  string name = 1;
+  optional string value = 2;
+}
+
+// JNI return value from planDeltaScan -- the list of tasks for a given snapshot.
+message DeltaScanTaskList {
+  uint64 snapshot_version = 1;
+  string table_root = 2;
+  repeated DeltaScanTask tasks = 3;
+  repeated string unsupported_features = 4;
+  // Field 5 was `column_mappings`: column mapping is now fully resolved by the kernel-built schemas
+  // shipped on `DeltaScanCommon` (kernel resolves physical names + field-ids at every nesting
+  // level), and partition-value key translation happens driver-side, so nothing on the wire needs
+  // a column-mapping tree.
+  reserved 5;
+  // Kernel-built data-column schemas (Arrow IPC), produced by the driver from the projected
+  // `Scan` (`scan.physical_schema()` / `scan.logical_schema()`). Carried back to Scala and copied
+  // onto `DeltaScanCommon.kernel_physical_schema` / `kernel_logical_schema`. Empty when the driver
+  // had no projection to build the scan against.
+  bytes physical_schema = 6;
+  bytes logical_schema = 7;
+}
+
+// === Iceberg writes =========================================================
+//
+// Mirrors the read-side split: `IcebergWriteCommon` is the per-write payload broadcast once to
+// every task; `IcebergWrite` wraps the common payload and adds per-task fields filled in at
+// execution time (partitionId/taskAttemptId). The rust side translates `IcebergWriteCommon` and
+// `IcebergParquetWriteSettings` into the iceberg-rust writer stack
+// (`ParquetWriterBuilder` -> `RollingFileWriterBuilder` -> `DataFileWriterBuilder` -> partitioner)
+// and returns the task's `DataFile`s packed as a single in-memory Iceberg V2 data manifest
+// (one Binary row per task), which the JVM decodes via `ManifestFiles.read`.
+
+// Picks which iceberg-rust writer the rust side instantiates. Resolved once on the JVM driver
+// (via `spec.isUnpartitioned()` and `SparkWriteConf.useFanoutWriter`) so the rust side never
+// re-derives the choice.
+enum IcebergWriterMode {
+  ICEBERG_WRITER_UNPARTITIONED = 0;
+  ICEBERG_WRITER_FANOUT = 1;
+  ICEBERG_WRITER_CLUSTERED = 2;
+}
+
+// Parquet-rs `WriterProperties` knobs derived from Iceberg table properties on the JVM driver.
+// All fields use Iceberg defaults when absent in the table properties; the rust side does not
+// re-apply defaults.
+//
+// Iceberg's metrics modes (`write.metadata.metrics.*`) are deliberately NOT translated: the
+// native writer always emits full, untruncated footer statistics (matching parquet-mr, which
+// never truncates), and the JVM re-derives every manifest `DataFile`'s metrics from the footer
+// with Iceberg's own `MetricsConfig` logic before commit. See `CometIcebergWriteExec`.
+message IcebergParquetWriteSettings {
+  CompressionCodec compression = 1;
+  // Codec-dependent: zstd 1-22, gzip 0-9, brotli 0-11. JVM side substitutes parquet-mr's
+  // per-codec default when the property is unset and parquet-rs's default would diverge
+  // (zstd: 3 instead of parquet-rs's 1). Absent => use parquet-rs's natural default.
+  optional int32 compression_level = 2;
+  // Iceberg `write.parquet.row-group-size-bytes` (default 128 MiB).
+  uint64 row_group_size_bytes = 3;
+  // Iceberg `write.parquet.page-size-bytes` (default 1 MiB).
+  uint64 page_size_bytes = 4;
+  // Iceberg `write.parquet.dict-size-bytes` (default 2 MiB).
+  uint64 dict_size_bytes = 5;
+  // Iceberg `write.parquet.page-row-limit` (default 20_000).
+  uint32 page_row_limit = 6;
+  // String written into parquet file metadata. JVM-side default is
+  // `"Apache Iceberg <ver> (Comet)"`.
+  string created_by = 7;
+}
+
+// Broadcast payload -- one of these per write, identical for every task.
+message IcebergWriteCommon {
+  // Catalog properties for FileIO (same shape as `IcebergScanCommon.catalog_properties`).
+  map<string, string> catalog_properties = 1;
+
+  // Iceberg table metadata file path. Kept on the wire for plan-debug visibility (shows up in
+  // `IcebergWriteExec`'s `DisplayAs`); `FileIO` itself is initialised from `data_location`
+  // since both paths resolve to the same storage scheme.
+  string metadata_location = 2;
+
+  // Iceberg `SchemaParser.toJson(table.schema())`. Carries the schema id inside the JSON; the
+  // rust side parses it via `serde_json::from_str::<Schema>`.
+  string iceberg_schema_json = 3;
+
+  // Iceberg `PartitionSpecParser.toJson(table.spec())`. Same wire format as one entry in
+  // `IcebergScanCommon.partition_spec_pool`. Carries the spec id inside the JSON.
+  string partition_spec_json = 4;
+
+  // Iceberg `SparkWriteConf.outputSortOrderId(...)`. The rust side ignores it (iceberg-rust's
+  // writer does not expose the field); the JVM stamps it onto each decoded `DataFile` before
+  // commit. It rides in the common payload so the exec wrapper can read it back from the plan.
+  int32 sort_order_id = 5;
+
+  // Directory under which data files are written; resolved on the JVM via the table's
+  // `LocationProvider` plus any `write.data.path` override.
+  string data_location = 6;
+
+  // Iceberg `OutputFileFactory` operation UUID -- embedded in filenames so files from the same
+  // logical write are correlated across tasks.
+  string operation_id = 7;
+
+  // Target file size in bytes; the rust rolling writer rolls files at this threshold.
+  uint64 target_file_size_bytes = 8;
+
+  IcebergWriterMode writer_mode = 9;
+
+  IcebergParquetWriteSettings parquet_settings = 10;
+
+  // Spark V2 catalog name that loaded this table. Forwarded as the dispatchKey to
+  // CometS3CredentialDispatcher.ensureInitialized (and the access intent to the credential
+  // provider) so two catalogs sharing one provider class get isolated provider instances. Empty
+  // string when the table has no catalog identity (e.g. HadoopTables loaded by raw path). Mirrors
+  // `IcebergScanCommon.catalog_name`.
+  string catalog_name = 11;
+}
+
+// Single Iceberg write operator. Per-task fields are populated by the JVM exec wrapper at task
+// launch (matching how `ParquetWriter.task_attempt_id` is filled in `CometNativeWriteExec`).
+message IcebergWrite {
+  IcebergWriteCommon common = 1;
+
+  // Spark `TaskContext.get().partitionId()` -- 0-padded into the filename prefix
+  // `{partition_id:05d}-{task_attempt_id}-{operation_id}`.
+  optional int32 partition_id = 2;
+
+  // Spark `TaskContext.get().taskAttemptId()`.
+  optional int64 task_attempt_id = 3;
 }
 
 message Projection {
@@ -469,12 +882,39 @@ enum CompressionCodec {
   Snappy = 3;
   // Parquet write only. The shuffle writer rejects this codec.
   Gzip = 4;
+  // Iceberg write only; Iceberg inherits Parquet's full codec set. The shuffle
+  // and ParquetWriter paths reject this codec.
+  Brotli = 5;
 }
+
+// Selects where encoded shuffle partitions are written.
+message PartitionWriter {
+  oneof writer {
+    LocalPartitionWriter local = 1;
+    RssPartitionWriter rss = 2;
+  }
+}
+
+// Local shuffle output consists of a data file. The partition offsets are returned to the JVM via JNI
+message LocalPartitionWriter {
+  reserved 2;
+  reserved "output_index_file";
+
+  string output_data_file = 1;
+}
+
+// Marker for remote shuffle output. The task-owned callback is bound outside
+// the serialized plan and is never transmitted through protobuf.
+message RssPartitionWriter {}
 
 message ShuffleWriter {
   spark.spark_partitioning.Partitioning partitioning = 1;
+  reserved 4;
+  reserved "output_index_file";
+
+  // Retained for compatibility with native binaries that predate partition_writer.
+  // Local plans also carry this path in partition_writer.local.
   string output_data_file = 3;
-  string output_index_file = 4;
   CompressionCodec codec = 5;
   int32 compression_level = 6;
   bool tracing_enabled = 7;
@@ -490,14 +930,27 @@ message ShuffleWriter {
   // Maximum number of bytes that the writer buffers in memory before spilling to disk.
   // Zero means no limit, in which case spilling is driven only by memory pool pressure.
   uint64 max_buffer_bytes = 10;
+  // Explicit output destination. When absent, use the legacy output file fields.
+  PartitionWriter partition_writer = 11;
 }
 
 message ParquetWriter {
+  // Where this task writes. Two shapes, selected by whether `work_dir` is set:
+  //
+  //  - Spark 4.0+ (CometWriteFilesExec): `work_dir` is unset and `output_path` is the
+  //    fully-qualified path of the Parquet file to write, set per task from
+  //    FileCommitProtocol.newTaskTempFile. Naming and staging are owned by Spark's commit
+  //    protocol so that task-attempt isolation, speculative execution, and committers that track
+  //    individual files (S3A magic, streaming manifest) all behave as they do for Spark's own
+  //    writer. The native writer uses this path verbatim.
+  //  - Spark 3.x (CometNativeWriteExec): `work_dir` is set and the native writer derives the file
+  //    name from it, the partition id and the task attempt id. `output_path` is the write's
+  //    output directory and is unused natively. Goes away with Spark 3.x support.
   string output_path = 1;
   CompressionCodec compression = 2;
   repeated string column_names = 4;
-  // Working directory for temporary files (used by FileCommitProtocol)
-  // If not set, files are written directly to output_path
+  // Working directory for temporary files (used by FileCommitProtocol). Spark 3.x only; see
+  // output_path above.
   optional string work_dir = 5;
   // Job ID for tracking this write operation
   optional string job_id = 6;
@@ -510,6 +963,9 @@ message ParquetWriter {
   // configuration value "spark.hadoop.fs.s3a.access.key" will be stored as "fs.s3a.access.key" in
   // the map.
   map<string, string> object_store_options = 8;
+  // Catalyst's target schema, including top-level nullability and Parquet field IDs.
+  // Nested collection field IDs are carried by the corresponding DataType messages.
+  repeated SparkStructField output_schema = 9;
 }
 
 enum AggregateMode {
@@ -543,6 +999,9 @@ message HashJoin {
   // True for BroadcastHashJoinExec null-aware anti-joins (NOT IN subquery semantics).
   // When true, any null in the build side suppresses all left rows.
   bool null_aware_anti_join = 6;
+  // Opt-in completed-build filtering of probe batches and eligible native Parquet readers.
+  // Older serialized plans leave it false.
+  bool dynamic_filter_enabled = 10;
 }
 
 message SortMergeJoin {
@@ -642,4 +1101,20 @@ message Window {
   repeated spark.spark_expression.Expr order_by_list = 2;
   repeated spark.spark_expression.Expr partition_by_list = 3;
   Operator child = 4;
+}
+
+// Top-K rows per partition group. Corresponds to Spark's WindowGroupLimitExec
+// (Spark 3.5+). Rank-like function drives the semantics; the operator only
+// accepts ROW_NUMBER, RANK, and DENSE_RANK.
+message WindowGroupLimit {
+  repeated spark.spark_expression.Expr partition_by_list = 1;
+  repeated spark.spark_expression.Expr order_by_list = 2;
+  int32 limit = 3;
+  RankLikeFunction rank_like_function = 4;
+}
+
+enum RankLikeFunction {
+  RowNumber = 0;
+  Rank = 1;
+  DenseRank = 2;
 }

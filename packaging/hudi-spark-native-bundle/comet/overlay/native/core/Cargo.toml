@@ -36,8 +36,9 @@ publish = false
 
 [dependencies]
 arrow = { workspace = true }
+base64 = "0.23.0"
 bytes = { workspace = true }
-parquet = { workspace = true, default-features = false, features = ["experimental", "arrow", "snap", "lz4", "zstd", "flate2-zlib-rs"] }
+parquet = { workspace = true, default-features = false, features = ["experimental", "arrow", "arrow_canonical_extension_types", "snap", "lz4", "zstd", "flate2-zlib-rs"] }
 futures = { workspace = true }
 mimalloc = { version = "*", default-features = false, optional = true }
 tikv-jemallocator = { version = "0.6.1", optional = true, features = ["disable_initial_exec_tls"] }
@@ -67,16 +68,29 @@ object_store = { workspace = true }
 url = { workspace = true }
 aws-config = { workspace = true }
 aws-credential-types = { workspace = true }
+aws-sdk-sts = { workspace = true }
+# Only for the `SharedHttpClient` type in `build_provider`'s test seam; already in the graph.
+aws-smithy-runtime-api = "1.16.0"
 parking_lot = "0.12.5"
+# Optional Delta Lake contrib (enabled by the `contrib-delta` feature). Source lives
+# under `contrib/delta/native/` so non-Delta committers can ignore it.
+comet-contrib-delta = { path = "../../contrib/delta/native", optional = true }
+# Optional Lance contrib. The native scan implementation lives outside core.
+comet-contrib-lance = { path = "../../contrib/lance/native", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "http2"] }
-object_store_opendal = { version = "0.57.0", optional = true }
+object_store_opendal = { version = "0.58.0", optional = true }
 hdfs-sys = {version = "0.3", optional = true, features = ["hdfs_3_3"]}
-opendal = { version = "0.57.0", optional = true, features = ["services-hdfs"] }
+opendal = { version = "0.58.1", optional = true, features = ["services-hdfs"] }
 iceberg = { workspace = true }
 hudi = { workspace = true }
+hudi-arrow = { workspace = true }
 iceberg-storage-opendal = { workspace = true }
 reqsign-core = { workspace = true }
 serde_json = "1.0"
+# serde derive + typetag are required to implement iceberg's `Storage`/`StorageFactory` traits,
+# which carry `typetag::Serialize`/`Deserialize` supertraits (see BlobHostPromotingS3Storage).
+serde = { version = "1.0", features = ["derive"] }
+typetag = "0.2"
 uuid = "1.23.3"
 
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -92,13 +106,24 @@ jni = { version = "0.22.4", features = ["invocation"] }
 lazy_static = "1.4"
 assertables = "10"
 hex = "0.4.3"
-datafusion-functions-nested = { version = "54.1.0" }
+datafusion-functions-nested = { version = "55.1.0" }
+# Test-only helpers for a hand-rolled in-memory HTTP client that exercises the web-identity STS
+# retry path without a socket, plus reqsign's SigV4 signer for the signing round-trip test. Already
+# in the dependency graph (transitive via aws-config and iceberg-storage-opendal).
+aws-smithy-types = "1.6.3"
+http = "1.5.0"
+reqsign-aws-v4 = "3"
 
 [features]
 backtrace = ["datafusion/backtrace"]
 default = ["hdfs-opendal"]
+contrib-lance = ["dep:comet-contrib-lance"]
 hdfs-opendal = ["opendal", "object_store_opendal", "hdfs-sys"]
 jemalloc = ["tikv-jemallocator", "tikv-jemalloc-ctl"]
+# Delta Lake integration. When enabled, links the `comet-contrib-delta` crate
+# into `libcomet` and activates the `OpStruct::DeltaScan` dispatcher arm.
+# Default builds carry zero Delta surface.
+contrib-delta = ["dep:comet-contrib-delta"]
 
 # exclude optional packages from cargo machete verifications
 [package.metadata.cargo-machete]
@@ -110,5 +135,17 @@ name = "comet"
 crate-type = ["cdylib", "rlib"]
 
 [[bench]]
+name = "alloc_overhead"
+harness = false
+
+[[bench]]
 name = "array_element_append"
+harness = false
+
+[[bench]]
+name = "explode"
+harness = false
+
+[[bench]]
+name = "parquet_timestamp_conversion"
 harness = false

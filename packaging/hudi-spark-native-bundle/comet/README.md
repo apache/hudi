@@ -61,7 +61,7 @@ The bundle then builds against the result with:
 
 ```bash
 mvn clean package -DskipTests -Dspark3.5 \
-  -Dcomet.hudi.build -Ddatafusion.comet.version=1.0.0-hudi-1 \
+  -Dcomet.hudi.build -Ddatafusion.comet.version=1.1.0-hudi-1 \
   -pl packaging/hudi-spark-native-bundle -am
 ```
 
