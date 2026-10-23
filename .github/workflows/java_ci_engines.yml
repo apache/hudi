@@ -63,7 +63,7 @@ env:
 
 jobs:
   test-flink-1:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -131,7 +131,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-flink-2:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -179,7 +179,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  docker-java17-test:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -227,7 +227,7 @@ jobs:
 #          ./packaging/bundle-validation/run_docker_java17.sh
 
   validate-bundles:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -304,7 +304,7 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   validate-bundle-spark4:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -359,7 +359,7 @@ jobs:
   # [CI-TRIM] to revisit for CI improvement
 #  # flink 2.0/2.1 only support Java 11 and above version
 #  validate-bundles-java11:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -416,7 +416,7 @@ jobs:
 #          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   integration-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -510,7 +510,7 @@ jobs:
 #    # (VECTOR, BLOB) and the Spark 4.0+ VARIANT type. Runs the integ2 testcontainers
 #    # suite (ITTestCustomTypeHiveSync) against a real Hive metastore on Spark 3.5.9,
 #    # 4.0.2, and 4.1.1 stacks.
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      fail-fast: false
 #      matrix:
@@ -582,7 +582,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  build-flink-java17:
-#    runs-on: ubuntu-latest
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:

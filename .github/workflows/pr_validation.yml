@@ -33,7 +33,7 @@ jobs:
   # runner startup than on the check itself. Every check step runs even when an earlier one
   # fails, so one run reports every problem; the failed step's name says which check it was.
   validate-pr:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
 
