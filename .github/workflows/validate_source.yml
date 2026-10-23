@@ -136,6 +136,7 @@ jobs:
             echo "Commits must not credit Claude as a co-author."
             echo "Remove the 'Co-authored-by: Claude ...' trailer from the commit message(s),"
             echo "e.g., by amending the commit or rebasing, and force-push the branch."
+            echo "::error::Commits with a Claude co-author trailer: $(echo "$flagged" | paste -sd ' ' -). Remove the trailer (amend or rebase) and force-push."
             exit 1
           fi
 
@@ -171,16 +172,52 @@ jobs:
         id: source-dir
         if: ${{ !cancelled() }}
         run: ./scripts/release/create_source_directory.sh "${{ runner.temp }}/hudi-tmp-repo"
+      #
+      # The release scripts print plain text because release managers run them too. On failure the
+      # steps below turn each offending file into a file annotation, so the run summary and the PR
+      # diff name the file and the fix. The source release mirrors the repo layout, so its paths
+      # are repo paths. If a failure names no file, the step log has the details.
       - name: Check Binary Files
         if: ${{ !cancelled() && steps.source-dir.outcome == 'success' }}
         run: |
           cd "${{ runner.temp }}/hudi-tmp-repo"
-          ./scripts/release/validate_source_binary_files.sh
+          log="$RUNNER_TEMP/binary.log"
+          status=0
+          ./scripts/release/validate_source_binary_files.sh > "$log" 2>&1 || status=$?
+          cat "$log"
+          if [ "$status" -ne 0 ]; then
+            sed -n 's|^\./\([^:]*\):.*|\1|p' "$log" | while read -r f; do
+              echo "::error file=$f::Binary file in the source release. Binary files are only allowed under src/test/ as test fixtures."
+            done
+            exit 1
+          fi
       - name: Check Copyright
         if: ${{ !cancelled() && steps.source-dir.outcome == 'success' }}
         run: |
           cd "${{ runner.temp }}/hudi-tmp-repo"
-          ./scripts/release/validate_source_copyright.sh
+          log="$RUNNER_TEMP/copyright.log"
+          status=0
+          ./scripts/release/validate_source_copyright.sh > "$log" 2>&1 || status=$?
+          cat "$log"
+          if [ "$status" -ne 0 ]; then
+            sed -n 's|^\./||p' "$log" | while read -r f; do
+              echo "::error file=$f::Missing the ASF license header. Copy it from an existing file of the same type."
+            done
+            exit 1
+          fi
       - name: RAT check
         if: ${{ !cancelled() }}
-        run: ./scripts/release/validate_source_rat.sh
+        run: |
+          log="$RUNNER_TEMP/rat.log"
+          status=0
+          ./scripts/release/validate_source_rat.sh > "$log" 2>&1 || status=$?
+          cat "$log"
+          if [ "$status" -ne 0 ]; then
+            if [ -f target/rat.txt ]; then
+              awk '/^Files with unapproved licenses:/ { f = 1; next } f && /^\*/ { exit } f && NF { sub(/^ +/, ""); print }' target/rat.txt \
+                | while read -r f; do
+                  echo "::error file=$f::RAT found no approved license header. Copy the ASF header from an existing file of the same type."
+                done
+            fi
+            exit 1
+          fi
