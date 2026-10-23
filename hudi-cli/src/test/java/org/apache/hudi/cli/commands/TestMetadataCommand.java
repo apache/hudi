@@ -22,6 +22,7 @@ package org.apache.hudi.cli.commands;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.functional.CLIFunctionalTestHarness;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
+import org.apache.hudi.cli.utils.SparkUtil;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
@@ -119,6 +120,24 @@ public class TestMetadataCommand extends CLIFunctionalTestHarness {
 
     metaClient = HoodieTableMetaClient.reload(metaClient);
     assertTrue(metaClient.getTableConfig().getMetadataPartitions().isEmpty());
+  }
+
+  @Test
+  public void testMetadataDeleteRecordIndexInitializesSparkContext() throws Exception {
+    writeOneCommit(HoodieMetadataConfig.newBuilder().withEnableGlobalRecordLevelIndex(true).build());
+    connectToTable();
+
+    HoodieTableMetaClient metaClient = createMetaClient(jsc(), tablePath);
+    assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(
+        org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX));
+
+    // Use a fresh command instance so its Spark context is uninitialized, matching a first CLI command.
+    String result = new MetadataCommand().deleteRecordIndex(SparkUtil.DEFAULT_SPARK_MASTER, false);
+    assertTrue(result.startsWith("Record Index has been deleted from the Metadata Table"), result);
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(
+        org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX));
   }
 
   @Test
