@@ -22,13 +22,12 @@ concurrency:
   cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
 
 jobs:
-  # [CI-TRIM]
-  # The only required status check in .asf.yaml. The name is historical: PRs whose checks predate
-  # the matrix trim (#19514) never reported it, so they stay blocked until they re-run CI against
-  # the current workflows. Every other short check (PR metadata, source release) is folded in, so
-  # each PR event spends one runner. Renaming it would block every open PR until it re-runs CI,
-  # so keep the name even after #19535.
-  validate-ci-baseline:
+  # The only required status check in .asf.yaml. It runs every short check (PR metadata, source
+  # release) so each PR event spends one runner. It replaces validate-ci-baseline: PRs whose last
+  # run predates this job never reported its name, so they cannot merge on stale checks until a new
+  # push or a close and reopen runs it. A re-run of an old run does not help, as it replays the old
+  # workflow file.
+  validate-pr-and-source:
     runs-on: ubuntu-24.04
     env:
       # The metadata checks only apply to PRs. release-* PRs (backports, "[DO NOT MERGE] Validate
