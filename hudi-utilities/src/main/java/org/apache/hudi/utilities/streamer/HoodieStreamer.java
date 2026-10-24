@@ -221,6 +221,20 @@ public class HoodieStreamer implements Serializable {
   }
 
   /**
+   * Interrupts an in-progress ingestion. Unlike {@link #shutdownGracefully()} this neither closes nor waits: the sync
+   * is still running, and the thread owning it releases the resources once it returns. The interrupt lands mid-round,
+   * so the table can be left with an inflight instant that is rolled back on the next run.
+   */
+  public void interruptIngestion() {
+    ingestionService.ifPresent(ds -> {
+      if (!ds.isShutdown()) {
+        log.info("Interrupting ingestion for table {}", cfg.targetTableName);
+        ds.shutdown(true);
+      }
+    });
+  }
+
+  /**
    * Main method to start syncing.
    */
   public void sync() throws Exception {
