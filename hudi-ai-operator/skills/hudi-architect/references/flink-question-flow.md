@@ -22,6 +22,8 @@ HoodieStreamer requests.
 
 The PR1 gates remain the entry to this flow. PR2, PR3, and PR4 add bounded new-table executable
 paths. PR5 adds a read-only existing-table reconciliation path after the same workload decisions.
+PR6 composes five pinned direct SQL, DFS Catalog, and HMS Catalog profiles with those same design
+schemas; it does not add a design schema or choose a table architecture.
 
 Maintain a findings list throughout this flow. Adding a finding does not end the interview while
 another independent gate can still be evaluated. Ask dependent follow-ups only when their
@@ -100,13 +102,18 @@ Ask in outcome language:
 > - **Not now, maybe later**
 > - **Not sure**
 
-- No → record no current external-catalog requirement and continue.
-- Yes → `REVIEW_REQUIRED` with `FLINK_EXTERNAL_CATALOG_REVIEW`.
-- Not now, maybe later → continue, record a catalog revisit condition, and generate no catalog
-  configuration.
+- No → default to direct SQL with no external discovery, do not ask catalog implementation
+  questions, and continue.
+- Yes → ask whether the desired outcome is only external name-based discovery, shared Hudi catalog
+  resolution, or both. Then collect only the fields needed by a supported PR6 profile: catalog
+  name/path and lifecycle acceptance for DFS, credential-free Hive configuration source and
+  database for HMS, and MOR query modes when applicable.
+- Not now, maybe later → continue with direct SQL and no catalog block; record that later mutation
+  against an existing table is not covered by PR6 and requires review.
 - Not sure → `REVIEW_REQUIRED` with `FLINK_CATALOG_REQUIREMENT_UNRESOLVED`.
 
-Flink catalog and metastore composition arrives in PR6. Do not reuse the Spark sync templates.
+Phrase the follow-up in outcomes, not implementation jargon. Do not ask for credentials. Validate
+the resulting block with `flink-catalog-composition.md`; do not reuse Spark sync templates.
 
 ## F4 — Physical schema availability
 
@@ -388,7 +395,7 @@ the report and deployment checks with executable eligibility `false`, and never 
 known table-property or schema conflict is `CONFLICT`; incomplete, contradictory, evolutionary,
 or unsupported evidence is `UNVERIFIED`.
 
-## PR2/PR3/PR4/PR5 validation and completion
+## PR2/PR3/PR4/PR5/PR6 validation and completion
 
 After all applicable questions, build a version-1 JSON contract for append-only COW, a version-2
 contract for mutable COW, or a version-3 contract for mutable MOR. All contain confirmed safety
@@ -399,6 +406,13 @@ read-optimized freshness, compaction ownership and fixed schedule/execution sett
 clustering. Do not insert placeholders. Record an explicitly empty
 pass-through connector-option map; no renderer accepts an ignored option.
 
+When F3 selects catalog resolution or external discovery, add catalog contract schema 1 using only
+the confirmed PR6 fields. Do not change the design schema. For no catalog outcome, omit the block
+and retain `external_catalog=false`; the validator normalizes the legacy direct profile. For an
+existing table, a non-legacy block is accepted only to report
+`FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED`; do not collect a new evidence kind or infer that
+registration already exists.
+
 For a new table, run:
 
 ```bash
@@ -407,7 +421,8 @@ python3 validate_flink_design.py --input <redacted-design-contract.json>
 
 The validator is allowed to reject or serialize explicit decisions; it must not select
 architecture decisions or fill missing values. Preserve every returned finding. Only a successful
-result may provide the canonical runtime SQL, Hudi DDL, and `INSERT INTO` and end with:
+result may provide canonical runtime SQL, optional catalog setup SQL, Hudi DDL, and `INSERT INTO`
+and end with:
 
 ```text
 Status: CONFIG_VALIDATED
@@ -415,4 +430,5 @@ Executable eligible: true
 ```
 
 Any validation failure withholds all SQL and reports executable eligibility as `false`. Consult
-`flink-decision-overrides.md` for precedence and `flink-config-templates.md` for both envelopes.
+`flink-decision-overrides.md` for precedence, `flink-catalog-composition.md` for PR6 profiles, and
+`flink-config-templates.md` for both envelopes.

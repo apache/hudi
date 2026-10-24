@@ -30,7 +30,9 @@ Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
 Baseline ID: hudi-1.2.0-flink-1.20
 Hudi source revision: f05c83f2b97732de7a558ff9b26959e1139c05f5
 Fixture version: Apache Flink 1.20.1
-Capability manifest schema: 5
+Capability manifest schema: 6
+Catalog contract schema: 1
+Catalog profile: <one pinned profile or unresolved>
 Design contract schema: <1 append-only COW | 2 mutable COW | 3 mutable MOR>
 
 Confirmed facts:
@@ -63,7 +65,11 @@ Use only the machine result from `validate_flink_existing_table.py`:
 Flink design status: <CONFIG_VALIDATED | INCOMPLETE | BLOCKED | REVIEW_REQUIRED>
 Reconciliation result: <COMPATIBLE | CONFLICT | UNVERIFIED>
 Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
-Capability manifest schema: 5
+Capability manifest schema: 6
+Catalog contract schema: 1
+Catalog profile: <direct_sql_none or requested non-legacy profile>
+Catalog setup SQL: <always empty for an existing table>
+Effective catalog configuration: <validator-produced mapping>
 Reconciliation schema: 1
 Desired design contract schema: <1 | 2 | 3>
 Writer transition: <same_job_restore | cold_start_new_job | flink_writer_takeover |
@@ -84,6 +90,8 @@ Deployment checks:
 - Confirm the single-writer inventory immediately before deployment.
 - Recheck pending instants immediately before deployment.
 - For a mutable cold start, verify index bootstrap before relying on the first checkpoint.
+- Retain the validator-produced catalog deployment checks for any non-legacy profile; these are
+  observations to perform, not permission to mutate an existing registration.
 
 Executable output:
 - Withheld because PR5 is assessment-only, including for COMPATIBLE results.
@@ -104,11 +112,14 @@ Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
 Baseline ID: hudi-1.2.0-flink-1.20
 Hudi source revision: f05c83f2b97732de7a558ff9b26959e1139c05f5
 Fixture version: Apache Flink 1.20.1
-Capability manifest schema: 5
+Capability manifest schema: 6
+Catalog contract schema: 1
+Catalog profile: <direct_sql_none | direct_sql_hive_metastore | hudi_dfs_catalog_none |
+hudi_dfs_catalog_hive_metastore | hudi_hms_catalog_hive_metastore>
 Design contract schema: <1 append-only COW | 2 mutable COW | 3 mutable MOR>
 
 Confirmed facts:
-- New table; confirmed single writer; no current external-catalog requirement.
+- New table; confirmed single writer; explicit catalog/discovery outcome.
 - Workload: <append-only or mutable, with confirmed replay behavior>.
 - Identity: <stable key fields | explicitly accepted append-only auto-generated keys>.
 - Mutable only: one event-time ordering field; immutable partition values; full-row delete posture.
@@ -137,13 +148,18 @@ Runtime contract:
 Validation summary:
 - <baseline evidence>
 - <design-contract validation evidence>
+- <effective catalog configuration and post-commit-eventual freshness when applicable>
 - <advisories, including stable-key or auto-key durability>
+
+Catalog deployment checks:
+- <validator-produced check codes; these do not claim live connectivity or change static status>
 
 Executable eligible: true
 ```
 
-Then emit, in order, the validator-produced `runtime_sql`, `table_ddl`, and `insert_sql`. Do not
-retype or modify those artifacts after validation.
+Then emit the validator-produced `combined_sql`. Its canonical order is `runtime_sql`, optional
+`catalog_setup_sql`, `table_ddl`, and `insert_sql`; the JSON form retains all boundaries. Do not
+retype, modify, or execute those artifacts after validation.
 
 ## Canonical SQL contract
 
@@ -230,6 +246,12 @@ Compaction is scheduled and executed by the same Flink writer job. Snapshot read
 state at a visible completed instant; read-optimized readers expose compacted base files and are
 current only after compaction. Five delta commits is a trigger, not a time SLA. Reader-side
 `hoodie.datasource.query.type` is intentionally absent from sink DDL.
+
+For catalog profiles, apply the additional canonical rules in
+`flink-catalog-composition.md`. DFS Catalog setup precedes table DDL and the DDL omits `path`;
+external HMS Catalog includes the desired table path and does not duplicate its auto-supplied Hive
+sync options. Direct/DFS sink-owned discovery renders the five bounded `hive_sync.*` settings.
+MOR plus Hive discovery also renders the query-derived `hive_sync.table.strategy`.
 
 ## Deployment checks
 

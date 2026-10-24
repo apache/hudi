@@ -232,7 +232,8 @@ to the executable contract just like `F10_SAFE_APPEND`.
 
 ## PR3 mutable COW executable invariants
 
-- Version-2 contracts cover only new-table, single-writer, no-external-catalog streaming COW.
+- Version-2 contracts cover only new-table, single-writer streaming COW. Catalog composition is
+  orthogonal and, when requested, must pass one of the five PR6 profiles.
 - Identity is a stable, non-null primary key shared by source and target. Auto-key is blocked.
 - The source declares normalized UPSERT changelog (`INSERT`, `UPDATE_AFTER`, `DELETE`) without
   `UPDATE_BEFORE`. Deletes carry the full projected row, including key, ordering, and partition.
@@ -264,8 +265,9 @@ to the executable contract just like `F10_SAFE_APPEND`.
 - Snapshot readers see base plus log state at a visible completed instant. Read-optimized readers
   see compacted base-file state and advance only after compaction. Reader `query.type` is not a
   sink option and is not rendered into the DDL.
-- Clustering is disabled. Detailed compaction tuning, append-only MOR, existing tables, catalogs,
-  multi-writer operation, and live service validation remain outside this path.
+- Clustering is disabled. Detailed compaction tuning, append-only MOR, existing tables,
+  non-PR6 catalog profiles, multi-writer operation, and live service validation remain outside
+  this path.
 
 ## PR5 existing-table reconciliation invariants
 
@@ -289,6 +291,39 @@ to the executable contract just like `F10_SAFE_APPEND`.
   deployment-only configuration change cannot rewrite or reconcile existing partition paths.
 - Even a compatible result is assessment-only: executable eligibility remains false, deployment
   must recheck writer and timeline state, and no SQL, mutation, upgrade, or migration command is
+  emitted.
+
+## PR6 catalog/metastore composition invariants
+
+- Catalog composition is orthogonal to design schemas 1, 2, and 3. It never selects table type,
+  identity, ordering, compaction, or a writer topology.
+- No catalog block plus `safety.external_catalog=false` remains the byte-stable
+  `direct_sql_none` path. A true gate without the block is
+  `FLINK_CATALOG_CONTRACT_REQUIRED`; a gate/profile mismatch is
+  `FLINK_CATALOG_COMPOSITION_CONFLICT`.
+- Only five profiles are executable: direct SQL without discovery, direct SQL plus HMS sync, DFS
+  Catalog without discovery, DFS Catalog plus HMS sync, and external HMS Catalog plus HMS
+  discovery. Unknown or incompatible modes are `FLINK_CATALOG_MODE_UNSUPPORTED` or
+  `FLINK_CATALOG_COMPOSITION_CONFLICT`.
+- DFS Catalog requires exact `${catalog.path}/${database}/${table.name}` path agreement. A
+  mismatch is `FLINK_CATALOG_PATH_CONFLICT`. Catalog-owned lifecycle must be explicit; otherwise
+  use `FLINK_CATALOG_LIFECYCLE_UNRESOLVED`.
+- HMS Catalog is executable only with `table.external=true`, application-owned data, a
+  non-embedded Hive configuration, and an explicit desired table path. Managed HMS stays
+  `FLINK_CATALOG_LIFECYCLE_UNRESOLVED`.
+- Direct and DFS sink-owned Hive sync accepts credential-free thrift metastore URIs. Credential
+  fields or secret-bearing URIs are `FLINK_CATALOG_CREDENTIAL_REJECTED`; malformed structure is
+  `FLINK_CATALOG_CONTRACT_INVALID`.
+- AWS Glue remains `FLINK_GLUE_CATALOG_UNVERIFIED` until a Flink-specific released-bundle fixture
+  proves it. Presence of a Glue implementation in source is insufficient.
+- MOR query modes derive `RO`, `RT`, or `ALL`. Custom suffix/name behavior is
+  `FLINK_MOR_CATALOG_NAMING_UNVERIFIED`.
+- Hive registration is `post_commit_eventual`: it is asynchronous after a completed checkpoint
+  commit and is not atomic with that commit. Deployment checks do not contribute a failure status
+  and do not claim live connectivity.
+- Any non-legacy catalog request against an existing table is
+  `FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED`. Reconciliation remains `UNVERIFIED`, change
+  disposition remains `UNVERIFIED`, executable eligibility remains false, and no catalog SQL is
   emitted.
 
 ## Evidence and secret handling

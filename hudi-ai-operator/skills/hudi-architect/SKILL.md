@@ -37,7 +37,7 @@ Ask **workload questions, not Hudi questions.** Every decision falls into one of
 
 **Never ask a question whose answer wouldn't change the recommendation.** If the workload is COW-only, don't ask about compaction. If the workload is unpartitioned, don't ask about cross-partition updates.
 
-**Gate optional sections with one plain question before opening them.** Where a whole group of questions exists to configure something the user may not want at all — catalog sync is the clearest case — ask that first, in outcome terms, and let a "no" close the section. Deriving the answer from three questions the user didn't need to answer is the same waste as one unnecessary question, multiplied. Two things make the gate honest: phrase it as an outcome rather than a Hudi feature ("does anything need to find this table by name?", not "do you want meta sync?"), and when the answer is no, **say whether the decision is reversible** — declining something that can be added later against a live table costs nothing, and a user who doesn't know that may say yes defensively.
+**Gate optional sections with one plain question before opening them.** Where a whole group of questions exists to configure something the user may not want at all — catalog sync is the clearest case — ask that first, in outcome terms, and let a "no" close the section. Deriving the answer from three questions the user didn't need to answer is the same waste as one unnecessary question, multiplied. Two things make the gate honest: phrase it as an outcome rather than a Hudi feature ("does anything need to find this table by name?", not "do you want meta sync?"), and when the answer is no, **say whether the decision is reversible**. Do not call later catalog registration free or automatic: the bounded Flink path treats catalog mutation on an existing table as review-required.
 
 **Every question must be in user language, not Hudi language.** Users don't know what an RLI is; they know what a customer_id lookup is. Users don't know what a delta commit is; they know how often data lands.
 
@@ -67,6 +67,8 @@ Within the Flink route, load the remaining references only when needed:
 - Load `references/flink-config-templates.md` only when producing the final safety assessment.
 - Load `references/flink-existing-table-reconciliation.md` only after F1 confirms an existing
   table; use it to collect provenance-bearing evidence and produce the assessment-only PR5 report.
+- Load `references/flink-catalog-composition.md` only when the user needs named catalog resolution
+  or external discovery; use its PR6 contract without changing design schema 1, 2, or 3.
 
 The verified Flink baseline is Apache Hudi 1.2.0 at source revision
 `f05c83f2b97732de7a558ff9b26959e1139c05f5` with Apache Flink 1.20; build and test fixtures use
@@ -77,18 +79,22 @@ that manifest with options discovered from the enclosing checkout. If the user e
 another Hudi or Flink version, do not silently reuse the baseline: add a `REVIEW_REQUIRED` finding
 unless a separate verified capability reference exists.
 
-The Flink implementation includes the PR1 safety foundation, three bounded executable paths, and
-one existing-table assessment path. PR2 append-only COW, PR3 mutable COW, and PR4 mutable MOR all
-require a new table, confirmed single writer, no external catalog, streaming checkpointing, and
-`CONFIG_VALIDATED` from `validate_flink_design.py`. Both mutable paths additionally require stable non-null identity, one
+The Flink implementation includes the PR1 safety foundation, three bounded executable paths, one
+existing-table assessment path, and PR6 catalog/metastore composition. PR2 append-only COW, PR3
+mutable COW, and PR4 mutable MOR all require a new table, confirmed single writer, streaming
+checkpointing, and `CONFIG_VALIDATED` from `validate_flink_design.py`. They retain direct SQL by
+default; PR6 may compose one of five pinned direct/DFS/HMS profiles without changing the table
+design schema. Both mutable paths additionally require stable non-null identity, one
 event-time ordering field, normalized UPSERT changelog, full-row deletes when present, immutable
 partitions, and fixed global FLINK_STATE/bootstrap/no-TTL settings. The MOR path further requires
 snapshot/read-optimized expectations, compaction owned by the same Flink writer, fixed asynchronous
 five-delta-commit compaction, and clustering disabled. PR5 can reconcile an explicit schema 1, 2,
 or 3 desired contract with structured evidence from an existing table, but it never renders SQL or
-authorizes mutation. Append-only MOR, standalone table services, detailed compaction tuning,
-separate-writer or cross-engine takeover, catalog, multi-writer, alternative indexes, custom
-mergers, retract normalization, and full CDC history still fail closed.
+authorizes mutation. PR6 supports new-table direct Hive sync, Hudi DFS Catalog, and external Hudi
+HMS Catalog composition; AWS Glue, managed HMS, existing-table catalog mutation, and live service
+claims fail closed. Append-only MOR, standalone table services, detailed compaction tuning,
+separate-writer or cross-engine takeover, multi-writer, alternative indexes, custom mergers,
+retract normalization, and full CDC history still fail closed.
 
 ## Flow structure
 
@@ -98,7 +104,7 @@ The conversation has three parts:
 2. **Rounds 1-3** — workload questions, gated conditionally by tier.
 3. **Output** — engine-specific output: the established Spark artifacts, a non-executable Flink
   assessment, a PR5 existing-table reconciliation report, or bounded validator-rendered
-  PR2/PR3/PR4 SQL artifacts.
+  PR2/PR3/PR4 SQL artifacts, optionally composed with validated PR6 catalog setup SQL.
 
 Load `references/question-flow.md` for the full round-by-round question list with conditional gating.
 
@@ -214,6 +220,10 @@ every stable identifier. If a finding remains, emit only the non-executable enve
 safety gate passes, create the explicit JSON design contract described by `flink-question-flow.md`
 and run `validate_flink_design.py`. Only its successful, canonical artifacts may be emitted as
 runtime SQL, Hudi DDL, and the sink-side `INSERT INTO`; never modify them after validation.
+When a catalog block is present, retain the validator's `catalog_setup_sql`, effective catalog
+configuration, and deployment checks as separate machine fields; `--emit-sql` is only their
+canonical ordered composition. Catalog deployment checks never imply that a live service was
+probed, and the generated SQL is never executed by this skill.
 For an existing table, create the same explicit desired contract, collect and confirm evidence per
 `flink-existing-table-reconciliation.md`, and run `validate_flink_existing_table.py` instead. Emit
 its report and deployment checks exactly as assessment data; never reinterpret `COMPATIBLE` as
@@ -272,6 +282,8 @@ fact `INCOMPLETE`; do not ask the user to reveal the secret.
 - Emit executable Flink output while any safety or design-contract finding remains.
 - Render SQL or mutation commands from an existing-table reconciliation result.
 - Hand-write, repair, or extend SQL after `validate_flink_design.py` renders it.
+- Claim catalog/commit atomicity, execute generated catalog SQL, probe live HMS/Glue, or emit
+  existing-table catalog mutations.
 - Treat a successful `HoodieTableFactory` construction as proof that the source changelog is
   append-only.
 

@@ -23,13 +23,18 @@ the architecture, execute evidence, mutate the table, plan a migration, or rende
 
 ## Boundary
 
-The first reconciliation path supports Hudi 1.2.0 with Flink 1.20, one writer, no external catalog,
-and desired contract schemas 1, 2, or 3. It can validate an exact existing-table match. Schema
-evolution, table upgrades, catalog registration, multi-writer operation, separate-writer takeover,
-and cross-engine takeover remain unverified or blocked.
+The first compatible reconciliation path supports Hudi 1.2.0 with Flink 1.20, one writer, direct
+SQL with no external discovery, and desired contract schemas 1, 2, or 3. It can validate an exact
+existing-table match. Schema evolution, table upgrades, catalog registration, multi-writer
+operation, separate-writer takeover, and cross-engine takeover remain unverified or blocked.
 
 `CONFIG_VALIDATED` in this assessment means that the static comparison is complete. It always has
 `executable_eligible: false`; the PR5 path emits a report and deployment checks, never SQL.
+
+A desired contract may include a PR6 catalog block, but any non-legacy profile is an existing-table
+catalog mutation request. Report `FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED`, keep both
+reconciliation and change disposition `UNVERIFIED`, and emit no catalog SQL. Do not add a catalog
+evidence kind or bump reconciliation schema 1.
 
 ## Evidence contract
 
@@ -152,6 +157,11 @@ command. Do not emit in-place mutation or migration commands.
 For a mutable cold start, also require a deployment check that index bootstrap finishes before the
 first checkpoint is treated as operationally safe.
 
+When the desired contract includes a non-legacy PR6 catalog profile, retain its catalog contract
+schema, profile, effective configuration, and deployment checks in the machine report. Keep
+`catalog_setup_sql` empty: those fields describe the requested state and remaining observations;
+they do not authorize registration, alteration, takeover, or any other catalog mutation.
+
 ## Running the validator
 
 Run:
@@ -160,7 +170,7 @@ Run:
 python validate_flink_existing_table.py --input <reconciliation.json>
 ```
 
-See `../../../tests/fixtures/hudi_architect/flink_pr5/compatible_mutable_cow.json` for a complete
+See `hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr5/compatible_mutable_cow.json` for a complete
 synthetic envelope. Its timestamps and digests are fixture data, not production evidence.
 
 A compatible result exits zero even though `executable_eligible` is false. Other results exit one.

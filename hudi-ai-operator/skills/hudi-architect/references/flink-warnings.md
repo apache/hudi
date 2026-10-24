@@ -213,9 +213,11 @@ be treated as safe.
 **Trigger:** An external engine or BI tool must discover the table through a catalog or metastore.
 
 **Message:** Flink table resolution and external metastore synchronization are separate
-responsibilities that must be composed together. That composition is deferred to PR6.
+responsibilities. The outcome gate must be resolved into one explicit PR6 profile before SQL is
+eligible.
 
-**Action:** `REVIEW_REQUIRED`; generate no catalog or sync configuration.
+**Action:** `REVIEW_REQUIRED` at the outcome gate; collect the PR6 contract rather than guessing a
+catalog or sync owner.
 
 ## FLINK_CATALOG_REQUIREMENT_UNRESOLVED
 
@@ -682,3 +684,92 @@ configuration or secret references; never paste live credentials into the design
 
 **Action:** Continue with redacted evidence. If redaction makes a load-bearing fact unreadable, mark
 that fact `INCOMPLETE` without asking for the secret value.
+
+## FLINK_CATALOG_CONTRACT_REQUIRED
+
+**Trigger:** `safety.external_catalog=true` but no versioned catalog block is supplied.
+
+**Message:** The boolean gate does not identify table resolution, discovery, sync ownership, or
+data lifecycle.
+
+**Action:** `INCOMPLETE`; collect the PR6 catalog contract and emit no SQL.
+
+## FLINK_CATALOG_CONTRACT_INVALID
+
+**Trigger:** The catalog block is malformed, contains inapplicable fields, or lacks a required
+identifier or Hive configuration source.
+
+**Message:** Static validation cannot reproduce the catalog design.
+
+**Action:** `INCOMPLETE`; correct the contract without selecting architecture on the user's behalf.
+
+## FLINK_CATALOG_MODE_UNSUPPORTED
+
+**Trigger:** Resolution, discovery, or sync ownership uses a mode outside the pinned PR6 surface.
+
+**Message:** Hudi 1.2.0 source contains more integration code than this Flink fixture proves.
+
+**Action:** `BLOCKED`; use one of the five supported profiles or add pinned evidence later.
+
+## FLINK_CATALOG_PATH_CONFLICT
+
+**Trigger:** A DFS Catalog desired path differs from
+`${catalog.path}/${database}/${table.name}`.
+
+**Message:** Hudi DFS Catalog ignores an explicit table path and derives its own location.
+
+**Action:** `BLOCKED`; reconcile the desired path before rendering catalog SQL.
+
+## FLINK_CATALOG_LIFECYCLE_UNRESOLVED
+
+**Trigger:** DFS catalog-owned deletion semantics are not accepted, or HMS Catalog is not an
+external application-owned table.
+
+**Message:** Catalog operations can otherwise imply a different data lifecycle than the design.
+
+**Action:** `REVIEW_REQUIRED`; do not emit executable catalog SQL.
+
+## FLINK_CATALOG_COMPOSITION_CONFLICT
+
+**Trigger:** The legacy boolean gate, resolution/discovery pair, sync owner, or lifecycle owner
+contradicts another explicit field.
+
+**Message:** The validator does not arbitrate conflicting architecture decisions.
+
+**Action:** `BLOCKED`; make the contract internally consistent.
+
+## FLINK_GLUE_CATALOG_UNVERIFIED
+
+**Trigger:** AWS Glue is selected for external discovery.
+
+**Message:** The pinned source contains Glue support, but PR6 has no Flink-specific released-bundle
+fixture or live deployment evidence for an executable path.
+
+**Action:** `REVIEW_REQUIRED`; emit no Glue configuration or SQL.
+
+## FLINK_MOR_CATALOG_NAMING_UNVERIFIED
+
+**Trigger:** MOR sync strategy disagrees with query modes, or custom suffix/snapshot naming is
+requested.
+
+**Message:** PR6 fixes RO, RT, and ALL registrations with RO suffix skipping disabled and snapshot
+with base name enabled.
+
+**Action:** `REVIEW_REQUIRED`; retain the requested naming as a later capability.
+
+## FLINK_CATALOG_CREDENTIAL_REJECTED
+
+**Trigger:** Catalog configuration contains a username, password, token, IAM/keytab material, or a
+credential-bearing metastore URI.
+
+**Message:** Architect contracts may reference credential-free deployment configuration only.
+
+**Action:** `BLOCKED`; remove the secret and use deployment-managed authentication.
+
+## FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED
+
+**Trigger:** An existing-table desired contract requests any non-legacy catalog composition.
+
+**Message:** PR6 does not register, alter, rename, delete, or take over existing catalog entries.
+
+**Action:** `REVIEW_REQUIRED`; return an `UNVERIFIED`, non-executable reconciliation with no SQL.
