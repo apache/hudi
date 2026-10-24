@@ -19,23 +19,28 @@
 
 package org.apache.hudi.comet
 
-import org.apache.hudi.{HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping}
+import org.apache.hudi.{DataSourceReadOptions, HoodieFileIndex, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, SparkAdapterSupport}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieReaderConfig, RecordMergeMode}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieFileFormat, HoodieLogFile}
 import org.apache.hudi.storage.StoragePath
 
+import org.apache.comet.CometConf
+import org.apache.comet.parquet.CometParquetUtils
 import org.apache.comet.rules.CometExternalV1ScanProvider
 import org.apache.comet.serde.OperatorOuterClass
 import org.apache.comet.serde.QueryPlanSerde.serializeDataType
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.DynamicPruningExpression
+import org.apache.spark.sql.catalyst.expressions.PlanExpression
 import org.apache.spark.sql.comet.{CometHudiNativeScanExec, SerializedPlan}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
-import org.apache.spark.sql.execution.datasources.FileFormat
+import org.apache.spark.sql.execution.datasources.{FileFormat, FilePartition, PartitionedFile}
 import org.apache.spark.sql.execution.datasources.parquet.HoodieFileGroupReaderBasedFileFormat
-import org.apache.spark.sql.types.{ArrayType, MapType, StructType}
+import org.apache.spark.sql.types.{ArrayType, BooleanType, ByteType, DataType, DateType, IntegerType, LongType, MapType, ShortType, StringType, StructType, TimestampNTZType}
+
+import java.util.IdentityHashMap
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -48,7 +53,7 @@ import scala.collection.mutable.ArrayBuffer
  * tables whose partition columns are stored in the data files, with primitive output types)
  * returns None, which leaves the plan on Hudi's JVM scan.
  */
-class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
+class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapterSupport with Logging {
 
   override def supportsFormat(fileFormat: FileFormat): Boolean =
     fileFormat.isInstanceOf[HoodieFileGroupReaderBasedFileFormat]
@@ -61,8 +66,8 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
         .exists(_.toBoolean)) {
       return None
     }
-    val format =
-      scanExec.relation.fileFormat.asInstanceOf[HoodieFileGroupReaderBasedFileFormat]
+    val relation = scanExec.relation
+    val format = relation.fileFormat.asInstanceOf[HoodieFileGroupReaderBasedFileFormat]
     if (format.isIncrementalQuery || format.isBootstrapTable ||
       format.isMultipleBaseFileFormats || format.getRequiredFilters.nonEmpty) {
       return None
@@ -70,8 +75,11 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
     if (scanExec.requiredSchema.isEmpty) {
       return None
     }
-    if (scanExec.partitionFilters.exists(
-        _.find(_.isInstanceOf[DynamicPruningExpression]).isDefined)) {
+    // Spark lists the partitions without the filters that hold a subquery (a
+    // scalar subquery, or a dynamic partition pruning filter) and applies
+    // those at execution time; the listing read below has not been pruned by
+    // them.
+    if (scanExec.partitionFilters.exists(_.exists(_.isInstanceOf[PlanExpression[_]]))) {
       return None
     }
     if (scanExec.output.exists(attr =>
@@ -79,8 +87,52 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
           attr.dataType.isInstanceOf[MapType])) {
       return None
     }
+    // hudi-rs converts the whole table schema, projected or not, and has no
+    // Arrow mapping for Avro's local timestamps yet.
+    if (relation.dataSchema.exists(_.dataType == TimestampNTZType)) {
+      return None
+    }
 
-    val fileIndex = scanExec.relation.location match {
+    // The guards Comet applies to its own native scan. The external provider
+    // hook runs before them, so they are repeated here.
+    val conf = session.sessionState.conf
+    if (!CometConf.COMET_EXEC_ENABLED.get(conf)) {
+      return None
+    }
+    if (conf.ignoreCorruptFiles || conf.ignoreMissingFiles ||
+      relation.options.get("ignorecorruptfiles").contains("true") ||
+      relation.options.get("ignoremissingfiles").contains("true")) {
+      return None
+    }
+    if (!conf.parquetVectorizedReaderEnabled &&
+      !CometConf.COMET_SCAN_ALLOW_DISABLED_PARQUET_VECTORIZED_READER.get(conf)) {
+      return None
+    }
+    if (CometParquetUtils.encryptionEnabled(
+        session.sessionState.newHadoopConfWithOptions(relation.options))) {
+      return None
+    }
+
+    // Read options that change what the JVM read returns and that hudi-rs
+    // does not take. Hudi folds the session's hoodie.* confs into the relation
+    // options; the session is checked too in case a caller set one later.
+    def readOption(key: String): Option[String] =
+      relation.options.get(key).orElse(session.conf.getOption(key))
+    if (readOption(HoodieReaderConfig.MERGE_TYPE.key)
+        .exists(_.equalsIgnoreCase(HoodieReaderConfig.REALTIME_SKIP_MERGE))) {
+      return None
+    }
+    if (readOption(DataSourceReadOptions.EXTRACT_PARTITION_VALUES_FROM_PARTITION_PATH.key)
+        .exists(_.toBoolean)) {
+      return None
+    }
+    // Schema on read resolves renamed and retyped columns through the table's
+    // internal schema history, which only the JVM reader has.
+    if (readOption(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key).exists(_.toBoolean)) {
+      return None
+    }
+
+    val fileIndex = relation.location match {
       case index: HoodieFileIndex => index
       case _ => return None
     }
@@ -99,28 +151,64 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
     if (tableConfig.getBaseFileFormat != HoodieFileFormat.PARQUET) {
       return None
     }
+    // hudi-rs refuses to open a table with more than one ordering field, and
+    // its log merge implements only the two built-in merge modes: a CUSTOM
+    // mode (a payload class or merger) and the LSM layout's version collapse
+    // have no native counterpart.
+    if (tableConfig.getOrderingFields.size > 1 || tableConfig.isLSMTreeStorageLayout) {
+      return None
+    }
+    if (format.isMORTable) {
+      val mergeMode = tableConfig.getRecordMergeMode
+      if (mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING &&
+        mergeMode != RecordMergeMode.EVENT_TIME_ORDERING) {
+        return None
+      }
+    }
+    val baseUri = fileIndex.metaClient.getBasePath.toString
+    // hudi-rs opens the table through object_store, which resolves only these
+    // schemes; any other would fail at task time instead of falling back.
+    val scheme = Option(new StoragePath(baseUri).toUri.getScheme).getOrElse("file")
+    if (!HudiCometScanProvider.SUPPORTED_SCHEMES.contains(scheme.toLowerCase)) {
+      return None
+    }
     // Every output column must come out of the data files: the native reader
     // has no partition-value append path. Partition columns are stored in the
     // files (dropped partition columns are gated out above), but the JVM read
-    // appends the value parsed from the partition path instead, and the two
-    // agree only when the key generator writes values into the path unchanged.
-    // Generators that transform values (timestamp-based, custom) stay on the
-    // JVM scan whenever a partition column is projected.
-    val partitionColumns = scanExec.relation.partitionSchema.fieldNames.toSet
-    val availableColumns = scanExec.relation.dataSchema.fieldNames.toSet ++ partitionColumns
+    // appends the value parsed back from the partition path instead, and the
+    // two agree only when the key generator writes values into the path
+    // unchanged and the type's path form round-trips. Generators that
+    // transform values (timestamp-based, custom) and types whose rendering
+    // loses information (a timestamp keeps milliseconds and follows the JVM
+    // time zone) stay on the JVM scan. A scan of a partitioned table always
+    // outputs its partition columns, whatever the query projects.
+    val partitionSchema = relation.partitionSchema
+    val partitionColumns = partitionSchema.fieldNames.toSet
+    val availableColumns = relation.dataSchema.fieldNames.toSet ++ partitionColumns
     if (!scanExec.output.forall(attr => availableColumns.contains(attr.name))) {
       return None
     }
-    if (scanExec.output.exists(attr => partitionColumns.contains(attr.name)) &&
-      !HudiCometScanProvider.IDENTITY_KEY_GENERATORS.contains(
-        Option(tableConfig.getKeyGeneratorClassName)
-          .getOrElse("org.apache.hudi.keygen.SimpleKeyGenerator"))) {
-      return None
+    if (scanExec.output.exists(attr => partitionColumns.contains(attr.name))) {
+      if (!HudiCometScanProvider.IDENTITY_KEY_GENERATORS.contains(
+          Option(tableConfig.getKeyGeneratorClassName)
+            .getOrElse("org.apache.hudi.keygen.SimpleKeyGenerator"))) {
+        return None
+      }
+      if (!partitionSchema.forall(field =>
+          HudiCometScanProvider.PATH_ROUND_TRIP_PARTITION_TYPES.contains(field.dataType))) {
+        return None
+      }
+      // A null or empty partition value is written under the default partition
+      // path, which the JVM read parses back as null while the data file holds
+      // what was written.
+      if (scanExec.selectedPartitions.exists(partition =>
+          partitionSchema.indices.exists(partition.values.isNullAt))) {
+        return None
+      }
     }
 
-    val baseUri = fileIndex.metaClient.getBasePath.toString
-    val slices = extractFileSlices(scanExec, baseUri, format.isMORTable) match {
-      case Some(s) => s
+    val tasks = planTasks(session, scanExec, baseUri, format.isMORTable) match {
+      case Some(t) => t
       case None => return None
     }
 
@@ -135,7 +223,7 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
       // snapshot read passes the latest completed instant, a time-travel read
       // the requested one. Base files need no bound: the driver's listing only
       // names base files from admitted commits.
-      .putOptions("hoodie.read.end.timestamp", format.getQueryTimestamp)
+      .putOptions("hoodie.read.as.of.timestamp", format.getQueryTimestamp)
     for (attr <- scanExec.output) {
       val field = OperatorOuterClass.SparkStructField
         .newBuilder()
@@ -149,16 +237,16 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
     }
     val commonBytes = commonBuilder.build().toByteArray
 
-    val perPartitionBytes = slices.map { slice =>
-      OperatorOuterClass.HudiScan
-        .newBuilder()
-        .addFileSlices(
+    val perPartitionBytes = tasks.map { slices =>
+      val builder = OperatorOuterClass.HudiScan.newBuilder()
+      for (slice <- slices) {
+        builder.addFileSlices(
           OperatorOuterClass.HudiFileSlice
             .newBuilder()
             .setBaseFilePath(slice._1)
             .addAllLogFilePaths(slice._2.asJava))
-        .build()
-        .toByteArray
+      }
+      builder.build().toByteArray
     }.toArray
 
     // The plan carries only the identity of the scan; the full common block and each
@@ -178,7 +266,7 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
 
     logInfo(
       s"Converting Hudi scan of $baseUri to a Comet native scan " +
-        s"(${perPartitionBytes.length} file slices)")
+        s"(${tasks.map(_.size).sum} file slices in ${tasks.size} tasks)")
     Some(
       CometHudiNativeScanExec(
         placeholder,
@@ -192,15 +280,20 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
   }
 
   /**
-   * One (base file path, log file paths) pair per file slice, with every path relative to the
-   * table base as the hudi-rs reader expects, or None when any partition holds a shape the
-   * native reader does not take: CDC file groups, a slice with no base file, or a file outside
-   * the table base path.
+   * The file slices of each task, as (base file path, log file paths) pairs with every path
+   * relative to the table base as the hudi-rs reader expects, or None when any partition holds a
+   * shape the native reader does not take: CDC file groups, a slice with no base file, or a file
+   * outside the table base path.
+   *
+   * Slices are packed into tasks the way Spark's file scan packs its files, by base file size up
+   * to the same split size, so small files share a task. A base file larger than the split size
+   * is one task here, where Spark's copy-on-write read would split it by byte range.
    */
-  private def extractFileSlices(
+  private def planTasks(
+      session: SparkSession,
       scanExec: FileSourceScanExec,
       baseUri: String,
-      isMor: Boolean): Option[Seq[(String, Seq[String])]] = {
+      isMor: Boolean): Option[Seq[Seq[(String, Seq[String])]]] = {
     val basePrefix =
       if (baseUri.endsWith(StoragePath.SEPARATOR)) baseUri else baseUri + StoragePath.SEPARATOR
     def relativize(path: String): Option[String] = {
@@ -211,30 +304,32 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
         None
       }
     }
-    val slices = new ArrayBuffer[(String, Seq[String])]()
+    val partitionedFileUtils = sparkAdapter.getSparkPartitionedFileUtils
+    val files = new ArrayBuffer[PartitionedFile]()
+    val slicesByFile = new IdentityHashMap[PartitionedFile, (String, Seq[String])]()
     for (partition <- scanExec.selectedPartitions) {
-      partition.values match {
-        case _: HoodiePartitionCDCFileGroupMapping => return None
-        case mapping: HoodiePartitionFileSliceMapping =>
-          for (file <- partition.files) {
-            val filePath = file.getPath.toString
+      for (file <- partition.files) {
+        val filePath = file.getPath.toString
+        val slice: (String, Seq[String]) = partition.values match {
+          case _: HoodiePartitionCDCFileGroupMapping => return None
+          case mapping: HoodiePartitionFileSliceMapping =>
             val fileId = FSUtils.getFileIdFromFilePath(new StoragePath(filePath))
             mapping.getSlice(fileId) match {
-              case Some(slice) =>
-                if (!slice.getBaseFile.isPresent) {
+              case Some(fileSlice) =>
+                if (!fileSlice.getBaseFile.isPresent) {
                   return None
                 }
                 // A log-bearing slice outside a merge-on-read snapshot read
                 // (e.g. a read-optimized query) must not be merged natively.
-                if (!isMor && slice.getLogFiles.findAny().isPresent) {
+                if (!isMor && fileSlice.getLogFiles.findAny().isPresent) {
                   return None
                 }
-                val base = relativize(slice.getBaseFile.get().getPath) match {
+                val base = relativize(fileSlice.getBaseFile.get().getPath) match {
                   case Some(p) => p
                   case None => return None
                 }
                 val logFiles = new ArrayBuffer[String]()
-                for (logFile <- slice.getLogFiles
+                for (logFile <- fileSlice.getLogFiles
                     .sorted(HoodieLogFile.getLogFileComparator)
                     .iterator()
                     .asScala) {
@@ -243,24 +338,30 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with Logging {
                     case None => return None
                   }
                 }
-                slices += ((base, logFiles.toSeq))
+                (base, logFiles.toSeq)
               case None =>
                 relativize(filePath) match {
-                  case Some(p) => slices += ((p, Seq.empty))
+                  case Some(p) => (p, Seq.empty)
                   case None => return None
                 }
             }
-          }
-        case _ =>
-          for (file <- partition.files) {
-            relativize(file.getPath.toString) match {
-              case Some(p) => slices += ((p, Seq.empty))
+          case _ =>
+            relativize(filePath) match {
+              case Some(p) => (p, Seq.empty)
               case None => return None
             }
-          }
+        }
+        val partitionedFile = partitionedFileUtils.createPartitionedFile(
+          partition.values, new StoragePath(filePath), 0, file.getLen)
+        files += partitionedFile
+        slicesByFile.put(partitionedFile, slice)
       }
     }
-    Some(slices.toSeq)
+    // Largest first, as Spark orders its splits before packing them.
+    val sortedFiles = files.sortBy(_.length)(Ordering[Long].reverse).toSeq
+    val maxSplitBytes = FilePartition.maxSplitBytes(session, scanExec.selectedPartitions)
+    Some(sparkAdapter.getFilePartitions(session, sortedFiles, maxSplitBytes)
+      .map(_.files.map(slicesByFile.get).toSeq))
   }
 }
 
@@ -276,4 +377,12 @@ object HudiCometScanProvider {
     "org.apache.hudi.keygen.SimpleKeyGenerator",
     "org.apache.hudi.keygen.ComplexKeyGenerator",
     "org.apache.hudi.keygen.NonpartitionedKeyGenerator")
+
+  /** Partition column types whose value survives the path rendering and parse the JVM read does. */
+  val PATH_ROUND_TRIP_PARTITION_TYPES: Set[DataType] =
+    Set(StringType, IntegerType, LongType, ShortType, ByteType, DateType, BooleanType)
+
+  /** URI schemes the object_store crate behind hudi-rs resolves. */
+  val SUPPORTED_SCHEMES: Set[String] =
+    Set("file", "s3", "s3a", "gs", "abfs", "abfss", "az", "adl", "azure")
 }
