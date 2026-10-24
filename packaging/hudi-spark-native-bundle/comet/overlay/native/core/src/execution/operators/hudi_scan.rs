@@ -48,8 +48,7 @@ use datafusion::physical_plan::{
     DisplayAs, DisplayFormatType, ExecutionPlan, Partitioning, PlanProperties,
 };
 use futures::{StreamExt, TryStreamExt};
-use hudi::file_group::reader::FileGroupReader;
-use hudi::table::ReadOptions;
+use hudi::table::{ReadOptions, Table};
 
 /// One file slice assigned to this partition: a base file and the log files
 /// whose records amend it.
@@ -201,50 +200,86 @@ impl ExecutionPlan for HudiScanExec {
     fn execute(
         &self,
         _partition: usize,
-        _context: Arc<TaskContext>,
+        context: Arc<TaskContext>,
     ) -> DFResult<SendableRecordBatchStream> {
         let base_uri = self.table_base_uri.clone();
         let options = self.options.clone();
         let schema = Arc::clone(&self.output_schema);
         let slices = self.file_slices.clone();
         let projection: Vec<String> = schema.fields().iter().map(|f| f.name().clone()).collect();
+        let batch_size = context.session_config().batch_size();
         let baseline = BaselineMetrics::new(&self.metrics, 0);
 
         let batches = futures::stream::once(async move {
-            let reader = FileGroupReader::new_with_options(
-                &base_uri,
-                options.iter().map(|(k, v)| (k.as_str(), v.as_str())),
-            )
-            .await
-            .map_err(|e| {
-                DataFusionError::Execution(format!("failed to open Hudi table {base_uri}: {e}"))
-            })?;
-            let read_options = ReadOptions {
-                projection: Some(projection),
-                ..Default::default()
-            };
-            let mut out = Vec::with_capacity(slices.len());
-            for slice in &slices {
-                let batch = reader
-                    .read_file_slice_from_paths(
-                        &slice.base_file_path,
-                        slice.log_file_paths.iter().map(|s| s.as_str()),
-                        &read_options,
-                    )
-                    .await
-                    .map_err(|e| {
+            // The reader comes from an opened table rather than from the base
+            // URI alone so that it knows the table's current schema: a base file
+            // written before a column was added lacks that column, and only a
+            // reader holding the table schema null-fills it (and casts a widened
+            // column) as the JVM reader does. Opening the table costs one
+            // timeline listing per task. hudi-rs takes the read options (the
+            // query instant) per read, not on the table.
+            let (read_opts, table_opts): (Vec<_>, Vec<_>) = options
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .partition(|(k, _)| k.starts_with("hoodie.read."));
+            let table = Table::new_with_options(&base_uri, table_opts)
+                .await
+                .map_err(|e| {
+                    DataFusionError::Execution(format!("failed to open Hudi table {base_uri}: {e}"))
+                })?;
+            // The projection is pushed into the base file read, and each slice
+            // streams in batches of the session's batch size instead of being
+            // read whole.
+            let read_options = ReadOptions::new()
+                .with_hudi_options(read_opts)
+                .with_projection(projection)
+                .with_batch_size(batch_size)
+                .map_err(|e| DataFusionError::Execution(format!("Hudi scan batch size: {e}")))?;
+            let reader = table
+                .create_file_group_reader_with_options(
+                    Some(&read_options),
+                    std::iter::empty::<(&str, String)>(),
+                )
+                .await
+                .map_err(|e| {
+                    DataFusionError::Execution(format!(
+                        "failed to create a reader for Hudi table {base_uri}: {e}"
+                    ))
+                })?;
+            let reader = Arc::new(reader);
+            let slice_streams = futures::stream::iter(slices).then(move |slice| {
+                let reader = Arc::clone(&reader);
+                let read_options = read_options.clone();
+                async move {
+                    let base_file_path = slice.base_file_path.clone();
+                    let stream = reader
+                        .read_file_slice_from_paths_stream(
+                            &slice.base_file_path,
+                            slice.log_file_paths.iter().map(|s| s.as_str()),
+                            &read_options,
+                        )
+                        .await
+                        .map_err(|e| {
+                            DataFusionError::Execution(format!(
+                                "failed to open Hudi file slice {}: {e}",
+                                slice.base_file_path
+                            ))
+                        })?;
+                    Ok::<_, DataFusionError>(stream.map_err(move |e| {
                         DataFusionError::Execution(format!(
-                            "failed to read Hudi file slice {}: {e}",
-                            slice.base_file_path
+                            "failed to read Hudi file slice {base_file_path}: {e}"
                         ))
-                    })?;
-                let aligned = align_to_schema(batch_across_ffi(batch)?, &schema)?;
-                baseline.record_output(aligned.num_rows());
-                out.push(aligned);
-            }
-            Ok::<_, DataFusionError>(futures::stream::iter(out.into_iter().map(Ok)))
+                    }))
+                }
+            });
+            Ok::<_, DataFusionError>(slice_streams.try_flatten())
         })
-        .try_flatten();
+        .try_flatten()
+        .map(move |result| {
+            let aligned = align_to_schema(batch_across_ffi(result?)?, &schema)?;
+            baseline.record_output(aligned.num_rows());
+            Ok(aligned)
+        });
 
         Ok(Box::pin(RecordBatchStreamAdapter::new(
             Arc::clone(&self.output_schema),
