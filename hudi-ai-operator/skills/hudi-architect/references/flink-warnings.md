@@ -79,8 +79,9 @@ digest, or contains a credential-shaped fact.
 
 ## FLINK_EXISTING_EVIDENCE_CONFLICT
 
-**Trigger:** Two observations disagree, an evidence envelope identifies another table path, or a
-Flink DDL disagrees with authoritative Hudi table config or physical schema.
+**Trigger:** Two observations disagree, an evidence envelope identifies another table path, an
+in-scope envelope's identity fact names another path, or a Flink DDL disagrees with authoritative
+Hudi table config or physical schema.
 
 **Message:** Contradictory evidence cannot be silently merged. Persisted table config and the Hudi
 table schema remain authoritative, but the discrepancy needs review.
