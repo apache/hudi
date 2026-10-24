@@ -71,7 +71,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -250,10 +249,8 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
     }
 
     // NOTE: We cannot have any holes in the commit timeline.
-    // We cannot archive any commits which are made after the first savepoint present,
-    // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
+    // We cannot archive any commits which are made after the first savepoint present.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
-    Set<String> savepointTimestamps = table.getSavepointTimestamps();
     if (!commitTimeline.empty() && commitTimeline.countInstants() > maxInstantsToKeep) {
       // For Merge-On-Read table, inline or async compaction is enabled
       // We need to make sure that there are enough delta commits in the active timeline
@@ -300,16 +297,9 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       // Actually do the commits
       Option<HoodieInstant> finalOldestInstantToRetainForClean = oldestInstantToRetainForClean;
       Stream<HoodieInstant> instantToArchiveStream = commitTimeline.getInstantsAsStream()
+          // if no savepoint present, then don't filter; otherwise stop at the first savepoint commit
+          .filter(s -> !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().requestedTime(), LESSER_THAN_OR_EQUALS, s.requestedTime())))
           .filter(s -> {
-            if (config.shouldArchiveBeyondSavepoint()) {
-              // skip savepoint commits and proceed further
-              return !savepointTimestamps.contains(s.requestedTime());
-            } else {
-              // if no savepoint present, then don't filter
-              // stop at first savepoint commit
-              return !(firstSavepoint.isPresent() && compareTimestamps(firstSavepoint.get().requestedTime(), LESSER_THAN_OR_EQUALS, s.requestedTime()));
-            }
-          }).filter(s -> {
             // oldestCommitToRetain is the highest completed commit instant that is less than the oldest inflight instant.
             // By filtering out any commit >= oldestCommitToRetain, we can ensure there are no gaps in the timeline
             // when inflight commits are present.
@@ -372,12 +362,10 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
           .setConf(metaClient.getStorageConf())
           .build();
       Option<HoodieInstant> qualifiedEarliestInstant =
-          TimelineUtils.getEarliestInstantForMetadataArchival(
-              dataMetaClient.getActiveTimeline(), config.shouldArchiveBeyondSavepoint());
+          TimelineUtils.getEarliestInstantForMetadataArchival(dataMetaClient.getActiveTimeline());
 
       // Do not archive the instants after the earliest commit (COMMIT, DELTA_COMMIT, and
-      // REPLACE_COMMIT only, considering non-savepoint commit only if enabling archive
-      // beyond savepoint) and the earliest inflight instant (all actions).
+      // REPLACE_COMMIT only) and the earliest inflight instant (all actions).
       // This is required by metadata table, see HoodieTableMetadataUtil#processRollbackMetadata
       // for details.
       // Note that we cannot blindly use the earliest instant of all actions, because CLEAN and
