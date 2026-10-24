@@ -66,6 +66,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.URI;
@@ -190,6 +191,35 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         Option.empty());
     // Validate the result.
     validatePartitionStats(result, instant1, instant2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testPartitionStatsInitializationWithUnreadableFile(boolean logFile) throws Exception {
+    HoodieLocalEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    String instant = "20230918120000000";
+    hoodieTestTable = hoodieTestTable.addCommit(instant);
+    String partition = DATE_PARTITIONS.get(0);
+    String fileId = UUID.randomUUID().toString();
+    StoragePath path = new StoragePath(hoodieTestTable.getBaseFilePath(partition, fileId).toUri());
+    writeParquetFile(instant, path, dataGen.generateInsertsForPartition(instant, 10, partition), metaClient, engineContext);
+    FileSlice readable = new FileSlice(partition, instant, fileId);
+    readable.setBaseFile(new HoodieBaseFile(path.toString()));
+    FileSlice unreadable = new FileSlice(partition, instant, "missing");
+    if (logFile) {
+      unreadable.addLogFile(new HoodieLogFile(new StoragePath(path.getParent(), ".missing_" + instant + ".log.1_1-0-1")));
+    } else {
+      unreadable.setBaseFile(new HoodieBaseFile(new StoragePath(path.getParent(), "missing_1-0-1_" + instant + ".parquet").toString()));
+    }
+
+    List<HoodieRecord> records = HoodieTableMetadataUtil.convertFilesToPartitionStatsRecords(
+        engineContext, Arrays.asList(FileSliceAndPartition.of(partition, readable), FileSliceAndPartition.of(partition, unreadable)),
+        HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true)
+            .withColumnStatsIndexForColumns("rider,driver").withPartitionStatsIndexParallelism(1).build(),
+        metaClient, Lazy.eagerly(Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS)), Option.empty()).collectAsList();
+    assertFalse(records.isEmpty());
+    records.forEach(record -> assertTrue(((HoodieMetadataPayload) record.getData()).getColumnStatMetadata().get().getIsDeleted(),
+        "A readable subset must not become partition statistics"));
   }
 
   @Test

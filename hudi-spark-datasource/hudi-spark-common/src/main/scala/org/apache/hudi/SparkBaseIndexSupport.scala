@@ -30,9 +30,11 @@ import org.apache.hudi.metadata.{HoodieMetadataPayload, HoodieTableMetadata}
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_COLUMN_STATS
 
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.{Column, DataFrame, SparkSession}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.util.quoteIdentifier
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 
 import scala.collection.JavaConverters._
@@ -114,44 +116,13 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     }
 
     val validIndexedColumns = getValidIndexedColumnsFunc.apply(indexDefinition)
-    // Only split top-level AND predicates; keep OR and NOT subtrees intact.
-    val indexFilters = queryFilters.flatMap(SparkBaseIndexSupport.splitConjuncts)
-      .map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, validIndexedColumns))
-      .filterNot(_.equals(TrueLiteral))
-    if (indexFilters.isEmpty) {
+    val candidateFilter = buildCandidateFilter(indexDf, queryFilters, validIndexedColumns, isExpressionIndex)
+    if (candidateFilter.isEmpty) {
       // No translated predicate can prune files, so avoid scanning the index.
       fileNamesFromPrunedPartitions
     } else {
-      val projectedColumns = indexDf.columns.toSet
-      val statsToNullCount = validIndexedColumns.flatMap { column =>
-        val nullCountColumn = getNullCountColumnNameFor(column)
-        if (projectedColumns.contains(nullCountColumn)) {
-          Seq(getMinColumnNameFor(column), getMaxColumnNameFor(column), nullCountColumn)
-            .map(_ -> nullCountColumn)
-        } else {
-          Seq.empty
-        }
-      }.toMap
-      // Guard each independent conjunct using only the statistics it reads. Complete conjuncts
-      // can still exclude a file when another conjunct has missing statistics.
-      // For example, age > 100 AND name = 'alice' becomes:
-      //   (age_maxValue > 100 OR age_nullCount IS NULL)
-      //   AND (
-      //     (name_minValue <= 'alice' AND name_maxValue >= 'alice')
-      //     OR name_nullCount IS NULL
-      //   )
-      // A file with age_maxValue = 30 and age_nullCount = 0 is still excluded even if name statistics are missing.
-      val candidateFilter = indexFilters.map { conjunct =>
-        val referencedStats = conjunct.references.map(_.name).toSet
-        val nullCountColumns = referencedStats.flatMap(statsToNullCount.get)
-        // Apply the missing-statistics guard outside the whole translated conjunct, including NOT.
-        // Replacing a missing-statistics leaf with true before negation would incorrectly prune files.
-        nullCountColumns.foldLeft(sparkAdapter.createColumnFromExpression(conjunct)) { (filter, column) =>
-          filter.or(indexDf.col(column).isNull)
-        }
-      }.reduce(_.and(_))
       val prunedCandidateFileNames =
-        indexDf.where(candidateFilter)
+        indexDf.where(candidateFilter.get)
           .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
           .collect()
           .map(_.getString(0))
@@ -172,6 +143,51 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
       val notIndexedFileNames = fileNamesFromPrunedPartitions -- allIndexedFileNames
 
       prunedCandidateFileNames ++ notIndexedFileNames
+    }
+  }
+
+  /**
+   * Builds a conservative filter shared by file and partition statistics indexes.
+   * A null null-count marks missing statistics, whereas null min/max values can also describe an all-null column.
+   */
+  protected def buildCandidateFilter(indexDf: DataFrame, queryFilters: Seq[Expression], validIndexedColumns: Seq[String],
+                                     isExpressionIndex: Boolean = false): Option[Column] = {
+    // Only split top-level AND predicates; keep OR and NOT subtrees intact.
+    val indexFilters = queryFilters.flatMap(SparkBaseIndexSupport.splitConjuncts)
+      .map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, validIndexedColumns))
+      .filterNot(_.equals(TrueLiteral))
+    if (indexFilters.isEmpty) {
+      None
+    } else {
+      val projectedColumns = indexDf.columns.toSet
+      val statsToNullCount = validIndexedColumns.flatMap { column =>
+        val nullCountColumn = getNullCountColumnNameFor(column)
+        if (projectedColumns.contains(nullCountColumn)) {
+          Seq(getMinColumnNameFor(column), getMaxColumnNameFor(column), nullCountColumn)
+            .map(_ -> nullCountColumn)
+        } else {
+          Seq.empty
+        }
+      }.toMap
+      // Guard each independent conjunct using only the statistics it reads. A complete conjunct
+      // can still exclude a candidate when another conjunct has missing statistics.
+      // For example, age > 100 AND name = 'alice' becomes:
+      //   (age_maxValue > 100 OR age_nullCount IS NULL)
+      //   AND ((name_minValue <= 'alice' AND name_maxValue >= 'alice') OR name_nullCount IS NULL)
+      // A file with age_maxValue = 30 and age_nullCount = 0 is still excluded even if name statistics are missing.
+      Some(indexFilters.map { conjunct =>
+        val referencedStats = conjunct.references.map {
+          // UnresolvedAttribute.name adds SQL quoting; the index schema holds literal field names.
+          case attribute: UnresolvedAttribute => attribute.nameParts.mkString(".")
+          case attribute => attribute.name
+        }.toSet
+        val nullCountColumns = referencedStats.flatMap(statsToNullCount.get)
+        // Keep the guard outside the whole translated conjunct, including NOT. Substituting true
+        // for a missing-statistics leaf before negation could incorrectly exclude a candidate.
+        nullCountColumns.foldLeft(sparkAdapter.createColumnFromExpression(conjunct)) { (filter, column) =>
+          filter.or(indexDf.col(quoteIdentifier(column)).isNull)
+        }
+      }.reduce(_.and(_)))
     }
   }
 

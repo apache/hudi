@@ -29,17 +29,24 @@ import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.common.table.view.SpillableMapBasedFileSystemView;
+import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieLockConfig;
@@ -57,11 +64,18 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -70,8 +84,64 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.when;
 
 public class TestHoodieMetadataWriteUtils {
+
+  @Test
+  void testGetFilesToFetchColumnStatsExcludesReplacedFileGroups() {
+    String partition = "p1";
+    String instant = "002";
+    FileSlice replaced = new FileSlice(partition, "001", "replaced");
+    replaced.setBaseFile(new HoodieBaseFile("/table/p1/replaced_1-0-1_001.parquet"));
+    replaced.addLogFile(new HoodieLogFile("/table/p1/.replaced_001.log.1_1-0-1"));
+    FileSlice untouched = new FileSlice(partition, "001", "untouched");
+    untouched.setBaseFile(new HoodieBaseFile("/table/p1/untouched_1-0-1_001.parquet"));
+    untouched.addLogFile(new HoodieLogFile("/table/p1/.untouched_001.log.1_1-0-1"));
+    FileSlice current = new FileSlice(partition, instant, "current");
+    current.setBaseFile(new HoodieBaseFile("/table/p1/current_1-0-1_002.parquet"));
+    current.addLogFile(new HoodieLogFile("/table/p1/.current_002.log.1_1-0-1"));
+    HoodieWriteStat baseWrite = new HoodieWriteStat();
+    baseWrite.setPath(partition + "/" + current.getBaseFile().get().getFileName());
+    HoodieWriteStat logWrite = new HoodieWriteStat();
+    logWrite.setPath(partition + "/" + current.getLogFiles().findFirst().get().getFileName());
+    List<HoodieWriteStat> writes = Arrays.asList(baseWrite, logWrite);
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getBasePath()).thenReturn(new StoragePath("/table"));
+    doReturn(getDefaultStorageConf()).when(metaClient).getStorageConf();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/table").build();
+    HoodieTableMetadata metadata = mock(HoodieTableMetadata.class);
+    FileSystemViewManager manager = mock(FileSystemViewManager.class);
+    SyncableFileSystemView committedView = mock(SyncableFileSystemView.class);
+    when(manager.getFileSystemView(metaClient)).thenReturn(committedView);
+    when(committedView.getLatestMergedFileSlicesBeforeOrOn(partition, instant))
+        .thenReturn(Stream.of(replaced, untouched));
+
+    try (MockedStatic<FileSystemViewManager> viewManager = mockStatic(FileSystemViewManager.class);
+         MockedStatic<HoodieTableMetadataUtil> metadataUtil = mockStatic(HoodieTableMetadataUtil.class);
+         MockedConstruction<SpillableMapBasedFileSystemView> consolidatedViews = mockConstruction(
+             SpillableMapBasedFileSystemView.class, (view, context) ->
+                 when(view.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partition, instant, instant))
+                     .thenReturn(Stream.of(replaced, untouched, current)))) {
+      viewManager.when(() -> FileSystemViewManager.createViewManager(any(), any(), any(), any(), any()))
+          .thenReturn(manager);
+      metadataUtil.when(() -> HoodieTableMetadataUtil.translateWriteStatToFileStats(any(), any(), any(), any()))
+          .thenReturn(Collections.emptyList());
+
+      Set<String> files = HoodieMetadataWriteUtils.getFilesToFetchColumnStats(
+          writes, metaClient, metadata, config, partition, instant, instant,
+          Collections.singletonMap(partition, Collections.singleton(replaced.getFileId())),
+          Collections.singletonList("age"), HoodieIndexVersion.V1);
+
+      assertEquals(new HashSet<>(Arrays.asList("untouched_1-0-1_001.parquet", ".untouched_001.log.1_1-0-1")), files);
+      assertEquals(1, consolidatedViews.constructed().size());
+    }
+  }
 
   @Test
   void testCreateEmptyNativeLogFile(@TempDir Path tempDir) throws Exception {

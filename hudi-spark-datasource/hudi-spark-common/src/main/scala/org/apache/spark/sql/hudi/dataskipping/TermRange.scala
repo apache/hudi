@@ -21,6 +21,7 @@ import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColum
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
 
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.util.quoteIdentifier
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.getTargetIndexedColumnName
 
@@ -75,7 +76,7 @@ case class ColumnStatsSource(indexedCols: Seq[String]) extends RangeSource {
   }
 
   /** A column of the transposed column stats table, for ex `qty_minValue`. */
-  private def statsColumn(name: String): Expression = sparkAdapter.getExpressionFromColumn(col(name))
+  private def statsColumn(name: String): Expression = sparkAdapter.getExpressionFromColumn(col(quoteIdentifier(name)))
 }
 
 object TermRange {
