@@ -27,15 +27,15 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, InSet, Not}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, GetStructField, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.functions.{col, date_format, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
@@ -118,6 +118,71 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
         indexDefinitionOpt = Some(definition))
     }
     assertEquals(expected + "unindexed", support.candidates)
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("dottedColumnStatsPredicates"))
+  def testCandidateFilesWithDottedColumnStats(predicate: String, expected: Set[String],
+                                            separateFilters: Boolean, structNested: Boolean): Unit = {
+    val nestedField = if (structNested) {
+      StructField("profile", StructType(Seq(StructField("name", StringType))))
+    } else {
+      StructField("profile.name", StringType)
+    }
+    val nestedSchema = StructType(Seq(StructField("A", LongType), nestedField, StructField("C", TimestampType)))
+    // Literal dotted source attributes have a quoted canonical index name, including the backticks.
+    val indexedName = if (structNested) "profile.name" else "`profile.name`"
+    val nestedIndexedCols = Seq("A", indexedName, "C")
+    val nestedIndexSchema = StructType(indexSchema.fields.map { field =>
+      if (field.name.startsWith("B_")) field.copy(name = indexedName + field.name.stripPrefix("B")) else field
+    })
+    val input = Seq(
+      IndexRow("missing", A_minValue = 25, A_maxValue = 25, A_nullCount = 0),
+      IndexRow("missing_pruned_by_A", A_minValue = -1, A_maxValue = -1, A_nullCount = 0),
+      IndexRow("all_null", A_minValue = 25, A_maxValue = 25, A_nullCount = 0, B_nullCount = 1),
+      IndexRow("matching", A_minValue = 25, A_maxValue = 25, A_nullCount = 0,
+        B_minValue = "alice", B_maxValue = "alice", B_nullCount = 0),
+      IndexRow("nonmatching", A_minValue = 25, A_maxValue = 25, A_nullCount = 0,
+        B_minValue = "aaa", B_maxValue = "aaa", B_nullCount = 0))
+    // The index stores nested paths as literal top-level names containing dots.
+    val indexDf = spark.createDataFrame(spark.sparkContext.parallelize(input.map(_.toRow), 1), nestedIndexSchema)
+      .drop("C_minValue", "C_maxValue", "C_nullCount")
+    assertTrue(indexDf.columns.contains(s"${indexedName}_nullCount"))
+
+    // Analyze the raw source DataFrame to retain the actual Catalyst shape of both field references.
+    val sourceDf = spark.createDataFrame(java.util.Collections.emptyList[Row](), nestedSchema)
+    def analyzePredicate(sql: String): Expression = sourceDf.where(sql).queryExecution.analyzed
+      .asInstanceOf[Filter].condition
+    val resolvedPredicate = analyzePredicate(predicate)
+    assertEquals(structNested, resolvedPredicate.exists(_.isInstanceOf[GetStructField]))
+    if (!structNested) {
+      val nestedLookup = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(
+        analyzePredicate("`profile.name` = 'alice'"), indexedCols = nestedIndexedCols)
+      assertEquals(Set(Seq(s"${indexedName}_minValue"), Seq(s"${indexedName}_maxValue")),
+        nestedLookup.collect { case attribute: UnresolvedAttribute => attribute.nameParts }.toSet,
+        "Dotted predicates must translate to literal statistics names instead of silently disabling pruning")
+    }
+    val filters = resolvedPredicate match {
+      case And(left, right) if separateFilters => Seq(left, right)
+      case other => Seq(other)
+    }
+    val definition = HoodieIndexDefinition.newBuilder().withIndexName("column_stats")
+      .withIndexType("column_stats").withSourceFields(nestedIndexedCols.asJava).build()
+    val support = new ColumnStatsIndexSupport(spark, nestedSchema, null,
+      HoodieMetadataConfig.newBuilder().build(), null) {
+      def candidates: Set[String] = getCandidateFiles(indexDf, filters,
+        input.map(_.fileName).toSet + "unindexed", _ => nestedIndexedCols,
+        indexDefinitionOpt = Some(definition))
+    }
+    val jobGroup = s"nested-column-stats-$predicate-$separateFilters"
+    spark.sparkContext.setJobGroup(jobGroup, "Nested column statistics must prune file candidates")
+    try {
+      assertEquals(expected + "unindexed", support.candidates)
+      assertTrue(spark.sparkContext.statusTracker.getJobIdsForGroup(jobGroup).nonEmpty,
+        "Candidate pruning must execute against the index")
+    } finally {
+      spark.sparkContext.clearJobGroup()
+    }
   }
 
   @ParameterizedTest
@@ -229,6 +294,19 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 }
 
 object TestDataSkippingUtils {
+  def dottedColumnStatsPredicates(): java.util.stream.Stream[Arguments] = {
+    val cases = Seq(
+      ("A >= 0 AND `profile.name` = 'alice'", Set("missing", "matching"), false),
+      ("A >= 0 AND NOT (`profile.name` = 'aaa')", Set("missing", "matching"), false),
+      ("A > 100 AND `profile.name` = 'alice'", Set.empty[String], false),
+      // GetStructField is currently unsupported, but its independent complete conjunct can still prune.
+      ("A >= 0 AND profile.name = 'alice'", Set("missing", "all_null", "matching", "nonmatching"), true),
+      ("A > 100 AND profile.name = 'alice'", Set.empty[String], true))
+    cases.flatMap { case (predicate, expected, structNested) =>
+      Seq(false, true).map(separate => arguments(predicate, expected, Boolean.box(separate), Boolean.box(structNested)))
+    }.asJava.stream()
+  }
+
   def missingColumnStatsPredicates(): java.util.stream.Stream[Arguments] = {
     val matching = Set("missing", "matching")
     val cases = Seq(
