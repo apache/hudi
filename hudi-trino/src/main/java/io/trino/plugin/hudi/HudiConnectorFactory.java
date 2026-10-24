@@ -30,6 +30,7 @@ import io.trino.plugin.base.classloader.ClassLoaderSafeNodePartitioningProvider;
 import io.trino.plugin.base.jmx.MBeanServerModule;
 import io.trino.plugin.base.session.SessionPropertiesProvider;
 import io.trino.plugin.hive.metastore.HiveMetastoreModule;
+import io.trino.plugin.hudi.procedure.HudiProcedureModule;
 import io.trino.spi.classloader.ThreadContextClassLoader;
 import io.trino.spi.connector.Connector;
 import io.trino.spi.connector.ConnectorContext;
@@ -37,6 +38,7 @@ import io.trino.spi.connector.ConnectorFactory;
 import io.trino.spi.connector.ConnectorNodePartitioningProvider;
 import io.trino.spi.connector.ConnectorPageSourceProvider;
 import io.trino.spi.connector.ConnectorSplitManager;
+import io.trino.spi.procedure.Procedure;
 import org.weakref.jmx.guice.MBeanModule;
 
 import java.util.Map;
@@ -75,6 +77,7 @@ public class HudiConnectorFactory
                     new MBeanModule(),
                     new JsonModule(),
                     new HudiModule(),
+                    new HudiProcedureModule(),
                     new HiveMetastoreModule(Optional.empty(), false),
                     new HudiFileSystemModule(catalogName, context),
                     new MBeanServerModule(),
@@ -92,6 +95,7 @@ public class HudiConnectorFactory
             ConnectorPageSourceProvider connectorPageSource = injector.getInstance(ConnectorPageSourceProvider.class);
             ConnectorNodePartitioningProvider connectorDistributionProvider = injector.getInstance(ConnectorNodePartitioningProvider.class);
             Set<SessionPropertiesProvider> sessionPropertiesProviders = injector.getInstance(new Key<>() {});
+            Set<Procedure> procedures = injector.getInstance(new Key<>() {});
             HudiTableProperties hudiTableProperties = injector.getInstance(HudiTableProperties.class);
 
             return new HudiConnector(
@@ -102,6 +106,7 @@ public class HudiConnectorFactory
                     new ClassLoaderSafeConnectorPageSourceProvider(connectorPageSource, classLoader),
                     new ClassLoaderSafeNodePartitioningProvider(connectorDistributionProvider, classLoader),
                     ImmutableSet.of(),
+                    procedures,
                     sessionPropertiesProviders,
                     hudiTableProperties.getTableProperties());
         }
