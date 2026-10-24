@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.log.HoodieLogBlockMetadataScanner;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
@@ -90,11 +91,13 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
    * @param instantRange Range of valid instants.
    * @return Boolean value that determines whether log compaction will be scheduled or not.
    */
-  private boolean isFileSliceEligibleForLogCompaction(FileSlice fileSlice, String maxInstantTime,
+  @VisibleForTesting
+  boolean isFileSliceEligibleForLogCompaction(FileSlice fileSlice, String maxInstantTime,
                                                       Option<InstantRange> instantRange) {
     log.info("Checking if fileId {} and partition {} eligible for log compaction.", fileSlice.getFileId(), fileSlice.getPartitionPath());
     HoodieTableMetaClient metaClient = hoodieTable.getMetaClient();
-    long numLogFiles = fileSlice.getLogFiles().count();
+    // CDC log files only carry supplemental change data, so they do not count towards the threshold
+    long numLogFiles = fileSlice.getLogFiles().filter(logFile -> !logFile.isCDC()).count();
     if (numLogFiles >= writeConfig.getLogCompactionBlocksThreshold()) {
       log.info("Total logs files ({}) is greater than log blocks threshold is {}", numLogFiles, writeConfig.getLogCompactionBlocksThreshold());
       return true;
