@@ -22,9 +22,11 @@ package org.apache.hudi.table.upgrade;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.storage.HoodieStorage;
@@ -32,6 +34,10 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.MockedStatic;
 
 import java.util.ArrayList;
@@ -39,10 +45,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -103,6 +111,59 @@ class TestUpgradeDowngradeOrchestration {
       tableConfigStatic.verifyNoInteractions();
       upgradeUtils.verify(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
           testContext.table, testContext.engineContext, testContext.config, testContext.helper, false, HoodieTableVersion.SIX));
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "SIX"})
+  void testDowngradeBelowNineRefusesSeveralOrderingFieldsBeforeAnyStep(HoodieTableVersion toVersion) throws Exception {
+    TestContext testContext = new TestContext(HoodieTableVersion.TEN);
+    when(testContext.tableConfig.getOrderingFieldsStr()).thenReturn(Option.of("ts,seq"));
+    TrackingUpgradeDowngrade upgradeDowngrade = testContext.trackingUpgradeDowngrade();
+
+    try (MockedStatic<UpgradeDowngradeUtils> upgradeUtils = mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<HoodieTableConfig> tableConfigStatic = mockStatic(HoodieTableConfig.class)) {
+      HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
+          () -> upgradeDowngrade.run(toVersion, "100"));
+      assertTrue(exception.getMessage().startsWith(String.format(
+          "Cannot downgrade to table version %d: hoodie.table.ordering.fields=ts,seq orders records on several fields", toVersion.versionCode())),
+          exception.getMessage());
+
+      // no rollback or compaction, metadata table lookup, version hop or table config write ran before the refusal
+      assertTrue(upgradeDowngrade.hops.isEmpty());
+      upgradeUtils.verifyNoInteractions();
+      verify(testContext.storage, never()).exists(any(StoragePath.class));
+      verify(testContext.tableConfig, never()).setTableVersion(any(HoodieTableVersion.class));
+      tableConfigStatic.verifyNoInteractions();
+    }
+  }
+
+  static Stream<Arguments> downgradesPassingOrderingFieldsCheck() {
+    return Stream.of(
+        // version 9 keeps several ordering fields under hoodie.table.ordering.fields
+        Arguments.of(HoodieTableVersion.NINE, null, "ts,seq", java.util.Collections.singletonList("10->9")),
+        // the binlog file and position MySqlDebeziumAvroPayload orders on map back to its single sequence field
+        Arguments.of(HoodieTableVersion.EIGHT, MySqlDebeziumAvroPayload.class.getName(), MySqlDebeziumAvroPayload.ORDERING_FIELDS,
+            Arrays.asList("10->9", "9->8")));
+  }
+
+  @ParameterizedTest
+  @MethodSource("downgradesPassingOrderingFieldsCheck")
+  void testDowngradePassesOrderingFieldsCheck(HoodieTableVersion toVersion, String legacyPayloadClass, String orderingFields,
+                                               List<String> expectedHops) throws Exception {
+    TestContext testContext = new TestContext(HoodieTableVersion.TEN);
+    when(testContext.tableConfig.getLegacyPayloadClass()).thenReturn(legacyPayloadClass);
+    when(testContext.tableConfig.getOrderingFieldsStr()).thenReturn(Option.of(orderingFields));
+    TrackingUpgradeDowngrade upgradeDowngrade = testContext.trackingUpgradeDowngrade();
+
+    try (MockedStatic<UpgradeDowngradeUtils> upgradeUtils = mockStatic(UpgradeDowngradeUtils.class);
+         MockedStatic<HoodieTableConfig> ignored = mockStatic(HoodieTableConfig.class)) {
+      upgradeDowngrade.run(toVersion, null);
+
+      assertEquals(expectedHops, upgradeDowngrade.hops);
+      verify(testContext.tableConfig).setTableVersion(toVersion);
+      upgradeUtils.verify(() -> UpgradeDowngradeUtils.rollbackFailedWritesAndCompact(
+          testContext.table, testContext.engineContext, testContext.config, testContext.helper, false, HoodieTableVersion.TEN));
     }
   }
 
@@ -183,6 +244,7 @@ class TestUpgradeDowngradeOrchestration {
     TestContext(HoodieTableVersion version) throws Exception {
       when(metaClient.getTableConfig()).thenReturn(tableConfig);
       when(tableConfig.getTableVersion()).thenReturn(version);
+      when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
       when(tableConfig.isMetadataTableAvailable()).thenReturn(false);
       when(metaClient.getStorage()).thenReturn(storage);
       when(metaClient.getBasePath()).thenReturn(new StoragePath("/table"));
