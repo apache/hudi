@@ -78,6 +78,17 @@ case class CreateHoodieTableAsSelectCommand(
         return Seq.empty
         // scalastyle:on
       }
+
+      if (mode == SaveMode.Append) {
+        val existingTable = sessionState.catalog.getTableMetadata(qualifiedTableIdentifier)
+        val partitionSpec = existingTable.partitionColumnNames.map((_, None)).toMap
+        InsertIntoHoodieTableCommand.run(sparkSession, existingTable, plan, partitionSpec,
+          overwrite = false, metrics = metrics)
+        DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
+        // scalastyle:off
+        return Seq.empty
+        // scalastyle:on
+      }
     }
 
     // Remove some properties should not be used

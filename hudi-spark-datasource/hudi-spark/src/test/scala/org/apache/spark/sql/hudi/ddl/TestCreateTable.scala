@@ -1610,6 +1610,46 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     spark.sql(s"drop table $tableName")
   }
 
+  for (tableType <- Seq("cow", "mor"); external <- Seq(false, true); partitioned <- Seq(false, true)) {
+    test(s"saveAsTable append preserves existing $tableType table (external=$external, partitioned=$partitioned)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val location = if (external) s"LOCATION '${tmp.getCanonicalPath}/$tableName'" else ""
+        val partition = if (partitioned) "PARTITIONED BY (dt)" else ""
+        spark.sql(
+          s"""CREATE TABLE $tableName (id INT, name STRING, ts BIGINT, dt STRING)
+             |USING hudi $partition $location
+             |TBLPROPERTIES (type = '$tableType', primaryKey = 'id', orderingFields = 'ts')
+             |""".stripMargin)
+        try {
+          spark.sql(s"INSERT INTO $tableName VALUES (1, 'first', 1, 'p1')")
+          val identifier = TableIdentifier(tableName)
+          val before = spark.sessionState.catalog.getTableMetadata(identifier)
+          val tablePath = HoodieCatalogTable(spark, before).tableLocation
+          val configBefore = createMetaClient(spark, tablePath).getTableConfig.getProps.asScala.toMap
+
+          // Omit table options and partitionBy: these must come from the existing table.
+          spark.sql("SELECT 2 AS id, 'second' AS name, CAST(2 AS BIGINT) AS ts, 'p2' AS dt")
+            .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          checkAnswer(s"SELECT id, name, ts, dt FROM $tableName")(
+            Seq(1, "first", 1L, "p1"), Seq(2, "second", 2L, "p2"))
+          // saveAsTable appends by column name even when the input order differs.
+          spark.sql("SELECT 'p3' AS dt, CAST(3 AS BIGINT) AS ts, 'third' AS name, 3 AS id")
+            .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          checkAnswer(s"SELECT id, name, ts, dt FROM $tableName")(
+            Seq(1, "first", 1L, "p1"), Seq(2, "second", 2L, "p2"), Seq(3, "third", 3L, "p3"))
+          val after = spark.sessionState.catalog.getTableMetadata(identifier)
+          assertEquals(before.storage.locationUri, after.storage.locationUri)
+          assertEquals(before.partitionColumnNames, after.partitionColumnNames)
+          assertEquals(before.schema, after.schema)
+          assertEquals(configBefore, createMetaClient(spark, tablePath).getTableConfig.getProps.asScala.toMap)
+        } finally {
+          spark.sql(s"DROP TABLE IF EXISTS $tableName")
+        }
+      }
+    }
+  }
+
   test("Test CTAS not de-duplicating (by default)") {
     withRecordType() {
       withTempDir { tmp =>
