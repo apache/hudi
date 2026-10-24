@@ -205,7 +205,7 @@ trait ProvidesHoodieConfig extends Logging {
     val insertModeSet = combinedOpts.contains(SQL_INSERT_MODE.key)
     val sparkSqlInsertIntoOperationOpt = combinedOpts.get(SPARK_SQL_INSERT_INTO_OPERATION.key())
     val sparkSqlInsertIntoOperationSet = sparkSqlInsertIntoOperationOpt.nonEmpty
-    val sparkSqlInsertIntoOperation = sparkSqlInsertIntoOperationOpt.getOrElse(SPARK_SQL_INSERT_INTO_OPERATION.defaultValue())
+    val sparkSqlInsertIntoOperation = sparkSqlInsertIntoOperationOpt.getOrElse(SPARK_SQL_INSERT_INTO_OPERATION.defaultValue()).toLowerCase(Locale.ROOT)
     val insertDupPolicyOpt = combinedOpts.get(INSERT_DUP_POLICY.key())
     val insertDupPolicySet = insertDupPolicyOpt.nonEmpty
     val insertDupPolicy = combinedOpts.getOrElse(INSERT_DUP_POLICY.key(), INSERT_DUP_POLICY.defaultValue())
@@ -230,7 +230,7 @@ trait ProvidesHoodieConfig extends Logging {
       } else {
         deduceSparkSqlInsertIntoWriteOperation(isOverwritePartition, isOverwriteTable, sparkSqlInsertIntoOperation)
       }
-    )
+    ).toLowerCase(Locale.ROOT)
 
     val overwriteTableOpts = if (operation.equals(BULK_INSERT_OPERATION_OPT_VAL)) {
       if (isOverwriteTable) {
@@ -341,7 +341,7 @@ trait ProvidesHoodieConfig extends Logging {
     )
     val combinedOpts: Map[String, String] = combineOptions(catalogTable, catalogTable.tableConfig, sparkSession.sessionState.conf,
       defaultOpts = Map.empty, overridingOpts = overridingOpts)
-    val operation = combinedOpts.getOrElse(OPERATION.key, null)
+    val operation = Option(combinedOpts.getOrElse(OPERATION.key, null)).map(_.toLowerCase(Locale.ROOT)).orNull
     val isOverwriteOperation = operation != null &&
       (operation.equals(INSERT_OVERWRITE_OPERATION_OPT_VAL) || operation.equals(INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL))
     // If hoodie.datasource.overwrite.mode configured, respect it, otherwise respect spark.sql.sources.partitionOverwriteMode

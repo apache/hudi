@@ -77,6 +77,7 @@ public class HoodieTableSink implements
 
   @Override
   public SinkRuntimeProvider getSinkRuntimeProvider(Context context) {
+    OptionsResolver.checkInsertOverwriteSupported(conf);
     return (DataStreamSinkProviderAdapter) dataStream -> {
 
       // setup configuration
