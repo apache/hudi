@@ -22,7 +22,6 @@ package org.apache.hudi.metadata.index.partitionstats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListData;
-import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -36,7 +35,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -51,6 +49,7 @@ import org.apache.hudi.metadata.index.model.IndexInitializationPlan;
 import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.metadata.index.model.IndexUpdateContext;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.storage.StoragePath;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -171,9 +170,8 @@ public class PartitionStatsIndexer extends BaseIndexer {
         });
       }
 
-      // In this function we fetch column range metadata for all new files part of commit metadata along with all the other files
-      // of the affected partitions. The column range metadata is grouped by partition name to generate HoodiePairData of partition name
-      // and list of column range metadata for that partition files. This pair data is then used to generate partition stat records.
+      // Gather statistics and the expected file inventory independently for each affected partition.
+      // Missing file/column records must invalidate that column's partition statistics.
       List<HoodieWriteStat> allWriteStats = commitMetadata.getPartitionToWriteStats().values().stream()
           .flatMap(Collection::stream).collect(Collectors.toList());
       if (allWriteStats.isEmpty()) {
@@ -194,36 +192,35 @@ public class PartitionStatsIndexer extends BaseIndexer {
 
       int parallelism = Math.max(Math.min(partitionedWriteStats.size(), metadataConfig.getPartitionStatsIndexParallelism()), 1);
       String maxInstantTime = getMaxInstantTime(dataMetaClient, instantTime);
-      HoodiePairData<String, List<HoodieColumnRangeMetadata<Comparable>>> columnRangeMetadata =
-          engineContext.parallelize(partitionedWriteStats, parallelism).mapToPair(partitionedWriteStat -> {
-            final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
-            checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
+      return engineContext.parallelize(partitionedWriteStats, parallelism).flatMap(partitionedWriteStat -> {
+        final String partitionName = partitionedWriteStat.get(0).getPartitionPath();
+        checkState(tableMetadata != null, "tableMetadata should not be null when scanning metadata table");
 
-            // Collect column metadata for each file part of the latest merged file slice before the current instant time
-            List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
-                .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
-            // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
-            Set<String> filesToFetchColumnStats = getFilesToFetchColumnStats(partitionedWriteStat, dataMetaClient, tableMetadata, dataWriteConfig, partitionName, maxInstantTime,
-                instantTime, fileGroupIdsToReplaceMap, colsToIndex, partitionStatsIndexVersion);
-            // Fetch metadata table COLUMN_STATS partition records for the above files
-            List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
-                .getRecordsByKeyPrefixes(
-                    HoodieListData.lazy(generateColumnStatsKeys(colsToIndex, partitionName)),
-                    MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
-                // schema and properties are ignored in getInsertValue, so simply pass as null
-                .map(record -> ((HoodieMetadataPayload) record.getData()).getColumnStatMetadata())
-                .filter(Option::isPresent)
-                .map(colStatsOpt -> colStatsOpt.get())
-                .filter(stats -> filesToFetchColumnStats.contains(stats.getFileName()))
-                .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
-            // fileColumnMetadata already contains stats for the files from the current inflight commit.
-            // Here it adds the stats for the committed files part of the latest merged file slices
-            fileColumnMetadata.addAll(partitionColumnMetadata);
-            return Pair.of(partitionName, fileColumnMetadata);
-          });
-
-      return HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords(
-          columnRangeMetadata, dataMetaClient, columnsToIndexSchemaMap, partitionStatsIndexVersion);
+        // Collect column metadata for each file part of the latest merged file slice before the current instant time
+        List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
+            .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
+        // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
+        Set<String> filesToFetchColumnStats = getFilesToFetchColumnStats(partitionedWriteStat, dataMetaClient, tableMetadata, dataWriteConfig, partitionName, maxInstantTime,
+            instantTime, fileGroupIdsToReplaceMap, colsToIndex, partitionStatsIndexVersion);
+        // Fetch metadata table COLUMN_STATS partition records for the above files
+        List<HoodieColumnRangeMetadata<Comparable>> partitionColumnMetadata = tableMetadata
+            .getRecordsByKeyPrefixes(
+                HoodieListData.lazy(generateColumnStatsKeys(colsToIndex, partitionName)),
+                MetadataPartitionType.COLUMN_STATS.getPartitionPath(), false)
+            // schema and properties are ignored in getInsertValue, so simply pass as null
+            .map(record -> ((HoodieMetadataPayload) record.getData()).getColumnStatMetadata())
+            .filter(Option::isPresent)
+            .map(colStatsOpt -> colStatsOpt.get())
+            .filter(stats -> filesToFetchColumnStats.contains(stats.getFileName()))
+            .map(HoodieColumnRangeMetadata::fromColumnStats).collectAsList();
+        // fileColumnMetadata already contains stats for the files from the current inflight commit.
+        // Here it adds the stats for the committed files part of the latest merged file slices
+        fileColumnMetadata.addAll(partitionColumnMetadata);
+        Set<String> expectedFileNames = new HashSet<>(filesToFetchColumnStats);
+        partitionedWriteStat.forEach(stat -> expectedFileNames.add(new StoragePath(stat.getPath()).getName()));
+        return HoodieTableMetadataUtil.convertMetadataToPartitionStatsRecords(
+            partitionName, fileColumnMetadata, expectedFileNames, columnsToIndexSchemaMap, partitionStatsIndexVersion).iterator();
+      });
     } catch (Exception e) {
       throw new HoodieException("Failed to generate partition stats records for metadata table", e);
     }

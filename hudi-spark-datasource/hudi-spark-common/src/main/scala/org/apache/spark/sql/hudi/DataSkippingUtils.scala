@@ -27,6 +27,7 @@ import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, SubqueryExpression}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.util.quoteIdentifier
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
@@ -477,10 +478,10 @@ object DataSkippingUtils extends Logging {
 
 object ColumnStatsExpressionUtils {
 
-  @inline def genColMinValueExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getMinColumnNameFor(colName)))
-  @inline def genColMaxValueExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getMaxColumnNameFor(colName)))
-  @inline def genColNumNullsExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getNullCountColumnNameFor(colName)))
-  @inline def genColValueCountExpr: Expression = sparkAdapter.getExpressionFromColumn(col(getValueCountColumnNameFor))
+  @inline def genColMinValueExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(quoteIdentifier(getMinColumnNameFor(colName))))
+  @inline def genColMaxValueExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(quoteIdentifier(getMaxColumnNameFor(colName))))
+  @inline def genColNumNullsExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(quoteIdentifier(getNullCountColumnNameFor(colName))))
+  @inline def genColValueCountExpr: Expression = sparkAdapter.getExpressionFromColumn(col(quoteIdentifier(getValueCountColumnNameFor)))
 
   @inline def genColumnIsNullExpression(colName: String): Expression = {
     val numNullsExpr = genColNumNullsExpr(colName)
