@@ -129,9 +129,11 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
   }
 
   private void close() {
+    Writer writerToClose = this.writer;
+    this.writer = null;
     try {
-      if (this.writer != null) {
-        this.writer.close();
+      if (writerToClose != null) {
+        writerToClose.close();
       }
     } catch (IOException e) {
       throw new HoodieException("Unable to close HoodieLogFormat writer", e);
@@ -150,9 +152,24 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       addArchivalCommitMetrics(instantsToArchive);
       boolean success = true;
       if (!instantsToArchive.isEmpty()) {
-        this.writer = openWriter(archiveFilePath.getParent());
         log.info("Archiving instants {} for table {}", instantsToArchive, config.getBasePath());
-        archive(context, instantsToArchive);
+        try {
+          this.writer = openWriter(archiveFilePath.getParent());
+          archive(context, instantsToArchive);
+          close();
+        } catch (Exception e) {
+          try {
+            close();
+          } catch (Exception closeException) {
+            e.addSuppressed(closeException);
+          }
+          if (this.config.isFailOnTimelineArchivingEnabled()) {
+            throw e;
+          }
+          recordArchivalFailure(e);
+          log.warn("Failed to archive instants for table {}; active timeline files will not be deleted", config.getBasePath(), e);
+          return 0;
+        }
         log.info("Deleting archived instants {} for table {}", instantsToArchive, config.getBasePath());
         success = deleteArchivedInstants(instantsToArchive, context);
       } else {
@@ -165,8 +182,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
       metrics.put(ArchivalMetrics.ARCHIVAL_OOM_FAILURE, 1L);
       throw oom;
     } catch (Exception e) {
-      String failureMetricName = String.join(".", ArchivalMetrics.ARCHIVAL_FAILURE, e.getClass().getSimpleName());
-      metrics.put(failureMetricName, 1L);
+      recordArchivalFailure(e);
       throw e;
     } finally {
       close();
@@ -179,6 +195,12 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
   @Override
   public Map<String, Long> getMetrics() {
     return metrics;
+  }
+
+  private void recordArchivalFailure(Exception e) {
+    metrics.put(ArchivalMetrics.ARCHIVAL_STATUS, -1L);
+    String failureMetricName = String.join(".", ArchivalMetrics.ARCHIVAL_FAILURE, e.getClass().getSimpleName());
+    metrics.put(failureMetricName, 1L);
   }
 
   private void addArchivalCommitMetrics(List<HoodieInstant> instantsToArchive) {
@@ -473,9 +495,7 @@ public class TimelineArchiverV1<T extends HoodieAvroPayload, I, K, O> implements
         } catch (Exception e) {
           InstantFileNameGenerator fileNameFactory = new InstantFileNameGeneratorV1();
           log.error("Failed to archive commits, .commit file: {}", fileNameFactory.getFileName(hoodieInstant), e);
-          if (this.config.isFailOnTimelineArchivingEnabled()) {
-            throw e;
-          }
+          throw e;
         }
       }
       writeToFile(wrapperSchema, records);

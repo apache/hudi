@@ -262,14 +262,14 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
           activeActionsBatch.add(iterator.next());
           // If the batch is full, write it to the LSM timeline
           if (activeActionsBatch.size() == batchSize) {
-            lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
+            lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty());
             activeActionsBatch.clear();
           }
         }
 
         // Write any remaining actions in the final batch
         if (!activeActionsBatch.isEmpty()) {
-          lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
+          lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty());
         }
       }
     } catch (Exception e) {
