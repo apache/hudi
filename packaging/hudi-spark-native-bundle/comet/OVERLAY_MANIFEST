@@ -1,0 +1,26 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+00252bb43f623ddc211f513a31214cff0fcd5e03 native/Cargo.lock
+ff3c7f6d2b75ba410810d0aec4ca56bd44fc6ef7 native/Cargo.toml
+d8d94d899c54b900922a275b37508fa17eb7223b native/core/Cargo.toml
+d1a262cf4317c216c598e05491670e8b6f0a9e3b native/core/src/execution/jni_api.rs
+37f56fe1c5c92539cdf2fdc9e7e0c4d01b12426e native/core/src/execution/operators/mod.rs
+c2cd01f50e91da7a84c3661a1f7fd32e5c8db962 native/core/src/execution/planner.rs
+face6c3eb5e2580c132953df0caccbd781a5dfcd native/core/src/execution/planner/operator_registry.rs
+7b3a7aec0d271888ea087c6955a1b88dea0cba0a native/proto/src/proto/operator.proto
+b7bca2bf8c07eaca5a9af8494612f12142bf34c9 spark/src/main/scala/org/apache/comet/rules/CometScanRule.scala
+new native/core/src/execution/operators/hudi_scan.rs
+new spark/src/main/scala/org/apache/comet/rules/CometExternalV1ScanProvider.scala
