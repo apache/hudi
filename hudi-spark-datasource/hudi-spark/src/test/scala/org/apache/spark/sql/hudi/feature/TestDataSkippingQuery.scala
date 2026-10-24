@@ -19,8 +19,9 @@
 
 package org.apache.spark.sql.hudi.feature
 
-import org.apache.hudi.ColumnStatsIndexSupport
+import org.apache.hudi.{ColumnStatsIndexSupport, PartitionStatsIndexSupport}
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
@@ -136,57 +137,161 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
   }
 
   test("Data skipping retains files with missing column statistics after index expansion") {
-    withTempDir { tmp =>
-      val tableName = generateTableName
-      withSQLConf(
-        "hoodie.metadata.enable" -> "true",
-        "hoodie.metadata.index.column.stats.enable" -> "true",
-        "hoodie.metadata.index.partition.stats.enable" -> "false",
-        "hoodie.metadata.index.column.stats.column.list" -> "age",
-        "hoodie.enable.data.skipping" -> "false"
-      ) {
-        spark.sql(
-          s"""
-             |create table $tableName (
-             |  id int,
-             |  name string,
-             |  age int,
-             |  ts long,
-             |  dt string
-             |) using hudi
-             | tblproperties (primaryKey = 'id', orderingFields = 'ts', type = 'cow')
-             | partitioned by (dt)
-             | location '${tmp.getCanonicalPath}'
-             |""".stripMargin)
-        // The data column exists from the first write, but only age is indexed.
-        spark.sql(s"insert into $tableName values (1, 'alice', 25, 1, 'par1')")
+    for (tableType <- Seq("cow", "mor"); partitionStats <- Seq(false, true)) {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.metadata.index.partition.stats.enable" -> partitionStats.toString,
+          "hoodie.fileIndex.dataSkippingFailureMode" -> "strict",
+          "hoodie.metadata.index.column.stats.column.list" -> "age",
+          "hoodie.enable.data.skipping" -> "false"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  age int,
+               |  ts long,
+               |  dt string
+               |) using hudi
+               | tblproperties (primaryKey = 'id', orderingFields = 'ts', type = '$tableType')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+          // The data column exists from the first write, but only age is indexed.
+          spark.sql(s"insert into $tableName values (1, 'alice', 25, 1, 'par1')")
 
-        withSQLConf("hoodie.metadata.index.column.stats.column.list" -> "age,name") {
-          // A separate partition leaves the old file and its statistics untouched.
-          spark.sql(s"insert into $tableName values (2, 'bob', 30, 2, 'par2')")
-          val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
-          val indexedColumns = metaClient.getIndexMetadata.get().getIndexDefinitions.get("column_stats").getSourceFields
-          assert(indexedColumns.contains("age") && indexedColumns.contains("name"), indexedColumns.toString)
-          val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
-          val index = new ColumnStatsIndexSupport(spark, spark.table(tableName).schema,
-            new TableSchemaResolver(metaClient).getTableSchema, metadataConfig, metaClient)
-          val stats = index.loadColumnStatsIndexRecords(Seq("age", "name"), shouldReadInMemory = true)
-            .collectAsList().asScala
-          assert(stats.count(_.getColumnName == "age") == 2)
-          assert(stats.count(_.getColumnName == "name") == 1)
-          assert(stats.groupBy(_.getFileName).values.map(_.map(_.getColumnName).toSet).toSet ==
-            Set(Set("age"), Set("age", "name")))
-          val query = s"select id, name, age from $tableName where age >= 0 and name = 'alice'"
-          checkAnswer(query)(Seq(1, "alice", 25))
+          withSQLConf("hoodie.metadata.index.column.stats.column.list" -> "age,name") {
+            // A separate partition leaves the old file and its statistics untouched.
+            spark.sql(s"insert into $tableName values (2, 'bob', 30, 2, 'par2')")
+            val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+            val indexedColumns = metaClient.getIndexMetadata.get().getIndexDefinitions.get("column_stats").getSourceFields
+            assert(indexedColumns.contains("age") && indexedColumns.contains("name"), indexedColumns.toString)
+            val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
+            val index = new ColumnStatsIndexSupport(spark, spark.table(tableName).schema,
+              new TableSchemaResolver(metaClient).getTableSchema, metadataConfig, metaClient)
+            val stats = index.loadColumnStatsIndexRecords(Seq("age", "name"), shouldReadInMemory = true)
+              .collectAsList().asScala
+            assert(stats.count(_.getColumnName == "age") == 2)
+            assert(stats.count(_.getColumnName == "name") == 1)
+            assert(stats.groupBy(_.getFileName).values.map(_.map(_.getColumnName).toSet).toSet ==
+              Set(Set("age"), Set("age", "name")))
+            val query = s"select id, name, age from $tableName where age >= 0 and name = 'alice'"
+            checkAnswer(query)(Seq(1, "alice", 25))
 
-          withSQLConf("hoodie.enable.data.skipping" -> "true") {
-            spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
-            spark.catalog.refreshTable(tableName)
-            withClue("Name-only predicate with data skipping enabled: ") {
-              checkAnswer(s"select id, name, age from $tableName where name = 'alice'")(Seq(1, "alice", 25))
+            withSQLConf("hoodie.enable.data.skipping" -> "true") {
+              spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
+              spark.catalog.refreshTable(tableName)
+              withClue("Name-only predicate with data skipping enabled: ") {
+                checkAnswer(s"select id, name, age from $tableName where name = 'alice'")(Seq(1, "alice", 25))
+              }
+              // Adding a matching age predicate must not discard the partially indexed file.
+              withClue("Combined age/name predicate with data skipping enabled: ") {
+                checkAnswer(query)(Seq(1, "alice", 25))
+              }
             }
-            // Adding a matching age predicate must not discard the partially indexed file.
-            withClue("Combined age/name predicate with data skipping enabled: ") {
+          }
+        }
+      }
+    }
+  }
+
+  test("Partition statistics invalidate incomplete columns after adding indexed columns") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.metadata.index.partition.stats.enable" -> "true",
+          "hoodie.metadata.index.column.stats.column.list" -> "age",
+          "hoodie.parquet.small.file.limit" -> "0",
+          "hoodie.enable.data.skipping" -> "false"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (id int, name string, age int, ts long, dt string) using hudi
+               | tblproperties (primaryKey = 'id', orderingFields = 'ts', type = '$tableType')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'alice', 25, 1, 'par1')")
+          withSQLConf("hoodie.metadata.index.column.stats.column.list" -> "age,name") {
+            // Keep both files live in the same partition; rewriting the old file would hide missing coverage.
+            spark.sql(s"insert into $tableName values (2, 'bob', 30, 2, 'par1')")
+            assert(spark.sql(s"select input_file_name() from $tableName").collect().map(_.getString(0)).toSet.size == 2)
+            val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+            val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
+            val hoodieSchema = new TableSchemaResolver(metaClient).getTableSchema
+            val index = new ColumnStatsIndexSupport(spark, spark.table(tableName).schema, hoodieSchema, metadataConfig, metaClient)
+            val fileStats = index.loadColumnStatsIndexRecords(Seq("age", "name"), shouldReadInMemory = true).collectAsList().asScala
+            assert(fileStats.count(_.getColumnName == "age") == 2)
+            assert(fileStats.count(_.getColumnName == "name") == 1)
+            assert(fileStats.groupBy(_.getFileName).values.map(_.map(_.getColumnName).toSet).toSet ==
+              Set(Set("age"), Set("age", "name")))
+            val partitions = new PartitionStatsIndexSupport(spark, spark.table(tableName).schema, hoodieSchema, metadataConfig, metaClient)
+            val partitionStats = partitions.loadColumnStatsIndexRecords(Seq("age", "name"), shouldReadInMemory = true)
+              .collectAsList().asScala.filterNot(_.getIsDeleted)
+            assert(partitionStats.map(_.getColumnName).toSet == Set("age"), partitionStats.toString)
+            assert(partitionStats.head.getValueCount == 2)
+            checkAnswer(s"select id, name, age from $tableName where name = 'alice'")(Seq(1, "alice", 25))
+            withSQLConf("hoodie.enable.data.skipping" -> "true", "hoodie.fileIndex.dataSkippingFailureMode" -> "strict") {
+              spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
+              spark.catalog.refreshTable(tableName)
+              checkAnswer(s"select id, name, age from $tableName where name = 'alice'")(Seq(1, "alice", 25))
+              checkAnswer(s"select id, name, age from $tableName where age >= 0 and name = 'alice'")(Seq(1, "alice", 25))
+            }
+          }
+        }
+      }
+    }
+  }
+
+  test("Data skipping retains MOR log files with missing column statistics") {
+    Seq(false, true).foreach { partitionStats =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.metadata.index.partition.stats.enable" -> partitionStats.toString,
+          "hoodie.metadata.index.column.stats.column.list" -> "age",
+          "hoodie.compact.inline" -> "false",
+          "hoodie.compact.schedule.inline" -> "false",
+          "hoodie.enable.data.skipping" -> "false",
+          "hoodie.fileIndex.dataSkippingFailureMode" -> "strict"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (id int, name string, age int, ts long, dt string) using hudi
+               | tblproperties (primaryKey = 'id', orderingFields = 'ts', type = 'mor')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+          spark.sql(s"insert into $tableName values (1, 'before', 20, 1, 'par1')")
+          // Updating the existing key writes alice to a log before name is indexed.
+          spark.sql(s"update $tableName set name = 'alice', age = 25, ts = 2 where id = 1")
+          withSQLConf("hoodie.metadata.index.column.stats.column.list" -> "age,name") {
+            spark.sql(s"insert into $tableName values (2, 'bob', 30, 3, 'par2')")
+            val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+            val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
+            val index = new ColumnStatsIndexSupport(spark, spark.table(tableName).schema,
+              new TableSchemaResolver(metaClient).getTableSchema, metadataConfig, metaClient)
+            val stats = index.loadColumnStatsIndexRecords(Seq("age", "name"), shouldReadInMemory = true).collectAsList().asScala
+            val partialLogs = stats.groupBy(_.getFileName).filter { case (fileName, columns) =>
+              FSUtils.isLogFile(fileName) && columns.map(_.getColumnName).toSet == Set("age")
+            }
+            assert(partialLogs.nonEmpty, stats.toString)
+            val query = s"select id, name, age from $tableName where age >= 0 and name = 'alice'"
+            // The base file contains before, so this result proves the log contributes the matching row.
+            checkAnswer(query)(Seq(1, "alice", 25))
+            withSQLConf("hoodie.enable.data.skipping" -> "true") {
+              spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
+              spark.catalog.refreshTable(tableName)
+              checkAnswer(s"select id, name, age from $tableName where name = 'alice'")(Seq(1, "alice", 25))
               checkAnswer(query)(Seq(1, "alice", 25))
             }
           }

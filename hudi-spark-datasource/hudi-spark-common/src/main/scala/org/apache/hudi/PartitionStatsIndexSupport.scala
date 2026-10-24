@@ -35,9 +35,8 @@ import org.apache.hudi.util.{JFunction}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
-import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.hudi.DataSkippingUtils.{containsNullOrValueCountBasedFilters, translateIntoColumnStatsIndexFilterExpr}
+import org.apache.spark.sql.catalyst.expressions.{DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
+import org.apache.spark.sql.hudi.DataSkippingUtils.containsNullOrValueCountBasedFilters
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.storage.StorageLevel
 
@@ -108,30 +107,27 @@ class PartitionStatsIndexSupport(spark: SparkSession,
           transposedPartitionStatsDF => {
             try {
               transposedPartitionStatsDF.persist(StorageLevel.MEMORY_AND_DISK_SER)
-              val allPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
-                .collect()
-                .map(_.getString(0))
-                .toSet
-              if (allPartitions.nonEmpty) {
-                // PARTITION_STATS index exist for all or some columns in the filters
-                // NOTE: [[translateIntoColumnStatsIndexFilterExpr]] has covered the case where the
-                //       column in a filter does not have the stats available, by making sure such a
-                //       filter does not prune any partition.
-                // to be fixed. HUDI-8836.
-                val indexFilter = filteredQueryFilters.map(translateIntoColumnStatsIndexFilterExpr(_, indexedCols = filteredIndexedCols)).reduce(And)
-                if (indexFilter.equals(TrueLiteral)) {
-                  // if there are any non indexed cols or we can't translate source expr, we cannot prune partitions based on col stats lookup.
-                  Some(allPartitions)
-                } else {
-                  Some(transposedPartitionStatsDF.where(sparkAdapter.createColumnFromExpression(indexFilter))
-                    .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+              // Use the file index's query-path inventory: partitions entirely absent from the
+              // projected stats must survive, just like files absent from the column stats index.
+              lazy val allPartitions = fileIndex.getAllQueryPartitionPaths.asScala.map(_.getPath).toSet
+              buildCandidateFilter(transposedPartitionStatsDF, filteredQueryFilters, filteredIndexedCols) match {
+                case None => Some(allPartitions)
+                case Some(candidateFilter) =>
+                  val indexedPartitions = transposedPartitionStatsDF.select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
                     .collect()
                     .map(_.getString(0))
-                    .toSet)
-                }
-              } else {
-                // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
-                Option.empty
+                    .toSet
+                  if (indexedPartitions.nonEmpty) {
+                    val matchingPartitions = transposedPartitionStatsDF.where(candidateFilter)
+                      .select(HoodieMetadataPayload.COLUMN_STATS_FIELD_FILE_NAME)
+                      .collect()
+                      .map(_.getString(0))
+                      .toSet
+                    Some((matchingPartitions ++ (allPartitions -- indexedPartitions)).intersect(allPartitions))
+                  } else {
+                    // PARTITION_STATS index does not exist for any column in the filters, skip the pruning
+                    None
+                  }
               }
             } finally {
               transposedPartitionStatsDF.unpersist()
