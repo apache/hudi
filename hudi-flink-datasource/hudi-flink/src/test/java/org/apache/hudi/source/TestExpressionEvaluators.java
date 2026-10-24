@@ -39,6 +39,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -369,6 +370,35 @@ public class TestExpressionEvaluators {
 
     in.bindVals((Object) null);
     assertFalse(in.eval(stats1), "It is not possible to test for NULL values with 'in' operator");
+  }
+
+  @Test
+  void testTimestampStatsPreserveMicroseconds() {
+    LocalDateTime lower = LocalDateTime.parse("1970-01-01T00:00:01.000001");
+    LocalDateTime upper = lower.plusNanos(1000);
+    FieldReferenceExpression field = new FieldReferenceExpression("ts", DataTypes.TIMESTAMP(6), 0, 0);
+    RowType.RowField[] fields = {new RowType.RowField("ts", DataTypes.TIMESTAMP(6).getLogicalType())};
+    RowData indexRow = org.apache.flink.table.data.GenericRowData.of(
+        StringData.fromString("file"), 1L, TimestampData.fromLocalDateTime(upper), TimestampData.fromLocalDateTime(upper), 0L);
+    Map<String, ColumnStats> stats = convertColumnStats(indexRow, fields);
+    ValueLiteralExpression lowerLiteral = new ValueLiteralExpression(lower);
+    ValueLiteralExpression upperLiteral = new ValueLiteralExpression(upper);
+    assertTrue(fromExpression(call(BuiltInFunctionDefinitions.GREATER_THAN, field, lowerLiteral)).eval(stats));
+    assertTrue(fromExpression(call(BuiltInFunctionDefinitions.NOT_EQUALS, field, lowerLiteral)).eval(stats));
+    assertFalse(fromExpression(call(BuiltInFunctionDefinitions.EQUALS, field, lowerLiteral)).eval(stats));
+    assertFalse(fromExpression(call(BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL, field, lowerLiteral)).eval(stats));
+    assertTrue(fromExpression(call(BuiltInFunctionDefinitions.EQUALS, field, upperLiteral)).eval(stats));
+    assertTrue(fromExpression(CallExpression.permanent(BuiltInFunctionDefinitions.IN,
+        Arrays.asList(field, lowerLiteral, upperLiteral), DataTypes.BOOLEAN())).eval(stats));
+    assertFalse(fromExpression(call(BuiltInFunctionDefinitions.IN, field, lowerLiteral)).eval(stats));
+    // The literal has precision zero, while the field has precision six.
+    ValueLiteralExpression wholeSecond = new ValueLiteralExpression(lower.withNano(0));
+    assertTrue(fromExpression(call(BuiltInFunctionDefinitions.GREATER_THAN, field, wholeSecond)).eval(stats));
+
+    RowData lowerRow = org.apache.flink.table.data.GenericRowData.of(
+        StringData.fromString("file"), 1L, TimestampData.fromLocalDateTime(lower), TimestampData.fromLocalDateTime(lower), 0L);
+    assertTrue(fromExpression(call(BuiltInFunctionDefinitions.LESS_THAN, field, upperLiteral))
+        .eval(convertColumnStats(lowerRow, fields)));
   }
 
   @Test
