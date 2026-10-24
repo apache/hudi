@@ -26,6 +26,7 @@ Kubernetes cluster (minikube) for **development only**:
 | `manifests/hive-metastore.yaml` | Derby-backed HMS on thrift 9083 | in real deployments you bring your own HMS/Glue |
 | Apache Spark Kubernetes Operator | runs `SparkApplication` jobs | installed from its upstream helm chart by `up.sh` |
 | `charts/hudi-trino` (product chart) | Trino + the Hudi connector | the same chart used against real infrastructure, installed with `values-local-dev.yaml` |
+| `charts/hudi-spark-connect` (optional) | Spark Connect + Hudi, for direct ADBC SQL clients | enabled with `--spark-connect`; reuses MinIO/HMS |
 | `example/` | copy-me template to submit any Spark job | see its README |
 
 ## Quickstart
@@ -56,6 +57,23 @@ kubectl -n hudi-lakehouse exec deploy/hudi-trino -- \
 
 Consoles (via `kubectl -n hudi-lakehouse port-forward`):
 MinIO `svc/minio 9001`, Trino UI `svc/hudi-trino 8080`.
+
+## Optional: Spark Connect
+
+Run `../scripts/quickstart.sh --spark-connect` from this directory to build
+and install MinIO, HMS, and Connect using Docker, minikube, Helm, and kubectl.
+This mode requires no host Maven/JDK or Trino/writer build. When calling
+`scripts/up.sh` directly, build/load the Connect image first and pass
+`--spark-connect` there as well. Existing releases remain installed.
+
+Without `--spark-connect`, the scripts use the legacy full stack and its Trino
+build chain; see the chart README for its current limitations. Existing gateway
+configuration is unaffected.
+
+See [the Connect chart README](../charts/hudi-spark-connect/README.md) for
+ADBC client setup, CRUD and restart checks, resource requirements, and security
+limitations. The endpoint uses a separate Spark 4.1 image; existing Spark 3.5
+writer jobs continue unchanged.
 
 ## Optional: vLLM instead of Ollama
 
