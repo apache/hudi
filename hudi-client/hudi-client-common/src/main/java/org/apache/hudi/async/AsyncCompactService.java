@@ -78,7 +78,20 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
           if (null != instantTime) {
             log.info("Starting Compaction for instant {}", instantTime);
-            compactor.compact(instantTime);
+            BaseHoodieWriteClient clientAtStart = getCompactionWriteClient();
+            try {
+              compactor.compact(instantTime);
+            } catch (Exception e) {
+              if (getCompactionWriteClient() == clientAtStart) {
+                throw e;
+              }
+              // The writer switched this service to a new write client while the compaction ran, e.g. on a schema
+              // change, and closes the previous one: run the instant again with the new client.
+              log.warn("Compaction for instant {} failed after the write client was replaced, retrying it with the new write client",
+                  instantTime, e);
+              enqueuePendingAsyncServiceInstant(instantTime);
+              continue;
+            }
             log.info("Finished Compaction for instant {}", instantTime);
           }
         }
@@ -110,5 +123,9 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.compactor.updateWriteClient(writeClient);
+  }
+
+  private synchronized BaseHoodieWriteClient getCompactionWriteClient() {
+    return this.compactor.compactionClient;
   }
 }
