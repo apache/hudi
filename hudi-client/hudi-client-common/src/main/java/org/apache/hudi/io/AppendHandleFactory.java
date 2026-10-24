@@ -36,10 +36,10 @@ public class AppendHandleFactory<T, I, K, O> extends WriteHandleFactory<T, I, K,
     String fileId = getNextFileId(fileIdPrefix);
     if (CommonClientUtils.shouldWriteNativeLogs(hoodieConfig)) {
       return new HoodieNativeLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
-          fileId, sparkTaskContextSupplier);
+          fileId, null, sparkTaskContextSupplier);
     }
     return new HoodieInlineLogAppendHandle<>(hoodieConfig, commitTime, hoodieTable, partitionPath,
-        fileId, sparkTaskContextSupplier);
+        fileId, null, sparkTaskContextSupplier);
   }
 
   public HoodieAppendHandle<T, I, K, O> create(final HoodieWriteConfig hoodieConfig, final String commitTime,

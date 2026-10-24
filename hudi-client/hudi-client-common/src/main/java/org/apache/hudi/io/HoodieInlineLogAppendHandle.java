@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io;
 
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
@@ -35,8 +36,8 @@ import org.apache.hudi.common.table.log.block.HoodieHFileDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
@@ -56,6 +57,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -99,6 +101,7 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
   private final SizeEstimator<HoodieRecord> sizeEstimator;
 
   private final String[] orderingFields;
+  private final RecordContext<?> recordContext;
 
   /**
    * This is used by log compaction only.
@@ -106,7 +109,7 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
   public HoodieInlineLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
                             TaskContextSupplier taskContextSupplier, Map<HeaderMetadataType, String> header) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, true);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, true, hoodieTable.getRecordContextForWrite());
     this.useWriterSchema = true;
     this.isLogCompaction = true;
     this.header.putAll(header);
@@ -114,19 +117,18 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
 
   public HoodieInlineLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, false);
+    this(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, false, hoodieTable.getRecordContextForWrite());
   }
 
-  private HoodieInlineLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                             String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr, TaskContextSupplier taskContextSupplier, boolean preserveMetadata) {
+  protected HoodieInlineLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
+                                      TaskContextSupplier taskContextSupplier, boolean preserveMetadata, RecordContext<?> recordContext) {
     super(config, instantTime, hoodieTable, partitionPath, fileId, recordItr, taskContextSupplier, preserveMetadata);
     this.sizeEstimator = getSizeEstimator();
-    this.orderingFields = ConfigUtils.getOrderingFields(recordProperties);
-  }
-
-  public HoodieInlineLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                            String partitionPath, String fileId, TaskContextSupplier sparkTaskContextSupplier) {
-    this(config, instantTime, hoodieTable, partitionPath, fileId, null, sparkTaskContextSupplier);
+    this.orderingFields = HoodieRecordUtils.getOrderingFieldNames(
+        hoodieTable.getMetaClient().getTableConfig().getRecordMergeMode(), recordProperties);
+    this.recordContext = recordContext;
+    this.recordContext.initOrderingValueConverter(writeSchemaWithMetaFields, Arrays.asList(orderingFields));
   }
 
   protected SizeEstimator<HoodieRecord> getSizeEstimator() {
@@ -293,8 +295,9 @@ public class HoodieInlineLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     hoodieRecord.seal();
     recordsDeleted++;
 
-    // store ordering value with Java type.
-    final Comparable<?> orderingVal = hoodieRecord.getOrderingValueAsJava(writeSchema, recordProperties, orderingFields);
+    // Inline delete blocks require Java values; keep the record's cached engine value unchanged.
+    Comparable<?> engineOrderingValue = hoodieRecord.getOrderingValue(schema, recordProperties, orderingFields);
+    Comparable<?> orderingVal = recordContext.convertOrderingValueToJava(engineOrderingValue);
     long position = baseFileInstantTimeOfPositions.isPresent() ? hoodieRecord.getCurrentPosition() : -1L;
     recordsToDeleteWithPositions.add(Pair.of(DeleteRecord.create(hoodieRecord.getKey(), orderingVal), position));
   }
