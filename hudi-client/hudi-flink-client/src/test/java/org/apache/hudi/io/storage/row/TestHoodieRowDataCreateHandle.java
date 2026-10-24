@@ -101,9 +101,9 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
       if (preserveMetadata) {
         row = HoodieRowDataCreation.create(
             mode.isCommitTimePopulated() ? "old-instant" : null,
-            mode == MetaFieldsMode.ALL ? "old-sequence" : null,
+            mode.isCommitSeqnoPopulated() ? "old-sequence" : null,
             mode.isRecordKeyPopulated() ? "id1" : null,
-            mode == MetaFieldsMode.ALL ? PARTITION_PATH : null,
+            mode.isPartitionPathPopulated() ? PARTITION_PATH : null,
             mode.isFileNamePopulated() ? "old-file" : null,
             row, false, false);
       }
@@ -115,13 +115,13 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
       assertEquals("id1", stored.get("id").toString());
       assertEquals(mode.isCommitTimePopulated() ? (preserveMetadata ? "old-instant" : INSTANT_TIME) : null,
           Objects.toString(stored.get(HoodieRecord.COMMIT_TIME_METADATA_FIELD), null));
-      assertEquals(mode != MetaFieldsMode.ALL, stored.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
-      if (preserveMetadata && mode == MetaFieldsMode.ALL) {
+      assertEquals(!mode.isCommitSeqnoPopulated(), stored.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD) == null);
+      if (preserveMetadata && mode.isCommitSeqnoPopulated()) {
         assertEquals("old-sequence", stored.get(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD).toString());
       }
       assertEquals(mode.isRecordKeyPopulated() ? "id1" : null,
           Objects.toString(stored.get(HoodieRecord.RECORD_KEY_METADATA_FIELD), null));
-      assertEquals(mode == MetaFieldsMode.ALL ? PARTITION_PATH : null,
+      assertEquals(mode.isPartitionPathPopulated() ? PARTITION_PATH : null,
           Objects.toString(stored.get(HoodieRecord.PARTITION_PATH_METADATA_FIELD), null));
       assertEquals(mode.isFileNamePopulated() ? file.getName() : null,
           Objects.toString(stored.get(HoodieRecord.FILENAME_METADATA_FIELD), null));
