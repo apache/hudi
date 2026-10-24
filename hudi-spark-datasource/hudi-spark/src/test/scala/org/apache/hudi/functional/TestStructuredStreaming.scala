@@ -17,27 +17,33 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteOptions, DefaultSparkRecordMerger, HoodieDataSourceHelpers, HoodieStreamingSink}
 import org.apache.hudi.DataSourceWriteOptions.{STREAMING_CHECKPOINT_IDENTIFIER, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
-import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
+import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.common.config.{HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.engine.RecordContext
+import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.marker.MarkerType
+import org.apache.hudi.common.table.read.BufferedRecord
 import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, FileSystemViewStorageType}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
-import org.apache.hudi.common.util.{CollectionUtils, CommitUtils}
-import org.apache.hudi.config.{HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, MarkerUtils, Option => HOption}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider
-import org.apache.hudi.exception.TableNotFoundException
+import org.apache.hudi.exception.{HoodieException, TableNotFoundException}
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}
 
 import org.apache.spark.sql._
+import org.apache.spark.sql.functions.lit
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
@@ -97,6 +103,18 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     storage.createDirectory(new StoragePath(sourcePath))
     (sourcePath, destPath)
   }
+
+  /**
+   * Lazy failed-writes cleaning, where failed instants are rolled back once their heartbeat expires; failed
+   * micro-batches are ignored so that the query keeps running.
+   */
+  private val lazyFailedWritesCleaningOpts = Map(
+    HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key -> WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name,
+    HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key -> HoodieFailedWritesCleaningPolicy.LAZY.name,
+    HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key -> classOf[InProcessLockProvider].getName,
+    STREAMING_CHECKPOINT_IDENTIFIER.key -> "streaming_writer",
+    DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key -> "true",
+    DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> "1")
 
   def getOptsWithTableType(tableType: HoodieTableType): Map[String, String] = {
     commonOpts + (DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name())
@@ -509,6 +527,148 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   /**
+   * The sink owns one embedded timeline server for the lifetime of the streaming query and reuses it across
+   * micro-batches. With a REMOTE_ONLY file system view and no backup view, every micro-batch after the first used
+   * to fail because the timeline server was stopped along with the first micro-batch's write client
+   * (https://github.com/apache/hudi/issues/12652). Failed batches are ignored here so that a regression shows up
+   * as missing commits rather than the sink exiting the JVM.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testStructuredStreamingReusesTimelineServerAcrossBatches(tableType: HoodieTableType): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val opts = getOptsWithTableType(tableType) ++ Map(
+      HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key -> "true",
+      FileSystemViewStorageConfig.VIEW_TYPE.key -> FileSystemViewStorageType.REMOTE_ONLY.name,
+      FileSystemViewStorageConfig.REMOTE_BACKUP_VIEW_ENABLE.key -> "false",
+      DataSourceWriteOptions.STREAMING_IGNORE_FAILED_BATCH.key -> "true",
+      DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> "1")
+
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val query = initWritingStreamingQuery(inputDF1.schema, sourcePath, destPath, opts)
+    try {
+      query.processAllAvailable()
+      for (i <- 1 to 2) {
+        val records = recordsToStrings(dataGen.generateUpdates("%03d".format(i), 50)).asScala.toList
+        spark.read.json(spark.sparkContext.parallelize(records, 2)).coalesce(1)
+          .write.mode(SaveMode.Append).json(sourcePath)
+        query.processAllAvailable()
+      }
+    } finally {
+      query.stop()
+    }
+
+    assertEquals(3, HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, destPath).countInstants())
+  }
+
+  /**
+   * Same as [[testStructuredStreamingReleasesHeartbeatOfFailedBatch]] for a delete stream, which fails inside the
+   * delete operation: a record without a record key fails the key generation after the commit started.
+   */
+  @Test
+  def testStructuredStreamingReleasesHeartbeatOfFailedDelete(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val opts = getOptsWithTableType(HoodieTableType.COPY_ON_WRITE) ++ lazyFailedWritesCleaningOpts
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(
+      recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList, 1))
+    inputDF.write.format("org.apache.hudi").options(opts).mode(SaveMode.Overwrite).save(destPath)
+
+    inputDF.limit(1).withColumn("_row_key", lit(null).cast("string")).write.mode(SaveMode.Append).json(sourcePath)
+    val query = initWritingStreamingQuery(inputDF.schema, sourcePath, destPath,
+      opts + (DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL))
+    try {
+      query.processAllAvailable()
+    } finally {
+      query.stop()
+    }
+
+    val failedInstant = HoodieTestUtils.createMetaClient(storage, destPath).getActiveTimeline
+      .getCommitsTimeline.filterInflightsAndRequested().lastInstant()
+    assertTrue(failedInstant.isPresent, "the failed micro-batch must leave an inflight instant")
+    assertFalse(storage.exists(new StoragePath(HoodieTableMetaClient.getHeartbeatFolderPath(destPath),
+      failedInstant.get().requestedTime())), "the heartbeat of the failed instant must be stopped")
+  }
+
+  /**
+   * The sink keeps its write client open across micro-batches, so a micro-batch that fails after its commit started
+   * must still stop that instant's heartbeat. Otherwise, with the lazy failed-writes clean policy, the failed instant
+   * looks alive for as long as the query runs and is never rolled back. The failed write's markers also show that
+   * the sink uses timeline-server-based markers.
+   */
+  @Test
+  def testStructuredStreamingReleasesHeartbeatOfFailedBatch(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val opts = getOptsWithTableType(HoodieTableType.COPY_ON_WRITE) ++ Map(
+      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.RECORD_MERGE_MODE.key -> "CUSTOM",
+      DataSourceWriteOptions.RECORD_MERGE_STRATEGY_ID.key -> FailingSparkRecordMerger.STRATEGY_ID,
+      DataSourceWriteOptions.RECORD_MERGE_IMPL_CLASSES.key -> classOf[FailingSparkRecordMerger].getName
+    ) ++ lazyFailedWritesCleaningOpts
+
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val query = initWritingStreamingQuery(inputDF1.schema, sourcePath, destPath, opts)
+    try {
+      query.processAllAvailable()
+
+      // the updates of the next micro-batch fail while merging, after the commit started
+      FailingSparkRecordMerger.shouldFail = true
+      try {
+        spark.read.json(spark.sparkContext.parallelize(
+          recordsToStrings(dataGen.generateUniqueUpdates("001", 50)).asScala.toList, 2)).coalesce(1)
+          .write.mode(SaveMode.Append).json(sourcePath)
+        query.processAllAvailable()
+      } finally {
+        FailingSparkRecordMerger.shouldFail = false
+      }
+      val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
+      val failedInstant = metaClient.getActiveTimeline.getCommitsTimeline.filterInflightsAndRequested().lastInstant()
+      assertTrue(failedInstant.isPresent, "the failed micro-batch must leave an inflight instant")
+      assertFalse(storage.exists(new StoragePath(HoodieTableMetaClient.getHeartbeatFolderPath(destPath),
+        failedInstant.get().requestedTime())), "the heartbeat of the failed instant must be stopped")
+      // the sink does not force direct markers: the failed write's markers went through the sink's timeline server
+      assertEquals(HOption.of(MarkerType.TIMELINE_SERVER_BASED),
+        MarkerUtils.readMarkerType(storage, metaClient.getMarkerFolderPath(failedInstant.get().requestedTime())))
+
+      // the query recovers on the next micro-batch
+      spark.read.json(spark.sparkContext.parallelize(
+        recordsToStrings(dataGen.generateUniqueUpdates("002", 50)).asScala.toList, 2)).coalesce(1)
+        .write.mode(SaveMode.Append).json(sourcePath)
+      query.processAllAvailable()
+    } finally {
+      query.stop()
+    }
+    assertEquals(2, HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, destPath).countInstants())
+  }
+
+  /**
+   * When a micro-batch exhausts its retries, the sink resets while holding its lock: it shuts down the async table
+   * services and waits for them. The services' shutdown callbacks must not block on the sink in turn, otherwise the
+   * reset never finishes and the query hangs. The reset is driven directly here, with async clustering running,
+   * since a micro-batch that exhausts its retries exits the JVM.
+   */
+  @Test
+  def testSinkResetWithAsyncServiceRunningDoesNotHang(): Unit = {
+    val (_, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val opts = getOptsWithTableType(HoodieTableType.COPY_ON_WRITE)
+    spark.read.json(spark.sparkContext.parallelize(recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList, 1))
+      .write.format("org.apache.hudi").options(opts).mode(SaveMode.Overwrite).save(destPath)
+
+    val sink = new ResettableStreamingSink(sqlContext, opts + ("path" -> destPath))
+    val client = DataSourceUtils.createHoodieClient(jsc, HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, destPath,
+      commonOpts(HoodieWriteConfig.TBL_NAME.key), opts.asJava)
+    try {
+      sink.startAsyncClustering(client)
+      Await.result(Future(sink.resetHoldingSinkLock()), Duration(2, "minutes"))
+    } finally {
+      client.close()
+    }
+  }
+
+  /**
    * Injects a failing micro-batch into [[HoodieStreamingSink]] by pointing the record key at a
    * non-existent column so that every Hudi write throws. With STREAMING_IGNORE_FAILED_BATCH
    * enabled the sink must swallow the failure (unpersisting the write RDDs), let the streaming
@@ -612,5 +772,40 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
         assertEquals(0, expectedUpdatedRecords.except(updatedRecords).count())
       }
     }
+  }
+}
+
+/**
+ * Event-time merger that fails every merge while [[FailingSparkRecordMerger.shouldFail]] is set, to fail a write
+ * after its commit started.
+ */
+class FailingSparkRecordMerger extends DefaultSparkRecordMerger {
+  override def getMergingStrategy: String = FailingSparkRecordMerger.STRATEGY_ID
+
+  override def merge[T](older: BufferedRecord[T], newer: BufferedRecord[T], recordContext: RecordContext[T],
+                        props: TypedProperties): BufferedRecord[T] = {
+    if (FailingSparkRecordMerger.shouldFail) {
+      throw new HoodieException("Injected merge failure")
+    }
+    super.merge(older, newer, recordContext, props)
+  }
+}
+
+object FailingSparkRecordMerger {
+  val STRATEGY_ID = "6b3a2b4e-2f4f-4f0c-9a55-3c3f7d0b8e21"
+  @volatile var shouldFail: Boolean = false
+}
+
+/**
+ * Streaming sink that exposes its async clustering service and reset to tests.
+ */
+class ResettableStreamingSink(sqlContext: SQLContext, options: Map[String, String])
+  extends HoodieStreamingSink(sqlContext, options, Seq.empty, OutputMode.Append) {
+
+  def startAsyncClustering(client: SparkRDDWriteClient[_]): Unit = triggerAsyncClustering(client)
+
+  // a micro-batch that exhausts its retries resets the sink from addBatch, which holds the sink lock
+  def resetHoldingSinkLock(): Unit = this.synchronized {
+    reset(false)
   }
 }
