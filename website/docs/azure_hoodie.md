@@ -25,6 +25,10 @@ There are two storage systems support Hudi .
 This combination works out of the box. No extra config needed.
 
 #### Databricks Spark2.4 on Azure Data Lake Storage Gen 2
+> This recipe targets Databricks on Spark 2.4 and ADLS Gen 2 specifically. For reading Hudi tables on a
+> current Databricks Runtime, see
+> [Reading Hudi tables on the Databricks runtime](quick-start-guide.md#reading-hudi-tables-on-the-databricks-runtime).
+
 - Import Hudi jar to databricks workspace
 
 - Mount the file system to dbutils.
