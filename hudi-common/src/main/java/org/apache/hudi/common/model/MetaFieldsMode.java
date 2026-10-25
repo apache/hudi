@@ -33,19 +33,9 @@ import java.util.stream.Collectors;
 /**
  * Which of Hudi's meta columns are physically populated on disk.
  *
- * <p>Selective modes exist so that tables that opt out of the default {@code populate.meta.fields=true}
- * can still keep the two columns that matter for downstream operations without paying for the other
- * three:
- *
- * <ul>
- *   <li>{@code _hoodie_commit_time} — required for incremental queries.</li>
- *   <li>{@code _hoodie_file_name} — useful for file-level pruning / investigation lookups.</li>
- * </ul>
- *
- * <p>The remaining three meta columns ({@code _hoodie_commit_seqno}, {@code _hoodie_record_key},
- * {@code _hoodie_partition_path}) are all-or-nothing — either populate every meta column ({@link #ALL})
- * or none of them beyond the two selectable ones. If you need any of the remaining columns, set
- * {@code hoodie.populate.meta.fields=true}.
+ * <p>Selective modes let tables populate only the meta columns they need. Commit time supports
+ * incremental queries, and file name supports file-level lookups. {@link #ALL_EXCEPT_RECORD_KEY}
+ * also retains commit sequence number and partition path while omitting the record key.
  *
  * <p>This enum is the single source of truth for meta-column population. When the mode property is
  * absent, the {@code resolve} overloads fall back to the deprecated {@code
@@ -65,43 +55,51 @@ public enum MetaFieldsMode {
   /**
    * All five Hudi meta columns are populated — today's default.
    */
-  ALL(true, true),
+  ALL(true, true, true, true),
 
   /**
    * No Hudi meta columns are populated. Incremental queries are unsupported. File-level pruning
    * that depends on {@code _hoodie_file_name} is unsupported.
    */
-  NONE(false, false),
+  NONE(false, false, false, false),
 
   /**
    * Only {@code _hoodie_commit_time} is populated. Incremental queries remain functional; other
    * meta columns stay null on disk.
    */
-  COMMIT_TIME_ONLY(true, false),
+  COMMIT_TIME_ONLY(true, false, false, false),
 
   /**
    * Only {@code _hoodie_file_name} is populated. Useful for file-level lookups and debugging;
    * incremental queries are unsupported.
    */
-  FILE_NAME_ONLY(false, true),
+  FILE_NAME_ONLY(false, true, false, false),
 
   /**
    * Both {@code _hoodie_commit_time} and {@code _hoodie_file_name} are populated.
    */
-  COMMIT_TIME_AND_FILE_NAME(true, true);
+  COMMIT_TIME_AND_FILE_NAME(true, true, false, false),
+
+  /**
+   * All meta columns except {@code _hoodie_record_key} are populated.
+   */
+  ALL_EXCEPT_RECORD_KEY(true, true, true, true);
 
   private final boolean commitTimePopulated;
   private final boolean fileNamePopulated;
+  private final boolean commitSeqnoPopulated;
+  private final boolean partitionPathPopulated;
 
-  MetaFieldsMode(boolean commitTimePopulated, boolean fileNamePopulated) {
+  MetaFieldsMode(boolean commitTimePopulated, boolean fileNamePopulated,
+                 boolean commitSeqnoPopulated, boolean partitionPathPopulated) {
     this.commitTimePopulated = commitTimePopulated;
     this.fileNamePopulated = fileNamePopulated;
+    this.commitSeqnoPopulated = commitSeqnoPopulated;
+    this.partitionPathPopulated = partitionPathPopulated;
   }
 
   /**
-   * @return true when all five meta columns are populated (i.e. this is {@link #ALL}). Selective
-   * modes never populate {@code _hoodie_record_key}, {@code _hoodie_partition_path}, or
-   * {@code _hoodie_commit_seqno}.
+   * @return true when the record key is populated (i.e. this is {@link #ALL}).
    */
   public boolean isRecordKeyPopulated() {
     return this == ALL;
@@ -114,7 +112,7 @@ public enum MetaFieldsMode {
    * <p>These are the modes the deprecated {@code hoodie.populate.meta.fields} boolean cannot
    * express, so they are what callers gate on when a code path only understands all-or-nothing meta
    * fields — writer engines not yet wired for selective population, table versions that predate the
-   * mode property, and validation that must not let a two-state writer speak for a five-state table.
+   * mode property, and validation that must not let a two-state writer speak for a selective-mode table.
    */
   public boolean isSelective() {
     return this != ALL && this != NONE;
@@ -220,6 +218,8 @@ public enum MetaFieldsMode {
     }
     return (commitTimePopulated && !other.commitTimePopulated)
         || (fileNamePopulated && !other.fileNamePopulated)
+        || (commitSeqnoPopulated && !other.commitSeqnoPopulated)
+        || (partitionPathPopulated && !other.partitionPathPopulated)
         || (isRecordKeyPopulated() && !other.isRecordKeyPopulated());
   }
 }

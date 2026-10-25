@@ -22,6 +22,7 @@ import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
@@ -82,9 +83,9 @@ public class TestHoodieRowDataLanceWriter {
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
       assertTrue(arrowReader.loadNextBatch());
       VectorSchemaRoot root = arrowReader.getVectorSchemaRoot();
-      boolean[] populated = {mode.isCommitTimePopulated(), mode == MetaFieldsMode.ALL,
-          mode.isRecordKeyPopulated(), mode == MetaFieldsMode.ALL, mode.isFileNamePopulated()};
-      String[] expected = {"001", null, "key1", "partition", path.getName()};
+      boolean[] populated = {mode.isCommitTimePopulated(), mode.isCommitSeqnoPopulated(),
+          mode.isRecordKeyPopulated(), mode.isPartitionPathPopulated(), mode.isFileNamePopulated()};
+      String[] expected = {"001", HoodieRecord.generateSequenceId("001", 0, 0), "key1", "partition", path.getName()};
       for (int i = 0; i < populated.length; i++) {
         assertEquals(!populated[i], root.getVector(i).isNull(0));
         if (populated[i] && expected[i] != null) {

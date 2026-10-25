@@ -111,6 +111,13 @@ public class HoodieAvroParquetWriter
         if (metaFieldsMode.isCommitTimePopulated()) {
           genericRecord.put(HoodieRecord.COMMIT_TIME_METADATA_FIELD, instantTime);
         }
+        if (metaFieldsMode.isCommitSeqnoPopulated()) {
+          genericRecord.put(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD,
+              HoodieRecord.generateSequenceId(instantTime, taskContextSupplier.getPartitionIdSupplier().get(), getWrittenRecordCount()));
+        }
+        if (metaFieldsMode.isPartitionPathPopulated()) {
+          genericRecord.put(HoodieRecord.PARTITION_PATH_METADATA_FIELD, key.getPartitionPath());
+        }
         if (metaFieldsMode.isFileNamePopulated()) {
           genericRecord.put(HoodieRecord.FILENAME_METADATA_FIELD, fileName);
         }
