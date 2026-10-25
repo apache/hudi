@@ -23,18 +23,12 @@
 //! that URI, so merge mode, ordering field, and table version never travel in
 //! the plan; this operator only reads the named slices and projects the
 //! requested columns.
-//!
-//! Every batch crosses from hudi-rs into this workspace through the Arrow C
-//! data interface, whose layout is fixed by the Arrow specification and is
-//! identical across arrow crate majors; the transfer is pointer-level, not a
-//! copy. hudi-rs is on an older arrow major, named here as `hudi_arrow`, which
-//! exports the batch that this workspace's arrow then imports.
 
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use arrow::array::{Array as _, RecordBatch, RecordBatchOptions, StructArray};
+use arrow::array::{Array as _, RecordBatch, RecordBatchOptions};
 use arrow::compute::cast;
 use arrow::datatypes::SchemaRef;
 use datafusion::common::tree_node::TreeNodeRecursion;
@@ -90,33 +84,6 @@ impl HudiScanExec {
             metrics: ExecutionPlanMetricsSet::new(),
         }
     }
-}
-
-/// Moves a batch from hudi-rs's arrow into this workspace's arrow over the
-/// Arrow C data interface.
-fn batch_across_ffi(batch: hudi_arrow::array::RecordBatch) -> DFResult<RecordBatch> {
-    let data = hudi_arrow::array::Array::into_data(hudi_arrow::array::StructArray::from(batch));
-    let (mut ffi_array, mut ffi_schema) = hudi_arrow::ffi::to_ffi(&data)
-        .map_err(|e| DataFusionError::Execution(format!("Hudi scan arrow export failed: {e}")))?;
-    // SAFETY: FFI_ArrowArray and FFI_ArrowSchema are the #[repr(C)] structs of
-    // the Arrow C data interface; their layout is defined by the Arrow
-    // specification and is identical across arrow crate versions. from_raw
-    // moves each struct out and leaves a released one behind, so the release
-    // callbacks fire exactly once, on this workspace's side.
-    let (ffi_array, ffi_schema) = unsafe {
-        (
-            arrow::ffi::FFI_ArrowArray::from_raw(
-                &mut ffi_array as *mut _ as *mut arrow::ffi::FFI_ArrowArray,
-            ),
-            arrow::ffi::FFI_ArrowSchema::from_raw(
-                &mut ffi_schema as *mut _ as *mut arrow::ffi::FFI_ArrowSchema,
-            ),
-        )
-    };
-    // SAFETY: both structs were just produced by to_ffi and are valid.
-    let data = unsafe { arrow::ffi::from_ffi(ffi_array, &ffi_schema) }
-        .map_err(|e| DataFusionError::Execution(format!("Hudi scan arrow import failed: {e}")))?;
-    Ok(RecordBatch::from(StructArray::from(data)))
 }
 
 /// Reorders and casts a batch's columns to the scan's output schema. hudi-rs
@@ -276,7 +243,7 @@ impl ExecutionPlan for HudiScanExec {
         })
         .try_flatten()
         .map(move |result| {
-            let aligned = align_to_schema(batch_across_ffi(result?)?, &schema)?;
+            let aligned = align_to_schema(result?, &schema)?;
             baseline.record_output(aligned.num_rows());
             Ok(aligned)
         });
