@@ -23,4 +23,4 @@ COMET_VERSION=1.1.0-hudi-1
 # The hudi-rs revision is pinned in overlay/native/Cargo.toml (git dependency)
 # and locked with its full transitive graph in overlay/native/Cargo.lock. This
 # line documents it for humans; the Cargo files are the source of truth.
-HUDI_RS_COMMIT=eb95599c29dc9859c62294335e51d302a59d10e7
+HUDI_RS_COMMIT=cc5365b59a4fc84051718fbb40abe2dd444ce0ba

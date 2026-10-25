@@ -61,12 +61,10 @@ rand = "0.10"
 regex = "1.12.3"
 thiserror = "2"
 object_store = { version = "0.13.2", features = ["gcp", "azure", "aws", "http"] }
-hudi = { git = "https://github.com/apache/hudi-rs.git", rev = "eb95599c29dc9859c62294335e51d302a59d10e7" }
-# hudi-rs is on an older arrow major than this workspace. This renamed dep
-# names hudi-rs's arrow so its batches can cross into this workspace's arrow
-# through the Arrow C data interface (ABI-stable across majors). Drop it, and
-# the export side of the crossing, once hudi-rs is on this workspace's major.
-hudi-arrow = { package = "arrow", version = "58", default-features = false, features = ["ffi"] }
+# hudi-rs shares this workspace's arrow and DataFusion majors, so its batches
+# are this workspace's arrow batches. The lockfile resolves DataFusion to the
+# patch release both accept.
+hudi = { git = "https://github.com/apache/hudi-rs.git", rev = "cc5365b59a4fc84051718fbb40abe2dd444ce0ba" }
 url = "2.2"
 aws-config = "1.8.18"
 aws-credential-types = "1.2.13"
