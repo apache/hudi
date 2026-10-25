@@ -1,0 +1,426 @@
+name: Comet Spark Tests (experiment)
+
+# Throwaway lane: runs Hudi's Spark 3.5 / Scala 2.12 test suites with Apache DataFusion Comet as the
+# Spark plugin and the native Hudi scan from hudi-spark-datasource/hudi-spark-comet enabled, to find
+# out which tests fail when Hudi runs on Comet plus hudi-rs. It is not meant to be merged or to gate
+# anything. The job layout mirrors the Spark 3.5 lanes of bot.yml (the commented [CI-TRIM] ones for
+# the datasource modules); the differences are:
+#   * JDK 17 everywhere (Comet needs 11+, and the java17 profile supplies the add-opens flags),
+#   * -Dcomet.hudi.build -Dcomet.hudi.tests put hudi-spark-comet in the reactor and switch the test
+#     JVMs to Comet (see comet.hudi.test.spark.flags and the comet-hudi-tests profiles in the poms),
+#   * -Dsurefire.rerunFailingTestsCount=0 so a flaky-under-Comet test shows up as a failure,
+#   * -Dsurefire.reuseForks=false so a native crash (see COMET_ARGS) costs one test class, not the module,
+#   * tables are written at table version 8 (see HUDI_WRITE_TABLE_VERSION) so the native scan engages,
+#   * no coverage upload; surefire reports are uploaded instead when a job fails.
+# build-comet compiles Comet (pinned commit plus the Hudi overlay) once with a portable x86-64-v3
+# native library and hands the installed Maven artifacts to the test jobs through a workflow artifact.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep in sync with bot.yml.
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.intervalMax=30000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504 -Daether.connector.http.connectionMaxTtl=25 -Dorg.eclipse.jetty.LEVEL=WARN
+  # Activates hudi-spark-comet in the reactor, the comet-hudi-tests profiles, the Hudi-built Comet
+  # artifact, disables surefire retries, and forks one JVM per test class: Comet's native scan of
+  # plain parquet on a MiniDFSCluster (hdfs://) segfaults in libhdfs, and with a shared fork that
+  # crash would erase every test after it in the module. Passed to every install and test command.
+  COMET_ARGS: -Dcomet.hudi.build -Dcomet.hudi.tests -Ddatafusion.comet.version=1.1.0-hudi-1 -Dsurefire.rerunFailingTestsCount=0 -Dsurefire.reuseForks=false
+  COMET_VERSION: 1.1.0-hudi-1
+  # Table version the tests write. HoodieTableVersion.current() is 10 on this branch while the native
+  # Hudi scan (hudi-spark-comet's provider) accepts only 6, 8 and 9, so without this every table a
+  # test writes is declined and the hudi-rs path is never exercised. It is applied through Hudi's
+  # global config file (HUDI_CONF_DIR/hudi-defaults.conf, honored by the Spark writer and SQL
+  # paths). Set to '' to run the lane on the default table version instead.
+  HUDI_WRITE_TABLE_VERSION: '8'
+  COMET_DIR: packaging/hudi-spark-native-bundle/comet
+  SCALA_PROFILE: scala-2.12
+  SPARK_PROFILE: spark3.5
+  FLINK_PROFILE: flink2.2
+  SPARK_MODULES: hudi-spark-datasource/hudi-spark3.5.x
+  SPARK_COMMON_MODULES: hudi-spark-datasource/hudi-spark,hudi-spark-datasource/hudi-spark-common
+  JAVA_UT_FILTER1: -Dtest=!TestCOWDataSource,!TestMORDataSource,!TestHoodieFileSystemViews
+  JAVA_UT_FILTER2: -Dtest=TestCOWDataSource,TestMORDataSource,TestHoodieFileSystemViews
+  SCALA_TEST_DML_FILTER: -DwildcardSuites=org.apache.spark.sql.hudi.dml
+  SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hive,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.blob,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
+
+jobs:
+  build-comet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set build paths
+        # Cargo's target directory is kept outside the Comet checkout so it can be cached and restored
+        # before build_comet.sh clones Comet (git clone refuses a non-empty destination).
+        run: |
+          echo "COMET_BUILD_DIR=$RUNNER_TEMP/comet-build" >> "$GITHUB_ENV"
+          echo "CARGO_TARGET_DIR=$RUNNER_TEMP/comet-cargo-target" >> "$GITHUB_ENV"
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Install native build dependencies
+        # protobuf-compiler: Comet's proto build script. clang/libclang: bindgen for the RocksDB
+        # build that hudi-rs pulls in. cmake/pkg-config/libssl-dev: transitive -sys crates.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler clang libclang-dev cmake pkg-config libssl-dev
+      - name: Set up Rust
+        # Comet's rust-toolchain.toml asks for stable with rustfmt, clippy and rust-analyzer; rustup
+        # honors it when cargo runs inside the checkout. Installing up front keeps the download out
+        # of the timed build step.
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy,rust-analyzer
+          rustup default stable
+          rustc --version
+          cargo --version
+      - name: Cache the Comet native build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ${{ env.CARGO_TARGET_DIR }}
+          key: comet-native-x86-64-v3-${{ runner.os }}-${{ hashFiles('packaging/hudi-spark-native-bundle/comet/COMET_PIN', 'packaging/hudi-spark-native-bundle/comet/OVERLAY_MANIFEST', 'packaging/hudi-spark-native-bundle/comet/overlay/native/Cargo.lock') }}
+          restore-keys: |
+            comet-native-x86-64-v3-${{ runner.os }}-
+      - name: Build the Comet native library
+        # core-amd64-libs is Comet's portable x86 release build (-Ctarget-cpu=x86-64-v3); the default
+        # `release` target compiles for the build machine's CPU, which the test runners may not share.
+        run: COMET_MAKE_TARGET=core-amd64-libs "$COMET_DIR/build_comet.sh"
+      - name: Install the Comet Maven artifacts
+        # core-amd64-libs only builds libcomet.so; the install is the second half of Comet's `release`
+        # target. The release profile packs native/target/release/libcomet.so into the spark jar, so
+        # the external cargo target directory is linked in at that path.
+        run: |
+          rm -rf "$COMET_BUILD_DIR/native/target"
+          ln -s "$CARGO_TARGET_DIR" "$COMET_BUILD_DIR/native/target"
+          test -f "$COMET_BUILD_DIR/native/target/release/libcomet.so"
+          cd "$COMET_BUILD_DIR"
+          ./mvnw -B -ntp install -Prelease -Pspark-3.5 -DskipTests
+          JAR=~/.m2/repository/org/apache/datafusion/comet-spark-spark3.5_2.12/$COMET_VERSION/comet-spark-spark3.5_2.12-$COMET_VERSION.jar
+          ls -la "$JAR"
+          unzip -l "$JAR" | grep libcomet
+      - name: Upload the Comet Maven artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: comet-m2
+          path: ~/.m2/repository/org/apache/datafusion
+          if-no-files-found: error
+          retention-days: 7
+
+  test-spark-client-and-cli:
+    needs: build-comet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Install the Comet Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-m2
+          path: ~/.m2/repository/org/apache/datafusion
+      - name: Pin the Hudi write table version
+        if: env.HUDI_WRITE_TABLE_VERSION != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/hudi-conf"
+          echo "hoodie.write.table.version=$HUDI_WRITE_TABLE_VERSION" > "$RUNNER_TEMP/hudi-conf/hudi-defaults.conf"
+          echo "HUDI_CONF_DIR=$RUNNER_TEMP/hudi-conf" >> "$GITHUB_ENV"
+      - name: Build Project
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS $COMET_ARGS -am -pl hudi-client/hudi-spark-client,hudi-cli
+      - name: UT - hudi-client/hudi-spark-client
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-client/hudi-spark-client $MVN_ARGS $COMET_ARGS
+      - name: FT - hudi-client/hudi-spark-client
+        if: always()
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-client/hudi-spark-client $MVN_ARGS $COMET_ARGS
+      - name: UT - hudi-cli
+        if: always()
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-cli $MVN_ARGS $COMET_ARGS
+      - name: FT - hudi-cli
+        if: always()
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-cli $MVN_ARGS $COMET_ARGS
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-spark-client-and-cli
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+  test-utilities:
+    needs: build-comet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Install the Comet Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-m2
+          path: ~/.m2/repository/org/apache/datafusion
+      - name: Pin the Hudi write table version
+        if: env.HUDI_WRITE_TABLE_VERSION != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/hudi-conf"
+          echo "hoodie.write.table.version=$HUDI_WRITE_TABLE_VERSION" > "$RUNNER_TEMP/hudi-conf/hudi-defaults.conf"
+          echo "HUDI_CONF_DIR=$RUNNER_TEMP/hudi-conf" >> "$GITHUB_ENV"
+      - name: Build Project
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS $COMET_ARGS -am -pl hudi-utilities
+      - name: UT - hudi-utilities (TestHoodie*)
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dtest="TestHoodie*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS $COMET_ARGS
+      - name: UT - hudi-utilities (others)
+        if: always()
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dtest='!TestHoodie*' -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS $COMET_ARGS
+      - name: FT - hudi-utilities
+        if: always()
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS $COMET_ARGS
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-utilities
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+  test-spark-java-tests-part1:
+    needs: build-comet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Install the Comet Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-m2
+          path: ~/.m2/repository/org/apache/datafusion
+      - name: Pin the Hudi write table version
+        if: env.HUDI_WRITE_TABLE_VERSION != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/hudi-conf"
+          echo "hoodie.write.table.version=$HUDI_WRITE_TABLE_VERSION" > "$RUNNER_TEMP/hudi-conf/hudi-defaults.conf"
+          echo "HUDI_CONF_DIR=$RUNNER_TEMP/hudi-conf" >> "$GITHUB_ENV"
+      - name: Build Project
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS $COMET_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Java UT 1 - Common & Spark
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-spark-java-tests-part1
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+  test-spark-java-tests-part2:
+    needs: build-comet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Install the Comet Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-m2
+          path: ~/.m2/repository/org/apache/datafusion
+      - name: Pin the Hudi write table version
+        if: env.HUDI_WRITE_TABLE_VERSION != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/hudi-conf"
+          echo "hoodie.write.table.version=$HUDI_WRITE_TABLE_VERSION" > "$RUNNER_TEMP/hudi-conf/hudi-defaults.conf"
+          echo "HUDI_CONF_DIR=$RUNNER_TEMP/hudi-conf" >> "$GITHUB_ENV"
+      - name: Build Project
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS $COMET_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Quickstart Test
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS $COMET_ARGS
+      - name: Java UT 2 - Common & Spark
+        if: always()
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Java FTA - Spark
+        if: always()
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-spark-java-tests-part2
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+  test-spark-java-tests-part3:
+    needs: build-comet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Install the Comet Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-m2
+          path: ~/.m2/repository/org/apache/datafusion
+      - name: Pin the Hudi write table version
+        if: env.HUDI_WRITE_TABLE_VERSION != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/hudi-conf"
+          echo "hoodie.write.table.version=$HUDI_WRITE_TABLE_VERSION" > "$RUNNER_TEMP/hudi-conf/hudi-defaults.conf"
+          echo "HUDI_CONF_DIR=$RUNNER_TEMP/hudi-conf" >> "$GITHUB_ENV"
+      - name: Build Project
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS $COMET_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Java FTB - Spark
+        run:
+          mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Java FTC - Spark
+        if: always()
+        run:
+          mvn test -Pfunctional-tests-c -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-spark-java-tests-part3
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+  test-spark-scala-dml-tests:
+    needs: build-comet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Install the Comet Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-m2
+          path: ~/.m2/repository/org/apache/datafusion
+      - name: Pin the Hudi write table version
+        if: env.HUDI_WRITE_TABLE_VERSION != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/hudi-conf"
+          echo "hoodie.write.table.version=$HUDI_WRITE_TABLE_VERSION" > "$RUNNER_TEMP/hudi-conf/hudi-defaults.conf"
+          echo "HUDI_CONF_DIR=$RUNNER_TEMP/hudi-conf" >> "$GITHUB_ENV"
+      - name: Build Project
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS $COMET_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Scala UT - DML
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Scala FT - DML
+        if: always()
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-spark-scala-dml-tests
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+  test-spark-scala-other-tests:
+    needs: build-comet
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Install the Comet Maven artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: comet-m2
+          path: ~/.m2/repository/org/apache/datafusion
+      - name: Pin the Hudi write table version
+        if: env.HUDI_WRITE_TABLE_VERSION != ''
+        run: |
+          mkdir -p "$RUNNER_TEMP/hudi-conf"
+          echo "hoodie.write.table.version=$HUDI_WRITE_TABLE_VERSION" > "$RUNNER_TEMP/hudi-conf/hudi-defaults.conf"
+          echo "HUDI_CONF_DIR=$RUNNER_TEMP/hudi-conf" >> "$GITHUB_ENV"
+      - name: Build Project
+        run:
+          mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS $COMET_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+      - name: Scala UT - Others
+        run:
+          mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Scala FT - Others
+        if: always()
+        run:
+          mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -fae -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS $COMET_ARGS
+      - name: Upload surefire reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-spark-scala-other-tests
+          path: '**/target/surefire-reports/**'
+          retention-days: 7
