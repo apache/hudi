@@ -14,7 +14,7 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-FROM --platform=linux/amd64 adoptopenjdk/openjdk11:alpine
+FROM --platform=linux/amd64 azul/zulu-openjdk-alpine:11
 
 RUN apk add --no-cache --upgrade bash curl jq git maven
 

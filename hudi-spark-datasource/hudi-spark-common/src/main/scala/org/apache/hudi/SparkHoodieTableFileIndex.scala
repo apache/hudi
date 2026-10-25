@@ -17,23 +17,28 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.DataSourceReadOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.SparkHoodieTableFileIndex.{deduceQueryType, extractEqualityPredicatesLiteralValues, generateFieldMap, haveProperPartitionValues, shouldListLazily, shouldUsePartitionPathPrefixAnalysis, shouldValidatePartitionColumns}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.config.TypedProperties
+import org.apache.hudi.common.config.{HoodieCommonConfig, TypedProperties}
+import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.{FileSlice, HoodieTableQueryType}
 import org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.internal.Types.RecordType
+import org.apache.hudi.common.schema.internal.utils.Conversions
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 import org.apache.hudi.common.util.ReflectionUtils
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieBootstrapConfig.DATA_QUERIES_ONLY
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath
+import org.apache.hudi.hadoop.HoodieLatestBaseFilesPathFilter
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.internal.schema.Types.RecordType
-import org.apache.hudi.internal.schema.utils.Conversions
 import org.apache.hudi.keygen.{StringPartitionPathFormatter, TimestampBasedAvroKeyGenerator, TimestampBasedKeyGenerator}
+import org.apache.hudi.metadata.{CatalogBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.util.JFunction
 
@@ -42,11 +47,11 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{expressions, InternalRow}
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredicate, BoundReference, EmptyRow, EqualTo, Expression, InterpretedPredicate, Literal}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, BasePredicate, BoundReference, EmptyRow, EqualTo, Expression, GetStructField, Literal}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.{FileStatusCache, NoopCache}
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{ByteType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{ByteType, DataType, DateType, IntegerType, LongType, ShortType, StringType, StructField, StructType}
 import org.slf4j.LoggerFactory
 
 import javax.annotation.concurrent.NotThreadSafe
@@ -55,6 +60,7 @@ import java.lang.reflect.{Array => JArray}
 import java.util.Collections
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.LinkedHashMap
 import scala.language.implicitConversions
 import scala.util.{Success, Try}
 
@@ -88,6 +94,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     deduceQueryType(configProperties),
     queryPaths.asJava,
     toJavaOption(specifiedQueryInstant),
+    configProperties.getBoolean(FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.key,
+      FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER.defaultValue()),
     false,
     false,
     SparkHoodieTableFileIndex.adapt(fileStatusCache),
@@ -102,10 +110,10 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
    * Get the schema of the table.
    */
   lazy val schema: StructType = if (shouldFastBootstrap) {
-      StructType(rawStructSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
-    } else {
-      rawStructSchema
-    }
+    StructType(rawStructSchema.fields.filterNot(f => HOODIE_META_COLUMNS_WITH_OPERATION.contains(f.name)))
+  } else {
+    rawStructSchema
+  }
 
   lazy val rawHoodieSchema: HoodieSchema = {
     val schemaUtil = new TableSchemaResolver(metaClient)
@@ -117,6 +125,16 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   protected lazy val shouldFastBootstrap = configProperties.getBoolean(DATA_QUERIES_ONLY.key, false)
+
+  protected lazy val usePartitionValueExtractorOnRead = configProperties.getBoolean(
+    DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.key(),
+    DataSourceReadOptions.USE_PARTITION_VALUE_EXTRACTOR_ON_READ.defaultValue().toBoolean)
+
+  lazy val isPartitionListingViaCatalogEnabled: Boolean = {
+    configProperties.getBoolean(FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key,
+      FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.defaultValue()) &&
+      !metaClient.isMetadataTable
+  }
 
   /**
    * Get the partition schema from the hoodie.properties.
@@ -186,6 +204,25 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   /**
+   * Spark-facing partition schema that preserves nested structure for nested partition columns.
+   *
+   * NOTE: Hudi's [[partitionSchema]] intentionally returns a *flat* schema where field names use full
+   * dot-paths (for example, "a.b.c") to avoid collisions with top-level data columns. Some Spark
+   * planner/analyzer paths, however, reason about nested columns as nested [[StructType]]s and
+   * require a nested schema shape to properly resolve [[GetStructField]] chains.
+   *
+   * This method reconstructs a nested [[StructType]] from the flat partition schema, using the same
+   * leaf data-types, and preserving deterministic field ordering based on the original flat schema.
+   */
+  def partitionSchemaForSpark: StructType = {
+    if (!shouldReadAsPartitionedTable) {
+      new StructType()
+    } else {
+      SparkHoodieTableFileIndex.buildNestedPartitionSchema(_partitionSchemaFromProperties)
+    }
+  }
+
+  /**
    * Fetch list of latest base files w/ corresponding log files, after performing
    * partition pruning
    *
@@ -213,25 +250,33 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   /**
-   * Prune the partition by the filter.This implementation is fork from
+   * Lists the partitions of the table matching the partition predicates. The pruning is forked from
    * org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex#prunePartitions.
+   *
+   * Whether this lists the table depends on the predicates and the query:
+   *  - No partition predicate: returns [[getAllQueryPartitionPaths]]. For an incremental query whose start
+   *    is inside the active timeline these are the partitions written by the instants in range, read from
+   *    the commit metadata. Otherwise (snapshot query, or an incremental query starting from `earliest` or
+   *    before the active timeline) every partition of the table is listed.
+   *  - Equality predicates on all partition columns: a single existence check, no listing.
+   *  - Equality predicates on the leading partition columns: only the partitions under that prefix are listed.
+   *  - No bound leading prefix: hive-style, URL-encoded tables list from the table root, evaluating the
+   *    predicates through the metadata table, with no incremental shortcut. Other tables fall back to
+   *    [[getAllQueryPartitionPaths]] as above.
+   *
+   * Callers that already hold the candidate partitions (e.g. incremental reads, which know the partitions
+   * modified by the commits in range) should use [[filterPartitionPaths]] instead, which never lists the table.
    *
    * @param predicates The filter condition.
    * @return The pruned partition paths.
    */
   def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
-    val resolve = spark.sessionState.analyzer.resolver
     val partitionColumnNames = getPartitionColumns
-    val partitionPruningPredicates = predicates.filter {
-      _.references.map(_.name).forall { ref =>
-        // NOTE: We're leveraging Spark's resolver here to appropriately handle case-sensitivity
-        partitionColumnNames.exists(partCol => resolve(ref, partCol))
-      }
-    }
+    val partitionPruningPredicates = predicates.filter(referencesOnlyPartitionColumns)
 
     if (partitionPruningPredicates.isEmpty) {
       val queryPartitionPaths = getAllQueryPartitionPaths.asScala.toSeq
-      logInfo(s"No partition predicates provided, listing full table (${queryPartitionPaths.size} partitions)")
+      logInfo(s"No partition predicates provided, using all query partitions (${queryPartitionPaths.size} partitions)")
       queryPartitionPaths
     } else {
       // NOTE: We fallback to already cached partition-paths only in cases when we can subsequently
@@ -251,40 +296,102 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       we might not be able to properly parse partition-values from the listed partition-paths.
       //       In that case, we simply could not apply partition pruning and will have to regress to scanning
       //       the whole table
-      if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
-        val predicate = partitionPruningPredicates.reduce(expressions.And)
-        val transformedPredicate = predicate.transform {
-          case a: AttributeReference =>
-            val index = partitionSchema.indexWhere(a.name == _.name)
-            BoundReference(index, partitionSchema(index).dataType, nullable = true)
-        }
-        val boundPredicate: BasePredicate = try {
-          // Try using 1-arg constructor via reflection
-          val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
-          val ctor = clazz.getConstructor(classOf[Expression])
-          ctor.newInstance(transformedPredicate).asInstanceOf[BasePredicate]
-        } catch {
-          case _: NoSuchMethodException | _: IllegalArgumentException =>
-            // Fallback: Try using 2-arg constructor for certain Spark runtime
-            val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
-            val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
-            ctor.newInstance(transformedPredicate, java.lang.Boolean.FALSE)
-              .asInstanceOf[BasePredicate]
-        }
-        val prunedPartitionPaths = partitionPaths.filter {
-          partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.getValues))
-        }.toSeq
+      prunePartitionPaths(partitionPaths.toSeq, partitionPruningPredicates)
+    }
+  }
 
-        logInfo(s"Using provided predicates to prune number of target table's partitions scanned from" +
-          s" ${partitionPaths.size} to ${prunedPartitionPaths.size}")
+  /**
+   * Prunes the given relative partition paths by the partition predicates, without listing the table.
+   * Used by incremental reads, which already know the partitions modified by the commits in range.
+   *
+   * @param relativePartitionPaths The candidate relative partition paths.
+   * @param predicates             The filter condition.
+   * @return The relative partition paths matching the partition predicates.
+   */
+  def filterPartitionPaths(relativePartitionPaths: Seq[String], predicates: Seq[Expression]): Seq[String] = {
+    val partitionPruningPredicates = predicates.filter(referencesOnlyPartitionColumns)
+    if (partitionPruningPredicates.isEmpty) {
+      relativePartitionPaths
+    } else {
+      prunePartitionPaths(relativePartitionPaths.map(convertToPartitionPath), partitionPruningPredicates).map(_.getPath)
+    }
+  }
 
-        prunedPartitionPaths
-      } else {
-        logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
-          s" following path(s): ${partitionPaths.find(_.getValues.length == 0).map(e => e.getPath)}")
+  // Resolves GetStructField chain to full dot-path: GetStructField(attr("a"), _, "b") → "a.b"
+  private def getFieldPath(expr: Expression): Option[String] = expr match {
+    case a: AttributeReference => Some(a.name)
+    case GetStructField(child, _, Some(fieldName)) =>
+      getFieldPath(child).map(_ + "." + fieldName)
+    case _ => None
+  }
 
-        partitionPaths.toSeq
+  // True if every column reference in expr resolves to a partition column.
+  // For nested columns, walks GetStructField chains to match the full dot-path.
+  // Example: partition = "nested_record.level"
+  //   nested_record.level = 'INFO'   → GetStructField path "nested_record.level" → true
+  //   nested_record.nested_int = 10  → GetStructField path "nested_record.nested_int" → false
+  //   IsNotNull(nested_record)       → AttributeReference "nested_record" not in partitionColumnNames → false
+  private def referencesOnlyPartitionColumns(expr: Expression): Boolean = {
+    val resolve = spark.sessionState.analyzer.resolver
+    val partitionColumnNames = getPartitionColumns
+    expr match {
+      case g: GetStructField =>
+        getFieldPath(g).exists(path => partitionColumnNames.exists(pc => resolve(path, pc)))
+      case a: AttributeReference =>
+        partitionColumnNames.exists(pc => resolve(a.name, pc))
+      case _ =>
+        expr.children.forall(referencesOnlyPartitionColumns)
+    }
+  }
+
+  /**
+   * Evaluates the (non-empty) partition pruning predicates against the partition values of the given
+   * partition paths.
+   */
+  private def prunePartitionPaths(partitionPaths: Seq[PartitionPath],
+                                  partitionPruningPredicates: Seq[Expression]): Seq[PartitionPath] = {
+    val resolve = spark.sessionState.analyzer.resolver
+    if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
+      val predicate = partitionPruningPredicates.reduce(expressions.And)
+      val partitionFieldNames = partitionSchema.fieldNames
+      val transformedPredicate = predicate.transform {
+        case g @ GetStructField(_, _, Some(_)) =>
+          getFieldPath(g).flatMap { path =>
+            val idx = partitionFieldNames.indexWhere(name => resolve(path, name))
+            if (idx >= 0) Some(BoundReference(idx, partitionSchema(idx).dataType, nullable = true))
+            else None
+          }.getOrElse(g)
+        case a: AttributeReference =>
+          val index = partitionSchema.indexWhere(sf => resolve(a.name, sf.name))
+          if (index >= 0) BoundReference(index, partitionSchema(index).dataType, nullable = true)
+          else a
       }
+      val boundPredicate: BasePredicate = try {
+        // Try using 1-arg constructor via reflection
+        val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
+        val ctor = clazz.getConstructor(classOf[Expression])
+        ctor.newInstance(transformedPredicate).asInstanceOf[BasePredicate]
+      } catch {
+        case _: NoSuchMethodException | _: IllegalArgumentException =>
+          // Fallback: Try using 2-arg constructor for certain Spark runtime
+          val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
+          val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
+          ctor.newInstance(transformedPredicate, java.lang.Boolean.FALSE)
+            .asInstanceOf[BasePredicate]
+      }
+      val prunedPartitionPaths = partitionPaths.filter {
+        partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.getValues))
+      }.toSeq
+
+      logInfo(s"Using provided predicates to prune number of target table's partitions scanned from" +
+        s" ${partitionPaths.size} to ${prunedPartitionPaths.size}")
+
+      prunedPartitionPaths
+    } else {
+      logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
+        s" following path(s): ${partitionPaths.find(_.getValues.length == 0).map(e => e.getPath)}")
+
+      partitionPaths.toSeq
     }
   }
 
@@ -344,7 +451,7 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
     val urlEncodePartitioning = metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
 
-    val partitionTypesOption =if (hiveStylePartitioning && urlEncodePartitioning) {
+    val partitionTypesOption = if (hiveStylePartitioning && urlEncodePartitioning) {
       Try {
         SparkFilterHelper.convertDataType(partitionSchema).asInstanceOf[RecordType]
       } match {
@@ -367,7 +474,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
           partitionColumnPredicates.flatMap {
             expr => sparkAdapter.translateFilter(expr)
           })
-        listPartitionPaths(Collections.singletonList(""), partitionTypes, convertedFilters).asScala.toSeq
+        listPartitionPaths(Collections.singletonList(""), partitionTypes, convertedFilters,
+          partitionColumnPredicates.map(_.asInstanceOf[Object]).asJava).asScala.toSeq
       case (true, None) =>
         logDebug("Unable to compose relative partition path prefix from the predicates; falling back to fetching all partitions")
         getAllQueryPartitionPaths.asScala.toSeq
@@ -388,7 +496,8 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
               partitionColumnPredicates.flatMap {
                 expr => sparkAdapter.translateFilter(expr)
               })
-            listPartitionPaths(Seq(relativePartitionPathPrefix).asJava, partitionTypes, convertedFilters).asScala.toSeq
+            listPartitionPaths(Seq(relativePartitionPathPrefix).asJava, partitionTypes, convertedFilters,
+              partitionColumnPredicates.map(_.asInstanceOf[Object]).asJava).asScala.toSeq
           }.getOrElse {
             log.warn("Met incompatible issue when converting to hudi data type, rollback to list by prefix directly")
             listPartitionPaths(Seq(relativePartitionPathPrefix).asJava).asScala.toSeq
@@ -410,15 +519,25 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
     val (staticPartitionColumnNames, staticPartitionColumnValues) = staticPartitionColumnNameValuePairs.unzip
 
     val hiveStylePartitioning = metaClient.getTableConfig.getHiveStylePartitioningEnable.toBoolean
+    val slashSeparatedDatePartitioning = metaClient.getTableConfig.getSlashSeparatedDatePartitioning
 
     val partitionPathFormatter = new StringPartitionPathFormatter(
       JFunction.toJavaSupplier(() => new StringPartitionPathFormatter.JavaStringBuilder()),
       hiveStylePartitioning,
-      arePartitionPathsUrlEncoded
+      arePartitionPathsUrlEncoded,
+      slashSeparatedDatePartitioning
     )
 
     partitionPathFormatter.combine(staticPartitionColumnNames.asJava,
       staticPartitionColumnValues.map(_._1): _*)
+  }
+
+  override protected def createMetadataTable(engineContext: HoodieEngineContext): HoodieTableMetadata = {
+    if (isPartitionListingViaCatalogEnabled) {
+      new CatalogBackedTableMetadata(engineContext, metaClient.getTableConfig, metaClient.getStorage, getBasePath.toString)
+    } else {
+      super.createMetadataTable(engineContext)
+    }
   }
 
   /**
@@ -430,18 +549,105 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       partitionPath,
       getBasePath,
       schema,
-      metaClient.getTableConfig.propsMap,
+      metaClient.getTableConfig,
       configProperties.getString(DateTimeUtils.TIMEZONE_OPTION, SQLConf.get.sessionLocalTimeZone),
-      shouldValidatePartitionColumns(spark))
+      shouldValidatePartitionColumns(spark),
+      usePartitionValueExtractorOnRead)
   }
 
   private def arePartitionPathsUrlEncoded: Boolean =
     metaClient.getTableConfig.getUrlEncodePartitioning.toBoolean
+
+  override protected def getPartitionPathFilter(activeTimeline: HoodieTimeline): org.apache.hudi.common.util.Option[org.apache.hudi.storage.StoragePathFilter] = {
+    if (useLatestBaseFilesPathFilterForListing && !shouldIncludePendingCommits) {
+      // Use getStorageConfWithCopy to avoid mutating the shared Spark session config
+      val conf = HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration)
+      if (specifiedQueryInstant.isDefined) {
+        conf.set(HoodieCommonConfig.TIMESTAMP_AS_OF.key(), specifiedQueryInstant.get)
+      }
+      org.apache.hudi.common.util.Option.of(
+        new HoodieLatestBaseFilesPathFilter(conf, metaClient,
+          activeTimeline.filterCompletedInstantsOrRewriteTimeline()))
+    } else {
+      org.apache.hudi.common.util.Option.empty()
+    }
+  }
+
 }
 
 object SparkHoodieTableFileIndex extends SparkAdapterSupport {
   private val LOG = LoggerFactory.getLogger(classOf[SparkHoodieTableFileIndex])
   private val PUT_LEAF_FILES_METHOD_NAME = "putLeafFiles"
+
+  private case class NestedFieldNode(
+      leafType: Option[DataType],
+      children: LinkedHashMap[String, NestedFieldNode]
+  )
+
+  /**
+   * Reconstruct nested partition schema from a flat partition schema containing dot-path field names.
+   *
+   * For example, flat fields ["a.b": int, "a.c": string, "d": long] becomes:
+   *
+   *   StructType(
+   *     StructField("a", StructType(StructField("b", int), StructField("c", string))),
+   *     StructField("d", long)
+   *   )
+   */
+  private[hudi] def buildNestedPartitionSchema(flatPartitionSchema: StructType): StructType = {
+    if (flatPartitionSchema.isEmpty) {
+      new StructType()
+    } else {
+      val root = NestedFieldNode(None, LinkedHashMap.empty)
+
+      def getOrCreateChild(parent: NestedFieldNode, name: String): NestedFieldNode = {
+        parent.children.getOrElseUpdate(name, NestedFieldNode(None, LinkedHashMap.empty))
+      }
+
+      flatPartitionSchema.fields.foreach { field =>
+        val parts = field.name.split("\\.", -1)
+        checkState(parts.forall(p => p.nonEmpty),
+          s"Invalid partition field path '${field.name}' in partition schema")
+
+        var node = root
+        var i = 0
+        while (i < parts.length) {
+          val part = parts(i)
+          val isLeaf = i == parts.length - 1
+
+          if (isLeaf) {
+            val child = getOrCreateChild(node, part)
+            checkState(child.children.isEmpty,
+              s"Conflicting partition schema: '${field.name}' collides with nested fields under '${parts.take(i + 1).mkString(".")}'")
+            checkState(child.leafType.isEmpty || child.leafType.contains(field.dataType),
+              s"Conflicting partition schema: '${field.name}' has inconsistent types (${child.leafType.orNull} vs ${field.dataType})")
+            node.children.update(part, child.copy(leafType = Some(field.dataType)))
+          } else {
+            val child = getOrCreateChild(node, part)
+            checkState(child.leafType.isEmpty,
+              s"Conflicting partition schema: '${field.name}' requires struct at '${parts.take(i + 1).mkString(".")}', but a leaf is defined")
+            node = child
+          }
+
+          i += 1
+        }
+      }
+
+      def toStructType(node: NestedFieldNode): StructType = {
+        val fields = node.children.map { case (name, child) =>
+          child.leafType match {
+            case Some(dt) if child.children.isEmpty =>
+              StructField(name, dt, nullable = true)
+            case _ =>
+              StructField(name, toStructType(child), nullable = true)
+          }
+        }.toArray
+        StructType(fields)
+      }
+
+      toStructType(root)
+    }
+  }
 
   private def haveProperPartitionValues(partitionPaths: Seq[PartitionPath]) = {
     partitionPaths.forall(_.getValues.length > 0)
@@ -475,27 +681,10 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
   }
 
   /**
-   * This method unravels [[StructType]] into a [[Map]] of pairs of dot-path notation with corresponding
-   * [[StructField]] object for every field of the provided [[StructType]], recursively.
-   *
-   * For example, following struct
-   * <pre>
-   *   StructType(
-   *     StructField("a",
-   *       StructType(
-   *          StructField("b", StringType),
-   *          StructField("c", IntType)
-   *       )
-   *     )
-   *   )
-   * </pre>
-   *
-   * will be converted into following mapping:
-   *
-   * <pre>
-   *   "a.b" -> StructField("b", StringType),
-   *   "a.c" -> StructField("c", IntType),
-   * </pre>
+   * Maps every leaf field in `structType` to its dot-path name.
+   * Both the key and [[StructField.name]] use the full path.
+   * E.g. `StructType(StructField("a", StructType(StructField("b", IntegerType))))`
+   * → `Map("a.b" -> StructField("a.b", IntegerType))`.
    */
   private def generateFieldMap(structType: StructType) : Map[String, StructField] = {
     def traverse(structField: Either[StructField, StructType]) : Map[String, StructField] = {
@@ -503,7 +692,10 @@ object SparkHoodieTableFileIndex extends SparkAdapterSupport {
         case Right(struct) => struct.fields.flatMap(f => traverse(Left(f))).toMap
         case Left(field) => field.dataType match {
           case struct: StructType => traverse(Right(struct)).map {
-            case (key, structField)  => (s"${field.name}.$key", structField)
+            case (key, structField)  => {
+              val fullPath = s"${field.name}.$key"
+              (fullPath, structField.copy(name = fullPath))
+            }
           }
           case _ => Map(field.name -> field)
         }

@@ -29,17 +29,18 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.stats.BaseRecordLevelIndex;
 import org.apache.hudi.source.stats.FileStatsIndex;
-import org.apache.hudi.source.stats.RecordLevelIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.StreamerUtil;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.types.logical.RowType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -59,10 +60,9 @@ import java.util.stream.Collectors;
  *
  * <p>It caches the partition paths to avoid redundant look up.
  */
+@Slf4j
 public class FileIndex implements Serializable, AutoCloseable {
   private static final long serialVersionUID = 1L;
-
-  private static final Logger LOG = LoggerFactory.getLogger(FileIndex.class);
 
   private final StoragePath path;
   private final boolean tableExists;
@@ -72,8 +72,9 @@ public class FileIndex implements Serializable, AutoCloseable {
   private final ColumnStatsProbe colStatsProbe;                    // for probing column stats
   private final Function<String, Integer> partitionBucketIdFunc;   // for bucket pruning
   private List<String> partitionPaths;                             // cache of partition paths
+  private int totalPartitionCount;                                // partition count before pruning
   private final FileStatsIndex fileStatsIndex;                     // for data skipping
-  private final Option<RecordLevelIndex> recordLevelIndex;
+  private final Option<BaseRecordLevelIndex> recordLevelIndex;
   private final HoodieTableMetaClient metaClient;
 
   private FileIndex(
@@ -93,7 +94,7 @@ public class FileIndex implements Serializable, AutoCloseable {
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
     List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
-    this.recordLevelIndex = RecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType);
+    this.recordLevelIndex = BaseRecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType);
     this.metaClient = metaClient;
   }
 
@@ -197,8 +198,16 @@ public class FileIndex implements Serializable, AutoCloseable {
     }
 
     // data skipping based on column stats
+    if (colStatsProbe == null || filteredFileSlices.isEmpty()) {
+      return filteredFileSlices;
+    }
+    List<String> candidatePartitions = filteredFileSlices.stream().map(FileSlice::getPartitionPath).distinct().collect(Collectors.toList());
+    // Avoid expanding column prefixes when the remaining files still span every partition.
+    if (candidatePartitions.size() == totalPartitionCount) {
+      candidatePartitions = Collections.emptyList();
+    }
     List<String> allFiles = filteredFileSlices.stream().map(FileSlice::getAllFileNames).flatMap(List::stream).collect(Collectors.toList());
-    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles);
+    Set<String> candidateFiles = fileStatsIndex.computeCandidateFiles(colStatsProbe, allFiles, candidatePartitions);
     if (candidateFiles == null) {
       // no need to filter by col stats or error occurs.
       return filteredFileSlices;
@@ -232,6 +241,7 @@ public class FileIndex implements Serializable, AutoCloseable {
   @VisibleForTesting
   public void reset() {
     this.partitionPaths = null;
+    this.totalPartitionCount = 0;
   }
 
   // -------------------------------------------------------------------------
@@ -249,6 +259,7 @@ public class FileIndex implements Serializable, AutoCloseable {
     }
     List<String> allPartitionPaths = this.tableExists ? FSUtils.getAllPartitionPaths(new HoodieFlinkEngineContext(hadoopConf), metaClient, metadataConfig)
         : Collections.emptyList();
+    this.totalPartitionCount = allPartitionPaths.size();
     this.partitionPaths = partitionPruner.map(pruner -> pruner.filter(allPartitionPaths).stream().collect(Collectors.toList())).orElse(allPartitionPaths);
     return this.partitionPaths;
   }
@@ -264,14 +275,14 @@ public class FileIndex implements Serializable, AutoCloseable {
       if (metadataConfig.isEnabled()) {
         return true;
       } else {
-        LOG.warn("Data skipping requires Metadata Table to be enabled! Disable the data skipping or enable the metadata table.");
+        log.warn("Data skipping requires Metadata Table to be enabled! Disable the data skipping or enable the metadata table.");
       }
     }
     return false;
   }
 
   private void logPruningMsg(int numTotalFileSlices, int numLeftFileSlices, String action) {
-    LOG.info("\n"
+    log.info("\n"
         + "------------------------------------------------------------\n"
         + "---------- action:        {}\n"
         + "---------- total file slices:   {}\n"
@@ -288,7 +299,7 @@ public class FileIndex implements Serializable, AutoCloseable {
   @Override
   public void close() {
     this.fileStatsIndex.close();
-    this.recordLevelIndex.ifPresent(RecordLevelIndex::close);
+    this.recordLevelIndex.ifPresent(BaseRecordLevelIndex::close);
     this.partitionPruner.ifPresent(PartitionPruners.PartitionPruner::close);
   }
 
@@ -299,6 +310,7 @@ public class FileIndex implements Serializable, AutoCloseable {
   /**
    * Builder for {@link FileIndex}.
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   public static class Builder {
     private StoragePath path;
     private Configuration conf;
@@ -307,9 +319,6 @@ public class FileIndex implements Serializable, AutoCloseable {
     private ColumnStatsProbe columnStatsProbe;
     private PartitionPruners.PartitionPruner partitionPruner;
     private Function<String, Integer> partitionBucketIdFunc;
-
-    private Builder() {
-    }
 
     public Builder path(StoragePath path) {
       this.path = path;

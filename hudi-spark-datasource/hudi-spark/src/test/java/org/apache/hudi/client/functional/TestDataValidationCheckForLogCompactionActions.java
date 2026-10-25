@@ -50,7 +50,6 @@ import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -100,21 +99,6 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     HoodieSparkWriteableTestTable.of(metaClient);
   }
 
-  //TODO: include both the table's contents.
-  /**
-   * Cleanups resource group for the subclasses of {@link HoodieClientTestBase}.
-   */
-  @AfterEach
-  public void cleanupResources() throws IOException {
-    cleanupTimelineService();
-    cleanupClients();
-    cleanupSparkContexts();
-    cleanupTestDataGenerator();
-    cleanupFileSystem();
-    cleanupExecutorService();
-    System.gc();
-  }
-
   /**
    * Stress test logcompaction along with compaction by following approach.
    * a. Create a random seed to do insert/upsert/deleting operations on main table and replicate same action on experiment table.
@@ -138,12 +122,12 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     // Total ingestion writes.
     int totalWrites = 15;
 
-    LOG.warn("Starting trial with seed " + seed);
+    LOG.warn("Starting trial with seed {}", seed);
 
     // Current ingestion commit.
     int curr = 1;
     while (curr < totalWrites) {
-      LOG.warn("Starting write No. " + curr);
+      LOG.warn("Starting write No. {}", curr);
 
       // Pick an action. It can be insert/update/delete and write data to main table.
       boolean status = writeOnMainTable(mainTable, curr);
@@ -161,7 +145,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
 
         // Verify the records in both the tables.
         verifyRecords(mainTable, experimentTable);
-        LOG.warn("For write No." + curr + ", verification passed. Last ingestion commit timestamp is " + mainTable.commitTimeOnMainTable);
+        LOG.warn("For write No.{}, verification passed. Last ingestion commit timestamp is {}", curr, mainTable.commitTimeOnMainTable);
       }
       curr++;
     }
@@ -185,7 +169,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
     // Verify every field.
     mainRecordsMap.forEach((key, value) -> {
       assertTrue(experimentRecordsMap.containsKey(key + RECORD_KEY_APPEND_VALUE));
-      assertGenericRecords(value, experimentRecordsMap.get(key + RECORD_KEY_APPEND_VALUE), readerSchema.toAvroSchema(), excludeFields);
+      assertGenericRecords(value, experimentRecordsMap.get(key + RECORD_KEY_APPEND_VALUE), readerSchema, excludeFields);
     });
   }
 
@@ -211,7 +195,7 @@ public class TestDataValidationCheckForLogCompactionActions extends HoodieClient
           result = deleteDataIntoMainTable(mainTable, commitTime);
         }
       } catch (IllegalArgumentException e) {
-        LOG.warn(e.getMessage() + " ignoring current command.");
+        LOG.warn("{} ignoring current command.", e.getMessage());
         return false;
       }
     }

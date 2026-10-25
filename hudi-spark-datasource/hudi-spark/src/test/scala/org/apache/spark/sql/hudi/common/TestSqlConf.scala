@@ -18,11 +18,12 @@
 package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.DataSourceReadOptions._
-import org.apache.hudi.common.config.DFSPropertiesConfiguration
+import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieMetadataConfig}
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
-import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
+import org.apache.hudi.common.util.HoodieStorageUtils
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.scalatest.BeforeAndAfter
@@ -32,11 +33,22 @@ import java.nio.file.{Files, Paths}
 
 class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
 
+  // The backing mutable map field name inside java.util.Collections$unmodifiableMap,
+  // used to modify JVM environment variables at runtime via reflection
+  private val UNMODIFIABLE_MAP_FIELD = "m"
+
   def setEnv(key: String, value: String): String = {
-    val field = System.getenv().getClass.getDeclaredField("m")
+    val field = System.getenv().getClass.getDeclaredField(UNMODIFIABLE_MAP_FIELD)
     field.setAccessible(true)
     val map = field.get(System.getenv()).asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
     map.put(key, value)
+  }
+
+  def unsetEnv(key: String): String = {
+    val field = System.getenv().getClass.getDeclaredField(UNMODIFIABLE_MAP_FIELD)
+    field.setAccessible(true)
+    val map = field.get(System.getenv()).asInstanceOf[java.util.Map[java.lang.String, java.lang.String]]
+    map.remove(key)
   }
 
   test("Test Hudi Conf") {
@@ -104,6 +116,39 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
     }
   }
 
+  test("Test spark.hoodie.* configs propagate to write path") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | location '$tablePath'
+           | options (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+       """.stripMargin)
+
+      val metadataTablePath = s"$tablePath/${HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH}"
+
+      withSQLConf("spark." + HoodieMetadataConfig.ENABLE.key -> "false") {
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      }
+      assertResult(false)(existsPath(metadataTablePath))
+
+      checkAnswer(s"select id, name, price, ts from $tableName")(
+        Seq(1, "a1", 10.0, 1000)
+      )
+    }
+  }
+
   before {
     val testPropsFilePath = new File("src/test/resources/external-config").getAbsolutePath
     setEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME, testPropsFilePath)
@@ -111,6 +156,7 @@ class TestSqlConf extends HoodieSparkSqlTestBase with BeforeAndAfter {
   }
 
   after {
+    unsetEnv(DFSPropertiesConfiguration.CONF_FILE_DIR_ENV_NAME)
     DFSPropertiesConfiguration.clearGlobalProps()
   }
 }

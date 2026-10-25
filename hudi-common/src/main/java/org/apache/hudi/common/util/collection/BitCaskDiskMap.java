@@ -27,8 +27,10 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -56,6 +58,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
+import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
 import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
@@ -67,10 +70,10 @@ import static org.apache.hudi.common.util.BinaryUtil.generateChecksum;
  * <p>
  * Inspired by https://github.com/basho/bitcask
  */
+@Slf4j
 public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, R> {
 
-  public static final int BUFFER_SIZE = 128 * 1024;  // 128 KB
-  private static final Logger LOG = LoggerFactory.getLogger(BitCaskDiskMap.class);
+  public static final int BUFFER_SIZE = 128 * 1024;
   // Caching byte compression/decompression to avoid creating instances for every operation
   private static final ThreadLocal<CompressionHandler> DISK_COMPRESSION_REF =
       ThreadLocal.withInitial(CompressionHandler::new);
@@ -139,7 +142,7 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       writeOnlyFile.getParentFile().mkdir();
     }
     writeOnlyFile.createNewFile();
-    LOG.debug("Spilling to file location {}", writeOnlyFile.getAbsolutePath());
+    log.debug("Spilling to file location {}", writeOnlyFile.getAbsolutePath());
     // Make sure file is deleted when JVM exits
     writeOnlyFile.deleteOnExit();
   }
@@ -342,8 +345,10 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
     // Size (numberOfBytes) of the value written to disk
     private final Integer sizeOfValue;
     // Actual key
+    @Getter
     private final byte[] key;
     // Actual value
+    @Getter
     private final byte[] value;
     // Current timestamp when the value was written to disk
     private final Long timestamp;
@@ -369,14 +374,6 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       return sizeOfValue;
     }
 
-    public byte[] getKey() {
-      return key;
-    }
-
-    public byte[] getValue() {
-      return value;
-    }
-
     public long getTimestamp() {
       return timestamp;
     }
@@ -385,6 +382,8 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
   /**
    * The value relevant metadata.
    */
+  @AllArgsConstructor(access = AccessLevel.PROTECTED)
+  @Getter
   public static final class ValueMetadata implements Comparable<ValueMetadata> {
 
     // FilePath to store the spilled data
@@ -395,29 +394,6 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
     private final Long offsetOfValue;
     // Current timestamp when the value was written to disk
     private final Long timestamp;
-
-    protected ValueMetadata(String filePath, int sizeOfValue, long offsetOfValue, long timestamp) {
-      this.filePath = filePath;
-      this.sizeOfValue = sizeOfValue;
-      this.offsetOfValue = offsetOfValue;
-      this.timestamp = timestamp;
-    }
-
-    public String getFilePath() {
-      return filePath;
-    }
-
-    public int getSizeOfValue() {
-      return sizeOfValue;
-    }
-
-    public Long getOffsetOfValue() {
-      return offsetOfValue;
-    }
-
-    public long getTimestamp() {
-      return timestamp;
-    }
 
     @Override
     public int compareTo(ValueMetadata o) {
@@ -433,6 +409,11 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
     private final ByteArrayOutputStream compressBaos;
     private final ByteArrayOutputStream decompressBaos;
     private final byte[] decompressIntermediateBuffer;
+    // Each CompressionHandler is held in a ThreadLocal,
+    // so a single Deflater/Inflater pair per worker thread is sufficient and
+    // avoids per-call construction.
+    private transient Deflater deflater;
+    private transient Inflater inflater;
 
     CompressionHandler() {
       compressBaos = new ByteArrayOutputStream(DISK_COMPRESSION_INITIAL_BUFFER_SIZE);
@@ -440,22 +421,35 @@ public final class BitCaskDiskMap<T extends Serializable, R> extends DiskMap<T, 
       decompressIntermediateBuffer = new byte[DECOMPRESS_INTERMEDIATE_BUFFER_SIZE];
     }
 
+    private Deflater getDeflater() {
+      if (deflater == null) {
+        deflater = new Deflater(Deflater.BEST_COMPRESSION);
+      }
+      return deflater;
+    }
+
+    private Inflater getInflater() {
+      if (inflater == null) {
+        inflater = new Inflater();
+      }
+      return inflater;
+    }
+
     private byte[] compressBytes(final byte[] value) throws IOException {
       compressBaos.reset();
-      Deflater deflater = new Deflater(Deflater.BEST_COMPRESSION);
-      DeflaterOutputStream dos = new DeflaterOutputStream(compressBaos, deflater);
-      try {
+      Deflater deflater = getDeflater();
+      deflater.reset();
+      try (DeflaterOutputStream dos = new DeflaterOutputStream(compressBaos, deflater)) {
         dos.write(value);
-      } finally {
-        dos.close();
-        deflater.end();
       }
       return compressBaos.toByteArray();
     }
 
     private byte[] decompressBytes(final byte[] bytes) throws IOException {
       decompressBaos.reset();
-      try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes))) {
+      Inflater inflater = getInflater();
+      inflater.reset();
+      try (InputStream in = new InflaterInputStream(new ByteArrayInputStream(bytes), inflater)) {
         int len;
         while ((len = in.read(decompressIntermediateBuffer)) > 0) {
           decompressBaos.write(decompressIntermediateBuffer, 0, len);

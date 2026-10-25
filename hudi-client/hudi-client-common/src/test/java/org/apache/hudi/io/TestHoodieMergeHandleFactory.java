@@ -22,7 +22,9 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Assertions;
@@ -53,6 +55,7 @@ public class TestHoodieMergeHandleFactory {
     MockitoAnnotations.initMocks(this);
     when(mockHoodieTable.getMetaClient()).thenReturn(mockMetaClient);
     when(mockMetaClient.getTableConfig()).thenReturn(mockHoodieTableConfig);
+    when(mockHoodieTableConfig.isLSMTreeStorageLayout()).thenReturn(false);
   }
 
   @Test
@@ -67,10 +70,16 @@ public class TestHoodieMergeHandleFactory {
     when(mockHoodieTable.requireSortedRecords()).thenReturn(true);
     when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(true);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, HoodieSortedMergeHandleWithChangeLog.class.getName());
+    validateMergeClasses(mergeHandleClasses, FileGroupReaderBasedMergeHandle.class.getName());
     when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(false);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, HoodieSortedMergeHandle.class.getName());
+    validateMergeClasses(mergeHandleClasses, FileGroupReaderBasedMergeHandle.class.getName());
+
+    // LSM layout uses the LSM file-group-reader merge handle instead of the generic sorted merge handle.
+    when(mockHoodieTableConfig.isLSMTreeStorageLayout()).thenReturn(true);
+    mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
+    validateMergeClasses(mergeHandleClasses, LsmFileGroupReaderBasedMergeHandle.class.getName());
+    when(mockHoodieTableConfig.isLSMTreeStorageLayout()).thenReturn(false);
 
     // non-sorted: no CDC cases
     when(mockHoodieTable.requireSortedRecords()).thenReturn(false);
@@ -104,9 +113,14 @@ public class TestHoodieMergeHandleFactory {
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
     validateMergeClasses(mergeHandleClasses, CUSTOM_MERGE_HANDLE, FileGroupReaderBasedMergeHandle.class.getName());
 
+    when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(true);
+    mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
+    validateMergeClasses(mergeHandleClasses, FileGroupReaderBasedMergeHandle.class.getName());
+    when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(false);
+
     when(mockHoodieTable.requireSortedRecords()).thenReturn(true);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.UPSERT, getWriterConfig(properties), mockHoodieTable);
-    validateMergeClasses(mergeHandleClasses, HoodieSortedMergeHandle.class.getName());
+    validateMergeClasses(mergeHandleClasses, FileGroupReaderBasedMergeHandle.class.getName());
 
     when(mockHoodieTable.requireSortedRecords()).thenReturn(false);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesWrite(WriteOperationType.INSERT, getWriterConfig(propsWithDups), mockHoodieTable);
@@ -143,11 +157,31 @@ public class TestHoodieMergeHandleFactory {
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(properties), mockHoodieTable);
     validateMergeClasses(mergeHandleClasses, HoodieSortedMergeHandle.class.getName());
 
+    // LSM layout still uses the non-reader-context merge handle selection here.
+    when(mockHoodieTable.requireSortedRecords()).thenReturn(false);
+    when(mockHoodieTableConfig.isLSMTreeStorageLayout()).thenReturn(true);
+    mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(properties), mockHoodieTable);
+    validateMergeClasses(mergeHandleClasses, FileGroupReaderBasedMergeHandle.class.getName());
+
     // custom case
+    when(mockHoodieTableConfig.isLSMTreeStorageLayout()).thenReturn(false);
     when(mockHoodieTable.requireSortedRecords()).thenReturn(false);
     properties.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), CUSTOM_MERGE_HANDLE);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(properties), mockHoodieTable);
     validateMergeClasses(mergeHandleClasses, CUSTOM_MERGE_HANDLE, FileGroupReaderBasedMergeHandle.class.getName());
+
+    Properties pureLogProps = new Properties();
+    pureLogProps.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), CUSTOM_MERGE_HANDLE);
+    pureLogProps.setProperty(HoodieIndexConfig.INDEX_TYPE.key(), HoodieIndex.IndexType.FLINK_STATE.name());
+    when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(true);
+    mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(pureLogProps), mockHoodieTable);
+    validateMergeClasses(mergeHandleClasses, HoodieMergeHandleWithChangeLog.class.getName());
+
+    when(mockHoodieTableConfig.isLSMTreeStorageLayout()).thenReturn(true);
+    mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(pureLogProps), mockHoodieTable);
+    validateMergeClasses(mergeHandleClasses, HoodieMergeHandleWithChangeLog.class.getName());
+    when(mockHoodieTableConfig.isLSMTreeStorageLayout()).thenReturn(false);
+    when(mockHoodieTableConfig.isCDCEnabled()).thenReturn(false);
 
     when(mockHoodieTable.requireSortedRecords()).thenReturn(true);
     mergeHandleClasses = HoodieMergeHandleFactory.getMergeHandleClassesCompaction(getWriterConfig(properties), mockHoodieTable);

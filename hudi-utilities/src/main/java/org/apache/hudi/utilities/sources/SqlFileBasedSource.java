@@ -20,26 +20,26 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Scanner;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
@@ -61,21 +61,24 @@ import static org.apache.hudi.utilities.config.SqlFileBasedSourceConfig.SOURCE_S
  *
  * <p>hoodie.write.meta.key.prefixes = 'deltastreamer.checkpoint.key'
  */
+@Slf4j
 public class SqlFileBasedSource extends RowSource {
 
-  private static final Logger LOG = LoggerFactory.getLogger(SqlFileBasedSource.class);
   private final String sourceSqlFile;
   private final boolean shouldEmitCheckPoint;
+  private HoodieIngestionMetrics metrics;
 
   public SqlFileBasedSource(
       TypedProperties props,
       JavaSparkContext sparkContext,
       SparkSession sparkSession,
-      SchemaProvider schemaProvider) {
+      SchemaProvider schemaProvider,
+      HoodieIngestionMetrics metrics) {
     super(props, sparkContext, sparkSession, schemaProvider);
     checkRequiredConfigProperties(props, Collections.singletonList(SOURCE_SQL_FILE));
     sourceSqlFile = getStringWithAltKeys(props, SOURCE_SQL_FILE);
     shouldEmitCheckPoint = getBooleanWithAltKeys(props, EMIT_EPOCH_CHECKPOINT);
+    this.metrics = metrics;
   }
 
   @Override
@@ -83,18 +86,17 @@ public class SqlFileBasedSource extends RowSource {
       Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     Dataset<Row> rows = null;
     final FileSystem fs = HadoopFSUtils.getFs(sourceSqlFile, sparkContext.hadoopConfiguration(), true);
-    try {
-      final Scanner scanner = new Scanner(fs.open(new Path(sourceSqlFile)));
+    try (final Scanner scanner = new Scanner(fs.open(new Path(sourceSqlFile)))) {
       scanner.useDelimiter(";");
       while (scanner.hasNext()) {
         String sqlStr = scanner.next().trim();
         if (!sqlStr.isEmpty()) {
-          LOG.info(sqlStr);
+          log.info(sqlStr);
           // overwrite the same dataset object until the last statement then return.
           rows = sparkSession.sql(sqlStr);
         }
       }
-      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? new StreamerCheckpointV2(String.valueOf(System.currentTimeMillis())) : null);
+      return Pair.of(Option.of(rows), shouldEmitCheckPoint ? createCheckpoint(String.valueOf(System.currentTimeMillis())) : null);
     } catch (IOException ioe) {
       throw new HoodieIOException("Error reading source SQL file.", ioe);
     }

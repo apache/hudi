@@ -23,8 +23,10 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.hadoop.conf.Configuration;
@@ -44,6 +46,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestInputPathHandler {
@@ -225,5 +228,16 @@ public class TestInputPathHandler {
       }
     }
     return true;
+  }
+
+  /**
+   * A nonexistent input path must surface as TableNotFoundException (historical contract),
+   * not as a raw FileNotFoundException from the underlying path lookup.
+   */
+  @Test
+  public void testNonExistentPathThrowsTableNotFound() {
+    Path nonExistent = new Path(basePathTable1 + "_does_not_exist/2024/01/01");
+    assertThrows(TableNotFoundException.class,
+        () -> HoodieInputFormatUtils.getTableMetaClientForBasePathUnchecked(dfs.getConf(), nonExistent));
   }
 }

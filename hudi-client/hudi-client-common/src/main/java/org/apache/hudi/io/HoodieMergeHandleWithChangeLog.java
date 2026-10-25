@@ -27,8 +27,11 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.cdc.HoodieCDCLogWriter;
+import org.apache.hudi.io.cdc.HoodieCDCLogWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.table.HoodieTable;
 
@@ -37,7 +40,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -47,21 +49,13 @@ import java.util.Map;
 @Slf4j
 public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
 
-  protected final HoodieCDCLogger cdcLogger;
+  protected final HoodieCDCLogWriter<IndexedRecord> cdcLogger;
 
   public HoodieMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                        Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId,
+                                        MergeContext<T> mergeContext, String partitionPath, String fileId,
                                         TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
-    this.cdcLogger = new HoodieCDCLogger(
-        instantTime,
-        config,
-        hoodieTable.getMetaClient().getTableConfig(),
-        partitionPath,
-        storage,
-        getWriterSchema(),
-        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
-        IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
+    super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+    this.cdcLogger = createCDCLogWriter(instantTime, config, hoodieTable, partitionPath, taskContextSupplier);
   }
 
   /**
@@ -69,17 +63,29 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMerge
    */
   public HoodieMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                         Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                                        HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
-    this.cdcLogger = new HoodieCDCLogger(
+                                        HoodieBaseFile baseFile, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, baseFile, taskContextSupplier, keyGeneratorOpt);
+    this.cdcLogger = createCDCLogWriter(instantTime, config, hoodieTable, partitionPath, taskContextSupplier);
+  }
+
+  private HoodieCDCLogWriter<IndexedRecord> createCDCLogWriter(
+      String instantTime,
+      HoodieWriteConfig config,
+      HoodieTable<T, I, K, O> hoodieTable,
+      String partitionPath,
+      TaskContextSupplier taskContextSupplier) {
+    return HoodieCDCLogWriterFactory.createAvroCDCLogWriter(
         instantTime,
         config,
-        hoodieTable.getMetaClient().getTableConfig(),
+        hoodieTable,
         partitionPath,
         storage,
         getWriterSchema(),
-        createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()),
-        IOUtils.getMaxMemoryPerPartitionMerge(taskContextSupplier, config));
+        fileId,
+        writeToken,
+        getLogCreationCallback(),
+        taskContextSupplier,
+        () -> createLogWriter(instantTime, HoodieCDCUtils.CDC_LOGFILE_SUFFIX, Option.empty()));
   }
 
   protected boolean writeUpdateRecord(HoodieRecord<T> newRecord, HoodieRecord<T> oldRecord, HoodieRecord combinedRecord, HoodieSchema writerSchema)
@@ -101,13 +107,19 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMerge
     HoodieRecord<T> savedRecord = newRecord.newInstance();
     super.writeInsertRecord(newRecord);
     if (!HoodieOperation.isDelete(newRecord.getOperation()) && !savedRecord.isDelete(deleteContext, config.getPayloadConfig().getProps())) {
-      cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema.toAvroSchema(), config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
+      cdcLogger.put(newRecord, null, savedRecord.toIndexedRecord(schema, config.getPayloadConfig().getProps()).map(HoodieAvroIndexedRecord::getData));
     }
   }
 
   @Override
   public List<WriteStatus> close() {
-    List<WriteStatus> writeStatuses = super.close();
+    List<WriteStatus> writeStatuses;
+    try {
+      writeStatuses = super.close();
+    } catch (RuntimeException e) {
+      CloseableUtils.closeSuppressing(cdcLogger, e);
+      throw e;
+    }
     // if there are cdc data written, set the CDC-related information.
 
     if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {

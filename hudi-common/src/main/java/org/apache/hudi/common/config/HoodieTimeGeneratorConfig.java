@@ -20,6 +20,7 @@ package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.table.timeline.TimeGeneratorType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 
 import java.util.Properties;
 
@@ -32,7 +33,7 @@ import static org.apache.hudi.common.config.LockConfiguration.LOCK_PREFIX;
 public class HoodieTimeGeneratorConfig extends HoodieConfig {
 
   public static final String LOCK_PROVIDER_KEY = LOCK_PREFIX + "provider";
-  private static final String DEFAULT_LOCK_PROVIDER = "org.apache.hudi.client.transaction.lock.InProcessLockProvider";
+  private static final String DEFAULT_LOCK_PROVIDER = InProcessLockProvider.class.getName();
 
   public static final ConfigProperty<String> TIME_GENERATOR_TYPE = ConfigProperty
       .key("hoodie.time.generator.type")
@@ -46,7 +47,7 @@ public class HoodieTimeGeneratorConfig extends HoodieConfig {
       .key("hoodie.time.generator.max_expected_clock_skew_ms")
       .defaultValue(200L)
       .withInferFunction(cfg -> {
-        if (DEFAULT_LOCK_PROVIDER.equals(cfg.getString(LOCK_PROVIDER_KEY))) {
+        if (InProcessLockProvider.isInProcessLockProvider(cfg.getString(LOCK_PROVIDER_KEY))) {
           return Option.of(1L);
         }
         return Option.empty();

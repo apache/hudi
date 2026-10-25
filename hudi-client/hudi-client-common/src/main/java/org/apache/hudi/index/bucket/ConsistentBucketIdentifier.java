@@ -28,7 +28,8 @@ import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.exception.HoodieClusteringException;
 
 import lombok.Getter;
-import org.jetbrains.annotations.NotNull;
+
+import javax.annotation.Nonnull;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -165,7 +166,7 @@ public class ConsistentBucketIdentifier extends BucketIdentifier {
    * @param bucket parent bucket
    * @return lists of children buckets
    */
-  public Option<List<ConsistentHashingNode>> splitBucket(@NotNull ConsistentHashingNode bucket) {
+  public Option<List<ConsistentHashingNode>> splitBucket(@Nonnull ConsistentHashingNode bucket) {
     ConsistentHashingNode formerBucket = getFormerBucket(bucket.getValue());
 
     long mid = (long) formerBucket.getValue() + bucket.getValue()

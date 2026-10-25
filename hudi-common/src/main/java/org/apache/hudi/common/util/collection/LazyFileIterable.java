@@ -22,8 +22,7 @@ import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.util.BufferedRandomAccessFile;
 import org.apache.hudi.exception.HoodieException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -35,8 +34,8 @@ import java.util.stream.Collectors;
  * Iterable to lazily fetch values spilled to disk. This class uses BufferedRandomAccessFile to randomly access the position of
  * the latest value for a key spilled to disk and returns the result.
  */
+@Slf4j
 public class LazyFileIterable<T, R> implements Iterable<R> {
-  private static final Logger LOG = LoggerFactory.getLogger(LazyFileIterable.class);
 
   // Used to access the value written at a specific position in the file
   private final String filePath;
@@ -134,7 +133,7 @@ public class LazyFileIterable<T, R> implements Iterable<R> {
 
     private void addShutdownHook() {
       shutdownThread = new Thread(() -> {
-        LOG.debug("Failed to properly close LazyFileIterable in application.");
+        log.debug("Failed to properly close LazyFileIterable in application.");
         this.closeHandle();
       });
       Runtime.getRuntime().addShutdownHook(shutdownThread);

@@ -1,0 +1,58 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+{{- $s3 := .Values.catalog.filesystem.s3 }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "hudi-trino.fullname" . }}-catalog
+  labels:
+    {{- include "hudi-trino.labels" . | nindent 4 }}
+data:
+  {{ .Values.catalog.name }}.properties: |
+    connector.name=hudi
+    {{- if eq .Values.catalog.metastore.type "thrift" }}
+    {{- if not .Values.catalog.metastore.uri }}
+    {{- fail "catalog.metastore.uri is required when catalog.metastore.type=thrift" }}
+    {{- end }}
+    hive.metastore.uri={{ .Values.catalog.metastore.uri }}
+    {{- else if eq .Values.catalog.metastore.type "glue" }}
+    hive.metastore=glue
+    {{- range $k, $v := .Values.catalog.metastore.glueProperties }}
+    {{ $k }}={{ $v }}
+    {{- end }}
+    {{- else }}
+    {{- fail (printf "unsupported catalog.metastore.type %q (thrift|glue)" .Values.catalog.metastore.type) }}
+    {{- end }}
+    {{- if $s3.enabled }}
+    fs.native-s3.enabled=true
+    {{- if $s3.endpoint }}
+    s3.endpoint={{ $s3.endpoint }}
+    {{- end }}
+    s3.region={{ $s3.region }}
+    s3.path-style-access={{ $s3.pathStyleAccess }}
+    {{- if include "hudi-trino.s3SecretName" . }}
+    # Credentials come from the environment (Secret-backed); see deployment.yaml.
+    s3.aws-access-key=${ENV:HUDI_TRINO_S3_ACCESS_KEY}
+    s3.aws-secret-key=${ENV:HUDI_TRINO_S3_SECRET_KEY}
+    {{- end }}
+    {{- end }}
+    {{- range $k, $v := .Values.catalog.extraProperties }}
+    {{ $k }}={{ $v }}
+    {{- end }}
+  {{- if .Values.catalog.tpchEnabled }}
+  tpch.properties: |
+    connector.name=tpch
+  {{- end }}

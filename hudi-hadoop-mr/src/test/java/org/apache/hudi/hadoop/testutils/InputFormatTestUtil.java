@@ -18,7 +18,7 @@
 
 package org.apache.hudi.hadoop.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
@@ -27,8 +27,11 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieCommandBlock;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -38,13 +41,15 @@ import org.apache.hudi.common.table.log.block.HoodieParquetDataBlock;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -55,9 +60,18 @@ import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
 import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.parquet.avro.AvroParquetWriter;
+import org.apache.parquet.avro.AvroWriteSupport;
+import org.apache.parquet.example.data.Group;
+import org.apache.parquet.example.data.simple.SimpleGroupFactory;
+import org.apache.parquet.hadoop.ParquetWriter;
+import org.apache.parquet.hadoop.example.ExampleParquetWriter;
+import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.MessageTypeParser;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -71,7 +85,6 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
-import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 
 public class InputFormatTestUtil {
 
@@ -369,10 +382,14 @@ public class InputFormatTestUtil {
                                                      int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
-            .withFileId(fileId)
-            .withInstantTime(baseCommit).withStorage(storage).withLogVersion(logVersion)
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).build();
+        HoodieLogFormatWriter.builder()
+            .withParentPath(new StoragePath(partitionDir.getPath()))
+            .withLogFileId(fileId)
+            .withInstantTime(baseCommit)
+            .withStorage(storage)
+            .withLogVersion(logVersion)
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .build();
     // generate metadata
     Map<HoodieLogBlock.HeaderMetadataType, String> header = new HashMap<>();
     header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, newCommit);
@@ -404,8 +421,10 @@ public class InputFormatTestUtil {
                                                                HoodieLogBlock.HoodieLogBlockType logBlockType)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
+        HoodieLogFormatWriter.builder()
+            .withParentPath(new StoragePath(partitionDir.getPath()))
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withLogFileId(fileId)
             .withLogVersion(logVersion)
             .withInstantTime(newCommit)
             .withStorage(storage)
@@ -425,7 +444,7 @@ public class InputFormatTestUtil {
           hoodieRecords, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), writer.getLogFile().getPath());
     } else if (logBlockType == HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK) {
       dataBlock = new HoodieParquetDataBlock(hoodieRecords, header,
-          HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);
+          HoodieRecord.RECORD_KEY_METADATA_FIELD, "zstd", 0.1, true);
     } else {
       dataBlock = new HoodieAvroDataBlock(
           hoodieRecords, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
@@ -436,14 +455,16 @@ public class InputFormatTestUtil {
 
   public static HoodieLogFormat.Writer writeRollbackBlockToLogFile(File partitionDir,
                                                                    HoodieStorage storage,
-                                                                   Schema schema,
+                                                                   HoodieSchema schema,
                                                                    String fileId, String baseCommit,
                                                                    String newCommit,
                                                                    String oldCommit, int logVersion)
       throws InterruptedException, IOException {
     HoodieLogFormat.Writer writer =
-        HoodieLogFormat.newWriterBuilder().onParentPath(new StoragePath(partitionDir.getPath()))
-            .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(fileId)
+        HoodieLogFormatWriter.builder()
+            .withParentPath(new StoragePath(partitionDir.getPath()))
+            .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+            .withLogFileId(fileId)
             .withInstantTime(baseCommit)
             .withLogVersion(logVersion).withStorage(storage).build();
 
@@ -459,16 +480,16 @@ public class InputFormatTestUtil {
   }
 
   public static void setProjectFieldsForInputFormat(JobConf jobConf,
-                                                    Schema schema, String hiveColumnTypes) {
-    List<Schema.Field> fields = schema.getFields();
-    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
+                                                    HoodieSchema schema, String hiveColumnTypes) {
+    List<HoodieSchemaField> fields = schema.getFields();
+    String names = fields.stream().map(HoodieSchemaField::name).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
     Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
 
-    String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
-        .map(Schema.Field::name).collect(Collectors.joining(","));
+    String hiveColumnNames = fields.stream().map(HoodieSchemaField::name)
+        .filter(name -> !name.equalsIgnoreCase("datestr")).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
-    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(hiveColumnTypes);
+    String modifiedHiveColumnTypes = HoodieSchemaUtils.addMetadataColumnTypes(hiveColumnTypes);
     modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
@@ -486,16 +507,16 @@ public class InputFormatTestUtil {
   }
 
   public static void setPropsForInputFormat(JobConf jobConf,
-                                            Schema schema, String hiveColumnTypes) {
-    List<Schema.Field> fields = schema.getFields();
-    String names = fields.stream().map(f -> f.name().toString()).collect(Collectors.joining(","));
+                                            HoodieSchema schema, String hiveColumnTypes) {
+    List<HoodieSchemaField> fields = schema.getFields();
+    String names = fields.stream().map(HoodieSchemaField::name).collect(Collectors.joining(","));
     String positions = fields.stream().map(f -> String.valueOf(f.pos())).collect(Collectors.joining(","));
     Configuration conf = HoodieTestUtils.getDefaultStorageConf().unwrap();
 
-    String hiveColumnNames = fields.stream().filter(field -> !field.name().equalsIgnoreCase("datestr"))
-        .map(Schema.Field::name).collect(Collectors.joining(","));
+    String hiveColumnNames = fields.stream().map(HoodieSchemaField::name)
+        .filter(name -> !name.equalsIgnoreCase("datestr")).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",datestr";
-    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(hiveColumnTypes);
+    String modifiedHiveColumnTypes = HoodieSchemaUtils.addMetadataColumnTypes(hiveColumnTypes);
     modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
@@ -519,14 +540,254 @@ public class InputFormatTestUtil {
 
       HoodiePartitionMetadata partitionMetadata =
           new HoodiePartitionMetadata(
-              new HoodieHadoopStorage(new LocalFileSystem(lfs)),
+              HoodieStorageUtils.getStorage(String.valueOf(basePath),
+                  HadoopFSUtils.getStorageConf(new LocalFileSystem(lfs).getConf())),
               "0",
               new StoragePath(basePath.toAbsolutePath().toString()),
               new StoragePath(partitionPath.toAbsolutePath().toString()),
               Option.of(HoodieFileFormat.PARQUET));
 
-      partitionMetadata.trySave();
+      partitionMetadata.trySave(basePath.toAbsolutePath().relativize(partitionPath.toAbsolutePath()).toString());
     }
+  }
+
+  /** A shredded variant schema whose typed_value carries one string field {@code key}. */
+  static HoodieSchema.Variant shreddedVariantSchema() {
+    return HoodieSchema.createVariantShreddedObject(null, null, null,
+        Collections.singletonMap("key", HoodieSchema.create(HoodieSchemaType.STRING)));
+  }
+
+  /** Writes a one-row parquet file with an {@code id} column and a {@code v} variant column, shredded or not. */
+  public static StoragePath writeVariantParquetFile(java.nio.file.Path dir, String fileName, boolean shredded) throws IOException {
+    return writeVariantParquetFile(dir, fileName, shredded, false);
+  }
+
+  /**
+   * As {@link #writeVariantParquetFile(java.nio.file.Path, String, boolean)}, optionally adding a
+   * {@code ts} column stored as an INT96 primitive: the encoding Spark gives timestamps by default,
+   * which the avro converter refuses to read back.
+   */
+  public static StoragePath writeVariantParquetFile(java.nio.file.Path dir, String fileName, boolean shredded,
+                                                    boolean withInt96Timestamp) throws IOException {
+    HoodieSchema.Variant variantSchema = shredded ? shreddedVariantSchema() : HoodieSchema.createVariant();
+    HoodieSchema timestampSchema = HoodieSchema.createFixed("ts_fixed", null, null, 12);
+    List<HoodieSchemaField> fields = new ArrayList<>(Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("v", variantSchema)));
+    if (withInt96Timestamp) {
+      fields.add(HoodieSchemaField.of("ts", timestampSchema));
+    }
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, fields);
+    Configuration conf = new Configuration();
+    if (withInt96Timestamp) {
+      // parquet-avro writes a fixed(12) as INT96 only for the paths named here.
+      conf.set(AvroWriteSupport.WRITE_FIXED_AS_INT96, "ts");
+    }
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(new Path(file.toString()))
+        .withSchema(writeSchema.toAvroSchema())
+        .withConf(conf)
+        .build()) {
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("v", variantValue(variantSchema, shredded));
+      if (withInt96Timestamp) {
+        record.put("ts", new GenericData.Fixed(timestampSchema.toAvroSchema(), new byte[12]));
+      }
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /**
+   * Writes a one-row parquet file with an {@code id} column and a struct column {@code s} whose
+   * {@code inner} member is a shredded variant: the shape both write paths produce at depth, since
+   * the forced DDL reaches a variant record member at any depth on the row and the Avro path alike.
+   */
+  public static StoragePath writeNestedShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
+    return writeNestedShreddedVariantParquetFile(dir, fileName, false);
+  }
+
+  /**
+   * As {@link #writeNestedShreddedVariantParquetFile(java.nio.file.Path, String)}, optionally
+   * giving {@code s} a second member {@code other}: a plain struct whose only field is named
+   * {@code typed_value}, i.e. a user struct that must not be mistaken for a variant group.
+   */
+  public static StoragePath writeNestedShreddedVariantParquetFile(java.nio.file.Path dir, String fileName,
+                                                                  boolean withTypedValueSibling) throws IOException {
+    HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema siblingSchema = HoodieSchema.createRecord("other_t", null, null,
+        Collections.singletonList(HoodieSchemaField.of("typed_value", HoodieSchema.create(HoodieSchemaType.STRING))));
+    List<HoodieSchemaField> structFields = new ArrayList<>();
+    structFields.add(HoodieSchemaField.of("inner", shreddedVariant));
+    if (withTypedValueSibling) {
+      structFields.add(HoodieSchemaField.of("other", siblingSchema));
+    }
+    HoodieSchema structWithShredded = HoodieSchema.createRecord("s_t", null, null, structFields);
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("s", structWithShredded)));
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord struct = new GenericData.Record(structWithShredded.toAvroSchema());
+      struct.put("inner", variantValue(shreddedVariant, true));
+      if (withTypedValueSibling) {
+        GenericRecord sibling = new GenericData.Record(siblingSchema.toAvroSchema());
+        sibling.put("typed_value", "s1");
+        struct.put("other", sibling);
+      }
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("s", struct);
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /**
+   * Writes a one-row parquet file with an {@code id} column and an {@code a} column holding an
+   * array of shredded variants: the shape either write path produces from a write schema that
+   * declares it, a bare array element being the one position the forced DDL leaves alone on both.
+   *
+   * <p>parquet-avro 1.13 writes the 2-level list layout by default
+   * ({@code parquet.avro.write-old-list-structure} is true unless set), so the element group is
+   * named {@code array} and the shredded group sits at {@code a.array}; on the 3-level layout it
+   * sits at {@code a.list.element}. Either is fine for the guard, which walks every child group.
+   */
+  public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
+    return writeArrayShreddedVariantParquetFile(dir, fileName, false, false);
+  }
+
+  /**
+   * As {@link #writeArrayShreddedVariantParquetFile(java.nio.file.Path, String)}, optionally
+   * wrapping the element in a {@code struct<key:string, value:<variant>>}. On the 2-level layout
+   * the repeated group IS that element, so its member named {@code value} is a user field holding
+   * the shredded variant, not a collection level: the group must land at {@code a.value}.
+   */
+  public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName,
+                                                                 boolean wrapElementInStruct) throws IOException {
+    return writeArrayShreddedVariantParquetFile(dir, fileName, wrapElementInStruct, false);
+  }
+
+  /**
+   * As {@link #writeArrayShreddedVariantParquetFile(java.nio.file.Path, String, boolean)}, with
+   * {@code threeLevelList} switching the layout from parquet-avro's default 2-level {@code array}
+   * to the 3-level {@code list}/{@code element} one, which is what the Spark row writer emits; the
+   * Avro write path emits the 2-level form, so both layouts reach the guard.
+   */
+  public static StoragePath writeArrayShreddedVariantParquetFile(java.nio.file.Path dir, String fileName,
+                                                                 boolean wrapElementInStruct,
+                                                                 boolean threeLevelList) throws IOException {
+    HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema elementSchema = wrapElementInStruct
+        ? HoodieSchema.createRecord("a_t", null, null, Arrays.asList(
+            HoodieSchemaField.of("key", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("value", shreddedVariant)))
+        : shreddedVariant;
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("a", HoodieSchema.createArray(elementSchema))));
+    Configuration conf = new Configuration();
+    if (threeLevelList) {
+      conf.setBoolean(AvroWriteSupport.WRITE_OLD_LIST_STRUCTURE, false);
+    }
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (ParquetWriter<GenericRecord> writer = AvroParquetWriter.<GenericRecord>builder(new Path(file.toString()))
+        .withSchema(writeSchema.toAvroSchema())
+        .withConf(conf)
+        .build()) {
+      GenericRecord element = variantValue(shreddedVariant, true);
+      if (wrapElementInStruct) {
+        GenericRecord wrapper = new GenericData.Record(elementSchema.toAvroSchema());
+        wrapper.put("key", "k1");
+        wrapper.put("value", element);
+        element = wrapper;
+      }
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("a", Collections.singletonList(element));
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /**
+   * Writes a one-row parquet file whose {@code a} column is a 3-level LIST with its repeated level
+   * named {@code other_tuple} and a shredded variant as that level's single child. Parquet's
+   * backward-compatibility rule (AvroSchemaConverter.isElementType) takes a repeated group for
+   * the element only when it is named {@code array} or exactly {@code <list>_tuple}, so this level
+   * is a synthetic one and the shredded group has to land at the column's own path {@code a}.
+   * Nothing in Hudi writes this shape; it pins that the guard applies the rule by the list's own
+   * name rather than by the suffix alone, which would have collected {@code a.element} instead.
+   */
+  public static StoragePath writeMisnamedTupleListShreddedVariantParquetFile(java.nio.file.Path dir, String fileName)
+      throws IOException {
+    MessageType schema = MessageTypeParser.parseMessageType(
+        "message TestRecord {"
+            + " required int32 id;"
+            + " optional group a (LIST) {"
+            + "   repeated group other_tuple {"
+            + "     optional group element {"
+            + "       optional binary metadata;"
+            + "       optional binary value;"
+            + "       optional int64 typed_value;"
+            + "     }"
+            + "   }"
+            + " }"
+            + "}");
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (ParquetWriter<Group> writer = ExampleParquetWriter.builder(new Path(file.toString()))
+        .withType(schema)
+        .build()) {
+      Group record = new SimpleGroupFactory(schema).newGroup();
+      record.add("id", 1);
+      Group element = record.addGroup("a").addGroup("other_tuple").addGroup("element");
+      element.add("metadata", Binary.fromConstantByteArray(new byte[] {1}));
+      element.add("typed_value", 5L);
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /**
+   * Writes a one-row parquet file with an {@code id} column and an {@code m} column holding a
+   * {@code map<string, variant>} whose value is shredded: the shape either write path produces from
+   * a write schema that declares it, a bare map value being the other position the forced DDL
+   * leaves alone on both. A map's entry level, key and value are levels Hive's dotted paths never
+   * name, so the shredded group has to land at the column's own path {@code m}.
+   */
+  public static StoragePath writeMapShreddedVariantParquetFile(java.nio.file.Path dir, String fileName) throws IOException {
+    HoodieSchema.Variant shreddedVariant = shreddedVariantSchema();
+    HoodieSchema writeSchema = HoodieSchema.createRecord("TestRecord", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
+        HoodieSchemaField.of("m", HoodieSchema.createMap(shreddedVariant))));
+    java.nio.file.Path file = dir.resolve(fileName);
+    try (AvroParquetWriter<GenericRecord> writer =
+             new AvroParquetWriter<>(new Path(file.toString()), writeSchema.toAvroSchema())) {
+      GenericRecord record = new GenericData.Record(writeSchema.toAvroSchema());
+      record.put("id", 1);
+      record.put("m", Collections.singletonMap("k1", variantValue(shreddedVariant, true)));
+      writer.write(record);
+    }
+    return new StoragePath(file.toUri().toString());
+  }
+
+  /** A value of {@code variantSchema}: typed ({@code key = "k1"}) when asked, a residual value otherwise. */
+  static GenericRecord variantValue(HoodieSchema.Variant variantSchema, boolean populateTypedValue) {
+    GenericRecord variant = new GenericData.Record(variantSchema.toAvroSchema());
+    variant.put("metadata", ByteBuffer.wrap(new byte[] {1}));
+    if (populateTypedValue) {
+      Schema typedValueSchema = HoodieAvroUtils.unwrapNullable(variantSchema.getTypedValueField().get().toAvroSchema());
+      GenericRecord keyWrapper = new GenericData.Record(HoodieAvroUtils.unwrapNullable(typedValueSchema.getField("key").schema()));
+      keyWrapper.put("typed_value", "k1");
+      GenericRecord typedValue = new GenericData.Record(typedValueSchema);
+      typedValue.put("key", keyWrapper);
+      variant.put("typed_value", typedValue);
+    } else {
+      variant.put("value", ByteBuffer.wrap(new byte[] {0}));
+    }
+    return variant;
   }
 
   public static void setInputPath(JobConf jobConf, String inputPath) {

@@ -19,10 +19,12 @@
 
 package org.apache.hudi.util;
 
+import org.apache.hudi.adapter.DataTypeAdapter;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.api.common.typeinfo.Types;
@@ -34,6 +36,7 @@ import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.LogicalTypeFamily;
+import org.apache.flink.table.types.logical.LogicalTypeRoot;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.MultisetType;
 import org.apache.flink.table.types.logical.RowType;
@@ -41,7 +44,10 @@ import org.apache.flink.table.types.logical.TimeType;
 import org.apache.flink.table.types.logical.TimestampType;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -67,11 +73,55 @@ public class HoodieSchemaConverter {
    * <p>The "{rowName}." is used as the nested row type name prefix in order to generate
    * the right schema. Nested record types that only differ by type name are still compatible.
    *
+   * <p>On Flink 2.1+, {@code LogicalTypeRoot.VARIANT} is detected via string comparison
+   * (to avoid compile-time dependency) and mapped to {@link HoodieSchema#createVariant()}.
+   * Pre-2.1 Flink does not support Variant.
+   *
    * @param logicalType Flink logical type
    * @param rowName     the record name
    * @return HoodieSchema matching this logical type
    */
   public static HoodieSchema convertToSchema(LogicalType logicalType, String rowName) {
+    return convertToSchema(logicalType, rowName, Collections.emptyMap());
+  }
+
+  /**
+   * Converts a Flink LogicalType into a HoodieSchema with top-level VECTOR columns.
+   *
+   * <p>The vector column option uses {@code colName[:dimension]} entries separated by commas.
+   * The dimension defaults to 128. The vector element type is inferred from the Flink array
+   * element type: FLOAT, DOUBLE, or TINYINT.
+   *
+   * @param logicalType    Flink logical type
+   * @param rowName        the record name
+   * @param vectorColumns  comma-separated vector column descriptors, or null/empty
+   * @return HoodieSchema matching this logical type
+   */
+  public static HoodieSchema convertToSchema(
+      LogicalType logicalType,
+      String rowName,
+      String vectorColumns) {
+    Map<String, Integer> vectorColumnMap = vectorColumns == null || vectorColumns.trim().isEmpty()
+        ? Collections.emptyMap() : VectorColumnParser.parse(vectorColumns);
+    return convertToSchema(logicalType, rowName, vectorColumnMap);
+  }
+
+  /**
+   * Converts a Flink LogicalType into a HoodieSchema with the specified top-level VECTOR columns.
+   *
+   * @param logicalType   Flink logical type
+   * @param rowName       the record name
+   * @param vectorColumns vector column names and dimensions
+   * @return HoodieSchema matching this logical type
+   */
+  public static HoodieSchema convertToSchema(
+      LogicalType logicalType,
+      String rowName,
+      Map<String, Integer> vectorColumns) {
+    ValidationUtils.checkArgument(vectorColumns.isEmpty() || logicalType instanceof RowType,
+        "VECTOR columns can only be configured for top-level ROW schemas.");
+    validateVectorColumns(logicalType, vectorColumns);
+
     int precision;
     boolean nullable = logicalType.isNullable();
     HoodieSchema schema;
@@ -175,6 +225,13 @@ public class HoodieSchemaConverter {
 
       case ROW:
         RowType rowType = (RowType) logicalType;
+
+        // Check if this is a BLOB structure
+        if (isBlobStructure(rowType)) {
+          schema = HoodieSchema.createBlob();
+          break;
+        }
+
         List<String> fieldNames = rowType.getFieldNames();
 
         List<HoodieSchemaField> hoodieFields = new ArrayList<>();
@@ -182,8 +239,13 @@ public class HoodieSchemaConverter {
           String fieldName = fieldNames.get(i);
           LogicalType fieldType = rowType.getTypeAt(i);
 
-          // Recursive call for field schema
-          HoodieSchema fieldSchema = convertToSchema(fieldType, rowName + "." + fieldName);
+          HoodieSchema fieldSchema;
+          if (vectorColumns.containsKey(fieldName)) {
+            fieldSchema = VectorColumnParser.convertVectorField(fieldName, fieldType, vectorColumns.get(fieldName));
+          } else {
+            // Recursive call for field schema
+            fieldSchema = convertToSchema(fieldType, rowName + "." + fieldName, Collections.emptyMap());
+          }
 
           // Create field with or without default value
           HoodieSchemaField field;
@@ -201,23 +263,49 @@ public class HoodieSchemaConverter {
       case MULTISET:
       case MAP:
         LogicalType valueType = extractValueTypeForMap(logicalType);
-        HoodieSchema valueSchema = convertToSchema(valueType, rowName);
+        HoodieSchema valueSchema = convertToSchema(valueType, rowName, Collections.emptyMap());
         schema = HoodieSchema.createMap(valueSchema);
         break;
 
       case ARRAY:
         ArrayType arrayType = (ArrayType) logicalType;
-        HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName);
+        HoodieSchema elementSchema = convertToSchema(arrayType.getElementType(), rowName, Collections.emptyMap());
         schema = HoodieSchema.createArray(elementSchema);
         break;
 
       case RAW:
       default:
+        if (DataTypeAdapter.isVariantType(logicalType)) {
+          schema = HoodieSchema.createVariant();
+          break;
+        }
         throw new UnsupportedOperationException(
             "Unsupported type for HoodieSchema conversion: " + logicalType);
     }
 
     return nullable ? HoodieSchema.createNullable(schema) : schema;
+  }
+
+  /**
+   * Validates that all configured VECTOR columns resolve to top-level fields of the row schema.
+   *
+   * <p>Invoked by {@link #convertToSchema(LogicalType, String, String)} before schema inference so
+   * an unknown column is rejected instead of being silently ignored during conversion.
+   *
+   * @param logicalType   Flink logical type
+   * @param vectorColumns parsed vector columns (column name to dimension), may be empty
+   */
+  private static void validateVectorColumns(LogicalType logicalType, Map<String, Integer> vectorColumns) {
+    if (vectorColumns.isEmpty()) {
+      return;
+    }
+    List<String> fieldNames = ((RowType) logicalType).getFieldNames();
+    vectorColumns.keySet().stream()
+        .filter(vectorColumn -> !fieldNames.contains(vectorColumn))
+        .findFirst()
+        .ifPresent(vectorColumn -> {
+          throw new IllegalArgumentException("VECTOR column '" + vectorColumn + "' does not exist in the table schema.");
+        });
   }
 
   /**
@@ -250,6 +338,84 @@ public class HoodieSchemaConverter {
    */
   private static boolean isFamily(LogicalType logicalType, LogicalTypeFamily family) {
     return logicalType.getTypeRoot().getFamilies().contains(family);
+  }
+
+  /**
+   * Detects if a Flink RowType represents a BLOB structure by validating it matches the schema defined in {@link HoodieSchema.Blob}.
+   *
+   * <p>Detection intentionally keys off the stable structural signals (field names and base type
+   * roots) and does <b>not</b> assert nested-field nullability. Flink SQL {@code CREATE TABLE} does
+   * not reliably preserve {@code NOT NULL} constraints on nested {@code ROW} fields, so requiring an
+   * exact nullability match would silently demote a user's BLOB column to a generic record when the
+   * column is declared through DDL. The canonical nullability is restored by {@link HoodieSchema#createBlob()}.
+   *
+   * <p>TODO: This heuristic is a workaround for the lack of a native Flink/Parquet BLOB logical
+   * type. See <a href="https://github.com/apache/hudi/issues/18711">apache/hudi#18711</a> for
+   * the tracked work to remove this structural inference.
+   */
+  private static boolean isBlobStructure(RowType rowType) {
+    // Validate: 3 fields with exact names
+    if (rowType.getFieldCount() != HoodieSchema.Blob.getFieldCount()) {
+      return false;
+    }
+    List<String> fieldNames = rowType.getFieldNames();
+    if (!fieldNames.equals(Arrays.asList(
+        HoodieSchema.Blob.TYPE,
+        HoodieSchema.Blob.INLINE_DATA_FIELD,
+        HoodieSchema.Blob.EXTERNAL_REFERENCE))) {
+      return false;
+    }
+
+    // Validate 'type' field: STRING
+    if (!isFamily(rowType.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)) {
+      return false;
+    }
+
+    // Validate 'data' field: BYTES/VARBINARY
+    LogicalType dataField = rowType.getTypeAt(1);
+    if (dataField.getTypeRoot() != LogicalTypeRoot.BINARY && dataField.getTypeRoot() != LogicalTypeRoot.VARBINARY) {
+      return false;
+    }
+
+    // Validate 'reference' field: ROW
+    LogicalType referenceField = rowType.getTypeAt(2);
+    if (referenceField.getTypeRoot() != LogicalTypeRoot.ROW) {
+      return false;
+    }
+
+    // Validate reference sub-structure
+    RowType referenceRow = (RowType) referenceField;
+    if (referenceRow.getFieldCount() != HoodieSchema.Blob.getReferenceFieldCount()) {
+      return false;
+    }
+    List<String> refFieldNames = referenceRow.getFieldNames();
+    if (!refFieldNames.equals(Arrays.asList(
+        HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH,
+        HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET,
+        HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH,
+        HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED))) {
+      return false;
+    }
+
+    // Validate reference sub-field types
+    // external_path: STRING
+    if (!isFamily(referenceRow.getTypeAt(0), LogicalTypeFamily.CHARACTER_STRING)) {
+      return false;
+    }
+    // offset: BIGINT
+    if (referenceRow.getTypeAt(1).getTypeRoot() != LogicalTypeRoot.BIGINT) {
+      return false;
+    }
+    // length: BIGINT
+    if (referenceRow.getTypeAt(2).getTypeRoot() != LogicalTypeRoot.BIGINT) {
+      return false;
+    }
+    // managed: BOOLEAN
+    if (referenceRow.getTypeAt(3).getTypeRoot() != LogicalTypeRoot.BOOLEAN) {
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -316,6 +482,8 @@ public class HoodieSchemaConverter {
         return convertTimestamp(hoodieSchema);
       case UUID:
         return DataTypes.STRING().notNull();
+      case BLOB:
+        return createBlob();
       case ARRAY:
         return convertArray(hoodieSchema);
       case MAP:
@@ -324,6 +492,10 @@ public class HoodieSchemaConverter {
         return convertRecord(hoodieSchema);
       case UNION:
         return convertUnion(hoodieSchema);
+      case VARIANT:
+        return convertVariant(hoodieSchema);
+      case VECTOR:
+        return convertVector(hoodieSchema);
       default:
         throw new IllegalArgumentException("Unsupported HoodieSchemaType: " + type);
     }
@@ -380,6 +552,45 @@ public class HoodieSchemaConverter {
     return DataTypes.TIME(flinkPrecision).notNull();
   }
 
+  private static DataType convertVector(HoodieSchema schema) {
+    if (!(schema instanceof HoodieSchema.Vector)) {
+      throw new IllegalStateException("Expected HoodieSchema.Vector but got: " + schema.getClass());
+    }
+    HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) schema;
+    return DataTypes.ARRAY(convertVectorElementType(vectorSchema.getVectorElementType())).notNull();
+  }
+
+  private static DataType convertVectorElementType(HoodieSchema.Vector.VectorElementType elementType) {
+    switch (elementType) {
+      case FLOAT:
+        return DataTypes.FLOAT().notNull();
+      case DOUBLE:
+        return DataTypes.DOUBLE().notNull();
+      case INT8:
+        return DataTypes.TINYINT().notNull();
+      default:
+        throw new IllegalArgumentException("Unsupported VECTOR element type: " + elementType);
+    }
+  }
+
+  private static DataType createBlob() {
+    // Create nested reference ROW type
+    DataType referenceType = DataTypes.ROW(
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, DataTypes.STRING().notNull()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, DataTypes.BIGINT().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, DataTypes.BIGINT().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, DataTypes.BOOLEAN().notNull())
+    ).nullable();
+
+    // Create top-level BLOB ROW type
+    // Note: 'type' field is ENUM, converted to STRING in Flink
+    return DataTypes.ROW(
+        DataTypes.FIELD(HoodieSchema.Blob.TYPE, DataTypes.STRING().notNull()),
+        DataTypes.FIELD(HoodieSchema.Blob.INLINE_DATA_FIELD, DataTypes.BYTES().nullable()),
+        DataTypes.FIELD(HoodieSchema.Blob.EXTERNAL_REFERENCE, referenceType)
+    ).notNull();
+  }
+
   private static DataType convertRecord(HoodieSchema schema) {
     List<HoodieSchemaField> fields = schema.getFields();
     DataTypes.Field[] flinkFields = new DataTypes.Field[fields.size()];
@@ -420,7 +631,7 @@ public class HoodieSchemaConverter {
       return convertToDataType(unionTypes.get(0));
     }
 
-    // Complex multi-type unions - use RAW type (matches AvroSchemaConverter logic)
+    // Complex multi-type unions - use RAW type
     List<HoodieSchema> nonNullTypes = unionTypes.stream()
         .filter(t -> t.getType() != HoodieSchemaType.NULL)
         .collect(Collectors.toList());
@@ -446,6 +657,27 @@ public class HoodieSchemaConverter {
   }
 
   /**
+   * Converts a Variant HoodieSchema to the native Flink {@code VariantType} DataType.
+   * Requires Flink 2.1+ at runtime; throws {@link UnsupportedOperationException} on older versions.
+   *
+   * @param schema HoodieSchema to convert (must be a VARIANT type)
+   * @return native VariantType DataType
+   * @throws UnsupportedOperationException if Flink runtime is pre-2.1 or variant is shredded
+   */
+  private static DataType convertVariant(HoodieSchema schema) {
+    if (schema.getType() != HoodieSchemaType.VARIANT) {
+      throw new IllegalStateException("Expected HoodieSchema.Variant but got: " + schema.getClass());
+    }
+
+    if (((HoodieSchema.Variant) schema).isShredded()) {
+      throw new UnsupportedOperationException(
+          "Shredded Variant is not yet supported in Flink. Use unshredded Variant instead.");
+    }
+
+    return DataTypeAdapter.createVariantType().notNull();
+  }
+
+  /**
    * Returns true if all the types are RECORD type with same number of fields.
    */
   private static boolean recordTypesOfSameNumFields(List<HoodieSchema> types) {
@@ -457,5 +689,26 @@ public class HoodieSchemaConverter {
     }
     int numFields = types.get(0).getFields().size();
     return types.stream().allMatch(s -> s.getFields().size() == numFields);
+  }
+
+  public static LogicalType extractValueTypeToMap(LogicalType type) {
+    LogicalType keyType;
+    LogicalType valueType;
+    if (type instanceof MapType) {
+      MapType mapType = (MapType) type;
+      keyType = mapType.getKeyType();
+      valueType = mapType.getValueType();
+    } else {
+      MultisetType multisetType = (MultisetType) type;
+      keyType = multisetType.getElementType();
+      valueType = new IntType();
+    }
+    if (!isFamily(keyType, LogicalTypeFamily.CHARACTER_STRING)) {
+      throw new UnsupportedOperationException(
+          "Avro format doesn't support non-string as key type of map. "
+              + "The key type is: "
+              + keyType.asSummaryString());
+    }
+    return valueType;
   }
 }

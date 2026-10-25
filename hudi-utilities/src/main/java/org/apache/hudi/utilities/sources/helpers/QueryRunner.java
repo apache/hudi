@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -29,13 +28,12 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.HoodieIncrSourceConfig;
 import org.apache.hudi.utilities.sources.SnapshotLoadQuerySplitter;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.List;
@@ -43,18 +41,17 @@ import java.util.List;
 import static org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_TABLE_VERSION;
 import static org.apache.hudi.common.util.ConfigUtils.checkRequiredConfigProperties;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 
 /**
  * This class is currently used only by s3 and gcs incr sources that supports size based batching
- * This class will fetch comitted files from the current commit to support size based batching.
+ * This class will fetch committed files from the current commit to support size based batching.
  */
+@Slf4j
 public class QueryRunner {
+
   private final SparkSession sparkSession;
   private final TypedProperties props;
   private final String sourcePath;
-
-  private static final Logger LOG = LoggerFactory.getLogger(QueryRunner.class);
 
   public QueryRunner(SparkSession sparkSession, TypedProperties props) {
     this.sparkSession = sparkSession;
@@ -81,29 +78,30 @@ public class QueryRunner {
 
   public static Dataset<Row> applyOrdering(Dataset<Row> dataset, List<String> orderByColumns) {
     if (orderByColumns != null && !orderByColumns.isEmpty()) {
-      LOG.debug("Applying ordering {}", orderByColumns);
+      log.debug("Applying ordering {}", orderByColumns);
       return dataset.orderBy(orderByColumns.stream().map(functions::col).toArray(Column[]::new));
     }
     return dataset;
   }
 
   public Pair<QueryInfo, Dataset<Row>> runIncrementalQuery(QueryInfo queryInfo) {
-    LOG.info("Running incremental query");
+    log.info("Running incremental query");
 
-    HoodieTableVersion tableVersion = HoodieTableMetaClient.builder().setConf(getStorageConf()).setBasePath(sourcePath).build().getTableConfig().getTableVersion();
+    // S3/GCS event incremental sources operate with V1 checkpoint (commit#fileKey, requested-time based),
+    // so force INCREMENTAL_READ_TABLE_VERSION to 6. Use previousInstant so the start-exclusive incremental
+    // scan still includes the commit (startInstant), required to resume from checkpoint commit#fileKey.
     return Pair.of(queryInfo, sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType())
-        .option(INCREMENTAL_READ_TABLE_VERSION().key(), tableVersion.versionCode())
-        .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getStartInstant())
+        .option(INCREMENTAL_READ_TABLE_VERSION().key(), HoodieTableVersion.SIX.versionCode())
+        .option(DataSourceReadOptions.START_COMMIT().key(), queryInfo.getPreviousInstant())
         .option(DataSourceReadOptions.END_COMMIT().key(), queryInfo.getEndInstant())
         .option(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(),
-                tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().defaultValue() : "false"))
+            props.getString(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN().key(), "false"))
         .load(sourcePath));
   }
 
   public Pair<QueryInfo, Dataset<Row>> runSnapshotQuery(QueryInfo queryInfo, Option<SnapshotLoadQuerySplitter> snapshotLoadQuerySplitterOption) {
-    LOG.info("Running snapshot query");
+    log.info("Running snapshot query");
     Dataset<Row> snapshot = sparkSession.read().format("hudi")
         .option(DataSourceReadOptions.QUERY_TYPE().key(), queryInfo.getQueryType()).load(sourcePath);
     QueryInfo snapshotQueryInfo = snapshotLoadQuerySplitterOption

@@ -20,13 +20,13 @@ package org.apache.hudi.common.fs;
 
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -76,7 +76,9 @@ class TestHoodieWrapperFileSystem {
     StoragePath testFile = new StoragePath(basePath + StoragePath.SEPARATOR + "clean.00000001");
 
     // create same commit twice
-    HoodieStorage storage = new HoodieHadoopStorage(fs);
+    HoodieStorage storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(new Path(basePath)),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
     storage.createImmutableFileInPath(testFile, Option.of(outputStream -> outputStream.write(testContent.getBytes())));
     storage.createImmutableFileInPath(testFile, Option.of(outputStream -> outputStream.write(testContent.getBytes())));
     List<StoragePathInfo> pathInfoList = storage.listDirectEntries(new StoragePath(basePath));

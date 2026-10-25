@@ -414,4 +414,59 @@ class TestCustomKeyGenerator extends KeyGeneratorTestUtilities {
     // custom key generator will fail in the constructor, and we must unwrap the cause for asserting error messages
     return e.getCause().getCause();
   }
+
+  @Test
+  void testSlashSeparatedDatePartitioning() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    // NOTE: "ts_ms" is the string-typed field of the example schema, "timestamp" is a long, so only
+    //       the former survives the conversion into a [[Row]]/[[InternalRow]]
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ts_ms:simple");
+    properties.put(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
+    properties.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), CustomKeyGenerator.class.getName());
+
+    BuiltinKeyGenerator keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
+
+    // Create a record with date in yyyy-MM-dd format
+    GenericRecord avroRecord = KeyGeneratorTestUtilities.getRecord();
+    avroRecord.put("ts_ms", "2026-01-05");
+
+    // The partition path should be transformed to yyyy/MM/dd format
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("key1", key.getRecordKey());
+    assertEquals("2026/01/05", key.getPartitionPath());
+
+    // NOTE: [[CustomKeyGenerator]] builds one single-field sub-key-generator per partition field, so
+    //       the row-writer paths have to derive the very same partition path as the Avro one above
+    Row row = KeyGeneratorTestUtilities.getRow(avroRecord);
+    assertEquals("2026/01/05", keyGenerator.getPartitionPath(row));
+
+    InternalRow internalRow = KeyGeneratorTestUtilities.getInternalRow(row);
+    assertEquals(UTF8String.fromString("2026/01/05"),
+        keyGenerator.getPartitionPath(internalRow, row.schema()));
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningWithAlreadyFormattedInput() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp:simple");
+    properties.put(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
+    properties.put(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), CustomKeyGenerator.class.getName());
+
+    BuiltinKeyGenerator keyGenerator =
+        (BuiltinKeyGenerator) HoodieSparkKeyGeneratorFactory.createKeyGenerator(properties);
+
+    // Create a record with date already in yyyy/MM/dd format
+    GenericRecord avroRecord = KeyGeneratorTestUtilities.getRecord();
+    avroRecord.put("timestamp", "2026/01/01");
+
+    // The partition path should remain in yyyy/MM/dd format
+    HoodieKey key = keyGenerator.getKey(avroRecord);
+    assertEquals("key1", key.getRecordKey());
+    assertEquals("2026/01/01", key.getPartitionPath());
+  }
 }

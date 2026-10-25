@@ -28,23 +28,21 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRecordBuffer;
-import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.Triple;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.avro.Schema;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -104,25 +103,38 @@ public class FileGroupReaderSchemaHandler<T> {
   protected final TypedProperties properties;
   @Getter
   private final DeleteContext deleteContext;
-  private final HoodieTableMetaClient metaClient;
+  private final TableState tableState;
 
+  /**
+   * @deprecated Use the constructor that takes a {@link TableState} built once by the caller and passed down.
+   */
+  @Deprecated
   public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
                                       HoodieSchema tableSchema,
                                       HoodieSchema requestedSchema,
                                       Option<InternalSchema> internalSchemaOpt,
                                       TypedProperties properties,
                                       HoodieTableMetaClient metaClient) {
+    this(readerContext, tableSchema, requestedSchema, internalSchemaOpt, properties, TableState.fromMetaClient(metaClient));
+  }
+
+  public FileGroupReaderSchemaHandler(HoodieReaderContext<T> readerContext,
+                                      HoodieSchema tableSchema,
+                                      HoodieSchema requestedSchema,
+                                      Option<InternalSchema> internalSchemaOpt,
+                                      TypedProperties properties,
+                                      TableState tableState) {
     this.properties = properties;
     this.readerContext = readerContext;
     this.tableSchema = tableSchema;
     this.requestedSchema = HoodieSchemaCache.intern(requestedSchema);
-    this.hoodieTableConfig = metaClient.getTableConfig();
+    this.hoodieTableConfig = tableState.getTableConfig();
     this.deleteContext = new DeleteContext(properties, tableSchema);
     this.requiredSchema = HoodieSchemaCache.intern(prepareRequiredSchema(this.deleteContext));
     this.schemaForUpdates = requiredSchema;
     this.internalSchema = pruneInternalSchema(requiredSchema, internalSchemaOpt);
     this.internalSchemaOpt = getInternalSchemaOpt(internalSchemaOpt);
-    this.metaClient = metaClient;
+    this.tableState = tableState;
   }
 
   public Option<UnaryOperator<T>> getOutputConverter() {
@@ -136,8 +148,34 @@ public class FileGroupReaderSchemaHandler<T> {
     if (internalSchema.isEmptySchema()) {
       return Pair.of(requiredSchema, Collections.emptyMap());
     }
-    long commitInstantTime = Long.parseLong(FSUtils.getCommitTime(path.getName()));
-    InternalSchema fileSchema = InternalSchemaCache.searchSchemaAndCache(commitInstantTime, metaClient);
+    return getRequiredSchemaForInstantAndRenamedColumns(FSUtils.getCommitTime(path.getName()));
+  }
+
+  /**
+   * Creates the same writer-schema-to-evolved-schema transformer used for inline log blocks.
+   *
+   * <p>When schema evolution is enabled, log records must first be decoded with their writer
+   * schema and then rewritten to the schema applicable to that log instant. Both inline log blocks
+   * and native log files use this transformer so the evolution semantics stay aligned.
+   */
+  public Option<Pair<Function<T, T>, HoodieSchema>> getSchemaEvolutionTransformer(
+      HoodieSchema writerSchema, String instantTime) {
+    if (internalSchema.isEmptySchema()) {
+      return Option.empty();
+    }
+    Pair<HoodieSchema, Map<String, String>> requiredSchemaAndRenamedColumns =
+        getRequiredSchemaForInstantAndRenamedColumns(instantTime);
+    return Option.of(Pair.of(
+        readerContext.getRecordContext().projectRecord(
+            writerSchema,
+            requiredSchemaAndRenamedColumns.getLeft(),
+            requiredSchemaAndRenamedColumns.getRight()),
+        requiredSchemaAndRenamedColumns.getLeft()));
+  }
+
+  private Pair<HoodieSchema, Map<String, String>> getRequiredSchemaForInstantAndRenamedColumns(String instantTime) {
+    long commitInstantTime = Long.parseLong(instantTime);
+    InternalSchema fileSchema = tableState.getInternalSchema(commitInstantTime);
     Pair<InternalSchema, Map<String, String>> mergedInternalSchema = new InternalSchemaMerger(fileSchema, internalSchema,
         true, false, false).mergeSchemaGetRenamed();
     HoodieSchema mergedAvroSchema = HoodieSchemaCache.intern(InternalSchemaConverter.convert(mergedInternalSchema.getLeft(), requiredSchema.getFullName()));
@@ -176,7 +214,17 @@ public class FileGroupReaderSchemaHandler<T> {
       return requestedSchema;
     }
 
-    if (hoodieTableConfig.getRecordMergeMode() == RecordMergeMode.CUSTOM) {
+    RecordMergeMode mergeMode = hoodieTableConfig.getRecordMergeMode();
+    if (hoodieTableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
+      Triple<RecordMergeMode, String, String> mergingConfigs = inferMergingConfigsForPreV9Table(
+          hoodieTableConfig.getRecordMergeMode(),
+          hoodieTableConfig.getPayloadClass(),
+          hoodieTableConfig.getRecordMergeStrategyId(),
+          hoodieTableConfig.getOrderingFieldsStr().orElse(null),
+          hoodieTableConfig.getTableVersion());
+      mergeMode = mergingConfigs.getLeft();
+    }
+    if (mergeMode == RecordMergeMode.CUSTOM) {
       if (!readerContext.getRecordMerger().get().isProjectionCompatible()) {
         return this.tableSchema;
       }
@@ -185,7 +233,7 @@ public class FileGroupReaderSchemaHandler<T> {
     List<HoodieSchemaField> addedFields = new ArrayList<>();
     for (String field : getMandatoryFieldsForMerging(
         hoodieTableConfig, this.properties, this.tableSchema, readerContext.getRecordMerger(),
-        deleteContext.hasBuiltInDeleteField(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange)) {
+        deleteContext.hasBuiltInDeleteField(), deleteContext.getCustomDeleteMarkerKeyValue(), hasInstantRange, mergeMode)) {
       if (!findNestedField(requestedSchema, field).isPresent()) {
         addedFields.add(getField(this.tableSchema, field));
       }
@@ -204,18 +252,8 @@ public class FileGroupReaderSchemaHandler<T> {
                                                        Option<HoodieRecordMerger> recordMerger,
                                                        boolean hasBuiltInDelete,
                                                        Option<Pair<String, String>> customDeleteMarkerKeyAndValue,
-                                                       boolean hasInstantRange) {
-    RecordMergeMode mergeMode = cfg.getRecordMergeMode();
-    if (cfg.getTableVersion().lesserThan(HoodieTableVersion.NINE)) {
-      Triple<RecordMergeMode, String, String> mergingConfigs = inferMergingConfigsForPreV9Table(
-          cfg.getRecordMergeMode(),
-          cfg.getPayloadClass(),
-          cfg.getRecordMergeStrategyId(),
-          cfg.getOrderingFieldsStr().orElse(null),
-          cfg.getTableVersion());
-      mergeMode = mergingConfigs.getLeft();
-    }
-
+                                                       boolean hasInstantRange,
+                                                       RecordMergeMode mergeMode) {
     if (mergeMode == RecordMergeMode.CUSTOM) {
       return recordMerger.get().getMandatoryFieldsForMerging(tableSchema, cfg, props);
     }
@@ -293,7 +331,7 @@ public class FileGroupReaderSchemaHandler<T> {
   }
 
   /**
-   * Get {@link Schema.Field} from {@link Schema} by field name.
+   * Get {@link HoodieSchemaField} from {@link HoodieSchema} by field name.
    */
   private static HoodieSchemaField getField(HoodieSchema schema, String fieldName) {
     Option<HoodieSchemaField> foundFieldOpt = findNestedField(schema, fieldName);

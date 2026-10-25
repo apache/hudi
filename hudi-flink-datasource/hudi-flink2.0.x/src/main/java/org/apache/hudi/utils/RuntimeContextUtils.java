@@ -55,4 +55,8 @@ public class RuntimeContextUtils {
     return Long.parseLong(jobParameters.getOrDefault(AUTO_WATERMARK_INTERVAL.key(),
         AUTO_WATERMARK_INTERVAL.defaultValue().toMillis() + ""));
   }
+
+  public static boolean isObjectReuseEnabled(RuntimeContext runtimeContext) {
+    return runtimeContext.isObjectReuseEnabled();
+  }
 }

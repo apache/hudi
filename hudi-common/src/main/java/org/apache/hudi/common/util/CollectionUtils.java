@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,6 +70,14 @@ public class CollectionUtils {
     return !isNullOrEmpty(c);
   }
 
+  public static boolean nonEmpty(Map<?, ?> m) {
+    return !isNullOrEmpty(m);
+  }
+
+  public static boolean containsAll(Map<?, ?> m1, Map<?, ?> m2) {
+    return m1.entrySet().containsAll(m2.entrySet());
+  }
+
   /**
    * Reduces provided {@link Collection} using provided {@code reducer} applied to
    * every element of the collection like following
@@ -104,6 +113,35 @@ public class CollectionUtils {
   public static <T> T tail(T[] ts) {
     checkArgument(ts.length > 0);
     return ts[ts.length - 1];
+  }
+
+  /**
+   * An empty immutable {@code long} array.
+   */
+  public static final long[] EMPTY_LONG_ARRAY = new long[0];
+
+  /**
+   * <p>Converts an array of object Longs to primitives.</p>
+   *
+   * <p>This method returns {@code null} for a {@code null} input array.</p>
+   *
+   * NOTE : Adapted from org.apache.commons.lang3.ArrayUtils
+   *
+   * @param array  a {@code Long} array, may be {@code null}
+   * @return a {@code long} array, {@code null} if null array input
+   * @throws NullPointerException if array content is {@code null}
+   */
+  public static long[] toPrimitive(Long[] array) {
+    if (array == null) {
+      return null;
+    } else if (array.length == 0) {
+      return EMPTY_LONG_ARRAY;
+    }
+    final long[] result = new long[array.length];
+    for (int i = 0; i < array.length; i++) {
+      result[i] = array[i].longValue();
+    }
+    return result;
   }
 
   /**
@@ -252,7 +290,7 @@ public class CollectionUtils {
 
   @SafeVarargs
   public static <T> List<T> createImmutableList(final T... elements) {
-    return Collections.unmodifiableList(Stream.of(elements).collect(Collectors.toList()));
+    return Collections.unmodifiableList(new ArrayList<>(Arrays.asList(elements)));
   }
 
   public static <T> List<T> createImmutableList(final List<T> list) {

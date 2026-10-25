@@ -19,9 +19,9 @@
 
 package org.apache.hudi.utilities.streamer;
 
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
@@ -57,7 +57,7 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   }
 
   @VisibleForTesting
-  Metrics getMetrics() {
+  public Metrics getMetrics() {
     return metrics;
   }
 
@@ -105,6 +105,20 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
   public void updateStreamerMetrics(long durationInNs) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "duration"), getDurationInMs(durationInNs));
+    }
+  }
+
+  @Override
+  public void emitStreamerJobSuccessMetrics() {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "success"), 1);
+    }
+  }
+
+  @Override
+  public void emitStreamerJobFailedMetrics() {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "failure"), 1);
     }
   }
 
@@ -198,9 +212,18 @@ public class HoodieStreamerMetrics extends HoodieIngestionMetrics {
     }
   }
 
+  @Override
   public void updateStreamerSourceBytesToBeIngestedInSyncRound(long sourceBytesToBeIngested) {
     if (writeConfig.isMetricsOn()) {
       metrics.registerGauge(getMetricsName("deltastreamer", "sourceBytesToBeIngestedInSyncRound"), sourceBytesToBeIngested);
+    }
+  }
+
+  @Override
+  public void updateHoodieIncrSourceMetrics(long numCommitsInProgress, long numUnprocessedCommits) {
+    if (writeConfig.isMetricsOn()) {
+      metrics.registerGauge(getMetricsName("deltastreamer", "numCommitsInProgress"), numCommitsInProgress);
+      metrics.registerGauge(getMetricsName("deltastreamer", "numUnprocessedCommits"), numUnprocessedCommits);
     }
   }
 

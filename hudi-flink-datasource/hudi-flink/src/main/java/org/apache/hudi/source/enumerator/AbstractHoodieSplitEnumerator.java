@@ -19,16 +19,16 @@
 package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSplitProvider;
 import org.apache.hudi.source.split.SplitRequestEvent;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SplitEnumerator;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SupportsHandleExecutionAttemptSourceEvent;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
@@ -44,13 +44,16 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Abstract class for Hoodie SourceSplit enumerator.
  */
+@Slf4j
 abstract class AbstractHoodieSplitEnumerator
     implements SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState>,
     SupportsHandleExecutionAttemptSourceEvent {
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractHoodieSplitEnumerator.class);
-
+  // Table name
+  protected final String tableName;
   // Split provider that provide Hoodie split for split request
   protected final HoodieSplitProvider splitProvider;
+  // Stream Read metrics
+  protected final FlinkStreamReadMetrics enumeratorMetrics;
   // Context of split enumerator
   private final SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext;
   // Registered reader task id to request host home map
@@ -59,18 +62,25 @@ abstract class AbstractHoodieSplitEnumerator
   private final AtomicReference<CompletableFuture<Void>> availableFuture;
 
   AbstractHoodieSplitEnumerator(
+      String tableName,
       SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
       HoodieSplitProvider splitProvider) {
+    this.tableName = tableName;
     this.enumeratorContext = enumeratorContext;
     // Use LinkedHashMap to make sure split request are handled in request order
     this.readersAwaitingSplit = new LinkedHashMap<>();
     this.availableFuture = new AtomicReference<>();
     this.splitProvider = splitProvider;
-    this.enumeratorContext
-        .metricGroup()
-        // This number may not capture the entire backlog due to split discovery throttling to avoid
-        // excessive memory footprint. Some pending splits may not have been discovered yet.
-        .setUnassignedSplitsGauge(() -> Long.valueOf(splitProvider.pendingSplitCount()));
+    if (this.enumeratorContext.metricGroup() != null) {
+      // This number may not capture the entire backlog due to split discovery throttling to avoid
+      // excessive memory footprint. Some pending splits may not have been discovered yet.
+      this.enumeratorContext.metricGroup().setUnassignedSplitsGauge(() -> (long) splitProvider.pendingSplitCount());
+      this.enumeratorMetrics = new FlinkStreamReadMetrics(this.enumeratorContext.metricGroup(), tableName);
+      this.enumeratorMetrics.registerMetrics();
+    } else {
+      // Some test or runtime contexts can omit the metrics group.
+      enumeratorMetrics = null;
+    }
   }
 
   @Override
@@ -88,7 +98,7 @@ abstract class AbstractHoodieSplitEnumerator
   public void handleSourceEvent(int subtaskId, SourceEvent sourceEvent) {
     if (sourceEvent instanceof SplitRequestEvent) {
       SplitRequestEvent splitRequestEvent = (SplitRequestEvent) sourceEvent;
-      LOG.info("Received request split event from subtask {}", subtaskId);
+      log.info("Received request split event from subtask {}", subtaskId);
       splitProvider.onCompletedSplits(splitRequestEvent.finishedSplitIds());
       readersAwaitingSplit.put(subtaskId, splitRequestEvent.requesterHostname());
       assignSplits();
@@ -104,14 +114,14 @@ abstract class AbstractHoodieSplitEnumerator
 
   @Override
   public void addSplitsBack(List<HoodieSourceSplit> splits, int subtaskId) {
-    LOG.info("Add {} splits back to the split provider for failed subtask {}", splits.size(), subtaskId);
+    log.info("Add {} splits back to the split provider for failed subtask {}", splits.size(), subtaskId);
     splitProvider.onUnassignedSplits(splits);
     assignSplits();
   }
 
   @Override
   public void addReader(int subtaskId) {
-    LOG.info("Add reader for subtask {}", subtaskId);
+    log.info("Add reader for subtask {}", subtaskId);
   }
 
   @Override
@@ -130,7 +140,7 @@ abstract class AbstractHoodieSplitEnumerator
   }
 
   private void assignSplits() {
-    LOG.info("Assigning splits for {} awaiting readers", readersAwaitingSplit.size());
+    log.info("Assigning splits for {} awaiting readers", readersAwaitingSplit.size());
     Iterator<Map.Entry<Integer, String>> awaitingReader =
         readersAwaitingSplit.entrySet().iterator();
     while (awaitingReader.hasNext()) {
@@ -144,19 +154,20 @@ abstract class AbstractHoodieSplitEnumerator
 
       int awaitingSubtask = nextAwaiting.getKey();
       String hostname = nextAwaiting.getValue();
-      Option<HoodieSourceSplit> splitOption = splitProvider.getNext(hostname);
+      Option<HoodieSourceSplit> splitOption = splitProvider.getNext(awaitingSubtask, hostname);
       if (splitOption.isPresent()) {
-        LOG.info("Assign split to subtask {}: {}", awaitingSubtask, splitOption.get());
+        log.info("Assign split to subtask {}: {}", awaitingSubtask, splitOption.get());
         enumeratorContext.assignSplit(splitOption.get(), awaitingSubtask);
         awaitingReader.remove();
       } else if (splitOption.isEmpty()) {
         if (shouldWaitForMoreSplits()) {
           // for continuous split provider callback
           registerCallbackFromSplitProvider();
-          break;
+
+          // don't break here to make sure every reader get the chance of split assignment
         } else {
           // for static split provider
-          LOG.info("No more splits available for subtask {}", awaitingSubtask);
+          log.info("No more splits available for subtask {}", awaitingSubtask);
           enumeratorContext.signalNoMoreSplits(awaitingSubtask);
           awaitingReader.remove();
         }
@@ -178,11 +189,11 @@ abstract class AbstractHoodieSplitEnumerator
                 ignore ->
                     enumeratorContext.runInCoordinatorThread(
                         () -> {
-                          LOG.debug("Executing callback of new splits from provider");
+                          log.debug("Executing callback of new splits from provider");
                           availableFuture.set(null);
                           assignSplits();
                         }));
     availableFuture.set(future);
-    LOG.debug("Registered callback for future available splits");
+    log.debug("Registered callback for future available splits");
   }
 }

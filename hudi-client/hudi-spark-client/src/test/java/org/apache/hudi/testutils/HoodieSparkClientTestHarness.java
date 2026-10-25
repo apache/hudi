@@ -47,6 +47,7 @@ import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
@@ -61,7 +62,6 @@ import org.apache.hudi.metadata.HoodieBackedTableMetadataWriter;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -621,12 +621,6 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
         tableView.getAllFileGroups(partition).collect(Collectors.toList());
     fileGroups.addAll(tableView.getAllReplacedFileGroups(partition).collect(Collectors.toList()));
 
-    fileGroups.forEach(g -> log.info(g.toString()));
-    fileGroups.forEach(g -> g.getAllBaseFiles()
-        .forEach(b -> log.info(b.toString())));
-    fileGroups.forEach(g -> g.getAllFileSlices()
-        .forEach(s -> log.info(s.toString())));
-
     long numFiles = fileGroups.stream()
         .mapToLong(g -> g.getAllBaseFiles().count()
             + g.getAllFileSlices().mapToLong(s -> s.getLogFiles().count()).sum())
@@ -682,14 +676,12 @@ public abstract class HoodieSparkClientTestHarness extends HoodieWriterClientTes
     if (inflightOnly) {
       HoodieTestTable.of(metaClient).addInflightClean(instantTime, cleanerPlan);
     } else {
-      HoodieCleanStat cleanStats = new HoodieCleanStat(
-              HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS,
-              HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)],
-              Collections.emptyList(),
-              Collections.emptyList(),
-              Collections.emptyList(),
-              instantTime,
-              "");
+      HoodieCleanStat cleanStats = HoodieCleanStat.builder()
+          .withPolicy(HoodieCleaningPolicy.KEEP_LATEST_FILE_VERSIONS)
+          .withPartitionPath(HoodieTestUtils.DEFAULT_PARTITION_PATHS[new Random().nextInt(HoodieTestUtils.DEFAULT_PARTITION_PATHS.length)])
+          .withEarliestCommitToRetain(instantTime)
+          .withLastCompletedCommitTimestamp("")
+          .build();
       HoodieCleanMetadata cleanMetadata = convertCleanMetadata(instantTime, Option.of(0L), Collections.singletonList(cleanStats), Collections.EMPTY_MAP);
       HoodieTestTable.of(metaClient).addClean(instantTime, cleanerPlan, cleanMetadata, isEmptyForAll, isEmptyCompleted);
     }

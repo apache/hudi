@@ -32,6 +32,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.util.Option;
@@ -40,15 +42,12 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import lombok.AccessLevel;
 import lombok.Getter;
-import org.apache.avro.Schema;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -58,7 +57,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED;
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
-import static org.apache.hudi.common.config.HoodieMemoryConfig.SPILLABLE_MAP_BASE_PATH;
 import static org.apache.hudi.common.config.HoodieReaderConfig.MERGE_USE_RECORD_POSITIONS;
 
 /**
@@ -88,7 +86,7 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
    * file groups created is bounded by numOutputGroups.
    * Note that commit is not done as part of strategy. commit is callers responsibility.
    */
-  public abstract HoodieWriteMetadata<O> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime);
+  public abstract HoodieWriteMetadata<O> performClustering(final HoodieClusteringPlan clusteringPlan, final HoodieSchema schema, final String instantTime);
 
   protected ClosableIterator<HoodieRecord<T>> getRecordIterator(ReaderContextFactory<T> readerContextFactory, ClusteringOperation operation, String instantTime, long maxMemory) {
     TypedProperties props = getReaderProperties(maxMemory);
@@ -97,11 +95,10 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
     FileSlice fileSlice = clusteringOperationToFileSlice(table.getMetaClient().getBasePath().toString(), operation);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
-    final boolean enableLogBlocksScan = getWriteConfig().enableOptimizedLogBlocksScan();
     Option<InternalSchema> internalSchema = SerDeHelper.fromJson(getWriteConfig().getInternalSchema());
     try {
       return getFileGroupReader(table.getMetaClient(), fileSlice, readerSchemaWithMetaFields, internalSchema,
-              readerContextFactory, instantTime, props, usePosition, enableLogBlocksScan).getClosableHoodieRecordIterator();
+              readerContextFactory, instantTime, props, usePosition).getClosableHoodieRecordIterator();
     } catch (IOException e) {
       throw new HoodieClusteringException("Error reading file slices", e);
     }
@@ -109,8 +106,15 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   protected TypedProperties getReaderProperties(long maxMemory) {
     HoodieWriteConfig config = getWriteConfig();
-    TypedProperties props = new TypedProperties();
-    props.setProperty(SPILLABLE_MAP_BASE_PATH.key(), config.getSpillableMapBasePath());
+    // Seed from the full write config so that merge-related properties (e.g. the custom record
+    // merger impl classes, merge mode and strategy id) are propagated to the file group reader.
+    // Without this, reading source file groups with a CUSTOM merge mode fails to resolve the
+    // configured merger (HUDI-18980). This mirrors the compaction read path.
+    TypedProperties props = TypedProperties.copy(config.getProps());
+    // Don't pin SPILLABLE_MAP_BASE_PATH here: this runs on the driver, and props flow into
+    // executor task closures, so a value resolved here (e.g. via FileIOUtils.getDefaultSpillableMapBasePath())
+    // would apply to every executor regardless of its own local disks. Leaving it unset lets each
+    // consumer (e.g. FileGroupRecordBuffer) resolve it lazily inside the executor.
     props.setProperty(SPILLABLE_DISK_MAP_TYPE.key(), config.getCommonConfig().getSpillableDiskMapType().toString());
     props.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), Boolean.toString(config.getCommonConfig().isBitCaskDiskMapCompressionEnabled()));
     props.setProperty(MAX_MEMORY_FOR_MERGE.key(), Long.toString(maxMemory));
@@ -142,11 +146,20 @@ public abstract class ClusteringExecutionStrategy<T, I, K, O> implements Seriali
 
   protected static <R> HoodieFileGroupReader<R> getFileGroupReader(HoodieTableMetaClient metaClient, FileSlice fileSlice, HoodieSchema readerSchema, Option<InternalSchema> internalSchemaOption,
                                                                    ReaderContextFactory<R> readerContextFactory, String instantTime,
-                                                                   TypedProperties properties, boolean usePosition, boolean enableLogBlocksScan) {
+                                                                   TypedProperties properties, boolean usePosition) {
     HoodieReaderContext<R> readerContext = readerContextFactory.getContext();
-    return HoodieFileGroupReader.<R>newBuilder()
-        .withReaderContext(readerContext).withHoodieTableMetaClient(metaClient).withLatestCommitTime(instantTime)
-        .withFileSlice(fileSlice).withDataSchema(readerSchema).withRequestedSchema(readerSchema).withInternalSchema(internalSchemaOption)
-        .withShouldUseRecordPosition(usePosition).withEnableOptimizedLogBlockScan(enableLogBlocksScan).withProps(properties).build();
+    return HoodieFileGroupReader.<R>builder()
+        .withReaderContext(readerContext)
+        .withHoodieTableMetaClient(metaClient)
+        .withLatestCommitTime(instantTime)
+        .withBaseFileOption(fileSlice.getBaseFile())
+        .withLogFiles(fileSlice.getLogFiles())
+        .withPartitionPath(fileSlice.getPartitionPath())
+        .withDataSchema(readerSchema)
+        .withRequestedSchema(readerSchema)
+        .withInternalSchemaOpt(internalSchemaOption)
+        .withShouldUseRecordPosition(usePosition)
+        .withProps(properties)
+        .build();
   }
 }

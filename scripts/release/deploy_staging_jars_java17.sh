@@ -31,6 +31,17 @@ if [ ! -d "$CURR_DIR/packaging" ] ; then
   exit 1
 fi
 
+# Validate Java version (Spark 4.x requires Java 17)
+EXPECTED_JAVA_VERSION=17
+JAVA_VERSION_OUTPUT=$("${JAVA_HOME:+$JAVA_HOME/bin/}java" -version 2>&1)
+JAVA_MAJOR_VERSION=$(echo "$JAVA_VERSION_OUTPUT" | awk -F[\".] '/version/ {print ($2 == "1" ? $3 : $2); exit}')
+if [ "$JAVA_MAJOR_VERSION" != "$EXPECTED_JAVA_VERSION" ]; then
+  echo "Error: Java $EXPECTED_JAVA_VERSION is required for this script, but found:"
+  echo "$JAVA_VERSION_OUTPUT"
+  echo "Set JAVA_HOME to a Java $EXPECTED_JAVA_VERSION installation and retry."
+  exit 1
+fi
+
 if [ "$#" -gt "1" ]; then
   echo "Only accept 0 or 1 argument. Use -h to see examples."
   exit 1
@@ -38,10 +49,21 @@ fi
 
 declare -a ALL_VERSION_OPTS=(
 # For Spark 4.0, Scala 2.13:
-# hudi-spark4-common
 # hudi-spark4.0.x_2.13
 # hudi-spark4.0-bundle_2.13
-"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.0 -pl hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.0.x,packaging/hudi-spark-bundle -am"
+# hudi-spark4.0-native-bundle_2.13
+"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.0 -pl hudi-spark-datasource/hudi-spark4.0.x,packaging/hudi-spark-bundle,packaging/hudi-spark-native-bundle -am"
+# For Spark 4.1, Scala 2.13:
+# hudi-spark4.1.x_2.13
+# hudi-spark4.1-bundle_2.13
+# hudi-spark4.1-native-bundle_2.13
+"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.1 -pl hudi-spark-datasource/hudi-spark4.1.x,packaging/hudi-spark-bundle,packaging/hudi-spark-native-bundle -am"
+# For Spark 4.2, Scala 2.13:
+# (no hudi-spark4.2-native-bundle: Comet supports Spark 4.2 only experimentally and publishes no artifact for it)
+# hudi-spark4-common
+# hudi-spark4.2.x_2.13
+# hudi-spark4.2-bundle_2.13
+"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.2 -pl hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.2.x,packaging/hudi-spark-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 

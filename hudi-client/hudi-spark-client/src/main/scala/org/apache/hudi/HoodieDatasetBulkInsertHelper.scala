@@ -24,6 +24,7 @@ import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.data.HoodieData
 import org.apache.hudi.common.engine.TaskContextSupplier
 import org.apache.hudi.common.model.HoodieRecord
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.{OrderingValues, ReflectionUtils}
 import org.apache.hudi.config.HoodieWriteConfig
@@ -36,13 +37,11 @@ import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 import org.apache.hudi.table.{BulkInsertPartitioner, HoodieTable}
 import org.apache.hudi.table.action.commit.{BucketBulkInsertDataInternalWriterHelper, BulkInsertDataInternalWriterHelper, ConsistentBucketBulkInsertDataInternalWriterHelper, ParallelismHelper}
 import org.apache.hudi.util.JFunction.toJavaSerializableFunctionUnchecked
-
-import org.apache.avro.Schema
 import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Dataset, Row}
-import org.apache.spark.sql.HoodieUnsafeRowUtils.{composeNestedFieldPath, getNestedInternalRowValue, NestedFieldPath}
+import org.apache.spark.sql.HoodieUnsafeRowUtils.{NestedFieldPath, composeNestedFieldPath, getNestedInternalRowValue}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Alias, Literal}
 import org.apache.spark.sql.catalyst.plans.logical.Project
@@ -97,7 +96,7 @@ object HoodieDatasetBulkInsertHelper
 
       val prependedRdd: RDD[InternalRow] = {
         injectSQLConf(df.queryExecution.toRdd.mapPartitions { iter =>
-          val typedProps = TypedProperties.copy(config.getProps)
+          val typedProps = KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(config.getProps), tableConfig)
           if (autoGenerateRecordKeys) {
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(TaskContext.getPartitionId()))
             typedProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
@@ -138,7 +137,12 @@ object HoodieDatasetBulkInsertHelper
       //       need access to the [[InternalRow]] and therefore can avoid the need
       //       to dereference [[DataFrame]] into [[RDD]]
       val query = df.queryExecution.logical
-      val metaFieldsStubs = metaFields.map(f => Alias(Literal(UTF8String.EMPTY_UTF8, dataType = StringType), f.name)())
+      // Nullable null stubs — the actual meta-column values are set downstream by
+      // HoodieRowCreateHandle.write based on hoodie.meta.fields.mode. Using a null literal (rather
+      // than an empty-string literal) guarantees the resulting StructField's nullable=true so the
+      // physical Parquet column is written as OPTIONAL and can hold nulls under selective / NONE
+      // modes.
+      val metaFieldsStubs = metaFields.map(f => Alias(Literal.create(null, StringType), f.name)())
       val prependedQuery = Project(metaFieldsStubs ++ query.output, query)
 
       sparkAdapter.getUnsafeUtils.createDataFrameFrom(df.sparkSession, prependedQuery)
@@ -157,7 +161,7 @@ object HoodieDatasetBulkInsertHelper
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
                  shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val schema = AvroConversionUtils.alignFieldsNullability(dataset.schema, new Schema.Parser().parse(writeConfig.getSchema))
+    val schema = HoodieSchemaConversionUtils.alignFieldsNullability(dataset.schema, HoodieSchema.parse(writeConfig.getSchema))
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
         val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier

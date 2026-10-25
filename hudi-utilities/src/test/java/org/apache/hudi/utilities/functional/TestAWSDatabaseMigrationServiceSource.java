@@ -34,6 +34,9 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 
+import static org.apache.spark.sql.functions.lit;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -87,5 +90,19 @@ public class TestAWSDatabaseMigrationServiceSource extends SparkClientFunctional
         .map(f -> f.name()).anyMatch(n -> n.equals(AWSDmsAvroPayload.OP_FIELD)));
     assertTrue(outputFrame.select(AWSDmsAvroPayload.OP_FIELD).collectAsList().stream()
         .allMatch(r -> r.getString(0).equals("")));
+  }
+
+  @Test
+  public void testTransformerWithOpFieldAlreadyPresent() {
+    AWSDmsTransformer transformer = new AWSDmsTransformer();
+    Dataset<Row> inputFrame = spark().createDataFrame(Arrays.asList(
+        new Record("1", 3433L),
+        new Record("2", 3433L)), Record.class)
+        .withColumn(AWSDmsAvroPayload.OP_FIELD, lit("D"));
+
+    Dataset<Row> outputFrame = transformer.apply(jsc(), spark(), inputFrame, null);
+    // the dataset is handed back untouched, the existing operation values are kept as they are
+    assertArrayEquals(inputFrame.columns(), outputFrame.columns());
+    assertEquals(inputFrame.collectAsList(), outputFrame.collectAsList());
   }
 }

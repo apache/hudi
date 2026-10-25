@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
-import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
 import static org.apache.hudi.io.util.IOUtils.copy;
 import static org.apache.hudi.io.util.IOUtils.decodeVarLongSizeOnDisk;
 import static org.apache.hudi.io.util.IOUtils.readInt;
@@ -107,20 +106,10 @@ public class HFileRootIndexBlock extends HFileIndexBlock {
       for (BlockIndexEntry entry : entries) {
         outputStream.writeLong(entry.getOffset());
         outputStream.writeInt(entry.getSize());
-
-        // Key length + 2.
-        try {
-          byte[] keyLength = getVariableLengthEncodedBytes(
-              entry.getFirstKey().getLength() + SIZEOF_INT16);
-          outputStream.write(keyLength);
-        } catch (IOException e) {
-          throw new RuntimeException(
-              "Failed to serialize number: " + entry.getFirstKey().getLength() + SIZEOF_INT16);
-        }
-        // Key length.
-        outputStream.writeShort((short) entry.getFirstKey().getLength());
-        // Key.
-        outputStream.write(entry.getFirstKey().getBytes());
+        int kvKeyLength = keyValueKeyLength(entry.getFirstKey().getLength());
+        outputStream.write(getVarIntBytes(kvKeyLength));
+        Key firstKey = entry.getFirstKey();
+        writeKey(outputStream, firstKey.getBytes(), firstKey.getOffset(), firstKey.getLength());
       }
     }
 

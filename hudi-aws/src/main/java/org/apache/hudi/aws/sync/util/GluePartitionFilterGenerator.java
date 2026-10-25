@@ -18,7 +18,7 @@
 
 package org.apache.hudi.aws.sync.util;
 
-import org.apache.hudi.expression.Expression;
+import org.apache.hudi.common.expression.Expression;
 import org.apache.hudi.hive.util.PartitionFilterGenerator;
 
 public class GluePartitionFilterGenerator extends PartitionFilterGenerator {

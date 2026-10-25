@@ -75,6 +75,7 @@ public class HoodieDataSourceHelpers {
         .map(HoodieInstant::requestedTime).collect(Collectors.toList());
   }
 
+  @SuppressWarnings("unused")
   // this is used in the integration test script: docker/demo/sparksql-incremental.commands
   public static Stream<String> streamCompletionTimeSince(FileSystem fs, String basePath,
                                                          String instantTimestamp) {

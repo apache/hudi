@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
@@ -29,6 +30,10 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
@@ -48,6 +53,7 @@ import java.util.stream.IntStream;
 /**
  * A Single Record managed by Hoodie.
  */
+@NoArgsConstructor
 public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterface, KryoSerializable, Serializable {
 
   private static final long serialVersionUID = 3015229555587559252L;
@@ -62,6 +68,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   // always treated as the commit time ordering.
   public static final int DEFAULT_ORDERING_VALUE = 0;
 
+  @AllArgsConstructor(access = AccessLevel.PACKAGE)
+  @Getter
   public enum HoodieMetadataField {
     COMMIT_TIME_METADATA_FIELD("_hoodie_commit_time"),
     COMMIT_SEQNO_METADATA_FIELD("_hoodie_commit_seqno"),
@@ -71,14 +79,6 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     OPERATION_METADATA_FIELD("_hoodie_operation");
 
     private final String fieldName;
-
-    HoodieMetadataField(String fieldName) {
-      this.fieldName = fieldName;
-    }
-
-    public String getFieldName() {
-      return fieldName;
-    }
   }
 
   /**
@@ -123,6 +123,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Identifies the record across the table.
    */
+  @Getter
   protected HoodieKey key;
 
   /**
@@ -153,6 +154,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * The cdc operation.
    */
+  @Getter
   protected HoodieOperation operation;
 
   /**
@@ -212,32 +214,21 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     this.ignoreIndexUpdate = record.ignoreIndexUpdate;
   }
 
-  public HoodieRecord() {
-  }
-
   public abstract HoodieRecord<T> newInstance();
 
   public abstract HoodieRecord<T> newInstance(HoodieKey key, HoodieOperation op);
 
   public abstract HoodieRecord<T> newInstance(HoodieKey key);
 
-  public HoodieKey getKey() {
-    return key;
-  }
-
-  public HoodieOperation getOperation() {
-    return operation;
-  }
-
   /**
    * Get ordering value for the record from the cached variable, or extracting from the record if not cached.
    *
-   * @param recordSchema Avro schema for the record
+   * @param recordSchema Hudi schema for the record
    * @param props Properties containing the necessary configurations
    * @param orderingFields name of the ordering fields
    * @return The ordering value for the record
    */
-  public Comparable<?> getOrderingValue(Schema recordSchema, Properties props, String[] orderingFields) {
+  public Comparable<?> getOrderingValue(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
     if (orderingValue == null) {
       orderingValue = doGetOrderingValue(recordSchema, props, orderingFields);
     }
@@ -247,14 +238,14 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Extracting the ordering value from the record.
    *
-   * @param recordSchema Avro schema for the record
+   * @param recordSchema Hudi schema for the record
    * @param props Properties containing the necessary configurations
    * @param orderingFields name of the ordering fields
    * @return The ordering value for the record
    */
-  protected abstract Comparable<?> doGetOrderingValue(Schema recordSchema, Properties props, String[] orderingFields);
+  protected abstract Comparable<?> doGetOrderingValue(HoodieSchema recordSchema, Properties props, String[] orderingFields);
 
-  public Comparable<?> getOrderingValueAsJava(Schema recordSchema, Properties props, String[] orderingFields) {
+  public Comparable<?> getOrderingValueAsJava(HoodieSchema recordSchema, Properties props, String[] orderingFields) {
     return getOrderingValue(recordSchema, props, orderingFields);
   }
 
@@ -366,9 +357,9 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
 
   public abstract HoodieRecordType getRecordType();
 
-  public abstract String getRecordKey(Schema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt);
+  public abstract String getRecordKey(HoodieSchema recordSchema, Option<BaseKeyGenerator> keyGeneratorOpt);
 
-  public abstract String getRecordKey(Schema recordSchema, String keyFieldName);
+  public abstract String getRecordKey(HoodieSchema recordSchema, String keyFieldName);
 
   public void seal() {
     this.sealed = true;
@@ -451,13 +442,13 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * represented/stored in parquet.
    */
   public abstract Object convertColumnValueForLogicalType(
-      Schema fieldSchema, Object fieldValue, boolean keepConsistentLogicalTimestamp);
+      HoodieSchema fieldSchema, Object fieldValue, boolean keepConsistentLogicalTimestamp);
 
   /**
    * Get column in record to support RDDCustomColumnsSortPartitioner
    * @return
    */
-  public abstract Object[] getColumnValues(Schema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
+  public abstract Object[] getColumnValues(HoodieSchema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled);
 
   /**
    * Get column as Java type in record to collect index stats: col_stats, secondary index, etc.
@@ -465,19 +456,19 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    *
    * @return the column value
    */
-  public abstract Object getColumnValueAsJava(Schema recordSchema, String column, Properties props);
+  public abstract Object getColumnValueAsJava(HoodieSchema recordSchema, String column, Properties props);
 
   /**
    * Support bootstrap.
    */
-  public abstract HoodieRecord joinWith(HoodieRecord other, Schema targetSchema);
+  public abstract HoodieRecord joinWith(HoodieRecord other, HoodieSchema targetSchema);
 
   /**
    * Rewrites record into new target schema containing Hudi-specific meta-fields
    *
    * NOTE: This operation is idempotent
    */
-  public abstract HoodieRecord prependMetaFields(Schema recordSchema, Schema targetSchema, MetadataValues metadataValues, Properties props);
+  public abstract HoodieRecord prependMetaFields(HoodieSchema recordSchema, HoodieSchema targetSchema, MetadataValues metadataValues, Properties props);
 
   /**
    * Update a specific metadata field with given value.
@@ -487,16 +478,16 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * @param value the new value for the target metadata field
    * @return the new HoodieRecord with updated metadata value
    */
-  public HoodieRecord updateMetaField(Schema recordSchema, int ordinal, String value) {
+  public HoodieRecord updateMetaField(HoodieSchema recordSchema, int ordinal, String value) {
     throw new UnsupportedOperationException("updateMetaField is not supported yet for: " + this.getClass().getSimpleName());
   }
 
   /**
    * Support schema evolution.
    */
-  public abstract HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema, Map<String, String> renameCols);
+  public abstract HoodieRecord rewriteRecordWithNewSchema(HoodieSchema recordSchema, Properties props, HoodieSchema newSchema, Map<String, String> renameCols);
 
-  public HoodieRecord rewriteRecordWithNewSchema(Schema recordSchema, Properties props, Schema newSchema) {
+  public HoodieRecord rewriteRecordWithNewSchema(HoodieSchema recordSchema, Properties props, HoodieSchema newSchema) {
     return rewriteRecordWithNewSchema(recordSchema, props, newSchema, Collections.emptyMap());
   }
 
@@ -520,7 +511,7 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
   /**
    * Is EmptyRecord. Generated by ExpressionPayload.
    */
-  public abstract boolean shouldIgnore(Schema recordSchema, Properties props) throws IOException;
+  public abstract boolean shouldIgnore(HoodieSchema recordSchema, Properties props) throws IOException;
 
   /**
    * This is used to copy data.
@@ -533,8 +524,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
     return instantTime + "_" + partitionId + "_" + recordIndex;
   }
 
-  protected static boolean hasMetaFields(Schema schema) {
-    return schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) != null;
+  protected static boolean hasMetaFields(HoodieSchema schema) {
+    return schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent();
   }
 
   /**
@@ -553,9 +544,8 @@ public abstract class HoodieRecord<T> implements HoodieRecordCompatibilityInterf
    * We can see the usage of IGNORE_RECORD in
    * org.apache.spark.sql.hudi.command.payload.ExpressionPayload
    */
+  @NoArgsConstructor(access = AccessLevel.PRIVATE)
   private static class EmptyRecord implements GenericRecord {
-    private EmptyRecord() {
-    }
 
     @Override
     public void put(int i, Object v) {

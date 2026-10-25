@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.model;
 
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -71,6 +72,13 @@ public class TestHoodieBaseFile {
   }
 
   @Test
+  void createFromBaseFileWithoutExtension() {
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile("136281f3-c24e-423b-a65a-95dbfbddce1d_1-0-1_100");
+    assertEquals("136281f3-c24e-423b-a65a-95dbfbddce1d", hoodieBaseFile.getFileId());
+    assertEquals("100", hoodieBaseFile.getCommitTime());
+  }
+
+  @Test
   void createFromExternalFileStatus() {
     String fileName = "parquet_file_1.parquet";
     String storedPathString =
@@ -83,6 +91,40 @@ public class TestHoodieBaseFile {
     HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(inputPathInfo);
 
     assertFileGetters(expectedPathInfo, hoodieBaseFile, length, Option.empty(), fileName,
+        expectedPathString, fileName);
+  }
+
+  @Test
+  void createFromExternalFileStatusWithFileGroupPrefix() {
+    String prefix = "bucket-0";
+    String fileName = "parquet_file_1.parquet";
+    String markedFileName = ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(fileName, baseCommitTime, prefix);
+    String storedPathString = "file:/tmp/hoodie/2021/01/01/" + prefix + "/" + markedFileName;
+    String expectedPathString = "file:/tmp/hoodie/2021/01/01/" + prefix + "/" + fileName;
+    StoragePathInfo inputPathInfo = new StoragePathInfo(
+        new StoragePath(storedPathString), length, false, blockReplication, blockSize, 0);
+    StoragePathInfo expectedPathInfo = new StoragePathInfo(
+        new StoragePath(expectedPathString), length, false, blockReplication, blockSize, 0);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(inputPathInfo);
+
+    assertFileGetters(expectedPathInfo, hoodieBaseFile, length, Option.empty(), prefix + "/" + fileName,
+        expectedPathString, fileName);
+  }
+
+  @Test
+  void createFromExternalFileStatusWithFileGroupPrefixForUnpartitionedTable() {
+    String prefix = "bucket-0";
+    String fileName = "parquet_file_1.parquet";
+    String markedFileName = ExternalFilePathUtil.appendCommitTimeAndExternalFileMarker(fileName, baseCommitTime, prefix);
+    String storedPathString = "file:/tmp/hoodie/" + prefix + "/" + markedFileName;
+    String expectedPathString = "file:/tmp/hoodie/" + prefix + "/" + fileName;
+    StoragePathInfo inputPathInfo = new StoragePathInfo(
+        new StoragePath(storedPathString), length, false, blockReplication, blockSize, 0);
+    StoragePathInfo expectedPathInfo = new StoragePathInfo(
+        new StoragePath(expectedPathString), length, false, blockReplication, blockSize, 0);
+    HoodieBaseFile hoodieBaseFile = new HoodieBaseFile(inputPathInfo);
+
+    assertFileGetters(expectedPathInfo, hoodieBaseFile, length, Option.empty(), prefix + "/" + fileName,
         expectedPathString, fileName);
   }
 

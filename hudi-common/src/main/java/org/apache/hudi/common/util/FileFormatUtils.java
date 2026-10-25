@@ -18,8 +18,7 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.HoodieBloomFilterWriteSupport;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
@@ -27,18 +26,19 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
-import org.apache.hudi.stats.ValueMetadata;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 
 import javax.annotation.Nonnull;
@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -152,6 +153,20 @@ public abstract class FileFormatUtils {
   }
 
   /**
+   * Read the rowKey list from the given data file, which was written outside Hudi and carries no record keys.
+   * Every row is keyed by the file path relative to the table base path and the row position.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath the data file path.
+   * @param basePath the table base path.
+   * @return set of row keys
+   */
+  public Set<String> readRowKeys(HoodieStorage storage, StoragePath filePath, StoragePath basePath) {
+    return filterRowKeys(storage, filePath, basePath, new HashSet<>())
+        .stream().map(Pair::getKey).collect(Collectors.toSet());
+  }
+
+  /**
    * Read the bloom filter from the metadata of the given data file.
    *
    * @param storage  {@link HoodieStorage} instance.
@@ -218,7 +233,7 @@ public abstract class FileFormatUtils {
    * @param filePath the data file path.
    * @return a list of GenericRecord.
    */
-  public abstract List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, Schema schema);
+  public abstract List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, HoodieSchema schema);
 
   /**
    * Read the footer data of the given data file.
@@ -252,13 +267,49 @@ public abstract class FileFormatUtils {
   public abstract Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter);
 
   /**
+   * Read the rowKey list matching the given filter, from the given data file, which was written outside Hudi and
+   * carries no record key. If the filter is empty, then this will return all the row keys and corresponding positions.
+   * Formats that support such files override this method to key every row by the file path relative to the table
+   * base path and the row position.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath the data file path.
+   * @param basePath the table base path.
+   * @param filter   record keys filter.
+   * @return set of pairs of row key and position matching candidateRecordKeys.
+   */
+  public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, StoragePath basePath, Set<String> filter) {
+    throw positionalRowKeysUnsupported();
+  }
+
+  /**
+   * Provides a closable iterator over the row keys of the given data file, which was written outside Hudi and carries
+   * no record key. Every row is keyed by the file path relative to the table base path and the row position, so the
+   * keys stream out in row order without being held in memory. Formats that support such files override this method.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath the data file path.
+   * @param basePath the table base path.
+   * @return {@link ClosableIterator} of the row keys in row order.
+   */
+  public ClosableIterator<String> getRowKeyIterator(HoodieStorage storage, StoragePath filePath, StoragePath basePath) {
+    throw positionalRowKeysUnsupported();
+  }
+
+  private UnsupportedOperationException positionalRowKeysUnsupported() {
+    return new UnsupportedOperationException("Positional row keys are only supported for parquet base files, not " + getClass().getSimpleName());
+  }
+
+  /**
    * Fetch {@link HoodieKey}s with positions from the given data file.
    *
    * @param storage  {@link HoodieStorage} instance.
    * @param filePath the data file path.
    * @return {@link List} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath);
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
+    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
+  }
 
   /**
    * Provides a closable iterator for reading the given data file.
@@ -281,17 +332,19 @@ public abstract class FileFormatUtils {
    * @param filePath the data file path.
    * @return {@link ClosableIterator} of {@link HoodieKey}s for reading the file.
    */
-  public abstract ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath);
+  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
+    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
+  }
 
-  protected Schema getKeyIteratorSchema(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
+  protected HoodieSchema getKeyIteratorSchema(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
     return keyGeneratorOpt
         .map(keyGenerator -> {
           List<String> fields = new ArrayList<>();
           fields.addAll(keyGenerator.getRecordKeyFieldNames());
           fields.addAll(keyGenerator.getPartitionPathFields());
-          return HoodieAvroUtils.projectSchema(readAvroSchema(storage, filePath), fields);
+          return HoodieSchemaUtils.projectSchema(readSchema(storage, filePath), fields);
         })
-        .orElse(partitionPath.isPresent() ? HoodieAvroUtils.getRecordKeySchema() : HoodieAvroUtils.getRecordKeyPartitionPathSchema());
+        .orElse(partitionPath.isPresent() ? HoodieSchemaUtils.getRecordKeySchema() : HoodieSchemaUtils.getRecordKeyPartitionPathSchema());
   }
 
   /**
@@ -303,10 +356,14 @@ public abstract class FileFormatUtils {
    * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
    * @return {@link Iterator} of pairs of {@link HoodieKey} and position fetched from the data file.
    */
-  public abstract ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
-                                                                                       StoragePath filePath,
-                                                                                       Option<BaseKeyGenerator> keyGeneratorOpt,
-                                                                                       Option<String> partitionPath);
+  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage,
+                                                                               StoragePath filePath,
+                                                                               Option<BaseKeyGenerator> keyGeneratorOpt,
+                                                                               Option<String> partitionPath) {
+    AtomicLong position = new AtomicLong(0);
+    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath),
+        key -> Pair.of(key, position.getAndIncrement()));
+  }
 
   /**
    * Read the Avro schema of the data file.
@@ -315,7 +372,7 @@ public abstract class FileFormatUtils {
    * @param filePath the data file path.
    * @return the Avro schema of the data file.
    */
-  public abstract Schema readAvroSchema(HoodieStorage storage, StoragePath filePath);
+  public abstract HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath);
 
   /**
    * Reads column statistics stored in the metadata.
@@ -381,8 +438,8 @@ public abstract class FileFormatUtils {
   public abstract Pair<ByteArrayOutputStream, Object> serializeRecordsToLogBlock(HoodieStorage storage,
                                                                                  Iterator<HoodieRecord> records,
                                                                                  HoodieRecord.HoodieRecordType recordType,
-                                                                                 Schema writerSchema,
-                                                                                 Schema readerSchema,
+                                                                                 HoodieSchema writerSchema,
+                                                                                 HoodieSchema readerSchema,
                                                                                  String keyFieldName,
                                                                                  Map<String, String> paramsMap) throws IOException;
 

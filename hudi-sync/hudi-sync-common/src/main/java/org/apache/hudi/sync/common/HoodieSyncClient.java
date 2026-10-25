@@ -34,9 +34,9 @@ import org.apache.hudi.sync.common.model.Partition;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 import org.apache.hudi.sync.common.model.PartitionValueExtractor;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
@@ -51,14 +51,15 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
+import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TOUCH_PARTITIONS_ENABLED;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_USE_FILE_LISTING_FROM_METADATA;
 
+@Slf4j
 public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, AutoCloseable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSyncClient.class);
 
   protected final HoodieSyncConfig config;
   protected final PartitionValueExtractor partitionValueExtractor;
+  @Getter
   protected final HoodieTableMetaClient metaClient;
   protected final ParquetTableSchemaResolver tableSchemaResolver;
   private static final String TEMP_SUFFIX = "_temp";
@@ -84,10 +85,6 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public boolean isBootstrap() {
     return metaClient.getTableConfig().getBootstrapBasePath().isPresent();
-  }
-
-  public HoodieTableMetaClient getMetaClient() {
-    return metaClient;
   }
 
   public String getTableName() {
@@ -154,11 +151,11 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
 
   public List<String> getWrittenPartitionsSince(Option<String> lastCommitTimeSynced, Option<String> lastCommitCompletionTimeSynced) {
     if (!lastCommitTimeSynced.isPresent()) {
-      LOG.info("Last commit time synced is not known, listing all partitions in {} , FS: {}",
+      log.info("Last commit time synced is not known, listing all partitions in {} , FS: {}",
           config.getString(META_SYNC_BASE_PATH), config.getHadoopFileSystem());
       return getAllPartitionPathsOnStorage();
     } else {
-      LOG.info("Last commit time synced is {}, Getting commits since then", lastCommitTimeSynced.get());
+      log.info("Last commit time synced is {}, Getting commits since then", lastCommitTimeSynced.get());
       return TimelineUtils.getWrittenPartitions(
           TimelineUtils.getCommitsTimelineAfter(metaClient, lastCommitTimeSynced.get(), lastCommitCompletionTimeSynced));
     }
@@ -210,7 +207,7 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
             metaClient.getBasePath(), new StoragePath(storagePath));
         events.add(PartitionEvent.newPartitionDropEvent(relativePath));
       } catch (IllegalArgumentException e) {
-        LOG.error("Cannot parse the path stored in the metastore, ignoring it for generating DROP partition event: \"{}\".",
+        log.error("Cannot parse the path stored in the metastore, ignoring it for generating DROP partition event: \"{}\".",
             storagePath, e);
       }
     });
@@ -246,6 +243,9 @@ public abstract class HoodieSyncClient implements HoodieMetaSyncOperations, Auto
             events.add(PartitionEvent.newPartitionAddEvent(storagePartition));
           } else if (!paths.get(storageValue).equals(fullStoragePartitionPath)) {
             events.add(PartitionEvent.newPartitionUpdateEvent(storagePartition));
+          } else if (config.getBoolean(META_SYNC_TOUCH_PARTITIONS_ENABLED)) {
+            // Only produce TOUCH events when touch partitions is enabled
+            events.add(PartitionEvent.newPartitionTouchEvent(storagePartition));
           }
         }
       }

@@ -19,8 +19,9 @@
 
 package org.apache.hudi.utilities.streamer;
 
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
-import org.apache.hudi.storage.HoodieStorageUtils;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamerMetrics;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
@@ -28,7 +29,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -44,7 +45,7 @@ public class TestHoodieStreamerMetrics {
         .withReporterType("INMEMORY")
         .build();
     HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
-        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        metricsConfig, getDefaultStorage());
     Timer.Context timerContext = metrics.getErrorTableWriteTimerContext();
     Thread.sleep(TimeUnit.SECONDS.toMillis(1));
     long duration = timerContext.stop();
@@ -62,10 +63,81 @@ public class TestHoodieStreamerMetrics {
         .withReporterType("INMEMORY")
         .build();
     HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
-        metricsConfig, HoodieStorageUtils.getStorage(getDefaultStorageConf()));
+        metricsConfig, getDefaultStorage());
     Timer.Context timerContext = metrics.getErrorTableWriteTimerContext();
     assertNull(timerContext);
     metrics.updateErrorTableCommitDuration(0L);
     assertNull(metrics.getMetrics());
+  }
+
+  @Test
+  public void testEmitStreamerJobSuccessMetrics() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(true)
+        .withPath("/tmp/path3")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
+        metricsConfig, getDefaultStorage());
+    metrics.emitStreamerJobSuccessMetrics();
+    MetricRegistry registry = metrics.getMetrics().getRegistry();
+    assertEquals(1, registry.getGauges().size());
+    assertEquals(".deltastreamer.success", registry.getGauges().firstKey());
+    assertEquals(1L, registry.getGauges().get(".deltastreamer.success").getValue());
+  }
+
+  @Test
+  public void testEmitStreamerJobFailedMetrics() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(true)
+        .withPath("/tmp/path4")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
+        metricsConfig, getDefaultStorage());
+    metrics.emitStreamerJobFailedMetrics();
+    MetricRegistry registry = metrics.getMetrics().getRegistry();
+    assertEquals(1, registry.getGauges().size());
+    assertEquals(".deltastreamer.failure", registry.getGauges().firstKey());
+    assertEquals(1L, registry.getGauges().get(".deltastreamer.failure").getValue());
+  }
+
+  @Test
+  public void testEmitStreamerJobMetricsIfDisabled() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(false)
+        .withPath("/tmp/path5")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieStreamerMetrics metrics = new HoodieStreamerMetrics(
+        metricsConfig, getDefaultStorage());
+    // Should not throw when metrics are disabled
+    metrics.emitStreamerJobSuccessMetrics();
+    metrics.emitStreamerJobFailedMetrics();
+    assertNull(metrics.getMetrics());
+  }
+
+  @Test
+  public void testDeprecatedDeltaStreamerMetricsAlias() {
+    HoodieMetricsConfig metricsConfig = HoodieMetricsConfig.newBuilder()
+        .on(true)
+        .withPath("/tmp/path6")
+        .withReporterType("INMEMORY")
+        .build();
+    HoodieDeltaStreamerMetrics metrics = new HoodieDeltaStreamerMetrics(
+        metricsConfig, getDefaultStorage());
+    metrics.emitStreamerJobSuccessMetrics();
+    assertEquals(".deltastreamer.success", metrics.getMetrics().getRegistry().getGauges().firstKey());
+
+    // the write config overload reports against the metrics config derived from the write config
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/path7")
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder().on(true).withReporterType("INMEMORY").build())
+        .build();
+    HoodieDeltaStreamerMetrics metricsFromWriteConfig = new HoodieDeltaStreamerMetrics(
+        writeConfig, getDefaultStorage());
+    metricsFromWriteConfig.emitStreamerJobFailedMetrics();
+    assertEquals(".deltastreamer.failure",
+        metricsFromWriteConfig.getMetrics().getRegistry().getGauges().firstKey());
   }
 }

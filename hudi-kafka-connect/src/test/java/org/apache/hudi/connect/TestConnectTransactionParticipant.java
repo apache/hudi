@@ -28,6 +28,7 @@ import org.apache.hudi.helper.MockKafkaConnect;
 import org.apache.hudi.helper.MockKafkaControlAgent;
 import org.apache.hudi.helper.TestHudiWriterProvider;
 
+import lombok.Getter;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -194,9 +195,12 @@ public class TestConnectTransactionParticipant {
     }
 
     private final KafkaControlAgent kafkaControlAgent;
+    @Getter
     private final TopicPartition partition;
 
+    @Getter
     private Option<ControlMessage> lastReceivedWriteStatusEvent;
+    @Getter
     private long committedKafkaOffset;
 
     public MockCoordinator(KafkaControlAgent kafkaControlAgent) {
@@ -229,14 +233,6 @@ public class TestConnectTransactionParticipant {
       }
     }
 
-    public Option<ControlMessage> getLastReceivedWriteStatusEvent() {
-      return lastReceivedWriteStatusEvent;
-    }
-
-    public long getCommittedKafkaOffset() {
-      return committedKafkaOffset;
-    }
-
     @Override
     public void start() {
       kafkaControlAgent.registerTransactionCoordinator(this);
@@ -245,11 +241,6 @@ public class TestConnectTransactionParticipant {
     @Override
     public void stop() {
       kafkaControlAgent.deregisterTransactionCoordinator(this);
-    }
-
-    @Override
-    public TopicPartition getPartition() {
-      return partition;
     }
 
     @Override

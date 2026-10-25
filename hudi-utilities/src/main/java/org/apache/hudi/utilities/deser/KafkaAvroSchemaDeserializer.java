@@ -23,8 +23,10 @@ import org.apache.hudi.exception.HoodieException;
 
 import io.confluent.kafka.schemaregistry.client.SchemaRegistryClient;
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import lombok.NoArgsConstructor;
 import org.apache.avro.Schema;
 import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.header.Headers;
 
 import java.util.Map;
 import java.util.Map.Entry;
@@ -35,12 +37,10 @@ import static org.apache.hudi.utilities.config.KafkaSourceConfig.KAFKA_VALUE_DES
 /**
  * Extending {@link KafkaAvroSchemaDeserializer} as we need to be able to inject reader schema during deserialization.
  */
+@NoArgsConstructor
 public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
 
   private Schema sourceSchema;
-
-  public KafkaAvroSchemaDeserializer() {
-  }
 
   public KafkaAvroSchemaDeserializer(SchemaRegistryClient client, Map<String, ?> props) {
     super(client, props);
@@ -56,6 +56,21 @@ public class KafkaAvroSchemaDeserializer extends KafkaAvroDeserializer {
     } catch (Throwable e) {
       throw new HoodieException(e);
     }
+  }
+
+  @Override
+  public Object deserialize(String topic, byte[] bytes) {
+    return this.deserialize(topic, false, bytes, sourceSchema);
+  }
+
+  @Override
+  public Object deserialize(String topic, byte[] bytes, Schema readerSchema) {
+    return this.deserialize(topic, false, bytes, sourceSchema);
+  }
+
+  @Override
+  public Object deserialize(String topic, Headers headers, byte[] bytes) {
+    return super.deserialize(topic, false, bytes, sourceSchema);
   }
 
   /**

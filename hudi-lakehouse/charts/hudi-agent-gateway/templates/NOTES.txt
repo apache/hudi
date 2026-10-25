@@ -1,0 +1,46 @@
+{{- /*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/ -}}
+hudi-agent-gateway {{ .Chart.Version }} deployed.
+
+  provider : {{ .Values.gateway.provider }} ({{ .Values.gateway.model }})
+  trino    : {{ .Values.trino.host }}:{{ .Values.trino.port }} (catalog {{ .Values.trino.catalog }})
+  mcp      : {{ if .Values.mcpEnabled }}enabled at /mcp{{ else }}disabled{{ end }}
+
+Try it:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "hudi-agent-gateway.fullname" . }} 8000:{{ .Values.service.port }}
+
+  # chat UI
+  open http://localhost:8000/ui/
+
+  # agent chat API
+  curl -X POST localhost:8000/v1/chat -H 'Content-Type: application/json' \
+    -d '{"message": "How many trips per city?", "session_id": "s1"}'
+
+  # connect an MCP client (e.g. Claude Code)
+  claude mcp add --transport http hudi-lakehouse http://localhost:8000/mcp/
+
+{{- if and (eq .Values.gateway.provider "ollama") (contains "host.minikube.internal" .Values.gateway.ollama.baseUrl) }}
+
+NOTE: the gateway expects Ollama on the HOST machine. If it only binds
+loopback, restart it reachable from the cluster:
+  OLLAMA_HOST=0.0.0.0 ollama serve
+{{- end }}
+
+Readiness (kubectl -n {{ .Release.Namespace }} get pods) stays NotReady until
+both Trino and the LLM endpoint are reachable -- `curl localhost:8000/ready`
+shows per-dependency status.

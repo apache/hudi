@@ -73,7 +73,7 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
     parquetWriterbuilder.withRowGroupSize(parquetConfig.getBlockSize());
     parquetWriterbuilder.withPageSize(parquetConfig.getPageSize());
     parquetWriterbuilder.withDictionaryPageSize(parquetConfig.getPageSize());
-    parquetWriterbuilder.withDictionaryEncoding(parquetConfig.dictionaryEnabled());
+    parquetWriterbuilder.withDictionaryEncoding(parquetConfig.isDictionaryEnabled());
     parquetWriterbuilder.withValidation(ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED);
     parquetWriterbuilder.withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION);
     parquetWriterbuilder.withConf(HadoopFSUtils.registerFileSystem(file, hadoopConf));
@@ -166,5 +166,9 @@ public abstract class HoodieBaseParquetWriter<R> implements Closeable {
   @Override
   public void close() throws IOException {
     this.parquetWriter.close();
+  }
+
+  public Object getFileFormatMetadata() {
+    return this.parquetWriter.getFooter();
   }
 }

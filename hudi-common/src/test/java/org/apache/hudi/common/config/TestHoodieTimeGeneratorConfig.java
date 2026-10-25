@@ -31,6 +31,8 @@ class TestHoodieTimeGeneratorConfig {
 
   @ParameterizedTest
   @CsvSource(value = {
+      // the second row (pre-1.3.0 FQN, via the @CompatAlias stub) must keep inferring 1ms
+      "org.apache.hudi.core.transaction.lock.InProcessLockProvider,1",
       "org.apache.hudi.client.transaction.lock.InProcessLockProvider,1",
       "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider,200",
       ",1",

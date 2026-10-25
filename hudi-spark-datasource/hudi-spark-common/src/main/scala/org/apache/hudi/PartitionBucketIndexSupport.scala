@@ -17,10 +17,11 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{FileSlice, PartitionBucketIndexHashingConfig}
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex.PartitionPath
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexCalculator
 
 import org.apache.spark.sql.SparkSession

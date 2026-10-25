@@ -43,7 +43,6 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -94,11 +93,13 @@ public class FileIOUtils {
    * @return String lines in a list.
    */
   public static List<String> readAsUTFStringLines(InputStream input) {
-    List<String> lines = new ArrayList<>();
-    BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8));
-    lines = bufferedReader.lines().collect(Collectors.toList());
-    closeQuietly(bufferedReader);
-    return lines;
+    try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+      return bufferedReader.lines().collect(Collectors.toList());
+    } catch (IOException e) {
+      // Note: stream errors from lines().collect(...) surface as UncheckedIOException and bypass this block.
+      // This catch handles IOException from close() during try-with-resources teardown.
+      throw new RuntimeException(e);
+    }
   }
 
   public static void copy(InputStream inputStream, OutputStream outputStream) throws IOException {
@@ -268,6 +269,11 @@ public class FileIOUtils {
       // created the directories already, and that they are secured so that only the
       // user has access to them.
       return getYarnLocalDirs().split(",");
+    } else if (System.getenv("SPARK_LOCAL_DIRS") != null) {
+      // Kubernetes provides no scheduler-side local-dir contract like YARN's, so Spark itself
+      // publishes the mounted scratch paths here. Without this we fall through to
+      // java.io.tmpdir, i.e. /tmp inside the container rather than the mounted disk.
+      return System.getenv("SPARK_LOCAL_DIRS").split(",");
     } else if (System.getProperty("java.io.tmpdir") != null) {
       return System.getProperty("java.io.tmpdir").split(",");
     } else {

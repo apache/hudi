@@ -70,35 +70,43 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
 
   @Override
   protected void completeCompaction(HoodieCommitMetadata metadata, HoodieTable table, String compactionCommitTime, List<HoodieWriteStat> partialMetadataWriteStats) {
-    this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
-    List<HoodieWriteStat> writeStats = metadata.getWriteStats();
-    final HoodieInstant compactionInstant = table.getInstantGenerator().getCompactionInflightInstant(compactionCommitTime);
     try {
-      this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
-      finalizeWrite(table, compactionCommitTime, writeStats);
-      // commit to data table after committing to metadata table.
-      // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
-      // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
-      writeTableMetadata(table, compactionCommitTime, metadata);
-      log.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
-      CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
-    } finally {
-      this.txnManager.endStateChange(Option.of(compactionInstant));
-    }
-    WriteMarkersFactory
-        .get(config.getMarkersType(), table, compactionCommitTime)
-        .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
-    if (compactionTimer != null) {
-      long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
+      this.context.setJobStatus(this.getClass().getSimpleName(), "Collect compaction write status and commit compaction: " + config.getTableName());
+      List<HoodieWriteStat> writeStats = metadata.getWriteStats();
+      final HoodieInstant compactionInstant = table.getInstantGenerator().getCompactionInflightInstant(compactionCommitTime);
       try {
-        metrics.updateCommitMetrics(TimelineUtils.parseDateFromInstantTime(compactionCommitTime).getTime(),
-            durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
-      } catch (ParseException e) {
-        throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
-            + config.getBasePath() + " at time " + compactionCommitTime, e);
+        this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
+        finalizeWrite(table, compactionCommitTime, writeStats);
+        // commit to data table after committing to metadata table.
+        // Do not do any conflict resolution here as we do with regular writes. We take the lock here to ensure all writes to metadata table happens within a
+        // single lock (single writer). Because more than one write to metadata table will result in conflicts since all of them updates the same partition.
+        writeTableMetadata(table, compactionCommitTime, metadata);
+        log.info("Committing Compaction {} finished with result {}.", compactionCommitTime, metadata);
+        CompactHelpers.getInstance().completeInflightCompaction(table, compactionCommitTime, metadata);
+      } finally {
+        this.txnManager.endStateChange(Option.of(compactionInstant));
+      }
+      WriteMarkersFactory
+          .get(config.getMarkersType(), table, compactionCommitTime)
+          .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
+      if (compactionTimer != null) {
+        long durationInMs = metrics.getDurationInMs(compactionTimer.stop());
+        try {
+          metrics.updateCommitMetrics(TimelineUtils.parseDateFromInstantTime(compactionCommitTime).getTime(),
+              durationInMs, metadata, HoodieActiveTimeline.COMPACTION_ACTION);
+        } catch (ParseException e) {
+          throw new HoodieCommitException("Commit time is not of valid format. Failed to commit compaction "
+              + config.getBasePath() + " at time " + compactionCommitTime, e);
+        }
+      }
+      log.info("Compacted successfully on commit {}", compactionCommitTime);
+      fireCommitCallbackIfNecessary(compactionCommitTime, HoodieActiveTimeline.COMMIT_ACTION,
+          metadata.getWriteStats(), table::getBaseFileOnlyView, Option.empty());
+    } finally {
+      if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+        this.heartbeatClient.stop(compactionCommitTime);
       }
     }
-    log.info("Compacted successfully on commit " + compactionCommitTime);
   }
 
   protected void completeClustering(
@@ -119,8 +127,8 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
       finalizeWrite(table, clusteringCommitTime, writeStats);
       // Only in some cases conflict resolution needs to be performed.
       // So, check if preCommit method that does conflict resolution needs to be triggered.
-      if (isPreCommitRequired()) {
-        preCommit(metadata);
+      if (isPreCommitConflictResolutionRequired() || !config.getRollingMetadataKeys().isEmpty()) {
+        preCommit(metadata, isPreCommitConflictResolutionRequired());
       }
       // commit to data table after committing to metadata table.
       // We take the lock here to ensure all writes to metadata table happens within a single lock (single writer).
@@ -153,7 +161,9 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
             + config.getBasePath() + " at time " + clusteringCommitTime, e);
       }
     }
-    log.info("Clustering successfully on commit " + clusteringCommitTime);
+    log.info("Clustering successfully on commit {}", clusteringCommitTime);
+    fireCommitCallbackIfNecessary(clusteringCommitTime, HoodieActiveTimeline.REPLACE_COMMIT_ACTION,
+        writeStats, table::getBaseFileOnlyView, Option.empty());
   }
 
   @Override
@@ -191,7 +201,15 @@ public class HoodieFlinkTableServiceClient<T> extends BaseHoodieTableServiceClie
         this.txnManager.getLockManager().lock();
         try (HoodieBackedTableMetadataWriter metadataWriter = initMetadataWriter(latestPendingInstant)) {
           if (metadataWriter.isInitialized()) {
-            metadataWriter.performTableServices(Option.empty());
+            if (metadataWriter.hasPartitionsStateChanged()) {
+              table.getMetaClient().reloadTableConfig();
+            }
+            // Do not perform table service for mdt when streaming write is enabled, since the compaction/clean
+            // will be performed asynchronously in the dedicated compaction pipeline.
+            if (!this.config.getMetadataConfig().isStreamingWriteEnabled()
+                && this.config.getMetadataConfig().isInlineTableServicesEnabled()) {
+              metadataWriter.performTableServices(Option.empty());
+            }
           }
         }
       } catch (Exception e) {

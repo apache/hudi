@@ -20,8 +20,11 @@ package org.apache.hudi.client.common;
 
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter;
+import org.apache.hudi.common.config.HoodieReaderConfig;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Types;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
@@ -32,8 +35,6 @@ import org.apache.hudi.common.table.timeline.versioning.v2.InstantFileNameGenera
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Types;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
@@ -112,6 +113,11 @@ class TestSparkReaderContextFactory extends HoodieClientTestBase {
 
     String inlineClassName = createdConfig.get("fs." + InLineFileSystem.SCHEME + ".impl");
     assertEquals(InLineFileSystem.class.getName(), inlineClassName);
+
+    // Internal write-side reads must pin CONTENT; a DESCRIPTOR leak here drops blob bytes (#19232).
+    assertEquals(
+        HoodieReaderConfig.BLOB_INLINE_READ_MODE_CONTENT,
+        createdConfig.get(HoodieReaderConfig.BLOB_INLINE_READ_MODE.key()));
 
     assertEquals(
         "0001_0005.deltacommit,0002_0006.deltacommit,0003_0007.commit",

@@ -20,6 +20,8 @@ package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -32,10 +34,12 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
@@ -80,6 +84,40 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("Whether to enable streaming writes to metadata table or not. With streaming writes, we execute writes to both data table and metadata table "
           + "in streaming manner rather than two disjoint writes. By default "
           + "streaming writes to metadata table is enabled for SPARK engine for incremental operations and disabled for all other cases.");
+
+  public static final ConfigProperty<String> METADATA_WRITE_CONCURRENCY_MODE = ConfigProperty
+      .key(METADATA_PREFIX + ".write.concurrency.mode")
+      .defaultValue(WriteConcurrencyMode.SINGLE_WRITER.name())
+      .markAdvanced()
+      .withDocumentation("Change this to OPTIMISTIC_CONCURRENCY_CONTROL when MDT operations are being performed "
+          + "from an external concurrent writer (such as a table service platform) so that appropriate locks are taken.");
+
+  public static final ConfigProperty<Boolean> TABLE_SERVICE_MANAGER_ENABLED = ConfigProperty
+      .key(METADATA_PREFIX + ".table.service.manager.enabled")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("If true, delegate specified table service actions on the metadata table to the table service manager "
+          + "instead of executing them inline. This prevents the current writer from executing compaction/logcompaction "
+          + "on the metadata table, allowing a separate async pipeline to handle them.");
+
+  public static final ConfigProperty<Boolean> INLINE_TABLE_SERVICES_ENABLED = ConfigProperty
+      .key(METADATA_PREFIX + ".inline.table.services.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("If false, a data table writer does not run clean, compaction or archival on the metadata table "
+          + "inline. For jobs that must not maintain the metadata table, such as a partition delete, "
+          + "and that leave it to the regular writers or a table service platform.");
+
+  public static final Set<ActionType> SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS =
+      EnumSet.of(ActionType.compaction, ActionType.logcompaction);
+
+  public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_ACTIONS = ConfigProperty
+      .key(METADATA_PREFIX + ".table.service.manager.actions")
+      .defaultValue("")
+      .markAdvanced()
+      .withDocumentation("Comma-separated list of table service actions on the metadata table "
+          + "that should be delegated to the table service manager. Currently supported actions are: compaction, logcompaction.");
 
   public static final ConfigProperty<Integer> STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR = ConfigProperty
       .key(METADATA_PREFIX + ".streaming.write.datatable.write.statuses.coalesce.divisor")
@@ -151,6 +189,13 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("Controls the criteria to log compacted files groups in metadata table.");
 
+  public static final ConfigProperty<Boolean> DERIVE_FROM_DATA_TABLE_CLEAN_POLICY = ConfigProperty
+      .key(METADATA_PREFIX + ".derive.from.datatable.clean.policy")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("This config determines whether the cleaner policy should use data table's cleaner policy.");
+
   // Regex to filter out matching directories during bootstrap
   public static final ConfigProperty<String> DIR_FILTER_REGEX = ConfigProperty
       .key(METADATA_PREFIX + ".dir.filter.regex")
@@ -158,6 +203,16 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.7.0")
       .withDocumentation("Directories matching this regex, will be filtered out when initializing metadata table from lake storage for the first time.");
+
+  public static final ConfigProperty<Boolean> SKIP_ZERO_SIZE_FILES_ON_INITIALIZE = ConfigProperty
+      .key(METADATA_PREFIX + ".skip.zero.size.files.on.initialize")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.1")
+      .withDocumentation("When enabled, zero-size data files encountered while listing the data table during "
+          + "metadata table initialization and restore sync are skipped instead of being recorded in the metadata "
+          + "table. Skipped files remain on storage and are not tracked by the metadata table or the cleaner; "
+          + "remove them manually. The metadata validator will report them as inconsistencies.");
 
   public static final ConfigProperty<Integer> FILE_LISTING_PARALLELISM_VALUE = ConfigProperty
       .key("hoodie.file.listing.parallelism")
@@ -196,7 +251,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.11.0")
       .withDocumentation("Enable indexing column ranges of user data files under metadata table key lookups. When "
           + "enabled, metadata table will have a partition to store the column ranges and will be "
-          + "used for pruning files during the index lookups.");
+          + "used for pruning files during the index lookups. "
+          + "For the Spark engine, this config defaults to true (enabled), overriding the base default of false. "
+          + "For Flink and Java engines, this remains false by default.");
+
+  public static final ConfigProperty<Boolean> ENABLE_METADATA_INDEX_PARTITION_STATS = ConfigProperty
+      .key(METADATA_PREFIX + ".index.partition.stats.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.0.0")
+      .withDocumentation("Enable aggregating the column stats index to the partition level in the metadata table, "
+          + "used to prune partitions during index lookups. Partition stats requires the column stats index "
+          + "(" + METADATA_PREFIX + ".index.column.stats.enable) to be enabled and has no effect when column stats "
+          + "is disabled. This is an advanced option that should generally be left enabled; disabling it while "
+          + "keeping column stats enabled is recommended only for tables composed of externally created files "
+          + "(e.g. file formats integrated through Apache XTable), where partition stats are not generated.");
 
   public static final ConfigProperty<Integer> METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.file.group.count")
@@ -219,7 +288,12 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .noDefaultValue()
       .markAdvanced()
       .sinceVersion("0.11.0")
-      .withDocumentation("Comma-separated list of columns for which column stats index will be built. If not set, all columns will be indexed");
+      .withDocumentation("Comma-separated list of columns for which column stats index will be built. "
+          + "If not set, all columns will be indexed. "
+          + "For nested fields within ARRAY types, use: field.list.element "
+          + "(e.g., items.list.element or items.list.element.price). "
+          + "For nested fields within MAP types, use: field.key_value.key for keys or field.key_value.value for values "
+          + "(e.g., metadata.key_value.key, metadata.key_value.value, or metadata.key_value.value.nested_field).");
 
   public static final ConfigProperty<Integer> COLUMN_STATS_INDEX_MAX_COLUMNS = ConfigProperty
       .key(METADATA_PREFIX + ".index.column.stats.max.columns.to.index")
@@ -356,6 +430,14 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.14.0")
       .withDocumentation("The current number of records are multiplied by this number when estimating the number of "
           + "file groups to create automatically. This helps account for growth in the number of records in the dataset.");
+
+  public static final ConfigProperty<Boolean> DEFER_RLI_INIT_FOR_FRESH_TABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".record.level.index.defer.init")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When enabled, defers RLI initialization to 2nd commit for a fresh table. This should help with determining the file group "
+          + "count dynamically for Record Index (global and non-global RLI)");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".max.init.parallelism")
@@ -497,6 +579,17 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "The index name either starts with or matches exactly can be one of the following: "
           + StringUtils.join(Arrays.stream(MetadataPartitionType.values()).map(MetadataPartitionType::getPartitionPath).collect(Collectors.toList()), ", "));
 
+  public static final ConfigProperty<Boolean> AUTO_DELETE_PARTITIONS = ConfigProperty
+      .key(METADATA_PREFIX + ".auto.delete.partitions")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("When enabled (default), metadata table partitions (indexes) that are disabled in the write config "
+          + "will be automatically deleted. When disabled, users must explicitly drop metadata partitions "
+          + "using the hudi-cli or DROP INDEX command. Disabling automatic deletion is recommended for production "
+          + "datasets with multiple writers to avoid accidental deletion of large metadata indexes due to "
+          + "misconfiguration.");
+
   // Range-based repartitioning configuration for metadata table lookups
   public static final ConfigProperty<Double> RANGE_REPARTITION_SAMPLING_FRACTION = ConfigProperty
       .key(METADATA_PREFIX + ".range.repartition.sampling.fraction")
@@ -604,6 +697,32 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "honor the set value for number of tasks. If not, number of write status's from data "
           + "table writes will be used for metadata table record preparation");
 
+  public static final ConfigProperty<Boolean> FAIL_ON_TABLE_SERVICE_FAILURES = ConfigProperty
+      .key(METADATA_PREFIX + ".write.fail.on.table.service.failures")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("when set to true, it fails the job on metadata table's "
+          + "table services operation failure");
+
+  public static final ConfigProperty<Boolean> RECORD_INDEX_INITIALIZATION_VALIDATION_ENABLE = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.enable.validation.on.initialization")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.1.0")
+      .withDocumentation("Enable validation of record index after initialization by comparing the expected record count "
+          + "with the actual record count stored in the metadata table. This validation runs in a distributed manner "
+          + "using the compute engine. Disabled by default as it adds overhead to the initialization process.");
+
+  public static final ConfigProperty<Boolean> ENABLE_DETAILED_METRICS = ConfigProperty
+      .key(METADATA_PREFIX + ".enable.detailed.metrics")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.1")
+      .withDocumentation("Enables detailed metadata table metrics — per-metadata-partition file size and base/log "
+          + "file counts. Emitting these requires building a HoodieTableFileSystemView for the metadata table on "
+          + "the driver, which adds memory pressure at scale; leave disabled unless you need the breakdown.");
+
   public long getMaxLogFileSize() {
     return getLong(MAX_LOG_FILE_SIZE_BYTES_PROP);
   }
@@ -628,6 +747,22 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getBoolean(STREAMING_WRITE_ENABLED);
   }
 
+  public String getWriteConcurrencyMode() {
+    return getString(METADATA_WRITE_CONCURRENCY_MODE);
+  }
+
+  public boolean isTableServiceManagerEnabled() {
+    return getBoolean(TABLE_SERVICE_MANAGER_ENABLED);
+  }
+
+  public boolean isInlineTableServicesEnabled() {
+    return getBoolean(INLINE_TABLE_SERVICES_ENABLED);
+  }
+
+  public String getTableServiceManagerActions() {
+    return getString(TABLE_SERVICE_MANAGER_ACTIONS);
+  }
+
   public int getStreamingWritesCoalesceDivisorForDataTableWrites() {
     return getInt(HoodieMetadataConfig.STREAMING_WRITE_DATATABLE_WRITE_STATUSES_COALESCE_DIVISOR);
   }
@@ -646,6 +781,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isRecordLevelIndexEnabled() {
     return isEnabled() && getBooleanOrDefault(RECORD_LEVEL_INDEX_ENABLE_PROP);
+  }
+
+  public boolean shouldDeferRliInitForFreshTable() {
+    return getBooleanOrDefault(DEFER_RLI_INIT_FOR_FRESH_TABLE);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -694,6 +833,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public String getDirectoryFilterRegex() {
     return getString(DIR_FILTER_REGEX);
+  }
+
+  public boolean shouldSkipZeroSizeFilesOnInitialize() {
+    return getBoolean(SKIP_ZERO_SIZE_FILES_ON_INITIALIZE);
   }
 
   public boolean shouldIgnoreSpuriousDeletes() {
@@ -746,6 +889,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public int getRecordIndexMaxParallelism() {
     return getInt(RECORD_INDEX_MAX_PARALLELISM);
+  }
+
+  public boolean isRecordIndexInitializationValidationEnabled() {
+    return getBooleanOrDefault(RECORD_INDEX_INITIALIZATION_VALIDATION_ENABLE);
   }
 
   public boolean shouldAutoInitialize() {
@@ -821,7 +968,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
   }
 
   public boolean isPartitionStatsIndexEnabled() {
-    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS);
+    // Partition stats are derived from the column stats index, so they can only be enabled when column
+    // stats is enabled. Within that constraint the partition stats flag is honoured: it defaults to true
+    // (mirroring column stats) but can be explicitly disabled, e.g. for tables of externally created files.
+    return getBooleanOrDefault(ENABLE_METADATA_INDEX_COLUMN_STATS)
+        && getBooleanOrDefault(ENABLE_METADATA_INDEX_PARTITION_STATS);
   }
 
   public int getPartitionStatsIndexFileGroupCount() {
@@ -882,6 +1033,18 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getIntOrDefault(RECORD_PREPARATION_PARALLELISM);
   }
 
+  public boolean shouldDeriveFromDataTableCleanPolicy() {
+    return getBooleanOrDefault(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY);
+  }
+
+  public boolean shouldFailOnTableServiceFailures() {
+    return getBooleanOrDefault(FAIL_ON_TABLE_SERVICE_FAILURES);
+  }
+
+  public boolean isAutoDeletePartitionsEnabled() {
+    return getBooleanOrDefault(AUTO_DELETE_PARTITIONS);
+  }
+
   /**
    * Checks if a specific metadata index is marked for dropping based on the metadata configuration.
    * NOTE: Only applicable for secondary indexes (SI) or expression indexes (EI).
@@ -907,6 +1070,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     checkArgument(indexName.startsWith(PARTITION_NAME_EXPRESSION_INDEX_PREFIX)
         || indexName.startsWith(PARTITION_NAME_SECONDARY_INDEX_PREFIX), "Unexpected index name to drop: " + indexName);
     return subIndexNameToDrop.contains(indexName);
+  }
+
+  public boolean isDetailedMetricsEnabled() {
+    return getBoolean(ENABLE_DETAILED_METRICS);
   }
 
   public static class Builder {
@@ -936,6 +1103,29 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withWriteConcurrencyMode(WriteConcurrencyMode mode) {
+      metadataConfig.setValue(METADATA_WRITE_CONCURRENCY_MODE, mode.name());
+      return this;
+    }
+
+    public Builder withTableServiceManagerEnabled(boolean enabled) {
+      metadataConfig.setValue(TABLE_SERVICE_MANAGER_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withInlineTableServicesEnabled(boolean enabled) {
+      metadataConfig.setValue(INLINE_TABLE_SERVICES_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withTableServiceManagerActions(String actions) {
+      if (!actions.isEmpty()) {
+        validateTableServiceManagerActions(actions);
+      }
+      metadataConfig.setValue(TABLE_SERVICE_MANAGER_ACTIONS, actions);
+      return this;
+    }
+
     public Builder withMetadataIndexBloomFilter(boolean enable) {
       metadataConfig.setValue(ENABLE_METADATA_INDEX_BLOOM_FILTER, String.valueOf(enable));
       return this;
@@ -953,6 +1143,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withMetadataIndexColumnStats(boolean enable) {
       metadataConfig.setValue(ENABLE_METADATA_INDEX_COLUMN_STATS, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withMetadataIndexPartitionStats(boolean enable) {
+      metadataConfig.setValue(ENABLE_METADATA_INDEX_PARTITION_STATS, String.valueOf(enable));
       return this;
     }
 
@@ -1011,6 +1206,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public HoodieMetadataConfig.Builder deriveFromDataTableCleanPolicy(boolean deriveFromDataTableCleanPolicy) {
+      metadataConfig.setValue(DERIVE_FROM_DATA_TABLE_CLEAN_POLICY, Boolean.toString(deriveFromDataTableCleanPolicy));
+      return this;
+    }
+
     public Builder withFileListingParallelism(int parallelism) {
       metadataConfig.setValue(FILE_LISTING_PARALLELISM_VALUE, String.valueOf(parallelism));
       return this;
@@ -1023,6 +1223,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withDirectoryFilterRegex(String regex) {
       metadataConfig.setValue(DIR_FILTER_REGEX, regex);
+      return this;
+    }
+
+    public Builder withSkipZeroSizeFilesOnInitialize(boolean skipZeroSizeFiles) {
+      metadataConfig.setValue(SKIP_ZERO_SIZE_FILES_ON_INITIALIZE, String.valueOf(skipZeroSizeFiles));
       return this;
     }
 
@@ -1051,14 +1256,30 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withDeferRliInitializationForFreshTable(boolean deferRliInitializationForFreshTable) {
+      metadataConfig.setValue(DEFER_RLI_INIT_FOR_FRESH_TABLE, String.valueOf(deferRliInitializationForFreshTable));
+      return this;
+    }
+
     public Builder withEnableGlobalRecordLevelIndex(boolean enabled) {
       metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withEnableRecordLevelIndex(boolean enabled) {
+      metadataConfig.setValue(RECORD_LEVEL_INDEX_ENABLE_PROP, String.valueOf(enabled));
       return this;
     }
 
     public Builder withRecordIndexFileGroupCount(int minCount, int maxCount) {
       metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP, String.valueOf(minCount));
       metadataConfig.setValue(GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP, String.valueOf(maxCount));
+      return this;
+    }
+
+    public Builder withPartitionedRecordIndexFileGroupCount(int minCount, int maxCount) {
+      metadataConfig.setValue(RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP, String.valueOf(minCount));
+      metadataConfig.setValue(RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP, String.valueOf(maxCount));
       return this;
     }
 
@@ -1189,6 +1410,21 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder setFailOnTableServiceFailures(boolean failOnTableServiceFailures) {
+      metadataConfig.setValue(FAIL_ON_TABLE_SERVICE_FAILURES, String.valueOf(failOnTableServiceFailures));
+      return this;
+    }
+
+    public Builder withAutoDeletePartitions(boolean autoDeletePartitions) {
+      metadataConfig.setValue(AUTO_DELETE_PARTITIONS, String.valueOf(autoDeletePartitions));
+      return this;
+    }
+
+    public Builder enableDetailedMetadataMetrics(boolean enable) {
+      metadataConfig.setValue(ENABLE_DETAILED_METRICS, String.valueOf(enable));
+      return this;
+    }
+
     public HoodieMetadataConfig build() {
       metadataConfig.setDefaultValue(ENABLE, getDefaultMetadataEnable(engineType));
       metadataConfig.setDefaultValue(ENABLE_METADATA_INDEX_COLUMN_STATS, getDefaultColStatsEnable(engineType));
@@ -1196,6 +1432,17 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       metadataConfig.setDefaultValue(STREAMING_WRITE_ENABLED, getDefaultForStreamingWriteEnabled(engineType));
       // fix me: disable when schema on read is enabled.
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
+
+      String tsmActions = metadataConfig.getString(TABLE_SERVICE_MANAGER_ACTIONS);
+      if (tsmActions != null && !tsmActions.isEmpty()) {
+        validateTableServiceManagerActions(tsmActions);
+      }
+      if (metadataConfig.getBoolean(TABLE_SERVICE_MANAGER_ENABLED)
+          && (tsmActions == null || tsmActions.isEmpty())) {
+        throw new IllegalArgumentException(TABLE_SERVICE_MANAGER_ENABLED.key() + " is set to true but "
+            + TABLE_SERVICE_MANAGER_ACTIONS.key() + " is empty. Specify at least one action to delegate"
+            + " (supported: " + SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS + ").");
+      }
       return metadataConfig;
     }
 
@@ -1246,14 +1493,24 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           throw new HoodieNotSupportedException("Unsupported engine " + engineType);
       }
     }
-  }
 
-  /**
-   * The config is now deprecated. Partition stats are configured using the column stats config itself.
-   */
-  @Deprecated
-  public static final String ENABLE_METADATA_INDEX_PARTITION_STATS =
-      METADATA_PREFIX + ".index.partition.stats.enable";
+    private static void validateTableServiceManagerActions(String actions) {
+      for (String action : actions.split(",")) {
+        String trimmed = action.trim();
+        ActionType actionType;
+        try {
+          actionType = ActionType.valueOf(trimmed);
+        } catch (IllegalArgumentException e) {
+          throw new IllegalArgumentException("Unknown metadata table service manager action: " + trimmed
+              + ". Supported actions are: " + SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS, e);
+        }
+        if (!SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS.contains(actionType)) {
+          throw new IllegalArgumentException("Unsupported metadata table service manager action: " + trimmed
+              + ". Supported actions are: " + SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS);
+        }
+      }
+    }
+  }
 
   /**
    * @deprecated Use {@link #ENABLE} and its methods.

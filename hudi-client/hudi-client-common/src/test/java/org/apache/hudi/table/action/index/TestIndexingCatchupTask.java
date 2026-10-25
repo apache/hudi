@@ -19,13 +19,20 @@
 
 package org.apache.hudi.table.action.index;
 
+import org.apache.hudi.avro.model.HoodieCleanMetadata;
+import org.apache.hudi.avro.model.HoodieRestoreMetadata;
+import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -37,10 +44,14 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -50,10 +61,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class TestIndexingCatchupTask {
@@ -238,6 +252,149 @@ public class TestIndexingCatchupTask {
     );
 
     assertTrue(task.awaitInstantCaughtUp(pendingInstantWithNoHeartbeat), "Expected null as the instant's heartbeat has expired.");
+  }
+
+  @Test
+  public void testRunSkipsInstantAlreadyCommittedToMetadata() {
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "002");
+    HoodieActiveTimeline metadataTimeline = mock(HoodieActiveTimeline.class);
+    when(metadataMetaClient.reloadActiveTimeline()).thenReturn(metadataTimeline);
+    when(metadataTimeline.filterCompletedInstants()).thenReturn(metadataTimeline);
+    when(metadataTimeline.filter(any())).thenReturn(metadataTimeline);
+    when(metadataTimeline.firstInstant()).thenReturn(Option.of(instant));
+
+    RunningIndexingCatchupTask task = runningTask(instant);
+    task.run();
+
+    assertEquals("002", task.currentCaughtupInstant);
+    assertEquals(0, task.writeActionsUpdated.get());
+  }
+
+  @Test
+  public void testRunUpdatesCompletedWriteActionInsideTransaction() {
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "002");
+    stubNoCompletedMetadataInstant();
+    RunningIndexingCatchupTask task = runningTask(instant);
+
+    task.run();
+
+    assertEquals(1, task.writeActionsUpdated.get());
+    assertEquals("002", task.currentCaughtupInstant);
+    verify(transactionManager).beginStateChange(Option.of(instant), Option.empty());
+    verify(transactionManager).endStateChange(Option.of(instant));
+  }
+
+  @Test
+  public void testRunUpdatesCleanRestoreAndRollbackActions() throws IOException {
+    HoodieInstant clean = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.CLEAN_ACTION, "002");
+    HoodieInstant restore = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.RESTORE_ACTION, "003");
+    HoodieInstant rollback = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.ROLLBACK_ACTION, "004");
+    stubNoCompletedMetadataInstant();
+    HoodieCleanMetadata cleanMetadata = mock(HoodieCleanMetadata.class);
+    HoodieRestoreMetadata restoreMetadata = mock(HoodieRestoreMetadata.class);
+    HoodieRollbackMetadata rollbackMetadata = mock(HoodieRollbackMetadata.class);
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.readRestoreMetadata(restore)).thenReturn(restoreMetadata);
+    when(activeTimeline.readRollbackMetadata(rollback)).thenReturn(rollbackMetadata);
+
+    try (MockedStatic<CleanerUtils> cleanerUtils = mockStatic(CleanerUtils.class)) {
+      cleanerUtils.when(() -> CleanerUtils.getCleanerMetadata(metaClient, clean)).thenReturn(cleanMetadata);
+      runningTask(clean, restore, rollback).run();
+    }
+
+    verify(metadataWriter).update(cleanMetadata, "002");
+    verify(metadataWriter).update(restoreMetadata, "003");
+    verify(metadataWriter).update(rollbackMetadata, "004");
+    verify(transactionManager).endStateChange(Option.of(clean));
+    verify(transactionManager).endStateChange(Option.of(restore));
+    verify(transactionManager).endStateChange(Option.of(rollback));
+  }
+
+  /**
+   * A replace commit that registers files written outside Hudi carries the replaced file groups only in its
+   * {@link HoodieReplaceCommitMetadata}, so both catch-up tasks must read it as such for the indexes to drop them.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testUpdateIndexForWriteActionReadsReplaceCommitMetadata(boolean writeStatBased) throws IOException {
+    HoodieInstant replaceCommit = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "002");
+    HoodieInstant commit = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003");
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    replaceCommitMetadata.addReplaceFileId("p1", "file_1.parquet");
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.readReplaceCommitMetadata(replaceCommit)).thenReturn(replaceCommitMetadata);
+    when(activeTimeline.readCommitMetadata(commit)).thenReturn(commitMetadata);
+
+    AbstractIndexingCatchupTask task = writeStatBased
+        ? new WriteStatBasedIndexingCatchupTask(metadataWriter, Arrays.asList(replaceCommit, commit), new HashSet<>(), metaClient, metadataMetaClient,
+            "001", transactionManager, engineContext, table, heartbeatClient)
+        : new RecordBasedIndexingCatchupTask(metadataWriter, Arrays.asList(replaceCommit, commit), new HashSet<>(), metaClient, metadataMetaClient,
+            "001", transactionManager, engineContext, table, heartbeatClient);
+    task.updateIndexForWriteAction(replaceCommit);
+    task.updateIndexForWriteAction(commit);
+
+    verify(metadataWriter).update(replaceCommitMetadata, "002");
+    verify(metadataWriter).update(commitMetadata, "003");
+  }
+
+  @Test
+  public void testRunRejectsUnexpectedCompletedActionAndReleasesTransaction() {
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "002");
+    stubNoCompletedMetadataInstant();
+
+    assertThrows(IllegalStateException.class, () -> runningTask(instant).run());
+    verify(transactionManager).endStateChange(Option.of(instant));
+  }
+
+  @Test
+  public void testAwaitInstantCaughtUpUsesKnownMetadataInstant() {
+    HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.COMMIT_ACTION, "002");
+    RunningIndexingCatchupTask task = new RunningIndexingCatchupTask(
+        metadataWriter, Collections.singletonList(instant), Collections.singleton("002"), metaClient, metadataMetaClient,
+        transactionManager, "001", engineContext, table, heartbeatClient);
+
+    assertTrue(task.awaitInstantCaughtUp(instant));
+    assertEquals("002", task.currentCaughtupInstant);
+  }
+
+  private RunningIndexingCatchupTask runningTask(HoodieInstant... instants) {
+    return new RunningIndexingCatchupTask(
+        metadataWriter, Arrays.asList(instants), new HashSet<>(), metaClient, metadataMetaClient,
+        transactionManager, "001", engineContext, table, heartbeatClient);
+  }
+
+  private void stubNoCompletedMetadataInstant() {
+    HoodieActiveTimeline metadataTimeline = mock(HoodieActiveTimeline.class);
+    when(metadataMetaClient.reloadActiveTimeline()).thenReturn(metadataTimeline);
+    when(metadataTimeline.filterCompletedInstants()).thenReturn(metadataTimeline);
+    when(metadataTimeline.filter(any())).thenReturn(metadataTimeline);
+    when(metadataTimeline.firstInstant()).thenReturn(Option.empty());
+  }
+
+  static class RunningIndexingCatchupTask extends AbstractIndexingCatchupTask {
+    private final AtomicInteger writeActionsUpdated = new AtomicInteger();
+
+    RunningIndexingCatchupTask(HoodieTableMetadataWriter metadataWriter,
+                               List<HoodieInstant> instantsToIndex,
+                               Set<String> metadataCompletedInstants,
+                               HoodieTableMetaClient metaClient,
+                               HoodieTableMetaClient metadataMetaClient,
+                               TransactionManager transactionManager,
+                               String currentCaughtupInstant,
+                               HoodieEngineContext engineContext,
+                               HoodieTable table,
+                               HoodieHeartbeatClient heartbeatClient) {
+      super(metadataWriter, instantsToIndex, metadataCompletedInstants, metaClient, metadataMetaClient,
+          transactionManager, currentCaughtupInstant, engineContext, table, heartbeatClient);
+    }
+
+    @Override
+    public void updateIndexForWriteAction(HoodieInstant instant) {
+      writeActionsUpdated.incrementAndGet();
+    }
   }
 
   static class DummyIndexingCatchupTask extends AbstractIndexingCatchupTask {

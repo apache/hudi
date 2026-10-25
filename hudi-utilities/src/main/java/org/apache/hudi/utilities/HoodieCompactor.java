@@ -22,11 +22,14 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.TableServiceUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -35,21 +38,19 @@ import org.apache.hudi.table.action.compact.strategy.LogFileSizeBasedCompactionS
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+@Slf4j
 public class HoodieCompactor {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCompactor.class);
   public static final String EXECUTE = "execute";
   public static final String SCHEDULE = "schedule";
   public static final String SCHEDULE_AND_EXECUTE = "scheduleandexecute";
@@ -73,11 +74,12 @@ public class HoodieCompactor {
     this.props.put(HoodieCleanConfig.ASYNC_CLEAN.key(), false);
     if (this.metaClient.getTableConfig().isMetadataTableAvailable()) {
       // add default lock config options if MDT is enabled.
-      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(),  this.props);
+      UtilHelpers.addLockOptions(cfg.basePath, this.metaClient.getBasePath().toUri().getScheme(), this.props);
     }
   }
 
   public static class Config implements Serializable {
+
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
     @Parameter(names = {"--table-name", "-tn"}, description = "Table name", required = true)
@@ -92,6 +94,8 @@ public class HoodieCompactor {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = false)
     public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries", required = false)
     public int retry = 0;
     @Parameter(names = {"--skip-clean", "-sc"}, description = "do not trigger clean after compaction", required = false)
@@ -102,6 +106,12 @@ public class HoodieCompactor {
         + "Set \"execute\" means execute a compact plan at given instant which means --instant-time is needed here; "
         + "Set \"scheduleAndExecute\" means make a compact plan first and execute that plan immediately", required = false)
     public String runningMode = null;
+    @Parameter(names = {"--retry-last-failed-job", "-rc"}, description = "Take effect when using --mode/-m scheduleAndExecute. Set true means "
+        + "check, rollback and execute last failed compaction plan instead of planning a new compaction job directly.")
+    public Boolean retryLastFailedJob = false;
+    @Parameter(names = {"--job-max-processing-time-ms", "-jt"}, description = "Take effect when using --mode/-m scheduleAndExecute and --retry-last-failed-job/-rc true. "
+        + "If maxProcessingTimeMs passed but compaction job is still unfinished, hoodie would consider this job as failed and relaunch.")
+    public long maxProcessingTimeMs = 0;
     @Parameter(names = {"--strategy", "-st"}, description = "Strategy Class", required = false)
     public String strategyClassName = LogFileSizeBasedCompactionStrategy.class.getName();
     @Parameter(names = {"--help", "-h"}, help = true)
@@ -130,6 +140,8 @@ public class HoodieCompactor {
           + "   --retry " + retry + ", \n"
           + "   --schedule " + runSchedule + ", \n"
           + "   --mode " + runningMode + ", \n"
+          + "   --retry-last-failed-job " + retryLastFailedJob + ", \n"
+          + "   --job-max-processing-time-ms " + maxProcessingTimeMs + ", \n"
           + "   --strategy " + strategyClassName + ", \n"
           + "   --props " + propsFilePath + ", \n"
           + "   --hoodie-conf " + configs
@@ -156,6 +168,8 @@ public class HoodieCompactor {
           && Objects.equals(skipClean, config.skipClean)
           && Objects.equals(runSchedule, config.runSchedule)
           && Objects.equals(runningMode, config.runningMode)
+          && Objects.equals(retryLastFailedJob, config.retryLastFailedJob)
+          && Objects.equals(maxProcessingTimeMs, config.maxProcessingTimeMs)
           && Objects.equals(strategyClassName, config.strategyClassName)
           && Objects.equals(propsFilePath, config.propsFilePath)
           && Objects.equals(configs, config.configs);
@@ -164,7 +178,8 @@ public class HoodieCompactor {
     @Override
     public int hashCode() {
       return Objects.hash(basePath, tableName, compactionInstantTime, schemaFile,
-          sparkMaster, parallelism, sparkMemory, retry, skipClean, runSchedule, runningMode, strategyClassName, propsFilePath, configs, help);
+          sparkMaster, parallelism, sparkMemory, retry, skipClean, runSchedule, runningMode,
+          retryLastFailedJob, maxProcessingTimeMs, strategyClassName, propsFilePath, configs, help);
     }
   }
 
@@ -175,12 +190,13 @@ public class HoodieCompactor {
       cmd.usage();
       throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + 1);
     }
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("compactor-" + cfg.tableName,
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     int ret = new HoodieCompactor(jsc, cfg).compact(cfg.retry);
     if (ret != 0) {
       throw new HoodieException("Fail to run compaction for " + cfg.tableName + ", return code: " + ret);
     }
-    LOG.info("Success to run compaction for " + cfg.tableName);
+    log.info("Success to run compaction for {}", cfg.tableName);
     jsc.stop();
   }
 
@@ -188,29 +204,29 @@ public class HoodieCompactor {
     this.fs = HadoopFSUtils.getFs(cfg.basePath, jsc.hadoopConfiguration());
     // need to do validate in case that users call compact() directly without setting cfg.runningMode
     validateRunningMode(cfg);
-    LOG.info(cfg.toString());
+    log.info(cfg.toString());
 
     int ret = UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
-          LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
+          log.info("Running Mode: [{}] Do schedule", SCHEDULE);
           Option<String> instantTime = doSchedule(jsc);
           int result = instantTime.isPresent() ? 0 : -1;
           if (result == 0) {
-            LOG.info("The schedule instant time is " + instantTime.get());
+            log.info("The schedule instant time is {}", instantTime.get());
           }
           return result;
         }
         case SCHEDULE_AND_EXECUTE: {
-          LOG.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
+          log.info("Running Mode: [{}]", SCHEDULE_AND_EXECUTE);
           return doScheduleAndCompact(jsc);
         }
         case EXECUTE: {
-          LOG.info("Running Mode: [" + EXECUTE + "]; Do compaction");
+          log.info("Running Mode: [{}]; Do compaction", EXECUTE);
           return doCompact(jsc);
         }
         default: {
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          log.info("Unsupported running mode [{}], quit the job directly", cfg.runningMode);
           return -1;
         }
       }
@@ -219,17 +235,28 @@ public class HoodieCompactor {
   }
 
   private Integer doScheduleAndCompact(JavaSparkContext jsc) throws Exception {
-    LOG.info("Step 1: Do schedule");
-    Option<String> instantTime = doSchedule(jsc);
-    if (!instantTime.isPresent()) {
-      LOG.error("Couldn't do schedule");
-      return -1;
-    } else {
-      cfg.compactionInstantTime = instantTime.get();
+    log.info("Step 1: Do schedule");
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    Option<String> instantTime = Option.empty();
+
+    if (cfg.retryLastFailedJob) {
+      Option<HoodieInstant> staleInstant = TableServiceUtils.findStaleInflightInstant(
+          metaClient, HoodieTimeline.COMPACTION_ACTION, cfg.maxProcessingTimeMs);
+      if (staleInstant.isPresent()) {
+        log.info("Found failed compaction instant at : {}; Will rollback the failed compaction and re-trigger again.", staleInstant.get());
+        instantTime = Option.of(staleInstant.get().requestedTime());
+      }
     }
 
-    LOG.info("The schedule instant time is {}", instantTime.get());
-    LOG.info("Step 2: Do compaction");
+    instantTime = instantTime.isPresent() ? instantTime : doSchedule(jsc);
+    if (!instantTime.isPresent()) {
+      log.error("Couldn't do schedule");
+      return -1;
+    }
+    cfg.compactionInstantTime = instantTime.get();
+
+    log.info("The schedule instant time is {}", instantTime.get());
+    log.info("Step 2: Do compaction");
 
     return doCompact(jsc);
   }
@@ -251,10 +278,10 @@ public class HoodieCompactor {
     } else {
       schemaStr = UtilHelpers.parseSchema(fs, cfg.schemaFile);
     }
-    LOG.info("Schema --> : " + schemaStr);
+    log.info("Schema --> : {}", schemaStr);
 
     try (SparkRDDWriteClient<HoodieRecordPayload> client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
+        UtilHelpers.createHoodieClient(jsc, cfg.basePath, schemaStr, cfg.parallelism, Option.empty(), props)) {
       // If no compaction instant is provided by --instant-time, find the earliest scheduled compaction
       // instant from the active timeline
       if (StringUtils.isNullOrEmpty(cfg.compactionInstantTime)) {
@@ -262,10 +289,9 @@ public class HoodieCompactor {
         Option<HoodieInstant> firstCompactionInstant = metaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
         if (firstCompactionInstant.isPresent()) {
           cfg.compactionInstantTime = firstCompactionInstant.get().requestedTime();
-          LOG.info("Found the earliest scheduled compaction instant which will be executed: "
-              + cfg.compactionInstantTime);
+          log.info("Found the earliest scheduled compaction instant which will be executed: {}", cfg.compactionInstantTime);
         } else {
-          LOG.info("There is no scheduled compaction in the table.");
+          log.info("There is no scheduled compaction in the table.");
           return 0;
         }
       }
@@ -278,7 +304,7 @@ public class HoodieCompactor {
 
   private Option<String> doSchedule(JavaSparkContext jsc) {
     try (SparkRDDWriteClient client =
-             UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
+        UtilHelpers.createHoodieClient(jsc, cfg.basePath, "", cfg.parallelism, Option.of(cfg.strategyClassName), props)) {
 
       return client.scheduleCompaction(Option.empty());
     }
@@ -286,7 +312,7 @@ public class HoodieCompactor {
 
   private String getSchemaFromLatestInstant() throws Exception {
     TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-    Schema schema = schemaUtil.getTableAvroSchema(false);
+    HoodieSchema schema = schemaUtil.getTableSchema(false);
     return schema.toString();
   }
 

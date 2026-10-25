@@ -19,7 +19,6 @@
 package org.apache.hudi.streamer;
 
 import org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy;
-import org.apache.hudi.client.utils.OperationConverter;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -31,6 +30,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.util.FlinkStateBackendConverter;
+import org.apache.hudi.util.OperationConverter;
 import org.apache.hudi.util.StreamerUtil;
 
 import com.beust.jcommander.Parameter;
@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
 import static org.apache.hudi.configuration.FlinkOptions.PARTITION_FORMAT_DAY;
@@ -367,7 +368,7 @@ public class FlinkStreamerConfig extends Configuration {
   @Parameter(names = {"--hive-sync-file-format"}, description = "File format for hive sync, default 'PARQUET'")
   public String hiveSyncFileFormat = "PARQUET";
 
-  @Parameter(names = {"--hive-sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, jdbc and hiveql, default 'jdbc'")
+  @Parameter(names = {"--hive-sync-mode"}, description = "Mode to choose for Hive ops. Valid values are hms, glue, jdbc and hiveql, default 'jdbc'")
   public String hiveSyncMode = "jdbc";
 
   @Parameter(names = {"--hive-sync-username"}, description = "Username for hive sync, default 'hive'")
@@ -433,7 +434,8 @@ public class FlinkStreamerConfig extends Configuration {
     conf.set(FlinkOptions.RECORD_MERGER_STRATEGY_ID, config.recordMergerStrategy);
     conf.set(FlinkOptions.PRE_COMBINE, config.preCombine);
     conf.set(FlinkOptions.RETRY_TIMES, Integer.parseInt(config.instantRetryTimes));
-    conf.set(FlinkOptions.RETRY_INTERVAL_MS, Long.parseLong(config.instantRetryInterval));
+    conf.set(FlinkOptions.RETRY_INTERVAL_MS,
+        TimeUnit.SECONDS.toMillis(Long.parseLong(config.instantRetryInterval)));
     conf.set(FlinkOptions.IGNORE_FAILED, config.commitOnErrors);
     conf.set(FlinkOptions.RECORD_KEY_FIELD, config.recordKeyField);
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, config.partitionPathField);

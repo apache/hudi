@@ -21,11 +21,11 @@
 package org.apache.hudi.aws.transaction.lock;
 
 import org.apache.hudi.aws.credentials.HoodieAWSCredentialsProviderFactory;
+import org.apache.hudi.client.transaction.lock.LockGetResult;
+import org.apache.hudi.client.transaction.lock.LockUpsertResult;
 import org.apache.hudi.client.transaction.lock.StorageLockClient;
-import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.client.transaction.lock.StorageLockData;
+import org.apache.hudi.client.transaction.lock.StorageLockFile;
 import org.apache.hudi.common.util.Functions;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -193,6 +193,7 @@ public class S3StorageLockClient implements StorageLockClient {
       logger.info("OwnerId: {}, Retriable conditional request conflict error: {}", ownerId, lockFilePath);
     } else if (status == RATE_LIMIT_ERROR_CODE) {
       logger.warn("OwnerId: {}, Rate limit exceeded for: {}", ownerId, lockFilePath);
+      return LockUpsertResult.THROTTLED;
     } else if (status >= INTERNAL_SERVER_ERROR_CODE_MIN) {
       logger.warn("OwnerId: {}, internal server error for: {}", ownerId, lockFilePath, e);
     } else {
@@ -244,10 +245,11 @@ public class S3StorageLockClient implements StorageLockClient {
   }
 
   private static S3Client createS3Client(Region region, long timeoutSecs, Properties props) {
-    // Set the timeout, credentials, and region
+    // Set the timeout, credentials, and region with no retries
     return S3Client.builder()
         .overrideConfiguration(
-            b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs)))
+            b -> b.apiCallTimeout(Duration.ofSeconds(timeoutSecs))
+                  .retryStrategy(r -> r.maxAttempts(1)))
         .credentialsProvider(HoodieAWSCredentialsProviderFactory.getAwsCredentialsProvider(props))
         .region(region).build();
   }

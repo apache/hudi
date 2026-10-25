@@ -113,7 +113,7 @@ public class HudiSplit
 The split manager will partition the data for a table into the individual chunks that Trino will distribute to workers
 for processing. This is where the partition loader logic will reside. While listing the files for each Hudi partition,
 the split manager will create one or more splits per file. Additionally, split generation is dynamic based on size to 
-futher improve the performance (see [query planning optimization](#query-planning-optimization) for more details).
+further improve the performance (see [query planning optimization](#query-planning-optimization) for more details).
 
 During query execution, the Trino coordinator tracks all splits available for processing and the locations where tasks
 are running on workers and processing splits. As tasks finish processing and are producing more splits for downstream
@@ -272,7 +272,7 @@ Hudi, so we need to either use the Hudi APIs or write custom Spark jobs to migra
 - When will we remove the existing behavior?
 
 We are not proposing to remove the existing behavior. We hope that we will have a critical mass of users who will like
-to use the new Hudi connector. That said, we whould continue to support the current integration.
+to use the new Hudi connector. That said, we would continue to support the current integration.
 
 ## Test Plan
 

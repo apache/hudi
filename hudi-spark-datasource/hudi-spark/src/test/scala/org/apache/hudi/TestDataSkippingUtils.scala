@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.functions.{col, lower}
+import org.apache.spark.sql.functions.{col, date_format, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
@@ -189,15 +189,29 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
-        // Composite expression
+        // NOTE: file_1 may hold "B" (sorting between "ABC" and "abc"), whose lower-case form "b" doesn't
+        //       start w/ "abc", even though lower(B_minValue) = lower(B_maxValue) = "abc" does
         Not(sparkAdapter.getExpressionFromColumn(lower(col("B")).startsWith("abc"))),
         Seq(
-          IndexRow("file_1", valueCount = 1, B_minValue = "ABA", B_maxValue = "ADF", B_nullCount = 1), // may contain strings starting w/ "ABC" (after upper)
-          IndexRow("file_2", valueCount = 1, B_minValue = "ADF", B_maxValue = "AZY", B_nullCount = 0),
-          IndexRow("file_3", valueCount = 1, B_minValue = "AAA", B_maxValue = "ABA", B_nullCount = 0),
-          IndexRow("file_4", valueCount = 1, B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0) // all strings start w/ "ABC" (after upper)
+          IndexRow("file_1", valueCount = 3, B_minValue = "ABC", B_maxValue = "abc", B_nullCount = 0)
         ),
-        Seq("file_1", "file_2", "file_3"))
+        Seq("file_1")),
+      arguments(
+        // NOTE: file_1 holds "Zebra", whose lower-case form is the queried "zebra", even though
+        //       lower(B_maxValue) = "apple" sorts before it
+        sparkAdapter.getExpressionFromColumn(lower(col("B")) === "zebra"),
+        Seq(
+          IndexRow("file_1", valueCount = 2, B_minValue = "Zebra", B_maxValue = "apple", B_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        // NOTE: file_1 holds "apple", whose upper-case form is the queried "APPLE", even though
+        //       upper(B_minValue) = "ZEBRA" sorts after it
+        sparkAdapter.getExpressionFromColumn(upper(col("B")) === "APPLE"),
+        Seq(
+          IndexRow("file_1", valueCount = 2, B_minValue = "Zebra", B_maxValue = "apple", B_nullCount = 0)
+        ),
+        Seq("file_1"))
     )
   }
 
@@ -229,24 +243,65 @@ object TestDataSkippingUtils {
           IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
         ),
         Seq("file_1", "file_2")
+      ),
+      // NOTE: file_1 holds no stats for B (for ex, B was added by schema evolution after it was written),
+      //       hence it could hold nulls for B and could NOT be pruned
+      arguments(
+        "B is null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 1)
+        ),
+        Seq("file_1", "file_3")
+      ),
+      arguments(
+        "B <=> null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 1)
+        ),
+        Seq("file_1", "file_3")
+      ),
+      arguments(
+        "A = 1 and B is null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0)
+        ),
+        Seq("file_1")
       )
     )
   }
 
   def testMiscLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
-    // NOTE: Have to use [[Arrays.stream]], as Scala can't resolve properly 2 overloads for [[Stream.of]]
-    //       (for single element)
-    java.util.Arrays.stream(
-      Array(
-        arguments(
-          InSet(UnresolvedAttribute("A"), HashSet(0, 1)),
-          Seq(
-            IndexRow("file_1", valueCount = 1, 1, 2, 0),
-            IndexRow("file_2", valueCount = 1, -1, 1, 0),
-            IndexRow("file_3", valueCount = 1, -2, -1, 0)
-          ),
-          Seq("file_1", "file_2"))
-      )
+    java.util.stream.Stream.of(
+      arguments(
+        InSet(UnresolvedAttribute("A"), HashSet(0, 1)),
+        Seq(
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        // Composite expression
+        // NOTE: date_format(C, 'yyyy-MM-dd') preserves the ordering of C, so this filter is translated and
+        //       file_1, whose dates all fall in 03/2022, is pruned
+        Not(sparkAdapter.getExpressionFromColumn(date_format(col("C"), "yyyy-MM-dd").startsWith("2022-03"))),
+        Seq(
+          IndexRow("file_1", valueCount = 2,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 2,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1648785048000L), // 04/01/2022
+            C_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 
@@ -684,6 +739,31 @@ object TestDataSkippingUtils {
             B_minValue = "2022-03-06", // 03/06/2022
             B_maxValue = "2022-03-06", // 03/06/2022
             B_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        // datediff(end, start) preserves the ordering of its end date, hence is translated
+        "datediff(CAST(C AS DATE), DATE '2022-03-07') >= 2",
+        Seq(
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        // NOTE: datediff(end, start) reverses the ordering of its start date, so it isn't translated:
+        //       file_1 holds 03/08/2022 (1 day before the end date) though its min is 2 days before it
+        "datediff(DATE '2022-03-09', CAST(C AS DATE)) <= 1",
+        Seq(
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
         ),
         Seq("file_1"))
 

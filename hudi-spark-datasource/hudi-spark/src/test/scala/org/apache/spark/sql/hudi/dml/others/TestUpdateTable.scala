@@ -25,9 +25,10 @@ import org.apache.hudi.HoodieSparkUtils.gteqSpark3_4
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
-import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.{AnalysisException, Row}
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.junit.jupiter.api.Assertions.assertEquals
 
@@ -71,6 +72,53 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
             )
 
             // update data
+            spark.sql(s"update $tableName set price = price * 2 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 40.0, 1000)
+            )
+          }
+        }
+      }
+    })
+  }
+
+  test("Test Update Table With Row Merge Handle") {
+    // Same statements as above with the merge handle pinned to HoodieWriteMergeHandle, so the write
+    // builds payload-carrying records and merges on the ordering value each record carries.
+    withRecordType()(withTempDir { tmp =>
+      Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double,
+               |  ts long
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts',
+               |  '${HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key()}' = 'org.apache.hudi.io.HoodieWriteMergeHandle'
+               | )
+         """.stripMargin)
+
+          spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000")
+          checkAnswer(s"select id, name, price, ts from $tableName")(
+            Seq(1, "a1", 10.0, 1000)
+          )
+
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+
+            // the ordering column is not assigned, so the update must take effect
+            spark.sql(s"update $tableName set price = 20 where id = 1")
+            checkAnswer(s"select id, name, price, ts from $tableName")(
+              Seq(1, "a1", 20.0, 1000)
+            )
+
             spark.sql(s"update $tableName set price = price * 2 where id = 1")
             checkAnswer(s"select id, name, price, ts from $tableName")(
               Seq(1, "a1", 40.0, 1000)
@@ -490,6 +538,97 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
         }
       }
+    }
+  }
+
+  test("Test UPDATE on VECTOR column preserves custom-type metadata") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  embedding VECTOR(3)
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+         """.stripMargin)
+
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, array(cast(0.1 as float), cast(0.2 as float), cast(0.3 as float)))
+           """.stripMargin)
+
+      // Assigning a VECTOR column goes through castIfNeeded; without the metadata
+      // re-attach it would fail schema compat with MISSING_UNION_BRANCH.
+      spark.sql(
+        s"""
+           |update $tableName
+           |set embedding = array(cast(0.9 as float), cast(0.8 as float), cast(0.7 as float))
+           |where id = 1
+           """.stripMargin)
+
+      checkAnswer(s"select id, embedding from $tableName")(
+        Seq(1L, Seq(0.9f, 0.8f, 0.7f))
+      )
+    }
+  }
+
+  test("Test UPDATE on BLOB column preserves custom-type metadata") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id bigint,
+           |  payload BLOB
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$tableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id'
+           | )
+         """.stripMargin)
+
+      // Use OUT_OF_LINE with a concrete reference: per RFC-100 the BLOB struct's
+      // inner reference fields (external_path, managed) are non-null, and the
+      // source literal must conform to that contract.
+      spark.sql(
+        s"""
+           |insert into $tableName values
+           |  (1, named_struct(
+           |        'type', 'OUT_OF_LINE',
+           |        'data', cast(null as binary),
+           |        'reference', named_struct(
+           |          'external_path', 'blobs/seed',
+           |          'offset', 0L,
+           |          'length', 3L,
+           |          'managed', false)))
+           """.stripMargin)
+
+      // Assigning a BLOB column goes through castIfNeeded; without the metadata
+      // re-attach it would fail schema compat with MISSING_UNION_BRANCH.
+      spark.sql(
+        s"""
+           |update $tableName
+           |set payload = named_struct(
+           |  'type', 'OUT_OF_LINE',
+           |  'data', cast(null as binary),
+           |  'reference', named_struct(
+           |    'external_path', 'blobs/updated',
+           |    'offset', 10L,
+           |    'length', 100L,
+           |    'managed', true))
+           |where id = 1
+           """.stripMargin)
+
+      checkAnswer(s"select id, payload from $tableName")(
+        Seq(1L, Row("OUT_OF_LINE", null, Row("blobs/updated", 10L, 100L, true)))
+      )
     }
   }
 }

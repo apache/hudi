@@ -58,7 +58,7 @@ public class FlinkPartitionTTLActionExecutor<T> extends BaseFlinkCommitActionExe
       if (expiredPartitions.isEmpty()) {
         return emptyResult;
       }
-      log.info("Partition ttl find the following expired partitions to delete:  " + String.join(",", expiredPartitions));
+      log.info("Partition ttl find the following expired partitions to delete:  {}", String.join(",", expiredPartitions));
       return new FlinkAutoCommitActionExecutor(new FlinkDeletePartitionCommitActionExecutor<>(context, config, table, instantTime, expiredPartitions)).execute();
     } catch (HoodieDeletePartitionPendingTableServiceException deletePartitionPendingTableServiceException) {
       log.info("Partition is under table service, do nothing, call delete partition next time.");

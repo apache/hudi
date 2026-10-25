@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -31,11 +31,12 @@
     <main.basedir>${project.parent.basedir}</main.basedir>
     <skipTests>true</skipTests>
     <!-- jakarta and jline version chosen based on hibernate validator https://mvnrepository.com/artifact/org.hibernate.validator/hibernate-validator/6.2.4.Final -->
-    <jakarta.el.version>3.0.3</jakarta.el.version>
+    <jakarta.el.version>3.0.4</jakarta.el.version>
+    <jakarta.el.api.version>3.0.3</jakarta.el.api.version>
     <jakarta.validation.version>2.0.2</jakarta.validation.version>
     <jline.version>3.21.0</jline.version>
     <hudi.cli.gson.version>2.11.0</hudi.cli.gson.version>
-    <commons-configuration-2.version>2.11.0</commons-configuration-2.version>
+    <commons-configuration-2.version>2.15.0</commons-configuration-2.version>
   </properties>
 
   <build>
@@ -99,6 +100,7 @@
                   <include>org.objenesis:objenesis</include>
 
                   <!-- cli related dependencies -->
+                  <include>com.beust:jcommander</include>
                   <include>com.fasterxml:classmate</include>
                   <include>com.fasterxml.woodstox:woodstox-core</include>
                   <include>com.google.code.gson:gson</include>
@@ -130,6 +132,10 @@
                 </includes>
               </artifactSet>
               <relocations>
+                <relocation>
+                  <pattern>com.beust.jcommander.</pattern>
+                  <shadedPattern>org.apache.hudi.com.beust.jcommander.</shadedPattern>
+                </relocation>
                 <!-- Kryo -->
                 <relocation>
                   <pattern>com.esotericsoftware.kryo.</pattern>
@@ -255,7 +261,7 @@
     <dependency>
       <groupId>jakarta.el</groupId>
       <artifactId>jakarta.el-api</artifactId>
-      <version>${jakarta.el.version}</version>
+      <version>${jakarta.el.api.version}</version>
       <scope>compile</scope>
     </dependency>
     <dependency>

@@ -133,6 +133,10 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
         .withBulkInsertParallelism(PARALLELISM)
         .withFinalizeWriteParallelism(PARALLELISM)
         .withDeleteParallelism(PARALLELISM)
+        // #17714: enabling the consistency check makes this test slow on macOS local file://. The cleaner's
+        // getFileStatus calls the guard's waitTillFileAppears, which misses the translated path and burns the
+        // full ~25.2s backoff per deleted file. Does NOT reproduce on CI (Linux), where the path resolves and
+        // it stays fast, so this gotcha is only visible locally.
         .withConsistencyGuardConfig(ConsistencyGuardConfig.newBuilder().withConsistencyCheckEnabled(true).build())
         .build();
     try (final SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
@@ -209,25 +213,25 @@ public class TestCleanerInsertAndCleanByVersions extends SparkClientFunctionalTe
           for (HoodieFileGroup fileGroup : fileGroups) {
             if (compactionFileIdToLatestFileSlice.containsKey(fileGroup.getFileGroupId())) {
               // Ensure latest file-slice selected for compaction is retained
-              Option<HoodieBaseFile> dataFileForCompactionPresent =
-                  Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(df -> {
+              Option<HoodieBaseFile> baseFileForCompactionPresent =
+                  Option.fromJavaOptional(fileGroup.getAllBaseFiles().filter(baseFile -> {
                     return compactionFileIdToLatestFileSlice.get(fileGroup.getFileGroupId()).getBaseInstantTime()
-                        .equals(df.getCommitTime());
+                        .equals(baseFile.getCommitTime());
                   }).findAny());
-              assertTrue(dataFileForCompactionPresent.isPresent(),
+              assertTrue(baseFileForCompactionPresent.isPresent(),
                   "Data File selected for compaction is retained");
             } else {
               // file has no more than max versions
               String fileId = fileGroup.getFileGroupId().getFileId();
-              List<HoodieBaseFile> dataFiles = fileGroup.getAllBaseFiles().collect(Collectors.toList());
+              List<HoodieBaseFile> baseFiles = fileGroup.getAllBaseFiles().collect(Collectors.toList());
 
-              assertTrue(dataFiles.size() <= maxVersions,
+              assertTrue(baseFiles.size() <= maxVersions,
                   "fileId " + fileId + " has more than " + maxVersions + " versions");
 
               // Each file, has the latest N versions (i.e cleaning gets rid of older versions)
               List<String> commitedVersions = new ArrayList<>(fileIdToVersions.get(fileId));
-              for (int i = 0; i < dataFiles.size(); i++) {
-                assertEquals((dataFiles.get(i)).getCommitTime(),
+              for (int i = 0; i < baseFiles.size(); i++) {
+                assertEquals((baseFiles.get(i)).getCommitTime(),
                     commitedVersions.get(commitedVersions.size() - 1 - i),
                     "File " + fileId + " does not have latest versions on commits" + commitedVersions);
               }

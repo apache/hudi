@@ -222,7 +222,7 @@ public class DynamoTableUtils {
       return true;
     } catch (final ResourceInUseException e) {
       if (log.isTraceEnabled()) {
-        log.trace("Table " + createTableRequest.tableName() + " already exists", e);
+        log.trace("Table {} already exists", createTableRequest.tableName(), e);
       }
     }
     return false;
@@ -240,7 +240,7 @@ public class DynamoTableUtils {
       return true;
     } catch (final ResourceNotFoundException e) {
       if (log.isTraceEnabled()) {
-        log.trace("Table " + deleteTableRequest.tableName() + " does not exist", e);
+        log.trace("Table {} does not exist", deleteTableRequest.tableName(), e);
       }
     }
     return false;

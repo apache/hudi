@@ -21,24 +21,23 @@ package org.apache.hudi.utilities.transform;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.exception.HoodieTransformExecutionException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 
 /**
  * Transformer that can flatten nested objects. It currently doesn't unnest arrays.
  */
+@Slf4j
 public class FlatteningTransformer implements Transformer {
 
   private static final String TMP_TABLE = "HUDI_SRC_TMP_TABLE_";
-  private static final Logger LOG = LoggerFactory.getLogger(FlatteningTransformer.class);
 
   /**
    * Configs supported.
@@ -49,7 +48,7 @@ public class FlatteningTransformer implements Transformer {
     try {
       // tmp table name doesn't like dashes
       String tmpTable = TMP_TABLE.concat(UUID.randomUUID().toString().replace("-", "_"));
-      LOG.info("Registering tmp table : " + tmpTable);
+      log.info("Registering tmp table: {}", tmpTable);
       rowDataset.createOrReplaceTempView(tmpTable);
       Dataset<Row> transformed = sparkSession.sql("select " + flattenSchema(rowDataset.schema(), null) + " from " + tmpTable);
       sparkSession.catalog().dropTempView(tmpTable);

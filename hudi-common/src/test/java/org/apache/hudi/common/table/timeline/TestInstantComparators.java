@@ -20,6 +20,7 @@
 package org.apache.hudi.common.table.timeline;
 
 import org.apache.hudi.common.table.timeline.versioning.common.InstantComparators;
+import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.timeline.versioning.v2.InstantComparatorV2;
 
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class TestInstantComparators {
   @Test
@@ -44,6 +46,39 @@ class TestInstantComparators {
     List<HoodieInstant> instants = Arrays.asList(instant5, instant3, instant1, instant4, instant2);
     instants.sort(comparator);
     assertEquals(Arrays.asList(instant1, instant3, instant2, instant4, instant5), instants);
+  }
+
+  @Test
+  void testOrderingComparatorPerTimelineVersion() {
+    // Completion order (001 completes at 005, 002 completes at 003) inverts requested order.
+    HoodieInstant instant1 = createCompletedHoodieInstant("001", "005");
+    HoodieInstant instant2 = createCompletedHoodieInstant("002", "003");
+
+    // Timeline layout v1 orders by requested time.
+    List<HoodieInstant> instants = Arrays.asList(instant2, instant1);
+    instants.sort(new InstantComparatorV1().orderingComparator());
+    assertEquals(Arrays.asList(instant1, instant2), instants);
+
+    // Timeline layout v2 orders by completion time.
+    instants = Arrays.asList(instant1, instant2);
+    instants.sort(new InstantComparatorV2().orderingComparator());
+    assertEquals(Arrays.asList(instant2, instant1), instants);
+  }
+
+  @Test
+  void testGetOrderingTimePerTimelineVersion() {
+    HoodieInstant completed = createCompletedHoodieInstant("001", "005");
+    HoodieInstant inflight = createInflightHoodieInstant("002");
+
+    // Timeline layout v1 orders by requested time.
+    InstantComparator comparatorV1 = new InstantComparatorV1();
+    assertEquals("001", comparatorV1.getOrderingTime(completed));
+    assertEquals("002", comparatorV1.getOrderingTime(inflight));
+
+    // Timeline layout v2 orders by completion time, which an inflight instant does not have yet.
+    InstantComparator comparatorV2 = new InstantComparatorV2();
+    assertEquals("005", comparatorV2.getOrderingTime(completed));
+    assertNull(comparatorV2.getOrderingTime(inflight));
   }
 
   private static HoodieInstant createCompletedHoodieInstant(String requestedTime, String completionTime) {

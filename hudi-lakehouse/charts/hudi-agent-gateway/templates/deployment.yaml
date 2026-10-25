@@ -1,0 +1,135 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+{{- $g := .Values.gateway }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hudi-agent-gateway.fullname" . }}
+  labels:
+    {{- include "hudi-agent-gateway.labels" . | nindent 4 }}
+spec:
+  # Sessions live in an in-memory checkpointer: run exactly one replica.
+  # (Horizontal scale requires the Postgres checkpointer; see the module README.)
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "hudi-agent-gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hudi-agent-gateway.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          {{- with include "hudi-agent-gateway.secretName" . }}
+          # Every key in the Secret becomes an env var; keys use standard
+          # provider names (ANTHROPIC_API_KEY, OPENAI_API_KEY, TOGETHER_API_KEY,
+          # ...), so new providers need no chart changes.
+          envFrom:
+            - secretRef:
+                name: {{ . }}
+          {{- end }}
+          env:
+            - name: GATEWAY_LLM_PROVIDER
+              value: {{ $g.provider | quote }}
+            - name: GATEWAY_LLM_MODEL
+              value: {{ $g.model | quote }}
+            - name: GATEWAY_LLM_TIMEOUT_SECONDS
+              value: {{ $g.llmTimeoutSeconds | quote }}
+            {{- with $g.ollama.baseUrl }}
+            - name: GATEWAY_OLLAMA_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $g.openaiCompatible.baseUrl }}
+            - name: GATEWAY_OPENAI_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $g.systemPromptExtra }}
+            - name: GATEWAY_SYSTEM_PROMPT_EXTRA
+              value: {{ . | quote }}
+            {{- end }}
+            - name: GATEWAY_TRINO_HOST
+              value: {{ .Values.trino.host | quote }}
+            - name: GATEWAY_TRINO_PORT
+              value: {{ .Values.trino.port | quote }}
+            - name: GATEWAY_TRINO_CATALOG
+              value: {{ .Values.trino.catalog | quote }}
+            - name: GATEWAY_TRINO_SCHEMA
+              value: {{ .Values.trino.schema | quote }}
+            - name: GATEWAY_TRINO_USER
+              value: {{ .Values.trino.user | quote }}
+            - name: GATEWAY_SQL_ROW_CAP
+              value: {{ .Values.guardrails.rowCap | quote }}
+            - name: GATEWAY_SQL_TIMEOUT_SECONDS
+              value: {{ .Values.guardrails.queryTimeoutSeconds | quote }}
+            - name: GATEWAY_TOOL_RESULT_MAX_BYTES
+              value: {{ .Values.guardrails.resultMaxBytes | quote }}
+            - name: GATEWAY_SESSION_TTL_SECONDS
+              value: {{ .Values.sessions.ttlSeconds | quote }}
+            - name: GATEWAY_MAX_SESSIONS
+              value: {{ .Values.sessions.maxSessions | quote }}
+            - name: GATEWAY_MAX_MESSAGES_PER_SESSION
+              value: {{ .Values.sessions.maxMessagesPerSession | quote }}
+            - name: GATEWAY_MCP_ENABLED
+              value: {{ .Values.mcpEnabled | quote }}
+            - name: GATEWAY_LOG_LEVEL
+              value: {{ .Values.logLevel | quote }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            periodSeconds: 10
+            # /ready's own dependency checks budget up to ~8s (5s trino ping +
+            # 3s LLM probe) on a cache miss; the k8s default of 1s would flap.
+            timeoutSeconds: 9
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

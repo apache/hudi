@@ -35,8 +35,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN;
-
 /**
  * Compaction related config.
  */
@@ -46,6 +44,15 @@ import static org.apache.hudi.common.config.HoodieReaderConfig.ENABLE_OPTIMIZED_
     description = "Configurations that control compaction "
         + "(merging of log files onto a new base files).")
 public class HoodieCompactionConfig extends HoodieConfig {
+
+  public static final ConfigProperty<Integer> COMPACTION_PLAN_PARALLELISM = ConfigProperty
+      .key("hoodie.compaction.plan.parallelism")
+      .defaultValue(200)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Maximum parallelism for scanning partitions when planning compaction or log compaction. "
+          + "The actual parallelism is capped by the number of partitions selected by the compaction strategy. "
+          + "Lower this value to reduce concurrent requests and memory pressure on the file system view server. Must be positive.");
 
   public static final ConfigProperty<String> INLINE_COMPACT = ConfigProperty
       .key("hoodie.compact.inline")
@@ -374,6 +381,11 @@ public class HoodieCompactionConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withCompactionPlanParallelism(int parallelism) {
+      compactionConfig.setValue(COMPACTION_PLAN_PARALLELISM, String.valueOf(parallelism));
+      return this;
+    }
+
     public Builder withScheduleInlineCompaction(Boolean scheduleAsyncCompaction) {
       compactionConfig.setValue(SCHEDULE_INLINE_COMPACT, String.valueOf(scheduleAsyncCompaction));
       return this;
@@ -473,11 +485,6 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withLogCompactionBlocksThreshold(int logCompactionBlocksThreshold) {
       compactionConfig.setValue(LOG_COMPACTION_BLOCKS_THRESHOLD, String.valueOf(logCompactionBlocksThreshold));
-      return this;
-    }
-
-    public Builder withEnableOptimizedLogBlocksScan(String enableOptimizedLogBlocksScan) {
-      compactionConfig.setValue(ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN, enableOptimizedLogBlocksScan);
       return this;
     }
 

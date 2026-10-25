@@ -90,7 +90,7 @@ public class FlinkCreateHandle<T, I, K, O>
     final StoragePath path = makeNewFilePath(partitionPath, lastDataFileName);
     try {
       if (storage.exists(path)) {
-        log.info("Deleting invalid INSERT file due to task retry: " + lastDataFileName);
+        log.info("Deleting invalid INSERT file due to task retry: {}", lastDataFileName);
         storage.deleteFile(path);
       }
     } catch (IOException e) {

@@ -18,7 +18,6 @@
 
 package org.apache.hudi.async;
 
-import org.apache.hudi.client.BaseCompactor;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.client.HoodieSparkCompactor;
 import org.apache.hudi.common.engine.HoodieEngineContext;

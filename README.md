@@ -26,6 +26,7 @@ to ingest, index, store, serve, transform and manage your data across multiple c
 <https://hudi.apache.org/>
 
 [![Build](https://github.com/apache/hudi/actions/workflows/bot.yml/badge.svg)](https://github.com/apache/hudi/actions/workflows/bot.yml)
+[![Engines](https://github.com/apache/hudi/actions/workflows/java_ci_engines.yml/badge.svg)](https://github.com/apache/hudi/actions/workflows/java_ci_engines.yml)
 [![Test](https://dev.azure.com/apachehudi/hudi-oss-ci/_apis/build/status/apachehudi-ci.hudi-mirror?branchName=master)](https://dev.azure.com/apachehudi/hudi-oss-ci/_build/latest?definitionId=5&branchName=master)
 [![License](https://img.shields.io/badge/license-Apache%202-4EB1BA.svg)](https://www.apache.org/licenses/LICENSE-2.0.html)
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.apache.hudi/hudi/badge.svg)](http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22org.apache.hudi%22)
@@ -94,14 +95,14 @@ Learn more about Hudi at [https://hudi.apache.org](https://hudi.apache.org)
 Prerequisites for building Apache Hudi:
 
 * Unix-like system (like Linux, Mac OS X)
-* Java 8, 11 or 17
+* Java 11 or 17
 * Git
 * Maven (>=3.6.0)
 
 ```
 # Checkout code and build
 git clone https://github.com/apache/hudi.git && cd hudi
-mvn clean package -DskipTests
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.2
 
 # Start command
 spark-3.5.0-bin-hadoop3/bin/spark-shell \
@@ -127,15 +128,29 @@ The default Spark 3.x version, corresponding to `spark3` profile is
 
 Refer to the table below for building with different Spark and Scala versions.
 
-| Maven build options       | Expected Spark bundle jar name               | Notes                                            |
-|:--------------------------|:---------------------------------------------|:-------------------------------------------------|
-| (empty)                   | hudi-spark3.5-bundle_2.12                    | For Spark 3.5.x and Scala 2.12 (default options) |
-| `-Dspark3.3`              | hudi-spark3.3-bundle_2.12                    | For Spark 3.3.2+ and Scala 2.12                  |
-| `-Dspark3.4`              | hudi-spark3.4-bundle_2.12                    | For Spark 3.4.x and Scala 2.12                   |
-| `-Dspark3.5 -Dscala-2.12` | hudi-spark3.5-bundle_2.12                    | For Spark 3.5.x and Scala 2.12 (same as default) |
-| `-Dspark3.5 -Dscala-2.13` | hudi-spark3.5-bundle_2.13                    | For Spark 3.5.x and Scala 2.13                   |
-| `-Dspark4.0`              | hudi-spark4.0-bundle_2.13                    | For Spark 4.0 and Scala 2.13 (Needs java 17)     |
-| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | For Spark 3.5.x and Scala 2.12                   |
+| Maven build options       | Expected Spark bundle jar name               | Expected Spark native bundle jar name | Notes                                            |
+|:--------------------------|:---------------------------------------------|:--------------------------------------|:-------------------------------------------------|
+| (empty)                   | hudi-spark3.5-bundle_2.12                    | hudi-spark3.5-native-bundle_2.12      | For Spark 3.5.x and Scala 2.12 (default options) |
+| `-Dspark3.3`              | hudi-spark3.3-bundle_2.12                    | none                                  | For Spark 3.3.2+ and Scala 2.12                  |
+| `-Dspark3.4`              | hudi-spark3.4-bundle_2.12                    | hudi-spark3.4-native-bundle_2.12      | For Spark 3.4.x and Scala 2.12                   |
+| `-Dspark3.5 -Dscala-2.12` | hudi-spark3.5-bundle_2.12                    | hudi-spark3.5-native-bundle_2.12      | For Spark 3.5.x and Scala 2.12 (same as default) |
+| `-Dspark3.5 -Dscala-2.13` | hudi-spark3.5-bundle_2.13                    | hudi-spark3.5-native-bundle_2.13      | For Spark 3.5.x and Scala 2.13                   |
+| `-Dspark4.0`              | hudi-spark4.0-bundle_2.13                    | hudi-spark4.0-native-bundle_2.13      | For Spark 4.0 and Scala 2.13 (Needs java 17)     |
+| `-Dspark4.1`              | hudi-spark4.1-bundle_2.13                    | hudi-spark4.1-native-bundle_2.13      | For Spark 4.1 and Scala 2.13 (Needs java 17)     |
+| `-Dspark4.2`              | hudi-spark4.2-bundle_2.13                    | none                                  | For Spark 4.2 and Scala 2.13 (Needs java 17)     |
+| `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | none                                  | For Spark 3.5.x and Scala 2.12                   |
+
+`hudi-spark-native-bundle` is `hudi-spark-bundle` plus [Apache DataFusion Comet](https://datafusion.apache.org/comet/)
+for native vectorized execution, built by the same Maven options. Comet publishes one artifact per
+Spark minor version, so the native bundle exists only where that artifact does, and `-Dspark3` is a
+legacy alias that selects none. It builds on Java 11 but needs Java 17 and Linux with glibc at runtime.
+See `packaging/hudi-spark-native-bundle/README.md`.
+
+Hudi uses ZSTD as the default Parquet compression codec with Spark 3.5 and newer. Spark 3.3 and 3.4
+retain GZIP because Hudi's non-vectorized file-group reader uses parquet-java 1.12.x and can leak
+off-heap memory when reading ZSTD files ([PARQUET-2160](https://issues.apache.org/jira/browse/PARQUET-2160)).
+Upgrade to Spark 3.5 or newer before using ZSTD. Keeping GZIP as the write default does not remove the
+risk when an older Spark runtime reads ZSTD files produced by another engine.
 
 Please note that only Spark-related bundles, i.e., `hudi-spark-bundle`, `hudi-utilities-bundle`,
 `hudi-utilities-slim-bundle`, can be built using `scala-2.13` profile. Hudi Flink bundle cannot be built
@@ -149,10 +164,10 @@ mvn clean package -DskipTests -Dspark3.5 -Dscala-2.13 -pl packaging/hudi-spark-b
 For example,
 ```
 # Build against Spark 3.5.x
-mvn clean package -DskipTests
+mvn clean package -DskipTests -Dspark3.5 -Dflink2.2
 
 # Build against Spark 3.4.x
-mvn clean package -DskipTests -Dspark3.4
+mvn clean package -DskipTests -Dspark3.4 -Dflink2.2
 ```
 
 #### What about "spark-avro" module?
@@ -161,25 +176,24 @@ Starting from versions 0.11, Hudi no longer requires `spark-avro` to be specifie
 
 ### Build with different Flink versions
 
-The default Flink version supported is 1.20. The default Flink 1.20.x version, corresponding to `flink1.20` profile is 1.20.1.
+The default Flink version supported is 2.2. The default Flink 2.2.x version, corresponding to the `flink2.2` profile, is 2.2.1.
 Flink is Scala-free since 1.15.x, there is no need to specify the Scala version for Flink 1.15.x and above versions.
-Refer to the table below for building with different Flink and Scala versions. Besides, Flink 2.x do not support Java 8 
-anymore, so it's not set as the default Flink version since Java 8 is the default Java version for Hudi now.
+Refer to the table below for building with different Flink and Scala versions.
 
 | Maven build options | Expected Flink bundle jar name | Notes                            |
-|:--------------------|:-------------------------------|:---------------------------------|
-| (empty)             | hudi-flink1.20-bundle          | For Flink 1.20 (default options) |
-| `-Dflink2.1`        | hudi-flink2.1-bundle           | For Flink 2.1                    |
-| `-Dflink2.0`        | hudi-flink2.0-bundle           | For Flink 2.0                    |
-| `-Dflink1.20`       | hudi-flink1.20-bundle          | For Flink 1.20 (same as default) |
-| `-Dflink1.19`       | hudi-flink1.19-bundle          | For Flink 1.19                   |
-| `-Dflink1.18`       | hudi-flink1.18-bundle          | For Flink 1.18                   |
-| `-Dflink1.17`       | hudi-flink1.17-bundle          | For Flink 1.17                   |
+|:--------------------|:--------------------------------|:---------------------------------|
+| (empty)             | hudi-flink2.2-bundle            | For Flink 2.2 (default options)  |
+| `-Dflink2.2`        | hudi-flink2.2-bundle            | For Flink 2.2 (same as default)  |
+| `-Dflink2.1`        | hudi-flink2.1-bundle            | For Flink 2.1                    |
+| `-Dflink2.0`        | hudi-flink2.0-bundle            | For Flink 2.0                    |
+| `-Dflink1.20`       | hudi-flink1.20-bundle           | For Flink 1.20                   |
+| `-Dflink1.19`       | hudi-flink1.19-bundle           | For Flink 1.19                   |
+| `-Dflink1.18`       | hudi-flink1.18-bundle           | For Flink 1.18                   |
 
 For example,
 ```
-# Build against Flink 1.17.x
-mvn clean package -DskipTests -Dflink1.17
+# Build against Flink 2.2.x
+mvn clean package -DskipTests -Dflink2.2
 ```
 
 ## Running Tests

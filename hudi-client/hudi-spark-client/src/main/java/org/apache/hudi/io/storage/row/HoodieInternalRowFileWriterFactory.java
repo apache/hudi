@@ -18,21 +18,32 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.SparkAdapterSupport$;
+import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.avro.VariantShreddingRuntime;
+import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.storage.HoodieSparkLanceWriter;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
+import java.util.List;
 
+import static org.apache.hudi.common.model.HoodieFileFormat.LANCE;
 import static org.apache.hudi.common.model.HoodieFileFormat.PARQUET;
 import static org.apache.hudi.common.util.ParquetUtils.getCompressionCodecName;
 
@@ -59,6 +70,11 @@ public class HoodieInternalRowFileWriterFactory {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
       return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
+    } else if (LANCE.getFileExtension().equals(extension)) {
+      long maxFileSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE);
+      long allocatorSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES);
+      long flushByteWatermark = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_FLUSH_BYTE_WATERMARK);
+      return newLanceInternalRowFileWriter(path, hoodieTable, schema, maxFileSize, allocatorSize, flushByteWatermark);
     }
     throw new UnsupportedOperationException(extension + " format not supported yet.");
   }
@@ -70,8 +86,49 @@ public class HoodieInternalRowFileWriterFactory {
                                                                              Option<BloomFilter> bloomFilterOpt
   )
       throws IOException {
+    // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
+    // hoodie.avro.schema), so inferable columns are detected on that same config schema and the
+    // deferred creation splices a copied config; the StructType argument stays original.
+    // Gates are ordered by cost, because with inference on by default the flag gates inside
+    // getInferableVariantColumnsFromConfig pass on every table and the config-schema parse behind
+    // them is uncached and per file handle: the inferrer lookup is a static field, so a classpath
+    // that cannot infer (Spark 3.x, 4.0) pays nothing here; the StructType scan is a handful of type
+    // checks; only a table with a top-level variant then pays the parse.
+    Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
+    if (inferrer.isPresent() && hasTopLevelVariant(structType)) {
+      List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeConfig);
+      if (!inferableColumns.isEmpty()) {
+        return new VariantShreddingInferenceInternalRowFileWriter(
+            inferableColumns,
+            VariantShreddingInferenceInternalRowFileWriter.resolveOrdinals(structType, inferableColumns),
+            inferrer.get(),
+            inferred -> createParquetInternalRowFileWriter(path, table, writeConfig,
+                VariantSchemaUtils.applyInferredShreddingToConfig(writeConfig, inferred), structType, bloomFilterOpt),
+            writeConfig.getParquetMaxFileSize());
+      }
+    }
+    return createParquetInternalRowFileWriter(path, table, writeConfig, writeConfig, structType, bloomFilterOpt);
+  }
+
+  /** Whether any top-level column is a variant; inference applies to no other position. */
+  private static boolean hasTopLevelVariant(StructType structType) {
+    for (StructField field : structType.fields()) {
+      if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(field.dataType())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static HoodieInternalRowFileWriter createParquetInternalRowFileWriter(StoragePath path,
+                                                                                HoodieTable table,
+                                                                                HoodieWriteConfig writeConfig,
+                                                                                HoodieConfig writeSupportConfig,
+                                                                                StructType structType,
+                                                                                Option<BloomFilter> bloomFilterOpt)
+      throws IOException {
     HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
-        .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), structType, bloomFilterOpt, writeConfig);
+        .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), structType, bloomFilterOpt, writeSupportConfig);
 
     return new HoodieInternalRowParquetWriter(
         path,
@@ -85,6 +142,24 @@ public class HoodieInternalRowFileWriterFactory {
             writeConfig.getParquetCompressionRatio(),
             writeConfig.parquetDictionaryEnabled()
         ));
+  }
+
+  private static HoodieInternalRowFileWriter newLanceInternalRowFileWriter(StoragePath path,
+                                                                           HoodieTable table,
+                                                                           StructType structType,
+                                                                           long maxFileSize,
+                                                                           long allocatorSize,
+                                                                           long flushByteWatermark)
+      throws IOException {
+    return HoodieSparkLanceWriter.builder()
+        .file(path)
+        .sparkSchema(structType)
+        .taskContextSupplier(new LocalTaskContextSupplier())
+        .storage(table.getStorage())
+        .maxFileSize(maxFileSize)
+        .allocatorSize(allocatorSize)
+        .flushByteWatermark(flushByteWatermark)
+        .build();
   }
 
   private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {

@@ -26,9 +26,10 @@ import org.antlr.v4.runtime.misc.{Interval, ParseCancellationException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
+import org.apache.spark.sql.catalyst.analysis.{RelationTimeTravel, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException, ParserInterface}
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, TimeTravelRelation}
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.types.{DataType, StructType}
 
@@ -43,7 +44,18 @@ class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
   override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
     builder.visit(parser.singleStatement()) match {
       case plan: LogicalPlan => plan
-      case _ => sparkExtendedParser.parsePlan(sqlText)
+      case _ => convertNativeTimeTravel(sparkExtendedParser.parsePlan(sqlText))
+    }
+  }
+
+  /**
+   * Rewrites Spark's native time-travel node into Hudi's [[TimeTravelRelation]] so that
+   * `TIMESTAMP/VERSION AS OF` on Hudi tables resolves through the Hudi resolution rule.
+   */
+  private def convertNativeTimeTravel(plan: LogicalPlan): LogicalPlan = {
+    plan.transformDownWithSubqueries {
+      case RelationTimeTravel(relation: UnresolvedRelation, timestamp, version) =>
+        TimeTravelRelation(relation, timestamp, version)
     }
   }
 

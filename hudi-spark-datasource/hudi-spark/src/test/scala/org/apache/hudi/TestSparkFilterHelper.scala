@@ -20,7 +20,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.SparkFilterHelper.convertFilter
-import org.apache.hudi.expression.{Expression, Literal => HLiteral, NameReference, Predicates}
+import org.apache.hudi.common.expression.{Expression, Literal => HLiteral, NameReference, Predicates}
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness
 
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -28,11 +28,21 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
-import org.junit.jupiter.api.{Assertions, Test}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach, Test}
 
 import scala.collection.JavaConverters._
 
 class TestSparkFilterHelper extends HoodieSparkClientTestHarness with SparkAdapterSupport  {
+
+  @BeforeEach
+  def setUp(): Unit = {
+    initSparkContexts()
+  }
+
+  @AfterEach
+  def tearDown(): Unit = {
+    cleanupSparkContexts()
+  }
 
   @Test
   def testConvertInExpression(): Unit = {

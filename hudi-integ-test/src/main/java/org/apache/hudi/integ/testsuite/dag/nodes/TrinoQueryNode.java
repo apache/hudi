@@ -23,10 +23,13 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 
+@Slf4j
 public class TrinoQueryNode extends BaseQueryNode {
 
   public TrinoQueryNode(DeltaConfig.Config config) {

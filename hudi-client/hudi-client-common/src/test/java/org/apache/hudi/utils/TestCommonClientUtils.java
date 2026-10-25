@@ -20,9 +20,11 @@
 
 package org.apache.hudi.utils;
 
-import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.util.CommonClientUtils;
@@ -30,6 +32,7 @@ import org.apache.hudi.util.CommonClientUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
@@ -68,14 +71,78 @@ class TestCommonClientUtils {
     assertThrows(HoodieNotSupportedException.class, () -> CommonClientUtils.validateTableVersion(tConfig, wConfig));
   }
 
-  @Test
-  void testGenerateTokenOnError() {
-    // given: a task context supplies that throws errors.
-    TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
-    when(taskContextSupplier.getPartitionIdSupplier()).thenThrow(new RuntimeException("generated under testing"));
+  @ParameterizedTest(name = "LSM-tree layout, writer version {0} should throw: {1}")
+  @MethodSource("provideLSMTreeVersionExpectations")
+  void testLSMTreeStorageLayoutRequiresVersionTen(HoodieTableVersion writeVersion, boolean expectThrow) {
+    HoodieWriteConfig wConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tConfig = mock(HoodieTableConfig.class);
+    when(wConfig.getWriteVersion()).thenReturn(writeVersion);
+    when(tConfig.getTableVersion()).thenReturn(writeVersion);
+    when(tConfig.isLSMTreeStorageLayout()).thenReturn(true);
 
-    // when:
-    assertEquals("0-0-0", CommonClientUtils.generateWriteToken(taskContextSupplier));
+    if (expectThrow) {
+      assertThrows(HoodieNotSupportedException.class, () -> CommonClientUtils.validateTableVersion(tConfig, wConfig));
+    } else {
+      CommonClientUtils.validateTableVersion(tConfig, wConfig);
+    }
+  }
+
+  private static Stream<Arguments> provideLSMTreeVersionExpectations() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.EIGHT, true),
+        Arguments.of(HoodieTableVersion.NINE, true),
+        Arguments.of(HoodieTableVersion.TEN, false)
+    );
+  }
+
+  @ParameterizedTest(name = "Write version {0} should write native log format: {1}")
+  @MethodSource("provideWriteVersionNativeLogExpectations")
+  void testShouldWriteNativeLogs(HoodieTableVersion writeVersion, boolean expected) {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeConfig.getWriteVersion()).thenReturn(writeVersion);
+
+    assertEquals(expected, CommonClientUtils.shouldWriteNativeLogs(writeConfig));
+  }
+
+  private static Stream<Arguments> provideWriteVersionNativeLogExpectations() {
+    // Native log format is the default for write version >= TEN.
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.SIX, false),
+        Arguments.of(HoodieTableVersion.EIGHT, false),
+        Arguments.of(HoodieTableVersion.NINE, false),
+        Arguments.of(HoodieTableVersion.TEN, true)
+    );
+  }
+
+  /**
+   * Every base file format needs a case in the getLogBlockType switch; a missing one only surfaces as a
+   * HoodieException on the inline log write path (write version below TEN), which is how VORTEX shipped (#19252).
+   */
+  // TODO(#19252): drop the VORTEX exclusion once the VORTEX case lands in getLogBlockType.
+  @ParameterizedTest
+  @EnumSource(value = HoodieFileFormat.class, mode = EnumSource.Mode.EXCLUDE, names = {"HOODIE_LOG", "VORTEX"})
+  void testGetLogBlockTypeMapsEveryBaseFileFormat(HoodieFileFormat format) {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(writeConfig.getLogDataBlockFormat()).thenReturn(Option.empty());
+    when(tableConfig.getBaseFileFormat()).thenReturn(format);
+
+    assertEquals(expectedLogBlockType(format), CommonClientUtils.getLogBlockType(writeConfig, tableConfig));
+  }
+
+  private static HoodieLogBlock.HoodieLogBlockType expectedLogBlockType(HoodieFileFormat format) {
+    switch (format) {
+      case PARQUET:
+      case ORC:
+      case LANCE:
+      case VORTEX:
+        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+      default:
+        throw new IllegalArgumentException("No expected log block type for " + format
+            + "; add it here and to CommonClientUtils#getLogBlockType");
+    }
   }
 
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")

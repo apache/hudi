@@ -18,14 +18,14 @@
 
 package org.apache.hudi.hive.util;
 
-import org.apache.hudi.expression.BoundReference;
-import org.apache.hudi.expression.Expression;
-import org.apache.hudi.expression.ExpressionVisitor;
-import org.apache.hudi.expression.Literal;
-import org.apache.hudi.expression.NameReference;
-import org.apache.hudi.expression.Predicate;
-import org.apache.hudi.expression.Predicates;
-import org.apache.hudi.internal.schema.Types;
+import org.apache.hudi.common.expression.BoundReference;
+import org.apache.hudi.common.expression.Expression;
+import org.apache.hudi.common.expression.ExpressionVisitor;
+import org.apache.hudi.common.expression.Literal;
+import org.apache.hudi.common.expression.NameReference;
+import org.apache.hudi.common.expression.Predicate;
+import org.apache.hudi.common.expression.Predicates;
+import org.apache.hudi.common.schema.internal.Types;
 
 public class FilterGenVisitor implements ExpressionVisitor<String> {
 

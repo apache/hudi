@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
-import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
+import org.apache.hudi.{HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
 
 import org.apache.spark.internal.Logging
@@ -63,7 +63,12 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
       buildHoodieConfig(catalogTable)
     }
 
-    val df = sparkSession.internalCreateDataFrame(plan.execute(), plan.schema)
+    val enrichedSchema = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
+      plan.schema,
+      catalogTable.tableSchemaWithoutMetaFields,
+      sparkSession.sessionState.conf.caseSensitiveAnalysis,
+      alignNullability = true)
+    val df = sparkSession.internalCreateDataFrame(plan.execute(), enrichedSchema)
     val (success, commitInstantTime, _, _, _, _) = HoodieSparkSqlWriter.write(sparkSession.sqlContext, SaveMode.Append, config, df)
     if (success && commitInstantTime.isPresent) {
       updateCommitMetrics(metrics, catalogTable.metaClient, commitInstantTime.get())

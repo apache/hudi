@@ -29,6 +29,7 @@ import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -36,10 +37,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.AvroRuntimeException;
 import org.apache.spark.launcher.SparkLauncher;
 import org.apache.spark.sql.hudi.DeDupeType;
 import org.apache.spark.util.Utils;
@@ -47,8 +48,10 @@ import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
 import org.springframework.shell.standard.ShellOption;
 
+import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -92,8 +95,12 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.DEDUPLICATE, master, sparkMemory,
-        duplicatedPartitionPath, repairedOutputPath, HoodieCLI.basePath, String.valueOf(dryRun), dedupeType);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkMain.SparkCommand.DEDUPLICATE, master, sparkMemory,
+        "duplicatedPartitionPath", duplicatedPartitionPath,
+        "repairedOutputPath", repairedOutputPath,
+        "basePath", HoodieCLI.basePath,
+        "dryRun", String.valueOf(dryRun),
+        "dedupeType", dedupeType);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -135,7 +142,7 @@ public class RepairsCommand {
           HoodiePartitionMetadata partitionMetadata =
               new HoodiePartitionMetadata(HoodieCLI.storage, latestCommit, basePath, partitionPath,
                   client.getTableConfig().getPartitionMetafileFormat());
-          partitionMetadata.trySave();
+          partitionMetadata.trySave(partition);
           row[2] = "Repaired";
         }
       }
@@ -189,34 +196,76 @@ public class RepairsCommand {
 
   @ShellMethod(key = "repair corrupted clean files", value = "repair corrupted clean files")
   public void removeCorruptedPendingCleanAction() {
+    removeCorruptedPendingCleanAction(HoodieCLI.getTableMetaClient());
+  }
 
-    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
-    HoodieTimeline cleanerTimeline = HoodieCLI.getTableMetaClient().getActiveTimeline().getCleanerTimeline();
+  /**
+   * Removes the pending clean instants whose plan is verifiably empty or corrupt.
+   * <p>
+   * The plan bytes are read in full before anything is judged. The timeline serde wraps every
+   * exception raised while it streams an instant file, a transient read failure included, in
+   * the same "unable to read commit metadata" IOException that an empty or truncated file
+   * raises, so the message cannot tell a storage outage from corruption. A failure of the
+   * read itself is therefore propagated, and only the in-memory decode, which no I/O can
+   * disturb, decides that the plan is corrupt.
+   */
+  static void removeCorruptedPendingCleanAction(HoodieTableMetaClient client) {
+    HoodieActiveTimeline activeTimeline = client.getActiveTimeline();
+    HoodieTimeline cleanerTimeline = activeTimeline.getCleanerTimeline();
     log.info("Inspecting pending clean metadata in timeline for corrupted files");
     cleanerTimeline.filterInflightsAndRequested().getInstants().forEach(instant -> {
-      try {
-        CleanerUtils.getCleanerPlan(client, instant);
-      } catch (AvroRuntimeException e) {
-        log.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
+      HoodieInstant planInstant = CleanerUtils.getCleanRequestInstant(client, instant);
+      byte[] plan;
+      try (InputStream in = activeTimeline.getInstantContentStream(planInstant)) {
+        plan = FileIOUtils.readAsByteArray(in);
+      } catch (IOException e) {
+        throw new HoodieIOException("Failed to read the plan of pending clean instant " + instant, e);
+      }
+      if (plan.length > 0 && isReadableCleanerPlan(client, plan)) {
+        return;
+      }
+      log.warn("Corruption found. Trying to remove corrupted clean instant file: {}", instant);
+      // An inflight clean keeps its plan in the requested file, so removing only the instant the
+      // timeline listed would leave the corrupt plan behind for the next clean to fail on. The
+      // inflight file goes first: a failure between the two deletes leaves the action requested,
+      // which is a state this command already handles, whereas the reverse order would leave an
+      // inflight action with no plan at all.
+      TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
+          instant, client.getInstantFileNameGenerator());
+      if (!instant.equals(planInstant)) {
         TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
-            instant, client.getInstantFileNameGenerator());
-      } catch (IOException ioe) {
-        if (ioe.getMessage().contains("Not an Avro data file")) {
-          log.warn("Corruption found. Trying to remove corrupted clean instant file: " + instant);
-          TimelineUtils.deleteInstantFile(client.getStorage(), client.getTimelinePath(),
-              instant, client.getInstantFileNameGenerator());
-        } else {
-          throw new HoodieIOException(ioe.getMessage(), ioe);
-        }
+            planInstant, client.getInstantFileNameGenerator());
       }
     });
+  }
+
+  /**
+   * Decodes a clean plan held in memory, which fails only on the content itself: bytes that are not
+   * an Avro file or that stop short fail the read, and an Avro container that holds no record, which
+   * a writer killed between opening and closing it leaves behind, fails the serde's argument check.
+   * <p>
+   * Every failure is caught, because corrupt bytes do not reach the decoder through one exception
+   * type: a length that survives as far as Avro's own ceiling raises an {@code
+   * UnsupportedOperationException} rather than an {@code AvroRuntimeException}, and a plan that
+   * decodes with no version leaves the migrator to unbox a null. Nothing inside the try touches
+   * storage -- the bytes are already in memory and both clean plan migration handlers are pure
+   * transforms -- so there is no I/O failure here to mistake for corruption, and letting one of
+   * these escape would abandon the repair of every instant behind this one.
+   */
+  private static boolean isReadableCleanerPlan(HoodieTableMetaClient client, byte[] plan) {
+    try {
+      CleanerUtils.getCleanerPlan(client, new ByteArrayInputStream(plan));
+      return true;
+    } catch (IOException | RuntimeException e) {
+      return false;
+    }
   }
 
   @ShellMethod(key = "repair show empty commit metadata", value = "show failed commits")
   public void showFailedCommits() {
     HoodieTableMetaClient metaClient = HoodieCLI.getTableMetaClient();
     HoodieActiveTimeline activeTimeline =  metaClient.getActiveTimeline();
-    activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> log.warn("Empty Commit: " + hoodieInstant.toString()));
+    activeTimeline.filterCompletedInstants().getInstantsAsStream().filter(activeTimeline::isEmpty).forEach(hoodieInstant -> log.warn("Empty Commit: {}", hoodieInstant));
   }
 
   @ShellMethod(key = "repair migrate-partition-meta", value = "Migrate all partition meta file currently stored in text format "
@@ -256,7 +305,7 @@ public class RepairsCommand {
           HoodiePartitionMetadata partitionMetadata =
               new HoodiePartitionMetadata(HoodieCLI.storage, latestCommit, basePath, partition,
                   Option.of(client.getTableConfig().getBaseFileFormat()));
-          partitionMetadata.trySave();
+          partitionMetadata.trySave(partitionPath);
         }
 
         // delete it, in case we failed midway last time.
@@ -300,8 +349,8 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION, master, sparkMemory,
-        HoodieCLI.basePath);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkMain.SparkCommand.REPAIR_DEPRECATED_PARTITION, master, sparkMemory,
+        "basePath", HoodieCLI.basePath);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -328,8 +377,10 @@ public class RepairsCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.RENAME_PARTITION, master, sparkMemory,
-        HoodieCLI.basePath, oldPartition, newPartition);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkMain.SparkCommand.RENAME_PARTITION, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "oldPartition", oldPartition,
+        "newPartition", newPartition);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

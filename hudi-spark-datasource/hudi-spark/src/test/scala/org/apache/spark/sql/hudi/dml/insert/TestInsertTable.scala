@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.dml.insert
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
-import org.apache.hudi.exception.HoodieDuplicateKeyException
+import org.apache.hudi.exception.{HoodieDuplicateKeyException, HoodieException}
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
@@ -530,6 +530,108 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Insert Into partitioned table with non-populated meta fields and allowed key generator names") {
+    Seq(
+      "org.apache.hudi.keygen.SimpleKeyGenerator",
+      "org.apache.hudi.keygen.SimpleAvroKeyGenerator",
+      "org.apache.hudi.keygen.ComplexKeyGenerator",
+      "org.apache.hudi.keygen.ComplexAvroKeyGenerator"
+    ).foreach(keyGenClassName =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  par string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  'hoodie.populate.meta.fields' = 'false',
+             |  'hoodie.table.keygenerator.class' = '$keyGenClassName'
+             | ) partitioned by (par)
+     """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10, 'parr')")
+        checkAnswer(s"select id, name, price, par from $tableName")(
+          Seq(1, "a1", 10.0, "parr")
+        )
+      })
+  }
+
+  test("Test Insert Into non-partitioned table with non-populated meta fields and allowed key generator names") {
+    Seq(
+      "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      "org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator"
+    ).foreach(keyGenClassName =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  'hoodie.populate.meta.fields' = 'false',
+             |  'hoodie.table.keygenerator.class' = '$keyGenClassName'
+             | )
+     """.stripMargin)
+        spark.sql(s"insert into $tableName values(1, 'a1', 10)")
+        checkAnswer(s"select id, name, price from $tableName")(
+          Seq(1, "a1", 10.0)
+        )
+      })
+  }
+
+  test("Test Insert Into partitioned table with non-populated meta fields and not allowed key generator names") {
+    Seq(
+      "org.apache.hudi.keygen.CustomKeyGenerator",
+      "org.apache.hudi.keygen.CustomAvroKeyGenerator"
+    ).foreach(keyGenClassName =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  par string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = 'cow',
+             |  primaryKey = 'id',
+             |  'hoodie.populate.meta.fields' = 'false',
+             |  'hoodie.table.keygenerator.class' = '$keyGenClassName',
+             |  'hoodie.datasource.write.partitionpath.field' = 'par:simple'
+             | ) partitioned by (par)
+     """.stripMargin)
+        assertThrows[HoodieException] {
+          try {
+            spark.sql(s"insert into $tableName values(1, 'a1', 10, 'parr')")
+          } catch {
+            case e: Exception =>
+              var root: Throwable = e
+              while (root.getCause != null) {
+                root = root.getCause
+              }
+              assert(root.getMessage.equals(
+                s"Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: $keyGenClassName"))
+              throw root
+          }
+        }
+      })
+  }
+
   test("Test Insert Overwrite") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -908,6 +1010,53 @@ class TestInsertTable extends HoodieSparkSqlTestBase {
         Seq(1, "a1", "001", "0001", "1", "path1", "file1"),
         Seq(2, "a2", "002", "0002", "2", "path2", "file2")
       )
+    }
+  }
+
+  test("Test Query CoW table with splitable file format") {
+    withTable(generateTableName) { tableName =>
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           |) using hudi
+           | tblproperties (
+           |  type = 'cow'
+           | )
+           | partitioned by (dt)
+          """.stripMargin
+      )
+
+      withSQLConf("hoodie.datasource.overwrite.mode" -> "dynamic") {
+        spark.sql(
+          s"""
+             | insert overwrite table $tableName partition(dt) values
+             | (0, 'a0', 10, 1000, '2023-12-06'),
+             | (1, 'a1', 10, 1000, '2023-12-06'),
+             | (2, 'a2', 11, 1000, '2023-12-06'),
+             | (3, 'a3', 10, 1000, '2023-12-06')
+          """.stripMargin)
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(0, "a0", 10.0, 1000, "2023-12-06"),
+          Seq(1, "a1", 10.0, 1000, "2023-12-06"),
+          Seq(2, "a2", 11.0, 1000, "2023-12-06"),
+          Seq(3, "a3", 10.0, 1000, "2023-12-06")
+        )
+      }
+
+      // force split file by setting small
+      withSQLConf(s"${SQLConf.FILES_MAX_PARTITION_BYTES.key}" -> "10240") {
+        checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+          Seq(0, "a0", 10.0, 1000, "2023-12-06"),
+          Seq(1, "a1", 10.0, 1000, "2023-12-06"),
+          Seq(2, "a2", 11.0, 1000, "2023-12-06"),
+          Seq(3, "a3", 10.0, 1000, "2023-12-06")
+        )
+      }
     }
   }
 

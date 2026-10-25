@@ -18,17 +18,25 @@
 
 package org.apache.hudi.metadata;
 
+import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
-import org.apache.hudi.stats.ValueMetadata;
+import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.ValueMetadata;
 
+import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -40,6 +48,8 @@ import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.apache.hudi.metadata.HoodieMetadataPayload.SECONDARY_INDEX_RECORD_KEY_SEPARATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -323,6 +333,88 @@ public class TestHoodieMetadataPayload extends HoodieCommonTestHarness {
     combinedSecondaryIndexRecord = HoodieMetadataPayload.combineSecondaryIndexRecord(oldSecondaryIndexRecord, newSecondaryIndexRecord);
     assertTrue(combinedSecondaryIndexRecord.isPresent());
     assertEquals(newSecondaryIndexRecord.getData(), combinedSecondaryIndexRecord.get().getData());
+  }
+
+  @Test
+  public void testPayloadAccessorsAndObjectMethods() {
+    HoodieMetadataPayload emptyPayload = new HoodieMetadataPayload(Option.empty());
+    assertFalse(emptyPayload.getBloomFilterMetadata().isPresent());
+    assertFalse(emptyPayload.getColumnStatMetadata().isPresent());
+    assertFalse(emptyPayload.equals("not-a-payload"));
+    emptyPayload.hashCode();
+
+    HoodieMetadataPayload secondaryIndexPayload = HoodieMetadataPayload.createSecondaryIndexRecord(
+        "record-key", "secondary-key", MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "test", true).getData();
+    assertTrue(secondaryIndexPayload.isSecondaryIndexDeleted());
+  }
+
+  @Test
+  public void testInvalidRecordIndexInputs() {
+    assertThrows(HoodieMetadataException.class,
+        () -> HoodieMetadataPayload.parseRecordIndexInstantTime("not-an-instant"));
+    assertThrows(HoodieMetadataException.class,
+        () -> HoodieMetadataPayload.createRecordIndexUpdate(
+            "record-key", PARTITION_NAME, "not-a-uuid", "20240101000000000", 0));
+  }
+
+  private static HoodieMetadataPayload newBloomFilterPayload() {
+    return HoodieMetadataPayload.createBloomFilterMetadataRecord(
+        PARTITION_NAME, "file-id_1-0-1_20240101000000000.parquet", "20240101000000000", "SIMPLE",
+        ByteBuffer.wrap("bloom-data".getBytes()), false).getData();
+  }
+
+  @Test
+  public void testProjectedInsertValueIncludesBloomFilter() throws IOException {
+    HoodieMetadataPayload bloomFilterPayload = newBloomFilterPayload();
+    Schema projectedSchema = HoodieSchemaUtils.addMetadataFields(
+        HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema())).toAvroSchema();
+
+    IndexedRecord projectedRecord = bloomFilterPayload.getInsertValue(projectedSchema).get();
+
+    assertEquals(bloomFilterPayload.getBloomFilterMetadata().get(),
+        ((GenericRecord) projectedRecord).get("BloomFilterMetadata"));
+  }
+
+  @Test
+  public void testInsertValueFastPathOnlyForClassSchema() throws IOException {
+    HoodieMetadataPayload payload = newBloomFilterPayload();
+
+    // The class schema singleton (and no schema) takes the reference-equality fast path and returns the generated record.
+    IndexedRecord fastPath = payload.getInsertValue(HoodieMetadataRecord.getClassSchema()).get();
+    assertInstanceOf(HoodieMetadataRecord.class, fastPath);
+    // Implied by the check above (the generated class returns SCHEMA$ from both accessors); pins the invariant.
+    assertSame(HoodieMetadataRecord.getClassSchema(), fastPath.getSchema());
+    assertInstanceOf(HoodieMetadataRecord.class, payload.getInsertValue(null).get());
+
+    // Any other instance takes the slow path, which fills a GenericRecord at the metadata-field offsets.
+    Schema withMetaFields = HoodieSchemaUtils.addMetadataFields(
+        HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema())).toAvroSchema();
+    assertInstanceOf(GenericData.Record.class, payload.getInsertValue(withMetaFields).get());
+
+    // So an equal but distinct copy of the bare class schema is not usable. It misses the identity check, and the
+    // slow path then writes at the offsets the metadata fields would occupy, which a bare copy does not have:
+    // hence ArrayIndexOutOfBoundsException rather than a wrong-but-returned record.
+    Schema equalCopy = new Schema.Parser().parse(HoodieMetadataRecord.getClassSchema().toString());
+    assertEquals(HoodieMetadataRecord.getClassSchema(), equalCopy);
+    assertThrows(ArrayIndexOutOfBoundsException.class, () -> payload.getInsertValue(equalCopy));
+  }
+
+  @Test
+  public void testPayloadToStringForIndexedRecordTypes() {
+    HoodieMetadataPayload filesPayload = HoodieMetadataPayload.createPartitionFilesRecord(
+        PARTITION_NAME, Collections.singletonMap("file.parquet", 10L), Collections.singletonList("old.parquet")).getData();
+    assertTrue(filesPayload.toString().contains("creations=[file.parquet]"));
+    assertTrue(filesPayload.toString().contains("deletions=[old.parquet]"));
+
+    HoodieMetadataPayload bloomFilterPayload = newBloomFilterPayload();
+    assertTrue(bloomFilterPayload.toString().contains("BloomFilter"));
+
+    HoodieColumnRangeMetadata<Comparable> columnRange = HoodieColumnRangeMetadata.<Comparable>create(
+        "file.parquet", "column", 1, 2, 0, 2, 10, 10, ValueMetadata.V1EmptyMetadata.get());
+    HoodieMetadataPayload columnStatsPayload =
+        (HoodieMetadataPayload) HoodieMetadataPayload.createColumnStatsRecords(
+            PARTITION_NAME, Collections.singletonList(columnRange), false).findFirst().get().getData();
+    assertTrue(columnStatsPayload.toString().contains("ColStats"));
   }
 
   @Test

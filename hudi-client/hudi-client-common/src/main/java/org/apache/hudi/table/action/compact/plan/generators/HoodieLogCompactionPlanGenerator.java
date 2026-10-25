@@ -75,7 +75,8 @@ public class HoodieLogCompactionPlanGenerator<T extends HoodieRecordPayload, I, 
   @Override
   protected boolean filterFileSlice(FileSlice fileSlice, String lastCompletedInstantTime,
                                     Set<HoodieFileGroupId> pendingFileGroupIds, Option<InstantRange> instantRange) {
-    return super.filterFileSlice(fileSlice, lastCompletedInstantTime, pendingFileGroupIds, instantRange) && isFileSliceEligibleForLogCompaction(fileSlice, lastCompletedInstantTime, instantRange);
+    return super.filterFileSlice(fileSlice, lastCompletedInstantTime, pendingFileGroupIds, instantRange)
+        && isFileSliceEligibleForLogCompaction(fileSlice, lastCompletedInstantTime, instantRange);
   }
 
   @Override

@@ -24,13 +24,14 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.sink.partitioner.profile.WriteProfile;
 import org.apache.hudi.sink.partitioner.profile.WriteProfiles;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 /**
  * Utilities for {@code BucketAssigner}.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public abstract class BucketAssigners {
-
-  private BucketAssigners() {
-  }
 
   /**
    * Creates a {@code BucketAssigner}.

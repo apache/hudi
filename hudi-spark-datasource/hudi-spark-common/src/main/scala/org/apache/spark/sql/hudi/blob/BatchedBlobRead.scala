@@ -1,0 +1,52 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.spark.sql.hudi.blob
+
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSet, Expression}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, UnaryNode}
+import org.apache.spark.sql.hudi.blob.BatchedBlobReader.DATA_COL
+import org.apache.spark.sql.types.BinaryType
+
+/**
+ * Logical plan node for batched blob reading.
+ *
+ * Created by [[ReadBlobRule]] when `read_blob()` is detected in queries.
+ * Converted to [[BatchedBlobReadExec]] by [[BatchedBlobReaderStrategy]] during physical planning.
+ *
+ * @param child Child logical plan
+ * @param blobAttr The blob column attribute to read from
+ * @param dataAttr The output attribute for resolved blob data
+ */
+case class BatchedBlobRead(
+                            child: LogicalPlan,
+                            blobAttr: Attribute,
+                            dataAttr: AttributeReference =
+                            AttributeReference(DATA_COL, BinaryType, nullable = true)())
+  extends UnaryNode {
+
+  override def output: Seq[Attribute] = child.output :+ dataAttr
+
+  override protected def withNewChildInternal(newChild: LogicalPlan): LogicalPlan = {
+    copy(child = newChild)
+  }
+
+  override def producedAttributes: AttributeSet = AttributeSet(dataAttr)
+
+}

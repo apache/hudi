@@ -38,7 +38,7 @@ case class BasicStagedTable(ident: Identifier,
                             table: Table,
                             catalog: TableCatalog) extends SupportsWrite with StagedTable {
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
-    info match {
+    table match {
       case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
       case _ => throw new HoodieException(s"Table `${ident.name}` does not support writes.")
     }

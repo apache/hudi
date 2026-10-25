@@ -123,6 +123,10 @@ public class ClusteringFunctionWrapper {
   }
 
   public void close() throws Exception {
-    ioManager.close();
+    TestFunctionWrapper.closeAll(
+        clusteringPlanOperator == null ? null : clusteringPlanOperator::close,
+        clusteringOperator == null ? null : clusteringOperator::close,
+        commitSink == null ? null : commitSink::close,
+        ioManager::close);
   }
 }

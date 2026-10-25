@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -41,6 +42,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class SparkInsertOverwriteCommitActionExecutor<T>
@@ -82,10 +84,10 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
 
   @Override
   protected Map<String, List<String>> getPartitionToReplacedFileIds(HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata) {
-    String staticOverwritePartition = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
-    if (StringUtils.nonEmpty(staticOverwritePartition)) {
+    String staticOverwritePartitionPaths = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
+    if (StringUtils.nonEmpty(staticOverwritePartitionPaths)) {
       // static insert overwrite partitions
-      List<String> partitionPaths = Arrays.asList(staticOverwritePartition.split(","));
+      List<String> partitionPaths = Arrays.asList(staticOverwritePartitionPaths.split(","));
       context.setJobStatus(this.getClass().getSimpleName(), "Getting ExistingFileIds of matching static partitions");
       return HoodieJavaPairRDD.getJavaPairRDD(context.parallelize(partitionPaths, partitionPaths.size()).mapToPair(
           partitionPath -> Pair.of(partitionPath, getAllExistingFileIds(partitionPath)))).collectAsMap();
@@ -99,6 +101,26 @@ public class SparkInsertOverwriteCommitActionExecutor<T>
   protected List<String> getAllExistingFileIds(String partitionPath) {
     // because new commit is not complete. it is safe to mark all existing file Ids as old files
     return table.getSliceView().getLatestFileSlices(partitionPath).map(FileSlice::getFileId).distinct().collect(Collectors.toList());
+  }
+
+  @Override
+  protected Set<HoodieFileGroupId> getFileGroupsBeingReplaced(HoodieData<HoodieRecord<T>> inputRecords) {
+    String staticOverwritePartitionPaths = config.getStringOrDefault(HoodieInternalConfig.STATIC_OVERWRITE_PARTITION_PATHS);
+    List<String> partitionPaths;
+
+    if (StringUtils.nonEmpty(staticOverwritePartitionPaths)) {
+      // Static insert overwrite: use the configured partitions
+      partitionPaths = Arrays.asList(staticOverwritePartitionPaths.split(","));
+    } else {
+      // Dynamic insert overwrite: determine partitions from input records
+      partitionPaths = inputRecords.map(HoodieRecord::getPartitionPath).distinct().collectAsList();
+    }
+
+    // Get all file groups in the partitions to be overwritten
+    return partitionPaths.stream()
+        .flatMap(partitionPath -> getAllExistingFileIds(partitionPath).stream()
+            .map(fileId -> new HoodieFileGroupId(partitionPath, fileId)))
+        .collect(Collectors.toSet());
   }
 
   @Override

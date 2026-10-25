@@ -34,6 +34,7 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
@@ -180,5 +181,12 @@ class TestSchemaRegistryProvider {
     HoodieSchema schema = spyProvider.getSourceHoodieSchema();
     // Verify that the fallback schema is returned.
     assertEquals(HoodieSchema.parse(FALLBACK_SCHEMA), schema);
+  }
+
+  @Test
+  public void testNullTargetProviderReturnsNullTargetSchema() {
+    // the registry is never contacted: the url is only validated at construction time
+    NullTargetSchemaRegistryProvider underTest = new NullTargetSchemaRegistryProvider(getProps(), null);
+    assertNull(underTest.getTargetHoodieSchema());
   }
 }

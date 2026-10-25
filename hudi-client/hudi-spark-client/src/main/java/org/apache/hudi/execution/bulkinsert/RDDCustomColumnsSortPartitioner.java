@@ -53,6 +53,7 @@ public class RDDCustomColumnsSortPartitioner<T>
     this.sortColumnNames = getSortColumnName(config);
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
     this.suffixRecordKey = config.getBoolean(BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS);
+    SortUtils.validateSortableColumns(sortColumnNames, schema);
   }
 
   public RDDCustomColumnsSortPartitioner(String[] columnNames, HoodieSchema schema, HoodieWriteConfig config) {
@@ -60,6 +61,7 @@ public class RDDCustomColumnsSortPartitioner<T>
     this.schema = schema;
     this.consistentLogicalTimestampEnabled = config.isConsistentLogicalTimestampEnabled();
     this.suffixRecordKey = config.getBoolean(BULKINSERT_SUFFIX_RECORD_KEY_SORT_COLUMNS);
+    SortUtils.validateSortableColumns(sortColumnNames, schema);
   }
 
   @Override

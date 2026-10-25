@@ -34,7 +34,6 @@ import org.apache.hudi.table.HoodieTable;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -67,10 +66,9 @@ public class ListBasedHoodieBloomIndexHelper extends BaseHoodieBloomIndexHelper 
         CollectionUtils.toStream(
             new HoodieBloomIndexCheckFunction<Pair<HoodieFileGroupId, String>>(hoodieTable, config, Pair::getLeft, Pair::getRight)
                 .apply(fileComparisonPairList.iterator())
-            )
-            .flatMap(Collection::stream)
-            .filter(lr -> lr.getMatchingRecordKeysAndPositions().size() > 0)
-            .collect(toList());
+        )
+        .filter(lr -> !lr.getMatchingRecordKeysAndPositions().isEmpty())
+        .collect(toList());
 
     return context.parallelize(keyLookupResults).flatMap(lookupResult ->
         lookupResult.getMatchingRecordKeysAndPositions().stream()

@@ -105,7 +105,7 @@ For 1.0.0 and later hudi version which supports efficient completion time querie
 
 ### Apply different strategies for different partitions
 
-For some specific users, they may want to apply different strategies for different partitions. For example, they may have multi partition fileds(productId, day). For partitions under `product=1` they want to keep for 30 days while for partitions under `product=2` they want to keep for 7 days only. 
+For some specific users, they may want to apply different strategies for different partitions. For example, they may have multi partition fields(productId, day). For partitions under `product=1` they want to keep for 30 days while for partitions under `product=2` they want to keep for 7 days only. 
 
 For the first version of TTL management, we do not plan to implement a complicated strategy (For example, use an array to store strategies, introduce partition regex etc.). Instead, we add a new abstract method `getPartitionPathsForTTL` in `PartitionTTLStrategy` and provides a new config `hoodie.partition.ttl.partition.selected`. 
 

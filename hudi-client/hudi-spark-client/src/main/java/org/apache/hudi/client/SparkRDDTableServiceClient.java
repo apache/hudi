@@ -33,6 +33,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.StreamingMetadataWriteHandler;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
@@ -50,7 +51,7 @@ public class SparkRDDTableServiceClient<T> extends BaseHoodieTableServiceClient<
   protected SparkRDDTableServiceClient(HoodieEngineContext context,
                                        HoodieWriteConfig clientConfig,
                                        Option<EmbeddedTimelineService> timelineService) {
-    this(context, clientConfig, timelineService, new StreamingMetadataWriteHandler());
+    this(context, clientConfig, timelineService, new SparkStreamingMetadataWriteHandler());
   }
 
   @VisibleForTesting

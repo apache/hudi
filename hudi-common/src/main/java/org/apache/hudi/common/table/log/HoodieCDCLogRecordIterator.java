@@ -18,119 +18,33 @@
 
 package org.apache.hudi.common.table.log;
 
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
-import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
-import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
-import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.storage.HoodieStorage;
 
-import org.apache.avro.generic.IndexedRecord;
-
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 /**
- * Record iterator for Hudi logs in CDC format.
+ * Record iterator for Hudi CDC log files.
+ *
+ * @param <T> Engine-specific record type used by native CDC log files
  */
-public class HoodieCDCLogRecordIterator implements ClosableIterator<IndexedRecord> {
+public interface HoodieCDCLogRecordIterator<T> extends ClosableIterator<HoodieCDCLogRecord<T>> {
 
-  private final HoodieStorage storage;
-
-  private final HoodieSchema cdcSchema;
-
-  private final Iterator<HoodieLogFile> cdcLogFileIter;
-
-  private HoodieLogFormat.Reader reader;
-
-  private ClosableIterator<IndexedRecord> itr;
-
-  private IndexedRecord record;
-
-  public HoodieCDCLogRecordIterator(HoodieStorage storage, HoodieLogFile[] cdcLogFiles, HoodieSchema cdcSchema) {
-    this.storage = storage;
-    this.cdcSchema = cdcSchema;
-    this.cdcLogFileIter = Arrays.stream(cdcLogFiles).iterator();
-  }
-
-  @Override
-  public boolean hasNext() {
-    if (record != null) {
-      return true;
-    }
-    if (itr == null || !itr.hasNext()) {
-      if (reader == null || !reader.hasNext()) {
-        // step1: load new file reader first.
-        if (!loadReader()) {
-          return false;
-        }
-      }
-      // step2: load block records iterator
-      if (!loadItr()) {
+  static <T> HoodieCDCLogRecordIterator<T> empty() {
+    return new HoodieCDCLogRecordIterator<T>() {
+      @Override
+      public boolean hasNext() {
         return false;
       }
-    }
-    record = itr.next();
-    return true;
-  }
 
-  private boolean loadReader() {
-    try {
-      closeReader();
-      if (cdcLogFileIter.hasNext()) {
-        reader = new HoodieLogFileReader(storage, cdcLogFileIter.next(), cdcSchema, HoodieLogFileReader.DEFAULT_BUFFER_SIZE);
-        return reader.hasNext();
+      @Override
+      public HoodieCDCLogRecord<T> next() {
+        throw new NoSuchElementException("No CDC log records");
       }
-      return false;
-    } catch (IOException e) {
-      throw new HoodieIOException(e.getMessage());
-    }
-  }
 
-  private boolean loadItr() {
-    HoodieDataBlock dataBlock = (HoodieDataBlock) reader.next();
-    closeItr();
-    // TODO support cdc with spark record.
-    itr = new CloseableMappingIterator(dataBlock.getRecordIterator(HoodieRecordType.AVRO), record -> ((HoodieAvroIndexedRecord) record).getData());
-    return itr.hasNext();
-  }
-
-  @Override
-  public IndexedRecord next() {
-    IndexedRecord ret = record;
-    record = null;
-    return ret;
-  }
-
-  @Override
-  public void close() {
-    try {
-      closeItr();
-      closeReader();
-    } catch (IOException e) {
-      throw new HoodieIOException(e.getMessage());
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  //  Utilities
-  // -------------------------------------------------------------------------
-
-  private void closeReader() throws IOException {
-    if (reader != null) {
-      reader.close();
-      reader = null;
-    }
-  }
-
-  private void closeItr() {
-    if (itr != null) {
-      itr.close();
-      itr = null;
-    }
+      @Override
+      public void close() {
+        // no-op
+      }
+    };
   }
 }

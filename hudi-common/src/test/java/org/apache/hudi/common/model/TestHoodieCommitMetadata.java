@@ -44,8 +44,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
@@ -127,7 +129,7 @@ public class TestHoodieCommitMetadata {
   }
 
   @Test
-  public void testGetFileSliceForFileGroupFromDeltaCommit() throws IOException {
+  public void testGetDependentFileSliceForFileGroupFromDeltaCommit() throws IOException {
     org.apache.hudi.avro.model.HoodieCommitMetadata commitMetadata = new org.apache.hudi.avro.model.HoodieCommitMetadata();
     org.apache.hudi.avro.model.HoodieWriteStat writeStat1 = createWriteStat("111", "111base", Arrays.asList("1.log", "2.log"));
     org.apache.hudi.avro.model.HoodieWriteStat writeStat2 = createWriteStat("111", "111base", Arrays.asList("3.log", "4.log"));
@@ -139,21 +141,41 @@ public class TestHoodieCommitMetadata {
     byte[] serializedCommitMetadata = TimelineMetadataUtils.serializeAvroMetadata(
         commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
 
-    Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"));
+    Option<Pair<String, List<String>>> result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "4.log");
 
     assertTrue(result.isPresent());
     assertEquals("111base", result.get().getKey());
-    assertEquals(2, result.get().getValue().size());
+    assertEquals(1, result.get().getValue().size());
     assertEquals("3.log", result.get().getValue().get(0));
-    assertEquals("4.log", result.get().getValue().get(1));
 
-    result = HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "222"));
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "222"), "5.log");
     assertTrue(result.isPresent());
     assertTrue(result.get().getKey().isEmpty());
+    assertEquals(0, result.get().getValue().size());
+
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat4 = createWriteStat("111", null, Arrays.asList("1.log"));
+    org.apache.hudi.avro.model.HoodieWriteStat writeStat5 = createWriteStat("111", null, Arrays.asList("2.log"));
+    partitionToWriteStatsMap = new HashMap<>();
+    // simulate the scenario like eager flushing of MOR ingestion in flink writer.
+    partitionToWriteStatsMap.put("partition1", Arrays.asList(writeStat4, writeStat5));
+    commitMetadata.setPartitionToWriteStats(partitionToWriteStatsMap);
+    serializedCommitMetadata = TimelineMetadataUtils.serializeAvroMetadata(
+        commitMetadata, org.apache.hudi.avro.model.HoodieCommitMetadata.class).get();
+
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "1.log");
+    assertTrue(result.isPresent());
+    assertEquals("", result.get().getKey());
+    assertEquals(0, result.get().getValue().size());
+
+    result = HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+        new ByteArrayInputStream(serializedCommitMetadata), new HoodieFileGroupId("partition1", "111"), "2.log");
+    assertTrue(result.isPresent());
+    assertEquals("", result.get().getKey());
     assertEquals(1, result.get().getValue().size());
-    assertEquals("5.log", result.get().getValue().get(0));
+    assertEquals("1.log", result.get().getValue().get(0));
   }
 
   @Test
@@ -253,5 +275,192 @@ public class TestHoodieCommitMetadata {
       return HoodieSchema.createMap(replaceEnumWithString(schema.getValueType()));
     }
     return schema;
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_AllInserts() {
+    // When all partitions have only insert stats (prevCommit is "null"), the result should be empty
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat insertStat1 = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat insertStat2 = createWriteStatWithPrevFileId("partition2", "file2", "null");
+
+    commitMetadata.addWriteStat("partition1", insertStat1);
+    commitMetadata.addWriteStat("partition2", insertStat2);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    assertTrue(result.isEmpty(), "Result should be empty when all stats are inserts (prevCommit = 'null')");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_AllUpdates() {
+    // When all partitions have update stats (prevCommit is a valid commit time), all partitions should be returned
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat updateStat1 = createWriteStatWithPrevFileId("partition1", "file1", "20240101120000");
+    HoodieWriteStat updateStat2 = createWriteStatWithPrevFileId("partition2", "file2", "20240101130000");
+
+    commitMetadata.addWriteStat("partition1", updateStat1);
+    commitMetadata.addWriteStat("partition2", updateStat2);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    Set<String> expected = new HashSet<>(Arrays.asList("partition1", "partition2"));
+    assertEquals(expected, result, "Result should contain all partitions with updates");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_MixedInsertsAndUpdates() {
+    // When some partitions have inserts and some have updates, only the update partitions should be returned
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat insertStat = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition2", "file2", "20240101120000");
+
+    commitMetadata.addWriteStat("partition1", insertStat);
+    commitMetadata.addWriteStat("partition2", updateStat);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    Set<String> expected = new HashSet<>(Arrays.asList("partition2"));
+    assertEquals(expected, result, "Result should only contain partitions with updates");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_PartitionWithBothInsertAndUpdate() {
+    // When a partition has both insert and update stats, it should be included
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat insertStat = createWriteStatWithPrevFileId("partition1", "file1", "null");
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition1", "file2", "20240101120000");
+
+    commitMetadata.addWriteStat("partition1", insertStat);
+    commitMetadata.addWriteStat("partition1", updateStat);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    Set<String> expected = new HashSet<>(Arrays.asList("partition1"));
+    assertEquals(expected, result, "Result should contain partition with at least one update");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_NullPrevCommit() {
+    // When prevCommit is null (not the string "null"), the partition should not be included
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    HoodieWriteStat statWithNullPrevCommit = createWriteStatWithPrevFileId("partition1", "file1", null);
+    HoodieWriteStat updateStat = createWriteStatWithPrevFileId("partition2", "file2", "20240101120000");
+
+    commitMetadata.addWriteStat("partition1", statWithNullPrevCommit);
+    commitMetadata.addWriteStat("partition2", updateStat);
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    Set<String> expected = new HashSet<>(Arrays.asList("partition2"));
+    assertEquals(expected, result, "Result should not include partitions where prevCommit is null");
+  }
+
+  @Test
+  public void testGetWritePartitionPathsWithExistingFileGroupsModified_EmptyMetadata() {
+    // When metadata is empty, result should be empty
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+
+    Set<String> result = commitMetadata.getWritePartitionPathsWithUpdatedFileGroups();
+    assertTrue(result.isEmpty(), "Result should be empty for empty metadata");
+  }
+
+  /**
+   * Helper method to create a HoodieWriteStat with specified partition, fileId, and prevCommit.
+   */
+  private HoodieWriteStat createWriteStatWithPrevFileId(String partitionPath, String fileId, String prevCommit) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partitionPath);
+    writeStat.setFileId(fileId);
+    writeStat.setPrevCommit(prevCommit);
+    writeStat.setPath(partitionPath + "/" + fileId + ".parquet");
+    writeStat.setNumWrites(100);
+    writeStat.setNumDeletes(0);
+    return writeStat;
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_FoldsAcrossStatsWithinPartition() {
+    // Two stats in the same partition: per-partition rollup folds min/max across them.
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f1", 100L, 200L));
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f2", 50L, 300L));
+    commitMetadata.addWriteStat("partition2", createWriteStatWithEventTime("partition2", "f3", 1000L, 2000L));
+
+    Map<String, Pair<Option<Long>, Option<Long>>> result = commitMetadata.getMinAndMaxEventTimePerPartition();
+
+    assertEquals(2, result.size());
+    assertEquals(Option.of(50L), result.get("partition1").getLeft());
+    assertEquals(Option.of(300L), result.get("partition1").getRight());
+    assertEquals(Option.of(1000L), result.get("partition2").getLeft());
+    assertEquals(Option.of(2000L), result.get("partition2").getRight());
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_OmitsPartitionsWithoutEventTime() {
+    // A partition whose stats carry no event time should not appear in the result map.
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f1", 100L, 200L));
+    commitMetadata.addWriteStat("partition2", createWriteStatWithEventTime("partition2", "f2", null, null));
+
+    Map<String, Pair<Option<Long>, Option<Long>>> result = commitMetadata.getMinAndMaxEventTimePerPartition();
+
+    assertEquals(1, result.size());
+    assertTrue(result.containsKey("partition1"));
+    assertEquals(Option.of(100L), result.get("partition1").getLeft());
+    assertEquals(Option.of(200L), result.get("partition1").getRight());
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_HandlesPartialEventTime() {
+    // Stats may carry only one of min/max (e.g. when folding across writers); the missing
+    // side should surface as Option.empty() in the rollup, the present side as Option.of(...).
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f1", 100L, null));
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f2", null, 500L));
+
+    Map<String, Pair<Option<Long>, Option<Long>>> result = commitMetadata.getMinAndMaxEventTimePerPartition();
+
+    assertEquals(1, result.size());
+    assertEquals(Option.of(100L), result.get("partition1").getLeft());
+    assertEquals(Option.of(500L), result.get("partition1").getRight());
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_EmptyMetadata() {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    assertTrue(commitMetadata.getMinAndMaxEventTimePerPartition().isEmpty());
+  }
+
+  @Test
+  public void testGetMinAndMaxEventTimePerPartition_MatchesGlobalRollup() {
+    // Sanity: collapsing the per-partition rollup yields the same min/max as the global getter.
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addWriteStat("partition1", createWriteStatWithEventTime("partition1", "f1", 100L, 200L));
+    commitMetadata.addWriteStat("partition2", createWriteStatWithEventTime("partition2", "f2", 50L, 300L));
+    commitMetadata.addWriteStat("partition3", createWriteStatWithEventTime("partition3", "f3", 75L, 150L));
+
+    Pair<Option<Long>, Option<Long>> global = commitMetadata.getMinAndMaxEventTime();
+    Map<String, Pair<Option<Long>, Option<Long>>> perPartition = commitMetadata.getMinAndMaxEventTimePerPartition();
+
+    long minAcrossPartitions = perPartition.values().stream()
+        .mapToLong(p -> p.getLeft().orElse(Long.MAX_VALUE))
+        .min().getAsLong();
+    long maxAcrossPartitions = perPartition.values().stream()
+        .mapToLong(p -> p.getRight().orElse(Long.MIN_VALUE))
+        .max().getAsLong();
+
+    assertEquals(global.getLeft(), Option.of(minAcrossPartitions));
+    assertEquals(global.getRight(), Option.of(maxAcrossPartitions));
+  }
+
+  private HoodieWriteStat createWriteStatWithEventTime(String partitionPath, String fileId, Long minEventTime, Long maxEventTime) {
+    HoodieWriteStat writeStat = new HoodieWriteStat();
+    writeStat.setPartitionPath(partitionPath);
+    writeStat.setFileId(fileId);
+    writeStat.setPath(partitionPath + "/" + fileId + ".parquet");
+    writeStat.setMinEventTime(minEventTime);
+    writeStat.setMaxEventTime(maxEventTime);
+    return writeStat;
   }
 }

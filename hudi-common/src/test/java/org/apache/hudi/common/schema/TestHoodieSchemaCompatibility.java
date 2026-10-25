@@ -18,7 +18,8 @@
 
 package org.apache.hudi.common.schema;
 
-import org.apache.hudi.avro.AvroSchemaUtils;
+import org.apache.hudi.common.avro.VariantSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
@@ -42,6 +43,8 @@ import static org.apache.hudi.common.schema.TestHoodieSchemaUtils.SIMPLE_SCHEMA;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -214,6 +217,59 @@ public class TestHoodieSchemaCompatibility {
     MessageType messageType = new AvroSchemaConverter().convert(sourceSchema.toAvroSchema());
     HoodieSchema converted = HoodieSchema.fromAvroSchema(new AvroSchemaConverter().convert(messageType));
     assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(sourceSchema, converted));
+  }
+
+  @Test
+  public void testIsStrictProjectionWithAlignedShreddedVariants() {
+    // A shredded variant base file surfaces through the parquet footer as a plain
+    // {metadata, value, typed_value} record, so it can never look like a strict projection
+    // source of the table's variant column. HoodieMergeHelper aligns such columns via
+    // VariantSchemaUtils.alignShreddedVariants before the check so the merge reads at the
+    // writer schema and variant reconstruction can engage (#19567).
+    HoodieSchema footerShredded = HoodieSchema.createRecord("v", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("typed_value", HoodieSchema.createNullable(HoodieSchemaType.INT))));
+    HoodieSchema fileSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(footerShredded))));
+    HoodieSchema writerSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(HoodieSchema.createVariant()))));
+
+    assertFalse(HoodieSchemaCompatibility.isStrictProjectionOf(fileSchema, writerSchema));
+    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(
+        VariantSchemaUtils.alignShreddedVariants(fileSchema, writerSchema), writerSchema));
+
+    // Without a variant on the requested side there is nothing to align: a plain user struct of
+    // the same shape passes through untouched.
+    assertSame(fileSchema, VariantSchemaUtils.alignShreddedVariants(fileSchema, fileSchema));
+
+    // The alignment now runs on every HoodieMergeHelper.runMerge, so pin the ordinary unshredded
+    // table too: a footer-derived plain {metadata, value} column carries no typed_value to
+    // reconstruct, and must pass through untouched even against a variant requested column.
+    HoodieSchema footerUnshredded = HoodieSchema.createRecord("v", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES)),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES))));
+    HoodieSchema unshreddedFileSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(footerUnshredded))));
+    assertSame(unshreddedFileSchema,
+        VariantSchemaUtils.alignShreddedVariants(unshreddedFileSchema, writerSchema));
+
+    // The row writer shreds variants at any depth, so the alignment has to descend as well:
+    // a variant nested in a struct hits the same lossy rewrite when it is left unaligned.
+    HoodieSchema nestedFileSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("nested", HoodieSchema.createRecord("nested_rec", "example.schema", null,
+            Arrays.asList(HoodieSchemaField.of("v", HoodieSchema.createNullable(footerShredded)))))));
+    HoodieSchema nestedWriterSchema = HoodieSchema.createRecord("rec", "example.schema", null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("nested", HoodieSchema.createRecord("nested_rec", "example.schema", null,
+            Arrays.asList(HoodieSchemaField.of("v", HoodieSchema.createNullable(HoodieSchema.createVariant())))))));
+    assertFalse(HoodieSchemaCompatibility.isStrictProjectionOf(nestedFileSchema, nestedWriterSchema));
+    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(
+        VariantSchemaUtils.alignShreddedVariants(nestedFileSchema, nestedWriterSchema), nestedWriterSchema));
   }
 
   @Test
@@ -647,6 +703,157 @@ public class TestHoodieSchemaCompatibility {
     assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(longS, intS, true, true));
   }
 
+  /**
+   * Sibling of {@link #testIsSchemaCompatibleWithTypePromotion()} covering the rest of the reader/writer type
+   * table: the primitive widening cases shared with {@link HoodieSchemaTypePromotion}, plus the two
+   * logical-type-over-primitive rules (TIMESTAMP over LONG, UUID over STRING) that are compatibility-only.
+   *
+   * <p>All pairs are asserted through the 4-arg {@code isSchemaCompatible(prev = writer, new = reader, true, true)}.</p>
+   */
+  @Test
+  public void testIsSchemaCompatibleWithLogicalTypesAndWidening() {
+    // Logical type over its backing primitive: accepted for reader/writer compatibility.
+    assertCompatible(HoodieSchema.createTimestampMillis(), HoodieSchema.create(HoodieSchemaType.LONG));
+    assertCompatible(HoodieSchema.createUUID(), HoodieSchema.create(HoodieSchemaType.STRING));
+
+    // ... but only in that direction, and only over the matching primitive.
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.createTimestampMillis());
+    assertIncompatible(HoodieSchema.createTimestampMillis(), HoodieSchema.create(HoodieSchemaType.INT));
+    // DATE has no such rule at all, even though it is backed by INT.
+    assertIncompatible(HoodieSchema.createDate(), HoodieSchema.create(HoodieSchemaType.INT));
+
+    // Primitive widening, delegated to HoodieSchemaTypePromotion.
+    assertCompatible(HoodieSchema.create(HoodieSchemaType.DOUBLE), HoodieSchema.create(HoodieSchemaType.FLOAT));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.FLOAT), HoodieSchema.create(HoodieSchemaType.DOUBLE));
+    // The narrowing direction is rejected for every numeric pair. The hudi-spark guard for the reversed
+    // argument bug class (TestTableSchemaEvolution, HUDI-1493) never runs, so the pairs are pinned here.
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.LONG));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.FLOAT));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.DOUBLE));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.FLOAT));
+    assertIncompatible(HoodieSchema.create(HoodieSchemaType.LONG), HoodieSchema.create(HoodieSchemaType.DOUBLE));
+    assertCompatible(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.BYTES));
+    assertCompatible(HoodieSchema.create(HoodieSchemaType.BYTES), HoodieSchema.create(HoodieSchemaType.STRING));
+    assertCompatible(HoodieSchema.create(HoodieSchemaType.STRING), HoodieSchema.create(HoodieSchemaType.INT));
+  }
+
+  @Test
+  public void testAreSchemasCompatibleReaderIsFirstArgument() {
+    HoodieSchema longRecord = HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", HoodieSchema.create(HoodieSchemaType.LONG), null, null));
+    HoodieSchema intRecord = HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", HoodieSchema.create(HoodieSchemaType.INT), null, null));
+
+    // A long reader can read int data ...
+    assertTrue(HoodieSchemaCompatibility.areSchemasCompatible(longRecord, intRecord));
+    // ... but not the other way round, which pins the reader as the FIRST argument.
+    assertFalse(HoodieSchemaCompatibility.areSchemasCompatible(intRecord, longRecord));
+  }
+
+  @Test
+  public void testLookupWriterFieldDirectMatch() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema writerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"W\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"}]}");
+
+    HoodieSchemaField writerField = HoodieSchemaCompatibility.lookupWriterField(writerSchema, readerField);
+    assertEquals("a", writerField.name());
+  }
+
+  /**
+   * The alias path is also driven end to end through the sole production caller,
+   * {@code HoodieTable#validateSecondaryIndexSchemaEvolution} (see
+   * {@code TestHoodieTableSchemaEvolution#testFieldWithAlias}, whose type-change half is what makes the alias
+   * match decide the outcome: an unresolved alias returns null and is skipped by that caller's
+   * {@code writerField != null} guard); this case pins the facade on its own.
+   */
+  @Test
+  public void testLookupWriterFieldAliasMatch() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema writerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"W\",\"fields\":["
+        + "{\"name\":\"old_a\",\"type\":\"int\"}]}");
+
+    HoodieSchemaField writerField = HoodieSchemaCompatibility.lookupWriterField(writerSchema, readerField);
+    assertEquals("old_a", writerField.name());
+  }
+
+  @Test
+  public void testLookupWriterFieldAmbiguousMatchThrows() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema writerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"W\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\"},"
+        + "{\"name\":\"old_a\",\"type\":\"int\"}]}");
+
+    assertThrows(HoodieSchemaException.class,
+        () -> HoodieSchemaCompatibility.lookupWriterField(writerSchema, readerField));
+  }
+
+  @Test
+  public void testLookupWriterFieldNoMatchReturnsNull() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema writerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"W\",\"fields\":["
+        + "{\"name\":\"unrelated\",\"type\":\"int\"}]}");
+
+    assertNull(HoodieSchemaCompatibility.lookupWriterField(writerSchema, readerField));
+  }
+
+  @Test
+  public void testLookupWriterFieldRejectsNonRecordWriterSchema() {
+    HoodieSchemaField readerField = readerFieldWithAlias();
+    HoodieSchema notARecord = HoodieSchema.create(HoodieSchemaType.STRING);
+
+    assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchemaCompatibility.lookupWriterField(notARecord, readerField));
+  }
+
+  /**
+   * Reader field {@code a}, aliased {@code old_a}. Aliases have no builder on HoodieSchemaField, so the
+   * reader record is parsed from JSON.
+   */
+  private static HoodieSchemaField readerFieldWithAlias() {
+    HoodieSchema readerSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"R\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"int\",\"aliases\":[\"old_a\"]}]}");
+    return readerSchema.getField("a").get();
+  }
+
+  /**
+   * Asserts that a field written as {@code writerFieldSchema} can be read back as {@code readerFieldSchema},
+   * that is, the {@code writer -> reader} conversion is allowed.
+   *
+   * <p>Arguments are in reader-first ("to", "from") order, matching
+   * {@link HoodieSchemaCompatibility#areSchemasCompatible(HoodieSchema, HoodieSchema)}. That is the reverse
+   * of the (prev = writer, new = reader) order taken by
+   * {@link HoodieSchemaCompatibility#isSchemaCompatible(HoodieSchema, HoodieSchema, boolean, boolean)};
+   * the helper flips the pair before calling it.</p>
+   *
+   * <p>Both schemas are wrapped in a single-field record {@code R { f }}, so only the per-field type rules
+   * are exercised here. Naming checks and projection are both enabled; field addition, removal and renaming
+   * are covered by the other tests in this class.</p>
+   *
+   * @param readerFieldSchema type the field is read as (the "to" side of the conversion)
+   * @param writerFieldSchema type the field was written with (the "from" side)
+   */
+  private static void assertCompatible(HoodieSchema readerFieldSchema, HoodieSchema writerFieldSchema) {
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", writerFieldSchema, null, null)),
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", readerFieldSchema, null, null)), true, true),
+        "reader " + readerFieldSchema + " should read writer " + writerFieldSchema);
+  }
+
+  /**
+   * Negative counterpart of {@link #assertCompatible(HoodieSchema, HoodieSchema)}: asserts that a field
+   * written as {@code writerFieldSchema} cannot be read back as {@code readerFieldSchema}, that is, the
+   * {@code writer -> reader} conversion is rejected. Same reader-first argument order and same single-field
+   * record wrapping.
+   *
+   * @param readerFieldSchema type the field would be read as (the "to" side of the conversion)
+   * @param writerFieldSchema type the field was written with (the "from" side)
+   */
+  private static void assertIncompatible(HoodieSchema readerFieldSchema, HoodieSchema writerFieldSchema) {
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", writerFieldSchema, null, null)),
+        HoodieSchemaTestUtils.createRecord("R", HoodieSchemaField.of("f", readerFieldSchema, null, null)), true, true),
+        "reader " + readerFieldSchema + " should not read writer " + writerFieldSchema);
+  }
+
   @Test
   public void testIsSchemaCompatibleWithNestedSchemas() {
     // Test with nested record schemas
@@ -717,27 +924,6 @@ public class TestHoodieSchemaCompatibility {
   }
 
   @Test
-  public void testIsSchemaCompatibleConsistencyWithAvro() {
-    // Verify HoodieSchemaCompatibility results match AvroSchemaUtils for various scenarios
-    HoodieSchema s1 = HoodieSchema.parse(SIMPLE_SCHEMA);
-    HoodieSchema s2 = HoodieSchema.parse(EVOLVED_SCHEMA);
-
-    // Test all combinations of checkNaming and allowProjection
-    for (boolean checkNaming : Arrays.asList(true, false)) {
-      for (boolean allowProjection : Arrays.asList(true, false)) {
-        boolean avroResult = AvroSchemaUtils.isSchemaCompatible(
-            s1.toAvroSchema(), s2.toAvroSchema(), checkNaming, allowProjection);
-        boolean hoodieResult = HoodieSchemaCompatibility.isSchemaCompatible(
-            s1, s2, checkNaming, allowProjection);
-
-        assertEquals(avroResult, hoodieResult,
-            String.format("Results should match for checkNaming=%s, allowProjection=%s",
-                checkNaming, allowProjection));
-      }
-    }
-  }
-
-  @Test
   public void testIsSchemaCompatibleIdenticalSchemas() {
     // Test with identical schemas
     HoodieSchema schema = HoodieSchema.parse(SOURCE_SCHEMA);
@@ -747,5 +933,229 @@ public class TestHoodieSchemaCompatibility {
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, true, false));
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, false, true));
     assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(schema, schema, false, false));
+  }
+
+  @Test
+  public void testCompatibilityWithBlobFields() {
+    // Tests that BLOB compatibility follows RECORD rules
+    HoodieSchema writerBlob = HoodieSchema.createBlob();
+    HoodieSchema readerBlob = HoodieSchema.createBlob();
+
+    // Reader BLOB with all writer BLOB fields should be compatible
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerBlob, readerBlob, true, false));
+
+    // Same BLOB schemas are compatible both ways
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(readerBlob, writerBlob, true, false));
+
+    // Test BLOB in a record context
+    HoodieSchema writerSchema = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("blob_field", writerBlob, null, null)
+        ));
+
+    HoodieSchema readerSchema = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("blob_field", readerBlob, null, null)
+        ));
+
+    // Records containing BLOBs should be compatible
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerSchema, readerSchema, true, false));
+
+    // Test writer with extra fields (reader can ignore with projection allowed)
+    HoodieSchema writerWithExtraField = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("blob_field", writerBlob, null, null),
+            HoodieSchemaField.of("extra_field", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, null)
+        ));
+
+    // Reader can ignore extra fields if projection is allowed
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerWithExtraField, readerSchema, true, true));
+
+    // Source with more fields projects to target with fewer fields
+    assertTrue(HoodieSchemaCompatibility.isStrictProjectionOf(writerWithExtraField, readerSchema));
+    assertTrue(HoodieSchemaCompatibility.isCompatibleProjectionOf(writerWithExtraField, readerSchema));
+    // Opposite should be false
+    assertFalse(HoodieSchemaCompatibility.isStrictProjectionOf(readerSchema, writerWithExtraField));
+  }
+
+  @Test
+  public void testBlobAreSchemasProjectionEquivalent() {
+    // Tests that BLOB projection equivalence works correctly
+    HoodieSchema blob1 = HoodieSchema.createBlob();
+    HoodieSchema blob2 = HoodieSchema.createBlob();
+
+    // Two BLOBs with same field structure are equivalent
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(blob1, blob2));
+
+    // BLOB is equivalent to itself
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(blob1, blob1));
+
+    // BLOBs in arrays are projection equivalent
+    HoodieSchema arrayBlob1 = HoodieSchema.createArray(blob1);
+    HoodieSchema arrayBlob2 = HoodieSchema.createArray(blob2);
+    arrayBlob1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(arrayBlob1, arrayBlob2));
+
+    // BLOBs in maps are projection equivalent
+    HoodieSchema mapBlob1 = HoodieSchema.createMap(blob1);
+    HoodieSchema mapBlob2 = HoodieSchema.createMap(blob2);
+    mapBlob1.addProp("prop1", "value1"); // prevent Objects.equals from returning true
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(mapBlob1, mapBlob2));
+
+    // BLOB with nested BLOBs in a record structure
+    HoodieSchema recordWithBlob1 = HoodieSchema.createRecord("test", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("nested_blob", blob1, null, null)
+        ));
+
+    HoodieSchema recordWithBlob2 = HoodieSchema.createRecord("test2", null, null, false,
+        Collections.singletonList(
+            HoodieSchemaField.of("nested_blob", blob2, null, null)
+        ));
+
+    // Records with BLOBs should be projection equivalent (names can differ)
+    assertTrue(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(recordWithBlob1, recordWithBlob2));
+
+    // BLOB vs non-BLOB should not be equivalent
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    assertFalse(HoodieSchemaCompatibility.areSchemasProjectionEquivalent(blob1, stringSchema));
+  }
+
+  @Test
+  public void testVectorSchemaCompatibility() {
+    HoodieSchema incomingSchema = HoodieSchema.createRecord("vector_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("embedding", HoodieSchema.createVector(4, HoodieSchema.Vector.VectorElementType.DOUBLE), null, null)
+    ));
+
+    HoodieSchema tableSchema = HoodieSchema.createRecord("vector_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("embedding", HoodieSchema.createVector(4, HoodieSchema.Vector.VectorElementType.DOUBLE), null, null)
+    ));
+
+    HoodieSchemaCompatibilityChecker.SchemaPairCompatibility compatibility =
+        HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(incomingSchema, tableSchema, false);
+    assertEquals(HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.COMPATIBLE, compatibility.getType());
+    assertDoesNotThrow(() -> HoodieSchemaCompatibility.checkValidEvolution(incomingSchema, tableSchema));
+  }
+
+  @Test
+  public void testVectorSchemaCompatibilityRejectsElementTypeEvolution() {
+    HoodieSchema incomingSchema = HoodieSchema.createRecord("vector_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("embedding", HoodieSchema.createVector(4, HoodieSchema.Vector.VectorElementType.DOUBLE), null, null)
+    ));
+
+    HoodieSchema tableSchema = HoodieSchema.createRecord("vector_record", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null),
+        HoodieSchemaField.of("embedding", HoodieSchema.createVector(4, HoodieSchema.Vector.VectorElementType.FLOAT), null, null)
+    ));
+
+    HoodieSchemaCompatibilityChecker.SchemaPairCompatibility compatibility =
+        HoodieSchemaCompatibilityChecker.checkReaderWriterCompatibility(incomingSchema, tableSchema, false);
+    assertEquals(HoodieSchemaCompatibilityChecker.SchemaCompatibilityType.INCOMPATIBLE, compatibility.getType());
+    assertThrows(SchemaBackwardsCompatibilityException.class,
+        () -> HoodieSchemaCompatibility.checkValidEvolution(incomingSchema, tableSchema));
+  }
+
+  @Test
+  public void testVariantUnshreddedCompatible() {
+    HoodieSchema.Variant writer = HoodieSchema.createVariant();
+    HoodieSchema.Variant reader = HoodieSchema.createVariant();
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writer, reader, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(reader, writer, true, false));
+  }
+
+  @Test
+  public void testVariantShreddedSameTypedValueCompatible() {
+    HoodieSchema typedValue = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema.Variant writer = HoodieSchema.createVariantShredded(typedValue);
+    HoodieSchema.Variant reader = HoodieSchema.createVariantShredded(typedValue);
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writer, reader, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(reader, writer, true, false));
+  }
+
+  @Test
+  public void testVariantShreddedDifferentTypedValueCompatible() {
+    // Variant is self-describing, so different typed_value schemas are still compatible
+    HoodieSchema.Variant writer = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieSchema.Variant reader = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.INT));
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writer, reader, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(reader, writer, true, false));
+  }
+
+  @Test
+  public void testVariantUnshreddedVsShreddedCompatible() {
+    // Shredding is a storage optimization, not a semantic difference
+    HoodieSchema.Variant unshredded = HoodieSchema.createVariant();
+    HoodieSchema.Variant shredded = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.STRING));
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(unshredded, shredded, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(shredded, unshredded, true, false));
+  }
+
+  @Test
+  public void testVariantShreddedWithoutTypedValueCompatible() {
+    HoodieSchema.Variant withTypedValue = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.INT));
+    HoodieSchema.Variant withoutTypedValue = HoodieSchema.createVariantShredded(null);
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(withTypedValue, withoutTypedValue, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(withoutTypedValue, withTypedValue, true, false));
+  }
+
+  @Test
+  public void testVariantVsNonVariantIncompatible() {
+    HoodieSchema.Variant variant = HoodieSchema.createVariant();
+    HoodieSchema stringSchema = HoodieSchema.create(HoodieSchemaType.STRING);
+    HoodieSchema intSchema = HoodieSchema.create(HoodieSchemaType.INT);
+
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(variant, stringSchema, true, false));
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(stringSchema, variant, true, false));
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(variant, intSchema, true, false));
+    assertFalse(HoodieSchemaCompatibility.isSchemaCompatible(intSchema, variant, true, false));
+  }
+
+  @Test
+  public void testVariantInNullableUnionCompatible() {
+    HoodieSchema.Variant writer = HoodieSchema.createVariant();
+    HoodieSchema.Variant reader = HoodieSchema.createVariant();
+
+    HoodieSchema nullableWriter = HoodieSchema.createNullable(writer);
+    HoodieSchema nullableReader = HoodieSchema.createNullable(reader);
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(nullableWriter, nullableReader, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(nullableReader, nullableWriter, true, false));
+  }
+
+  @Test
+  public void testVariantNestedInRecordCompatible() {
+    HoodieSchema.Variant writerVariant = HoodieSchema.createVariant();
+    HoodieSchema.Variant readerVariant = HoodieSchema.createVariantShredded(
+        HoodieSchema.create(HoodieSchemaType.STRING));
+
+    HoodieSchema writerRecord = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("data", writerVariant, null, null)
+        ));
+
+    HoodieSchema readerRecord = HoodieSchema.createRecord("test", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), null, null),
+            HoodieSchemaField.of("data", readerVariant, null, null)
+        ));
+
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(writerRecord, readerRecord, true, false));
+    assertTrue(HoodieSchemaCompatibility.isSchemaCompatible(readerRecord, writerRecord, true, false));
   }
 }

@@ -15,10 +15,10 @@
 * See the License for the specific language governing permissions and
 -->
 # Requirements
-Python is required to run this. Pyspark 2.4.7 does not work with the latest versions of python (python 3.8+) so if you want to use a later version (in the example below 3.3) you can build Hudi by using the command:
+Python is required to run this. Pyspark 2.4.7 does not work with the latest versions of python (python 3.8+) so if you want to use a later version (in the example below 3.5) you can build Hudi by using the command:
 ```bash
 cd $HUDI_DIR
-mvn clean install -DskipTests -Dspark3.3 -Dscala2.12 
+mvn clean install -DskipTests -Dspark3.5 -Dscala2.12 
 ```
 Various python packages may also need to be installed so you should get pip and then use **pip install \<package name\>** to get them
 # How to Run
@@ -32,7 +32,7 @@ export PYTHONPATH=$SPARK_HOME/python/:$PYTHONPATH
 export PYTHONPATH=$SPARK_HOME/python/lib/*.zip:$PYTHONPATH
 ```
 4. Identify the Hudi Spark Bundle .jar or package that you wish to use:
-A package will be in the format **org.apache.hudi:hudi-spark3.3-bundle_2.12:0.12.0**
+A package will be in the format **org.apache.hudi:hudi-spark3.5-bundle_2.12:0.12.0**
 A jar will be in the format  **\[HUDI_BASE_PATH\]/packaging/hudi-spark-bundle/target/hudi-spark-bundle\[VERSION\].jar**
 5. Go to the hudi directory and run the quickstart examples using the commands below, using the -t flag for the table name and the -p flag or -j flag for your package or jar respectively.
 ```bash

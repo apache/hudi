@@ -73,7 +73,7 @@ Hence, the migration protocol is key to ensure a smooth migration experience for
 - 1.x writer should be able to write in both the table versions tables (table version 6 and the current version) w/o any
   loss in 0.x functionality and guaranteeing no data inconsistencies.
   But for new features that was introduced in 1.x, we may not be able to support all of them.
-- In this case, we explicitly request users to not turn on these features untill all readers are completely migrated to
+- In this case, we explicitly request users to not turn on these features until all readers are completely migrated to
   1.x so as to not break any readers as applicable.
 
 Connecting back to our example above, lets see how the migration might look like for an existing user. 

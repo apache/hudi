@@ -18,8 +18,10 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -50,5 +52,30 @@ class TestHoodieRelations {
       Seq(tableStructSchema.fields.apply(tableStructSchema.fieldIndex("ts"))),
       requiredStructSchema.fields.toSeq
     )
+  }
+
+  @Test
+  def testPruningInternalSchemaToEmptyProjection(): Unit = {
+    val tableSchema = HoodieSchema.parse(
+      "{\"type\":\"record\",\"name\":\"record\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}"
+    )
+    val internalSchema = InternalSchemaConverter.convert(tableSchema)
+
+    val (requiredAvroSchema, requiredStructSchema, requiredInternalSchema) =
+      HoodieBaseRelation.projectSchema(Right(internalSchema), Array.empty)
+
+    assertEquals(0, requiredAvroSchema.getFields.size)
+    assertEquals(0, requiredStructSchema.fields.length)
+    assertTrue(requiredInternalSchema.isEmptySchema)
+
+    // The schema-on-read arm must land on the same projection as the plain arm, which has always
+    // handled an empty projection by building a zero-field record. The record names differ ("schema"
+    // vs the table's own), so compare the struct schema and the field count rather than the records.
+    val (plainAvroSchema, plainStructSchema, plainInternalSchema) =
+      HoodieBaseRelation.projectSchema(Left(tableSchema), Array.empty)
+
+    assertEquals(plainStructSchema, requiredStructSchema)
+    assertEquals(plainAvroSchema.getFields.size, requiredAvroSchema.getFields.size)
+    assertTrue(plainInternalSchema.isEmptySchema)
   }
 }

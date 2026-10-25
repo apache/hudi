@@ -67,7 +67,13 @@ public class S3SourceConfig extends HoodieConfig {
       .defaultValue("20")
       .withAlternatives(OLD_S3_SOURCE_PREFIX + "queue.long.poll.wait")
       .markAdvanced()
-      .withDocumentation("Long poll wait time in seconds, If set as 0 then client will fetch on short poll basis.");
+      .withDocumentation("Long poll wait time in seconds, If set as 0 then client will fetch on short poll basis. "
+          + "This also governs how the source confirms the queue is drained: under long polling SQS sends an empty "
+          + "response only once the wait time expires, so an empty response is strong evidence but always costs a "
+          + "full wait. The source therefore requires however many empty responses fit in one ~20s window (1 empty "
+          + "at 20s, 2 at 10s, 4 at 5s), holding drain confirmation to roughly a single poll window at any setting. "
+          + "Short polling samples only a subset of SQS servers and returns immediately, so its empty responses are "
+          + "weak evidence but nearly free, and a higher fixed count is required instead. AWS caps this at 20s.");
 
   public static final ConfigProperty<String> S3_SOURCE_QUEUE_MAX_MESSAGES_PER_BATCH = ConfigProperty
       .key(S3_SOURCE_PREFIX + "queue.max.messages.per.batch")
@@ -90,4 +96,18 @@ public class S3SourceConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("Visibility timeout for messages in queue. After we consume the message, queue will move the consumed "
           + "messages to in-flight state, these messages can't be consumed again by source for this timeout period.");
+
+  public static final ConfigProperty<Integer> S3_SOURCE_QUEUE_PROCESSING_PARALLELISM = ConfigProperty
+      .key(S3_SOURCE_PREFIX + "queue.processing.parallelism")
+      .defaultValue(16)
+      .withAlternatives(OLD_S3_SOURCE_PREFIX + "queue.processing.parallelism")
+      .markAdvanced()
+      .withDocumentation("Number of threads used to receive messages from and delete messages against the SQS queue "
+          + "concurrently. ReceiveMessage and DeleteMessageBatch are capped by SQS at 10 messages per call, so draining a "
+          + "large backlog is dominated by serial round-trips; this fans those calls out across a fixed thread pool. The "
+          + "shared SqsClient is thread-safe (AWS SDK for Java 2.x) and its HTTP connection pool must be at least this "
+          + "value so workers never block on connection acquisition; the SDK default (maxConnections=50) already covers "
+          + "any value up to 50, and only a value above 50 makes the source resize the pool, which requires "
+          + "software.amazon.awssdk:apache-client on the runtime classpath. Set to 1 to restore fully sequential "
+          + "behaviour.");
 }

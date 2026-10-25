@@ -1,0 +1,98 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Self-contained COW + MOR stock-ticks seed for the Trino E2E tests
+// (ITTestTrinoStockTicks). Mirrors the retired trino-batch1.commands data
+// shape without the Kafka/streaming pipeline, which integ2 does not exercise.
+// ts stays STRING so Trino's CSV_UNQUOTED output matches the test's exact
+// row assertion: GOOG,2018-08-31 10:29:00,6330,1230.5,1230.5
+spark.sql("""
+  CREATE TABLE stock_ticks_cow (
+    symbol STRING,
+    ts STRING,
+    volume LONG,
+    open DOUBLE,
+    close DOUBLE,
+    dt STRING
+  ) USING hudi
+  PARTITIONED BY (dt)
+  LOCATION '/user/hive/warehouse/stock_ticks_cow'
+  TBLPROPERTIES (
+    'primaryKey' = 'symbol',
+    'preCombineField' = 'ts',
+    'hoodie.datasource.hive_sync.enable' = 'true',
+    'hoodie.datasource.hive_sync.database' = 'default',
+    'hoodie.datasource.hive_sync.table' = 'stock_ticks_cow',
+    'hoodie.datasource.hive_sync.jdbcurl' = 'jdbc:hive2://hiveserver:10000/',
+    'hoodie.datasource.hive_sync.mode' = 'jdbc',
+    'hoodie.datasource.hive_sync.partition_fields' = 'dt',
+    'hoodie.datasource.hive_sync.partition_extractor_class' = 'org.apache.hudi.hive.MultiPartKeysValueExtractor',
+    'hoodie.datasource.hive_sync.username' = 'hive',
+    'hoodie.datasource.hive_sync.password' = 'hive'
+  )
+""")
+
+spark.sql("INSERT INTO stock_ticks_cow VALUES ('GOOG', '2018-08-31 10:29:00', 6330, 1230.5, 1230.5, '2018-08-31')")
+spark.sql("select symbol, ts, volume, open, close from stock_ticks_cow").show(10, false)
+println("STOCK_TICKS_COW_SETUP_SUCCESS")
+
+// MOR variant: identical schema and seed row. 'type' = 'mor' makes hive sync
+// register stock_ticks_mor_ro / stock_ticks_mor_rt; the initial insert writes
+// parquet base files, and the follow-up UPDATE below adds a log-only delta so
+// the _ro and _rt views actually diverge.
+spark.sql("""
+  CREATE TABLE stock_ticks_mor (
+    symbol STRING,
+    ts STRING,
+    volume LONG,
+    open DOUBLE,
+    close DOUBLE,
+    dt STRING
+  ) USING hudi
+  PARTITIONED BY (dt)
+  LOCATION '/user/hive/warehouse/stock_ticks_mor'
+  TBLPROPERTIES (
+    'type' = 'mor',
+    'primaryKey' = 'symbol',
+    'preCombineField' = 'ts',
+    'hoodie.datasource.hive_sync.enable' = 'true',
+    'hoodie.datasource.hive_sync.database' = 'default',
+    'hoodie.datasource.hive_sync.table' = 'stock_ticks_mor',
+    'hoodie.datasource.hive_sync.jdbcurl' = 'jdbc:hive2://hiveserver:10000/',
+    'hoodie.datasource.hive_sync.mode' = 'jdbc',
+    'hoodie.datasource.hive_sync.partition_fields' = 'dt',
+    'hoodie.datasource.hive_sync.partition_extractor_class' = 'org.apache.hudi.hive.MultiPartKeysValueExtractor',
+    'hoodie.datasource.hive_sync.username' = 'hive',
+    'hoodie.datasource.hive_sync.password' = 'hive'
+  )
+""")
+
+spark.sql("INSERT INTO stock_ticks_mor VALUES ('GOOG', '2018-08-31 10:29:00', 6330, 1230.5, 1230.5, '2018-08-31')")
+
+// Log-only delta on the same key: UPDATE routes through upsert, so the existing
+// file group gains a log file that _ro must ignore (base row: 10:29:00) and
+// _rt must merge (10:59:00). One delta commit stays far below the inline
+// compaction threshold, so the log survives for the read-path split to matter.
+// open/close use .25/.5 so the double renders exactly in Trino's CSV output.
+spark.sql("UPDATE stock_ticks_mor SET ts = '2018-08-31 10:59:00', volume = 9021, open = 1227.25, close = 1227.5 WHERE symbol = 'GOOG'")
+spark.sql("select symbol, ts, volume, open, close from stock_ticks_mor").show(10, false)
+println("STOCK_TICKS_MOR_SETUP_SUCCESS")
+
+// Debug aid: proves stock_ticks_mor_ro / stock_ticks_mor_rt got registered.
+spark.sql("show tables").show(100, false)
+println("STOCK_TICKS_TRINO_SETUP_SUCCESS")

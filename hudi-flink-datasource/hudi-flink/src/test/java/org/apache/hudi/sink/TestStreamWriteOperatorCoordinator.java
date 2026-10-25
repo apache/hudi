@@ -18,56 +18,99 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hive.HiveSyncConfigHolder;
+import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
 import org.apache.hudi.sink.utils.CoordinationResponseSerDe;
+import org.apache.hudi.sink.utils.EventBuffers;
 import org.apache.hudi.sink.utils.MockCoordinatorExecutor;
+import org.apache.hudi.sink.utils.MockCorrespondent;
 import org.apache.hudi.sink.utils.NonThrownExecutor;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Gauge;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.metrics.groups.OperatorCoordinatorMetricGroup;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
 import org.apache.flink.runtime.operators.coordination.MockOperatorCoordinatorContext;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.util.FileUtils;
+import org.apache.flink.util.function.ThrowingRunnable;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -79,6 +122,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -92,7 +137,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   @BeforeEach
   public void before() throws Exception {
-    coordinator = createCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2);
+    coordinator = startCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), 2);
   }
 
   @AfterEach
@@ -119,6 +164,86 @@ public class TestStreamWriteOperatorCoordinator {
     assertNotEquals(instant, inflight, "Should start a new instant");
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"upsert", "insert", "bulk_insert", "insert_overwrite", "insert_overwrite_table", "delete"})
+  void testValidationOncePerInstant(String operation) throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, operation);
+    coordinator = startCoordinator(conf, 2);
+    HoodieFlinkWriteClient writeClient = Mockito.spy(coordinator.getWriteClient());
+    Field writeClientField = StreamWriteOperatorCoordinator.class.getDeclaredField("writeClient");
+    writeClientField.setAccessible(true);
+    writeClientField.set(coordinator, writeClient);
+
+    String firstInstant = requestInstantTime(1);
+    assertEquals(firstInstant, requestInstantTime(1));
+    Mockito.verify(writeClient, Mockito.times(1)).preTxn(Mockito.eq(WriteOperationType.fromValue(operation)), Mockito.any());
+    Mockito.verify(writeClient, Mockito.times(1)).validateAgainstTableProperties(Mockito.any(), Mockito.any(), Mockito.eq(WriteOperationType.fromValue(operation)));
+
+    // Complete the first checkpoint so the next request can create a new instant.
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1, firstInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1, firstInstant, "par2", false, true, 0.2));
+    coordinator.notifyCheckpointComplete(2);
+    assertNull(coordinator.getEventBuffer(1));
+    String nextInstant = requestInstantTime(2);
+    assertNotEquals(firstInstant, nextInstant);
+    Mockito.verify(writeClient, Mockito.times(2)).preTxn(Mockito.eq(WriteOperationType.fromValue(operation)), Mockito.any());
+    Mockito.verify(writeClient, Mockito.times(2)).validateAgainstTableProperties(Mockito.any(), Mockito.any(), Mockito.eq(WriteOperationType.fromValue(operation)));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"upsert", "insert", "bulk_insert", "insert_overwrite", "insert_overwrite_table", "delete"})
+  void testColumnDropFailsBeforeInstantIsPublished(String operation) throws Exception {
+    coordinator.close();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, operation);
+    coordinator = startCoordinator(conf, 2);
+    HoodieWriteConfig writeConfig = coordinator.getWriteClient().getConfig();
+    assertFalse(writeConfig.shouldValidateAvroSchema());
+    assertFalse(writeConfig.shouldAllowAutoEvolutionColumnDrop());
+
+    // Complete an instant using the original schema, then drop a column for the next instant.
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, writeConfig.getSchema());
+    HoodieTestTable.of(StreamerUtil.createMetaClient(conf)).addCommit("001", Option.of(metadata));
+    conf.set(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH,
+        getClass().getClassLoader().getResource("test_read_schema_dropped_age.avsc").toString());
+    writeConfig.setSchema(StreamerUtil.getSourceSchema(conf).toString());
+
+    assertInstantCreationFails(conf, MissingSchemaFieldException.class, "age");
+  }
+
+  @Test
+  void testTablePropertyChangesAreValidatedBeforeInstantIsPublished() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    Properties updatedProperties = new Properties();
+    updatedProperties.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
+    updatedProperties.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProperties);
+
+    assertInstantCreationFails(conf, HoodieException.class, HoodieTableConfig.META_FIELDS_MODE.key());
+  }
+
+  private void assertInstantCreationFails(Configuration conf, Class<? extends Throwable> causeType, String message) throws Exception {
+    Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(1))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(response.getInstant());
+    assertNull(coordinator.getEventBuffer(1));
+    MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
+    assertTrue(context.isJobFailed());
+    Throwable cause = context.getJobFailureReason();
+    while (cause != null && !(causeType.isInstance(cause) && cause.getMessage() != null && cause.getMessage().contains(message))) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause, "Expected " + causeType.getSimpleName() + " containing: " + message);
+    HoodieTimeline pending = StreamerUtil.createMetaClient(conf).reloadActiveTimeline().filterPendingExcludingCompaction();
+    assertTrue(pending.empty(), "Validation must fail before a new instant is created");
+  }
+
   @Test
   public void testTableInitialized() throws IOException {
     final org.apache.hadoop.conf.Configuration hadoopConf = HadoopConfigurations.getHadoopConf(new Configuration());
@@ -128,11 +253,110 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
-  @Test
-  public void testCheckpointAndRestore() throws Exception {
+  /**
+   * Verifies both coordinator restore paths. In case 1, a newly constructed coordinator receives
+   * checkpoint data before {@link StreamWriteOperatorCoordinator#start()}, so it must deserialize
+   * the event buffers for restoration during start. In case 2, global failover resets an already
+   * started coordinator, so it recommits its live event buffers directly.
+   */
+  @ParameterizedTest
+  @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+  public void testCheckpointAndRestore(boolean isStreamingIndexWriteEnabled, boolean restartCoordinator) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    if (isStreamingIndexWriteEnabled) {
+      conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+      conf.set(FlinkOptions.INDEX_WRITE_TASKS, 2);
+      coordinator.close();
+      coordinator = startCoordinator(conf, 2);
+    }
+
+    requestInstantTime(-1);
+    String instant = coordinator.getInstant();
+    assertNotEquals("", instant);
+
+    // Writer checkpoint 1 finishes after the coordinator has taken its snapshot.
+    coordinator.checkpointCoordinator(1, new CompletableFuture<>());
+    OperatorEvent event0 = createOperatorEvent(0, instant, "par1", true, 0.1);
+    OperatorEvent event1 = createOperatorEvent(1, instant, "par2", true, 0.2);
+    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(1, event1);
+
+    if (isStreamingIndexWriteEnabled) {
+      OperatorEvent indexEvent0 = createOperatorEvent(0, -1, instant, "record_index", false, true, 0.1, true);
+      OperatorEvent indexEvent1 = createOperatorEvent(1, -1, instant, "record_index", false, true, 0.2, true);
+      coordinator.handleEventFromOperator(0, indexEvent0);
+      coordinator.handleEventFromOperator(1, indexEvent1);
+    }
+
     CompletableFuture<byte[]> future = new CompletableFuture<>();
-    coordinator.checkpointCoordinator(1, future);
-    coordinator.resetToCheckpoint(1, future.get());
+    coordinator.checkpointCoordinator(2, future);
+
+    if (restartCoordinator) {
+      coordinator.close();
+      coordinator = createCoordinator(conf, 4);
+      coordinator.resetToCheckpoint(2, future.get());
+      EventBuffers.EventBuffer eventBuffer = coordinator.getEventBuffer(-1);
+      assertEquals(2, eventBuffer.getDataWriteEventBuffer().length);
+      assertEquals(isStreamingIndexWriteEnabled ? 2 : 0, eventBuffer.getIndexWriteEventBuffer().length);
+      // Exercise recommit during start, not only checkpoint deserialization.
+      coordinator.start();
+    } else {
+      // Global failover recommits the live buffers of the already started coordinator.
+      coordinator.resetToCheckpoint(2, future.get());
+    }
+
+    assertNull(coordinator.getEventBuffer(-1));
+    assertNull(((MockOperatorCoordinatorContext) coordinator.getContext()).getJobFailureReason());
+    assertTrue(StreamerUtil.createMetaClient(conf).reloadActiveTimeline()
+        .filterCompletedInstants().containsInstant(instant));
+  }
+
+  /**
+   * Verifies both restore paths with the legacy checkpoint format.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testRestoreFromLegacyState(boolean restartCoordinator) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    requestInstantTime(-1);
+    String instant = coordinator.getInstant();
+    assertNotEquals("", instant);
+
+    // Writer checkpoint 1 finishes after the coordinator has taken its snapshot.
+    coordinator.checkpointCoordinator(1, new CompletableFuture<>());
+    OperatorEvent event0 = createOperatorEvent(0, instant, "par1", true, 0.1);
+    OperatorEvent event1 = createOperatorEvent(1, instant, "par2", true, 0.2);
+    coordinator.handleEventFromOperator(0, event0);
+    coordinator.handleEventFromOperator(1, event1);
+
+    CompletableFuture<byte[]> future = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(2, future);
+
+    Map<Long, Pair<String, EventBuffers.EventBuffer>> eventBuffers = SerializationUtils.deserialize(future.get());
+    // convert to legacy event buffers
+    Map<Long, Pair<String, WriteMetadataEvent[]>> legacyEventBuffers = new HashMap<>();
+    eventBuffers.forEach((ckpId, eventBuffer) -> {
+      legacyEventBuffers.put(ckpId, Pair.of(eventBuffer.getLeft(), eventBuffer.getRight().getDataWriteEventBuffer()));
+    });
+
+    byte[] legacyState = SerializationUtils.serialize(legacyEventBuffers);
+    if (restartCoordinator) {
+      coordinator.close();
+      coordinator = createCoordinator(conf, 4);
+      coordinator.resetToCheckpoint(2, legacyState);
+      EventBuffers.EventBuffer eventBuffer = coordinator.getEventBuffer(-1);
+      assertEquals(2, eventBuffer.getDataWriteEventBuffer().length);
+      assertEquals(0, eventBuffer.getIndexWriteEventBuffer().length);
+      coordinator.start();
+    } else {
+      // A coordinator surviving global failover recommits its live buffers directly.
+      coordinator.resetToCheckpoint(2, legacyState);
+    }
+
+    assertNull(coordinator.getEventBuffer(-1));
+    assertNull(((MockOperatorCoordinatorContext) coordinator.getContext()).getJobFailureReason());
+    assertTrue(StreamerUtil.createMetaClient(conf).reloadActiveTimeline()
+        .filterCompletedInstants().containsInstant(instant));
   }
 
   @Test
@@ -151,10 +375,92 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
+  void testDeferredRecommitAfterScaleUp() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    String restoredInstant = restoreFirstCheckpointAfterScaleUp(conf);
+    String nextInstant = requestInstantTime(1);
+    assertNotEquals(restoredInstant, nextInstant);
+    assertEquals(nextInstant, coordinator.getInstant());
+    coordinator.checkpointCoordinator(2, new CompletableFuture<>());
+    sendCheckpointEvents(1, nextInstant, 4);
+
+    coordinator.notifyCheckpointComplete(2);
+
+    HoodieTimeline completed = StreamerUtil.createMetaClient(conf)
+        .reloadActiveTimeline().filterCompletedInstants();
+    assertTrue(completed.containsInstant(restoredInstant));
+    assertTrue(completed.containsInstant(nextInstant));
+    assertEquals(2, completed.readCommitMetadata(INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, restoredInstant))
+        .getPartitionToWriteStats().size(), "Both original writers must be included in the restored commit");
+    assertEquals(4, completed.readCommitMetadata(INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.COMPLETED, HoodieTimeline.DELTA_COMMIT_ACTION, nextInstant))
+        .getPartitionToWriteStats().size(), "All scaled-up writers must be included in the next commit");
+    assertNull(coordinator.getEventBuffer(-1));
+    assertNull(coordinator.getEventBuffer(1));
+    assertNull(((MockOperatorCoordinatorContext) coordinator.getContext()).getJobFailureReason());
+  }
+
+  @Disabled("https://github.com/apache/hudi/issues/19922: deferred bootstrap metadata is omitted from the next checkpoint")
+  @Test
+  void testDeferredRecommitSurvivesAnotherRestart() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    String restoredInstant = restoreFirstCheckpointAfterScaleUp(conf);
+    String nextInstant = requestInstantTime(1);
+    CompletableFuture<byte[]> secondCheckpoint = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(2, secondCheckpoint);
+    sendCheckpointEvents(1, nextInstant, 4);
+    coordinator.close();
+
+    // Checkpoint 2 succeeded, but the job stopped before notifyCheckpointComplete could commit it.
+    // The writers now restore only checkpoint 2's batch; the coordinator must preserve the older batch.
+    coordinator = createCoordinator(conf, 4);
+    coordinator.resetToCheckpoint(2, secondCheckpoint.get());
+    coordinator.start();
+    setSynchronousExecutors(coordinator);
+    for (int task = 0; task < 4; task++) {
+      coordinator.handleEventFromOperator(task, createBootstrapEvent(task, 1, nextInstant, "new" + task));
+    }
+    coordinator.notifyCheckpointComplete(3);
+
+    HoodieTimeline completed = StreamerUtil.createMetaClient(conf).reloadActiveTimeline().filterCompletedInstants();
+    assertTrue(completed.containsInstant(nextInstant));
+    assertTrue(completed.containsInstant(restoredInstant), "The first batch must survive a second restart before its deferred commit");
+  }
+
+  private String restoreFirstCheckpointAfterScaleUp(Configuration conf) throws Exception {
+    resetToMergeOnRead(conf);
+    String restoredInstant = requestInstantTime(-1);
+    CompletableFuture<byte[]> firstCheckpoint = new CompletableFuture<>();
+    // The first coordinator snapshot precedes the writer snapshots, so only writer state has this batch.
+    coordinator.checkpointCoordinator(1, firstCheckpoint);
+    coordinator.close();
+
+    coordinator = createCoordinator(conf, 4);
+    coordinator.resetToCheckpoint(1, firstCheckpoint.get());
+    coordinator.start();
+    setSynchronousExecutors(coordinator);
+    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, -1, restoredInstant, "par1"));
+    coordinator.handleEventFromOperator(1, createBootstrapEvent(1, -1, restoredInstant, "par2"));
+    EventBuffers.EventBuffer buffer = coordinator.getEventBuffer(-1);
+    assertFalse(buffer.allBootstrapEventsReceived());
+    assertEquals("", coordinator.getInstant());
+    assertFalse(StreamerUtil.createMetaClient(conf).reloadActiveTimeline().filterCompletedInstants().containsInstant(restoredInstant));
+    return restoredInstant;
+  }
+
+  private void sendCheckpointEvents(long checkpointId, String instant, int parallelism) {
+    for (int task = 0; task < parallelism; task++) {
+      coordinator.handleEventFromOperator(task,
+          createOperatorEvent(task, checkpointId, instant, "new" + task, false, true, 0.1));
+    }
+    assertNull(((MockOperatorCoordinatorContext) coordinator.getContext()).getJobFailureReason());
+  }
+
+  @Test
   public void testEventReset() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
-    coordinator = createCoordinator(conf, 2);
+    resetToMergeOnRead(conf);
     CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
     String instant = requestInstantTime(0);
@@ -166,26 +472,26 @@ public class TestStreamWriteOperatorCoordinator {
         .build();
     coordinator.handleEventFromOperator(0, event1);
     coordinator.subtaskFailed(0, null);
-    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+    assertNotNull(coordinator.getEventBuffer().getDataWriteEventBuffer()[0], "Events should not be cleared by subTask failure");
 
     OperatorEvent event2 = createOperatorEvent(0, 0, instant, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event2);
     coordinator.subtaskFailed(0, null);
-    assertNotNull(coordinator.getEventBuffer()[0], "Events should not be cleared by subTask failure");
+    assertNotNull(coordinator.getEventBuffer().getDataWriteEventBuffer()[0], "Events should not be cleared by subTask failure");
 
     OperatorEvent event3 = createOperatorEvent(0, 0, instant, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event3);
     assertThat("Multiple events of same instant should be merged",
-        coordinator.getEventBuffer()[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer().getDataWriteEventBuffer()[0].getWriteStatuses().size(), is(1));
 
     long nextCkpId = 1;
-    coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(nextCkpId));
-    OperatorEvent event4 = createOperatorEvent(0, nextCkpId, "002", "par1", false, false, 0.1);
+    String instant2 = requestInstantTime(nextCkpId);
+    OperatorEvent event4 = createOperatorEvent(0, nextCkpId, instant2, "par1", false, false, 0.1);
     coordinator.handleEventFromOperator(0, event4);
     assertThat("First instant is not committed yet, new event should not override the old event",
-        coordinator.getEventBuffer(0)[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer(0).getDataWriteEventBuffer()[0].getWriteStatuses().size(), is(1));
     assertThat("Second instant should have one newly added write status",
-        coordinator.getEventBuffer(1)[0].getWriteStatuses().size(), is(1));
+        coordinator.getEventBuffer(1).getDataWriteEventBuffer()[0].getWriteStatuses().size(), is(1));
   }
 
   @Test
@@ -197,7 +503,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "false");
 
     OperatorCoordinator.Context context = new MockOperatorCoordinatorContext(new OperatorID(), 2);
-    coordinator = createCoordinator(conf, 2);
+    coordinator = startCoordinator(conf, 2);
 
     final CompletableFuture<byte[]> future = new CompletableFuture<>();
     coordinator.checkpointCoordinator(1, future);
@@ -236,6 +542,102 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat("Recommits the instant with partial uncommitted events", lastCompleted, is(instant));
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"COPY_ON_WRITE", "MERGE_ON_READ"})
+  void testLateBootstrapAfterNormalCommit(String tableType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, tableType);
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1_000L);
+    coordinator.close();
+    reset();
+    coordinator = startCoordinator(conf, 2);
+    String instant = requestInstantTime(41);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 41, instant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 41, instant, "par2", false, true, 0.1));
+
+    // The restored writer observes a pending instant, but its event is handled after the normal commit.
+    WriteMetadataEvent delayed = createBootstrapEvent(0, 41, instant, "par1");
+    coordinator.notifyCheckpointComplete(42);
+    assertEquals(instant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(41));
+    coordinator.handleEventFromOperator(0, delayed);
+    assertNull(coordinator.getEventBuffer(41), "A late bootstrap must not recreate a normally committed buffer");
+
+    // COW instant creation must not block on a buffer recreated by the late event.
+    String nextInstant = requestInstantTime(42);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 42, nextInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 42, nextInstant, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(43);
+    assertEquals(nextInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(((MockOperatorCoordinatorContext) coordinator.getContext()).getJobFailureReason());
+  }
+
+  @Test
+  void testDuplicateBootstrapEvents() {
+    String instant = requestInstantTime(-1);
+    WriteMetadataEvent partial = createOperatorEvent(0, -1, instant, "par1", false, false, 0.1);
+    partial.setLastBatch(false);
+    coordinator.handleEventFromOperator(0, partial);
+    WriteMetadataEvent first = createBootstrapEvent(0, -1, instant, "par1");
+    coordinator.handleEventFromOperator(0, first);
+    assertSame(first, coordinator.getEventBuffer(-1).getDataWriteEventBuffer()[0],
+        "Recovery must replace an incomplete ordinary event");
+    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, -1, instant, "par1"));
+    assertSame(first, coordinator.getEventBuffer(-1).getDataWriteEventBuffer()[0],
+        "A retry must preserve the existing bootstrap event");
+    assertEquals(1, coordinator.getEventBuffer(-1).collectDataWriteStatuses().size(),
+        "A retry must not accumulate write statuses");
+    assertNull(TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+
+    // The other task's first delivery was lost; its retry completes the recovered batch.
+    coordinator.handleEventFromOperator(1, createBootstrapEvent(1, -1, instant, "par2"));
+    assertEquals(instant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(-1));
+    coordinator.handleEventFromOperator(0, first);
+    assertNull(coordinator.getEventBuffer(-1), "A late retry must not recreate a committed buffer");
+
+    String nextInstant = requestInstantTime(1);
+    coordinator.handleEventFromOperator(0, createBootstrapEvent(0, 1, nextInstant, "par1"));
+    coordinator.handleEventFromOperator(1, createBootstrapEvent(1, 1, nextInstant, "par2"));
+    assertEquals(nextInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    coordinator.handleEventFromOperator(0, first);
+    assertNull(coordinator.getEventBuffer(-1), "Older retries must remain ignored after a newer checkpoint");
+  }
+
+  @Test
+  void testBootstrapDeduplicationSeparatesDataAndIndexWriters() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_WRITE_TASKS, 2);
+    coordinator.close();
+    coordinator = startCoordinator(conf, 2);
+    String instant = requestInstantTime(-1);
+    WriteMetadataEvent dataEvent = createBootstrapEvent(0, -1, instant, "par1");
+    WriteMetadataEvent indexEvent = createOperatorEvent(0, -1, instant, "record_index", true, true, 0.1, true);
+    coordinator.handleEventFromOperator(0, dataEvent);
+    coordinator.handleEventFromOperator(0, indexEvent);
+    EventBuffers.EventBuffer buffer = coordinator.getEventBuffer(-1);
+    assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0]);
+    assertEquals(indexEvent, buffer.getIndexWriteEventBuffer()[0]);
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, -1, instant, "record_index", true, true, 0.1, true));
+    assertSame(indexEvent, buffer.getIndexWriteEventBuffer()[0], "An index retry must preserve the existing bootstrap event");
+    assertEquals(1, buffer.collectIndexWriteStatuses().size(), "An index retry must not accumulate write statuses");
+    assertEquals(dataEvent, buffer.getDataWriteEventBuffer()[0], "An index retry must not replace the data writer's slot");
+    assertFalse(buffer.allBootstrapEventsReceived());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"GLOBAL_RECORD_LEVEL_INDEX", "RECORD_LEVEL_INDEX"})
+  public void testRecordLevelIndexFlag(String indexType) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(new File(tempFile, indexType).getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, indexType);
+    conf.set(FlinkOptions.INDEX_WRITE_TASKS, 1);
+
+    try (StreamWriteOperatorCoordinator coordinator = startCoordinator(conf, 1)) {
+      assertTrue(getRecordLevelIndexFlag(coordinator));
+    }
+  }
+
   @Test
   public void testStopHeartbeatForUncommittedEventWithLazyCleanPolicy() throws Exception {
     // reset
@@ -243,7 +645,7 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.key(), HoodieFailedWritesCleaningPolicy.LAZY.name());
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     assertTrue(coordinator.getWriteClient().getConfig().getFailedWritesCleanPolicy().isLazy());
 
@@ -289,13 +691,98 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.HIVE_SYNC_ENABLED, true);
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = mockWriteWithMetadata(0);
     assertNotEquals("", instant);
 
     // never throw for hive synchronization now
     assertDoesNotThrow(() -> coordinator.notifyCheckpointComplete(1));
+  }
+
+  @Test
+  void testHiveSyncMetricsNotRegisteredWhenHiveSyncDisabled() throws Exception {
+    coordinator.close();
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()), metricGroup);
+
+    assertTrue(metricGroup.counters.isEmpty());
+    assertTrue(metricGroup.histograms.isEmpty());
+    assertTrue(metricGroup.gauges.isEmpty());
+  }
+
+  @Test
+  void testHiveSyncBreakdownMetricsNotRegisteredUnlessDetailedMetricsEnabled() throws Exception {
+    coordinator.close();
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(getUnreachableMetastoreConf(), metricGroup);
+
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+
+    assertEquals(1, metricGroup.counters.get("hiveSyncFailureCount").getCount(),
+        "A failed sync is counted whether or not the detailed metrics are enabled");
+    assertNotNull(metricGroup.counters.get("hiveSyncSuccessCount"));
+    assertNotNull(metricGroup.histograms.get("hiveSyncDurationMs"));
+    assertNotNull(metricGroup.gauges.get("hiveSyncLastSuccessTimeMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncInitDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncSchemaReadDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncPartitionScanDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncRemainingDurationMs"));
+    assertNull(metricGroup.counters.get("hiveSyncPartitionsAddedCount"));
+    assertNull(metricGroup.counters.get("hiveSyncSchemaEvolvedCount"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", "properties."})
+  void testHiveSyncFailureUpdatesMetrics(String keyPrefix) throws Exception {
+    coordinator.close();
+    Configuration conf = getUnreachableMetastoreConf();
+    conf.setString(keyPrefix + HiveSyncConfigHolder.HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(conf, metricGroup);
+
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+
+    assertEquals(0, metricGroup.counters.get("hiveSyncSuccessCount").getCount());
+    assertEquals(2, metricGroup.counters.get("hiveSyncFailureCount").getCount());
+    assertEquals(2, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+    assertEquals(2, metricGroup.histograms.get("hiveSyncInitDurationMs").getCount(),
+        "The time spent failing to build the sync tool is init time");
+    assertEquals(0, metricGroup.histograms.get("hiveSyncRemainingDurationMs").getCount());
+  }
+
+  @Test
+  void testHiveSyncWithIgnoredClientFailureCountsAsFailure() throws Exception {
+    coordinator.close();
+    Configuration conf = getUnreachableMetastoreConf();
+    conf.set(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, true);
+    conf.setString(HiveSyncConfigHolder.HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(conf, metricGroup);
+
+    assertDoesNotThrow(() -> coordinator.doSyncHive());
+
+    assertEquals(0, metricGroup.counters.get("hiveSyncSuccessCount").getCount());
+    assertEquals(1, metricGroup.counters.get("hiveSyncFailureCount").getCount());
+    assertEquals(1, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
+    assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+    assertEquals(1, metricGroup.histograms.get("hiveSyncInitDurationMs").getCount(),
+        "The time spent failing to connect is init time");
+    assertEquals(0, metricGroup.histograms.get("hiveSyncRemainingDurationMs").getCount(),
+        "A sync that never ran records no remaining time");
+  }
+
+  private Configuration getUnreachableMetastoreConf() {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.HIVE_SYNC_ENABLED, true);
+    // nothing listens on port 1, so creating the metastore client fails on its only attempt
+    conf.set(FlinkOptions.HIVE_SYNC_METASTORE_URIS, "thrift://localhost:1");
+    conf.setString(HadoopConfigurations.HADOOP_PREFIX + "hive.metastore.connect.retries", "0");
+    return conf;
   }
 
   @Test
@@ -307,13 +794,18 @@ public class TestStreamWriteOperatorCoordinator {
     int metadataCompactionDeltaCommits = 5;
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
     assertEquals("", instant);
 
     final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
     HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), metadataTableBasePath);
+    assertTrue(metadataTableMetaClient.getTableConfig().isLSMTreeStorageLayout());
+    assertTrue(FSUtils.getAllDataFilesInPartition(
+        metadataTableMetaClient.getStorage(),
+        new StoragePath(metadataTableBasePath, MetadataPartitionType.FILES.getPartitionPath())).stream()
+        .anyMatch(pathInfo -> FSUtils.isNativeLogFile(pathInfo.getPath().getName())));
     HoodieTimeline completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedInstants();
     HoodieTableMetaClient dataTableMetaClient =
         HoodieTestUtils.createMetaClient(new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), new Path(metadataTableBasePath).getParent().getParent().toString());
@@ -332,6 +824,8 @@ public class TestStreamWriteOperatorCoordinator {
       assertThat("One instant need to sync to metadata table", completedTimeline.countInstants(), is(numCommits + 1));
       assertThat(completedTimeline.lastInstant().get().requestedTime(), is(instant));
     }
+    assertLsmMetadataTableReads(conf, dataTableMetaClient);
+
     // the 5th commit triggers the compaction
     mockWriteWithMetadata(ckp++);
     metadataTableMetaClient.reloadActiveTimeline();
@@ -376,6 +870,48 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
+  void testSkipInlineMetadataTableServices() throws Exception {
+    coordinator.close();
+    reset();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    int metadataCompactionDeltaCommits = 5;
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
+    conf.setString(HoodieMetadataConfig.INLINE_TABLE_SERVICES_ENABLED.key(), "false");
+    coordinator = startCoordinator(conf, 1);
+
+    final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), metadataTableBasePath);
+    List<HoodieInstant> before = metadataTableMetaClient.getActiveTimeline().getInstants();
+
+    // Commits past the compaction threshold only add their own deltacommits: no clean, compaction or archival.
+    List<String> instants = new ArrayList<>();
+    for (int ckp = 0; ckp <= metadataCompactionDeltaCommits; ckp++) {
+      instants.add(mockWriteWithMetadata(ckp));
+    }
+    List<HoodieInstant> afterWrites = metadataTableMetaClient.reloadActiveTimeline().getInstants();
+    assertTrue(afterWrites.containsAll(before), "nothing should have been archived");
+    List<HoodieInstant> added = afterWrites.stream().filter(i -> !before.contains(i)).collect(Collectors.toList());
+    assertTrue(added.stream().allMatch(i -> i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)),
+        "unexpected metadata instants " + added);
+    assertEquals(instants, added.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()));
+
+    // Restarting the coordinator does not run them either.
+    coordinator.close();
+    coordinator = startCoordinator(conf, 1);
+    assertEquals(afterWrites, metadataTableMetaClient.reloadActiveTimeline().getInstants());
+
+    // The same restart with the services enabled compacts, so the checks above cannot pass vacuously.
+    coordinator.close();
+    conf.setString(HoodieMetadataConfig.INLINE_TABLE_SERVICES_ENABLED.key(), "true");
+    coordinator = startCoordinator(conf, 1);
+    assertTrue(metadataTableMetaClient.reloadActiveTimeline().getInstants().stream()
+            .anyMatch(i -> i.getAction().equals(HoodieTimeline.COMMIT_ACTION) && !afterWrites.contains(i)),
+        "a compaction was due and should have run");
+  }
+
+  @Test
   void testSyncMetadataTableWithLogCompaction() throws Exception {
     // reset
     reset();
@@ -384,7 +920,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.set(FlinkOptions.METADATA_ENABLED, true);
     conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 20);
     conf.setString("hoodie.metadata.log.compaction.enable", "true");
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
     assertEquals("", instant);
@@ -428,7 +964,7 @@ public class TestStreamWriteOperatorCoordinator {
     // override the default configuration
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.METADATA_ENABLED, true);
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
     assertEquals("", instant);
@@ -452,7 +988,7 @@ public class TestStreamWriteOperatorCoordinator {
     metadataTableMetaClient.getActiveTimeline().transitionRequestedToInflight(HoodieActiveTimeline.DELTA_COMMIT_ACTION, instant);
     metadataTableMetaClient.reloadActiveTimeline();
     // reset the coordinator to mimic the job failover.
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     // write another commit with new instant on the metadata timeline
     instant = mockWriteWithMetadata(ckp);
@@ -471,7 +1007,7 @@ public class TestStreamWriteOperatorCoordinator {
     Logger logger = Mockito.mock(Logger.class); // avoid too many logs by executor
     NonThrownExecutor executor = NonThrownExecutor.builder(logger).waitForTasksFinish(true).build();
 
-    try (StreamWriteOperatorCoordinator coordinator = createCoordinator(conf, 1)) {
+    try (StreamWriteOperatorCoordinator coordinator = startCoordinator(conf, 1)) {
       coordinator.start();
       coordinator.setExecutor(executor);
       TimeUnit.SECONDS.sleep(5); // wait for handled bootstrap event
@@ -509,7 +1045,7 @@ public class TestStreamWriteOperatorCoordinator {
     conf.setString(HoodieWriteConfig.WRITE_CONCURRENCY_MODE.key(), WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL.name());
     conf.setString("hoodie.write.lock.client.num_retries", "1");
 
-    coordinator = createCoordinator(conf, 1);
+    coordinator = startCoordinator(conf, 1);
 
     String instant = coordinator.getInstant();
     assertEquals("", instant);
@@ -534,7 +1070,7 @@ public class TestStreamWriteOperatorCoordinator {
   public void testCommitOnEmptyBatch() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.setString(HoodieWriteConfig.ALLOW_EMPTY_COMMIT.key(), "true");
-    try (StreamWriteOperatorCoordinator coordinator = createCoordinator(conf, 2)) {
+    try (StreamWriteOperatorCoordinator coordinator = startCoordinator(conf, 2)) {
       // Coordinator start the instant
       String instant = requestInstantTime(coordinator, -1);
 
@@ -561,6 +1097,228 @@ public class TestStreamWriteOperatorCoordinator {
     }
   }
 
+  @Test
+  void testHandleInFlightInstantsRequest() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    resetToMergeOnRead(conf);
+
+    // Request an instant time to create an initial instant
+    String instant1 = requestInstantTime(1);
+    assertThat(instant1, not(is("")));
+
+    // Add some events to the buffer to simulate ongoing processing
+    OperatorEvent event1 = createOperatorEvent(0, 1, instant1, "par1", false, false, 0.1);
+    coordinator.handleEventFromOperator(0, event1);
+
+    // Request another instant time to create a second instant
+    String instant2 = requestInstantTime(2);
+    assertThat(instant2, not(is("")));
+
+    // Add more events for the second instant
+    OperatorEvent event2 = createOperatorEvent(1, 2, instant2, "par2", false, false, 0.2);
+    coordinator.handleEventFromOperator(1, event2);
+
+    // Call handleCoordinationRequest with InflightInstantsRequest
+    CompletableFuture<CoordinationResponse> responseFuture =
+        coordinator.handleCoordinationRequest(Correspondent.InflightInstantsRequest.getInstance());
+
+    // Unwrap and verify the response
+    Correspondent.InflightInstantsResponse response =
+        CoordinationResponseSerDe.unwrap(responseFuture.get());
+
+    // Check that the response contains the expected checkpoint IDs and instant times
+    Map<Long, String> inflightInstants = response.getInflightInstants();
+    assertEquals(2, inflightInstants.size());
+    assertTrue(inflightInstants.containsKey(1L));
+    assertTrue(inflightInstants.containsKey(2L));
+    assertEquals(instant1, inflightInstants.get(1L));
+    assertEquals(instant2, inflightInstants.get(2L));
+  }
+
+  @Test
+  void testInstantRequestPollsWhileCreationBlockedThenSucceeds() throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    CountDownLatch lockHeld = new CountDownLatch(1);
+    NonThrownExecutor gatedWorker = Mockito.spy(new GatedInstantRequestExecutor(
+        Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)),
+        lockHeld));
+    coordinator.setInstantRequestExecutor(gatedWorker);
+
+    try {
+      // The first request starts creation; subsequent requests must not queue more work while it is blocked.
+      for (long checkpointId : new long[] {1L, 1L, 2L}) {
+        Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+            coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId))
+                .get(1, TimeUnit.SECONDS));
+        assertNull(pending.getInstant());
+      }
+      assertTrue(gatedWorker.hasRunningTasks());
+      Mockito.verify(gatedWorker, Mockito.times(1)).execute(Mockito.any(), Mockito.eq("request instant time"));
+    } finally {
+      lockHeld.countDown();
+    }
+
+    String instant = requestInstantTime(1L);
+    assertNotNull(instant);
+    assertEquals(instant, requestInstantTime(1L), "Repeated requests must reuse the instant");
+    assertFalse(ctx.isJobFailed());
+    HoodieTimeline inflights = StreamerUtil.createMetaClient(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()))
+        .reloadActiveTimeline().filterInflights();
+    assertEquals(1, inflights.countInstants());
+    assertTrue(inflights.containsInstant(instant));
+  }
+
+  @Test
+  void testReadyInstantRemainsAvailableWhileAnotherCreationIsBlocked() throws Exception {
+    resetToMergeOnRead(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()));
+    String existingInstant = requestInstantTime(1L);
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    CountDownLatch gate = new CountDownLatch(1);
+    NonThrownExecutor worker = new GatedInstantRequestExecutor(
+        Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)), gate);
+    coordinator.setInstantRequestExecutor(worker);
+    try {
+      Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+              .get(1, TimeUnit.SECONDS));
+      assertNull(pending.getInstant());
+      assertTrue(worker.hasRunningTasks());
+      Correspondent.InstantTimeResponse ready = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(1L))
+              .get(1, TimeUnit.SECONDS));
+      assertEquals(existingInstant, ready.getInstant(),
+          "An existing instant must remain available while another checkpoint's creation is blocked");
+    } finally {
+      gate.countDown();
+    }
+  }
+
+  @Test
+  void testEarlierPendingInstantDefersCreationUntilRetry() throws Exception {
+    String instant1 = requestInstantTime(1L);
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    NonThrownExecutor worker = Mockito.spy(NonThrownExecutor.builder(Mockito.mock(Logger.class))
+        .exceptionHook((errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)))
+        .build());
+    coordinator.setInstantRequestExecutor(worker);
+
+    // An earlier checkpoint with an empty event buffer still represents a pending instant.
+    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(pending.getInstant());
+    Mockito.verify(worker, Mockito.never()).execute(Mockito.any(), Mockito.eq("request instant time"));
+    assertEquals(instant1, requestInstantTime(1L), "Matching checkpoint requests must reuse the pending instant");
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, instant1, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, instant1, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(2L);
+    assertEquals(instant1, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertFalse(worker.hasRunningTasks(), "Commit completion must not create an instant for a previously deferred request");
+    assertNull(coordinator.getEventBuffer(2L));
+
+    assertNotEquals(instant1, requestInstantTime(2L), "A new task-side poll must create the next instant");
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(ctx.isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"regional", "global"})
+  void testRecoveredWriterReusesPendingInstantAndRetries(String failover) throws Exception {
+    String instant1 = requestInstantTime(1L);
+    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L)).get(1, TimeUnit.SECONDS));
+    assertNull(pending.getInstant());
+
+    if ("regional".equals(failover)) {
+      coordinator.subtaskReset(0, 1L);
+    } else {
+      CompletableFuture<byte[]> checkpoint = new CompletableFuture<>();
+      coordinator.checkpointCoordinator(1L, checkpoint);
+      coordinator.resetToCheckpoint(1L, checkpoint.get());
+    }
+    assertEquals(instant1, requestInstantTime(1L));
+    assertNull(coordinator.getEventBuffer(2L));
+
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, instant1, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, instant1, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(2L);
+    assertNotEquals(instant1, requestInstantTime(2L));
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"regional", "global"})
+  void testRecoveredWriterRollsBackLaterInstantAndContinues(String failover) throws Exception {
+    CompletableFuture<byte[]> checkpoint = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1L, checkpoint);
+    String abandonedInstant = requestInstantTime(2L);
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 2L, abandonedInstant, "par2", false, true, 0.1));
+
+    if ("regional".equals(failover)) {
+      coordinator.subtaskReset(0, 1L);
+      coordinator.subtaskReset(1, 1L);
+    } else {
+      coordinator.resetToCheckpoint(1L, checkpoint.get());
+    }
+    // One restored writer requests its instant before the other writer clears its old metadata.
+    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0, 1L, false));
+
+    String recoveredInstant = requestInstantTime(1L);
+    assertNotEquals(abandonedInstant, recoveredInstant);
+    assertEquals(recoveredInstant, requestInstantTime(1L));
+    assertEquals(1, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertEquals(recoveredInstant, TestUtils.getLastPendingInstant(tempFile.getAbsolutePath()));
+
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1, 1L, false));
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, recoveredInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, recoveredInstant, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(3L);
+    assertEquals(recoveredInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(2L), "Checkpoint completion must remove the abandoned empty buffer");
+    assertNotEquals(recoveredInstant, requestInstantTime(3L));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @Test
+  void testInstantCreationRechecksPendingBuffersOnWorker() throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    CountDownLatch gate = new CountDownLatch(1);
+    NonThrownExecutor worker = new GatedInstantRequestExecutor(Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)), gate);
+    coordinator.setInstantRequestExecutor(worker);
+    try {
+      Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L)).get(1, TimeUnit.SECONDS));
+      assertNull(pending.getInstant());
+      // Bootstrap can restore a pending buffer after admission but before the creation worker runs.
+      Field buffersField = StreamWriteOperatorCoordinator.class.getDeclaredField("eventBuffers");
+      buffersField.setAccessible(true);
+      EventBuffers buffers = (EventBuffers) buffersField.get(coordinator);
+      buffers.initNewEventBuffer(1L, "001");
+    } finally {
+      gate.countDown();
+    }
+    worker.executeSync(() -> { }, "drain instant requests");
+    assertNull(coordinator.getEventBuffer(2L));
+    assertNotNull(coordinator.getEventBuffer(1L));
+    assertFalse(ctx.isJobFailed());
+  }
+
+  @Test
+  void testNonblockingInstantGenerationAllowsPendingBuffers() throws Exception {
+    resetToMergeOnRead(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()));
+    String instant1 = requestInstantTime(1L);
+    assertNotEquals(instant1, requestInstantTime(2L));
+    assertNotNull(coordinator.getEventBuffer(1L));
+    assertNotNull(coordinator.getEventBuffer(2L));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
@@ -570,21 +1328,96 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   private String requestInstantTime(StreamWriteOperatorCoordinator coordinator, long checkpointId) {
-    try {
-      Correspondent.InstantTimeResponse response = CoordinationResponseSerDe.unwrap(coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(checkpointId)).get());
-      return response.getInstant();
-    } catch (Exception e) {
-      throw new HoodieException("Error requesting the instant time from the coordinator", e);
+    return new MockCorrespondent(coordinator)
+        .requestInstantTime(checkpointId, TimeUnit.SECONDS.toMillis(10));
+  }
+
+  private void resetToMergeOnRead(Configuration conf) throws Exception {
+    coordinator.close();
+    reset();
+    conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    coordinator = startCoordinator(conf, 2);
+  }
+
+  private static StreamWriteOperatorCoordinator startCoordinator(Configuration conf, int subTasks) throws Exception {
+    StreamWriteOperatorCoordinator coordinator = createCoordinator(conf, subTasks);
+    coordinator.start();
+    setSynchronousExecutors(coordinator);
+    return coordinator;
+  }
+
+  private static StreamWriteOperatorCoordinator startCoordinator(
+      Configuration conf, OperatorCoordinatorMetricGroup metricGroup) throws Exception {
+    MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), 1) {
+      @Override
+      public OperatorCoordinatorMetricGroup metricGroup() {
+        return metricGroup;
+      }
+    };
+    StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+    coordinator.start();
+    setSynchronousExecutors(coordinator);
+    return coordinator;
+  }
+
+  private static void setSynchronousExecutors(StreamWriteOperatorCoordinator coordinator) throws Exception {
+    MockOperatorCoordinatorContext coordinatorContext = (MockOperatorCoordinatorContext) coordinator.getContext();
+    coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(coordinatorContext));
+  }
+
+  private static StreamWriteOperatorCoordinator createCoordinator(Configuration conf, int subTasks) {
+    MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), subTasks);
+    return new StreamWriteOperatorCoordinator(conf, coordinatorContext);
+  }
+
+  /**
+   * A coordinator metric group that keeps what is registered on it.
+   */
+  private static final class CapturingCoordinatorMetricGroup extends UnregisteredMetricsGroup
+      implements OperatorCoordinatorMetricGroup {
+    private final Map<String, Counter> counters = new HashMap<>();
+    private final Map<String, Histogram> histograms = new HashMap<>();
+    private final Map<String, Gauge<?>> gauges = new HashMap<>();
+
+    @Override
+    public <C extends Counter> C counter(String name, C counter) {
+      counters.put(name, counter);
+      return counter;
+    }
+
+    @Override
+    public <H extends Histogram> H histogram(String name, H histogram) {
+      histograms.put(name, histogram);
+      return histogram;
+    }
+
+    @Override
+    public <T, G extends Gauge<T>> G gauge(String name, G gauge) {
+      gauges.put(name, gauge);
+      return gauge;
     }
   }
 
-  private static StreamWriteOperatorCoordinator createCoordinator(Configuration conf, int subTasks) throws Exception {
-    MockOperatorCoordinatorContext coordinatorContext = new MockOperatorCoordinatorContext(new OperatorID(), subTasks);
-    StreamWriteOperatorCoordinator coordinator = new StreamWriteOperatorCoordinator(conf, coordinatorContext);
-    coordinator.start();
-    coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
-    coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(coordinatorContext));
-    return coordinator;
+  /**
+   * A real single-thread instant-request worker whose submitted creation task blocks on a latch before
+   * running, to deterministically delay instant creation (simulating a held table lock).
+   */
+  private static final class GatedInstantRequestExecutor extends NonThrownExecutor {
+    private final CountDownLatch gate;
+
+    private GatedInstantRequestExecutor(Logger logger, ExceptionHook exceptionHook, CountDownLatch gate) {
+      super(logger, null, exceptionHook, true);
+      this.gate = gate;
+    }
+
+    @Override
+    public void execute(ThrowingRunnable<Throwable> action, String actionName, Object... actionParams) {
+      super.execute(() -> {
+        gate.await();
+        action.run();
+      }, actionName, actionParams);
+    }
   }
 
   private String mockWriteWithMetadata(long checkpointId) {
@@ -595,6 +1428,40 @@ public class TestStreamWriteOperatorCoordinator {
     // uses the next checkpoint id because the checkpoint id used in events come from the last round.
     coordinator.notifyCheckpointComplete(checkpointId + 1);
     return instant;
+  }
+
+  private static void assertLsmMetadataTableReads(Configuration conf, HoodieTableMetaClient dataTableMetaClient)
+      throws Exception {
+    String dataTableBasePath = dataTableMetaClient.getBasePath().toString();
+    String partitionPath = new Path(dataTableBasePath, "par1").toString();
+    List<String> partitionPaths = Arrays.asList(
+        partitionPath,
+        new Path(dataTableBasePath, "missing-partition").toString());
+
+    List<String> actualPartitions;
+    Map<String, List<StoragePathInfo>> actualFiles;
+    try (HoodieTableMetadata metadataTable = dataTableMetaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        dataTableMetaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        dataTableBasePath,
+        false)) {
+      actualPartitions = metadataTable.getAllPartitionPaths();
+      actualFiles = metadataTable.getAllFilesInPartitions(partitionPaths);
+    }
+
+    try (HoodieTableMetadata metadataTable = dataTableMetaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        dataTableMetaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        dataTableBasePath,
+        true)) {
+      assertEquals(actualPartitions, metadataTable.getAllPartitionPaths());
+      assertEquals(actualFiles, metadataTable.getAllFilesInPartitions(partitionPaths));
+    }
+
+    assertEquals(Collections.singletonList("par1"), actualPartitions);
+    assertFalse(actualFiles.get(partitionPath).isEmpty());
   }
 
   private static WriteMetadataEvent createBootstrapEvent(int taskId, long checkpointId, String instant, String partitionPath) {
@@ -618,13 +1485,25 @@ public class TestStreamWriteOperatorCoordinator {
       boolean isBootstrap,
       boolean trackSuccessRecords,
       double failureFraction) {
+    return createOperatorEvent(taskId, checkpointId, instant, partitionPath, isBootstrap, trackSuccessRecords, failureFraction, false);
+  }
+
+  private static WriteMetadataEvent createOperatorEvent(
+      int taskId,
+      long checkpointId,
+      String instant,
+      String partitionPath,
+      boolean isBootstrap,
+      boolean trackSuccessRecords,
+      double failureFraction,
+      boolean isMetadataTable) {
     final WriteStatus writeStatus = new WriteStatus(trackSuccessRecords, failureFraction);
     writeStatus.setPartitionPath(partitionPath);
 
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPartitionPath(partitionPath);
     writeStat.setFileId("fileId123");
-    writeStat.setPath("path123");
+    writeStat.setPath(partitionPath + "/" + FSUtils.makeBaseFileName(instant, "1-0-1", "fileId123", ".parquet"));
     writeStat.setFileSizeInBytes(123);
     writeStat.setTotalWriteBytes(123);
     writeStat.setNumWrites(1);
@@ -638,6 +1517,7 @@ public class TestStreamWriteOperatorCoordinator {
         .writeStatus(Collections.singletonList(writeStatus))
         .bootstrap(isBootstrap)
         .lastBatch(true)
+        .metadataTable(isMetadataTable)
         .build();
   }
 
@@ -651,5 +1531,448 @@ public class TestStreamWriteOperatorCoordinator {
     assertThat(coordinator.getContext(), instanceOf(MockOperatorCoordinatorContext.class));
     MockOperatorCoordinatorContext context = (MockOperatorCoordinatorContext) coordinator.getContext();
     assertTrue(context.isJobFailed(), message);
+  }
+
+  private static boolean getRecordLevelIndexFlag(StreamWriteOperatorCoordinator coordinator) throws Exception {
+    Field tableStateField = StreamWriteOperatorCoordinator.class.getDeclaredField("tableState");
+    tableStateField.setAccessible(true);
+    Object tableState = tableStateField.get(coordinator);
+
+    Field recordLevelIndexField = tableState.getClass().getDeclaredField("isRecordLevelIndex");
+    recordLevelIndexField.setAccessible(true);
+    return recordLevelIndexField.getBoolean(tableState);
+  }
+
+  // -------------------------------------------------------------------------
+  //  Kafka Offset Tests
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void testStringFyMethod() throws Exception {
+    String topic = "test-topic";
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 100L);
+    offsetMap.put(1, 200L);
+    offsetMap.put(2, 300L);
+
+    String result = StreamerUtil.stringFy(topic, "test-cluster", offsetMap);
+
+    assertEquals("kafka_metadata%3Atest-topic%3A0:100;kafka_metadata%3Atest-topic%3A1:200;"
+        + "kafka_metadata%3Atest-topic%3A2:300;kafka_metadata%3Akafka_cluster%3Atest-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointException() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenThrow(new IOException("Network error"));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+
+    // Fail open: returns cluster metadata even on exception
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointNullKafkaOffsetsInfo() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            null,
+            "20231201120000",
+            "14458"
+        );
+
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfo));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+
+    // Fail open: returns cluster metadata when kafkaOffsetsInfo is null
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointMultipleTopics() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets1 =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(
+            Collections.singletonMap(0, 100L));
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo topic1 =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo("topic1", "test-cluster", offsets1);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets2 =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(
+            Collections.singletonMap(0, 200L));
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo topic2 =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo("topic2", "test-cluster", offsets2);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            Arrays.asList(topic1, topic2),
+            "20231201120000",
+            "14458"
+        );
+
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfo));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    // Multiple topics throws IllegalStateException, caught by fail-open
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointWithoutKafkaTopicName() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca1");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "test-kafka-cluster");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+    conf.set(FlinkOptions.TOPIC_ID, "test-job_production_dca1_test-owner_kafka_hoodie_10_test-feed");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 1000L);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(offsetMap);
+
+    String expectedTopicId = "test-job_production_dca1_test-owner_kafka_hoodie_10_test-feed";
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetsInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo(expectedTopicId, "test-cluster", offsets);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            Collections.singletonList(kafkaOffsetsInfo),
+            "20231201120000",
+            "14458"
+        );
+
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfo));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Atest-topic%3A0:1000;kafka_metadata%3Akafka_cluster%3Atest-topic%3A:test-kafka-cluster", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointMissingConfig() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    // Missing DC - only set some configs
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    // Missing DC: returns cluster metadata (fail open)
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, null);
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testStringFyWithEmptyOffsets() {
+    String result = StreamerUtil.stringFy("test-topic", "test-cluster", new HashMap<>());
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testStringFyWithNullOffsetMap() {
+    String result = StreamerUtil.stringFy("test-topic", "test-cluster", null);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testStringFyWithSinglePartition() {
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 12345L);
+
+    String result = StreamerUtil.stringFy("single-partition-topic", "test-cluster", offsetMap);
+    assertEquals("kafka_metadata%3Asingle-partition-topic%3A0:12345;"
+        + "kafka_metadata%3Akafka_cluster%3Asingle-partition-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testStringFyWithUnorderedPartitions() {
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(2, 300L);
+    offsetMap.put(0, 100L);
+    offsetMap.put(3, 400L);
+    offsetMap.put(1, 200L);
+
+    String result = StreamerUtil.stringFy("unordered-topic", "test-cluster", offsetMap);
+    assertEquals("kafka_metadata%3Aunordered-topic%3A0:100;kafka_metadata%3Aunordered-topic%3A1:200;"
+        + "kafka_metadata%3Aunordered-topic%3A2:300;kafka_metadata%3Aunordered-topic%3A3:400;"
+        + "kafka_metadata%3Akafka_cluster%3Aunordered-topic%3A:test-cluster", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointEmptyOffsets() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.empty());
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+
+    // Fail open: returns cluster metadata when no offsets found
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointNegativeCheckpointId() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    // Negative checkpoint ID: returns cluster metadata (fail open)
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, -1L, null);
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+
+    result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, -100L, null);
+    assertNotNull(result);
+    assertEquals("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test", result);
+  }
+
+  @Test
+  public void testStringFyWithNullOrEmptyTopic() {
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 100L);
+    offsetMap.put(1, 200L);
+
+    assertEquals("", StreamerUtil.stringFy(null, "test-cluster", offsetMap));
+    assertEquals("", StreamerUtil.stringFy("", "test-cluster", offsetMap));
+  }
+
+  @Test
+  public void testStringFyWithNullCluster() {
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 100L);
+    offsetMap.put(1, 200L);
+
+    String result = StreamerUtil.stringFy("test-topic", null, offsetMap);
+    assertEquals("kafka_metadata%3Atest-topic%3A0:100;kafka_metadata%3Atest-topic%3A1:200", result);
+
+    result = StreamerUtil.stringFy("test-topic", "", offsetMap);
+    assertEquals("kafka_metadata%3Atest-topic%3A0:100;kafka_metadata%3Atest-topic%3A1:200", result);
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointWithInvalidPartitionData() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "test-job");
+    conf.set(FlinkOptions.HADOOP_USER, "test-user");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-test");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME, "test-topic");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+
+    // Negative partition ID
+    Map<Integer, Long> offsetMapNegativePartition = new HashMap<>();
+    offsetMapNegativePartition.put(-1, 1000L);
+    offsetMapNegativePartition.put(0, 2000L);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsetsNegPartition =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(offsetMapNegativePartition);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetsInfoNegPartition =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo("test-topic", "test-cluster", offsetsNegPartition);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfoNegPartition =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            Collections.singletonList(kafkaOffsetsInfoNegPartition),
+            "20231201120000",
+            "14458"
+        );
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.eq(123L),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfoNegPartition));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 123L, mockClient);
+    // Negative partition is still included in offsets (stringFy doesn't filter)
+    assertNotNull(result);
+    assertTrue(result.contains("kafka_metadata%3Akafka_cluster%3Atest-topic%3A:kafka-test"));
+  }
+
+  @Test
+  public void testCollectKafkaOffsetCheckpointFormat() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.DC, "dca");
+    conf.set(FlinkOptions.ENV, "production");
+    conf.set(FlinkOptions.JOB_NAME, "production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow_1");
+    conf.set(FlinkOptions.HADOOP_USER, "hoover");
+    conf.set(FlinkOptions.SOURCE_KAFKA_CLUSTER, "kafka-ingestion-dca");
+    conf.set(FlinkOptions.TARGET_KAFKA_CLUSTER, "kafka-ingestion-dca");
+    conf.set(FlinkOptions.ATHENA_SERVICE, "athena-test");
+    conf.set(FlinkOptions.CALLER_SERVICE_NAME, "test-service");
+    conf.set(FlinkOptions.SERVICE_TIER, "DEFAULT");
+    conf.set(FlinkOptions.SERVICE_NAME, "ingestion-rt");
+    conf.set(FlinkOptions.KAFKA_TOPIC_NAME,
+        "production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow");
+    conf.set(FlinkOptions.TOPIC_ID,
+        "production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow_1_"
+        + "production_dca1_hadoop_platform_self_serve_5_kafka_hoodie_streaming_"
+        + "hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow");
+
+    AthenaIngestionGateway mockGateway = Mockito.mock(AthenaIngestionGateway.class);
+
+    Map<Integer, Long> offsetMap = new HashMap<>();
+    offsetMap.put(0, 1000L);
+    offsetMap.put(1, 2000L);
+    offsetMap.put(2, 3000L);
+
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets offsets =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo.Offsets(offsetMap);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo kafkaOffsetsInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo.KafkaOffsetsInfo(
+            "production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow_1_"
+            + "production_dca1_hadoop_platform_self_serve_5_kafka_hoodie_streaming_"
+            + "hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow",
+            "test-cluster",
+            offsets);
+    AthenaIngestionGateway.CheckpointKafkaOffsetInfo offsetInfo =
+        new AthenaIngestionGateway.CheckpointKafkaOffsetInfo(
+            String.valueOf(System.currentTimeMillis()),
+            Collections.singletonList(kafkaOffsetsInfo),
+            "20231201120000",
+            "14458"
+        );
+
+    Mockito.when(mockGateway.getKafkaCheckpointsInfo(
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyLong(),
+        Mockito.anyString(), Mockito.anyString(), Mockito.anyString(),
+        Mockito.anyString(), Mockito.anyInt(), Mockito.anyMap(),
+        Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(Option.of(offsetInfo));
+
+    FlinkCheckpointClient mockClient = new FlinkCheckpointClient(mockGateway);
+    String result = StreamerUtil.collectKafkaOffsetCheckpoint(conf, 14458L, mockClient);
+
+    assertNotNull(result);
+    assertTrue(result.contains("kafka_metadata%3A"));
+    assertTrue(result.contains("production_hp-bliss-policy-engine-execution-service-execute-policy_streaming_shadow"));
+    assertTrue(result.contains("kafka_metadata%3Akafka_cluster%3A"));
+    assertTrue(result.contains("kafka-ingestion-dca"));
   }
 }

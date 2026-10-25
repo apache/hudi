@@ -18,7 +18,7 @@
 
 package org.apache.hudi.common.table.timeline.versioning.v1;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -160,6 +160,7 @@ public class ArchivedTimelineV1 extends BaseTimelineV1 implements HoodieArchived
    *
    * @deprecated
    */
+  @Deprecated
   public ArchivedTimelineV1() {
   }
 
@@ -309,7 +310,7 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
    * Callback to read instant details.
    */
   public class InstantsLoader implements BiConsumer<String, GenericRecord> {
-    private final Map<String, List<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
+    private final Map<String, Set<HoodieInstant>> instantsInRange = new ConcurrentHashMap<>();
     private final boolean loadInstantDetails;
 
     private InstantsLoader(boolean loadInstantDetails) {
@@ -320,12 +321,12 @@ public Option<byte[]> getInstantDetails(HoodieInstant instant) {
     public void accept(String instantTime, GenericRecord record) {
       Option<HoodieInstant> instant = readCommit(instantTime, record, loadInstantDetails, null);
       if (instant.isPresent()) {
-        instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> new ArrayList<>())
-            .add(instant.get());
+        Set<HoodieInstant> instantsForTime = instantsInRange.computeIfAbsent(instant.get().requestedTime(), s -> ConcurrentHashMap.newKeySet());
+        instantsForTime.add(instant.get());
       }
     }
 
-    public Map<String, List<HoodieInstant>> getInstantsInRangeCollected() {
+    public Map<String, Set<HoodieInstant>> getInstantsInRangeCollected() {
       return instantsInRange;
     }
   }

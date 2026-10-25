@@ -1,0 +1,67 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.execution.bulkinsert;
+
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.table.BulkInsertPartitioner;
+
+import org.apache.spark.api.java.JavaRDD;
+
+import static org.apache.hudi.execution.bulkinsert.BulkInsertSortMode.GLOBAL_SORT;
+import static org.apache.hudi.execution.bulkinsert.LSMBulkInsertRecordSorter.KEY_COMPARATOR;
+import static org.apache.hudi.execution.bulkinsert.LSMBulkInsertRecordSorter.keyByPartitionAndRecordKey;
+
+/**
+ * LSM RDD bulk-insert partitioner for {@link BulkInsertSortMode#GLOBAL_SORT}.
+ *
+ * <p>Like {@link GlobalSortPartitioner}, this partitioner globally sorts the input and range
+ * partitions it across the requested number of Spark partitions. The sort key and comparator are
+ * intentionally different: {@code GlobalSortPartitioner} concatenates the partition path and
+ * record key and relies on the natural Java String ordering, while this implementation keeps the
+ * two key components separate and compares each component by its UTF-8 bytes. This preserves key
+ * boundaries and produces the physical ordering required by LSM base files.
+ */
+public class LSMGlobalSortPartitioner<T>
+    implements BulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
+
+  private final boolean shouldPopulateMetaFields;
+
+  public LSMGlobalSortPartitioner(HoodieWriteConfig config) {
+    this.shouldPopulateMetaFields = config.populateMetaFields();
+  }
+
+  @Override
+  public JavaRDD<HoodieRecord<T>> repartitionRecords(JavaRDD<HoodieRecord<T>> records,
+                                                     int outputSparkPartitions) {
+    if (!shouldPopulateMetaFields) {
+      throw new HoodieException(GLOBAL_SORT.name() + " mode requires meta-fields to be enabled");
+    }
+
+    return keyByPartitionAndRecordKey(records)
+        .sortByKey(KEY_COMPARATOR, true, outputSparkPartitions)
+        .values();
+  }
+
+  @Override
+  public boolean arePartitionRecordsSorted() {
+    return true;
+  }
+}

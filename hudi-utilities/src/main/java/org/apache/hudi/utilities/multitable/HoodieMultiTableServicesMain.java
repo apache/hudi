@@ -28,11 +28,10 @@ import org.apache.hudi.utilities.UtilHelpers;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -51,8 +50,9 @@ import java.util.stream.Collectors;
 /**
  * Main function for executing multi-table services.
  */
+@Slf4j
 public class HoodieMultiTableServicesMain {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieMultiTableServicesMain.class);
+
   final Config cfg;
   final TypedProperties props;
 
@@ -107,7 +107,7 @@ public class HoodieMultiTableServicesMain {
   }
 
   public void startServices() throws ExecutionException, InterruptedException {
-    LOG.info("StartServices Config: " + cfg);
+    log.info("StartServices Config: {}", cfg);
     List<String> tablePaths;
     if (cfg.autoDiscovery) {
       // We support defining multi base paths
@@ -118,7 +118,7 @@ public class HoodieMultiTableServicesMain {
     } else {
       tablePaths = MultiTableServiceUtils.getTablesToBeServedFromProps(jsc, props);
     }
-    LOG.info("All table paths: " + String.join(",", tablePaths));
+    log.info("All table paths: {}", String.join(",", tablePaths));
     if (cfg.batch) {
       batchRunTableServices(tablePaths);
     } else {
@@ -184,6 +184,9 @@ public class HoodieMultiTableServicesMain {
     @Parameter(names = {"--enable-archive"}, help = true)
     public Boolean enableArchive = false;
 
+    @Parameter(names = {"--enable-hive-support"}, description = "Enables hive support during spark context initialization.")
+    public Boolean enableHiveSupport = true;
+
     @Parameter(names = {"--compaction-mode"}, description = "Set job mode: Set \"schedule\" means make a compact plan; "
         + "Set \"execute\" means execute a compact plan at given instant which means --instant-time is needed here; "
         + "Set \"scheduleAndExecute\" means make a compact plan first and execute that plan immediately")
@@ -246,11 +249,11 @@ public class HoodieMultiTableServicesMain {
       cmd.usage();
       System.exit(1);
     }
-    JavaSparkContext jsc = UtilHelpers.buildSparkContext(cfg.appName, cfg.sparkMaster, cfg.sparkMemory);
+    JavaSparkContext jsc = UtilHelpers.buildSparkContext(cfg.appName, cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     try {
       new HoodieMultiTableServicesMain(jsc, cfg).startServices();
     } catch (Throwable throwable) {
-      LOG.error("Fail to run table services, ", throwable);
+      log.error("Fail to run table services, ", throwable);
     } finally {
       jsc.stop();
     }

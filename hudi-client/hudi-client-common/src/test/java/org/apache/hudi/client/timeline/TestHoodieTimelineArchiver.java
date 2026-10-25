@@ -19,19 +19,20 @@
 
 package org.apache.hudi.client.timeline;
 
-import org.apache.hudi.client.timeline.versioning.v1.TimelineArchiverV1;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
@@ -42,6 +43,7 @@ import java.util.Collections;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -69,8 +71,8 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
         .withProperties(advanceProperties)
         .build();
     HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
-    HoodieStorage hoodieStorage = new HoodieHadoopStorage(basePath, metaClient.getStorageConf());
-    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA.toAvroSchema(), null, null, Option.of(context));
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, metaClient.getStorageConf());
+    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA, null, null, Option.of(context));
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
     testTable.addCommit(InProcessTimeGenerator.createNewInstantTime());
@@ -94,6 +96,44 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
 
     ActiveTimelineV1 rawActiveTimeline = new ActiveTimelineV1(metaClient, false);
     assertEquals(9, rawActiveTimeline.countInstants());
+  }
+
+  /**
+   * The LSM writer must build its config on a table upgraded to version 10.
+   *
+   * <p>{@code LSMTimelineWriter#getOrCreateWriterConfig} inherits the parent config's props and then
+   * sets {@code metaFieldsMode=NONE} -- it writes timeline instants, not records. On an upgraded
+   * table those inherited props carry {@code hoodie.meta.fields.mode=ALL}, written by
+   * {@code NineToTenUpgradeHandler} for every version 9 table. If the builder treated that inherited
+   * mode as authoritative over the writer's override, archival would use the wrong mode on every
+   * upgraded table once it passed {@code hoodie.keep.min.commits} -- the default case.
+   *
+   * <p>This exercises the writer's own config construction rather than a full archival run, because
+   * that construction is where the failure was: {@code getOrCreateWriterConfig} throws before any
+   * instant is written.
+   */
+  @Test
+  void lsmWriterConfigSurvivesAnUpgradedTablesInheritedMode() {
+    // What an upgraded v9 -> v10 table hands down: the mode written by the upgrade handler.
+    TypedProperties upgradedTableProps = new TypedProperties();
+    upgradedTableProps.put(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.ALL.name());
+
+    HoodieWriteConfig parentConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.toString())
+        .withProperties(upgradedTableProps)
+        .build();
+    assertEquals(MetaFieldsMode.ALL, parentConfig.getMetaFieldsMode(),
+        "precondition: the parent config carries the upgraded table's ALL mode");
+
+    // Exactly what LSMTimelineWriter#getOrCreateWriterConfig does.
+    HoodieWriteConfig lsmConfig = HoodieWriteConfig.newBuilder()
+        .withProperties(parentConfig.getProps())
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
+        .build();
+
+    assertEquals(MetaFieldsMode.NONE, lsmConfig.getMetaFieldsMode(),
+        "the LSM writer's explicit NONE mode must win over the table's inherited ALL");
+    assertFalse(lsmConfig.populateMetaFields());
   }
 
   private HoodieTable setupMockHoodieTable(HoodieEngineContext context, HoodieWriteConfig writeConfig) {

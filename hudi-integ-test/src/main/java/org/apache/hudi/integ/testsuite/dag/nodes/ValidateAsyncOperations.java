@@ -28,11 +28,10 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -43,9 +42,8 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
 /**
  * Node to validate data set sanity like total file versions retained, has cleaning happened, has archival happened, etc.
  */
+@Slf4j
 public class ValidateAsyncOperations extends DagNode<Option<String>> {
-
-  private static Logger log = LoggerFactory.getLogger(ValidateAsyncOperations.class);
 
   public ValidateAsyncOperations(Config config) {
     this.config = config;
@@ -66,10 +64,10 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
             .setConf(HadoopFSUtils.getStorageConfWithCopy(executionContext.getJsc().hadoopConfiguration())).build();
         Option<HoodieInstant> latestCleanInstant = metaClient.getActiveTimeline().getCleanerTimeline().filterCompletedInstants().lastInstant();
         if (latestCleanInstant.isPresent()) {
-          log.warn("Latest clean commit " + latestCleanInstant.get());
+          log.warn("Latest clean commit {}", latestCleanInstant.get());
           HoodieCleanMetadata cleanMetadata = CleanerUtils.getCleanerMetadata(metaClient, latestCleanInstant.get());
           String earliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
-          log.warn("Earliest commit to retain : " + earliestCommitToRetain);
+          log.warn("Earliest commit to retain : {}", earliestCommitToRetain);
           long unCleanedInstants = metaClient.getActiveTimeline().filterCompletedInstants().filter(instant ->
               compareTimestamps(instant.requestedTime(), GREATER_THAN_OR_EQUALS, earliestCommitToRetain)).countInstants();
           ValidationUtils.checkArgument(unCleanedInstants >= (maxCommitsRetained + 1), "Total uncleaned instants " + unCleanedInstants
@@ -112,7 +110,7 @@ public class ValidateAsyncOperations extends DagNode<Option<String>> {
           }
         }
       } catch (Exception e) {
-        log.warn("Exception thrown in ValidateHoodieAsyncOperations Node :: " + e.getCause() + ", msg :: " + e.getMessage());
+        log.warn("Exception thrown in ValidateHoodieAsyncOperations Node :: {}, msg :: {}", e.getCause(), e.getMessage());
         throw e;
       }
     }

@@ -19,8 +19,8 @@
 package org.apache.hudi.aws.metrics.cloudwatch;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.MetricsReporterFactory;
 import org.apache.hudi.metrics.MetricsReporterType;
 

@@ -22,8 +22,8 @@ package org.apache
 import org.apache.hudi.DataSourceWriteOptions.RECORD_MERGE_MODE
 import org.apache.hudi.common.config.RecordMergeMode
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.storage.HoodieStorageUtils
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 
@@ -86,7 +86,7 @@ class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTest
 
     val storageConfiguration = new HadoopStorageConfiguration(false)
     val metaClient = HoodieTableMetaClient.builder().setBasePath(tblPath)
-      .setStorage(HoodieStorageUtils.getStorage(storageConfiguration)).build()
+      .setStorage(HoodieTestUtils.getLocalStorage(storageConfiguration)).build()
     val instants = metaClient.getArchivedTimeline().getInstants
 
     // There are at least one archived instants.
@@ -100,7 +100,7 @@ class TestIncrementalQueryWithArchivedInstants extends SparkClientFunctionalTest
           .option("hoodie.datasource.read.begin.instanttime", "0")
           .options(opt)
           .load(tblPath)
-          .show(false)
+          .collect()
       }
     })
   }

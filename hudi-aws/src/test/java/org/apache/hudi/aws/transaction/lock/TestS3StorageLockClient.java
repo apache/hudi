@@ -20,15 +20,15 @@
 
 package org.apache.hudi.aws.transaction.lock;
 
-import org.apache.hudi.client.transaction.lock.models.LockGetResult;
-import org.apache.hudi.client.transaction.lock.models.LockUpsertResult;
-import org.apache.hudi.client.transaction.lock.models.StorageLockData;
-import org.apache.hudi.client.transaction.lock.models.StorageLockFile;
+import org.apache.hudi.client.transaction.lock.LockGetResult;
+import org.apache.hudi.client.transaction.lock.LockUpsertResult;
+import org.apache.hudi.client.transaction.lock.StorageLockData;
+import org.apache.hudi.client.transaction.lock.StorageLockFile;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
-
 import org.apache.hudi.exception.HoodieLockException;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,8 +49,10 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Properties;
 
-import static org.apache.hudi.client.transaction.lock.models.LockUpsertResult.UNKNOWN_ERROR;
+import static org.apache.hudi.client.transaction.lock.LockUpsertResult.THROTTLED;
+import static org.apache.hudi.client.transaction.lock.LockUpsertResult.UNKNOWN_ERROR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -222,8 +224,8 @@ class TestS3StorageLockClient {
     Pair<LockUpsertResult, Option<StorageLockFile>> result =
             lockService.tryUpsertLockFile(lockData, Option.empty());
 
-    assertEquals(UNKNOWN_ERROR, result.getLeft());
-    assertTrue(result.getRight().isEmpty());
+    assertEquals(THROTTLED, result.getLeft());
+    assertFalse(result.getRight().isPresent());
     verify(mockLogger).warn(contains("Rate limit exceeded"), eq(OWNER_ID), eq(LOCK_FILE_PATH));
   }
 
@@ -239,6 +241,35 @@ class TestS3StorageLockClient {
     assertEquals(UNKNOWN_ERROR, result.getLeft());
     assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("internal server error"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex503));
+  }
+
+  @Test
+  void testTryUpsertLockFile_unexpectedS3StatusIsReportedAsUnknownError() {
+    StorageLockData lockData = new StorageLockData(false, 6000L, "myTxOwner");
+    AwsServiceException ex403 = S3Exception.builder().statusCode(403).build();
+    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex403);
+
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.empty());
+
+    assertEquals(UNKNOWN_ERROR, result.getLeft());
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).warn(contains("Error writing lock file"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex403));
+  }
+
+  @Test
+  void testTryRenewLockFile_unexpectedErrorIsReportedRatherThanThrown() {
+    StorageLockData lockData = new StorageLockData(false, 7000L, "myTxOwner");
+    StorageLockFile prevLockFile = new StorageLockFile(lockData, "old-etag");
+    AwsServiceException ex400 = AwsServiceException.builder().statusCode(400).build();
+    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex400);
+
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.of(prevLockFile));
+
+    assertEquals(UNKNOWN_ERROR, result.getLeft(), "a renewal keeps the failure to itself, only creation throws early");
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).error(contains("Unexpected SDK error"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex400));
   }
 
   @Test

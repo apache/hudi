@@ -19,13 +19,13 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
-import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
 import org.apache.hudi.TestHoodieSparkUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
@@ -136,6 +136,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   public void teardown() throws Exception {
     super.teardown();
     TestSchemaProvider.resetTargetSchema();
+    if (deltaStreamer != null) {
+      deltaStreamer.shutdownGracefully();
+    }
   }
 
   @AfterAll
@@ -221,16 +224,17 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
           useSchemaProvider, dfsSourceLimitBytes, false, null, tableType, "timestamp", null);
     }
     cfg.forceDisableCompaction = !shouldCompact;
+    cfg.enableHiveSupport = false;
     return cfg;
   }
 
   protected void addData(Dataset<Row> df, Boolean isFirst) {
     if (useSchemaProvider) {
-      TestSchemaProvider.sourceSchema = HoodieSchema.fromAvroSchema(
-          AvroConversionUtils.convertStructTypeToAvroSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE));
+      TestSchemaProvider.sourceSchema =
+          HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(df.schema(), HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE);
       if (withErrorTable && isFirst) {
-        TestSchemaProvider.setTargetSchema(HoodieSchema.fromAvroSchema(
-            AvroConversionUtils.convertStructTypeToAvroSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk")));
+        TestSchemaProvider.setTargetSchema(
+            HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(TestHoodieSparkUtils.getSchemaColumnNotNullable(df.schema(), "_row_key"),"idk", "idk"));
       }
     }
     if (useKafkaSource) {
@@ -383,7 +387,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option commitedInstantTime) {
+    public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option committedInstantTime) {
       if (errorEvents.size() > 0) {
         if (errorTableInstantTime.isPresent()) {
           throw new IllegalStateException("Error table instant time should be empty before calling upsert");
@@ -415,7 +419,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
+    public boolean upsertAndCommit(String baseTableInstantTime, Option committedInstantTime) {
       if (errorEvents.size() > 0) {
         JavaRDD errorsCombined = errorEvents.get(0);
         for (int i = 1; i < errorEvents.size(); i++) {
@@ -431,7 +435,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     }
 
     @Override
-    public Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+    public Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option committedInstantTime) {
       return Option.empty();
     }
   }

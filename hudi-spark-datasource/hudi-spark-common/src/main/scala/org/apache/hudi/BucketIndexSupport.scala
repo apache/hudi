@@ -23,10 +23,12 @@ import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.config.HoodieIndexConfig
+import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.index.bucket.BucketIdentifier
 import org.apache.hudi.keygen.KeyGenerator
+import org.apache.hudi.keygen.KeyGenUtils
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory
 
 import org.apache.avro.generic.GenericData
@@ -52,7 +54,7 @@ class BucketIndexSupport(spark: SparkSession,
     HoodieSparkKeyGeneratorFactory.createKeyGenerator(props)
   }
 
-  private lazy val avroSchema = new TableSchemaResolver(metaClient).getTableAvroSchema(false)
+  private lazy val schema = new TableSchemaResolver(metaClient).getTableSchema(false)
 
   override def getIndexName: String = BucketIndexSupport.INDEX_NAME
 
@@ -133,7 +135,7 @@ class BucketIndexSupport(spark: SparkSession,
     if (hashValuePairs.size != indexBucketHashFields.size) {
       matchedBuckets.setUntil(numBuckets)
     } else {
-      val record = new GenericData.Record(avroSchema)
+      val record = new GenericData.Record(schema.toAvroSchema)
       hashValuePairs.foreach(p => record.put(p.getKey, p.getValue))
       val hoodieKey = keyGenerator.getKey(record)
       matchedBuckets.set(BucketIdentifier.getBucketId(hoodieKey.getRecordKey, indexBucketHashFieldsOpt.get, numBuckets))
@@ -153,7 +155,7 @@ class BucketIndexSupport(spark: SparkSession,
   private def getBucketsBySingleHashFields(expr: Expression, bucketColumnName: String, numBuckets: Int): BitSet = {
 
     def getBucketNumber(attr: Attribute, v: Any): Int = {
-      val record = new GenericData.Record(avroSchema)
+      val record = new GenericData.Record(schema.toAvroSchema)
       record.put(attr.name, v)
       val hoodieKey = keyGenerator.getKey(record)
       BucketIdentifier.getBucketId(hoodieKey.getRecordKey, indexBucketHashFieldsOpt.get, numBuckets)
@@ -212,7 +214,7 @@ class BucketIndexSupport(spark: SparkSession,
     if (bucketHashFields == null || bucketHashFields.isEmpty) {
       Option.apply(null)
     } else {
-      Option.apply(JavaConverters.seqAsJavaListConverter(bucketHashFields.split(",")).asJava)
+      Option.apply(KeyGenUtils.getIndexKeyFields(bucketHashFields))
     }
   }
 
@@ -224,4 +226,3 @@ class BucketIndexSupport(spark: SparkSession,
 object BucketIndexSupport {
   val INDEX_NAME = "BUCKET"
 }
-

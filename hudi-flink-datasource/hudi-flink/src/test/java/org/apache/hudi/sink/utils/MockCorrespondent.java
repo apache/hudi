@@ -21,6 +21,9 @@ package org.apache.hudi.sink.utils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.Correspondent;
+import org.apache.hudi.sink.event.WriteMetadataEvent;
+
+import java.util.Map;
 
 /**
  * A mock {@link Correspondent} that always return the latest instant.
@@ -32,12 +35,22 @@ public class MockCorrespondent extends Correspondent {
   }
 
   @Override
-  public String requestInstantTime(long checkpointId) {
+  protected InstantTimeResponse fetchInstantTimeResponse(long checkpointId) throws Exception {
+    return CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InstantTimeRequest.getInstance(checkpointId)).get());
+  }
+
+  @Override
+  public Map<Long, String> requestInflightInstants() {
     try {
-      InstantTimeResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InstantTimeRequest.getInstance(checkpointId)).get());
-      return response.getInstant();
+      InflightInstantsResponse response = CoordinationResponseSerDe.unwrap(this.coordinator.handleCoordinationRequest(InflightInstantsRequest.getInstance()).get());
+      return response.getInflightInstants();
     } catch (Exception e) {
-      throw new HoodieException("Error requesting the instant time from the coordinator", e);
+      throw new HoodieException("Error requesting the inflight instants from the coordinator", e);
     }
+  }
+
+  @Override
+  public void sendWriteMetadataEvent(WriteMetadataEvent writeMetadataEvent) {
+    this.coordinator.handleEventFromOperator(0, writeMetadataEvent);
   }
 }

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.sync.common.metrics;
 
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.sync.common.HoodieSyncConfig;

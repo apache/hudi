@@ -22,9 +22,7 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
@@ -47,15 +45,15 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
   private final Deque<HoodieLogBlock> currentInstantLogBlocks;
   private final HoodieReadStats readStats;
   private ClosableIterator<T> recordIterator;
+  private HoodieSchema logRecordSchema;
 
   UnmergedFileGroupRecordBuffer(
       HoodieReaderContext<T> readerContext,
-      HoodieTableMetaClient hoodieTableMetaClient,
       RecordMergeMode recordMergeMode,
       Option<PartialUpdateMode> partialUpdateModeOpt,
       TypedProperties props,
       HoodieReadStats readStats) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, Collections.emptyList(), null);
+    super(readerContext, recordMergeMode, partialUpdateModeOpt, props, Collections.emptyList(), null);
     this.readStats = readStats;
     this.currentInstantLogBlocks = new ArrayDeque<>();
   }
@@ -66,7 +64,7 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
     // Output from base file first.
     if (baseFileIterator.hasNext()) {
-      nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(baseFileIterator.next()));
+      nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(readerSchema, baseFileIterator.next()));
       return true;
     }
 
@@ -79,12 +77,13 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
           recordIterator.close();
         }
         recordIterator = iteratorSchemaPair.getLeft();
+        logRecordSchema = iteratorSchemaPair.getRight();
       }
     }
     if (recordIterator == null || !recordIterator.hasNext()) {
       return false;
     }
-    nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(recordIterator.next()));
+    nextRecord = bufferedRecordConverter.convert(readerContext.getRecordContext().seal(logRecordSchema, recordIterator.next()));
     readStats.incrementNumInserts();
     return true;
   }
@@ -111,11 +110,6 @@ class UnmergedFileGroupRecordBuffer<T> extends FileGroupRecordBuffer<T> {
 
   @Override
   public void processDeleteBlock(HoodieDeleteBlock deleteBlock) {
-    // no-op
-  }
-
-  @Override
-  public void processNextDeletedRecord(DeleteRecord deleteRecord, Serializable index) {
     // no-op
   }
 

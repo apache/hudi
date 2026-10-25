@@ -40,10 +40,9 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,9 +56,8 @@ import java.util.Set;
  * {@link TransactionCoordinator}
  * using {@link HoodieJavaWriteClient}.
  */
+@Slf4j
 public class KafkaConnectTransactionServices implements ConnectTransactionServices {
-
-  private static final Logger LOG = LoggerFactory.getLogger(KafkaConnectTransactionServices.class);
 
   private final KafkaConnectConfigs connectConfigs;
   private final Option<HoodieTableMetaClient> tableMetaClient;
@@ -91,8 +89,7 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       String partitionColumns = KafkaConnectUtils.getPartitionColumnsForKeyGenerator(keyGenerator,
           connectConfigs.getProps());
 
-      LOG.info(String.format("Setting record key %s and partition fields %s for table %s",
-          recordKeyFields, partitionColumns, tableBasePath + tableName));
+      log.info("Setting record key {} and partition fields {} for table {}", recordKeyFields, partitionColumns, tableBasePath + tableName);
 
       tableMetaClient = Option.of(HoodieTableMetaClient.newTableBuilder()
           .setTableType(HoodieTableType.COPY_ON_WRITE.name())
@@ -116,28 +113,47 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
   public String startCommit() {
     String newCommitTime = javaClient.startCommit();
     javaClient.transitionInflight(newCommitTime);
-    LOG.info("Starting Hudi commit " + newCommitTime);
+    log.info("Starting Hudi commit {}", newCommitTime);
     return newCommitTime;
   }
 
   @Override
   public boolean endCommit(String commitTime, List<WriteStatus> writeStatuses, Map<String, String> extraMetadata) {
-    boolean success = javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
+    boolean success;
+    try {
+      success = javaClient.commit(commitTime, writeStatuses, Option.of(extraMetadata));
+    } catch (RuntimeException exception) {
+      // Once the instant is completed, its data and Kafka offsets are visible, so a failure after that point inside the
+      // commit (e.g. in cleaning or archiving) must not fail it, or the participants would write the same records again
+      if (!isCommitCompleted(commitTime)) {
+        throw exception;
+      }
+      log.error("Commit {} completed, but a post-commit action failed", commitTime, exception);
+      success = true;
+    }
     if (success) {
-      LOG.info("Ending Hudi commit " + commitTime);
-
-      // Schedule clustering and compaction as needed.
-      if (writeConfig.isAsyncClusteringEnabled()) {
-        javaClient.scheduleClustering(Option.empty()).ifPresent(
-            instantTs -> LOG.info("Scheduled clustering at instant time:" + instantTs));
+      log.info("Ending Hudi commit {}", commitTime);
+      try {
+        scheduleTableServicesAndSyncMeta();
+      } catch (RuntimeException exception) {
+        // Likewise, these follow-up actions must not fail the commit; they run again after the next one
+        log.error("Commit {} succeeded, but scheduling table services or meta sync failed", commitTime, exception);
       }
-      if (isAsyncCompactionEnabled()) {
-        javaClient.scheduleCompaction(Option.empty()).ifPresent(
-            instantTs -> LOG.info("Scheduled compaction at instant time:" + instantTs));
-      }
-      syncMeta();
     }
     return success;
+  }
+
+  private void scheduleTableServicesAndSyncMeta() {
+    // Schedule clustering and compaction as needed.
+    if (writeConfig.isAsyncClusteringEnabled()) {
+      javaClient.scheduleClustering(Option.empty()).ifPresent(
+          instantTs -> log.info("Scheduled clustering at instant time:{}", instantTs));
+    }
+    if (isAsyncCompactionEnabled()) {
+      javaClient.scheduleCompaction(Option.empty()).ifPresent(
+          instantTs -> log.info("Scheduled compaction at instant time:{}", instantTs));
+    }
+    syncMeta();
   }
 
   @Override
@@ -147,17 +163,32 @@ public class KafkaConnectTransactionServices implements ConnectTransactionServic
       if (metadata.isPresent()) {
         return metadata.get().getExtraMetadata();
       } else {
-        LOG.info("Hoodie Extra Metadata from latest commit is absent");
+        log.info("Hoodie Extra Metadata from latest commit is absent");
         return Collections.emptyMap();
       }
     }
     throw new HoodieException("Fatal error retrieving Hoodie Extra Metadata since Table Meta Client is absent");
   }
 
+  @Override
+  public void close() {
+    javaClient.close();
+  }
+
   private boolean isAsyncCompactionEnabled() {
     return tableMetaClient.isPresent()
         && HoodieTableType.MERGE_ON_READ.equals(tableMetaClient.get().getTableType())
         && connectConfigs.isAsyncCompactEnabled();
+  }
+
+  private boolean isCommitCompleted(String commitTime) {
+    try {
+      return tableMetaClient.isPresent()
+          && tableMetaClient.get().reloadActiveTimeline().filterCompletedInstants().containsInstant(commitTime);
+    } catch (RuntimeException exception) {
+      log.warn("Failed to check whether commit {} completed", commitTime, exception);
+      return false;
+    }
   }
 
   private void syncMeta() {

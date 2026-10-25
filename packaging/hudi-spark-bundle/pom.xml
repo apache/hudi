@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -116,6 +116,11 @@
                   <include>org.apache.hive:hive-service-rpc</include>
                   <include>org.apache.hive:hive-metastore</include>
                   <include>org.apache.hive:hive-jdbc</include>
+                  <!-- Thrift runtime matching the Hive client jars above; only bundled under
+                       spark-bundle-shade-hive (compile scope), where the relocated Hive classes
+                       must not bind to the older Spark-provided libthrift. See #19680. -->
+                  <include>org.apache.thrift:libthrift</include>
+                  <include>org.apache.thrift:libfb303</include>
 
                   <include>org.apache.curator:curator-framework</include>
                   <include>org.apache.curator:curator-client</include>
@@ -174,6 +179,17 @@
                   <pattern>org.apache.hadoop.hive.service.</pattern>
                   <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.hadoop.hive.service.</shadedPattern>
                 </relocation>
+                <!-- Keep the relocated Hive classes on their matching thrift runtime instead of
+                     the older Spark-provided libthrift; fb303 rides along because the generated
+                     hive-metastore client extends its classes. No-op when the prefix is empty. -->
+                <relocation>
+                  <pattern>org.apache.thrift.</pattern>
+                  <shadedPattern>${spark.bundle.hive.shade.prefix}org.apache.thrift.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.facebook.fb303.</pattern>
+                  <shadedPattern>${spark.bundle.hive.shade.prefix}com.facebook.fb303.</shadedPattern>
+                </relocation>
                 <relocation>
                   <pattern>com.codahale.metrics.</pattern>
                   <shadedPattern>org.apache.hudi.com.codahale.metrics.</shadedPattern>
@@ -204,6 +220,13 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <!-- Timeline UI assets ship only in hudi-timeline-server-bundle; the standalone-only UI cannot be served from engine bundles -->
+                  <artifact>org.apache.hudi:hudi-timeline-service</artifact>
+                  <excludes>
+                    <exclude>public/**</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -301,6 +324,23 @@
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-common</artifactId>
       <version>${hive.version}</version>
+      <scope>${spark.bundle.hive.scope}</scope>
+    </dependency>
+
+    <!-- Thrift runtime matching the Hive client jars above. Declared directly (rather than
+         relying on the transitive versions) so its scope tracks the Hive jars: provided by
+         default, bundled and relocated under spark-bundle-shade-hive. See #19680. -->
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>${hive.libthrift.version}</version>
+      <scope>${spark.bundle.hive.scope}</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libfb303</artifactId>
+      <version>${hive.libfb303.version}</version>
       <scope>${spark.bundle.hive.scope}</scope>
     </dependency>
 

@@ -20,10 +20,14 @@ package org.apache.hudi.source.enumerator;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
+import org.apache.hudi.source.split.GlobalHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SplitRequestEvent;
+import org.apache.hudi.source.split.assign.HoodieSplitNumberAssigner;
 
+import lombok.Getter;
 import org.apache.flink.api.connector.source.ReaderInfo;
+import org.apache.flink.api.connector.source.SourceEvent;
 import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 import org.apache.flink.api.connector.source.SplitsAssignment;
 import org.apache.flink.metrics.groups.SplitEnumeratorMetricGroup;
@@ -41,7 +45,9 @@ import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -58,8 +64,8 @@ public class TestHoodieStaticSplitEnumerator {
   @BeforeEach
   public void setUp() {
     context = new MockSplitEnumeratorContext();
-    splitProvider = new DefaultHoodieSplitProvider();
-    enumerator = new HoodieStaticSplitEnumerator(context, splitProvider);
+    splitProvider = new DefaultHoodieSplitProvider(new HoodieSplitNumberAssigner(2));
+    enumerator = new HoodieStaticSplitEnumerator("test-table", context, splitProvider);
 
     split1 = createTestSplit(1, "file1");
     split2 = createTestSplit(2, "file2");
@@ -125,6 +131,9 @@ public class TestHoodieStaticSplitEnumerator {
 
     context.registerReader(new ReaderInfo(0, "localhost"));
     enumerator.handleSplitRequest(0, "localhost");
+
+    context.registerReader(new ReaderInfo(1, "localhost"));
+    enumerator.handleSplitRequest(1, "localhost");
 
     // Simulate reader failure - add splits back
     enumerator.addSplitsBack(Arrays.asList(split1), 0);
@@ -206,22 +215,139 @@ public class TestHoodieStaticSplitEnumerator {
     splitProvider.onDiscoveredSplits(Arrays.asList(split1));
     enumerator.start();
 
-    context.registerReader(new ReaderInfo(0, "localhost"));
+    context.registerReader(new ReaderInfo(1, "localhost"));
 
     SplitRequestEvent event = new SplitRequestEvent(Collections.emptyList(), "localhost");
-    enumerator.handleSourceEvent(0, 1, event);
+    enumerator.handleSourceEvent(1, 1, event);
 
     assertTrue(context.getAssignedSplits().size() > 0, "Should assign split via attempt-aware method");
+  }
+
+  @Test
+  public void testConstructorWithNullMetricGroup() {
+    MockSplitEnumeratorContext nullMetricContext = new MockSplitEnumeratorContext(true);
+    HoodieStaticSplitEnumerator enumeratorWithNullMetrics =
+        new HoodieStaticSplitEnumerator("test-table", nullMetricContext, splitProvider);
+
+    assertNotNull(enumeratorWithNullMetrics, "Enumerator should initialize without NPE when metricGroup is null");
+
+    // Basic operations should still work without metrics
+    nullMetricContext.registerReader(new ReaderInfo(1, "localhost"));
+    enumeratorWithNullMetrics.start();
+    splitProvider.onDiscoveredSplits(Arrays.asList(split1));
+    enumeratorWithNullMetrics.handleSplitRequest(1, "localhost");
+    assertTrue(nullMetricContext.getAssignedSplits().containsKey(1),
+        "Splits should still be assigned when metrics are null");
+    assertFalse(nullMetricContext.getNoMoreSplitsSignaled().contains(1),
+        "No-more-splits signal should not be sent when a split was assigned");
+  }
+
+  @Test
+  public void testHandleSourceEventWithUnknownEventThrows() {
+    enumerator.start();
+    context.registerReader(new ReaderInfo(0, "localhost"));
+
+    SourceEvent unknownEvent = new SourceEvent() {};
+    assertThrows(IllegalArgumentException.class,
+        () -> enumerator.handleSourceEvent(0, unknownEvent),
+        "Should throw IllegalArgumentException for unknown source event type");
+  }
+
+  @Test
+  public void testGlobalProviderWorkStealingAcrossSubtasks() {
+    // With the shared work-stealing pool a single reader can drain every split: the enumerator no
+    // longer pins splits to a subtask. DefaultHoodieSplitProvider with a number/hash assigner would
+    // hand most of these to other subtasks and starve reader 0.
+    GlobalHoodieSplitProvider globalProvider = new GlobalHoodieSplitProvider();
+    HoodieStaticSplitEnumerator globalEnumerator =
+        new HoodieStaticSplitEnumerator("test-table", context, globalProvider);
+    globalProvider.onDiscoveredSplits(Arrays.asList(split1, split2, split3));
+    globalEnumerator.start();
+
+    context.registerReader(new ReaderInfo(0, "localhost"));
+    context.registerReader(new ReaderInfo(1, "localhost"));
+
+    // Reader 0 keeps finishing and asking for more; it takes all three splits by itself.
+    globalEnumerator.handleSplitRequest(0, "localhost");
+    globalEnumerator.handleSplitRequest(0, "localhost");
+    globalEnumerator.handleSplitRequest(0, "localhost");
+
+    assertEquals(3, context.getAssignedSplits().get(0).size(),
+        "A single reader should be able to steal the entire pool");
+    assertFalse(context.getNoMoreSplitsSignaled().contains(0),
+        "No-more-splits must not fire while the pool still had splits");
+  }
+
+  @Test
+  public void testGlobalProviderSignalsNoMoreSplitsOnlyWhenPoolEmpty() {
+    GlobalHoodieSplitProvider globalProvider = new GlobalHoodieSplitProvider();
+    HoodieStaticSplitEnumerator globalEnumerator =
+        new HoodieStaticSplitEnumerator("test-table", context, globalProvider);
+    globalProvider.onDiscoveredSplits(Collections.singletonList(split1)); // one split, two readers
+    globalEnumerator.start();
+
+    context.registerReader(new ReaderInfo(0, "localhost"));
+    context.registerReader(new ReaderInfo(1, "localhost"));
+
+    globalEnumerator.handleSplitRequest(0, "localhost"); // reader 0 takes the only split
+    globalEnumerator.handleSplitRequest(1, "localhost"); // reader 1 finds the shared pool empty
+
+    assertTrue(context.getAssignedSplits().containsKey(0), "Reader 0 should receive the split");
+    assertFalse(context.getNoMoreSplitsSignaled().contains(0),
+        "Reader 0 got a split, so it should not be told no-more-splits");
+    assertTrue(context.getNoMoreSplitsSignaled().contains(1),
+        "Reader 1 should be told no-more-splits once the shared pool is drained");
+  }
+
+  @Test
+  public void testGlobalProviderAddSplitsBackAfterOtherReadersGotNoMoreSplits() {
+    // Failure recovery once the pool has already been drained and some readers have finished:
+    // the split a failed reader hands back must land in the shared pool and stay claimable by a
+    // subtask that is neither the failed one nor an already-finished one. Under per-subtask
+    // pinning it would instead be re-pinned to hash(fileId), possibly a reader that is already
+    // done, and never be read.
+    GlobalHoodieSplitProvider globalProvider = new GlobalHoodieSplitProvider();
+    HoodieStaticSplitEnumerator globalEnumerator =
+        new HoodieStaticSplitEnumerator("test-table", context, globalProvider);
+    globalProvider.onDiscoveredSplits(Collections.singletonList(split1));
+    globalEnumerator.start();
+
+    context.registerReader(new ReaderInfo(0, "localhost"));
+    context.registerReader(new ReaderInfo(1, "localhost"));
+    context.registerReader(new ReaderInfo(2, "localhost"));
+
+    globalEnumerator.handleSplitRequest(0, "localhost"); // reader 0 takes the only split
+    globalEnumerator.handleSplitRequest(1, "localhost"); // pool is drained, reader 1 finishes
+    assertTrue(context.getNoMoreSplitsSignaled().contains(1),
+        "Reader 1 should already have been told no-more-splits");
+
+    // Reader 0 fails mid-split and its split is returned.
+    context.unregisterReader(0);
+    globalEnumerator.addSplitsBack(Collections.singletonList(split1), 0);
+    assertEquals(1, globalProvider.pendingSplitCount(),
+        "Returned split should be back in the shared pool");
+
+    // Reader 2, which has neither failed nor finished, claims it.
+    globalEnumerator.handleSplitRequest(2, "localhost");
+
+    assertEquals(Collections.singletonList(split1), context.getAssignedSplits().get(2),
+        "A different, still-running subtask should claim the returned split");
+    assertFalse(context.getNoMoreSplitsSignaled().contains(2),
+        "Reader 2 got the returned split, so it should not be told no-more-splits");
+    assertEquals(0, globalProvider.pendingSplitCount(), "Pool should be drained again");
   }
 
   private HoodieSourceSplit createTestSplit(int splitNum, String fileId) {
     return new HoodieSourceSplit(
         splitNum,
-        "basePath_" + splitNum,
+        "40e603a8-3cc1-4d09-b0a5-1432992b4bf7_1-0" + splitNum + "_20260126034717000.parquet",
         Option.empty(),
         "/table/path",
+        "/table/path/partition1",
         "read_optimized",
-        fileId
+        "19700101000000000",
+        fileId,
+        Option.empty()
     );
   }
 
@@ -230,9 +356,20 @@ public class TestHoodieStaticSplitEnumerator {
    */
   private static class MockSplitEnumeratorContext implements SplitEnumeratorContext<HoodieSourceSplit> {
     private final Map<Integer, ReaderInfo> registeredReaders = new HashMap<>();
+    @Getter
     private final Map<Integer, List<HoodieSourceSplit>> assignedSplits = new HashMap<>();
+    @Getter
     private final List<Integer> noMoreSplitsSignaled = new ArrayList<>();
     private final List<Runnable> coordinatorThreadTasks = new ArrayList<>();
+    private final boolean returnNullMetricGroup;
+
+    MockSplitEnumeratorContext() {
+      this(false);
+    }
+
+    MockSplitEnumeratorContext(boolean returnNullMetricGroup) {
+      this.returnNullMetricGroup = returnNullMetricGroup;
+    }
 
     public void registerReader(ReaderInfo readerInfo) {
       registeredReaders.put(readerInfo.getSubtaskId(), readerInfo);
@@ -242,17 +379,9 @@ public class TestHoodieStaticSplitEnumerator {
       registeredReaders.remove(subtaskId);
     }
 
-    public Map<Integer, List<HoodieSourceSplit>> getAssignedSplits() {
-      return assignedSplits;
-    }
-
-    public List<Integer> getNoMoreSplitsSignaled() {
-      return noMoreSplitsSignaled;
-    }
-
     @Override
     public SplitEnumeratorMetricGroup metricGroup() {
-      return  UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
+      return returnNullMetricGroup ? null : UnregisteredMetricsGroup.createSplitEnumeratorMetricGroup();
     }
 
     @Override

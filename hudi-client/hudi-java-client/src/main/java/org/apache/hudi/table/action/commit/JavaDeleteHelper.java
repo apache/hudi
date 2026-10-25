@@ -38,7 +38,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -64,16 +64,12 @@ public class JavaDeleteHelper<R> extends
                                          int parallelism) {
     boolean isIndexingGlobal = table.getIndex().isGlobal();
     if (isIndexingGlobal) {
-      HashSet<String> recordKeys = keys.stream().map(HoodieKey::getRecordKey).collect(Collectors.toCollection(HashSet::new));
-      List<HoodieKey> deduplicatedKeys = new LinkedList<>();
-      keys.forEach(x -> {
-        if (recordKeys.contains(x.getRecordKey())) {
-          deduplicatedKeys.add(x);
-        }
-      });
-      return deduplicatedKeys;
+      HashSet<String> recordKeys = new HashSet<>();
+      return keys.stream()
+          .filter(key -> recordKeys.add(key.getRecordKey()))
+          .collect(Collectors.toList());
     } else {
-      HashSet<HoodieKey> set = new HashSet<>(keys);
+      LinkedHashSet<HoodieKey> set = new LinkedHashSet<>(keys);
       keys.clear();
       keys.addAll(set);
       return keys;

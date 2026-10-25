@@ -28,15 +28,14 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.queue.HoodieExecutor;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.execution.ExecutorFactory;
 import org.apache.hudi.io.HoodieBootstrapHandle;
-import org.apache.hudi.io.storage.HoodieFileReader;
 import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.ExecutorFactory;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
@@ -66,7 +65,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
   }
 
   @Override
-  Schema getAvroSchema(StoragePath sourceFilePath) throws IOException {
+  HoodieSchema getSchema(StoragePath sourceFilePath) throws IOException {
     ParquetMetadata readFooter = ParquetFileReader.readFooter(
         (Configuration) table.getStorageConf().unwrap(), new Path(sourceFilePath.toUri()),
         ParquetMetadataConverter.NO_FILTER);
@@ -79,7 +78,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
                                   StoragePath sourceFilePath,
                                   KeyGeneratorInterface keyGenerator,
                                   String partitionPath,
-                                  Schema schema) throws Exception {
+                                  HoodieSchema schema) throws Exception {
     HoodieRecord.HoodieRecordType recordType = table.getConfig().getRecordMerger().getRecordType();
 
     HoodieFileReader reader = getHoodieSparkIOFactory(table.getStorage()).getReaderFactory(recordType)
@@ -95,8 +94,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
             //       it since these records will be inserted into the queue later.
             .copy();
       };
-      //TODO boundary to reivisit in later pr to use HoodieSchema directly
-      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(HoodieSchema.fromAvroSchema(schema));
+      ClosableIterator<HoodieRecord> recordIterator = reader.getRecordIterator(schema);
       executor = ExecutorFactory.create(config, recordIterator,
           new BootstrapRecordConsumer(bootstrapHandle), transformer, table.getPreExecuteRunnable());
       executor.execute();
@@ -124,7 +122,7 @@ class ParquetBootstrapMetadataHandler extends BaseBootstrapMetadataHandler {
         return new HoodieAvroIndexedRecord(hoodieKey, avroRecord);
 
       case SPARK:
-        StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(METADATA_BOOTSTRAP_RECORD_SCHEMA.toAvroSchema());
+        StructType schema = HoodieInternalRowUtils$.MODULE$.getCachedSchema(METADATA_BOOTSTRAP_RECORD_SCHEMA);
         UnsafeProjection unsafeProjection = HoodieInternalRowUtils$.MODULE$.getCachedUnsafeProjection(schema, schema);
 
         GenericInternalRow row = new GenericInternalRow(METADATA_BOOTSTRAP_RECORD_SCHEMA.getFields().size());

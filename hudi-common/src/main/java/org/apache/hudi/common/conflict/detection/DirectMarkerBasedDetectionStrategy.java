@@ -30,8 +30,8 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.List;
@@ -42,9 +42,9 @@ import java.util.stream.Stream;
  * This abstract strategy is used for direct marker writers, trying to do early conflict detection.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
+@AllArgsConstructor
+@Slf4j
 public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflictDetectionStrategy {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DirectMarkerBasedDetectionStrategy.class);
 
   protected final HoodieStorage storage;
   protected final String partitionPath;
@@ -52,17 +52,6 @@ public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflic
   protected final String instantTime;
   protected final HoodieActiveTimeline activeTimeline;
   protected final HoodieConfig config;
-
-  public DirectMarkerBasedDetectionStrategy(HoodieStorage storage, String partitionPath, String fileId,
-                                            String instantTime,
-                                            HoodieActiveTimeline activeTimeline, HoodieConfig config) {
-    this.storage = storage;
-    this.partitionPath = partitionPath;
-    this.fileId = fileId;
-    this.instantTime = instantTime;
-    this.activeTimeline = activeTimeline;
-    this.config = config;
-  }
 
   /**
    * We need to do list operation here.
@@ -106,7 +95,7 @@ public abstract class DirectMarkerBasedDetectionStrategy implements EarlyConflic
     }).count();
 
     if (res != 0L) {
-      LOG.warn("Detected conflict marker files: {}/{} for {}", partitionPath, fileId, instantTime);
+      log.warn("Detected conflict marker files: {}/{} for {}", partitionPath, fileId, instantTime);
       return true;
     }
     return false;

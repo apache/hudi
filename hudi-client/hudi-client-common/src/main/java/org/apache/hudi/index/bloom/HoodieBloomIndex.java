@@ -37,7 +37,7 @@ import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieIndexUtils;
 import org.apache.hudi.io.HoodieRangeInfoHandle;
-import org.apache.hudi.stats.ValueMetadata;
+import org.apache.hudi.metadata.stats.ValueMetadata;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -136,6 +136,12 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
                                                                                     List<String> affectedPartitionPathList) {
     List<Pair<String, BloomIndexFileInfo>> fileInfoList = new ArrayList<>();
 
+    // Preload the partitions so that each parallel op does not have to perform listing.
+    // This is only needed when the embedded timeline server is not enabled, as TLS caches file listings.
+    if (!config.isEmbeddedTimelineServerEnabled()) {
+      affectedPartitionPathList.forEach(partition -> hoodieTable.getBaseFileOnlyView().getAllBaseFiles(partition));
+    }
+
     if (config.getBloomIndexPruneByRanges()) {
       // load column ranges from metadata index if column stats index is enabled and column_stats metadata partition is available
       if (config.getBloomIndexUseMetadata()
@@ -165,7 +171,7 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         .collect(toList());
 
     context.setJobStatus(this.getClass().getName(), "Obtain key ranges for file slices (range pruning=on): " + config.getTableName());
-    return context.map(partitionPathFileIDList, pf -> {
+    List<Pair<String, BloomIndexFileInfo>> result = context.map(partitionPathFileIDList, pf -> {
       try {
         HoodieRangeInfoHandle rangeInfoHandle = new HoodieRangeInfoHandle(config, hoodieTable, Pair.of(pf.getKey(), pf.getValue().getKey()));
         String[] minMaxKeys = rangeInfoHandle.getMinMaxKeys(pf.getValue().getValue());
@@ -175,6 +181,8 @@ public class HoodieBloomIndex extends HoodieIndex<Object, Object> {
         return Pair.of(pf.getKey(), new BloomIndexFileInfo(pf.getValue().getKey()));
       }
     }, Math.max(partitionPathFileIDList.size(), 1));
+    context.clearJobStatus();
+    return result;
   }
 
   /**

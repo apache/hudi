@@ -34,6 +34,9 @@ import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2M
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
@@ -49,6 +52,7 @@ import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deseri
  * Helper class to generate compaction plan from FileGroup/FileSlice abstraction.
  */
 public class CompactionUtils {
+  private static final Logger LOG = LoggerFactory.getLogger(CompactionUtils.class);
 
   public static final Integer COMPACTION_METADATA_VERSION_1 = CompactionV1MigrationHandler.VERSION;
   public static final Integer COMPACTION_METADATA_VERSION_2 = CompactionV2MigrationHandler.VERSION;
@@ -357,6 +361,67 @@ public class CompactionUtils {
         // timeline containing all the delta commits, and the first delta commit instant
         return Option.of(Pair.of(deltaCommits.findInstantsAfterOrEquals(
               latestInstant.requestedTime(), Integer.MAX_VALUE), latestInstant));
+      } else {
+        return Option.empty();
+      }
+    }
+  }
+
+  /**
+   * Returns the most recent log compaction instant from the raw active timeline.
+   *
+   * @param rawActiveTimeline Active timeline of table, that has current and previous states of each instant.
+   * @return The latest log compaction instant, or empty if no log compaction is present.
+   */
+  public static Option<HoodieInstant> getLastLogCompaction(final HoodieActiveTimeline rawActiveTimeline) {
+    Option<HoodieInstant> lastLogCompactionInstantOpt = Option.fromJavaOptional(
+        rawActiveTimeline
+            .filterPendingLogCompactionTimeline()
+            .getReverseOrderedInstants()
+            .findFirst()
+    );
+    if (!lastLogCompactionInstantOpt.isPresent()) {
+      return Option.empty();
+    }
+    String logCompactionTimestamp = lastLogCompactionInstantOpt.get().requestedTime();
+    Option<HoodieInstant> completedInstantOpt = Option.fromJavaOptional(
+        rawActiveTimeline
+            .findInstantsInClosedRange(logCompactionTimestamp, logCompactionTimestamp)
+            .getInstantsAsStream()
+            .filter(HoodieInstant::isCompleted)
+            .findFirst()
+    );
+    return completedInstantOpt.isPresent() ? completedInstantOpt : lastLogCompactionInstantOpt;
+  }
+
+  /**
+   * Returns a pair of (timeline containing the delta commits after the latest completed
+   * log compaction delta commit, the completed log compaction commit instant), if the latest completed
+   * log compaction commit is present; a pair of (timeline containing all the delta commits,
+   * the first delta commit instant), if there is no completed log compaction commit.
+   *
+   * @param deltaCommitTimeline Active timeline of table that contains only delta commits.
+   * @param rawActiveTimeline Active timeline of table, that has current and previous states of each instant.
+   * @return Pair of timeline containing delta commits and an instant.
+   */
+  public static Option<Pair<HoodieTimeline, HoodieInstant>> getDeltaCommitsSinceLatestCompletedLogCompaction(
+      final HoodieTimeline deltaCommitTimeline,
+      final HoodieActiveTimeline rawActiveTimeline) {
+    Option<HoodieInstant> lastLogCompactionOpt = getLastLogCompaction(rawActiveTimeline);
+
+    if (lastLogCompactionOpt.isPresent()) {
+      HoodieInstant lastLogCompaction = lastLogCompactionOpt.get();
+      if (lastLogCompaction.isCompleted()) {
+        return Option.of(Pair.of(deltaCommitTimeline.findInstantsModifiedAfterByCompletionTime(
+            lastLogCompaction.requestedTime()), lastLogCompaction));
+      } else {
+        LOG.info("Last log compaction instant {} is in pending state, returning empty value.", lastLogCompaction.requestedTime());
+        return Option.empty();
+      }
+    } else {
+      Option<HoodieInstant> firstDeltaCommitInstantOption = deltaCommitTimeline.firstInstant();
+      if (firstDeltaCommitInstantOption.isPresent()) {
+        return Option.of(Pair.of(deltaCommitTimeline, firstDeltaCommitInstantOption.get()));
       } else {
         return Option.empty();
       }

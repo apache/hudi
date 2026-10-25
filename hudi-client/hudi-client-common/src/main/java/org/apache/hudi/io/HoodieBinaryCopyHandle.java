@@ -19,20 +19,20 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileBinaryCopier;
+import org.apache.hudi.core.io.storage.HoodieFileMetadataMerger;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.storage.HoodieFileBinaryCopier;
 import org.apache.hudi.parquet.io.HoodieParquetFileBinaryCopier;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
-import org.apache.hudi.util.HoodieFileMetadataMerger;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
@@ -69,8 +69,8 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       // All files should have the same schema in this case
       try {
         ParquetUtils parquetUtils = new ParquetUtils();
-        MessageType fileSchema = parquetUtils.readSchema(table.getStorage(), inputFiles.get(0));
-        log.info("Binary copy schema evolution disabled. Using schema from input file: " + inputFiles.get(0));
+        MessageType fileSchema = parquetUtils.readMessageType(table.getStorage(), inputFiles.get(0));
+        log.info("Binary copy schema evolution disabled. Using schema from input file: {}", inputFiles.get(0));
         return fileSchema;
       } catch (Exception e) {
         log.error("Failed to read schema from input file", e);
@@ -79,7 +79,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       }
     } else {
       // Default behavior: use the table's write schema for evolution
-      return getAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields.toAvroSchema());
+      return getAvroSchemaConverter(conf).convert(writeSchemaWithMetaFields);
     }
   }
 
@@ -104,13 +104,16 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     writeStatus.setStat(new HoodieWriteStat());
     this.writer = new HoodieParquetFileBinaryCopier(
         conf,
-        CompressionCodecName.fromConf(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
+        CompressionCodecName.fromConf(config.getParquetCompressionCodec()),
         fileMetadataMerger);
+    // From the TABLE config, as the write handles do: the mode is a table property, and the copier
+    // otherwise rewrites _hoodie_file_name on a table that does not populate it.
+    this.writer.setMetaFieldsMode(hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode());
   }
 
   public void write() {
-    log.info("Start to merge source files " + this.inputFiles + " into target file: " + this.path
-        + ". Please pay attention that we will not rolling files based on max-file-size config during binary copy.");
+    log.info("Start to merge source files {} into target file: {}. Please pay attention that we will not rolling files based on max-file-size config during binary copy.",
+        this.inputFiles, this.path);
     HoodieTimer timer = HoodieTimer.start();
     long records = 0;
     try {
@@ -118,18 +121,31 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       log.info("Schema evolution enabled for binary copy: {}", schemaEvolutionEnabled);
       records = this.writer.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, schemaEvolutionEnabled);
     } catch (IOException e) {
+      closeWriterQuietly(e);
       throw new HoodieIOException(e.getMessage(), e);
+    } catch (RuntimeException e) {
+      closeWriterQuietly(e);
+      throw e;
     } finally {
       this.recordsWritten = records;
       this.insertRecordsWritten = records;
     }
-    log.info("Finish rewriting " + this.path + ". Using " + timer.endTimer() + " mills");
+    log.info("Finish rewriting {}. Using {} mills", this.path, timer.endTimer());
+  }
+
+  private void closeWriterQuietly(Throwable failure) {
+    markClosed();
+    CloseableUtils.closeSuppressing(writer::close, failure);
   }
 
   @Override
   public List<WriteStatus> close() {
-    log.info("Closing the file " + writeStatus.getFileId() + " as we are done with all the records " + recordsWritten);
+    log.info("Closing the file {} as we are done with all the records {}", writeStatus.getFileId(), recordsWritten);
     try {
+      if (isClosed()) {
+        return Collections.singletonList(writeStatus);
+      }
+      markClosed();
       this.writer.close();
 
       HoodieWriteStat stat = writeStatus.getStat();

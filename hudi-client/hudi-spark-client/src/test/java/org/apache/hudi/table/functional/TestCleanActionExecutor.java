@@ -34,11 +34,11 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -62,11 +62,14 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getLocalStorage;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -91,7 +94,7 @@ public class TestCleanActionExecutor {
     when(mockHoodieTable.getMetaClient()).thenReturn(metaClient);
     HoodieTableConfig tableConfig = new HoodieTableConfig();
     when(metaClient.getTableConfig()).thenReturn(tableConfig);
-    storage = spy(HoodieStorageUtils.getStorage(CONF));
+    storage = spy(getLocalStorage(CONF));
     when(metaClient.getStorage()).thenReturn(storage);
     when(mockHoodieTable.getStorage()).thenReturn(storage);
   }
@@ -115,6 +118,15 @@ public class TestCleanActionExecutor {
       when(storage.exists(filePath)).thenReturn(true);
     } else if (failureType == CleanFailureType.FILE_NOT_FOUND_EXC_ON_DELETE) {
       when(storage.deleteFile(filePath)).thenThrow(new FileNotFoundException("throwing file not found exception"));
+    } else if (failureType == CleanFailureType.IO_EXCEPTION) {
+      when(storage.deleteFile(filePath)).thenThrow(new IOException("throwing io exception"));
+      when(storage.exists(filePath)).thenThrow(new IOException("throwing io exception"));
+    } else if (failureType == CleanFailureType.IO_EXCEPTION_AND_EXISTS) {
+      when(storage.deleteFile(filePath)).thenThrow(new IOException("throwing io exception"));
+      when(storage.exists(filePath)).thenReturn(true);
+    } else if (failureType == CleanFailureType.IO_EXCEPTION_BUT_NOT_EXISTS) {
+      when(storage.deleteFile(filePath)).thenThrow(new IOException("throwing io exception"));
+      when(storage.exists(filePath)).thenReturn(false);
     } else {
       // run time exception
       when(storage.deleteFile(filePath)).thenThrow(new RuntimeException("throwing run time exception"));
@@ -152,17 +164,26 @@ public class TestCleanActionExecutor {
 
     CleanActionExecutor cleanActionExecutor = new CleanActionExecutor(context, config, mockHoodieTable, "002");
     if (failureType == CleanFailureType.TRUE_ON_DELETE) {
-      assertCleanExecutionSuccess(cleanActionExecutor, filePath);
+      assertCleanExecutionSuccess(cleanActionExecutor, filePath, true);
     } else if (failureType == CleanFailureType.FALSE_ON_DELETE_IS_EXISTS_FALSE) {
-      assertCleanExecutionSuccess(cleanActionExecutor, filePath);
+      // a missing file on a retried clean counts as a successful delete so its MDT entry is removed
+      assertCleanExecutionSuccess(cleanActionExecutor, filePath, true);
     } else if (failureType == CleanFailureType.FALSE_ON_DELETE_IS_EXISTS_TRUE) {
       assertCleanExecutionFailure(cleanActionExecutor);
     } else if (failureType == CleanFailureType.FILE_NOT_FOUND_EXC_ON_DELETE) {
-      assertCleanExecutionSuccess(cleanActionExecutor, filePath);
+      assertCleanExecutionSuccess(cleanActionExecutor, filePath, true);
+    } else if (failureType == CleanFailureType.IO_EXCEPTION) {
+      assertCleanExecutionFailure(cleanActionExecutor);
+    } else if (failureType == CleanFailureType.IO_EXCEPTION_AND_EXISTS) {
+      assertCleanExecutionFailure(cleanActionExecutor);
+    } else if (failureType == CleanFailureType.IO_EXCEPTION_BUT_NOT_EXISTS) {
+      assertCleanExecutionSuccess(cleanActionExecutor, filePath, false);
     } else {
       // run time exception
       assertCleanExecutionFailure(cleanActionExecutor);
     }
+    // file deletions must not stat the path first; deletes go straight to storage
+    verify(storage, never()).getPathInfo(filePath);
   }
 
   private void assertCleanExecutionFailure(CleanActionExecutor cleanActionExecutor) {
@@ -171,11 +192,16 @@ public class TestCleanActionExecutor {
     });
   }
 
-  private void assertCleanExecutionSuccess(CleanActionExecutor cleanActionExecutor, StoragePath filePath) {
+  private void assertCleanExecutionSuccess(CleanActionExecutor cleanActionExecutor, StoragePath filePath, boolean expectFileDeleteSuccess) {
     HoodieCleanMetadata cleanMetadata = cleanActionExecutor.execute();
     assertTrue(cleanMetadata.getPartitionMetadata().containsKey(PARTITION1));
     HoodieCleanPartitionMetadata cleanPartitionMetadata = cleanMetadata.getPartitionMetadata().get(PARTITION1);
     assertTrue(cleanPartitionMetadata.getDeletePathPatterns().contains(filePath.getName()));
+    if (expectFileDeleteSuccess) {
+      assertTrue(cleanPartitionMetadata.getSuccessDeleteFiles().contains(filePath.getName()));
+    } else {
+      assertTrue(cleanPartitionMetadata.getFailedDeleteFiles().contains(filePath.getName()));
+    }
   }
 
   private static HoodieWriteConfig getCleanByCommitsConfig() {
@@ -189,6 +215,9 @@ public class TestCleanActionExecutor {
     FALSE_ON_DELETE_IS_EXISTS_FALSE,
     FALSE_ON_DELETE_IS_EXISTS_TRUE,
     FILE_NOT_FOUND_EXC_ON_DELETE,
+    IO_EXCEPTION,
+    IO_EXCEPTION_AND_EXISTS,
+    IO_EXCEPTION_BUT_NOT_EXISTS,
     RUNTIME_EXC_ON_DELETE
   }
 }

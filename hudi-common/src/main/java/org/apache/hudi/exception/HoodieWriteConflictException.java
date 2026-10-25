@@ -18,6 +18,8 @@
 
 package org.apache.hudi.exception;
 
+import org.apache.hudi.common.util.Option;
+
 /**
  * <p>
  * Exception thrown for Hoodie failures. The root of the exception hierarchy.
@@ -29,15 +31,44 @@ package org.apache.hudi.exception;
  */
 public class HoodieWriteConflictException extends HoodieException {
 
+  /**
+   * Categorizes the two sides of a write conflict for metrics and diagnostics.
+   */
+  public enum ConflictCategory {
+    INGESTION_VS_INGESTION,
+    INGESTION_VS_TABLE_SERVICE,
+    TABLE_SERVICE_VS_INGESTION,
+    TABLE_SERVICE_VS_TABLE_SERVICE
+  }
+
+  private final Option<ConflictCategory> category;
+
   public HoodieWriteConflictException(String msg) {
     super(msg);
+    this.category = Option.empty();
   }
 
   public HoodieWriteConflictException(Throwable e) {
     super(e);
+    this.category = Option.empty();
   }
 
   public HoodieWriteConflictException(String msg, Throwable e) {
     super(msg, e);
+    this.category = Option.empty();
+  }
+
+  public HoodieWriteConflictException(ConflictCategory category, String msg) {
+    super(msg);
+    this.category = Option.of(category);
+  }
+
+  public HoodieWriteConflictException(ConflictCategory category, String msg, Throwable e) {
+    super(msg, e);
+    this.category = Option.of(category);
+  }
+
+  public Option<ConflictCategory> getCategory() {
+    return category;
   }
 }

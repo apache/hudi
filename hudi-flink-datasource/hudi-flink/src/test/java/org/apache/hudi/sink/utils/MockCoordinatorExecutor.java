@@ -20,20 +20,19 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.function.ThrowingRunnable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * A mock {@link NonThrownExecutor} that executes the actions synchronously.
  */
+@Slf4j
 public class MockCoordinatorExecutor extends NonThrownExecutor {
-  private static final Logger LOG = LoggerFactory.getLogger(MockCoordinatorExecutor.class);
 
   public MockCoordinatorExecutor(OperatorCoordinator.Context context) {
-    super(LOG, null, (errMsg, t) -> context.failJob(new HoodieException(errMsg, t)), true);
+    super(log, null, (errMsg, t) -> context.failJob(new HoodieException(errMsg, t)), true);
   }
 
   @Override
@@ -45,12 +44,12 @@ public class MockCoordinatorExecutor extends NonThrownExecutor {
     final String actionString = String.format(actionName, actionParams);
     try {
       action.run();
-      LOG.info("Executor executes action [{}] success!", actionString);
+      log.info("Executor executes action [{}] success!", actionString);
     } catch (Throwable t) {
       // if we have a JVM critical error, promote it immediately, there is a good
       // chance the
       // logging or job failing will not succeed anymore
-      LOG.error("Executor executes action [{}] failed.", actionString, t);
+      log.error("Executor executes action [{}] failed.", actionString, t);
       ExceptionUtils.rethrowIfFatalErrorOrOOM(t);
       final String errMsg = String.format("Executor executes action [%s] error", actionString);
       if (hook != null) {

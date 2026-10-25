@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
@@ -34,11 +35,9 @@ import org.apache.hudi.metadata.MetadataPartitionType;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.jetbrains.annotations.TestOnly;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -63,14 +62,13 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 
 /**
- * TODO: [HUDI-8294]
  * A tool to run metadata indexing asynchronously.
  * <p>
  * Example command (assuming indexer.properties contains related index configs, see {@link org.apache.hudi.common.config.HoodieMetadataConfig} for configs):
  * <p>
  * spark-submit \
  * --class org.apache.hudi.utilities.HoodieIndexer \
- * /path/to/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.11-0.11.0-SNAPSHOT.jar \
+ * /path/to/hudi/packaging/hudi-utilities-bundle/target/hudi-utilities-bundle_2.12-1.3.0-SNAPSHOT.jar \
  * --props /path/to/indexer.properties \
  * --mode scheduleAndExecute \
  * --base-path /tmp/hudi_trips_cow \
@@ -87,9 +85,9 @@ import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
  * hoodie.write.concurrency.mode=optimistic_concurrency_control
  * hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider
  */
+@Slf4j
 public class HoodieIndexer {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieIndexer.class);
   static final String DROP_INDEX = "dropindex";
 
   private final HoodieIndexer.Config cfg;
@@ -124,6 +122,8 @@ public class HoodieIndexer {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--retry", "-rt"}, description = "number of retries")
     public int retry = 0;
     @Parameter(names = {"--index-types", "-ixt"}, description = "Comma-separated index types to be built, e.g. BLOOM_FILTERS,COLUMN_STATS", required = true)
@@ -154,7 +154,8 @@ public class HoodieIndexer {
       throw new HoodieException("Indexing failed for basePath : " + cfg.basePath);
     }
 
-    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("indexing-" + cfg.tableName, cfg.sparkMaster, cfg.sparkMemory);
+    final JavaSparkContext jsc = UtilHelpers.buildSparkContext("indexing-" + cfg.tableName,
+        cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport);
     HoodieIndexer indexer = new HoodieIndexer(jsc, cfg);
     int result = indexer.start(cfg.retry);
     String resultMsg = String.format("Indexing with basePath: %s, tableName: %s, runningMode: %s",
@@ -162,21 +163,21 @@ public class HoodieIndexer {
     if (result != 0) {
       throw new HoodieException(resultMsg + " failed");
     }
-    LOG.info(resultMsg + " success");
+    log.info("{} success", resultMsg);
     jsc.stop();
   }
 
   public int start(int retry) {
     // indexing should be done only if metadata is enabled
     if (!props.getBoolean(HoodieMetadataConfig.ENABLE.key())) {
-      LOG.error(String.format("Metadata is not enabled. Please set %s to true.", HoodieMetadataConfig.ENABLE.key()));
+      log.error("Metadata is not enabled. Please set {} to true.", HoodieMetadataConfig.ENABLE.key());
       return -1;
     }
 
     // all inflight or completed metadata partitions have already been initialized
     // so enable corresponding indexes in the props so that they're not deleted
     Set<String> initializedMetadataPartitions = getInflightAndCompletedMetadataPartitions(metaClient.getTableConfig());
-    LOG.info("Setting props for: " + initializedMetadataPartitions);
+    log.info("Setting props for: {}", initializedMetadataPartitions);
     initializedMetadataPartitions.forEach(p -> {
       if (PARTITION_NAME_COLUMN_STATS.equals(p)) {
         props.setProperty(ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
@@ -192,35 +193,35 @@ public class HoodieIndexer {
     return UtilHelpers.retry(retry, () -> {
       switch (cfg.runningMode.toLowerCase()) {
         case SCHEDULE: {
-          LOG.info("Running Mode: [" + SCHEDULE + "]; Do schedule");
+          log.info("Running Mode: [{}]; Do schedule", SCHEDULE);
           Option<String> instantTime = scheduleIndexing(jsc);
           int result = instantTime.isPresent() ? 0 : -1;
           if (result == 0) {
-            LOG.info("The schedule instant time is " + instantTime.get());
+            log.info("The schedule instant time is {}", instantTime.get());
           }
           return result;
         }
         case SCHEDULE_AND_EXECUTE: {
-          LOG.info("Running Mode: [" + SCHEDULE_AND_EXECUTE + "]");
+          log.info("Running Mode: [{}]", SCHEDULE_AND_EXECUTE);
           return scheduleAndRunIndexing(jsc);
         }
         case EXECUTE: {
-          LOG.info("Running Mode: [" + EXECUTE + "];");
+          log.info("Running Mode: [{}];", EXECUTE);
           return runIndexing(jsc);
         }
         case DROP_INDEX: {
-          LOG.info("Running Mode: [" + DROP_INDEX + "];");
+          log.info("Running Mode: [{}];", DROP_INDEX);
           return dropIndex(jsc);
         }
         default: {
-          LOG.info("Unsupported running mode [" + cfg.runningMode + "], quit the job directly");
+          log.info("Unsupported running mode [{}], quit the job directly", cfg.runningMode);
           return -1;
         }
       }
     }, "Indexer failed");
   }
 
-  @TestOnly
+  @VisibleForTesting
   public Option<String> doSchedule() throws Exception {
     return this.scheduleIndexing(jsc);
   }
@@ -245,7 +246,7 @@ public class HoodieIndexer {
 
     Option<String> indexingInstant = client.scheduleIndexing(partitionTypes, Collections.emptyList());
     if (!indexingInstant.isPresent()) {
-      LOG.error("Scheduling of index action did not return any instant.");
+      log.error("Scheduling of index action did not return any instant.");
     }
     return indexingInstant;
   }
@@ -261,7 +262,7 @@ public class HoodieIndexer {
     Set<String> requestedIndexPartitionPaths = partitionTypes.stream().map(MetadataPartitionType::getPartitionPath).collect(Collectors.toSet());
     requestedIndexPartitionPaths.retainAll(indexedMetadataPartitions);
     if (!requestedIndexPartitionPaths.isEmpty()) {
-      LOG.error("Following indexes already built: " + requestedIndexPartitionPaths);
+      log.error("Following indexes already built: {}", requestedIndexPartitionPaths);
       return true;
     }
     return false;
@@ -283,8 +284,7 @@ public class HoodieIndexer {
             .firstInstant();
         if (earliestPendingIndexInstant.isPresent()) {
           cfg.indexInstantTime = earliestPendingIndexInstant.get().requestedTime();
-          LOG.info("Found the earliest scheduled indexing instant which will be executed: "
-              + cfg.indexInstantTime);
+          log.info("Found the earliest scheduled indexing instant which will be executed: {}", cfg.indexInstantTime);
         } else {
           throw new HoodieIndexException("There is no scheduled indexing in the table.");
         }
@@ -313,18 +313,18 @@ public class HoodieIndexer {
       client.dropIndex(partitionTypes);
       return 0;
     } catch (Exception e) {
-      LOG.error("Failed to drop index. ", e);
+      log.error("Failed to drop index. ", e);
       return -1;
     }
   }
 
   private boolean handleResponse(Option<HoodieIndexCommitMetadata> commitMetadata) {
     if (!commitMetadata.isPresent()) {
-      LOG.error("Indexing failed as no commit metadata present.");
+      log.error("Indexing failed as no commit metadata present.");
       return false;
     }
     List<HoodieIndexPartitionInfo> indexPartitionInfos = commitMetadata.get().getIndexPartitionInfos();
-    LOG.info("Indexing complete for partitions: {}", indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList()));
+    log.info("Indexing complete for partitions: {}", indexPartitionInfos.stream().map(HoodieIndexPartitionInfo::getMetadataPartitionPath).collect(Collectors.toList()));
     return isIndexBuiltForAllRequestedTypes(indexPartitionInfos);
   }
 

@@ -19,37 +19,39 @@
 
 package org.apache.hudi.io.storage.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaRepair;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.HoodieAvroParquetReaderIterator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetReaderIterator;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.schema.AvroSchemaRepair;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -70,7 +72,7 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
   private final HoodieStorage storage;
   private final FileFormatUtils parquetUtils;
   private final List<ParquetReaderIterator> readerIterators = new ArrayList<>();
-  private Option<Schema> fileSchema = Option.empty();
+  private Option<HoodieSchema> fileSchema = Option.empty();
 
   public HoodieAvroParquetReader(HoodieStorage storage, StoragePath path) {
     // We have to clone the Hadoop Config as it might be subsequently modified
@@ -107,28 +109,28 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
 
   @Override
   protected ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema schema) throws IOException {
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
-    return getIndexedRecordIteratorInternal(schema.getAvroSchema(), Collections.emptyMap());
+    return getIndexedRecordIteratorInternal(schema, Collections.emptyMap());
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
-    return getIndexedRecordIteratorInternal(requestedSchema.getAvroSchema(), Collections.emptyMap());
+    return getIndexedRecordIteratorInternal(requestedSchema, Collections.emptyMap());
   }
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) throws IOException {
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
-    return getIndexedRecordIteratorInternal(requestedSchema.getAvroSchema(), renamedColumns);
+    return getIndexedRecordIteratorInternal(requestedSchema, renamedColumns);
   }
 
   @Override
   public HoodieSchema getSchema() {
-    if (fileSchema.isEmpty()) {
-      fileSchema = Option.ofNullable(parquetUtils.readAvroSchema(storage, path));
-    }
-    return HoodieSchema.fromAvroSchema(fileSchema.get());
+    // Lazy initialization with caching: read schema from parquet file footer on first call,
+    // then cache it in fileSchema to avoid repeated I/O on subsequent calls
+    return fileSchema.orElseGet(() -> {
+      HoodieSchema schema = parquetUtils.readSchema(storage, path);
+      fileSchema = Option.ofNullable(schema);
+      return schema;
+    });
   }
 
   @Override
@@ -181,26 +183,29 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     return conf;
   }
 
-  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(Schema schema, Map<String, String> renamedColumns) throws IOException {
+  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(HoodieSchema schema, Map<String, String> renamedColumns) throws IOException {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
-    //TODO boundary for now to revisit in later pr to use HoodieSchema
-    Schema repairedFileSchema = AvroSchemaRepair.repairLogicalTypes(getSchema().getAvroSchema(), schema);
-    Option<Schema> promotedSchema = Option.empty();
-    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema, schema)) {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, repairedFileSchema);
-      AvroReadSupport.setRequestedProjection(hadoopConf, repairedFileSchema);
-      promotedSchema = Option.of(schema);
+    // If the on-disk file shreds variant columns, read them in their shredded (typed_value-bearing)
+    // shape and reconstruct the unshredded variant per-record below (#18931). null when not needed.
+    HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(getSchema(), schema, storage);
+    HoodieSchema readSchema = reconstruction == null ? schema : reconstruction.intermediateSchema();
+    HoodieSchema repairedFileSchema = HoodieSchemaRepair.repairLogicalTypes(getSchema(), readSchema);
+    Option<HoodieSchema> promotedSchema = Option.empty();
+    if (!renamedColumns.isEmpty() || HoodieAvroUtils.recordNeedsRewriteForExtendedAvroTypePromotion(repairedFileSchema.toAvroSchema(), readSchema.toAvroSchema())) {
+      AvroReadSupport.setAvroReadSchema(hadoopConf, repairedFileSchema.toAvroSchema());
+      AvroReadSupport.setRequestedProjection(hadoopConf, repairedFileSchema.toAvroSchema());
+      promotedSchema = Option.of(readSchema);
     } else {
-      AvroReadSupport.setAvroReadSchema(hadoopConf, schema);
-      AvroReadSupport.setRequestedProjection(hadoopConf, schema);
+      AvroReadSupport.setAvroReadSchema(hadoopConf, readSchema.toAvroSchema());
+      AvroReadSupport.setRequestedProjection(hadoopConf, readSchema.toAvroSchema());
     }
+    HadoopInputFile inputFile = HadoopInputFile.fromPath(new Path(path.toUri()), hadoopConf);
     ParquetReader<IndexedRecord> reader =
-        new HoodieAvroParquetReaderBuilder<IndexedRecord>(path)
-            .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(schema))
-            .withConf(hadoopConf)
+        ParquetUtils.withHadoopReadOptions(new HoodieAvroParquetReaderBuilder<IndexedRecord>(inputFile)
+                .withTableSchema(getAvroSchemaConverter(hadoopConf).convert(readSchema)), inputFile)
             .set(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, hadoopConf.get(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS))
             .set(ParquetInputFormat.STRICT_TYPE_CHECKING, hadoopConf.get(ParquetInputFormat.STRICT_TYPE_CHECKING))
             .build();
@@ -208,7 +213,10 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
         ? new HoodieAvroParquetReaderIterator(reader, promotedSchema.get(), renamedColumns)
         : new ParquetReaderIterator<>(reader);
     readerIterators.add(parquetReaderIterator);
-    return parquetReaderIterator;
+    if (reconstruction == null) {
+      return parquetReaderIterator;
+    }
+    return new CloseableMappingIterator<>(parquetReaderIterator, reconstruction::reconstruct);
   }
 
   @Override

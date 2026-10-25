@@ -60,11 +60,11 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
   protected List<HoodieRollbackStat> executeRollback(HoodieRollbackPlan hoodieRollbackPlan) {
     HoodieTimer rollbackTimer = HoodieTimer.start();
 
-    log.info("Rolling back instant " + instantToRollback);
+    log.info("Rolling back instant {}", instantToRollback);
 
     // Atomically un-publish all non-inflight commits
     if (instantToRollback.isCompleted()) {
-      log.info("Un-publishing instant " + instantToRollback + ", deleteInstants=" + deleteInstants);
+      log.info("Un-publishing instant {}, deleteInstants={}", instantToRollback, deleteInstants);
       resolvedInstant = table.getActiveTimeline().revertToInflight(instantToRollback);
       // reload meta-client to reflect latest timeline status
       table.getMetaClient().reloadActiveTimeline();
@@ -81,13 +81,13 @@ public class MergeOnReadRollbackActionExecutor<T, I, K, O> extends BaseRollbackA
     // For Requested State (like failure during index lookup), there is nothing to do rollback other than
     // deleting the timeline file
     if (!resolvedInstant.isRequested()) {
-      log.info("Unpublished " + resolvedInstant);
+      log.info("Unpublished {}", resolvedInstant);
       allRollbackStats = executeRollback(instantToRollback, hoodieRollbackPlan);
     }
 
     dropBootstrapIndexIfNeeded(resolvedInstant);
 
-    log.info("Time(in ms) taken to finish rollback " + rollbackTimer.endTimer());
+    log.info("Time(in ms) taken to finish rollback {}", rollbackTimer.endTimer());
     return allRollbackStats;
   }
 }

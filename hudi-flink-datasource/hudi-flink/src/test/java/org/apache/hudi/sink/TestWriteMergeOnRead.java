@@ -18,21 +18,49 @@
 
 package org.apache.hudi.sink;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
+import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import static org.apache.hudi.utils.TestData.insertRow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for delta stream write.
@@ -42,6 +70,67 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   @Override
   protected void setUp(Configuration conf) {
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "COMMIT_TIME_ORDERING, false, false", "COMMIT_TIME_ORDERING, true, false",
+      "EVENT_TIME_ORDERING, false, false", "EVENT_TIME_ORDERING, true, false",
+      "EVENT_TIME_ORDERING, false, true", "EVENT_TIME_ORDERING, true, true"
+  })
+  void testLsmDuplicateKeysRespectMergeMode(RecordMergeMode mergeMode, boolean preCombine, boolean equalOrderingValues) throws Exception {
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), "LSM_TREE");
+    conf.set(FlinkOptions.RECORD_MERGE_MODE, mergeMode.name());
+    conf.set(FlinkOptions.PRE_COMBINE, preCombine);
+    conf.set(FlinkOptions.INDEX_TYPE, "BUCKET");
+    conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, 1);
+    conf.set(FlinkOptions.WRITE_BATCH_SIZE, 256.0);
+    boolean commitTimeOrdering = mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING;
+    boolean lastArrivalWins = commitTimeOrdering || equalOrderingValues;
+    List<RowData> records = new ArrayList<>();
+    Map<String, Integer> expectedWinners = new HashMap<>();
+    for (int i = 0; i < 1000; i++) {
+      String key = "id" + i % 17;
+      // Decreasing event times distinguish event-time merging from commit-time merging.
+      // Equal event times must retain the last arrival, just like commit-time merging.
+      records.add(insertRow(StringData.fromString(key), StringData.fromString("name"), i,
+          TimestampData.fromEpochMillis(equalOrderingValues ? 1000 : 1000 - i), StringData.fromString("par1")));
+      if (lastArrivalWins) {
+        expectedWinners.put(key, i);
+      } else {
+        expectedWinners.putIfAbsent(key, i);
+      }
+    }
+    String expected = expectedWinners.entrySet().stream().sorted(Map.Entry.comparingByKey())
+        .map(entry -> entry.getKey() + ",par1," + entry.getKey() + ",name," + entry.getValue()
+            + "," + (equalOrderingValues ? 1000 : 1000 - entry.getValue()) + ",par1")
+        .collect(Collectors.joining(", ", "[", "]"));
+    preparePipeline(conf)
+        .consume(records)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(Collections.singletonMap("par1", expected), 1)
+        .end();
+
+    // With pre-combine off, all versions must reach one native log file in arrival order
+    // within each key, including event-time ties resolved during subsequent reads.
+    File[] logFiles = new File(tempFile, "par1").listFiles(file -> file.getName().endsWith(".log.parquet"));
+    assertNotNull(logFiles);
+    assertEquals(1, logFiles.length, "duplicate versions must be tested within a single native log file");
+    List<GenericRecord> written = TestData.readAllData(tempFile, TestConfigurations.ROW_TYPE, 1);
+    assertEquals(preCombine ? expectedWinners.size() : records.size(), written.size());
+    Map<String, Integer> previous = new HashMap<>();
+    Map<String, Integer> actualWinners = new HashMap<>();
+    for (GenericRecord record : written) {
+      String key = record.get("uuid").toString();
+      int arrival = (Integer) record.get("age");
+      Integer oldArrival = previous.put(key, arrival);
+      assertTrue(oldArrival == null || arrival > oldArrival, "file order must preserve arrivals for " + key);
+      actualWinners.merge(key, arrival, (oldValue, newValue) ->
+          lastArrivalWins ? Math.max(oldValue, newValue) : Math.min(oldValue, newValue));
+    }
+    assertEquals(expectedWinners, actualWinners);
   }
 
   @Test
@@ -155,8 +244,19 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
   }
 
   @Override
-  public void testInsertClustering() {
+  public void testInsertClustering(MetaFieldsMode mode) {
     // insert clustering is only valid for cow table.
+  }
+
+  @Override
+  public void testMergeWithMetaFieldsMode(MetaFieldsMode mode, String storageLayout, String mergeHandleClass) {
+    // These tests exercise COW merge handles; MOR does not support selective metadata modes.
+  }
+
+  @Override
+  public void testMergeWithMultiplePartitionFieldsAndMetaFieldsMode(
+      MetaFieldsMode mode, String storageLayout, String mergeHandleClass) {
+    // These tests exercise COW merge handles; MOR does not support selective metadata modes.
   }
 
   @Test
@@ -253,9 +353,149 @@ public class TestWriteMergeOnRead extends TestWriteCopyOnWrite {
         .end();
   }
 
-  @Override
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED1;
+  @Test
+  public void testRecommitOnJobRestartTriggeringGlobalFailover() throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3,par2, id4,par2,id4,Fabian,31,4,par2]");
+
+    TestHarness testHarness = preparePipeline(conf)
+        .consume(TestData.DATA_SET_PART1)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent(1, "par1")
+        .consume(TestData.DATA_SET_PART3)
+        .checkpoint(2)
+        // both ckp-1 and ckp-2 are not committing
+        .assertNextEvent(1, "par2")
+        // then simulating restarting job manually, coordinator will reset to ckp-2
+        // and recommit write metadata for ckp-1
+        .restartCoordinator()
+        .subTaskFails(0, 0);
+
+    // global failover is not triggered now, since write metadata events from writer state are not recommitted.
+    testHarness.assertGlobalFailure(false);
+
+    testHarness.assertNextEvent();
+    // global failover is triggered now, since all the pending write metadata events are recommitted.
+    testHarness.assertGlobalFailure(true);
+
+    testHarness.subTaskFails(0, 0)
+        .checkIndexLoaded(
+            new HoodieKey("id1", "par1"),
+            new HoodieKey("id3", "par2"))
+        // insert another batch of data.
+        .consume(TestData.DATA_SET_PART4)
+        .checkpoint(3)
+        .assertNextEvent(1, "par2")
+        // write metadata will be committed for ckp-3
+        .checkpointComplete(3)
+        // there should be 3 rows and 2 partitions
+        .checkWrittenData(expected, 2)
+        .end();
+  }
+
+  @Test
+  public void testRecommitOnGlobalFailoverWithStreamingIndex() throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+    expected.put("par2", "[id3,par2,id3,Julian,53,3,par2]");
+
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_PART1)
+        .emptyEventBuffer()
+        .checkpoint(1)
+        .assertNextEvent(1, "par1")
+        .consume(TestData.DATA_SET_PART3)
+        .checkpoint(2)
+        // both ckp-1 and ckp-2 are not committing
+        .assertNextEvent(1, "par2")
+        .checkCompletedInstantCount(0)
+        // Simulate the global failover path. The coordinator resets to ckp-2, recommits ckp-1
+        // from the coordinator state, and recommits ckp-2 from the restored writer state.
+        .jobFailover()
+        .checkCompletedInstantCount(2)
+        // This is already the global failover path, so recommit does not need to trigger another failover.
+        .assertGlobalFailure(false)
+        .checkIndexLoaded(
+            new HoodieKey("id1", "par1"),
+            new HoodieKey("id3", "par2"))
+        .checkWrittenData(expected, 2)
+        .end();
+  }
+
+  @Test
+  public void testInsertDuplicateRecordsWithCDCMode() throws Exception {
+    conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 10_000L);
+    conf.set(FlinkOptions.CDC_ENABLED, true);
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1", "[id1,par1,id1,Danny,23,1,par1]");
+
+    List<RowData> insertData = List.of(
+        insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+
+    TestHarness testHarness = preparePipeline()
+        .consume(insertData)
+        .checkpoint(1)
+        .allDataFlushed()
+        .handleEvents(1);
+
+    Thread t1 = new Thread(() -> {
+      try {
+        Thread.sleep(3000);
+        testHarness.checkpointComplete(1);
+        testHarness.checkWrittenData(expected, 1);
+      } catch (Exception e) {
+        throw new HoodieException(e);
+      }
+    });
+    t1.start();
+
+    testHarness
+        .consume(insertData)
+        .checkpoint(2)
+        .allDataFlushed();
+    t1.join();
+
+    testHarness.handleEvents(1)
+        .checkpointComplete(2)
+        .checkWrittenData(expected, 1)
+        .end();
+
+    // validate the metadata of the above two inserts, specifically the `prevCommit` in the write stat, the expected
+    // result should be:
+    // 1) the prev commit time for the first commit is itself.
+    // 2) the prev commit time for the second commit is the first instant time, which ensures the deterministic update sequence.
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    List<HoodieInstant> completedDeltaInstants =
+        metaClient.reloadActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants().getInstants();
+    assertEquals(2, completedDeltaInstants.size());
+    HoodieInstant firstInstant = completedDeltaInstants.get(0);
+    HoodieInstant secondInstant = completedDeltaInstants.get(1);
+    HoodieCommitMetadata firstCommitMetadata = metaClient.getActiveTimeline().readCommitMetadata(firstInstant);
+    HoodieCommitMetadata secondCommitMetadata = metaClient.getActiveTimeline().readCommitMetadata(secondInstant);
+
+    List<HoodieWriteStat> firstWriteStats = firstCommitMetadata.getWriteStats();
+    assertEquals(1, firstWriteStats.size());
+    assertEquals(firstInstant.requestedTime(), firstWriteStats.get(0).getPrevCommit());
+
+    List<HoodieWriteStat> secondWriteStats = secondCommitMetadata.getWriteStats();
+    assertEquals(1, secondWriteStats.size());
+    assertEquals(firstInstant.requestedTime(), secondWriteStats.get(0).getPrevCommit());
   }
 
   protected Map<String, String> getMiniBatchExpected() {

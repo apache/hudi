@@ -23,7 +23,9 @@ import org.apache.hudi.common.model.PartitionBucketIndexHashingConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.util.ClientIds;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.StreamerUtil;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.configuration.Configuration;
@@ -31,14 +33,12 @@ import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.configuration.SchedulerExecutionMode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Tool helping to infer the flink options {@link FlinkOptions}.
  */
+@Slf4j
 public class OptionsInference {
-  private static final Logger LOG = LoggerFactory.getLogger(OptionsInference.class);
 
   private static final String FLINK2_VERSION = "2.0";
 
@@ -77,6 +77,10 @@ public class OptionsInference {
     // clustering tasks, default same as write tasks
     if (!conf.contains(FlinkOptions.CLUSTERING_TASKS)) {
       conf.set(FlinkOptions.CLUSTERING_TASKS, writeTasks);
+    }
+    // index write tasks, default same as write tasks
+    if (!conf.contains(FlinkOptions.INDEX_WRITE_TASKS)) {
+      conf.set(FlinkOptions.INDEX_WRITE_TASKS, writeTasks);
     }
   }
 
@@ -146,9 +150,17 @@ public class OptionsInference {
         conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS, hashingConfig.getExpressions());
         conf.set(FlinkOptions.BUCKET_INDEX_PARTITION_RULE, hashingConfig.getRule());
         conf.set(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS, hashingConfig.getDefaultBucketNumber());
-        LOG.info("Loaded Latest Hashing Config " + hashingConfig
-            + ". Reset hoodie.bucket.index.num.buckets to " + hashingConfig.getDefaultBucketNumber());
+        log.info("Loaded Latest Hashing Config {}. Reset hoodie.bucket.index.num.buckets to {}", hashingConfig, hashingConfig.getDefaultBucketNumber());
       }
     }
+  }
+
+  /**
+   * Apply key generator defaults from the job configuration, as in HoodieTableFactory.
+   */
+  public static void setupComplexKeygenEncoding(Configuration conf) {
+    boolean complexHoodieKey = OptionsResolver.getRecordKeys(conf).length > 1
+        || conf.get(FlinkOptions.PARTITION_PATH_FIELD).split(",").length > 1;
+    StreamerUtil.checkKeygenGenerator(complexHoodieKey, conf);
   }
 }

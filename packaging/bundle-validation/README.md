@@ -20,7 +20,7 @@
 # Bundle Validation for Hudi
 
 This directory contains scripts for running bundle validation in GitHub Actions (`validate-bundles`
-specified in `.github/workflows/bot.yml`) and build profile for Docker images used.
+specified in `.github/workflows/java_ci_engines.yml`) and build profile for Docker images used.
 
 ## Docker Image for Bundle Validation
 
@@ -33,23 +33,29 @@ Hub. To do so, create a new shell script like [build_flink1180hive313spark350.sh
 and change the Spark (or Flink/Hive/Hadoop) version in the script. Then run the script to build the image and upload it 
 to the Docker Hub.
 
-The `Dockerfile` for the image is under `base/`. To build the image with updated `Dockerfile`, you may use the script in
+The `Dockerfile` for the image is under `base/`. It is a glibc image (Ubuntu with Java 8 as the default runtime and
+Java 11 and 17 under `/usr/lib/jvm/java-11-openjdk` and `/usr/lib/jvm/java-17-openjdk`), so bundles that carry native
+libraries, such as the Spark native bundle with `libcomet.so`, run in it. CI pulls the image by tag when a job starts,
+so pushing a rebuilt image under an existing tag changes what every lane using that tag runs on; rebuild one tag and
+check it in CI before the others.
+
+To build the image with updated `Dockerfile`, you may use the script in
 the folder. Here are the docker commands to build the image by specifying different versions:
 
 ```shell
 docker build \
  --build-arg HIVE_VERSION=3.1.3 \
- --build-arg FLINK_VERSION=1.15.3 \
- --build-arg SPARK_VERSION=3.3.1 \
- --build-arg SPARK_HADOOP_VERSION=2.7 \
- -t hudi-ci-bundle-validation-base:flink1153hive313spark331 .
-docker image tag hudi-ci-bundle-validation-base:flink1153hive313spark331 apachehudi/hudi-ci-bundle-validation-base:flink1153hive313spark331
+ --build-arg FLINK_VERSION=1.18.1 \
+ --build-arg SPARK_VERSION=3.4.3 \
+ --build-arg SPARK_HADOOP_VERSION=3 \
+ -t hudi-ci-bundle-validation-base:flink1181hive313spark343 .
+docker image tag hudi-ci-bundle-validation-base:flink1181hive313spark343 apachehudi/hudi-ci-bundle-validation-base:flink1181hive313spark343
 ```
 
 To upload the image with the tag:
 
 ```shell
-docker push apachehudi/hudi-ci-bundle-validation-base:flink1153hive313spark331
+docker push apachehudi/hudi-ci-bundle-validation-base:flink1181hive313spark343
 ```
 
 Note that for each library like Hive and Spark, the download and extraction happen under one `RUN` instruction so that
@@ -109,3 +115,13 @@ flag and adding the release version:
       HUDI_VERSION: 1.0.0 ## Change to the release version
       MAVEN_BASE_URL: 'https://repo1.maven.org/maven2'  ## Maven Central URL, no need to change unless necessary
 ```
+
+## Spark native bundle
+
+`hudi-spark-native-bundle` is validated on the Java 17 pass in two steps. The Comet query in
+`spark_native/` asserts Comet operators in the plan, not just row counts, because Comet silently falls
+back to Spark for anything it cannot accelerate. It needs a glibc JVM for `libcomet.so`, and the Alpine
+based image's Java 17 is musl, so `validate.sh` skips this step there with a warning; run it on a glibc
+image with the same `SPARK_HOME` and `/usr/lib/jvm/java-17-openjdk` layout. The second step runs the
+utilities slim bundle paired with the native bundle instead of the Spark bundle, with no Comet config,
+so it runs on the Alpine image too.

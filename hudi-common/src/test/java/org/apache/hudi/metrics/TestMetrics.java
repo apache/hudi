@@ -18,7 +18,7 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.storage.HoodieStorage;
 
 import org.junit.jupiter.api.Test;

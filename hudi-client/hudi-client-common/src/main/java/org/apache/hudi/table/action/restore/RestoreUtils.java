@@ -40,7 +40,7 @@ public class RestoreUtils {
    */
   public static HoodieRestorePlan getRestorePlan(HoodieTableMetaClient metaClient, HoodieInstant restoreInstant)
       throws IOException {
-    final HoodieInstant requested = metaClient.getInstantGenerator().getRollbackRequestedInstant(restoreInstant);
+    final HoodieInstant requested = metaClient.getInstantGenerator().getRestoreRequestedInstant(restoreInstant);
     return metaClient.getActiveTimeline().readRestorePlan(requested);
   }
 

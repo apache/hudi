@@ -20,11 +20,13 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.S3SourceConfig;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelector;
 import org.apache.hudi.utilities.sources.helpers.S3EventsMetaSelector;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -33,13 +35,16 @@ import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.model.Message;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.apache.hudi.utilities.config.CloudSourceConfig.META_EVENTS_PER_PARTITION;
 
 /**
  * This source provides capability to create the hudi table for S3 events metadata (eg. S3
@@ -49,9 +54,12 @@ import java.util.List;
  */
 public class S3EventsSource extends RowSource implements Closeable {
 
+  private static final Logger LOG = LoggerFactory.getLogger(S3EventsSource.class);
+
   private final S3EventsMetaSelector pathSelector;
   private final SchemaProvider schemaProvider;
-  private final List<Message> processedMessages = new ArrayList<>();
+  private final List<CloudObjectsSelector.MessageTracker> processedMessages = new ArrayList<>();
+  private final int recordsPerPartition;
   SqsClient sqs;
 
   public S3EventsSource(
@@ -63,6 +71,7 @@ public class S3EventsSource extends RowSource implements Closeable {
     this.pathSelector = S3EventsMetaSelector.createSourceSelector(props);
     this.sqs = this.pathSelector.createAmazonSqsClient();
     this.schemaProvider = schemaProvider;
+    this.recordsPerPartition = ConfigUtils.getIntWithAltKeys(props, META_EVENTS_PER_PARTITION);
   }
 
   /**
@@ -80,7 +89,9 @@ public class S3EventsSource extends RowSource implements Closeable {
     if (selectPathsWithLatestSqsMessage.getLeft().isEmpty()) {
       return Pair.of(Option.empty(), selectPathsWithLatestSqsMessage.getRight());
     } else {
-      Dataset<String> eventRecords = sparkSession.createDataset(selectPathsWithLatestSqsMessage.getLeft(), Encoders.STRING());
+      int numPartitions = (int) Math.ceil(
+          (double) selectPathsWithLatestSqsMessage.getLeft().size() / recordsPerPartition);
+      Dataset<String> eventRecords = sparkSession.createDataset(selectPathsWithLatestSqsMessage.getLeft(), Encoders.STRING()).repartition(numPartitions);
       StructType sourceSchema = UtilHelpers.getSourceSchema(schemaProvider);
       if (sourceSchema != null) {
         return Pair.of(
@@ -102,6 +113,8 @@ public class S3EventsSource extends RowSource implements Closeable {
 
   @Override
   public void onCommit(String lastCkptStr) {
+    LOG.info("Deleting {} processed messages from SQS queue, checkpoint={}.",
+        processedMessages.size(), lastCkptStr);
     pathSelector.deleteProcessedMessages(sqs, pathSelector.queueUrl, processedMessages);
     processedMessages.clear();
   }

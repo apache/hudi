@@ -59,6 +59,10 @@ public class HoodieFlinkInternalRow implements Serializable {
   @Getter
   private final RowData rowData;
 
+  public HoodieFlinkInternalRow(String recordKey, String partitionPath, RowData rowData) {
+    this(recordKey, partitionPath, "", "", "", false, rowData);
+  }
+
   public HoodieFlinkInternalRow(String recordKey, String partitionPath, String operationType, RowData rowData) {
     this(recordKey, partitionPath, "", "", operationType, false, rowData);
   }

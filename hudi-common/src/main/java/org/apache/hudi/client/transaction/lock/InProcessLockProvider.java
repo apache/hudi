@@ -19,109 +19,22 @@
 
 package org.apache.hudi.client.transaction.lock;
 
-import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.CompatAlias;
 import org.apache.hudi.common.config.LockConfiguration;
-import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.lock.LockProvider;
-import org.apache.hudi.common.lock.LockState;
-import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
-
-import java.io.Serializable;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-
 /**
- * InProcess level lock. This {@link LockProvider} implementation is to
- * guard table from concurrent operations happening in the local JVM process.
- * A separate lock is maintained per "table basepath".
- * <p>
- * Note: This Lock provider implementation doesn't allow lock reentrancy.
- * Attempting to reacquire the lock from the same thread will throw
- * HoodieLockException. Threads other than the current lock owner, will
- * block on lock() and return false on tryLock().
+ * Compatibility alias for {@link org.apache.hudi.core.transaction.lock.InProcessLockProvider},
+ * kept only so existing {@code hoodie.write.lock.provider} configs referencing the old class
+ * name keep resolving. Holds no logic; do not use in new code.
+ *
+ * @deprecated use {@link org.apache.hudi.core.transaction.lock.InProcessLockProvider} instead.
  */
-@Slf4j
-public class InProcessLockProvider implements LockProvider<ReentrantReadWriteLock>, Serializable {
-
-  private static final Map<String, ReentrantReadWriteLock> LOCK_INSTANCE_PER_BASEPATH = new ConcurrentHashMap<>();
-  @Getter
-  private final ReentrantReadWriteLock lock;
-  private final String basePath;
-  private final long maxWaitTimeMillis;
+@Deprecated
+@CompatAlias(of = org.apache.hudi.core.transaction.lock.InProcessLockProvider.class, since = "1.3.0")
+public class InProcessLockProvider extends org.apache.hudi.core.transaction.lock.InProcessLockProvider {
 
   public InProcessLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
-    TypedProperties typedProperties = lockConfiguration.getConfig();
-    basePath = lockConfiguration.getConfig().getProperty(HoodieCommonConfig.BASE_PATH.key());
-    ValidationUtils.checkArgument(basePath != null);
-    lock = LOCK_INSTANCE_PER_BASEPATH.computeIfAbsent(basePath, (ignore) -> new ReentrantReadWriteLock());
-    maxWaitTimeMillis = typedProperties.getLong(LockConfiguration.LOCK_ACQUIRE_WAIT_TIMEOUT_MS_PROP_KEY,
-        LockConfiguration.DEFAULT_LOCK_ACQUIRE_WAIT_TIMEOUT_MS);
-  }
-
-  @Override
-  public void lock() {
-    log.info(getLogMessage(LockState.ACQUIRING));
-    if (lock.isWriteLockedByCurrentThread()) {
-      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
-    }
-    lock.writeLock().lock();
-    log.info(getLogMessage(LockState.ACQUIRED));
-  }
-
-  @Override
-  public boolean tryLock() {
-    return tryLock(maxWaitTimeMillis, TimeUnit.MILLISECONDS);
-  }
-
-  @Override
-  public boolean tryLock(long time, TimeUnit unit) {
-    log.info(getLogMessage(LockState.ACQUIRING));
-    if (lock.isWriteLockedByCurrentThread()) {
-      throw new HoodieLockException(getLogMessage(LockState.ALREADY_ACQUIRED));
-    }
-
-    boolean isLockAcquired;
-    try {
-      isLockAcquired = lock.writeLock().tryLock(time, unit);
-    } catch (InterruptedException e) {
-      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_ACQUIRE));
-    }
-
-    log.info(getLogMessage(isLockAcquired ? LockState.ACQUIRED : LockState.FAILED_TO_ACQUIRE));
-    return isLockAcquired;
-  }
-
-  @Override
-  public void unlock() {
-    log.info(getLogMessage(LockState.RELEASING));
-    try {
-      if (lock.isWriteLockedByCurrentThread()) {
-        lock.writeLock().unlock();
-        log.info(getLogMessage(LockState.RELEASED));
-      } else {
-        log.info("Cannot unlock because the current thread does not hold the lock.");
-      }
-    } catch (Exception e) {
-      throw new HoodieLockException(getLogMessage(LockState.FAILED_TO_RELEASE), e);
-    }
-  }
-
-  @Override
-  public void close() {
-    if (lock.isWriteLockedByCurrentThread()) {
-      lock.writeLock().unlock();
-    }
-    log.info(getLogMessage(LockState.ALREADY_RELEASED));
-  }
-
-  private String getLogMessage(LockState state) {
-    return String.format("Base Path %s, Lock Instance %s, Thread %s, In-process lock state %s", basePath, getLock().toString(), Thread.currentThread().getName(), state.name());
+    super(lockConfiguration, conf);
   }
 }

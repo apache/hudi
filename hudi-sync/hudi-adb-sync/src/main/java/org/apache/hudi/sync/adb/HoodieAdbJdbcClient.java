@@ -31,9 +31,8 @@ import org.apache.hudi.hive.util.HiveSchemaUtil;
 import org.apache.hudi.sync.common.HoodieSyncClient;
 import org.apache.hudi.sync.common.model.PartitionEvent;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.sql.Connection;
@@ -56,9 +55,8 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_BASE_PATH;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
+@Slf4j
 public class HoodieAdbJdbcClient extends HoodieSyncClient {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieAdbJdbcClient.class);
 
   public static final String HOODIE_LAST_COMMIT_TIME_SYNC = "hoodie_last_sync";
   // Make sure we have the jdbc driver in classpath
@@ -82,7 +80,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
     this.config = config;
     this.databaseName = config.getString(META_SYNC_DATABASE_NAME);
     createAdbConnection();
-    LOG.info("Init adb jdbc client success, jdbcUrl:{}", config.getString(ADB_SYNC_JDBC_URL));
+    log.info("Init adb jdbc client success, jdbcUrl: {}", config.getString(ADB_SYNC_JDBC_URL));
   }
 
   private void createAdbConnection() {
@@ -90,7 +88,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
       try {
         Class.forName(DRIVER_NAME);
       } catch (ClassNotFoundException e) {
-        LOG.error("Unable to load jdbc driver class", e);
+        log.error("Unable to load jdbc driver class", e);
         return;
       }
       try {
@@ -109,18 +107,18 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
                           String outputFormatClass, String serdeClass,
                           Map<String, String> serdeProperties, Map<String, String> tableProperties) {
     try {
-      LOG.info("Creating table:{}", tableName);
+      log.info("Creating table: {}", tableName);
       String createSQLQuery = HiveSchemaUtil.generateCreateDDL(tableName, storageSchema,
           config, inputFormatClass, outputFormatClass, serdeClass, serdeProperties, tableProperties);
       executeAdbSql(createSQLQuery);
     } catch (IOException e) {
-      throw new HoodieException("Fail to create table:" + tableName, e);
+      throw new HoodieException("Fail to create table: " + tableName, e);
     }
   }
 
   @Override
   public void dropTable(String tableName) {
-    LOG.info("Dropping table:{}", tableName);
+    log.info("Dropping table: {}", tableName);
     String dropTable = "drop table if exists `" + databaseName + "`.`" + tableName + "`";
     executeAdbSql(dropTable);
   }
@@ -145,7 +143,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
       }
       return schema;
     } catch (SQLException e) {
-      throw new HoodieException("Fail to get table schema:" + tableName, e);
+      throw new HoodieException("Fail to get table schema: " + tableName, e);
     } finally {
       closeQuietly(result, null);
     }
@@ -154,11 +152,11 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   @Override
   public void addPartitionsToTable(String tableName, List<String> partitionsToAdd) {
     if (partitionsToAdd.isEmpty()) {
-      LOG.info("No partitions to add for table:{}", tableName);
+      log.info("No partitions to add for table: {}", tableName);
       return;
     }
 
-    LOG.info("Adding partitions to table:{}, partitionNum:{}", tableName, partitionsToAdd.size());
+    log.info("Adding partitions to table: {}, partitionNum: {}", tableName, partitionsToAdd.size());
     String sql = constructAddPartitionsSql(tableName, partitionsToAdd);
     executeAdbSql(sql);
   }
@@ -167,10 +165,10 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
     Statement stmt = null;
     try {
       stmt = connection.createStatement();
-      LOG.info("Executing sql:{}", sql);
+      log.info("Executing sql: {}", sql);
       stmt.execute(sql);
     } catch (SQLException e) {
-      throw new HoodieException("Fail to execute sql:" + sql, e);
+      throw new HoodieException("Fail to execute sql: " + sql, e);
     } finally {
       closeQuietly(null, stmt);
     }
@@ -180,10 +178,10 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
     Statement stmt = null;
     try {
       stmt = connection.createStatement();
-      LOG.info("Executing sql:{}", sql);
+      log.info("Executing sql: {}", sql);
       return function.apply(stmt.executeQuery(sql));
     } catch (SQLException e) {
-      throw new HoodieException("Fail to execute sql:" + sql, e);
+      throw new HoodieException("Fail to execute sql: " + sql, e);
     } finally {
       closeQuietly(null, stmt);
     }
@@ -191,7 +189,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
 
   public void createDatabase(String databaseName) {
     String rootPath = config.getDatabasePath();
-    LOG.info("Creating database:{}, databaseLocation:{}", databaseName, rootPath);
+    log.info("Creating database: {}, databaseLocation: {}", databaseName, rootPath);
     String sql = constructCreateDatabaseSql(rootPath);
     executeAdbSql(sql);
   }
@@ -205,7 +203,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
         if (e.getMessage().contains("Unknown database `" + databaseName + "`")) {
           return false;
         } else {
-          throw new HoodieException("Fail to execute sql:" + sql, e);
+          throw new HoodieException("Fail to execute sql: " + sql, e);
         }
       }
     };
@@ -219,7 +217,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
       try {
         return resultSet.next();
       } catch (Exception e) {
-        throw new HoodieException("Fail to execute sql:" + sql, e);
+        throw new HoodieException("Fail to execute sql: " + sql, e);
       }
     };
     return executeQuerySQL(sql, transform);
@@ -253,7 +251,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
         }
         return Option.empty();
       } catch (Exception e) {
-        throw new HoodieException("Fail to execute sql:" + sql, e);
+        throw new HoodieException("Fail to execute sql: " + sql, e);
       }
     };
     return executeQuerySQL(sql, transform);
@@ -267,7 +265,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
       String sql = constructUpdateTblPropertiesSql(tableName, lastCommitSynced);
       executeAdbSql(sql);
     } catch (Exception e) {
-      throw new HoodieHiveSyncException("Fail to get update last commit time synced:" + lastCommitSynced, e);
+      throw new HoodieHiveSyncException("Fail to get update last commit time synced: " + lastCommitSynced, e);
     }
   }
 
@@ -294,11 +292,11 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
   @Override
   public void updatePartitionsToTable(String tableName, List<String> changedPartitions) {
     if (changedPartitions.isEmpty()) {
-      LOG.info("No partitions to change for table:{}", tableName);
+      log.info("No partitions to change for table: {}", tableName);
       return;
     }
 
-    LOG.info("Changing partitions on table:{}, changedPartitionNum:{}", tableName, changedPartitions.size());
+    log.info("Changing partitions on table: {}, changedPartitionNum: {}", tableName, changedPartitions.size());
     List<String> sqlList = constructChangePartitionsSql(tableName, changedPartitions);
     for (String sql : sqlList) {
       executeAdbSql(sql);
@@ -332,7 +330,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
           }
         }
       } catch (Exception e) {
-        throw new HoodieException("Fail to execute sql:" + sql, e);
+        throw new HoodieException("Fail to execute sql: " + sql, e);
       }
       return partitions;
     };
@@ -343,12 +341,12 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
    * TODO align with {@link org.apache.hudi.sync.common.HoodieMetaSyncOperations#updateTableSchema}
    */
   public void updateTableDefinition(String tableName, SchemaDifference schemaDiff) {
-    LOG.info("Adding columns for table:{}", tableName);
+    log.info("Adding columns for table: {}", tableName);
     schemaDiff.getAddColumnTypes().forEach((columnName, columnType) ->
         executeAdbSql(constructAddColumnSql(tableName, columnName, columnType))
     );
 
-    LOG.info("Updating columns' definition for table:{}", tableName);
+    log.info("Updating columns' definition for table: {}", tableName);
     schemaDiff.getUpdateColumnTypes().forEach((columnName, columnType) ->
         executeAdbSql(constructChangeColumnSql(tableName, columnName, columnType))
     );
@@ -483,7 +481,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
         stmt.close();
       }
     } catch (SQLException e) {
-      LOG.warn("Could not close the statement opened ", e);
+      log.warn("Could not close the statement opened ", e);
     }
 
     try {
@@ -491,7 +489,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
         resultSet.close();
       }
     } catch (SQLException e) {
-      LOG.warn("Could not close the resultset opened ", e);
+      log.warn("Could not close the resultset opened ", e);
     }
   }
 
@@ -502,7 +500,7 @@ public class HoodieAdbJdbcClient extends HoodieSyncClient {
         connection.close();
       }
     } catch (SQLException e) {
-      LOG.error("Fail to close connection", e);
+      log.error("Fail to close connection", e);
     }
   }
 }

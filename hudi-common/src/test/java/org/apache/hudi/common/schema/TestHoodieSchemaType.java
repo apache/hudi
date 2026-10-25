@@ -84,6 +84,9 @@ public class TestHoodieSchemaType {
     assertTrue(HoodieSchemaType.ARRAY.isComplex(), "ARRAY should be complex");
     assertTrue(HoodieSchemaType.MAP.isComplex(), "MAP should be complex");
     assertTrue(HoodieSchemaType.UNION.isComplex(), "UNION should be complex");
+    assertTrue(HoodieSchemaType.VARIANT.isComplex(), "VARIANT should be complex");
+    assertTrue(HoodieSchemaType.BLOB.isComplex(), "BLOB should be complex");
+    assertTrue(HoodieSchemaType.VECTOR.isComplex(), "VECTOR should be complex");
 
     assertFalse(HoodieSchemaType.STRING.isComplex(), "STRING should not be complex");
     assertFalse(HoodieSchemaType.INT.isComplex(), "INT should not be complex");
@@ -114,6 +117,9 @@ public class TestHoodieSchemaType {
     assertFalse(HoodieSchemaType.ARRAY.isNumeric(), "ARRAY should not be numeric");
     assertFalse(HoodieSchemaType.MAP.isNumeric(), "MAP should not be numeric");
     assertFalse(HoodieSchemaType.UNION.isNumeric(), "UNION should not be numeric");
+    assertFalse(HoodieSchemaType.VARIANT.isNumeric(), "VARIANT should not be numeric");
+    assertFalse(HoodieSchemaType.BLOB.isNumeric(), "BLOB should not be numeric");
+    assertFalse(HoodieSchemaType.VECTOR.isNumeric(), "VECTOR should not be numeric");
   }
 
   @Test
@@ -170,6 +176,7 @@ public class TestHoodieSchemaType {
     assertEquals(HoodieSchemaType.DECIMAL, HoodieSchemaType.fromAvro(LogicalTypes.decimal(10, 5).addToSchema(Schema.create(Schema.Type.BYTES))));
     assertEquals(HoodieSchemaType.DATE, HoodieSchemaType.fromAvro(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT))));
     assertEquals(HoodieSchemaType.UUID, HoodieSchemaType.fromAvro(LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING))));
+    assertEquals(HoodieSchemaType.VARIANT, HoodieSchemaType.fromAvro(createVariantSchemaForTest()));
   }
 
   private static Map<HoodieSchemaType, Schema> buildSampleSchemasForType() {
@@ -200,6 +207,117 @@ public class TestHoodieSchemaType {
         LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)));
     map.put(HoodieSchemaType.UUID,
         LogicalTypes.uuid().addToSchema(Schema.create(Schema.Type.STRING)));
+    map.put(HoodieSchemaType.VARIANT, createVariantSchemaForTest());
+    map.put(HoodieSchemaType.BLOB, HoodieSchema.createBlob().toAvroSchema());
+    map.put(HoodieSchemaType.VECTOR, createVectorSchemaForTest());
     return map;
+  }
+
+  /**
+   * Creates a variant schema manually using Avro APIs.
+   *
+   * @return a variant schema with value and metadata fields
+   */
+  private static Schema createVariantSchemaForTest() {
+    Schema variantRecord = Schema.createRecord("variant", null, null, false);
+    variantRecord.setFields(Arrays.asList(
+        new Schema.Field("value", Schema.create(Schema.Type.BYTES), "Variant value component", null),
+        new Schema.Field("metadata", Schema.create(Schema.Type.BYTES), "Variant metadata component", null)
+    ));
+    HoodieSchema.VariantLogicalType.variant().addToSchema(variantRecord);
+    return variantRecord;
+  }
+
+  @Test
+  void testVectorFromSchemaWithStringProperties() {
+    // Manually craft a JSON schema where 'dimension' is a string rather than an integer
+    String jsonSchema = "{"
+        + "\"type\":\"fixed\","
+        + "\"name\":\"vector_float_128\","
+        + "\"size\":512,"
+        + "\"logicalType\":\"vector\","
+        + "\"dimension\":\"128\","
+        + "\"elementType\":\"FLOAT\","
+        + "\"storageBacking\":\"FIXED_BYTES\""
+        + "}";
+
+    Schema avroSchema = new Schema.Parser().parse(jsonSchema);
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(avroSchema);
+
+    assertTrue(schema instanceof HoodieSchema.Vector);
+    HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) schema;
+
+    // Verify it correctly parsed the string "128" into the integer 128
+    assertEquals(128, vectorSchema.getDimension());
+    assertEquals(HoodieSchema.Vector.VectorElementType.FLOAT, vectorSchema.getVectorElementType());
+  }
+
+  @Test
+  void testVectorSizeMismatchValidation() {
+    // Dimension 10, FLOAT (4 bytes) -> expected fixed size is 40.
+    // We intentionally create a FIXED schema with size 42 via JSON parsing
+    // so the VectorLogicalTypeFactory is properly invoked.
+    String jsonSchema = "{"
+        + "\"type\":\"fixed\","
+        + "\"name\":\"bad_vector\","
+        + "\"size\":42,"
+        + "\"logicalType\":\"vector\","
+        + "\"dimension\":10,"
+        + "\"elementType\":\"FLOAT\","
+        + "\"storageBacking\":\"FIXED_BYTES\""
+        + "}";
+
+    Schema avroSchema = new Schema.Parser().parse(jsonSchema);
+
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchema.fromAvroSchema(avroSchema));
+
+    assertTrue(ex.getMessage().contains("FIXED size mismatch"),
+        "Should throw size mismatch error, got: " + ex.getMessage());
+  }
+
+  @Test
+  void testVectorUnknownElementType() {
+    // Create a FIXED schema with an invalid element type via JSON parsing
+    // so the VectorLogicalTypeFactory is properly invoked.
+    String jsonSchema = "{"
+        + "\"type\":\"fixed\","
+        + "\"name\":\"bad_vector\","
+        + "\"size\":40,"
+        + "\"logicalType\":\"vector\","
+        + "\"dimension\":10,"
+        + "\"elementType\":\"VARCHAR\","
+        + "\"storageBacking\":\"FIXED_BYTES\""
+        + "}";
+
+    Schema avroSchema = new Schema.Parser().parse(jsonSchema);
+
+    IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+        () -> HoodieSchema.fromAvroSchema(avroSchema));
+
+    assertTrue(ex.getMessage().contains("Unknown element type: VARCHAR"),
+        "Should reject unknown element types");
+  }
+
+  /**
+   * Creates a vector schema manually using Avro APIs.
+   *
+   * @return a vector FIXED schema with VectorLogicalType metadata
+   */
+  private static Schema createVectorSchemaForTest() {
+    int dimension = 128;
+    String elementType = HoodieSchema.Vector.VectorElementType.FLOAT.name();
+    String storageBacking = HoodieSchema.Vector.StorageBacking.FIXED_BYTES.name();
+
+    int fixedSize = dimension * 4;
+    // Create FIXED schema directly
+    Schema vectorSchema = Schema.createFixed("vector", null, null, fixedSize);
+
+    // Apply VectorLogicalType with metadata
+    HoodieSchema.VectorLogicalType vectorLogicalType =
+        new HoodieSchema.VectorLogicalType(dimension, elementType, storageBacking);
+    vectorLogicalType.addToSchema(vectorSchema);
+
+    return vectorSchema;
   }
 }

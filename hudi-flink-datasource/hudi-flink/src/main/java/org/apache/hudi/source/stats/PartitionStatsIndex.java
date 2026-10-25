@@ -28,6 +28,7 @@ import org.apache.flink.table.types.logical.RowType;
 
 import javax.annotation.Nullable;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -57,7 +58,7 @@ public class PartitionStatsIndex extends FileStatsIndex {
   }
 
   @Override
-  public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
+  public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles, List<String> candidatePartitions) {
     throw new UnsupportedOperationException("This method is not supported by " + this.getClass().getSimpleName());
   }
 
@@ -82,6 +83,6 @@ public class PartitionStatsIndex extends FileStatsIndex {
    */
   @Override
   public Set<String> computeCandidatePartitions(ColumnStatsProbe probe, List<String> allPartitions) {
-    return super.computeCandidateFiles(probe, allPartitions);
+    return super.computeCandidateFiles(probe, allPartitions, Collections.emptyList());
   }
 }

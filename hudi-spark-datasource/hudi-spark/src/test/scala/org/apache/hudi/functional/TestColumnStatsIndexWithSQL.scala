@@ -18,7 +18,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex}
+import org.apache.hudi.{AvroConversionUtils, ColumnStatsIndexSupport, DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, HoodieSchemaConversionUtils}
 import org.apache.hudi.DataSourceWriteOptions.{DELETE_OPERATION_OPT_VAL, RECORDKEY_FIELD}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -485,7 +485,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
     var fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = true)
     val metadataConfig = HoodieMetadataConfig.newBuilder.withMetadataIndexColumnStats(true).enable(true).build
-    val hoodieSchema = HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(fileIndex.schema, "record", ""))
+    val hoodieSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(fileIndex.schema, "record", "")
     val cis = new ColumnStatsIndexSupport(spark, fileIndex.schema, hoodieSchema,  metadataConfig, metaClient)
     // unpartitioned table - get all file slices
     val fileSlices = fileIndex.prunePartitionsAndGetFileSlices(Seq.empty, Seq())
@@ -493,7 +493,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     // Number of files obtained if file index has include log files as true is double of number of parquet files
     val numberOfParquetFiles = 9
     assertEquals(numberOfParquetFiles * 2, files.size)
-    assertEquals(numberOfParquetFiles, files.count(f => f.endsWith("parquet")))
+    assertEquals(numberOfParquetFiles, files.count(f => FSUtils.isBaseFile(f)))
 
     fileIndex = HoodieFileIndex(spark, metaClient, None, commonOpts + ("path" -> basePath), includeLogFiles = false)
     files = cis.getPrunedPartitionsAndFileNames(fileIndex, fileSlices._2)._2

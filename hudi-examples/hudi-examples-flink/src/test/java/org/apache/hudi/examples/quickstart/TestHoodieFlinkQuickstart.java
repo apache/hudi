@@ -25,15 +25,20 @@ import org.apache.flink.types.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.examples.quickstart.TestQuickstartData.assertRowsEquals;
 
 /**
  * IT cases for Hoodie table source and sink.
+ *
+ * <p>Tests are parameterized over the table type (COW / MOR) and whether to use the FLIP-27
+ * Source V2 reader ({@code useSourceV2}), giving four combinations in total.
  */
 public class TestHoodieFlinkQuickstart extends AbstractTestBase {
   private final HoodieFlinkQuickstart flinkQuickstart = HoodieFlinkQuickstart.instance();
@@ -46,20 +51,29 @@ public class TestHoodieFlinkQuickstart extends AbstractTestBase {
   @TempDir
   File tempFile;
 
+  static Stream<Arguments> tableTypeAndSourceV2() {
+    return Stream.of(
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, false),
+        Arguments.of(HoodieTableType.COPY_ON_WRITE, true),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, false),
+        Arguments.of(HoodieTableType.MERGE_ON_READ, true)
+    );
+  }
+
   @ParameterizedTest
-  @EnumSource(value = HoodieTableType.class)
-  void testHoodieFlinkQuickstart(HoodieTableType tableType) throws Exception {
+  @MethodSource("tableTypeAndSourceV2")
+  void testHoodieFlinkQuickstart(HoodieTableType tableType, boolean useSourceV2) throws Exception {
     // create filesystem table named source
     flinkQuickstart.createFileSource();
 
-    // create hudi table
-    flinkQuickstart.createHudiTable(tempFile.getAbsolutePath(), "t1", tableType);
+    // create hudi table, with Source V2 enabled when requested
+    flinkQuickstart.createHudiTable(tempFile.getAbsolutePath(), "t1", tableType, useSourceV2);
 
     // insert data
     List<Row> rows = flinkQuickstart.insertData();
     assertRowsEquals(rows, TestQuickstartData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
 
-    // query data
+    // streaming query (continuous read)
     List<Row> rows1 = flinkQuickstart.queryData();
     assertRowsEquals(rows1, TestQuickstartData.DATA_SET_SOURCE_INSERT_LATEST_COMMIT);
 

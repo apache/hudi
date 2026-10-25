@@ -104,7 +104,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
       if (opPair != null) {
         assertEquals(fileSlice.getBaseInstantTime(), opPair.getKey(), "Expect baseInstant to match compaction Instant");
         assertTrue(fileSlice.getLogFiles().count() > 0,
-            "Expect atleast one log file to be present where the latest delta commit was written");
+            "Expect at least one log file to be present where the latest delta commit was written");
         assertFalse(fileSlice.getBaseFile().isPresent(), "Expect no data-file to be present");
       } else {
         assertTrue(fileSlice.getBaseInstantTime().compareTo(latestDeltaCommit) <= 0,
@@ -140,8 +140,8 @@ public class CompactionTestBase extends HoodieClientTestBase {
       assertNoWriteErrors(statusList);
       metaClient = createMetaClient(cfg.getBasePath());
       HoodieTable hoodieTable = getHoodieTable(metaClient, cfg);
-      List<HoodieBaseFile> dataFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
-      assertTrue(dataFilesToRead.stream().findAny().isPresent(),
+      List<HoodieBaseFile> baseFilesToRead = getCurrentLatestBaseFiles(hoodieTable);
+      assertTrue(baseFilesToRead.stream().findAny().isPresent(),
           "should list the base files we wrote in the delta commit");
       validateDeltaCommit(firstInstant, fgIdToCompactionOperation, cfg);
     }
@@ -210,7 +210,7 @@ public class CompactionTestBase extends HoodieClientTestBase {
 
     if (hasDeltaCommitAfterPendingCompaction) {
       assertFalse(fileSliceList.stream().anyMatch(fs -> fs.getLogFiles().count() == 0),
-          "Verify all file-slices have atleast one log-file");
+          "Verify all file-slices have at least one log-file");
     } else {
       assertFalse(fileSliceList.stream().anyMatch(fs -> fs.getLogFiles().count() > 0),
           "Verify all file-slices have no log-files");

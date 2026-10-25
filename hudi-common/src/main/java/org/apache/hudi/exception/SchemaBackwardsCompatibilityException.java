@@ -19,10 +19,9 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hudi.avro.AvroSchemaCompatibility;
-import org.apache.hudi.avro.AvroSchemaUtils;
-
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaCompatibilityChecker;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 
 import java.util.stream.Collectors;
 
@@ -32,12 +31,12 @@ import java.util.stream.Collectors;
  */
 public class SchemaBackwardsCompatibilityException extends SchemaCompatibilityException {
 
-  public SchemaBackwardsCompatibilityException(AvroSchemaCompatibility.SchemaPairCompatibility compatibility, Schema writerSchema, Schema tableSchema) {
+  public SchemaBackwardsCompatibilityException(HoodieSchemaCompatibilityChecker.SchemaPairCompatibility compatibility, HoodieSchema writerSchema, HoodieSchema tableSchema) {
     super(constructExceptionMessage(compatibility, writerSchema, tableSchema));
   }
 
-  private static String constructExceptionMessage(AvroSchemaCompatibility.SchemaPairCompatibility compatibility, Schema writerSchema, Schema tableSchema) {
-    return AvroSchemaUtils.createSchemaErrorString("Schema validation backwards compatibility check failed with the following issues: {"
+  private static String constructExceptionMessage(HoodieSchemaCompatibilityChecker.SchemaPairCompatibility compatibility, HoodieSchema writerSchema, HoodieSchema tableSchema) {
+    return HoodieSchemaUtils.createSchemaErrorString("Schema validation backwards compatibility check failed with the following issues: {"
         + compatibility.getResult().getIncompatibilities().stream()
             .map(incompatibility -> incompatibility.getType().name() + ": " + incompatibility.getMessage())
             .collect(Collectors.joining(", ")) + "}", writerSchema, tableSchema);

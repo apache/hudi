@@ -18,6 +18,8 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 
 /**

@@ -20,7 +20,6 @@ package org.apache.hudi.sink.transform;
 
 import org.apache.hudi.adapter.AbstractRichFunctionAdapter;
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 import org.apache.hudi.sink.bulk.RowDataKeyGens;
 
@@ -50,7 +49,6 @@ public class RowDataToHoodieFunction<I extends RowData, O extends HoodieFlinkInt
     return (O) new HoodieFlinkInternalRow(
         keyGen.getRecordKey(row),
         keyGen.getPartitionPath(row),
-        HoodieOperation.fromValue(row.getRowKind().toByteValue()).getName(),
         row);
   }
 }

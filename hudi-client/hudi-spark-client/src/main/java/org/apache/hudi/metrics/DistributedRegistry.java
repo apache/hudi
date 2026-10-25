@@ -20,8 +20,11 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.metrics.Registry;
 
+import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.util.AccumulatorV2;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -33,17 +36,67 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<String, Long>>
     implements Registry, Serializable {
+
+  private static final Logger LOG = LoggerFactory.getLogger(DistributedRegistry.class);
+
   private final String name;
   ConcurrentHashMap<String, Long> counters = new ConcurrentHashMap<>();
+  // The registered accumulator that replaced this one if it went stale, see register().
+  private transient volatile DistributedRegistry replacement;
+  /** Driver-only, to detect a SparkContext restart in the same JVM (shells, notebooks, Spark Connect). */
+  private transient String registeredAppId;
 
   public DistributedRegistry(String name) {
     this.name = name;
   }
 
-  public void register(JavaSparkContext jsc) {
-    if (!isRegistered()) {
-      jsc.sc().register(this);
+  @Override
+  public String getName() {
+    return name;
+  }
+
+  /**
+   * Registers this accumulator with the given SparkContext if it is not registered yet.
+   *
+   * <p>A cached instance that was registered to a previous SparkContext can no longer be registered
+   * (AccumulatorV2 rejects a second registration). In that case a fresh accumulator sharing the same
+   * counters is registered instead and swapped into {@link Registry#REGISTRY_MAP}. Callers should use the
+   * returned instance; updates made through the stale instance are still reported via the shared counters.
+   *
+   * @return this instance, or its registered replacement.
+   */
+  public synchronized DistributedRegistry register(JavaSparkContext jsc) {
+    if (isRegistered()) {
+      return this;
     }
+    if (registeredAppId == null) {
+      jsc.sc().register(this);
+      // Only when this call actually registers: stamping unconditionally would re-brand an accumulator
+      // bound to a dead context and mask the staleness this field exists to detect.
+      this.registeredAppId = jsc.sc().applicationId();
+      return this;
+    }
+    // Stale: registered to a previous SparkContext that no longer exists, so the id is gone from the
+    // current AccumulatorContext but AccumulatorV2 refuses to register this instance again.
+    if (replacement != null) {
+      // Another cache still holds this stale instance after it was already replaced. Delegate, so a
+      // replacement that went stale in turn (another SparkContext restart) is replaced the same way.
+      replacement = replacement.register(jsc);
+      return replacement;
+    }
+    DistributedRegistry fresh = new DistributedRegistry(this.name);
+    // Share the counters rather than copying them, so updates made through a caller that still holds
+    // this stale instance are reported by the replacement too.
+    fresh.counters = this.counters;
+    fresh.register(jsc);
+    Registry.REGISTRY_MAP.replaceAll((key, registry) -> registry == this ? fresh : registry);
+    replacement = fresh;
+    return fresh;
+  }
+
+  /** False when bound to a different (typically stopped) context, meaning it must be recreated. */
+  public boolean isRegisteredWith(JavaSparkContext jsc) {
+    return isRegistered() && jsc.sc().applicationId().equals(registeredAppId);
   }
 
   @Override
@@ -63,7 +116,34 @@ public class DistributedRegistry extends AccumulatorV2<Map<String, Long>, Map<St
 
   @Override
   public void set(String name, long value) {
+    // Last-writer-wins is neither commutative nor associative, and the driver merges executor copies in
+    // an unspecified order. Driver only; executors use increment()/add().
+    if (TaskContext.get() != null) {
+      // Warn rather than throw: this runs inside a task, and a metrics problem must not fail a write.
+      LOG.warn("DistributedRegistry.set() called from a Spark executor and ignored: it is non-commutative "
+          + "under accumulator merges and would produce non-deterministic values. Use increment()/add().");
+      return;
+    }
     counters.merge(name,  value, (oldValue, newValue) -> newValue);
+  }
+
+  /**
+   * Subtracts rather than clearing, so a concurrent merge either lands before the subtraction and is
+   * released with it, or after and survives. Clamped at zero because {@code Metrics.shutdown()} can empty
+   * the registry underneath a release; counters reaching zero are removed so a table that performed no
+   * lookup is distinguishable from one that missed everything.
+   */
+  public void release(Map<String, Long> counts) {
+    // Driver-only for the same reason as set(): clamping and eviction are order-dependent under merges.
+    if (TaskContext.get() != null) {
+      LOG.warn("DistributedRegistry.release() called from a Spark executor and ignored: clamping and eviction "
+          + "are order-dependent under accumulator merges. Release at the commit boundary on the driver.");
+      return;
+    }
+    counts.forEach((name, released) -> counters.compute(name, (key, current) -> {
+      long remaining = (current == null ? 0L : current) - released;
+      return remaining > 0L ? remaining : null;
+    }));
   }
 
   /**

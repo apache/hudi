@@ -19,6 +19,10 @@
 package org.apache.hudi.common.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import javax.annotation.Nullable;
 
@@ -28,6 +32,9 @@ import java.io.Serializable;
  * A model class defines hoodie rolling stat.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@NoArgsConstructor
+@Getter
+@Setter
 public class HoodieRollingStat implements Serializable {
 
   private String fileId;
@@ -35,54 +42,13 @@ public class HoodieRollingStat implements Serializable {
   private long upserts;
   private long deletes;
   // TODO
+  @Getter(AccessLevel.NONE)
+  @Setter(AccessLevel.NONE)
   @Nullable
-  private long totalInputWriteBytesToDisk;
+  private Long totalInputWriteBytesToDisk;
+  @Setter(AccessLevel.NONE)
   @Nullable
-  private long totalInputWriteBytesOnDisk;
-
-  public HoodieRollingStat() {
-    // called by jackson json lib
-  }
-
-  public HoodieRollingStat(String fileId, long inserts, long upserts, long deletes, long totalInputWriteBytesOnDisk) {
-    this.fileId = fileId;
-    this.inserts = inserts;
-    this.upserts = upserts;
-    this.deletes = deletes;
-    this.totalInputWriteBytesOnDisk = totalInputWriteBytesOnDisk;
-  }
-
-  public String getFileId() {
-    return fileId;
-  }
-
-  public void setFileId(String fileId) {
-    this.fileId = fileId;
-  }
-
-  public long getInserts() {
-    return inserts;
-  }
-
-  public void setInserts(long inserts) {
-    this.inserts = inserts;
-  }
-
-  public long getUpserts() {
-    return upserts;
-  }
-
-  public void setUpserts(long upserts) {
-    this.upserts = upserts;
-  }
-
-  public long getDeletes() {
-    return deletes;
-  }
-
-  public void setDeletes(long deletes) {
-    this.deletes = deletes;
-  }
+  private Long totalInputWriteBytesOnDisk;
 
   public long addInserts(long inserts) {
     this.inserts += inserts;
@@ -97,9 +63,5 @@ public class HoodieRollingStat implements Serializable {
   public long addDeletes(long deletes) {
     this.deletes += deletes;
     return this.deletes;
-  }
-
-  public long getTotalInputWriteBytesOnDisk() {
-    return totalInputWriteBytesOnDisk;
   }
 }

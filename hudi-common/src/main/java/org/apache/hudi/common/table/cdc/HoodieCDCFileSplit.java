@@ -22,6 +22,8 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.util.Option;
 
+import lombok.Getter;
+
 import java.io.Serializable;
 import java.util.Collection;
 import java.util.Collections;
@@ -45,7 +47,9 @@ import java.util.stream.Collectors;
  * For `cdcInferCase` = {@link HoodieCDCInferenceCase#REPLACE_COMMIT}, `cdcFile` is null,
  * `beforeFileSlice` is the current version of the file slice.
  */
+@Getter
 public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFileSplit> {
+
   /**
    * The instant time at which the changes happened.
    */
@@ -103,28 +107,19 @@ public class HoodieCDCFileSplit implements Serializable, Comparable<HoodieCDCFil
     this.afterFileSlice = afterFileSlice;
   }
 
-  public String getInstant() {
-    return this.instant;
-  }
-
-  public HoodieCDCInferenceCase getCdcInferCase() {
-    return this.cdcInferCase;
-  }
-
-  public List<String> getCdcFiles() {
-    return this.cdcFiles;
-  }
-
-  public Option<FileSlice> getBeforeFileSlice() {
-    return this.beforeFileSlice;
-  }
-
-  public Option<FileSlice> getAfterFileSlice() {
-    return this.afterFileSlice;
-  }
-
   @Override
   public int compareTo(HoodieCDCFileSplit o) {
-    return this.instant.compareTo(o.instant);
+    int cmpResult = this.instant.compareTo(o.instant);
+    if (cmpResult == 0 && this.cdcInferCase == HoodieCDCInferenceCase.LOG_FILE
+        && this.beforeFileSlice.isPresent() && o.getBeforeFileSlice().isPresent()) {
+      // For mor table, multiple writes may occur for the same file group for a single instant,
+      // producing multiple log files that have monotonically increasing  file version.
+      //
+      // A deterministic ordering between splits from the same file group is required to infer row changes for readers.
+      // beforeFileSlice` includes the log files already existed before the write of the log file in this split, which can be used as the
+      // tie-breaker to preserve the relative order of multiple log files.
+      return Math.toIntExact(this.beforeFileSlice.get().getLogFiles().count() - o.getBeforeFileSlice().get().getLogFiles().count());
+    }
+    return cmpResult;
   }
 }

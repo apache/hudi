@@ -21,16 +21,24 @@ package org.apache.hudi.io.hfile;
 
 import org.apache.hudi.common.util.Option;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+
 /**
  * Stores the current position and {@link KeyValue} at the position in the HFile.
  * The same instance is used as a position cursor during HFile reading.
  * The {@link KeyValue} can be lazily read and cached.
  */
+@Getter
 public class HFileCursor {
+
   private static final int INVALID_POSITION = -1;
 
-  private int offset;
+  // Block start offset in the HFile plus the offset within the uncompressed block. A long since
+  // the block start can exceed 2GB; the in-block part fits an int as a block is under 2GB.
+  private long offset;
   private Option<KeyValue> keyValue;
+  @Getter(AccessLevel.NONE)
   private boolean eof;
 
   public HFileCursor() {
@@ -47,20 +55,12 @@ public class HFileCursor {
     return !(offset == INVALID_POSITION || eof);
   }
 
-  public int getOffset() {
-    return offset;
-  }
-
-  public Option<KeyValue> getKeyValue() {
-    return keyValue;
-  }
-
-  public void set(int offset, KeyValue keyValue) {
+  public void set(long offset, KeyValue keyValue) {
     this.offset = offset;
     this.keyValue = Option.of(keyValue);
   }
 
-  public void setOffset(int offset) {
+  public void setOffset(long offset) {
     this.offset = offset;
     this.keyValue = Option.empty();
   }

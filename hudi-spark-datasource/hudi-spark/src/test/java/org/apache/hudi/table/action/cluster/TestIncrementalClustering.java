@@ -131,8 +131,8 @@ public class TestIncrementalClustering extends SparkClientFunctionalTestHarness 
 
     switch (mode) {
       case NONE: {
-        // For partitions filtered out by the regex expression, they will not be recorded in the missingPartitions
-        assertEquals(0, clusteringPlan.getMissingSchedulePartitions().size());
+        assertEquals(1, clusteringPlan.getMissingSchedulePartitions().size());
+        assertTrue(clusteringPlan.getMissingSchedulePartitions().contains(YESTERDAY));
         break;
       }
       case SELECTED_PARTITIONS: {

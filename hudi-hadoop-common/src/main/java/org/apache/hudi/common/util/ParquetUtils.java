@@ -19,35 +19,42 @@
 
 package org.apache.hudi.common.util;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.HoodieAvroWriteSupport;
 import org.apache.hudi.common.config.HoodieConfig;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.HoodieParquetConfigInjector;
+import org.apache.hudi.core.io.ParquetZstdCompressionLevelInjector;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.MetadataNotFoundException;
-import org.apache.hudi.io.storage.HoodieFileWriter;
-import org.apache.hudi.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.HoodieIndexVersion;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
-import org.apache.hudi.stats.ValueMetadata;
-import org.apache.hudi.stats.ValueType;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.metadata.stats.ValueMetadata;
+import org.apache.hudi.metadata.stats.ValueType;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroParquetReader;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.column.statistics.Statistics;
+import org.apache.parquet.crypto.DecryptionPropertiesFactory;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.ParquetReader;
@@ -55,14 +62,13 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 
@@ -78,7 +84,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -94,9 +99,19 @@ import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_
 /**
  * Utility functions involving with parquet.
  */
+@Slf4j
 public class ParquetUtils extends FileFormatUtils {
 
-  private static final Logger LOG = LoggerFactory.getLogger(ParquetUtils.class);
+  /**
+   * Applies built-in injectors followed by the user-defined injector to the configurations used by a Parquet writer.
+   */
+  public static Pair<StorageConfiguration, HoodieConfig> injectParquetWriterConfigs(
+      StoragePath path, StorageConfiguration storageConf, HoodieConfig hoodieConfig) {
+    Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
+        ParquetZstdCompressionLevelInjector.INSTANCE.injectConfig(path, storageConf, hoodieConfig);
+    return HoodieParquetConfigInjector.applyConfigInjector(
+        path, injectedConfigs.getLeft(), injectedConfigs.getRight());
+  }
 
   /**
    * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
@@ -109,7 +124,99 @@ public class ParquetUtils extends FileFormatUtils {
    */
   @Override
   public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, Set<String> filter) {
-    return filterParquetRowKeys(storage, new Path(filePath.toUri()), filter, HoodieAvroUtils.getRecordKeySchema());
+    return filterParquetRowKeys(storage, new Path(filePath.toUri()), filter, HoodieSchemaUtils.getRecordKeySchema());
+  }
+
+  /**
+   * Read the rowKey list matching the given filter, from the given parquet file. If the filter is empty, then this will
+   * return all the rowkeys and corresponding positions. The rows of a file written by a system other than Hudi carry no
+   * record key; every row is keyed by the file path relative to the table base path and the row position instead.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath The parquet file path.
+   * @param basePath The table base path.
+   * @param filter   record keys filter
+   * @return Set Set of pairs of row key and position matching candidateRecordKeys
+   */
+  @Override
+  public Set<Pair<String, Long>> filterRowKeys(HoodieStorage storage, StoragePath filePath, StoragePath basePath, Set<String> filter) {
+    Set<Pair<String, Long>> rowKeys = new HashSet<>();
+    long rowPosition = 0;
+    try (ClosableIterator<String> rowKeyIterator = getRowKeyIterator(storage, filePath, basePath)) {
+      while (rowKeyIterator.hasNext()) {
+        String rowKey = rowKeyIterator.next();
+        if (filter.isEmpty() || filter.contains(rowKey)) {
+          rowKeys.add(Pair.of(rowKey, rowPosition));
+        }
+        rowPosition++;
+      }
+    }
+    return rowKeys;
+  }
+
+  /**
+   * Streams the row keys of the given parquet file, which was written by a system other than Hudi and carries no
+   * record key. Every row is keyed by the file path relative to the table base path and the row position, the same
+   * key the secondary index generates for it. Only the row count is read from the file, no column.
+   *
+   * @param storage  {@link HoodieStorage} instance.
+   * @param filePath The parquet file path.
+   * @param basePath The table base path.
+   * @return {@link ClosableIterator} of the row keys in row order
+   */
+  @Override
+  public ClosableIterator<String> getRowKeyIterator(HoodieStorage storage, StoragePath filePath, StoragePath basePath) {
+    String relativeFilePath = FSUtils.getRelativePartitionPath(basePath, filePath);
+    Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
+    conf.addResource(storage.newInstance(filePath, storage.getConf()).getConf().unwrapAs(Configuration.class));
+    // the record key schema projects no column of the file, so every row is read as an empty record
+    AvroReadSupport.setAvroReadSchema(conf, HoodieSchemaUtils.getRecordKeySchema().toAvroSchema());
+    AvroReadSupport.setRequestedProjection(conf, HoodieSchemaUtils.getRecordKeySchema().toAvroSchema());
+    try {
+      ParquetReaderIterator<GenericRecord> rowIterator = new ParquetReaderIterator<>(
+          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withDataModel(GenericData.get()).withConf(conf).build());
+      return new ClosableIterator<String>() {
+        private long rowPosition = 0;
+
+        @Override
+        public boolean hasNext() {
+          return rowIterator.hasNext();
+        }
+
+        @Override
+        public String next() {
+          rowIterator.next();
+          return ExternalFilePathUtil.generateRecordKeyForRow(relativeFilePath, rowPosition++);
+        }
+
+        @Override
+        public void close() {
+          rowIterator.close();
+        }
+      };
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read row keys from Parquet " + filePath, e);
+    }
+  }
+
+  /**
+   * Sets the Hadoop read options of a reader built with {@code ParquetReader.Builder(InputFile)} from the
+   * file's {@link Configuration}, as {@code ParquetReader.Builder(Path)} followed by {@code withConf} does,
+   * without creating a new {@link Configuration}. {@code withConf} rebuilds the read options from the
+   * configuration and the builder's {@code path} field, which the {@code InputFile} constructor leaves null.
+   * The decryption properties are the only option that takes the file path, so parquet would hand the
+   * decryption factory a null path; they are resolved here with the file's path instead. On parquet 1.14+
+   * the {@code InputFile} constructor alone builds plain {@code ParquetReadOptions}, which never consult the
+   * {@code parquet.crypto.factory.class} decryption factory.
+   */
+  public static <T> ParquetReader.Builder<T> withHadoopReadOptions(ParquetReader.Builder<T> builder, HadoopInputFile file) {
+    Configuration conf = file.getConfiguration();
+    builder.withConf(conf);
+    DecryptionPropertiesFactory decryptionFactory = DecryptionPropertiesFactory.loadFactory(conf);
+    if (decryptionFactory != null) {
+      builder.withDecryption(decryptionFactory.getFileDecryptionProperties(conf, file.getPath()));
+    }
+    return builder;
   }
 
   public static ParquetMetadata readMetadata(HoodieStorage storage, StoragePath parquetFilePath) {
@@ -144,23 +251,28 @@ public class ParquetUtils extends FileFormatUtils {
    * @return Set of pairs of row key and position matching candidateRecordKeys
    */
   private static Set<Pair<String, Long>> filterParquetRowKeys(HoodieStorage storage,
-                                                              Path filePath, Set<String> filter,
-                                                              Schema readSchema) {
+                                                              Path filePath,
+                                                              Set<String> filter,
+                                                              HoodieSchema readSchema) {
     Option<RecordKeysFilterFunction> filterFunction = Option.empty();
     if (filter != null && !filter.isEmpty()) {
       filterFunction = Option.of(new RecordKeysFilterFunction(filter));
     }
     Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
     conf.addResource(storage.newInstance(convertToStoragePath(filePath), storage.getConf()).getConf().unwrapAs(Configuration.class));
-    AvroReadSupport.setAvroReadSchema(conf, readSchema);
-    AvroReadSupport.setRequestedProjection(conf, readSchema);
+    AvroReadSupport.setAvroReadSchema(conf, readSchema.toAvroSchema());
+    AvroReadSupport.setRequestedProjection(conf, readSchema.toAvroSchema());
     Set<Pair<String, Long>> rowKeys = new HashSet<>();
     long rowPosition = 0;
-    try (ParquetReader reader = AvroParquetReader.builder(filePath).withConf(conf).build()) {
+    try (ParquetReader reader = AvroParquetReader.builder(filePath).withDataModel(GenericData.get()).withConf(conf).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
-          String recordKey = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString();
+          Object recordKeyValue = ((GenericRecord) obj).get(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+          if (recordKeyValue == null) {
+            throw new HoodieException("Record key is missing in row " + rowPosition + " of " + filePath);
+          }
+          String recordKey = recordKeyValue.toString();
           if (!filterFunction.isPresent() || filterFunction.get().apply(recordKey)) {
             rowKeys.add(Pair.of(recordKey, rowPosition));
           }
@@ -185,23 +297,6 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   /**
-   * Fetch {@link HoodieKey}s with row positions from the given parquet file.
-   *
-   * @param storage  {@link HoodieStorage} instance.
-   * @param filePath The parquet file path.
-   * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
-   */
-  @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath) {
-    return fetchRecordKeysWithPositions(storage, filePath, Option.empty(), Option.empty());
-  }
-
-  @Override
-  public ClosableIterator<HoodieKey> getHoodieKeyIterator(HoodieStorage storage, StoragePath filePath) {
-    return getHoodieKeyIterator(storage, filePath, Option.empty(), Option.empty());
-  }
-
-  /**
    * Returns a closable iterator for reading the given parquet file.
    *
    * @param storage         {@link HoodieStorage} instance.
@@ -215,11 +310,11 @@ public class ParquetUtils extends FileFormatUtils {
     try {
       Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
       conf.addResource(storage.newInstance(filePath, storage.getConf()).getConf().unwrapAs(Configuration.class));
-      Schema readSchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
-      AvroReadSupport.setAvroReadSchema(conf, readSchema);
-      AvroReadSupport.setRequestedProjection(conf, readSchema);
+      HoodieSchema readSchema = getKeyIteratorSchema(storage, filePath, keyGeneratorOpt, partitionPath);
+      AvroReadSupport.setAvroReadSchema(conf, readSchema.toAvroSchema());
+      AvroReadSupport.setRequestedProjection(conf, readSchema.toAvroSchema());
       ParquetReader<GenericRecord> reader =
-          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withConf(conf).build();
+          AvroParquetReader.<GenericRecord>builder(new Path(filePath.toUri())).withDataModel(GenericData.get()).withConf(conf).build();
       return HoodieKeyIterator.getInstance(new ParquetReaderIterator<>(reader), keyGeneratorOpt, partitionPath);
     } catch (IOException e) {
       throw new HoodieIOException("Failed to read from Parquet file " + filePath, e);
@@ -235,16 +330,10 @@ public class ParquetUtils extends FileFormatUtils {
    * @param partitionPath optional partition path for the file, if provided only the record key is read from the file
    * @return {@link List} of pairs of {@link HoodieKey} and row position fetched from the parquet file
    */
-  @Override
-  public ClosableIterator<Pair<HoodieKey, Long>> fetchRecordKeysWithPositions(HoodieStorage storage, StoragePath filePath, Option<BaseKeyGenerator> keyGeneratorOpt, Option<String> partitionPath) {
-    AtomicLong position = new AtomicLong(0);
-    return new CloseableMappingIterator<>(getHoodieKeyIterator(storage, filePath, keyGeneratorOpt, partitionPath), key -> Pair.of(key, position.getAndIncrement()));
-  }
-
   /**
    * Get the schema of the given parquet file.
    */
-  public MessageType readSchema(HoodieStorage storage, StoragePath parquetFilePath) {
+  public MessageType readMessageType(HoodieStorage storage, StoragePath parquetFilePath) {
     return readFileMetadataOnly(storage, parquetFilePath).getFileMetaData().getSchema();
   }
   
@@ -255,10 +344,10 @@ public class ParquetUtils extends FileFormatUtils {
   public static Integer readSchemaHash(HoodieStorage storage, StoragePath parquetFilePath) {
     try {
       ParquetUtils parquetUtils = new ParquetUtils();
-      MessageType schema = parquetUtils.readSchema(storage, parquetFilePath);
+      MessageType schema = parquetUtils.readMessageType(storage, parquetFilePath);
       return schema.hashCode();
     } catch (Exception e) {
-      LOG.warn("Failed to read schema hash from file: {}", parquetFilePath, e);
+      log.warn("Failed to read schema hash from file: {}", parquetFilePath, e);
       return 0;
     }
   }
@@ -281,8 +370,8 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   @Override
-  public Schema readAvroSchema(HoodieStorage storage, StoragePath filePath) {
-    MessageType parquetSchema = readSchema(storage, filePath);
+  public HoodieSchema readSchema(HoodieStorage storage, StoragePath filePath) {
+    MessageType parquetSchema = readMessageType(storage, filePath);
     return getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(parquetSchema);
   }
 
@@ -296,17 +385,27 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   public List<HoodieColumnRangeMetadata<Comparable>> readColumnStatsFromMetadata(ParquetMetadata metadata, String filePath, Option<List<String>> columnList, HoodieIndexVersion indexVersion) {
+    // Create a set of columns to match, including both canonical (.list.element) and Parquet (.array) formats
+    // This handles files written by both Spark (uses .array) and Avro (uses .list.element) writers
+    Set<String> columnsToMatch = columnList.map(cols -> {
+      Set<String> set = new HashSet<>(cols);
+      cols.forEach(col -> set.add(convertListElementToArray(col)));
+      return set;
+    }).orElse(null);
+
     // Collect stats from all individual Parquet blocks
     Stream<HoodieColumnRangeMetadata<Comparable>> hoodieColumnRangeMetadataStream =
         metadata.getBlocks().stream().sequential().flatMap(blockMetaData ->
             blockMetaData.getColumns().stream()
-                .filter(f -> !columnList.isPresent() || columnList.get().contains(f.getPath().toDotString()))
+                .filter(f -> columnsToMatch == null || columnsToMatch.contains(f.getPath().toDotString()))
                 .map(columnChunkMetaData -> {
                   Statistics stats = columnChunkMetaData.getStatistics();
                   ValueMetadata valueMetadata = ValueMetadata.getValueMetadata(columnChunkMetaData.getPrimitiveType(), indexVersion);
+                  // Normalize column name to canonical .list.element format for consistent MDT storage
+                  String canonicalColumnName = convertArrayToListElement(columnChunkMetaData.getPath().toDotString());
                   return (HoodieColumnRangeMetadata<Comparable>) HoodieColumnRangeMetadata.<Comparable>create(
                       filePath,
-                      columnChunkMetaData.getPath().toDotString(),
+                      canonicalColumnName,
                       convertToNativeJavaType(
                           columnChunkMetaData.getPrimitiveType(),
                           stats.genericGetMin(),
@@ -355,6 +454,7 @@ public class ParquetUtils extends FileFormatUtils {
   public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath) {
     List<GenericRecord> records = new ArrayList<>();
     try (ParquetReader reader = AvroParquetReader.builder(new Path(filePath.toUri()))
+        .withDataModel(GenericData.get())
         .withConf(storage.getConf().unwrapAs(Configuration.class)).build()) {
       Object obj = reader.read();
       while (obj != null) {
@@ -371,8 +471,8 @@ public class ParquetUtils extends FileFormatUtils {
   }
 
   @Override
-  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, Schema schema) {
-    AvroReadSupport.setAvroReadSchema(storage.getConf().unwrapAs(Configuration.class), schema);
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, HoodieSchema schema) {
+    AvroReadSupport.setAvroReadSchema(storage.getConf().unwrapAs(Configuration.class), schema.toAvroSchema());
     return readAvroRecords(storage, filePath);
   }
 
@@ -399,7 +499,7 @@ public class ParquetUtils extends FileFormatUtils {
                             Properties props) throws IOException {
     // Since we are only interested in saving metadata to the footer, the schema, blocksizes and other
     // parameters are not important.
-    Schema schema = HoodieAvroUtils.getRecordKeySchema();
+    HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
     MessageType type = Types.buildMessage().optional(PrimitiveType.PrimitiveTypeName.INT64).named("dummyint").named("dummy");
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(type, schema, Option.empty(), new Properties());
     try (ParquetWriter writer = new ParquetWriter(new Path(filePath.toUri()), writeSupport, CompressionCodecName.UNCOMPRESSED, 1024, 1024)) {
@@ -429,10 +529,9 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue("hoodie.avro.schema", writerSchema.toString());
     HoodieRecord.HoodieRecordType recordType = records.iterator().next().getRecordType();
     try (HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        //TODO boundary to revisit in follow up to use HoodieSchema directly
         HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType)) {
       for (HoodieRecord<?> record : records) {
-        String recordKey = record.getRecordKey(readerSchema.toAvroSchema(), keyFieldName);
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
         parquetWriter.write(recordKey, record, writerSchema);
       }
       outputStream.flush();
@@ -443,9 +542,9 @@ public class ParquetUtils extends FileFormatUtils {
   @Override
   public Pair<ByteArrayOutputStream, Object> serializeRecordsToLogBlock(HoodieStorage storage,
                                                                         Iterator<HoodieRecord> recordItr,
-                                                                        HoodieRecord.HoodieRecordType recordType,
-                                                                        Schema writerSchema,
-                                                                        Schema readerSchema,
+                                                                        HoodieRecordType recordType,
+                                                                        HoodieSchema writerSchema,
+                                                                        HoodieSchema readerSchema,
                                                                         String keyFieldName,
                                                                         Map<String, String> paramsMap) throws IOException {
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -455,16 +554,16 @@ public class ParquetUtils extends FileFormatUtils {
     config.setValue(PARQUET_PAGE_SIZE.key(), String.valueOf(ParquetWriter.DEFAULT_PAGE_SIZE));
     config.setValue(PARQUET_MAX_FILE_SIZE.key(), String.valueOf(1024 * 1024 * 1024));
 
-    HoodieSchema schema = HoodieSchema.fromAvroSchema(writerSchema);
     HoodieFileWriter parquetWriter = HoodieFileWriterFactory.getFileWriter(
-        HoodieFileFormat.PARQUET, outputStream, storage, config, schema, recordType);
-    while (recordItr.hasNext()) {
-      HoodieRecord record = recordItr.next();
-      String recordKey = record.getRecordKey(readerSchema, keyFieldName);
-      parquetWriter.write(recordKey, record, schema);
+        HoodieFileFormat.PARQUET, outputStream, storage, config, writerSchema, recordType);
+    try (HoodieFileWriter writerToClose = parquetWriter) {
+      while (recordItr.hasNext()) {
+        HoodieRecord record = recordItr.next();
+        String recordKey = record.getRecordKey(readerSchema, keyFieldName);
+        parquetWriter.write(recordKey, record, writerSchema);
+      }
+      outputStream.flush();
     }
-    outputStream.flush();
-    parquetWriter.close();
     return Pair.of(outputStream, parquetWriter.getFileFormatMetadata());
   }
 
@@ -552,5 +651,32 @@ public class ParquetUtils extends FileFormatUtils {
     } else {
       throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", val.getClass().getName()));
     }
+  }
+
+  /**
+   * Converts Parquet array format (.array) to canonical format (.list.element).
+   * Parquet files written by Spark use ".array" while Avro uses ".list.element".
+   * We normalize to ".list.element" as the canonical format for MDT storage.
+   *
+   * @param columnName the column name from Parquet metadata
+   * @return the column name with .array converted to .list.element
+   */
+  private static String convertArrayToListElement(String columnName) {
+    return columnName
+        .replace(HoodieSchema.PARQUET_ARRAY_SPARK + ".", HoodieSchema.PARQUET_ARRAY_AVRO + ".")
+        .replace(HoodieSchema.PARQUET_ARRAY_SPARK, HoodieSchema.PARQUET_ARRAY_AVRO);
+  }
+
+  /**
+   * Converts canonical format (.list.element) to Parquet array format (.array).
+   * Used to match user-specified columns against Parquet files that use ".array" format.
+   *
+   * @param columnName the column name in canonical format
+   * @return the column name with .list.element converted to .array
+   */
+  private static String convertListElementToArray(String columnName) {
+    return columnName
+        .replace(HoodieSchema.PARQUET_ARRAY_AVRO + ".", HoodieSchema.PARQUET_ARRAY_SPARK + ".")
+        .replace(HoodieSchema.PARQUET_ARRAY_AVRO, HoodieSchema.PARQUET_ARRAY_SPARK);
   }
 }

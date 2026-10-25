@@ -19,7 +19,8 @@
 
 package org.apache.parquet.avro;
 
-import org.apache.avro.Schema;
+import org.apache.hudi.common.schema.HoodieSchema;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.MessageType;
 
@@ -35,12 +36,12 @@ public class NativeAvroSchemaConverter extends HoodieAvroParquetSchemaConverter 
   }
 
   @Override
-  public MessageType convert(Schema schema) {
-    return avroSchemaConverter.convert(schema);
+  public MessageType convert(HoodieSchema schema) {
+    return avroSchemaConverter.convert(schema.toAvroSchema());
   }
 
   @Override
-  public Schema convert(MessageType schema) {
-    return avroSchemaConverter.convert(schema);
+  public HoodieSchema convert(MessageType schema) {
+    return HoodieSchema.fromAvroSchema(avroSchemaConverter.convert(schema));
   }
 }

@@ -18,55 +18,19 @@
 
 package org.apache.hudi.source.stats;
 
-import javax.annotation.Nullable;
+import lombok.Value;
 
-import java.util.Objects;
+import javax.annotation.Nullable;
 
 /**
  * Column statistics.
  */
+@Value
 public class ColumnStats {
 
-  @Nullable private final Object minVal;
-  @Nullable private final Object maxVal;
-  private final long nullCnt;
-
-  public ColumnStats(@Nullable Object minVal, @Nullable Object maxVal, long nullCnt) {
-    this.minVal = minVal;
-    this.maxVal = maxVal;
-    this.nullCnt = nullCnt;
-  }
-
   @Nullable
-  public Object getMinVal() {
-    return minVal;
-  }
-
+  Object minVal;
   @Nullable
-  public Object getMaxVal() {
-    return maxVal;
-  }
-
-  public long getNullCnt() {
-    return nullCnt;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-    ColumnStats that = (ColumnStats) o;
-    return nullCnt == that.nullCnt
-        && Objects.equals(minVal, that.minVal)
-        && Objects.equals(maxVal, that.maxVal);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(minVal, maxVal, nullCnt);
-  }
+  Object maxVal;
+  long nullCnt;
 }

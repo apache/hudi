@@ -32,10 +32,11 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieBootstrapConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -45,7 +46,6 @@ import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
@@ -59,6 +59,9 @@ import org.apache.hudi.utilities.HoodieCompactor;
 import org.apache.hudi.utilities.streamer.BootstrapExecutor;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
+import com.beust.jcommander.DynamicParameter;
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -76,6 +79,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -97,17 +101,46 @@ public class SparkMain {
    * Commands.
    */
   enum SparkCommand {
-    BOOTSTRAP(21), ROLLBACK(6), DEDUPLICATE(8), ROLLBACK_TO_SAVEPOINT(6), SAVEPOINT(7),
-    IMPORT(13), UPSERT(13), COMPACT_SCHEDULE(6), COMPACT_RUN(10), COMPACT_SCHEDULE_AND_EXECUTE(9),
-    COMPACT_UNSCHEDULE_PLAN(9), COMPACT_UNSCHEDULE_FILE(10), COMPACT_VALIDATE(7), COMPACT_REPAIR(8),
-    CLUSTERING_SCHEDULE(6), CLUSTERING_RUN(9), CLUSTERING_SCHEDULE_AND_EXECUTE(8), CLEAN(5),
-    DELETE_MARKER(5), DELETE_SAVEPOINT(5), UPGRADE(5), DOWNGRADE(5),
-    REPAIR_DEPRECATED_PARTITION(4), RENAME_PARTITION(6), ARCHIVE(8);
+    BOOTSTRAP(21, "tableName", "tableType", "targetPath", "srcPath", "rowKeyField", "partitionPathField",
+        "parallelism", "schemaProviderClass", "bootstrapIndexClass", "selectorClass", "keyGeneratorClass",
+        "fullBootstrapInputProvider", "recordMergeMode", "payloadClass", "recordMergeStrategyId",
+        "recordMergeImplClasses", "enableHiveSync", "propsFilePath"),
+    ROLLBACK(6, "instantTime", "basePath", "rollbackUsingMarkers"),
+    DEDUPLICATE(8, "duplicatedPartitionPath", "repairedOutputPath", "basePath", "dryRun", "dedupeType"),
+    ROLLBACK_TO_SAVEPOINT(6, "savepointTime", "basePath", "lazyCleanPolicy"),
+    SAVEPOINT(7, "commitTime", "user", "comments", "basePath"),
+    IMPORT(13), UPSERT(13),
+    COMPACT_SCHEDULE(6, "basePath", "tableName", "propsFilePath"),
+    COMPACT_RUN(10, "basePath", "tableName", "compactionInstant", "parallelism", "schemaPath", "retry", "propsFilePath"),
+    COMPACT_SCHEDULE_AND_EXECUTE(9, "basePath", "tableName", "parallelism", "schemaPath", "retry", "propsFilePath"),
+    COMPACT_UNSCHEDULE_PLAN(9, "basePath", "compactionInstant", "outputPath", "parallelism", "skipValidation", "dryRun"),
+    COMPACT_UNSCHEDULE_FILE(10, "basePath", "fileId", "partitionPath", "outputPath", "parallelism", "skipValidation", "dryRun"),
+    COMPACT_VALIDATE(7, "basePath", "compactionInstant", "outputPath", "parallelism"),
+    COMPACT_REPAIR(8, "basePath", "compactionInstant", "outputPath", "parallelism", "dryRun"),
+    CLUSTERING_SCHEDULE(6, "basePath", "tableName", "propsFilePath"),
+    CLUSTERING_RUN(9, "basePath", "tableName", "clusteringInstant", "parallelism", "retry", "propsFilePath"),
+    CLUSTERING_SCHEDULE_AND_EXECUTE(8, "basePath", "tableName", "parallelism", "retry", "propsFilePath"),
+    CLEAN(5, "basePath", "propsFilePath"),
+    DELETE_MARKER(5, "instantTime", "basePath"),
+    DELETE_SAVEPOINT(5, "savepointTime", "basePath"),
+    UPGRADE(5, "basePath", "toVersionName"),
+    DOWNGRADE(5, "basePath", "toVersionName"),
+    REPAIR_DEPRECATED_PARTITION(4, "basePath"),
+    RENAME_PARTITION(6, "basePath", "oldPartition", "newPartition"),
+    ARCHIVE(8, "minCommits", "maxCommits", "commitsRetained", "enableMetadata", "basePath");
 
     private final int minArgsCount;
 
-    SparkCommand(int minArgsCount) {
+    /**
+     * Names of the positional command arguments (in order), used when assembling
+     * the positional form out of the named form ({@code -Dkey=value} pairs).
+     * This order must match the argument indexes in the corresponding main() switch branch.
+     */
+    private final String[] paramNames;
+
+    SparkCommand(int minArgsCount, String... paramNames) {
       this.minArgsCount = minArgsCount;
+      this.paramNames = paramNames;
     }
 
     void assertEq(int factArgsCount) {
@@ -139,8 +172,128 @@ public class SparkMain {
     sparkLauncher.addAppArgs(args);
   }
 
-  public static void main(String[] args) {
-    ValidationUtils.checkArgument(args.length >= 4);
+  /**
+   * Adds the command invocation as fully named options: {@code --command X --master Y --memory Z}
+   * plus {@code -Dkey=value} pairs for every command argument. This makes the launcher command
+   * self-describing and removes the risk of mis-aligned positional arguments at call sites.
+   *
+   * @param namedArgs flat name/value pairs for the command's declared arguments. Every name
+   *                  except propsFilePath must be supplied; explicit null values become empty
+   *                  strings, preserving the positional slots for optional values.
+   */
+  public static void addNamedAppArgs(SparkLauncher sparkLauncher, SparkMain.SparkCommand cmd, String master, String memory, String... namedArgs) {
+    ValidationUtils.checkArgument(namedArgs.length % 2 == 0, "namedArgs must be flat name/value pairs");
+    Map<String, String> params = new LinkedHashMap<>();
+    for (int i = 0; i < namedArgs.length; i += 2) {
+      ValidationUtils.checkArgument(!params.containsKey(namedArgs[i]), "Duplicate command argument: " + namedArgs[i]);
+      params.put(namedArgs[i], namedArgs[i + 1] == null ? "" : namedArgs[i + 1]);
+    }
+    validateNamedParams(cmd, params);
+    sparkLauncher.addAppArgs("--command", cmd.toString());
+    sparkLauncher.addAppArgs("--master", master);
+    sparkLauncher.addAppArgs("--memory", memory);
+    params.forEach((name, value) -> sparkLauncher.addAppArgs("-D" + name + "=" + value));
+  }
+
+  private static void validateNamedParams(SparkCommand command, Map<String, String> params) {
+    ValidationUtils.checkArgument(command.paramNames.length > 0, "Named arguments are not supported for " + command);
+    List<String> paramNames = Arrays.asList(command.paramNames);
+    for (String name : params.keySet()) {
+      ValidationUtils.checkArgument(paramNames.contains(name), "Unknown argument for " + command + ": " + name
+          + ". Pass Spark/Hoodie configs as trailing key=value arguments without -D.");
+    }
+    for (String name : paramNames) {
+      ValidationUtils.checkArgument(params.containsKey(name) || "propsFilePath".equals(name),
+          "Missing argument for " + command + ": " + name);
+    }
+  }
+
+  private static boolean isNamedInvocation(String[] argv) {
+    return argv.length > 0 && argv[0].startsWith("-");
+  }
+
+  /**
+   * Translates {@code --command X --master Y --memory Z -Dkey=value...} into the positional
+   * form {@code [X, Y, Z, arg1, arg2, ...]} expected by the legacy invocation path. The named
+   * -D arguments must match the command's positional argument names. Spark/Hoodie configs
+   * are supplied as trailing {@code key=value} arguments.
+   */
+  @VisibleForTesting
+  static String[] namedArgsToPositional(String[] argv) {
+    NamedArgs namedArgs = parseNamedArgs(argv);
+    SparkCommand command = SparkCommand.valueOf(namedArgs.command);
+    validateNamedParams(command, namedArgs.params);
+    List<String> positional = new ArrayList<>();
+    positional.add(namedArgs.command);
+    positional.add(namedArgs.master);
+    positional.add(namedArgs.memory);
+    for (String name : command.paramNames) {
+      positional.add(namedArgs.params.getOrDefault(name, ""));
+    }
+    positional.addAll(namedArgs.trailingConfigs);
+    return positional.toArray(new String[0]);
+  }
+
+  private static NamedArgs parseNamedArgs(String[] argv) {
+    NamedArgs namedArgs = new NamedArgs();
+    List<String> options = new ArrayList<>();
+    for (int i = 0; i < argv.length; i++) {
+      String arg = argv[i];
+      if ("--".equals(arg)) {
+        namedArgs.trailingConfigs.addAll(Arrays.asList(argv).subList(i + 1, argv.length));
+        break;
+      } else if (arg.startsWith("-")) {
+        options.add(arg);
+        if (Arrays.asList("--command", "-command", "--master", "-master", "--memory", "-memory", "-D").contains(arg)) {
+          ValidationUtils.checkArgument(i + 1 < argv.length, "Missing value for " + arg);
+          options.add(argv[++i]);
+        }
+      } else {
+        // JCommander trims and unquotes main parameters. Keep raw configs out of its parser;
+        // option values (including dynamic -D values) are consumed verbatim by fixed arity.
+        namedArgs.trailingConfigs.add(arg);
+      }
+    }
+    JCommander commander = JCommander.newBuilder().addObject(namedArgs).build();
+    commander.setExpandAtSign(false);
+    commander.parse(options.toArray(new String[0]));
+    return namedArgs;
+  }
+
+  /**
+   * Named-argument form of a SparkMain invocation. Kept separate from the legacy
+   * positional protocol so that existing call sites and scripts keep working unchanged:
+   * if the first argument does not look like a named option the legacy path is used.
+   */
+  private static class NamedArgs {
+    @Parameter(names = {"--command", "-command"}, description = "Name of the Spark command to run (e.g. ROLLBACK)", required = true)
+    private String command;
+
+    @Parameter(names = {"--master", "-master"}, description = "Spark master URL (was positional arg 2)", required = true)
+    private String master;
+
+    @Parameter(names = {"--memory", "-memory"}, description = "Spark executor memory (was positional arg 3)", required = true)
+    private String memory;
+
+    @DynamicParameter(names = "-D", description = "Command arguments as -Dkey=value pairs")
+    private Map<String, String> params = new HashMap<>();
+
+    /**
+     * Trailing configs appended by the caller after the named block ({@code key=value} strings,
+     * see {@link org.apache.hudi.utilities.UtilHelpers#validateAndAddProperties}); they are
+     * forwarded as trailing configs to mirror the positional form.
+     */
+    private List<String> trailingConfigs = new ArrayList<>();
+  }
+
+  public static void main(String[] argv) {
+    ValidationUtils.checkArgument(argv.length >= 1, "Please specify the command to invoke");
+    // Soft transition: accept both the legacy positional form (command + master + memory + positional args)
+    // and the new named form (--command + --master + --memory + -Dkey=value). The named form is
+    // translated to the positional form upfront so the rest of the invocation logic is shared.
+    String[] args = isNamedInvocation(argv) ? namedArgsToPositional(argv) : argv;
+
+    ValidationUtils.checkArgument(args.length >= 4, "Positional invocation requires at least command, master and memory");
     final String commandString = args[0];
     log.info("Invoking SparkMain: {}", commandString);
     final SparkCommand cmd = SparkCommand.valueOf(commandString);
@@ -275,7 +428,7 @@ public class SparkMain {
       HoodieWriteConfig config = client.getConfig();
       HoodieEngineContext context = client.getEngineContext();
       HoodieSparkTable table = HoodieSparkTable.create(config, context);
-      client.validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
+      client.validateAgainstTableProperties(table.getMetaClient(), config, WriteOperationType.UNKNOWN);
       WriteMarkersFactory.get(config.getMarkersType(), table, instantTime)
           .quietDeleteMarkerDir(context, config.getMarkersDeleteParallelism());
       return 0;
@@ -285,8 +438,9 @@ public class SparkMain {
     }
   }
 
-  private static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,
-                                        String outputPath, int parallelism) throws Exception {
+  @VisibleForTesting
+  static void doCompactValidate(JavaSparkContext jsc, String basePath, String compactionInstant,
+                                String outputPath, int parallelism) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.VALIDATE;
@@ -296,8 +450,9 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactRepair(JavaSparkContext jsc, String basePath, String compactionInstant,
-                                      String outputPath, int parallelism, boolean dryRun) throws Exception {
+  @VisibleForTesting
+  static void doCompactRepair(JavaSparkContext jsc, String basePath, String compactionInstant,
+                              String outputPath, int parallelism, boolean dryRun) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.REPAIR;
@@ -308,8 +463,9 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactUnschedule(JavaSparkContext jsc, String basePath, String compactionInstant,
-                                          String outputPath, int parallelism, boolean skipValidation, boolean dryRun) throws Exception {
+  @VisibleForTesting
+  static void doCompactUnschedule(JavaSparkContext jsc, String basePath, String compactionInstant,
+                                  String outputPath, int parallelism, boolean skipValidation, boolean dryRun) throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
     cfg.operation = Operation.UNSCHEDULE_PLAN;
@@ -321,8 +477,9 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String partitionPath,
-                                              String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
+  @VisibleForTesting
+  static void doCompactUnscheduleFile(JavaSparkContext jsc, String basePath, String fileId, String partitionPath,
+                                      String outputPath, int parallelism, boolean skipValidation, boolean dryRun)
       throws Exception {
     HoodieCompactionAdminTool.Config cfg = new HoodieCompactionAdminTool.Config();
     cfg.basePath = basePath;
@@ -336,9 +493,10 @@ public class SparkMain {
     new HoodieCompactionAdminTool(cfg).run(jsc);
   }
 
-  private static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
-                             int parallelism, String schemaFile, int retry, String mode, String propsFilePath,
-                             List<String> configs) {
+  @VisibleForTesting
+  static int compact(JavaSparkContext jsc, String basePath, String tableName, String compactionInstant,
+                     int parallelism, String schemaFile, int retry, String mode, String propsFilePath,
+                     List<String> configs) {
     HoodieCompactor.Config cfg = new HoodieCompactor.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
@@ -353,8 +511,9 @@ public class SparkMain {
     return new HoodieCompactor(jsc, cfg).compact(retry);
   }
 
-  private static int cluster(JavaSparkContext jsc, String basePath, String tableName, String clusteringInstant,
-                             int parallelism, String sparkMemory, int retry, String runningMode, String propsFilePath, List<String> configs) {
+  @VisibleForTesting
+  static int cluster(JavaSparkContext jsc, String basePath, String tableName, String clusteringInstant,
+                     int parallelism, String sparkMemory, int retry, String runningMode, String propsFilePath, List<String> configs) {
     HoodieClusteringJob.Config cfg = new HoodieClusteringJob.Config();
     cfg.basePath = basePath;
     cfg.tableName = tableName;
@@ -503,7 +662,8 @@ public class SparkMain {
     return 0;
   }
 
-  private static int rollback(JavaSparkContext jsc, String instantTime, String basePath, Boolean rollbackUsingMarkers) throws Exception {
+  @VisibleForTesting
+  static int rollback(JavaSparkContext jsc, String instantTime, String basePath, Boolean rollbackUsingMarkers) throws Exception {
     SparkRDDWriteClient client = createHoodieClient(jsc, basePath, rollbackUsingMarkers, false);
     if (client.rollback(instantTime)) {
       log.info("The commit \"{}\" rolled back.", instantTime);
@@ -514,8 +674,9 @@ public class SparkMain {
     }
   }
 
-  private static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
-                                     String comments, String basePath) throws Exception {
+  @VisibleForTesting
+  static int createSavepoint(JavaSparkContext jsc, String commitTime, String user,
+                             String comments, String basePath) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.savepoint(commitTime, user, comments);
       log.info("The commit \"{}\" has been savepointed.", commitTime);
@@ -526,7 +687,8 @@ public class SparkMain {
     }
   }
 
-  private static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath, boolean lazyCleanPolicy) throws Exception {
+  @VisibleForTesting
+  static int rollbackToSavepoint(JavaSparkContext jsc, String savepointTime, String basePath, boolean lazyCleanPolicy) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, lazyCleanPolicy)) {
       client.restoreToSavepoint(savepointTime);
       log.info("The commit \"{}\" rolled back.", savepointTime);
@@ -537,7 +699,8 @@ public class SparkMain {
     }
   }
 
-  private static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
+  @VisibleForTesting
+  static int deleteSavepoint(JavaSparkContext jsc, String savepointTime, String basePath) throws Exception {
     try (SparkRDDWriteClient client = createHoodieClient(jsc, basePath, false)) {
       client.deleteSavepoint(savepointTime);
       log.info("Savepoint \"{}\" deleted.", savepointTime);
@@ -558,14 +721,13 @@ public class SparkMain {
    * @throws Exception
    */
   protected static int upgradeOrDowngradeTable(JavaSparkContext jsc, String basePath, String toVersion) {
-    HoodieWriteConfig config = getWriteConfig(basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()),
+    HoodieWriteConfig config = getWriteConfig(jsc, basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()),
         false);
     HoodieTableMetaClient metaClient =
         HoodieTableMetaClient.builder()
             .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
             .setBasePath(config.getBasePath())
             .setLoadActiveTimelineOnLoad(false).setConsistencyGuardConfig(config.getConsistencyGuardConfig())
-            .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion())))
             .setFileSystemRetryConfig(config.getFileSystemRetryConfig()).build();
     HoodieWriteConfig updatedConfig = HoodieWriteConfig.newBuilder().withProps(config.getProps())
         .forTable(metaClient.getTableConfig().getTableName()).build();
@@ -581,7 +743,7 @@ public class SparkMain {
   }
 
   private static SparkRDDWriteClient createHoodieClient(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) throws Exception {
-    HoodieWriteConfig config = getWriteConfig(basePath, rollbackUsingMarkers, lazyCleanPolicy);
+    HoodieWriteConfig config = getWriteConfig(jsc, basePath, rollbackUsingMarkers, lazyCleanPolicy);
     return new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), config);
   }
 
@@ -589,17 +751,44 @@ public class SparkMain {
     return createHoodieClient(jsc, basePath, Boolean.parseBoolean(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.defaultValue()), lazyCleanPolicy);
   }
 
-  private static HoodieWriteConfig getWriteConfig(String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) {
-    return HoodieWriteConfig.newBuilder().withPath(basePath)
+  private static HoodieWriteConfig getWriteConfig(JavaSparkContext jsc, String basePath, Boolean rollbackUsingMarkers, boolean lazyCleanPolicy) {
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withRollbackUsingMarkers(rollbackUsingMarkers)
         .withCleanConfig(HoodieCleanConfig.newBuilder().withFailedWritesCleaningPolicy(lazyCleanPolicy ? HoodieFailedWritesCleaningPolicy.LAZY :
             HoodieFailedWritesCleaningPolicy.EAGER).build())
-        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build()).build();
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build());
+    // Adopt the table's meta-fields mode. These commands take only a base path, so without this the
+    // config resolves to the ALL default and is rejected against any table that is not ALL -- meta
+    // columns are physical, and a writer may not disagree with the table about which of them hold
+    // values. The table is the authority on that, and it is readable right here, so read it.
+    withMetaFieldsModeOf(jsc, basePath, builder);
+    return builder.build();
   }
 
-  private static int archive(JavaSparkContext jsc, int minCommits, int maxCommits, int commitsRetained, boolean enableMetadata, String basePath) {
+  /**
+   * Copy {@code hoodie.meta.fields.mode} from the table at {@code basePath} onto the builder.
+   *
+   * <p>Silent when the table cannot be read: these are maintenance commands, and a base path that is
+   * not yet a Hudi table is the caller's problem to report, not this helper's. In that case the
+   * builder keeps its default and any real mismatch still surfaces at validation.
+   */
+  private static void withMetaFieldsModeOf(JavaSparkContext jsc, String basePath, HoodieWriteConfig.Builder builder) {
     try {
-      return ArchiveExecutorUtils.archive(jsc, minCommits, maxCommits, commitsRetained, enableMetadata, basePath);
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
+          .setBasePath(basePath)
+          .build();
+      builder.withMetaFieldsMode(metaClient.getTableConfig().getMetaFieldsMode());
+    } catch (Exception e) {
+      log.warn("Could not read the table config at {} to pick up {}; proceeding with the default.",
+          basePath, HoodieTableConfig.META_FIELDS_MODE.key(), e);
+    }
+  }
+
+  @VisibleForTesting
+  protected static int archive(JavaSparkContext jsc, int minCommits, int maxCommits, int commitsRetained, boolean enableMetadata, String basePath) {
+    try {
+      return ArchiveExecutorUtils.archive(jsc, minCommits, maxCommits, commitsRetained, enableMetadata, basePath, new HashMap<>());
     } catch (IOException ex) {
       return -1;
     }

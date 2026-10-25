@@ -24,14 +24,14 @@ import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.action.TableChanges;
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.action.TableChanges;
-import org.apache.hudi.internal.schema.utils.SchemaChangeUtils;
 
 import java.util.Collections;
 import java.util.List;
@@ -43,13 +43,26 @@ import static org.apache.hudi.common.table.read.buffer.PositionBasedFileGroupRec
  * This class is responsible for handling the schema for the file group reader that supports row index based positional merge.
  */
 public class ParquetRowIndexBasedSchemaHandler<T> extends FileGroupReaderSchemaHandler<T> {
+  /**
+   * @deprecated Use the constructor that takes a {@link TableState} built once by the caller and passed down.
+   */
+  @Deprecated
   public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
                                            HoodieSchema dataSchema,
                                            HoodieSchema requestedSchema,
                                            Option<InternalSchema> internalSchemaOpt,
                                            TypedProperties properties,
                                            HoodieTableMetaClient metaClient) {
-    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, metaClient);
+    this(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, TableState.fromMetaClient(metaClient));
+  }
+
+  public ParquetRowIndexBasedSchemaHandler(HoodieReaderContext<T> readerContext,
+                                           HoodieSchema dataSchema,
+                                           HoodieSchema requestedSchema,
+                                           Option<InternalSchema> internalSchemaOpt,
+                                           TypedProperties properties,
+                                           TableState tableState) {
+    super(readerContext, dataSchema, requestedSchema, internalSchemaOpt, properties, tableState);
     if (!readerContext.getRecordContext().supportsParquetRowIndex()) {
       throw new IllegalStateException("Using " + this.getClass().getName() + " but context does not support parquet row index");
     }

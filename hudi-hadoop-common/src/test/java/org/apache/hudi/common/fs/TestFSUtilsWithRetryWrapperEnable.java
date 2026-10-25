@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-loop.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,6 +25,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
+import lombok.Getter;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -44,7 +45,6 @@ import java.net.URI;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -106,9 +106,13 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     FileSystem fileSystem =
         new HoodieRetryWrapperFileSystem(fakeFs, maxRetryIntervalMs, maxRetryNumbers,
             initialRetryIntervalMs, "");
-    HoodieWrapperFileSystem fs =
-        new HoodieWrapperFileSystem(fileSystem, new NoOpConsistencyGuard());
-    assertDoesNotThrow(fs::getScheme, "Method #getSchema does not implement correctly");
+    // FakeRemoteFileSystem deliberately does not override getScheme(), so FileSystem's own implementation
+    // throws - the PrestoS3FileSystem shape (HUDI-4602). Assert on the retry wrapper itself: asserting on
+    // HoodieWrapperFileSystem instead would only exercise its own uri.getScheme() and never reach here,
+    // which is why this guard was inert from the day HUDI-5286 added it.
+    assertThrows(UnsupportedOperationException.class, fakeFs::getScheme);
+    assertEquals("file", ((HoodieRetryWrapperFileSystem) fileSystem).getScheme(),
+        "the retry wrapper should resolve the scheme of a filesystem that does not implement getScheme()");
   }
 
   @Test
@@ -132,6 +136,7 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     private FileSystem fs;
     private int count = 1;
     private int loop;
+    @Getter
     private short defaultReplication = 3;
 
     public FakeRemoteFileSystem(FileSystem fs, int retryLoop) {
@@ -250,16 +255,6 @@ public class TestFSUtilsWithRetryWrapperEnable extends TestFSUtils {
     @Override
     public Configuration getConf() {
       return fs.getConf();
-    }
-
-    @Override
-    public String getScheme() {
-      return fs.getScheme();
-    }
-
-    @Override
-    public short getDefaultReplication() {
-      return  defaultReplication;
     }
 
     @Override

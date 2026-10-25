@@ -133,7 +133,6 @@ class ShowCommitsProcedure(includeExtraMetadata: Boolean) extends BaseProcedure 
   def getCommits(timeline: HoodieTimeline,
                  limit: Int): Seq[Row] = {
     val (rows: util.ArrayList[Row], newCommits: util.ArrayList[HoodieInstant]) = getSortCommits(timeline)
-    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
     for (i <- 0 until newCommits.size) {
       val commit = newCommits.get(i)
       val commitMetadata = timeline.readCommitMetadata(commit)

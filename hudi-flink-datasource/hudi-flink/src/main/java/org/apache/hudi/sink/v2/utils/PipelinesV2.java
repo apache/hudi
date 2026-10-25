@@ -19,7 +19,6 @@
 package org.apache.hudi.sink.v2.utils;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.exception.HoodieException;
@@ -33,20 +32,19 @@ import org.apache.hudi.sink.compact.CompactionPlanEvent;
 import org.apache.hudi.sink.compact.CompactionPlanOperator;
 import org.apache.hudi.sink.utils.Pipelines;
 import org.apache.hudi.sink.v2.CleanFunctionV2;
+import org.apache.hudi.sink.v2.HoodieSink;
 import org.apache.hudi.sink.v2.clustering.ClusteringCommitSinkV2;
 import org.apache.hudi.sink.v2.compact.CompactionCommitSinkV2;
-import org.apache.hudi.sink.v2.HoodieSink;
 
-import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.types.logical.RowType;
 
+import static org.apache.hudi.sink.utils.FlinkTransformationUtils.setManagedMemoryWeight;
 import static org.apache.hudi.sink.utils.Pipelines.opUID;
 
 /**
@@ -55,7 +53,6 @@ import static org.apache.hudi.sink.utils.Pipelines.opUID;
 public class PipelinesV2 {
 
   private static final String SINK_V2_NAME = "sink_v2";
-  private static final String FLINK_1_18_VERSION = "1.18";
 
   /**
    * Construct a write pipeline based on {@link HoodieSink}, which is implemented
@@ -75,8 +72,6 @@ public class PipelinesV2 {
       RowType rowType,
       boolean overwrite,
       boolean isBounded) {
-    ValidationUtils.checkArgument(FlinkVersion.current().toString().compareTo(FLINK_1_18_VERSION) > 0,
-        "Hudi sink v2 is not supported with Flink version: " + FlinkVersion.current());
     HoodieSink hoodieSink = new HoodieSink(conf, rowType, overwrite, isBounded);
     return dataStream.sinkTo(hoodieSink)
         .setParallelism(getParallelismForSinkV2(conf))
@@ -119,7 +114,7 @@ public class PipelinesV2 {
       DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
       if (OptionsResolver.needsAsyncClustering(conf)) {
         return clusterV2(conf, rowType, pipeline);
-      } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+      } else if (OptionsResolver.isLazyFailedWritesCleaning(conf)) {
         // add clean function to rollback failed writes for lazy failed writes cleaning policy
         return cleanV2(conf, pipeline);
       } else {
@@ -135,11 +130,13 @@ public class PipelinesV2 {
     if (OptionsResolver.needsAsyncCompaction(conf)) {
       // use synchronous compaction for bounded source.
       if (isBounded) {
-        conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+        conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
       }
       return compactV2(conf, pipeline);
-    } else {
+    } else if (OptionsResolver.needsAsyncCleaning(conf)) {
       return cleanV2(conf, pipeline);
+    } else {
+      return pipeline;
     }
   }
 
@@ -156,7 +153,7 @@ public class PipelinesV2 {
     if (OptionsResolver.isBulkInsertOperation(conf)) {
       return conf.get(FlinkOptions.WRITE_TASKS);
     } else if (OptionsResolver.isAppendMode(conf)) {
-      return OptionsResolver.needsAsyncClustering(conf) || OptionsResolver.isLazyFailedWritesCleanPolicy(conf)
+      return OptionsResolver.needsAsyncClustering(conf) || OptionsResolver.isLazyFailedWritesCleaning(conf)
           ? 1 : conf.get(FlinkOptions.WRITE_TASKS);
     } else {
       return 1;
@@ -225,7 +222,7 @@ public class PipelinesV2 {
             new ClusteringOperator(conf, rowType))
         .setParallelism(conf.get(FlinkOptions.CLUSTERING_TASKS));
     if (OptionsResolver.sortClusteringEnabled(conf)) {
-      ExecNodeUtil.setManagedMemoryWeight(clusteringStream.getTransformation(),
+      setManagedMemoryWeight(clusteringStream.getTransformation(),
           conf.get(FlinkOptions.WRITE_SORT_MEMORY) * 1024L * 1024L);
     }
     return clusteringStream.transform(

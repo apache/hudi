@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -35,12 +34,12 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.util.CollectionUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
@@ -240,11 +239,13 @@ public class HoodieTestDataGenerator implements AutoCloseable {
   public static final HoodieSchema HOODIE_SCHEMA = HoodieSchema.fromAvroSchema(AVRO_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_SPECIFIC_COLUMNS = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_WITH_PAYLOAD_SPECIFIC_COLS);
   public static final Schema NESTED_AVRO_SCHEMA = new Schema.Parser().parse(TRIP_NESTED_EXAMPLE_SCHEMA);
+  public static final HoodieSchema NESTED_SCHEMA = HoodieSchema.fromAvroSchema(NESTED_AVRO_SCHEMA);
   public static final Schema AVRO_SCHEMA_WITH_METADATA_FIELDS =
-      HoodieAvroUtils.addMetadataFields(AVRO_SCHEMA);
+      HoodieSchemaUtils.addMetadataFields(HoodieSchema.fromAvroSchema(AVRO_SCHEMA)).toAvroSchema();
   public static final HoodieSchema HOODIE_SCHEMA_WITH_METADATA_FIELDS = HoodieSchema.fromAvroSchema(AVRO_SCHEMA_WITH_METADATA_FIELDS);
   public static final Schema AVRO_SHORT_TRIP_SCHEMA = new Schema.Parser().parse(SHORT_TRIP_SCHEMA);
   public static final Schema AVRO_TRIP_ENCODED_DECIMAL_SCHEMA = new Schema.Parser().parse(TRIP_ENCODED_DECIMAL_SCHEMA);
+  public static final HoodieSchema HOODIE_TRIP_ENCODED_DECIMAL_SCHEMA = HoodieSchema.parse(TRIP_ENCODED_DECIMAL_SCHEMA);
   public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA);
   public static final HoodieSchema HOODIE_SCHEMA_TRIP_LOGICAL_TYPES_SCHEMA = HoodieSchema.parse(TRIP_LOGICAL_TYPES_SCHEMA);
   public static final Schema AVRO_TRIP_LOGICAL_TYPES_SCHEMA_V6 = new Schema.Parser().parse(TRIP_LOGICAL_TYPES_SCHEMA_V6);
@@ -367,7 +368,7 @@ public class HoodieTestDataGenerator implements AutoCloseable {
                                      String basePath) {
     for (String partitionPath : partitionPaths) {
       new HoodiePartitionMetadata(storage, "000", new StoragePath(basePath),
-          new StoragePath(basePath, partitionPath), Option.empty()).trySave();
+          new StoragePath(basePath, partitionPath), Option.empty()).trySave(partitionPath);
     }
   }
 
@@ -385,6 +386,8 @@ public class HoodieTestDataGenerator implements AutoCloseable {
         return generateRandomValue(key, commitTime, true, timestamp);
       } else if (TRIP_EXAMPLE_SCHEMA.equals(schemaStr)) {
         return generateRandomValue(key, commitTime, isFlattened, timestamp);
+      } else if (TRIP_EXAMPLE_SCHEMA_EVOLVED_1.equals(schemaStr)) {
+        return generateRandomValueForSchemaEvolved1(key, commitTime, isFlattened, timestamp);
       } else if (TRIP_ENCODED_DECIMAL_SCHEMA.equals(schemaStr)) {
         return generatePayloadForTripEncodedDecimalSchema(key, commitTime, timestamp);
       } else if (TRIP_SCHEMA.equals(schemaStr)) {
@@ -455,6 +458,25 @@ public class HoodieTestDataGenerator implements AutoCloseable {
     return generateGenericRecord(
         key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp,
         false, isFlattened);
+  }
+
+  private IndexedRecord generateRandomValueForSchemaEvolved1(HoodieKey key, String instantTime, boolean isFlattened, long timestamp) {
+    Schema evolvedSchema = new Schema.Parser().parse(TRIP_EXAMPLE_SCHEMA_EVOLVED_1);
+    GenericRecord rec = new GenericData.Record(evolvedSchema);
+
+    // Reuse existing logic to populate base fields
+    generateTripPrefixValues(rec, key.getRecordKey(), key.getPartitionPath(), "rider-" + instantTime, "driver-" + instantTime, timestamp);
+    generateExtraSchemaValues(rec);
+    generateMapTypeValues(rec);
+    generateFareNestedValues(rec);
+    generateTipNestedValues(rec);
+
+    // Add the evolved column
+    rec.put("extra_column1", "extra_value_" + instantTime);
+
+    generateCustomValues(rec, "customField");
+    generateTripSuffixValues(rec, false);
+    return rec;
   }
 
   private IndexedRecord generateNestedExampleRandomValue(HoodieKey key, String instantTime, long ts) {
@@ -1534,7 +1556,7 @@ Generate random record using TRIP_ENCODED_DECIMAL_SCHEMA
     public static RecordIdentifier fromTripTestPayload(HoodieAvroIndexedRecord record, String[] orderingFields) {
       String recordKey = record.getRecordKey();
       String partitionPath = record.getPartitionPath();
-      Comparable orderingValue = record.getOrderingValue(record.getData().getSchema(), CollectionUtils.emptyProps(), orderingFields);
+      Comparable orderingValue = record.getOrderingValue(HoodieSchema.fromAvroSchema(record.getData().getSchema()), CollectionUtils.emptyProps(), orderingFields);
       String orderingValStr = orderingValue.toString();
       String riderValue = ((GenericRecord) record.getData()).hasField("rider") ? ((GenericRecord) record.getData()).get("rider").toString() : "";
       return new RecordIdentifier(recordKey, partitionPath, orderingValStr, riderValue);

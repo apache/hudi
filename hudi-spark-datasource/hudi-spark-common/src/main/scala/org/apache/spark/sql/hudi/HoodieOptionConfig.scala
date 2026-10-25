@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
-import org.apache.hudi.avro.HoodieAvroUtils.getRootLevelFieldName
+import org.apache.hudi.common.avro.HoodieAvroUtils.getRootLevelFieldName
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.util.ValidationUtils
@@ -267,7 +267,7 @@ object HoodieOptionConfig {
       .flatMap(key => (List(key.sqlKeyName) ++ key.alternatives).toStream)
 
     sqlOptions.map(option => {
-      standardOptions.find(x => x.toLowerCase().contains(option._1.toLowerCase())) match {
+      standardOptions.find(_.equalsIgnoreCase(option._1)) match {
         case Some(standardKey) => (standardKey, option._2)
         case None => (option._1, option._2)
       }

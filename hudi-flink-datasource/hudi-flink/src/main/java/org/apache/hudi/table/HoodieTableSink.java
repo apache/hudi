@@ -44,7 +44,8 @@ import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelDelete;
 import org.apache.flink.table.connector.sink.abilities.SupportsRowLevelUpdate;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
-import org.jetbrains.annotations.Nullable;
+
+import javax.annotation.Nullable;
 
 import java.util.List;
 import java.util.Map;
@@ -111,7 +112,7 @@ public class HoodieTableSink implements
         DataStream<RowData> pipeline = Pipelines.append(conf, rowType, dataStream);
         if (OptionsResolver.needsAsyncClustering(conf)) {
           return Pipelines.cluster(conf, rowType, pipeline);
-        } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+        } else if (OptionsResolver.isLazyFailedWritesCleaning(conf)) {
           // add clean function to rollback failed writes for lazy failed writes cleaning policy
           return Pipelines.clean(conf, pipeline);
         } else {
@@ -124,14 +125,16 @@ public class HoodieTableSink implements
       final DataStream<HoodieFlinkInternalRow> hoodieRecordDataStream = Pipelines.bootstrap(conf, rowType, dataStream, context.isBounded(), overwrite);
       pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       // compaction
-      if (OptionsResolver.needsAsyncCompaction(conf)) {
+      if (OptionsResolver.needsAsyncCompaction(conf) || OptionsResolver.needsAsyncMetadataCompaction(conf)) {
         // use synchronous compaction for bounded source.
         if (context.isBounded()) {
-          conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false);
+          conf.set(FlinkOptions.COMPACTION_OPERATION_EXECUTE_ASYNC_ENABLED, false);
         }
         return Pipelines.compact(conf, pipeline);
-      } else {
+      } else if (OptionsResolver.needsAsyncCleaning(conf)) {
         return Pipelines.clean(conf, pipeline);
+      } else {
+        return Pipelines.dummySink(pipeline);
       }
     };
   }
@@ -152,7 +155,7 @@ public class HoodieTableSink implements
 
   @Override
   public DynamicTableSink copy() {
-    return new HoodieTableSink(this.conf, this.schema, this.overwrite);
+    return new HoodieTableSink(new Configuration(this.conf), this.schema, this.overwrite);
   }
 
   @Override

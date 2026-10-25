@@ -26,7 +26,6 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
@@ -46,6 +45,12 @@ import java.util.NoSuchElementException;
 @Slf4j
 public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteHandle<T, I, K, O> implements HoodieMergeHandle<T, I, K, O> {
 
+  // The number of incoming update and delete records based on tagging; see the
+  // MergeContext#getNumUpdates() javadoc for the exact semantics (lower bound, not iterator size).
+  // MergeContext.UNKNOWN_NUM_UPDATES on code paths without workload profiling, e.g.,
+  // compaction and metadata table writes.
+  @Getter
+  protected long numUpdates = MergeContext.UNKNOWN_NUM_UPDATES;
   protected Map<String, HoodieRecord<T>> keyToNewRecords;
   protected StoragePath newFilePath;
   @Getter
@@ -64,6 +69,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
    * @param config Hoodie writer configs.
    * @param instantTime current instant time.
    * @param hoodieTable an instance of {@link HoodieTable}
+   * @param mergeContext Context carrying incoming data to merge and its characteristics.
    * @param partitionPath Partition path of the upsert and insert records.
    * @param fileId New file id of the target base file.
    * @param taskContextSupplier Base task context supplier
@@ -71,14 +77,14 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
    * @param keyGeneratorOpt Optional instance of the {@link org.apache.hudi.keygen.KeyGenerator} used.
    */
   public HoodieAbstractMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                   String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
+                                   MergeContext<T> mergeContext, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
                                    HoodieBaseFile baseFile, Option<BaseKeyGenerator> keyGeneratorOpt, boolean preserveMetadata) {
     super(config, instantTime, partitionPath, fileId, hoodieTable, taskContextSupplier, preserveMetadata);
+    this.numUpdates = mergeContext.getNumUpdates();
     this.baseFileToMerge = baseFile;
     this.keyGeneratorOpt = keyGeneratorOpt;
     initPartitionMetadataAndFilePaths(partitionPath);
     initWriteStatus(fileId, partitionPath);
-    validateAndSetAndKeyGenProps(keyGeneratorOpt, config.populateMetaFields());
   }
 
   /**
@@ -111,7 +117,7 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
         new StoragePath(config.getBasePath()),
         FSUtils.constructAbsolutePath(config.getBasePath(), partitionPath),
         hoodieTable.getPartitionMetafileFormat());
-    partitionMetadata.trySave();
+    partitionMetadata.trySave(partitionPath);
 
     String newFileName = createNewFileName(latestValidFilePath);
     oldFilePath = makeNewFilePath(partitionPath, latestValidFilePath);
@@ -141,11 +147,6 @@ public abstract class HoodieAbstractMergeHandle<T, I, K, O> extends HoodieWriteH
     writeStatus.getStat().setFileId(fileId);
     log.debug("Initializing Write status with fileId {} partitionPath {}", fileId, partitionPath);
     setWriteStatusPath();
-  }
-
-  private void validateAndSetAndKeyGenProps(Option<BaseKeyGenerator> keyGeneratorOpt, boolean populateMetaFields) {
-    ValidationUtils.checkArgument(populateMetaFields == !keyGeneratorOpt.isPresent());
-    this.keyGeneratorOpt = keyGeneratorOpt;
   }
 
   protected String createNewFileName(String oldFileName) {

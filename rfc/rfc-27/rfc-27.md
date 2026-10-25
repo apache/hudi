@@ -60,7 +60,7 @@ RFC-15 added metadata table support to Hudi for optimized file listing. RFC-37 i
 as another partition to metadata table. This RFC will piggyback on the column stats partition that RFC-37 will be adding 
 to metadata table. 
 
-Notes: Effectiveness of the index will be proportional to how data is layed out. If every file contains data for 
+Notes: Effectiveness of the index will be proportional to how data is laid out. If every file contains data for 
 commonly specified query predicate, index may not be very effective.
 
 ## Implementation

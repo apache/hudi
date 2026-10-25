@@ -27,8 +27,8 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
-import org.apache.hudi.table.action.commit.SparkMetadataTableSecondaryDeltaCommitActionExecutor;
 import org.apache.hudi.table.action.commit.SparkMetadataTableFirstDeltaCommitActionExecutor;
+import org.apache.hudi.table.action.commit.SparkMetadataTableSecondaryDeltaCommitActionExecutor;
 
 import java.util.List;
 

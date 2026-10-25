@@ -19,11 +19,12 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -33,9 +34,9 @@ import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 
@@ -46,6 +47,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -66,6 +68,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());
     when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(storageConfiguration, tableConfig, Option.empty(), Option.empty());
     readerContext.initRecordMerger(new TypedProperties());
@@ -74,6 +77,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     when(fileGroupReaderSchemaHandler.getRequestedSchema()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getSchemaForUpdates()).thenReturn(SCHEMA);
     when(fileGroupReaderSchemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(fileGroupReaderSchemaHandler.getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
     DeleteContext deleteContext = mock(DeleteContext.class);
     when(deleteContext.getCustomDeleteMarkerKeyValue()).thenReturn(Option.empty());
     when(deleteContext.getHoodieOperationPos()).thenReturn(-1);
@@ -90,19 +94,19 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
     }
     ReaderParameters readerParameters = mock(ReaderParameters.class);
     if (fileGroupRecordBufferType.contains("Sorted")) {
-      when(readerParameters.sortOutputs()).thenReturn(true);
+      when(readerParameters.isSortOutputs()).thenReturn(true);
     }
     if (fileGroupRecordBufferType.contains("Position")) {
       HoodieBaseFile baseFile = mock(HoodieBaseFile.class);
       when(inputSplit.getBaseFileOption()).thenReturn(Option.of(baseFile));
-      when(readerParameters.useRecordPosition()).thenReturn(true);
+      when(readerParameters.shouldUseRecordPosition()).thenReturn(true);
     }
 
     Option<BaseFileUpdateCallback> fileGroupUpdateCallback = Option.empty();
 
     HoodieFileGroupRecordBuffer fileGroupRecordBuffer = (HoodieFileGroupRecordBuffer) fileGroupRecordBufferLoader
         .getRecordBuffer(readerContext, storage, inputSplit, Collections.singletonList("ts"),
-            mockMetaClient, new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
+            TableState.fromMetaClient(mockMetaClient), new TypedProperties(), readerParameters, readStats, fileGroupUpdateCallback).getLeft();
 
     switch (fileGroupRecordBufferType) {
       case "KeyBasedFileGroupRecordBuffer":

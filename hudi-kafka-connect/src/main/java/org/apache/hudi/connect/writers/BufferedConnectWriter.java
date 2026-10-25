@@ -23,6 +23,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
@@ -31,26 +32,22 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.io.IOUtils;
+import org.apache.hudi.io.MergeUtils;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.schema.SchemaProvider;
 
-import org.apache.avro.Schema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 /**
  * Specific implementation of a Hudi Writer that buffers all incoming records,
  * and writes them to Hudi files on the end of a transaction using Bulk Insert.
  */
+@Slf4j
 public class BufferedConnectWriter extends AbstractConnectWriter {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BufferedConnectWriter.class);
 
   private final HoodieEngineContext context;
   private final HoodieJavaWriteClient writeClient;
@@ -74,12 +71,12 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
   private void init() {
     try {
       // Load and batch all incoming records in a map
-      long memoryForMerge = IOUtils.getMaxMemoryPerPartitionMerge(context.getTaskContextSupplier(), config);
-      LOG.info("MaxMemoryPerPartitionMerge => " + memoryForMerge);
+      long memoryForMerge = MergeUtils.getMaxMemoryPerPartitionMerge(context.getTaskContextSupplier(), config);
+      log.info("MaxMemoryPerPartitionMerge => {}", memoryForMerge);
       this.bufferedRecords = new ExternalSpillableMap<>(memoryForMerge,
           config.getSpillableMapBasePath(),
           new DefaultSizeEstimator(),
-          new HoodieRecordSizeEstimator(new Schema.Parser().parse(config.getSchema())),
+          new HoodieRecordSizeEstimator(HoodieSchema.parse(config.getSchema())),
           config.getCommonConfig().getSpillableDiskMapType(),
           new DefaultSerializer<>(),
           config.getCommonConfig().isBitCaskDiskMapCompressionEnabled(),
@@ -97,12 +94,10 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
   @Override
   public List<WriteStatus> flushRecords() {
     try {
-      LOG.info("Number of entries in MemoryBasedMap => "
-          + bufferedRecords.getInMemoryMapNumEntries()
-          + ", Total size in bytes of MemoryBasedMap => "
-          + bufferedRecords.getCurrentInMemoryMapSize() + ", Number of entries in BitCaskDiskMap => "
-          + bufferedRecords.getDiskBasedMapNumEntries() + ", Size of file spilled to disk => "
-          + bufferedRecords.getSizeOfFileOnDiskInBytes());
+      log.info("Number of entries in MemoryBasedMap => {}, Total size in bytes of MemoryBasedMap => {}, "
+              + "Number of entries in BitCaskDiskMap => {}, Size of file spilled to disk => {}",
+          bufferedRecords.getInMemoryMapNumEntries(), bufferedRecords.getCurrentInMemoryMapSize(),
+          bufferedRecords.getDiskBasedMapNumEntries(), bufferedRecords.getSizeOfFileOnDiskInBytes());
       List<WriteStatus> writeStatuses = new ArrayList<>();
 
       boolean isMorTable = Option.ofNullable(connectConfigs.getString(HoodieTableConfig.TYPE))
@@ -113,16 +108,16 @@ public class BufferedConnectWriter extends AbstractConnectWriter {
       if (!bufferedRecords.isEmpty()) {
         if (isMorTable) {
           writeStatuses = writeClient.upsertPreppedRecords(
-              new LinkedList<>(bufferedRecords.values()),
+              new ArrayList<>(bufferedRecords.values()),
               instantTime);
         } else {
           writeStatuses = writeClient.bulkInsertPreppedRecords(
-              new LinkedList<>(bufferedRecords.values()),
+              new ArrayList<>(bufferedRecords.values()),
               instantTime, Option.empty());
         }
       }
       bufferedRecords.close();
-      LOG.info("Flushed hudi records and got writeStatuses: " + writeStatuses);
+      log.info("Flushed hudi records and got writeStatuses: {}", writeStatuses);
       return writeStatuses;
     } catch (Exception e) {
       throw new HoodieIOException("Write records failed", new IOException(e));

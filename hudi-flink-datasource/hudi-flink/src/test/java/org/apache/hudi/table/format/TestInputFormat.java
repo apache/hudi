@@ -21,37 +21,63 @@ package org.apache.hudi.table.format;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
+import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.bloom.BloomFilterFactory;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.io.ByteArraySeekableDataInputStream;
+import org.apache.hudi.io.ByteBufferBackedInputStream;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.io.SeekableDataInputStream;
+import org.apache.hudi.io.hfile.HFileReader;
+import org.apache.hudi.io.hfile.HFileReaderImpl;
+import org.apache.hudi.io.hfile.UTF8StringKey;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.source.IncrementalInputSplits;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTableSource;
 import org.apache.hudi.table.format.cdc.CdcInputFormat;
 import org.apache.hudi.table.format.cow.CopyOnWriteInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputFormat;
 import org.apache.hudi.table.format.mor.MergeOnReadInputSplit;
-import org.apache.hudi.util.AvroSchemaConverter;
 import org.apache.hudi.util.FlinkWriteClients;
+import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.hudi.util.SerializableSchema;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
@@ -81,6 +107,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -91,7 +118,10 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.utils.TestData.insertRow;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
@@ -117,6 +147,9 @@ public class TestInputFormat {
 
   void beforeEach(HoodieTableType tableType, Map<String, String> options) throws IOException {
     conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    // all test cases here expect former default values for record key and ordering fields
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.TABLE_TYPE, tableType.name());
     if (!conf.contains(FlinkOptions.COMPACTION_ASYNC_ENABLED)) {
       conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
@@ -168,8 +201,64 @@ public class TestInputFormat {
   }
 
   @Test
-  void testReadBaseAndLogFiles() throws Exception {
-    beforeEach(HoodieTableType.MERGE_ON_READ);
+  void testRecordIndexLogBlocksContainBloomFilter() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.INDEX_TYPE.key(), HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    options.put(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    options.put(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    options.put(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), "true");
+    options.put(HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED.key(), "true");
+    beforeEach(HoodieTableType.COPY_ON_WRITE, options);
+
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    HoodieStorage storage = metaClient.getStorage();
+    StoragePath recordIndexPath = new StoragePath(
+        HoodieTableMetadata.getMetadataTableBasePath(conf.get(FlinkOptions.PATH)),
+        MetadataPartitionType.RECORD_INDEX.getPartitionPath());
+    List<StoragePathInfo> logFiles = FSUtils.getAllDataFilesInPartition(storage, recordIndexPath).stream()
+        .filter(pathInfo -> FSUtils.isLogFile(pathInfo.getPath()))
+        .collect(Collectors.toList());
+
+    assertFalse(logFiles.isEmpty(), "The MDT record index partition should contain log files");
+    int nonEmptyHfileDataBlockCount = 0;
+    for (StoragePathInfo logFile : logFiles) {
+      HoodieSchema schema = TableSchemaResolver.readSchemaFromLogFile(metaClient, logFile.getPath());
+      try (HoodieLogFormat.Reader reader =
+               HoodieLogFormat.newReader(metaClient, new HoodieLogFile(logFile), schema)) {
+        while (reader.hasNext()) {
+          HoodieLogBlock logBlock = reader.next();
+          if (!(logBlock instanceof HoodieDeleteBlock)
+              && assertBloomFilterContainsWrittenKey(storage, logBlock)) {
+            nonEmptyHfileDataBlockCount++;
+          }
+        }
+      }
+    }
+    assertTrue(nonEmptyHfileDataBlockCount > 0, "The MDT record index log files should contain non-empty HFile data blocks");
+
+    HoodieTableMetadata metadataTable = StreamerUtil.createMetaClient(conf).getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        storage,
+        StreamerUtil.metadataConfig(conf),
+        conf.get(FlinkOptions.PATH));
+    List<String> recordKeys = Arrays.asList(
+        "id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8", "missing-key");
+    Map<String, HoodieRecordGlobalLocation> recordLocations = HoodieDataUtils.dedupeAndCollectAsMap(
+        metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys)));
+
+    assertThat(recordLocations.size(), is(8));
+    recordKeys.subList(0, 8).forEach(key -> assertTrue(recordLocations.containsKey(key)));
+    assertFalse(recordLocations.containsKey("missing-key"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"PARQUET", "LANCE"})
+  void testReadBaseAndLogFiles(String baseFileFormat) throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put("hoodie.table.base.file.format", baseFileFormat);
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
     // write base first with compaction
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, true);
@@ -527,10 +616,10 @@ public class TestInputFormat {
 
   @Test
   void testReadSkipClustering() throws Exception {
-    beforeEach(HoodieTableType.COPY_ON_WRITE);
+    beforeEach(HoodieTableType.COPY_ON_WRITE, Collections.singletonMap(
+        FlinkOptions.OPERATION.key(), "insert"));
 
     // write base first with clustering
-    conf.set(FlinkOptions.OPERATION, "insert");
     conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
     conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
     conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
@@ -898,6 +987,75 @@ public class TestInputFormat {
   }
 
   @Test
+  void testReadArchivedCommitsIncrementallyForPreEightMOR() throws Exception {
+    Map<String, String> options = new HashMap<>();
+    options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
+    options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), String.valueOf(HoodieTableVersion.SIX.versionCode()));
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
+    options.put(FlinkOptions.ARCHIVE_MIN_COMMITS.key(), "3");
+    options.put(FlinkOptions.ARCHIVE_MAX_COMMITS.key(), "4");
+    options.put(FlinkOptions.CLEAN_RETAIN_COMMITS.key(), "2");
+    options.put(FlinkOptions.METADATA_ENABLED.key(), "false");
+    options.put("hoodie.commits.archival.batch", "1");
+    beforeEach(HoodieTableType.MERGE_ON_READ, options);
+
+    // The second commit updates the same pre-v8 MOR file group. Its log block is appended
+    // to a log file whose filename still carries the first commit instant.
+    for (int i = 1; i <= 2; i++) {
+      TestData.writeData(Collections.singletonList(insertRow(
+          StringData.fromString("id1"), StringData.fromString("Danny"), 20 + i,
+          TimestampData.fromEpochMillis(i), StringData.fromString("par1"))), conf);
+    }
+    // Generate unrelated commits to archive the two commits under test without advancing
+    // the file slice containing id1.
+    for (int i = 3; i <= 8; i++) {
+      TestData.writeData(Collections.singletonList(insertRow(
+          StringData.fromString("id" + i), StringData.fromString("User" + i), 20 + i,
+          TimestampData.fromEpochMillis(i), StringData.fromString("par2"))), conf);
+    }
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    assertSame(HoodieTableVersion.SIX, metaClient.getTableConfig().getTableVersion());
+    List<String> archivedCommits = metaClient.getArchivedTimeline().getCommitsTimeline().filterCompletedInstants()
+        .getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toList());
+    assertTrue(archivedCommits.size() >= 2);
+
+    String startCommit = archivedCommits.get(0);
+    String endCommit = archivedCommits.get(1);
+    conf.set(FlinkOptions.READ_START_COMMIT, startCommit);
+    conf.set(FlinkOptions.READ_END_COMMIT, endCommit);
+    this.tableSource = getTableSource(conf);
+    InputFormat<RowData, ?> inputFormat = this.tableSource.getInputFormat();
+    assertThat(inputFormat, instanceOf(MergeOnReadInputFormat.class));
+
+    IncrementalInputSplits incrementalInputSplits = IncrementalInputSplits.builder()
+        .rowType(TestConfigurations.ROW_TYPE)
+        .conf(conf)
+        .path(FilePathUtils.toFlinkPath(metaClient.getBasePath()))
+        .build();
+    IncrementalInputSplits.Result splits = incrementalInputSplits.inputSplits(metaClient, false);
+    assertFalse(splits.isEmpty());
+    MergeOnReadInputSplit split = splits.getInputSplits().stream()
+        .filter(inputSplit -> inputSplit.getPartitionPath().equals("par1"))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("No input split found for par1"));
+    assertTrue(split.getLogPaths().isPresent());
+    String latestLogFileInstant = split.getLogPaths().get().stream()
+        .map(logPath -> new HoodieLogFile(new StoragePath(logPath)).getDeltaCommitTime())
+        .max(String::compareTo)
+        .orElseThrow(() -> new AssertionError("No log file found for par1"));
+    assertTrue(compareTimestamps(latestLogFileInstant, LESSER_THAN, endCommit),
+        "The in-range update must be newer than the filename-derived log instant");
+
+    List<RowData> actual = readData(inputFormat,
+        splits.getInputSplits().toArray(new MergeOnReadInputSplit[0]));
+    List<RowData> expected = Collections.singletonList(insertRow(
+        StringData.fromString("id1"), StringData.fromString("Danny"), 22,
+        TimestampData.fromEpochMillis(2), StringData.fromString("par1")));
+    TestData.assertRowDataEquals(actual, expected);
+  }
+
+  @Test
   void testReadChangelogIncrementally() throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
@@ -948,14 +1106,16 @@ public class TestInputFormat {
     testReadChangelogInternal(commits);
   }
 
-  @Test
-  void testReadChangelogIncrementallyForMorWithCompaction() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"PARQUET", "LANCE"})
+  void testReadChangelogIncrementallyForMorWithCompaction(String baseFileFormat) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.QUERY_TYPE.key(), FlinkOptions.QUERY_TYPE_INCREMENTAL);
     options.put(FlinkOptions.CDC_ENABLED.key(), "true");
     options.put(FlinkOptions.COMPACTION_ASYNC_ENABLED.key(), "true");
     options.put(FlinkOptions.COMPACTION_DELTA_COMMITS.key(), "1");   // compact for every commit
     options.put(FlinkOptions.INDEX_BOOTSTRAP_ENABLED.key(), "true"); // for batch update
+    options.put("hoodie.table.base.file.format", baseFileFormat);
     beforeEach(HoodieTableType.MERGE_ON_READ, options);
 
     // write 3 commits first
@@ -1207,7 +1367,7 @@ public class TestInputFormat {
   void testReadWithWiderSchema(HoodieTableType tableType) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA.key(),
-        AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_WIDER).toString());
+        HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_WIDER).toString());
     beforeEach(tableType, options);
 
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -1222,8 +1382,10 @@ public class TestInputFormat {
     conf.set(FlinkOptions.PATH, tempFile.getAbsolutePath());
     conf.set(FlinkOptions.TABLE_NAME, "TestHoodieTable");
     conf.set(FlinkOptions.TABLE_TYPE, HoodieTableType.MERGE_ON_READ.name());
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
-    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), AvroSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
+    conf.setString(FlinkOptions.SOURCE_AVRO_SCHEMA.key(), HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE_DECIMAL_ORDERING).toString());
     conf.set(FlinkOptions.COMPACTION_ASYNC_ENABLED, false); // by default close the async compaction
     StreamerUtil.initTableIfNotExists(conf);
 
@@ -1412,6 +1574,8 @@ public class TestInputFormat {
   void testStreamWriteAndReadWithUpgrade(HoodieTableType tableType) throws Exception {
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.WRITE_TABLE_VERSION.key(), HoodieTableVersion.SIX.versionCode() + "");
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
     // init and write data with table version SIX
     beforeEach(tableType, options);
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
@@ -1507,6 +1671,41 @@ public class TestInputFormat {
         Collections.singletonList("partition"),
         "default",
         conf);
+  }
+
+  /**
+   * Verifies that the block's bloom filter contains its first key when the block has records.
+   *
+   * @return {@code true} for a non-empty block, or {@code false} for an initialized empty native HFile block
+   */
+  private static boolean assertBloomFilterContainsWrittenKey(
+      HoodieStorage storage, HoodieLogBlock logBlock) throws IOException {
+    HoodieLogBlock.HoodieLogBlockContentLocation contentLocation =
+        logBlock.getBlockContentLocation().get();
+    byte[] hfileContent = new byte[Math.toIntExact(contentLocation.getBlockSize())];
+    try (SeekableDataInputStream inputStream =
+             storage.openSeekable(contentLocation.getLogFile().getPath(), false)) {
+      inputStream.seek(contentLocation.getContentPositionInLogFile());
+      inputStream.readFully(hfileContent);
+    }
+
+    try (HFileReader hfileReader = new HFileReaderImpl(
+        new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(hfileContent)),
+        hfileContent.length)) {
+      hfileReader.initializeMetadata();
+      ByteBuffer bloomFilterBuffer = hfileReader.getMetaBlock(
+          HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK).get();
+      String bloomFilterType = fromUTF8Bytes(hfileReader.getMetaInfo(
+          new UTF8StringKey(HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE)).get());
+      BloomFilter bloomFilter = BloomFilterFactory.fromByteBuffer(bloomFilterBuffer, bloomFilterType);
+
+      if (!hfileReader.seekTo()) {
+        return false;
+      }
+      String writtenKey = hfileReader.getKeyValue().get().getKey().getContentInString();
+      assertTrue(bloomFilter.mightContain(writtenKey));
+      return true;
+    }
   }
 
   private static List<RowData> readData(InputFormat inputFormat) throws IOException {

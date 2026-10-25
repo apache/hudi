@@ -19,25 +19,25 @@
 
 package org.apache.hudi.io.storage.hadoop;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.AvroOrcUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.hadoop.OrcReaderIterator;
-import org.apache.hudi.io.storage.HoodieAvroFileReader;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -51,7 +51,6 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -87,18 +86,14 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
 
   @Override
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) {
-    if (!Objects.equals(readerSchema, requestedSchema)) {
-      throw new UnsupportedOperationException("Schema projections are not supported in HFile reader");
-    }
-
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
     try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(hadoopConf))) {
       // Limit the ORC schema to requested fields only
-      Schema fileSchema = AvroOrcUtils.createAvroSchema(reader.getSchema());
+      HoodieSchema fileSchema = AvroOrcUtils.createSchema(reader.getSchema());
       Set<String> existingFields = fileSchema.getFields().stream()
-          .map(Schema.Field::name)
+          .map(HoodieSchemaField::name)
           .collect(Collectors.toSet());
-      Schema prunedFileSchema = HoodieAvroUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(HoodieSchemaField::name)
+      HoodieSchema prunedFileSchema = HoodieSchemaUtils.projectSchema(fileSchema, requestedSchema.getFields().stream().map(HoodieSchemaField::name)
               .filter(existingFields::contains).collect(Collectors.toList()));
       TypeDescription orcSchema = AvroOrcUtils.createOrcSchema(prunedFileSchema);
       RecordReader recordReader = reader.rows(new Options(hadoopConf).schema(orcSchema));
@@ -136,8 +131,7 @@ public class HoodieAvroOrcReader extends HoodieAvroFileReader {
 
   @Override
   public HoodieSchema getSchema() {
-    //TODO boundary for now to revisit in later pr to directly use HoodieSchema
-    return HoodieSchema.fromAvroSchema(orcUtils.readAvroSchema(storage, path));
+    return orcUtils.readSchema(storage, path);
   }
 
   @Override

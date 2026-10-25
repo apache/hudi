@@ -19,6 +19,7 @@
 package org.apache.hudi.client.model;
 
 import org.apache.hudi.SparkAdapterSupport$;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.DataTypes;

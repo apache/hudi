@@ -69,7 +69,8 @@ class TestHoodieParquetReadSupport {
 
   /**
    * Validate that when at least one child field of a nested struct/array/map field matches between the
-   * requested schema and the actual file schema, the entire struct/array/map field is retained.
+   * requested schema and the actual file schema, the group is retained with only the matching child
+   * fields. Non-matching fields are excluded; Spark's schema evolution fills them with null.
    */
   @Test
   def testSchemaTrimming_atLeastOneFieldMatches(): Unit = {
@@ -98,6 +99,54 @@ class TestHoodieParquetReadSupport {
 
     val trimmedSchema = HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema)
 
-    Assertions.assertEquals(requiredSchema, trimmedSchema)
+    // Only nested_b (present in both schemas) is retained; nested_a (only in requested)
+    // is excluded from the Parquet read schema. Spark schema evolution fills it with null.
+    val matchingNestedField = Types.requiredGroup().addField(Types.required(PrimitiveTypeName.INT32).named("nested_b"))
+    val expectedArrayField = Types.requiredList().optionalGroupElement().addField(matchingNestedField.named("element")).named("list")
+    val expectedMapField = Types.requiredMap().key(PrimitiveTypeName.BINARY).value(matchingNestedField.named("value")).named("key_value")
+    val expectedSchema = Types.buildMessage()
+        .addField(Types.required(PrimitiveTypeName.BINARY).named("a"))
+        .addField(matchingNestedField.named("b"))
+        .addField(expectedArrayField)
+        .addField(expectedMapField)
+        .addField(Types.required(PrimitiveTypeName.BINARY).named("e"))
+        .named("required")
+    Assertions.assertEquals(expectedSchema, trimmedSchema)
+  }
+
+  /**
+   * A top-level field the file does not have at all (a column added by DDL, say) is dropped from
+   * the read schema; the row converter leaves the catalyst column it never sees null. The missing
+   * field is shaped like the Spark 4.1 PushVariantIntoScan projection struct of a variant column,
+   * the case that fails when it is kept (#20135): the synthesised group is not a variant group,
+   * yet the variant converter is built over it. A request left with no field at all trims to an
+   * empty message.
+   */
+  @Test
+  def testSchemaTrimmingMissingTopLevelField(): Unit = {
+    val projectionStruct = Types.optionalGroup()
+        .addField(Types.optional(PrimitiveTypeName.BINARY).named("0"))
+        .named("v2")
+    val requiredSchema = Types.buildMessage()
+        .addField(Types.required(PrimitiveTypeName.INT32).named("id"))
+        .addField(Types.optional(PrimitiveTypeName.BINARY).named("v"))
+        .addField(projectionStruct)
+        .named("required")
+    val dataSchema = Types.buildMessage()
+        .addField(Types.required(PrimitiveTypeName.INT32).named("id"))
+        .addField(Types.optional(PrimitiveTypeName.BINARY).named("v"))
+        .named("data")
+
+    val expectedSchema = Types.buildMessage()
+        .addField(Types.required(PrimitiveTypeName.INT32).named("id"))
+        .addField(Types.optional(PrimitiveTypeName.BINARY).named("v"))
+        .named("required")
+    Assertions.assertEquals(expectedSchema, HoodieParquetReadSupport.trimParquetSchema(requiredSchema, dataSchema))
+
+    // A request whose only field is missing trims to an empty message, and the reader returns
+    // rows of nulls for it.
+    val onlyMissingField = Types.buildMessage().addField(projectionStruct).named("required")
+    Assertions.assertEquals(Types.buildMessage().named("required"),
+      HoodieParquetReadSupport.trimParquetSchema(onlyMissingField, dataSchema))
   }
 }

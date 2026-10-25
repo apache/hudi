@@ -18,6 +18,9 @@
 
 package org.apache.hudi.metaserver.store.jdbc;
 
+import lombok.Data;
+
+@Data
 public class BatchDaoOperation {
 
   public static final String OPERATION_TYPE_INSERT = "INSERT";
@@ -28,43 +31,4 @@ public class BatchDaoOperation {
   private String sqlID;
   private Object parameter;
   private String operationType;
-
-  public BatchDaoOperation(String namespace, String sqlID, Object parameter, String operationType) {
-    this.namespace = namespace;
-    this.sqlID = sqlID;
-    this.parameter = parameter;
-    this.operationType = operationType;
-  }
-
-  public String getNamespace() {
-    return namespace;
-  }
-
-  public void setNamespace(String namespace) {
-    this.namespace = namespace;
-  }
-
-  public String getSqlID() {
-    return sqlID;
-  }
-
-  public void setSqlID(String sqlID) {
-    this.sqlID = sqlID;
-  }
-
-  public Object getParameter() {
-    return parameter;
-  }
-
-  public void setParameter(Object parameter) {
-    this.parameter = parameter;
-  }
-
-  public String getOperationType() {
-    return operationType;
-  }
-
-  public void setOperationType(String operationType) {
-    this.operationType = operationType;
-  }
 }

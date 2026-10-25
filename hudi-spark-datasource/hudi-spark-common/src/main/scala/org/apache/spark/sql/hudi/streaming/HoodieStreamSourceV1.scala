@@ -179,14 +179,14 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
           }
           sparkAdapter.createStreamingDataFrame(sqlContext, relation, schema)
         } else {
+          val requiredColumns = schema.fields.map(_.name)
           val rdd = tableType match {
             case HoodieTableType.COPY_ON_WRITE =>
               val serDe = HoodieSparkUtils.getCatalystRowSerDe(schema)
               new IncrementalRelationV1(sqlContext, incParams, Some(schema), metaClient)
-                .buildScan()
+                .buildScan(requiredColumns)
                 .map(serDe.serializeRow)
             case HoodieTableType.MERGE_ON_READ =>
-              val requiredColumns = schema.fields.map(_.name)
               new MergeOnReadIncrementalRelationV1(sqlContext, incParams, metaClient, Some(schema))
                 .buildScan(requiredColumns, Array.empty[Filter])
                 .asInstanceOf[RDD[InternalRow]]

@@ -43,13 +43,13 @@ spec:
       initContainers:
         - name: prepare
           image: busybox:1.28
-          command: ['sh', '-c', 'mkdir -p /data/minio/ && chown 9999 /data/minio/' ]
+          command: ['sh', '-c', 'mkdir -p /data/minio/ && chown 65532 /data/minio/' ]
           volumeMounts:
             - mountPath: /data
               name: hostvolume
       containers:
         - name: minio
-          image: quay.io/minio/minio:RELEASE.2024-01-13T07-53-03Z
+          image: cgr.dev/chainguard/minio:latest
           command:
             - /bin/bash
             - -c

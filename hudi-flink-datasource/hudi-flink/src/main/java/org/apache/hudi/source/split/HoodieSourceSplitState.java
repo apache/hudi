@@ -18,23 +18,15 @@
 
 package org.apache.hudi.source.split;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Hoodie source split state that will be snapshot to checkpoint within enumerator.
  */
+@Getter
+@AllArgsConstructor
 public class HoodieSourceSplitState {
   private final HoodieSourceSplit split;
   private final HoodieSourceSplitStatus status;
-
-  public HoodieSourceSplitState(HoodieSourceSplit split, HoodieSourceSplitStatus status) {
-    this.split = split;
-    this.status = status;
-  }
-
-  public HoodieSourceSplit split() {
-    return split;
-  }
-
-  public HoodieSourceSplitStatus status() {
-    return status;
-  }
 }

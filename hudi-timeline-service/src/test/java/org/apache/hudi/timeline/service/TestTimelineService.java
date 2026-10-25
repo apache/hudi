@@ -45,7 +45,10 @@ class TestTimelineService {
     try {
       StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
       int originalServerPort = 8888;
-      TimelineService.Config config = TimelineService.Config.builder().enableMarkerRequests(true).serverPort(originalServerPort).build();
+      TimelineService.Config config = TimelineService.Config.builder()
+          .enableMarkerRequests(true)
+          .serverPort(originalServerPort)
+          .build();
       FileSystemViewManager viewManager = mock(FileSystemViewManager.class);
       timelineService = new TimelineService(conf, config, viewManager);
       assertEquals(originalServerPort, timelineService.startService());
@@ -73,7 +76,10 @@ class TestTimelineService {
       server.setExecutor(null);
       server.start();
 
-      TimelineService.Config config = TimelineService.Config.builder().enableMarkerRequests(true).serverPort(originalServerPort).build();
+      TimelineService.Config config = TimelineService.Config.builder()
+          .enableMarkerRequests(true)
+          .serverPort(originalServerPort)
+          .build();
       FileSystemViewManager viewManager = mock(FileSystemViewManager.class);
       StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
       timelineService = new TimelineService(conf, config, viewManager);

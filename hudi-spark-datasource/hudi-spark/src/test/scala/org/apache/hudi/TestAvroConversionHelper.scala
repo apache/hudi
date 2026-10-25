@@ -43,7 +43,7 @@ class TestAvroConversionHelper extends FunSuite with Matchers {
 
   test("Logical type: date") {
     val schema = HoodieSchema.parse(dateSchema)
-    val convertor = AvroConversionUtils.createConverterToRow(schema.toAvroSchema, HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema))
+    val convertor = AvroConversionUtils.createConverterToRow(schema, HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema))
 
     val dateOutputData = dateInputData.map(x => {
       val record = new GenericData.Record(schema.toAvroSchema) {{ put("date", x) }}

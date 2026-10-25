@@ -19,7 +19,7 @@
 package org.apache.hudi.utilities.sources.helpers;
 
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 
 import org.apache.spark.sql.Row;
 

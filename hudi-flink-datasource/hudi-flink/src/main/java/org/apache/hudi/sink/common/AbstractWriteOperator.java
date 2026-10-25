@@ -18,13 +18,20 @@
 
 package org.apache.hudi.sink.common;
 
+import org.apache.hudi.adapter.Utils;
+import org.apache.hudi.configuration.OptionsResolver;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.event.Correspondent;
 
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
+import org.apache.flink.streaming.api.graph.StreamConfig;
 import org.apache.flink.streaming.api.operators.BoundedOneInput;
+import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
+import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
+import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.table.data.RowData;
 
 /**
@@ -40,6 +47,17 @@ public abstract class AbstractWriteOperator<I>
   public AbstractWriteOperator(AbstractWriteFunction<I> function) {
     super(function);
     this.function = function;
+  }
+
+  @Override
+  public void setup(StreamTask<?, ?> containingTask, StreamConfig config, Output<StreamRecord<RowData>> output) {
+    super.setup(containingTask, config, output);
+
+    MemorySegmentPoolFactory memoryPoolFactory =
+        OptionsResolver.isManagedMemoryBufferEnabled(this.function.getConfig())
+            ? new MemorySegmentPoolFactory(containingTask, containingTask.getEnvironment().getMemoryManager(), Utils.computeManagedMemory(this))
+            : new MemorySegmentPoolFactory(null, null, -1);
+    this.function.setMemorySegmentPoolFactory(memoryPoolFactory);
   }
 
   public void setCorrespondent(Correspondent correspondent) {

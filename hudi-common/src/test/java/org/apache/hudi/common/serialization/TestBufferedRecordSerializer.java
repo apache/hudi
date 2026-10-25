@@ -18,9 +18,9 @@
 
 package org.apache.hudi.common.serialization;
 
-import org.apache.hudi.avro.AvroRecordContext;
-import org.apache.hudi.avro.AvroRecordSerializer;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
+import org.apache.hudi.common.avro.AvroRecordContext;
+import org.apache.hudi.common.avro.AvroRecordSerializer;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.schema.HoodieSchema;

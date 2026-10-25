@@ -27,9 +27,9 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.MarkerUtils;
 import org.apache.hudi.exception.HoodieRemoteException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.timeline.service.TimelineService;
@@ -74,7 +74,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
     this.markerFolderPath = new StoragePath(metaClient.getMarkerFolderPath("000"));
 
     restartServerAndClient(0);
-    log.info("Connecting to Timeline Server :" + timelineService.getServerPort());
+    log.info("Connecting to Timeline Server :{}", timelineService.getServerPort());
   }
 
   @AfterEach
@@ -108,7 +108,7 @@ public class TestTimelineServerBasedWriteMarkers extends TestWriteMarkersBase {
   @EnumSource(value = FileSystemViewStorageType.class)
   public void testCreationWithTimelineServiceRetries(FileSystemViewStorageType storageType) throws Exception {
     restartServerAndClient(0, storageType);
-    log.info("Connecting to Timeline Server :" + timelineService.getServerPort());
+    log.info("Connecting to Timeline Server :{}", timelineService.getServerPort());
     // Validate marker creation/ deletion work without any failures in the timeline service.
     createSomeMarkers(true);
     assertTrue(storage.exists(markerFolderPath));

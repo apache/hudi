@@ -140,7 +140,7 @@ public class SecondaryIndexStreamingTracker {
                                        List<HoodieIndexDefinition> secondaryIndexDefns, HoodieWriteConfig config) {
     // Add secondary index records for all the inserted records (including null values)
     secondaryIndexDefns.forEach(def -> {
-      Object secondaryKey = record.getColumnValueAsJava(writeSchemaWithMetaFields.toAvroSchema(), def.getSourceFieldsKey(), config.getProps());
+      Object secondaryKey = record.getColumnValueAsJava(writeSchemaWithMetaFields, def.getSourceFieldsKey(), config.getProps());
       addSecondaryIndexStat(writeStatus, def.getIndexName(), record.getRecordKey(), secondaryKey, false);
     });
   }
@@ -177,7 +177,7 @@ public class SecondaryIndexStreamingTracker {
       Object oldSecondaryKey = null;
 
       if (hasOldValue) {
-        oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields.toAvroSchema(), secondaryIndexSourceField, config.getProps());
+        oldSecondaryKey = oldRecord.getColumnValueAsJava(writeSchemaWithMetaFields, secondaryIndexSourceField, config.getProps());
       }
 
       // For new/combined record
@@ -186,7 +186,7 @@ public class SecondaryIndexStreamingTracker {
 
       if (!isDelete) {
         HoodieSchema newSchema = newSchemaSupplier.get();
-        newSecondaryKey = combinedRecord.getColumnValueAsJava(newSchema.toAvroSchema(), secondaryIndexSourceField, config.getProps());
+        newSecondaryKey = combinedRecord.getColumnValueAsJava(newSchema, secondaryIndexSourceField, config.getProps());
         hasNewValue = true;
       }
 
@@ -210,7 +210,7 @@ public class SecondaryIndexStreamingTracker {
       // 4. Old record does not exist, new record does not exist - do nothing
       if (shouldUpdate) {
         String recordKey = Option.ofNullable(hoodieKey).map(HoodieKey::getRecordKey)
-            .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields.toAvroSchema(), keyGeneratorOpt)))
+            .or(() -> Option.ofNullable(oldRecord).map(rec -> rec.getRecordKey(writeSchemaWithMetaFields, keyGeneratorOpt)))
             .orElseGet(combinedRecord::getRecordKey);
 
         // Delete old secondary index entry if old record exists.

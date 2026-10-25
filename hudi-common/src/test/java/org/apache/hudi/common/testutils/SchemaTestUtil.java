@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.testutils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.MercifulJsonConverter;
 import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -318,7 +318,7 @@ public final class SchemaTestUtil {
   public static GenericRecord generateAvroRecordFromJson(HoodieSchema schema, int recordNumber, String instantTime,
       String fileId, boolean populateMetaFields) throws IOException {
     SampleTestRecord record = new SampleTestRecord(instantTime, recordNumber, fileId, populateMetaFields);
-    return CONVERTER.convert(record.toJsonString(), schema.toAvroSchema());
+    return CONVERTER.convert(record.toJsonString(), schema);
   }
 
   public static HoodieSchema getSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
@@ -341,7 +341,7 @@ public final class SchemaTestUtil {
   public static HoodieSchema getHoodieSchemaFromResource(Class<?> clazz, String name, boolean withHoodieMetadata) {
     try (InputStream schemaInputStream = clazz.getResourceAsStream(name)) {
       HoodieSchema schema = new HoodieSchema.Parser().parse(schemaInputStream);
-      return withHoodieMetadata ? HoodieSchema.addMetadataFields(schema, false) : schema;
+      return withHoodieMetadata ? HoodieSchemaUtils.addMetadataFields(schema, false) : schema;
     } catch (IOException e) {
       throw new RuntimeException(String.format("Failed to get schema from resource `%s` for class `%s`", name, clazz.getName()));
     }
@@ -431,11 +431,12 @@ public final class SchemaTestUtil {
     }
 
     private static Utf8 randomUtf8(Random rand, int maxLength) {
-      Utf8 utf8 = new Utf8().setLength(rand.nextInt(maxLength));
-      for (int i = 0; i < utf8.getLength(); i++) {
-        utf8.getBytes()[i] = (byte) ('a' + rand.nextInt('z' - 'a'));
+      int length = rand.nextInt(maxLength);
+      byte[] bytes = new byte[length];
+      for (int i = 0; i < length; i++) {
+        bytes[i] = (byte) ('a' + rand.nextInt('z' - 'a'));
       }
-      return utf8;
+      return new Utf8(bytes);
     }
 
     private static ByteBuffer randomBytes(Random rand, int maxLength) {

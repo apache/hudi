@@ -20,11 +20,12 @@
 package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
-import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.avro.MercifulJsonConverter;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
@@ -42,7 +43,8 @@ import org.apache.hudi.utilities.sources.helpers.RowConverter;
 import org.apache.hudi.utilities.sources.helpers.SanitizationUtils;
 
 import com.google.protobuf.Message;
-import org.apache.avro.Schema;
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.Column;
@@ -73,12 +75,15 @@ import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABL
  */
 public class SourceFormatAdapter implements Closeable {
 
+  @Getter
   private final Source source;
   private boolean shouldSanitize = SANITIZE_SCHEMA_FIELD_NAMES.defaultValue();
 
   private  boolean wrapWithException = ROW_THROW_EXPLICIT_EXCEPTIONS.defaultValue();
+  @Getter(AccessLevel.PRIVATE)
   private String invalidCharMask = SCHEMA_FIELD_NAME_INVALID_CHAR_MASK.defaultValue();
 
+  @Getter(AccessLevel.PRIVATE)
   private boolean useJava8api = (boolean) SQLConf.DATETIME_JAVA8API_ENABLED().defaultValue().get();
 
 
@@ -111,18 +116,6 @@ public class SourceFormatAdapter implements Closeable {
   }
 
   /**
-   * Replacement mask for invalid characters encountered in avro names.
-   * @return sanitized value.
-   */
-  private String getInvalidCharMask() {
-    return invalidCharMask;
-  }
-
-  private boolean getUseJava8api() {
-    return useJava8api;
-  }
-
-  /**
    * transform input rdd of json string to generic records with support for adding error events to error table
    * @param inputBatch
    * @return
@@ -144,7 +137,7 @@ public class SourceFormatAdapter implements Closeable {
 
   private JavaRDD<Row> transformJsonToRowRdd(InputBatch<JavaRDD<String>> inputBatch) {
     MercifulJsonConverter.clearCache(inputBatch.getSchemaProvider().getSourceHoodieSchema().getFullName());
-    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceHoodieSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask(), getUseJava8api());
+    RowConverter convertor = new RowConverter(inputBatch.getSchemaProvider().getSourceHoodieSchema(), isFieldNameSanitizingEnabled(), getInvalidCharMask(), isUseJava8api());
     return inputBatch.getBatch().map(rdd -> {
       if (errorTableWriter.isPresent()) {
         JavaRDD<Either<Row, String>> javaRDD = rdd.map(convertor::fromJsonToRowWithError);
@@ -201,14 +194,20 @@ public class SourceFormatAdapter implements Closeable {
         return new InputBatch<>(Option.ofNullable(r.getBatch().map(
             rdd -> {
                 SchemaProvider originalProvider = UtilHelpers.getOriginalSchemaProvider(r.getSchemaProvider());
+                // Schema selection logic for Row-to-Avro conversion:
+                // 1. FileBased/SchemaRegistry providers: Use source schema to avoid nullability mismatch
+                //    between explicitly-defined Avro schema and inferred Row schema
+                // 2. Other providers (e.g., RowBased): Use target schema since this code path executes
+                //    after transformations have been applied, and the target schema represents the
+                //    schema after all transformations
                 return (originalProvider instanceof FilebasedSchemaProvider || (originalProvider instanceof SchemaRegistryProvider))
                     // If the source schema is specified through Avro schema,
                     // pass in the schema for the Row-to-Avro conversion
                     // to avoid nullability mismatch between Avro schema and Row schema
                     ? HoodieSparkUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, true,
-                    Option.ofNullable(r.getSchemaProvider().getSourceHoodieSchema().toAvroSchema())
-                ).toJavaRDD() : HoodieSparkUtils.createRdd(rdd,
-                    HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false, Option.empty()).toJavaRDD();
+                    Option.ofNullable(r.getSchemaProvider().getSourceHoodieSchema())).toJavaRDD()
+                    : HoodieSparkUtils.createRdd(rdd, HOODIE_RECORD_STRUCT_NAME, HOODIE_RECORD_NAMESPACE, false,
+                    Option.ofNullable(r.getSchemaProvider().getTargetHoodieSchema())).toJavaRDD();
             })
             .orElse(null)), r.getCheckpointForNextBatch(), r.getSchemaProvider());
       }
@@ -255,12 +254,12 @@ public class SourceFormatAdapter implements Closeable {
       }
       case JSON: {
         InputBatch<JavaRDD<String>> r = ((Source<JavaRDD<String>>) source).fetchNext(lastCheckpoint, sourceLimit);
-        Schema sourceSchema = r.getSchemaProvider().getSourceHoodieSchema().toAvroSchema();
+        HoodieSchema sourceSchema = r.getSchemaProvider().getSourceHoodieSchema();
         // Decimal fields need additional decoding from json generated by kafka-connect. JSON -> ROW conversion is done through
         // a spark library that has not implemented this decoding
         if (isFieldNameSanitizingEnabled()
-            || (HoodieAvroUtils.hasDecimalField(sourceSchema) && source instanceof KafkaSource)) {
-          StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
+            || (HoodieSchemaUtils.hasDecimalField(sourceSchema) && source instanceof KafkaSource)) {
+          StructType dataType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(sourceSchema);
           JavaRDD<Row> rowRDD = transformJsonToRowRdd(r);
           if (rowRDD != null) {
             Dataset<Row> rowDataset = source.getSparkSession().createDataFrame(rowRDD, dataType);
@@ -274,7 +273,7 @@ public class SourceFormatAdapter implements Closeable {
           // if error table writer is enabled, during spark read `columnNameOfCorruptRecord` option is configured.
           // Any records which spark is unable to read successfully are transferred to the column
           // configured via this option. The column is then used to trigger error events.
-          StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema)
+          StructType dataType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(sourceSchema)
               .add(new StructField(ERROR_TABLE_CURRUPT_RECORD_COL_NAME, DataTypes.StringType, true, Metadata.empty()));
           StructType nullableStruct = dataType.asNullable();
           Option<Dataset<Row>> dataset = r.getBatch().map(rdd -> source.getSparkSession().read()
@@ -288,7 +287,7 @@ public class SourceFormatAdapter implements Closeable {
               eventsDataset,
               r.getCheckpointForNextBatch(), r.getSchemaProvider());
         } else {
-          StructType dataType = AvroConversionUtils.convertAvroSchemaToStructType(sourceSchema);
+          StructType dataType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(sourceSchema);
           return new InputBatch<>(
               Option.ofNullable(
                   r.getBatch().map(rdd -> HoodieSparkUtils.maybeWrapDataFrameWithException(source.getSparkSession().read().schema(dataType).json(rdd),
@@ -315,10 +314,6 @@ public class SourceFormatAdapter implements Closeable {
       default:
         throw new IllegalArgumentException("Unknown source type (" + source.getSourceType() + ")");
     }
-  }
-
-  public Source getSource() {
-    return source;
   }
 
   @Override

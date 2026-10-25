@@ -24,35 +24,40 @@ import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.util.HoodieVectorUtils;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.io.storage.HoodieFileReader;
-import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.io.storage.row.parquet.ParquetSchemaConverter;
+import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.util.HoodieSchemaConverter;
+import org.apache.hudi.util.RowDataQueryContexts;
+import org.apache.hudi.util.VectorConversionUtils;
 
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.hudi.util.HoodieSchemaConverter;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
 /**
  * Implementation of {@link HoodieFileReader} to read {@link RowData}s from base file.
  */
-public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
+public class HoodieRowDataParquetReader implements HoodieRowDataFileReader  {
   private final HoodieStorage storage;
   private final ParquetUtils parquetUtils;
   private final StoragePath path;
@@ -95,12 +100,33 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
     return new CloseableMappingIterator<>(rowDataItr, rowData -> Objects.toString(rowData.getString(0)));
   }
 
+  @Override
+  public ClosableIterator<RowData> getRowDataIterator(
+      HoodieSchema dataSchema,
+      HoodieSchema requiredSchema,
+      InternalSchemaManager internalSchemaManager,
+      List<ExpressionPredicates.Predicate> predicates) throws IOException {
+    return getRowDataIterator(
+        internalSchemaManager,
+        RowDataQueryContexts.fromSchema(dataSchema).getRowType(),
+        requiredSchema,
+        predicates);
+  }
+
   public ClosableIterator<RowData> getRowDataIterator(
       InternalSchemaManager internalSchemaManager,
       DataType dataType,
       HoodieSchema requestedSchema,
       List<Predicate> predicates) throws IOException {
-    return RecordIterators.getParquetRecordIterator(storage.getConf(), internalSchemaManager, dataType, requestedSchema, path, predicates);
+    Map<Integer, HoodieSchema.Vector> vectorColumnInfo = HoodieVectorUtils.detectVectorColumns(requestedSchema);
+    ClosableIterator<RowData> rowDataItr = RecordIterators.getParquetRecordIterator(
+        storage.getConf(), internalSchemaManager, VectorConversionUtils.getParquetReadDataType(dataType, requestedSchema, vectorColumnInfo),
+        requestedSchema, path, predicates);
+    if (vectorColumnInfo.isEmpty()) {
+      return rowDataItr;
+    }
+    RowType requestedRowType = HoodieSchemaConverter.convertToRowType(requestedSchema);
+    return VectorConversionUtils.wrapVectorColumnIterator(rowDataItr, requestedRowType, vectorColumnInfo);
   }
 
   @Override
@@ -116,7 +142,7 @@ public class HoodieRowDataParquetReader implements HoodieFileReader<RowData>  {
       // Some types in avro are not compatible with parquet.
       // Avro only supports representing Decimals as fixed byte array
       // and therefore if we convert to Avro directly we'll lose logical type-info.
-      MessageType messageType = parquetUtils.readSchema(storage, path);
+      MessageType messageType = parquetUtils.readMessageType(storage, path);
       RowType rowType = ParquetSchemaConverter.convertToRowType(messageType);
       fileRowType = DataTypes.of(rowType);
     }

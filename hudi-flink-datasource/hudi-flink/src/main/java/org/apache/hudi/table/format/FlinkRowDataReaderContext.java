@@ -27,6 +27,7 @@ import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -35,24 +36,26 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.HoodieRecordUtils;
+import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieValidationException;
-import org.apache.hudi.io.storage.HoodieIOFactory;
 import org.apache.hudi.source.ExpressionPredicates;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.util.Lazy;
 import org.apache.hudi.util.RecordKeyToRowDataConverter;
-import org.apache.hudi.util.RowDataAvroQueryContexts;
+import org.apache.hudi.util.RowDataQueryContexts;
 
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.utils.JoinedRowData;
-import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.types.RowKind;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -102,12 +105,34 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     // disable schema evolution in fileReader if it's log file, since schema evolution for log file is handled in `FileGroupRecordBuffer`
     InternalSchemaManager schemaManager = isLogFile ? InternalSchemaManager.DISABLED : internalSchemaManager.get();
 
-    HoodieRowDataParquetReader rowDataParquetReader =
-        (HoodieRowDataParquetReader) HoodieIOFactory.getIOFactory(storage)
-            .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
-            .getFileReader(tableConfig, filePath, HoodieFileFormat.PARQUET, Option.empty());
-    DataType rowType = RowDataAvroQueryContexts.fromAvroSchema(dataSchema.toAvroSchema()).getRowType();
-    return rowDataParquetReader.getRowDataIterator(schemaManager, rowType, requiredSchema, getSafePredicates(requiredSchema));
+    // Log files only reach this method for parquet data blocks; base files are resolved by their extension.
+    // Format-specific handling lives in the readers themselves, so this method stays format-agnostic.
+    boolean isInlineLogFile = FSUtils.isInlineLogFile(filePath);
+    HoodieFileFormat format = isInlineLogFile ? HoodieFileFormat.PARQUET : HoodieFileFormat.fromFileExtension(filePath.getFileExtension());
+    HoodieRowDataFileReader reader = (HoodieRowDataFileReader) HoodieIOFactory.getIOFactory(storage)
+        .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
+        .getFileReader(tableConfig, filePath, format, Option.empty());
+    try {
+      ClosableIterator<RowData> rowDataIterator =
+          reader.getRowDataIterator(dataSchema, requiredSchema, schemaManager, getSafePredicates(requiredSchema));
+      return resolveRowKind(rowDataIterator, requiredSchema);
+    } catch (Throwable e) {
+      reader.close();
+      throw new HoodieException("Failed to get record iterator for: " + filePath, e);
+    }
+  }
+
+  private ClosableIterator<RowData> resolveRowKind(ClosableIterator<RowData> rowDataIterator, HoodieSchema requiredSchema) {
+    Option<HoodieSchemaField> operationField = requiredSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD);
+    if (!operationField.isPresent()) {
+      return rowDataIterator;
+    }
+    int operationPos = operationField.get().pos();
+    return new CloseableMappingIterator<>(rowDataIterator, rowData -> {
+      HoodieOperation operation = HoodieOperation.fromName(rowData.getString(operationPos).toString());
+      rowData.setRowKind(RowKind.fromByteValue(operation.getValue()));
+      return rowData;
+    });
   }
 
   @Override
@@ -203,7 +228,7 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
     // For e.g, if the pk fields are [a, b] but user only select a, then the pk
     // semantics is lost.
     RecordKeyToRowDataConverter recordKeyRowConverter = new RecordKeyToRowDataConverter(
-        pkFieldsPos, (RowType) RowDataAvroQueryContexts.fromAvroSchema(requiredSchema.toAvroSchema()).getRowType().getLogicalType());
+        pkFieldsPos, (RowType) RowDataQueryContexts.fromSchema(requiredSchema).getRowType().getLogicalType());
     ((FlinkRecordContext) recordContext).setRecordKeyRowConverter(recordKeyRowConverter);
   }
 

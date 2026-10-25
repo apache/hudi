@@ -1,0 +1,32 @@
+{{- /*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/ -}}
+hudi-trino {{ .Chart.Version }} deployed (Trino {{ .Chart.AppVersion }} + Hudi connector).
+
+Catalog "{{ .Values.catalog.name }}" points at:
+  metastore : {{ .Values.catalog.metastore.type }}{{ if eq .Values.catalog.metastore.type "thrift" }} ({{ .Values.catalog.metastore.uri }}){{ end }}
+  s3        : {{ if .Values.catalog.filesystem.s3.enabled }}enabled{{ with .Values.catalog.filesystem.s3.endpoint }} ({{ . }}){{ end }}{{ else }}disabled{{ end }}
+
+Try it:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "hudi-trino.fullname" . }} 8080:{{ .Values.service.port }}
+  # Web UI: http://localhost:8080   (any username)
+
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "hudi-trino.fullname" . }} -- \
+    trino --execute 'SHOW CATALOGS'
+
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "hudi-trino.fullname" . }} -- \
+    trino --execute 'SHOW TABLES FROM {{ .Values.catalog.name }}.default'

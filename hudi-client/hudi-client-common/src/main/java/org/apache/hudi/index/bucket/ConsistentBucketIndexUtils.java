@@ -19,15 +19,16 @@
 package org.apache.hudi.index.bucket;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
@@ -175,7 +176,7 @@ public class ConsistentBucketIndexUtils {
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
-      log.error("Error when loading hashing metadata, partition: " + partition, e);
+      log.error("Error when loading hashing metadata, partition: {}", partition, e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);
     }
   }
@@ -258,7 +259,7 @@ public class ConsistentBucketIndexUtils {
     } catch (FileNotFoundException e) {
       return Option.empty();
     } catch (IOException e) {
-      log.error("Error when loading hashing metadata, for path: " + metaFile.getPath().getName(), e);
+      log.error("Error when loading hashing metadata, for path: {}", metaFile.getPath().getName(), e);
       throw new HoodieIndexException("Error while loading hashing metadata", e);
     }
   }
@@ -296,7 +297,7 @@ public class ConsistentBucketIndexUtils {
             .stream()
             .anyMatch(node -> node.getFileIdPrefix().equals(hoodieBaseFile));
     if (table.getBaseFileOnlyView().getLatestBaseFiles(partition)
-        .map(fileIdPrefix -> FSUtils.getFileIdPfxFromFileId(fileIdPrefix.getFileId())).anyMatch(hoodieFileGroupIdPredicate)) {
+        .map(fileIdPrefix -> FileNameParser.getFileIdPfxFromFileId(fileIdPrefix.getFileId())).anyMatch(hoodieFileGroupIdPredicate)) {
       try {
         createCommitMarker(table, metaFile.getPath(), metadataPath);
         return true;

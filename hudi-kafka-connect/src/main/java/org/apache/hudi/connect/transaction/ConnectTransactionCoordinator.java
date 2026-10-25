@@ -20,6 +20,7 @@ package org.apache.hudi.connect.transaction;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.connect.ControlMessage;
 import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.utils.KafkaConnectUtils;
@@ -28,9 +29,9 @@ import org.apache.hudi.connect.writers.KafkaConnectConfigs;
 import org.apache.hudi.connect.writers.KafkaConnectTransactionServices;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.TopicPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -42,6 +43,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,11 +54,10 @@ import java.util.stream.Collectors;
  * coordinates the Hudi write transactions
  * across all the Kafka partitions for a single Kafka Topic.
  */
+@Slf4j
 public class ConnectTransactionCoordinator implements TransactionCoordinator, Runnable {
 
   public static final int COORDINATOR_KAFKA_PARTITION = 0;
-
-  private static final Logger LOG = LoggerFactory.getLogger(ConnectTransactionCoordinator.class);
   private static final String BOOTSTRAP_SERVERS_CFG = "bootstrap.servers";
   private static final String KAFKA_OFFSET_KEY = "kafka.commit.offsets";
   private static final String KAFKA_OFFSET_DELIMITER = ",";
@@ -64,15 +65,19 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private static final Long START_COMMIT_INIT_DELAY_MS = 100L;
   private static final Long RESTART_COMMIT_DELAY_MS = 500L;
   private static final int COORDINATOR_EVENT_LOOP_TIMEOUT_MS = 1000;
+  private static final int COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS = 5000;
 
   private final KafkaConnectConfigs configs;
+  @Getter
   private final TopicPartition partition;
   private final KafkaControlAgent kafkaControlClient;
   private final ConnectTransactionServices transactionServices;
   private final KafkaPartitionProvider partitionProvider;
+  private final int eventLoopShutdownTimeoutMs;
   private final Map<Integer, List<WriteStatus>> partitionsWriteStatusReceived;
   private final Map<Integer, Long> currentConsumedKafkaOffsets;
   private final AtomicBoolean hasStarted = new AtomicBoolean(false);
+  private final AtomicBoolean transactionServicesClosed = new AtomicBoolean(false);
   private final BlockingQueue<CoordinatorEvent> events;
   private final ExecutorService executorService;
   private final ScheduledExecutorService scheduler;
@@ -81,6 +86,8 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   private Map<Integer, Long> globalCommittedKafkaOffsets;
   private State currentState;
   private int numPartitions;
+  private boolean deregistered;
+  private boolean shutdownInitiated;
 
   public ConnectTransactionCoordinator(KafkaConnectConfigs configs,
                                        TopicPartition partition,
@@ -97,11 +104,23 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
                                        KafkaControlAgent kafkaControlClient,
                                        ConnectTransactionServices transactionServices,
                                        KafkaPartitionProvider partitionProvider) {
+    this(configs, partition, kafkaControlClient, transactionServices, partitionProvider,
+        COORDINATOR_EVENT_LOOP_SHUTDOWN_TIMEOUT_MS);
+  }
+
+  @VisibleForTesting
+  ConnectTransactionCoordinator(KafkaConnectConfigs configs,
+                                TopicPartition partition,
+                                KafkaControlAgent kafkaControlClient,
+                                ConnectTransactionServices transactionServices,
+                                KafkaPartitionProvider partitionProvider,
+                                int eventLoopShutdownTimeoutMs) {
     this.configs = configs;
     this.partition = partition;
     this.kafkaControlClient = kafkaControlClient;
     this.transactionServices = transactionServices;
     this.partitionProvider = partitionProvider;
+    this.eventLoopShutdownTimeoutMs = eventLoopShutdownTimeoutMs;
     this.events = new LinkedBlockingQueue<>();
     scheduler = Executors.newSingleThreadScheduledExecutor();
     executorService = Executors.newSingleThreadExecutor();
@@ -120,8 +139,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
       executorService.submit(this);
     }
     kafkaControlClient.registerTransactionCoordinator(this);
-    LOG.info(String.format("Start Transaction Coordinator for topic %s partition %s",
-        partition.topic(), partition.partition()));
+    log.info("Start Transaction Coordinator for topic {} partition {}", partition.topic(), partition.partition());
 
     initializeGlobalCommittedKafkaOffsets();
     // Submit the first start commit
@@ -132,32 +150,22 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   }
 
   @Override
-  public void stop() {
-    kafkaControlClient.deregisterTransactionCoordinator(this);
-    scheduler.shutdownNow();
+  public synchronized void stop() {
     hasStarted.set(false);
-    if (executorService != null) {
-      boolean terminated = false;
-      try {
-        LOG.info("Shutting down executor service.");
-        executorService.shutdown();
-        LOG.info("Awaiting termination.");
-        terminated = executorService.awaitTermination(100, TimeUnit.MILLISECONDS);
-      } catch (InterruptedException e) {
-        // ignored
+    try {
+      if (!deregistered) {
+        kafkaControlClient.deregisterTransactionCoordinator(this);
+        deregistered = true;
       }
-
-      if (!terminated) {
-        LOG.warn(
-            "Unclean Kafka Control Manager executor service shutdown ");
-        executorService.shutdownNow();
+    } finally {
+      if (!shutdownInitiated) {
+        shutdownInitiated = true;
+        shutdownEventLoop();
+      }
+      if (executorService.isTerminated()) {
+        closeTransactionServices();
       }
     }
-  }
-
-  @Override
-  public TopicPartition getPartition() {
-    return partition;
   }
 
   @Override
@@ -166,7 +174,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     if (message.getType().equals(ControlMessage.EventType.WRITE_STATUS)) {
       type = CoordinatorEvent.CoordinatorEventType.WRITE_STATUS;
     } else {
-      LOG.warn("Illegal message type [{}] processee by coordinator", message.getType().name());
+      log.warn("Illegal message type [{}] processee by coordinator", message.getType().name());
       return;
     }
 
@@ -179,14 +187,54 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
 
   @Override
   public void run() {
-    while (true) {
-      try {
-        CoordinatorEvent event = events.poll(COORDINATOR_EVENT_LOOP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
-        if (event != null) {
-          processCoordinatorEvent(event);
+    try {
+      while (hasStarted.get()) {
+        try {
+          CoordinatorEvent event = events.poll(COORDINATOR_EVENT_LOOP_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+          if (event != null && hasStarted.get()) {
+            processCoordinatorEvent(event);
+          }
+        } catch (InterruptedException exception) {
+          Thread.currentThread().interrupt();
+          log.debug("Transaction coordinator event loop interrupted for topic {} partition {}",
+              partition.topic(), partition.partition());
+          break;
         }
-      } catch (InterruptedException exception) {
-        LOG.warn("Error received while polling the event loop in Partition Coordinator", exception);
+      }
+    } finally {
+      closeTransactionServices();
+    }
+  }
+
+  @VisibleForTesting
+  boolean isEventLoopTerminated() {
+    return executorService.isTerminated();
+  }
+
+  private void shutdownEventLoop() {
+    scheduler.shutdownNow();
+    events.clear();
+    executorService.shutdownNow();
+    try {
+      if (!executorService.awaitTermination(eventLoopShutdownTimeoutMs, TimeUnit.MILLISECONDS)) {
+        log.warn("Transaction coordinator event loop did not terminate within {} ms for topic {} partition {}",
+            eventLoopShutdownTimeoutMs, partition.topic(), partition.partition());
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log.warn("Interrupted while waiting for transaction coordinator event loop to terminate for topic {} partition {}",
+          partition.topic(), partition.partition());
+    }
+  }
+
+  private void closeTransactionServices() {
+    if (transactionServicesClosed.compareAndSet(false, true)) {
+      try {
+        transactionServices.close();
+      } catch (RuntimeException e) {
+        transactionServicesClosed.set(false);
+        log.warn("Failed to close transaction services for topic {} partition {}",
+            partition.topic(), partition.partition(), e);
       }
     }
   }
@@ -196,9 +244,22 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
   }
 
   private void submitEvent(CoordinatorEvent event, long delay, TimeUnit unit) {
-    scheduler.schedule(() -> {
-      events.add(event);
-    }, delay, unit);
+    if (!hasStarted.get()) {
+      return;
+    }
+    try {
+      scheduler.schedule(() -> {
+        if (hasStarted.get()) {
+          events.add(event);
+        }
+      }, delay, unit);
+    } catch (RejectedExecutionException e) {
+      if (hasStarted.get()) {
+        throw e;
+      }
+      log.debug("Ignoring coordinator event submitted during shutdown for topic {} partition {}",
+          partition.topic(), partition.partition());
+    }
   }
 
   private void processCoordinatorEvent(CoordinatorEvent event) {
@@ -223,7 +284,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
               && currentState.equals(State.ENDED_COMMIT)) {
             onReceiveWriteStatus(event.getMessage());
           } else {
-            LOG.warn("Could not process WRITE_STATUS due to missing message");
+            log.warn("Could not process WRITE_STATUS due to missing message");
           }
           break;
         case ACK_COMMIT:
@@ -236,14 +297,14 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
           throw new IllegalStateException("Partition Coordinator has received an illegal event type " + event.getEventType().name());
       }
     } catch (Exception exception) {
-      LOG.warn("Error received while polling the event loop in Partition Coordinator", exception);
+      log.warn("Error received while polling the event loop in Partition Coordinator", exception);
     }
   }
 
   private void startNewCommit() {
-    numPartitions = partitionProvider.getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
     partitionsWriteStatusReceived.clear();
     try {
+      numPartitions = partitionProvider.getLatestNumPartitions(configs.getString(BOOTSTRAP_SERVERS_CFG), partition.topic());
       currentCommitTime = transactionServices.startCommit();
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.START_COMMIT));
       currentState = State.STARTED_COMMIT;
@@ -253,7 +314,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
               currentCommitTime),
           configs.getCommitIntervalSecs(), TimeUnit.SECONDS);
     } catch (Exception exception) {
-      LOG.error(String.format("Failed to start a new commit %s, will retry", currentCommitTime), exception);
+      log.error("Failed to start a new commit {}, will retry", currentCommitTime, exception);
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
               partition.topic(),
               StringUtils.EMPTY_STRING),
@@ -265,7 +326,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     try {
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.END_COMMIT));
     } catch (Exception exception) {
-      LOG.warn("Could not send END_COMMIT message for partition {} and commitTime {}",
+      log.warn("Could not send END_COMMIT message for partition {} and commitTime {}",
           partition, currentCommitTime, exception);
     }
     currentConsumedKafkaOffsets.clear();
@@ -300,7 +361,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
               transformKafkaOffsets(currentConsumedKafkaOffsets));
 
           if (success) {
-            LOG.info("Commit " + currentCommitTime + " successful!");
+            log.info("Commit {} successful!", currentCommitTime);
             currentState = State.WRITE_STATUS_RCVD;
             globalCommittedKafkaOffsets.putAll(currentConsumedKafkaOffsets);
             submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.ACK_COMMIT,
@@ -308,29 +369,29 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
                 currentCommitTime));
             return;
           } else {
-            LOG.error("Commit " + currentCommitTime + " failed!");
+            log.error("Commit {} failed!", currentCommitTime);
           }
         } else if (hasErrors) {
-          LOG.error("Coordinator found errors when writing. Errors/Total=" + totalErrorRecords + "/" + totalRecords);
-          LOG.error("Printing out the top 100 errors");
+          log.error("Coordinator found errors when writing. Errors/Total={}/{}", totalErrorRecords, totalRecords);
+          log.error("Printing out the top 100 errors");
           allWriteStatuses.stream().filter(WriteStatus::hasErrors).limit(100).forEach(ws -> {
-            LOG.error("Global error :", ws.getGlobalError());
+            log.error("Global error :", ws.getGlobalError());
             if (ws.getErrors().size() > 0) {
-              ws.getErrors().forEach((key, value) -> LOG.trace("Error for key:" + key + " is " + value));
+              ws.getErrors().forEach((key, value) -> log.trace("Error for key:{} is {}", key, value));
             }
           });
         }
 
         // Submit the next start commit, that will rollback the current commit.
         currentState = State.FAILED_COMMIT;
-        LOG.warn("Current commit {} failed. Starting a new commit after recovery delay of {} {}",
+        log.warn("Current commit {} failed. Starting a new commit after recovery delay of {} {}",
             currentCommitTime, RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS.name());
         submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
                 partition.topic(),
                 StringUtils.EMPTY_STRING),
             RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS);
       } catch (Exception exception) {
-        LOG.error("Fatal error while committing file", exception);
+        log.error("Fatal error while committing file", exception);
       }
     }
   }
@@ -339,7 +400,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     // If we are still stuck in ENDED_STATE
     if (currentState.equals(State.ENDED_COMMIT)) {
       currentState = State.WRITE_STATUS_TIMEDOUT;
-      LOG.warn("Current commit {} failed after a write status timeout. Starting a new commit after recovery delay of {} {}",
+      log.warn("Current commit {} failed after a write status timeout. Starting a new commit after recovery delay of {} {}",
           currentCommitTime, RESTART_COMMIT_DELAY_MS, TimeUnit.MILLISECONDS.name());
       // Submit the next start commit
       submitEvent(new CoordinatorEvent(CoordinatorEvent.CoordinatorEventType.START_COMMIT,
@@ -353,7 +414,7 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
     try {
       kafkaControlClient.publishMessage(buildControlMessage(ControlMessage.EventType.ACK_COMMIT));
     } catch (Exception exception) {
-      LOG.warn("Could not send ACK_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
+      log.warn("Could not send ACK_COMMIT message for partition {} and commitTime {}", partition, currentCommitTime, exception);
     }
     currentState = State.ACKED_COMMIT;
 
@@ -369,11 +430,11 @@ public class ConnectTransactionCoordinator implements TransactionCoordinator, Ru
       Map<String, String> commitMetadata = transactionServices.fetchLatestExtraCommitMetadata();
       String latestKafkaOffsets = commitMetadata.get(KAFKA_OFFSET_KEY);
       if (!StringUtils.isNullOrEmpty(latestKafkaOffsets)) {
-        LOG.info("Retrieved Raw Kafka offsets from Hudi Commit File " + latestKafkaOffsets);
+        log.info("Retrieved Raw Kafka offsets from Hudi Commit File {}", latestKafkaOffsets);
         globalCommittedKafkaOffsets = Arrays.stream(latestKafkaOffsets.split(KAFKA_OFFSET_DELIMITER))
             .map(entry -> entry.split(KAFKA_OFFSET_KV_DELIMITER))
             .collect(Collectors.toMap(entry -> Integer.parseInt(entry[0]), entry -> Long.parseLong(entry[1])));
-        LOG.info("Initialized the kafka offset commits " + globalCommittedKafkaOffsets);
+        log.info("Initialized the kafka offset commits {}", globalCommittedKafkaOffsets);
       }
     } catch (Exception exception) {
       throw new HoodieException("Could not deserialize the kafka commit offsets", exception);

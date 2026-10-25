@@ -68,7 +68,7 @@ public class SparkHoodieMetadataBulkInsertPartitioner implements BulkInsertParti
   @Override
   public JavaRDD<HoodieRecord> repartitionRecords(JavaRDD<HoodieRecord> records, int outputSparkPartitions) {
     Comparator<Tuple2<Integer, String>> keyComparator =
-            (Comparator<Tuple2<Integer, String>> & Serializable)(t1, t2) -> t1._2.compareTo(t2._2);
+            (Comparator<Tuple2<Integer, String>> & Serializable)(t1, t2) -> StringUtils.compareUtf8Bytes(t1._2, t2._2);
 
     // Partition the records by their file group
     JavaRDD<HoodieRecord> partitionedRDD = records

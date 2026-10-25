@@ -37,6 +37,8 @@ import org.apache.spark.sql.SparkSession;
 
 import java.util.List;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
+
 public class RandomJsonSource extends JsonSource {
   private final HoodieExampleDataGenerator<HoodieAvroPayload> dataGen;
   private final TimeGenerator timeGenerator;
@@ -54,6 +56,6 @@ public class RandomJsonSource extends JsonSource {
     String commitTime = TimelineUtils.generateInstantTime(true, timeGenerator);
     List<String> inserts = dataGen.convertToStringList(dataGen.generateInserts(commitTime, 20));
 
-    return new InputBatch<>(Option.of(sparkContext.parallelize(inserts, 1)), commitTime);
+    return new InputBatch<>(Option.of(sparkContext.parallelize(inserts, 1)), createCheckpoint(commitTime));
   }
 }

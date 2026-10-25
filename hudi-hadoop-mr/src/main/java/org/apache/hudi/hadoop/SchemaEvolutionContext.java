@@ -21,8 +21,16 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.Types;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.InternalSchemaCache;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -34,18 +42,9 @@ import org.apache.hudi.hadoop.hive.HoodieCombineHiveInputFormat;
 import org.apache.hudi.hadoop.realtime.AbstractRealtimeRecordReader;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.Types;
-import org.apache.hudi.internal.schema.action.InternalSchemaMerger;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.InternalSchemaUtils;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants;
@@ -127,13 +126,13 @@ public class SchemaEvolutionContext {
     return internalSchemaOpt;
   }
 
-  public Schema getAvroSchemaFromCache() throws Exception {
-    Option<Schema> avroSchemaOpt = getCachedData(
+  public HoodieSchema getSchemaFromCache() throws Exception {
+    Option<HoodieSchema> avroSchemaOpt = getCachedData(
         HoodieCombineHiveInputFormat.SCHEMA_CACHE_KEY_PREFIX,
-        json -> Option.ofNullable(new Schema.Parser().parse(json)));
+        json -> Option.ofNullable(HoodieSchema.parse(json)));
     if (avroSchemaOpt == null) {
       // the code path should only be invoked in tests.
-      return new TableSchemaResolver(this.metaClient).getTableAvroSchema();
+      return new TableSchemaResolver(this.metaClient).getTableSchema();
     }
     return avroSchemaOpt.orElseThrow(() -> new HoodieValidationException("The avro schema cache should always be set up together with the internal schema cache"));
   }
@@ -168,7 +167,8 @@ public class SchemaEvolutionContext {
     if (split instanceof FileSplit) {
       Path path = ((FileSplit) split).getPath();
       FileSystem fs = path.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+          HadoopFSUtils.convertToStoragePath(path), HadoopFSUtils.getStorageConf(fs.getConf()));
       return TablePathUtils.getTablePath(storage, HadoopFSUtils.convertToStoragePath(path));
     }
     return Option.empty();
@@ -178,7 +178,8 @@ public class SchemaEvolutionContext {
     try {
       Path inputPath = ((FileSplit) split).getPath();
       FileSystem fs = inputPath.getFileSystem(job);
-      HoodieStorage storage = new HoodieHadoopStorage(fs);
+      HoodieStorage storage = HoodieStorageUtils.getStorage(
+          HadoopFSUtils.convertToStoragePath(inputPath), HadoopFSUtils.getStorageConf(fs.getConf()));
       Option<StoragePath> tablePath = TablePathUtils.getTablePath(storage, convertToStoragePath(inputPath));
       return HoodieTableMetaClient.builder().setBasePath(tablePath.get().toString())
           .setConf(HadoopFSUtils.getStorageConfWithCopy(job)).build();
@@ -200,7 +201,7 @@ public class SchemaEvolutionContext {
       return;
     }
     if (internalSchemaOption.isPresent()) {
-      Schema tableAvroSchema = getAvroSchemaFromCache();
+      HoodieSchema tableSchema = getSchemaFromCache();
       List<String> requiredColumns = getRequireColumn(job);
       InternalSchema prunedInternalSchema = InternalSchemaUtils.pruneInternalSchema(internalSchemaOption.get(),
           requiredColumns);
@@ -208,12 +209,12 @@ public class SchemaEvolutionContext {
       String partitionFields = job.get(hive_metastoreConstants.META_TABLE_PARTITION_COLUMNS, "");
       List<String> partitioningFields = !partitionFields.isEmpty() ? Arrays.stream(partitionFields.split("/")).collect(Collectors.toList())
           : new ArrayList<>();
-      HoodieSchema writerSchema = InternalSchemaConverter.convert(internalSchemaOption.get(), tableAvroSchema.getName());
+      HoodieSchema writerSchema = InternalSchemaConverter.convert(internalSchemaOption.get(), tableSchema.getName());
       writerSchema = HoodieRealtimeRecordReaderUtils.addPartitionFields(writerSchema, partitioningFields);
       Map<String, HoodieSchemaField> schemaFieldsMap = HoodieRealtimeRecordReaderUtils.getNameToFieldMap(writerSchema);
       // we should get HoodieParquetInputFormat#HIVE_TMP_COLUMNS,since serdeConstants#LIST_COLUMNS maybe change by HoodieParquetInputFormat#setColumnNameList
       HoodieSchema hiveSchema = realtimeRecordReader.constructHiveOrderedSchema(writerSchema, schemaFieldsMap, job.get(HIVE_TMP_COLUMNS));
-      HoodieSchema readerSchema = InternalSchemaConverter.convert(prunedInternalSchema, tableAvroSchema.getName());
+      HoodieSchema readerSchema = InternalSchemaConverter.convert(prunedInternalSchema, tableSchema.getName());
       // setUp evolution schema
       realtimeRecordReader.setWriterSchema(writerSchema);
       realtimeRecordReader.setReaderSchema(readerSchema);
@@ -253,13 +254,35 @@ public class SchemaEvolutionContext {
     }
   }
 
+  /**
+   * Reads {@code hive.io.file.readcolumn.ids} as its non-blank, trimmed tokens. The key is unset until
+   * something projects a column, and {@code HoodieRealtimeInputFormatUtils#cleanProjectionColumnIds} drops
+   * the blank ids HIVE-22438 leaves in it before any reader runs; this keeps both callers below safe if
+   * either ever reaches them anyway.
+   */
+  private static List<String> parseReadColumnIds(JobConf job) {
+    return Arrays.stream(job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, "").split(","))
+        .map(String::trim)
+        .filter(id -> !id.isEmpty())
+        .collect(Collectors.toList());
+  }
+
   public void setColumnTypeList(JobConf job, List<Types.Field> fields) {
     List<TypeInfo> fullTypeInfos = TypeInfoUtils.getTypeInfosFromTypeString(job.get(serdeConstants.LIST_COLUMN_TYPES));
-    List<Integer> tmpColIdList = Arrays.stream(job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR).split(","))
+    // Blank ids are dropped rather than parsed: HIVE-22438 puts them in this conf value, and the key is
+    // unset until something projects a column. Either way the size check below reports the id list instead
+    // of failing with a bare NumberFormatException or an NPE.
+    List<Integer> tmpColIdList = parseReadColumnIds(job).stream()
         .map(Integer::parseInt).collect(Collectors.toList());
     if (tmpColIdList.size() != fields.size()) {
-      throw new HoodieException(String.format("The size of hive.io.file.readcolumn.ids: %s is not equal to projection columns: %s",
-          job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR), fields.stream().map(Types.Field::name).collect(Collectors.joining(","))));
+      // Report the counts that were compared, not just the raw conf value: the ids are counted after blanks
+      // are dropped, so the string printed here can hold more entries than the number the check used.
+      throw new HoodieException(String.format(
+          "The size of hive.io.file.readcolumn.ids: %s is not equal to projection columns: %s. "
+              + "#nonBlankIds: %d, #projectionColumns: %d",
+          job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR, ""),
+          fields.stream().map(Types.Field::name).collect(Collectors.joining(",")),
+          tmpColIdList.size(), fields.size()));
     }
     List<TypeInfo> fieldTypes = new ArrayList<>();
     for (int i = 0; i < tmpColIdList.size(); i++) {
@@ -388,7 +411,7 @@ public class SchemaEvolutionContext {
     if (fields == null) {
       return;
     }
-    List<String> tmpColIdList = Arrays.asList(job.get(ColumnProjectionUtils.READ_COLUMN_IDS_CONF_STR).split(","));
+    List<String> tmpColIdList = parseReadColumnIds(job);
     if (fields.size() != tmpColIdList.size()) {
       return;
     }
@@ -416,11 +439,11 @@ public class SchemaEvolutionContext {
   public static List<String> getRequireColumn(JobConf jobConf) {
     String originColumnString = jobConf.get(HIVE_TMP_READ_COLUMN_NAMES_CONF_STR);
     if (StringUtils.isNullOrEmpty(originColumnString)) {
-      jobConf.set(HIVE_TMP_READ_COLUMN_NAMES_CONF_STR, jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR));
+      jobConf.set(HIVE_TMP_READ_COLUMN_NAMES_CONF_STR, jobConf.get(ColumnProjectionUtils.READ_COLUMN_NAMES_CONF_STR, ""));
     }
     String hoodieFullColumnString = jobConf.get(HIVE_TMP_COLUMNS);
     if (StringUtils.isNullOrEmpty(hoodieFullColumnString)) {
-      jobConf.set(HIVE_TMP_COLUMNS, jobConf.get(serdeConstants.LIST_COLUMNS));
+      jobConf.set(HIVE_TMP_COLUMNS, jobConf.get(serdeConstants.LIST_COLUMNS, ""));
     }
     String tableColumnString = jobConf.get(HIVE_TMP_READ_COLUMN_NAMES_CONF_STR);
     List<String> tableColumns = Arrays.asList(tableColumnString.split(","));

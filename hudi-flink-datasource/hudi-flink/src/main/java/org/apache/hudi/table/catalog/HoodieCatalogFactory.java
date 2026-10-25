@@ -21,13 +21,12 @@ package org.apache.hudi.table.catalog;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieCatalogException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.catalog.Catalog;
 import org.apache.flink.table.factories.CatalogFactory;
 import org.apache.flink.table.factories.FactoryUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,8 +36,8 @@ import java.util.Set;
 /**
  * A catalog factory impl that creates {@link HoodieCatalog}.
  */
+@Slf4j
 public class HoodieCatalogFactory implements CatalogFactory {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieCatalogFactory.class);
 
   public static final String IDENTIFIER = "hudi";
 

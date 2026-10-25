@@ -88,6 +88,15 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .withDocumentation("Archiving of instants is batched in best-effort manner, to pack more instants into a single"
           + " archive log. This config controls such archival batch size.");
 
+  public static final ConfigProperty<Integer> MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE = ConfigProperty
+      .key("hoodie.timeline.migration.commits.archival.batch")
+      .defaultValue(500)
+      .markAdvanced()
+      .withDocumentation("Batch size used when migrating the legacy archived timeline to the LSM timeline during a"
+          + " table version upgrade. A larger batch size minimizes the number of parquet files (and the associated"
+          + " remote storage operations like exists check, parquet write and manifest update) created during the"
+          + " one-time migration, which significantly reduces the total migration time.");
+
   public static final ConfigProperty<Integer> TIMELINE_COMPACTION_BATCH_SIZE = ConfigProperty
       .key("hoodie.timeline.compaction.batch.size")
       .defaultValue(10)
@@ -101,6 +110,29 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .sinceVersion("0.12.0")
       .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits."
           + " If disabled, archival will stop at the earliest savepoint commit.");
+
+  public static final ConfigProperty<Long> TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES = ConfigProperty
+        .key("hoodie.timeline.compaction.target.file.max.bytes")
+        .defaultValue(1000L * 1024 * 1024)
+        .markAdvanced()
+        .withDocumentation("Max size (in bytes) for each archived timeline file.");
+
+  public static final ConfigProperty<Integer> TIMELINE_MANIFEST_RETAINED_VERSIONS = ConfigProperty
+      .key("hoodie.timeline.manifest.retained.versions")
+      .defaultValue(3)
+      .markAdvanced()
+      .withDocumentation("Number of timeline manifest versions to retain.");
+
+  public static final ConfigProperty<Boolean> BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR = ConfigProperty
+      .key("hoodie.archive.block.on.latest.clean.ectr")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withDocumentation("If enabled, archival will not archive commits beyond the Earliest Commit To Retain (ECTR) "
+          + "from the last completed clean. ECTR represents the oldest commit whose data files are still needed by "
+          + "the table and have not yet been cleaned up. Blocking archival at this point ensures that timeline metadata "
+          + "is not removed for commits whose data files still exist on storage, preventing inconsistencies between "
+          + "the timeline and the actual data.");
 
   /**
    * @deprecated Use {@link #MAX_COMMITS_TO_KEEP} and its methods instead
@@ -188,8 +220,18 @@ public class HoodieArchivalConfig extends HoodieConfig {
       return this;
     }
 
+    public HoodieArchivalConfig.Builder withMigrationCommitsArchivalBatchSize(int batchSize) {
+      archivalConfig.setValue(MIGRATION_COMMITS_ARCHIVAL_BATCH_SIZE, String.valueOf(batchSize));
+      return this;
+    }
+
     public Builder withArchiveBeyondSavepoint(boolean archiveBeyondSavepoint) {
       archivalConfig.setValue(ARCHIVE_BEYOND_SAVEPOINT, String.valueOf(archiveBeyondSavepoint));
+      return this;
+    }
+
+    public Builder withBlockArchivalOnCleanECTR(boolean blockArchivalOnCleanECTR) {
+      archivalConfig.setValue(BLOCK_ARCHIVAL_ON_LATEST_CLEAN_ECTR, String.valueOf(blockArchivalOnCleanECTR));
       return this;
     }
 

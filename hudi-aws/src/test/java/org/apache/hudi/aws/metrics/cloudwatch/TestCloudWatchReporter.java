@@ -27,6 +27,12 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -43,6 +49,8 @@ import software.amazon.awssdk.services.cloudwatch.model.MetricDatum;
 import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataRequest;
 import software.amazon.awssdk.services.cloudwatch.model.PutMetricDataResponse;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.TreeMap;
@@ -54,7 +62,6 @@ import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSIO
 import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_METRIC_TYPE_KEY;
 import static org.apache.hudi.aws.metrics.cloudwatch.CloudWatchReporter.DIMENSION_TABLE_NAME_KEY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
 public class TestCloudWatchReporter {
@@ -168,21 +175,139 @@ public class TestCloudWatchReporter {
     Mockito.verify(cloudWatchAsync).close();
   }
 
+  /**
+   * A metric name with no dot has no table name to report under, and such names do reach the reporter:
+   * {@code HoodieMetadataMetrics#setMetric} registers gauges without the metrics-name prefix, so
+   * {@code BaseTableMetadata#getBloomFilters} contributes a bare
+   * {@code lookup_meta_index_bloom_filters_file_count} on the normal bloom-index read path. This used to
+   * throw, and {@link com.codahale.metrics.ScheduledReporter} suppresses whatever {@code report()} throws,
+   * so no metrics reached CloudWatch at all - which is what #12182 and #13051 report. The unmappable metric
+   * is now skipped and the rest of the batch is still published. See HUDI issue #19507 for the producer side.
+   */
   @Test
-  public void testReportOnMetricsWithoutTableName() {
+  public void testReportSkipsMetricsWithoutTableNameAndPublishesTheRest() {
     SortedMap<String, Gauge> gauges = new TreeMap<>();
-    Gauge<Long> gauge1 = () -> 100L;
-    Gauge<Double> gauge2 = () -> 100.1;
-    gauges.put("gauge1", gauge1);
-    gauges.put(TABLE_NAME + ".gauge2", gauge2);
+    Gauge<Long> unmappable = () -> 7L;
+    Gauge<Double> wellFormed = () -> 100.1;
+    gauges.put("lookup_meta_index_bloom_filters_file_count", unmappable);
+    gauges.put(TABLE_NAME + ".gauge2", wellFormed);
 
     Mockito.when(metricRegistry.getGauges(MetricFilter.ALL)).thenReturn(gauges);
 
-    // should fail if metric name doesn't have at least two parts
-    assertThrows(IllegalArgumentException.class, () -> reporter.report());
+    reporter.report();
 
-    reporter.stop();
-    Mockito.verify(cloudWatchAsync).close();
+    Mockito.verify(cloudWatchAsync, Mockito.times(1)).putMetricData(putMetricDataRequestCaptor.capture());
+    List<MetricDatum> metricData = putMetricDataRequestCaptor.getValue().metricData();
+    assertEquals(1, metricData.size(),
+        "The unmappable metric should be skipped and the well-formed one still published");
+    assertEquals(PREFIX + ".gauge2", metricData.get(0).metricName());
+    assertEquals(wellFormed.getValue(), metricData.get(0).value());
+    assertDimensions(metricData.get(0).dimensions(), DIMENSION_GAUGE_TYPE_VALUE);
+  }
+
+  /**
+   * An empty first segment is reachable: {@code hoodie.metrics.reporter.metricsname.prefix} defaults to
+   * {@code ""} and {@code Metrics#registerGauges} still joins it with a dot, giving {@code ".foo"}. That
+   * splits into two parts and so passed the length check, then asked CloudWatch for an empty {@code Table}
+   * dimension value, which it rejects for the whole PutMetricData request - losing the batch again.
+   */
+  @Test
+  public void testReportSkipsMetricsWithAnEmptyTableName() {
+    SortedMap<String, Gauge> gauges = new TreeMap<>();
+    gauges.put(".gauge1", (Gauge<Long>) () -> 7L);
+    gauges.put(TABLE_NAME + ".gauge2", (Gauge<Long>) () -> 100L);
+
+    Mockito.when(metricRegistry.getGauges(MetricFilter.ALL)).thenReturn(gauges);
+
+    reporter.report();
+
+    Mockito.verify(cloudWatchAsync, Mockito.times(1)).putMetricData(putMetricDataRequestCaptor.capture());
+    List<MetricDatum> metricData = putMetricDataRequestCaptor.getValue().metricData();
+    assertEquals(1, metricData.size(), "a metric whose table name is empty should be skipped");
+    assertEquals(PREFIX + ".gauge2", metricData.get(0).metricName());
+  }
+
+  /**
+   * An interval in which every metric is unmappable leaves nothing staged. CloudWatch rejects an empty
+   * PutMetricData request, so the reporter must not send one.
+   */
+  @Test
+  public void testReportSendsNothingWhenEveryMetricIsUnmappable() {
+    SortedMap<String, Gauge> gauges = new TreeMap<>();
+    gauges.put("lookup_meta_index_bloom_filters_file_count", (Gauge<Long>) () -> 7L);
+    gauges.put("bootstrap_error", (Gauge<Long>) () -> 1L);
+
+    Mockito.when(metricRegistry.getGauges(MetricFilter.ALL)).thenReturn(gauges);
+
+    reporter.report();
+
+    Mockito.verify(cloudWatchAsync, Mockito.never()).putMetricData(ArgumentMatchers.any(PutMetricDataRequest.class));
+  }
+
+  /**
+   * The unmappable-name set exists so a persistent offender is logged once rather than every reporting
+   * interval. Without this, deleting the set and logging unconditionally would pass the suite.
+   */
+  @Test
+  public void testUnmappableMetricIsLoggedOncePerName() {
+    SortedMap<String, Gauge> gauges = new TreeMap<>();
+    gauges.put("lookup_meta_index_bloom_filters_file_count", (Gauge<Long>) () -> 7L);
+    Mockito.when(metricRegistry.getGauges(MetricFilter.ALL)).thenReturn(gauges);
+
+    CapturingAppender appender = CapturingAppender.attachTo(CloudWatchReporter.class);
+    try {
+      reporter.report();
+      reporter.report();
+    } finally {
+      appender.detach();
+    }
+
+    assertEquals(1, appender.warningsContaining("lookup_meta_index_bloom_filters_file_count"),
+        "a persistent unmappable name should be warned about once, not once per interval");
+  }
+
+  /** Captures WARN events from a single logger, so "logged once" can be asserted. */
+  private static final class CapturingAppender extends AbstractAppender {
+    private final List<String> warnings = Collections.synchronizedList(new ArrayList<>());
+    private final LoggerConfig loggerConfig;
+    private final Level previousLevel;
+
+    private CapturingAppender(LoggerConfig loggerConfig) {
+      super("CapturingAppender", null, null, true, null);
+      this.loggerConfig = loggerConfig;
+      this.previousLevel = loggerConfig.getLevel();
+    }
+
+    static CapturingAppender attachTo(Class<?> loggerFor) {
+      LoggerContext context = (LoggerContext) LogManager.getContext(false);
+      LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(loggerFor.getName());
+      CapturingAppender appender = new CapturingAppender(loggerConfig);
+      appender.start();
+      loggerConfig.addAppender(appender, Level.WARN, null);
+      loggerConfig.setLevel(Level.WARN);
+      context.updateLoggers();
+      return appender;
+    }
+
+    void detach() {
+      loggerConfig.removeAppender(getName());
+      loggerConfig.setLevel(previousLevel);
+      ((LoggerContext) LogManager.getContext(false)).updateLoggers();
+      stop();
+    }
+
+    long warningsContaining(String needle) {
+      synchronized (warnings) {
+        return warnings.stream().filter(m -> m.contains(needle)).count();
+      }
+    }
+
+    @Override
+    public void append(LogEvent event) {
+      if (event.getLevel().isMoreSpecificThan(Level.WARN)) {
+        warnings.add(event.getMessage().getFormattedMessage());
+      }
+    }
   }
 
   private void assertDimensions(List<Dimension> actualDimensions, String metricTypeDimensionVal) {

@@ -37,6 +37,21 @@ public class HeapRowColumnVector extends AbstractHeapVector
     this.vectors = vectors;
   }
 
+  /**
+   * Flink 2.1-compatible accessor for the children vectors. Backed by the existing public {@code
+   * vectors} field so legacy callers continue to work; the new {@link
+   * org.apache.hudi.table.format.cow.vector.reader.NestedColumnReader} (FLINK-35702 port) and any
+   * future Flink-2.1-style caller use this accessor.
+   */
+  public WritableColumnVector[] getFields() {
+    return vectors;
+  }
+
+  /** Counterpart of {@link #getFields()}. */
+  public void setFields(WritableColumnVector[] fields) {
+    this.vectors = fields;
+  }
+
   @Override
   public ColumnarRowData getRow(int i) {
     ColumnarRowData columnarRowData = new ColumnarRowData(new VectorizedColumnBatch(vectors));

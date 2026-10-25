@@ -19,7 +19,8 @@
 
 package org.apache.hudi.merge;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.BaseSparkInternalRecordContext;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
@@ -32,6 +33,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
@@ -119,16 +121,22 @@ public class SparkRecordMergingUtils {
       Map<Integer, StructField> mergedIdToFieldMapping = mergedSchemaPair.getLeft();
       Map<String, Integer> oldNameToIdMapping = getCachedFieldNameToIdMapping(oldSchema);
       Map<String, Integer> newPartialNameToIdMapping = getCachedFieldNameToIdMapping(newSchema);
+      // The values are read in the shape the rows carry: under a PushVariantIntoScan projection a variant is the
+      // projection struct, which a VariantType read would decode through UnsafeRow.getVariant.
+      StructType mergedRowStruct = recordContext instanceof BaseSparkInternalRecordContext
+          ? ((BaseSparkInternalRecordContext) recordContext).getRowStructType(mergedSchemaPair.getRight().getRight())
+          : mergedSchemaPair.getRight().getLeft();
       List<Object> values = new ArrayList<>(mergedIdToFieldMapping.size());
       for (int fieldId = 0; fieldId < mergedIdToFieldMapping.size(); fieldId++) {
         StructField structField = mergedIdToFieldMapping.get(fieldId);
+        DataType dataType = mergedRowStruct.fields()[fieldId].dataType();
         Integer ordInPartialUpdate = newPartialNameToIdMapping.get(structField.name());
         if (ordInPartialUpdate != null) {
           // The field exists in the newer record; picks the value from newer record
-          values.add(newPartialRow.get(ordInPartialUpdate, structField.dataType()));
+          values.add(newPartialRow.get(ordInPartialUpdate, dataType));
         } else {
           // The field does not exist in the newer record; picks the value from older record
-          values.add(oldRow.get(oldNameToIdMapping.get(structField.name()), structField.dataType()));
+          values.add(oldRow.get(oldNameToIdMapping.get(structField.name()), dataType));
         }
       }
       InternalRow mergedRow = new GenericInternalRow(values.toArray());
@@ -145,7 +153,7 @@ public class SparkRecordMergingUtils {
    */
   public static Map<Integer, StructField> getCachedFieldIdToFieldMapping(HoodieSchema providedSchema) {
     return FIELD_ID_TO_FIELD_MAPPING_CACHE.computeIfAbsent(providedSchema, schema -> {
-      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema());
+      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
       Map<Integer, StructField> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
 
@@ -164,7 +172,7 @@ public class SparkRecordMergingUtils {
    */
   public static Map<String, Integer> getCachedFieldNameToIdMapping(HoodieSchema providedSchema) {
     return FIELD_NAME_TO_ID_MAPPING_CACHE.computeIfAbsent(providedSchema, schema -> {
-      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema.toAvroSchema());
+      StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
       Map<String, Integer> schemaFieldIdMapping = new HashMap<>();
       int fieldId = 0;
 
@@ -218,8 +226,8 @@ public class SparkRecordMergingUtils {
             }
           }
           StructType mergedStructType = new StructType(mergedFieldList.toArray(new StructField[0]));
-          HoodieSchema mergedSchema = HoodieSchemaCache.intern(HoodieSchema.fromAvroSchema(AvroConversionUtils.convertStructTypeToAvroSchema(
-              mergedStructType, readerSchema.getName(), readerSchema.getNamespace().orElse(null))));
+          HoodieSchema mergedSchema = HoodieSchemaCache.intern(HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+              mergedStructType, readerSchema.getName(), readerSchema.getNamespace().orElse(null)));
           return Pair.of(mergedMapping, Pair.of(mergedStructType, mergedSchema));
         });
   }

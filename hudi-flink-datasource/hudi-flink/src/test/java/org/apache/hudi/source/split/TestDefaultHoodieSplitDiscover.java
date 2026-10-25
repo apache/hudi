@@ -24,16 +24,18 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.configuration.FlinkOptions;
-import org.apache.hudi.source.ScanContext;
+import org.apache.hudi.source.HoodieScanContext;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.core.fs.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+
+import java.io.File;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -61,9 +63,9 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
         .filter(hoodieInstant -> hoodieInstant.getAction().equals(HoodieTimeline.COMMIT_ACTION));
     String lastInstant = commitsTimeline.lastInstant().get().getCompletionTime();
 
-    ScanContext scanContext = createScanContext(conf);
+    HoodieScanContext scanContext = createScanContext(conf);
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
-        scanContext, metaClient);
+        scanContext);
 
     // Query with the last instant - should return empty or minimal splits
     HoodieContinuousSplitBatch result = discover.discoverSplits(lastInstant);
@@ -91,9 +93,9 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
 
     metaClient.reloadActiveTimeline();
 
-    ScanContext scanContext = createScanContext(conf);
+    HoodieScanContext scanContext = createScanContext(conf);
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
-        scanContext, metaClient);
+        scanContext);
 
     // Discover splits after the first instant
     HoodieContinuousSplitBatch result = discover.discoverSplits(firstInstant.getCompletionTime());
@@ -113,9 +115,9 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     // Insert test data
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    ScanContext scanContext = createScanContext(conf);
+    HoodieScanContext scanContext = createScanContext(conf);
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
-        scanContext, metaClient);
+        scanContext);
 
     // Discover splits from null (earliest)
     HoodieContinuousSplitBatch result = discover.discoverSplits(null);
@@ -135,9 +137,9 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     // Insert test data
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    ScanContext scanContext = createScanContext(conf);
+    HoodieScanContext scanContext = createScanContext(conf);
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
-        scanContext, metaClient);
+        scanContext);
 
     HoodieContinuousSplitBatch result = discover.discoverSplits(null);
 
@@ -162,9 +164,9 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     HoodieInstant firstInstant = commitsTimeline.firstInstant().get();
     String firstCompletionTime = firstInstant.getCompletionTime();
 
-    ScanContext scanContext = createScanContext(conf);
+    HoodieScanContext scanContext = createScanContext(conf);
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
-        scanContext, metaClient);
+        scanContext);
 
     HoodieContinuousSplitBatch result = discover.discoverSplits(firstCompletionTime);
 
@@ -184,11 +186,11 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     // Insert test data
     TestData.writeData(TestData.DATA_SET_INSERT, conf);
 
-    ScanContext scanContext = createScanContextWithSkipOptions(conf, true, true, false);
+    HoodieScanContext scanContext = createScanContextWithSkipOptions(conf, true, true, false);
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
-        scanContext, metaClient);
+        scanContext);
 
-    HoodieContinuousSplitBatch result = discover.discoverSplits(scanContext.getStartCommit());
+    HoodieContinuousSplitBatch result = discover.discoverSplits(scanContext.getStartInstant());
 
     assertNotNull(result, "Result should not be null");
     assertNotNull(result.getSplits(), "Splits should not be null");
@@ -199,27 +201,88 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
     Configuration conf = TestConfigurations.getDefaultConf(basePath);
 
-    ScanContext scanContext = createScanContext(conf);
+    HoodieScanContext scanContext = createScanContext(conf);
     DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
-        scanContext, metaClient);
+        scanContext);
 
     assertNotNull(discover, "Discover instance should not be null");
   }
 
+  @Test
+  void testDiscoverSplitsWithNonExistentTable() throws Exception {
+    // Use a path that doesn't have a Hudi table initialized
+    String nonExistentPath = basePath + "/non_existent_table";
+    Configuration conf = TestConfigurations.getDefaultConf(nonExistentPath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    HoodieScanContext scanContext = createScanContext(conf);
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
+        scanContext);
+
+    // Should return empty batch when table doesn't exist
+    HoodieContinuousSplitBatch result = discover.discoverSplits(null);
+
+    assertNotNull(result, "Result should not be null");
+    assertNotNull(result.getSplits(), "Splits should not be null");
+    // Empty batch should have no splits
+  }
+
+  @Test
+  void testLazyMetaClientInitialization() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    // Insert test data
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    HoodieScanContext scanContext = createScanContext(conf);
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
+        scanContext);
+
+    // First call should initialize metaClient and discover splits
+    HoodieContinuousSplitBatch result1 = discover.discoverSplits(null);
+    assertNotNull(result1, "First result should not be null");
+
+    // Second call should reuse the same metaClient
+    HoodieContinuousSplitBatch result2 = discover.discoverSplits(null);
+    assertNotNull(result2, "Second result should not be null");
+  }
+
+  @Test
+  void testDiscoverSplitsHandlesNullMetaClientGracefully() throws Exception {
+    // Use a directory that exists but is not a Hudi table
+    String emptyPath = basePath + "/empty_dir";
+    new File(emptyPath).mkdirs();
+
+    Configuration conf = TestConfigurations.getDefaultConf(emptyPath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+
+    HoodieScanContext scanContext = createScanContext(conf);
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(
+        scanContext);
+
+    // Should handle null metaClient gracefully and return empty batch
+    HoodieContinuousSplitBatch result = discover.discoverSplits("20230101000000");
+
+    assertNotNull(result, "Result should not be null even with null metaClient");
+    assertNotNull(result.getSplits(), "Splits should not be null");
+  }
+
   // Helper methods
 
-  private ScanContext createScanContext(Configuration conf) throws Exception {
+  private HoodieScanContext createScanContext(Configuration conf) throws Exception {
     return createScanContextWithSkipOptions(conf, false, false, false);
   }
 
-  private ScanContext createScanContextWithSkipOptions(
+  private HoodieScanContext createScanContextWithSkipOptions(
       Configuration conf,
       boolean skipCompaction,
       boolean skipClustering,
       boolean skipInsertOverwrite) throws Exception {
-    return new ScanContext.Builder()
+    return HoodieScanContext.builder()
         .conf(conf)
-        .path(new Path(basePath))
+        .path(new StoragePath(basePath))
         .rowType(TestConfigurations.ROW_TYPE)
         .startInstant(conf.get(FlinkOptions.READ_START_COMMIT))
         .endInstant("")

@@ -19,25 +19,120 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.model.TableServiceType;
+import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieCleanConfig;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
 
 public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
 
   @BeforeEach
-  private void setup() throws IOException {
+  void setup() throws IOException {
     initPath();
     initFileSystem();
     initMetaClient();
+  }
+
+  @AfterEach
+  void teardown() throws IOException {
+    cleanupResources();
+  }
+
+  @Test
+  void testTablePropertyValidationRunsOnlyInPreTxn() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+    writeClient = new HoodieFlinkWriteClient(context, writeConfig);
+
+    // Per-bucket table initialization defers validation to the coordinator.
+    writeClient.initTable(WriteOperationType.UPSERT, Option.empty());
+    HoodieException exception = assertThrows(HoodieException.class,
+        () -> writeClient.preTxn(WriteOperationType.UPSERT, metaClient));
+    assertTrue(exception.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()));
+  }
+
+  @Test
+  void testPreTxnSkipsSchemaValidationForMetadataTableDeletePrepped() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+    writeClient = spy(new HoodieFlinkWriteClient(context, writeConfig));
+    HoodieTableMetaClient metadataMetaClient = spy(metaClient);
+    doReturn(true).when(metadataMetaClient).isMetadataTable();
+    writeClient.preTxn(WriteOperationType.DELETE_PREPPED, metadataMetaClient);
+
+    verify(writeClient, never()).createTable(writeConfig, metadataMetaClient);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = WriteOperationType.class, names = {"UPSERT_PREPPED", "BULK_INSERT_PREPPED"})
+  void testPreppedSchemaValidationRunsOnlyInPreTxn(WriteOperationType operationType) {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+    writeClient = spy(new HoodieFlinkWriteClient(context, writeConfig));
+    HoodieTable table = spy(writeClient.getHoodieTable(false));
+    doReturn(table).when(writeClient).createTable(eq(writeConfig), any(HoodieTableMetaClient.class));
+
+    writeClient.preTxn(operationType, metaClient);
+    verify(writeClient).validateAgainstTableProperties(metaClient, writeConfig, operationType);
+    verify(table).validateSchema();
+
+    clearInvocations(table, writeClient);
+    if (operationType == WriteOperationType.UPSERT_PREPPED) {
+      writeClient.upsertPreppedRecords(Collections.emptyList(), "001");
+    } else {
+      writeClient.bulkInsertPreppedRecords(Collections.emptyList(), "001", Option.empty());
+    }
+    verify(table, never()).validateSchema();
+    verify(writeClient, never()).validateAgainstTableProperties(any(), any(), any());
   }
 
   @ParameterizedTest
@@ -60,5 +155,111 @@ public class TestFlinkWriteClient extends HoodieFlinkClientTestHarness {
     }
 
     writeClient.close();
+  }
+
+  @Test
+  public void testReleaseAndPostCommitResourcesForLazyFailedWrites() throws IOException {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .build();
+
+    AtomicBoolean failTableCreation = new AtomicBoolean(false);
+    writeClient = new HoodieFlinkWriteClient(context, writeConfig) {
+      @Override
+      protected HoodieTable createTable(HoodieWriteConfig config) {
+        if (failTableCreation.get()) {
+          throw new HoodieException("Expected table creation failure");
+        }
+        return super.createTable(config);
+      }
+    };
+    String instantTime = "20260709120000000";
+    writeClient.restartHeartbeat(instantTime);
+
+    assertTrue(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+
+    writeClient.releaseResources(instantTime);
+    assertTrue(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+
+    writeClient.postCommit(instantTime);
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+
+    String failedPostCommitInstantTime = "20260709120000001";
+    writeClient.restartHeartbeat(failedPostCommitInstantTime);
+    failTableCreation.set(true);
+    assertThrows(HoodieException.class, () -> writeClient.postCommit(failedPostCommitInstantTime));
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), failedPostCommitInstantTime));
+  }
+
+  @Test
+  public void testCleanResourcesCleansMetadataTableHeartbeatForStreamingMetadataWrites() throws IOException {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withStreamingWriteEnabled(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .build();
+
+    writeClient = new HoodieFlinkWriteClient(context, writeConfig, true);
+    String instantTime = "20260709120000000";
+    writeClient.restartHeartbeat(instantTime);
+
+    String metadataTableBasePath = metaClient.getBasePath()
+        + "/" + HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH;
+    assertTrue(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metadataTableBasePath, instantTime));
+
+    writeClient.cleanResources(instantTime);
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), instantTime));
+    assertFalse(HoodieHeartbeatClient.heartbeatExists(
+        metaClient.getStorage(), metadataTableBasePath, instantTime));
+  }
+
+  @Test
+  void testUnsupportedWriteEntryPointsAndInvalidTableServiceFailFast() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(metaClient.getBasePath())
+        .withEngineType(EngineType.FLINK)
+        .withEmbeddedTimelineServerEnabled(false)
+        .build();
+    writeClient = new HoodieFlinkWriteClient(context, writeConfig);
+
+    assertThrows(HoodieNotSupportedException.class, () -> writeClient.bootstrap(Option.empty()));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> writeClient.insertPreppedRecords(Collections.emptyList(), "001"));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> writeClient.bulkInsert(Collections.emptyList(), "001"));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> writeClient.bulkInsert(Collections.emptyList(), "001", Option.empty()));
+    assertThrows(HoodieNotSupportedException.class,
+        () -> writeClient.cluster("001", false));
+    assertThrows(HoodieException.class,
+        () -> writeClient.delete(Collections.singletonList(new HoodieKey("id", "partition")), "001"));
+    assertThrows(HoodieException.class,
+        () -> writeClient.deletePrepped(Collections.emptyList(), "001"));
+    assertThrows(IllegalArgumentException.class,
+        () -> writeClient.completeTableService(TableServiceType.CLEAN, null, null, "001"));
+    assertFalse(writeClient.loadActiveTimelineOnTableInit());
+    writeClient.waitForCleaningFinish();
+    writeClient.cleanHandles();
+    assertNotNull(writeClient.getHoodieTable(false));
   }
 }

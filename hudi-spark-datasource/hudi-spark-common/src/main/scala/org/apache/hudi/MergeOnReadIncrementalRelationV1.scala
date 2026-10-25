@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded, HollowCommitHandling}
@@ -48,15 +48,9 @@ import scala.collection.immutable
 case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
                                             override val optParams: Map[String, String],
                                             override val metaClient: HoodieTableMetaClient,
-                                            private val userSchema: Option[StructType],
-                                            private val prunedDataSchema: Option[StructType] = None)
-  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema, prunedDataSchema)
+                                            private val userSchema: Option[StructType])
+  extends BaseMergeOnReadSnapshotRelation(sqlContext, optParams, metaClient, userSchema)
     with HoodieIncrementalRelationV1Trait with MergeOnReadIncrementalRelation {
-
-  override type Relation = MergeOnReadIncrementalRelationV1
-
-  override def updatePrunedDataSchema(prunedSchema: StructType): Relation =
-    this.copy(prunedDataSchema = Some(prunedSchema))
 
   override protected def timeline: HoodieTimeline = {
     if (fullTableScan) {
@@ -93,7 +87,7 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
-      tableState = tableState,
+      targetInstantTime = targetInstantTime,
       mergeType = mergeType,
       fileSplits = fileSplits,
       includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
@@ -136,8 +130,10 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
-        fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
-          .map(p => p.getPath).filter(p => modifiedPartitions.contains(p))
+        // Evaluate the partition predicates against the modified partitions only, rather than listing
+        // every partition of the table.
+        fileIndex.filterPartitionPaths(modifiedPartitions.asScala.toSeq,
+          HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
           .flatMap { relativePartitionPath =>
             fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
           }
@@ -160,6 +156,11 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
     } else {
       incrementalSpanRecordFilters
     }
+  }
+
+  override def getIncrementalFilesSize: Long = {
+    // A full table scan lists the whole table, so the affected files would underestimate its size.
+    if (fullTableScan) Long.MaxValue else affectedFilesInCommits.asScala.map(_.getLength).sum
   }
 
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
@@ -204,8 +205,18 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
   //   3. there are files in metadata be deleted
   protected lazy val fullTableScan: Boolean = {
     val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key, "false").toBoolean
-    fallbackToFullTableScan && (startInstantArchived || endInstantArchived
-      || affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath)))
+    if (!fallbackToFullTableScan) {
+      false
+    } else if (startInstantArchived || endInstantArchived) {
+      true
+    } else {
+      val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(
+        sqlContext, metaClient, affectedFilesInCommits.asScala.map(_.getPath.toString))
+      if (missingFileFound) {
+        logInfo("Falling back to full table scan as some files cannot be found.")
+      }
+      missingFileFound
+    }
   }
 
   protected lazy val includedCommits: immutable.Seq[HoodieInstant] = {
@@ -267,8 +278,19 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
         s"option ${DataSourceReadOptions.START_COMMIT.key}")
     }
 
-    if (!this.tableConfig.populateMetaFields()) {
-      throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
+    // MoR incremental relies on _hoodie_commit_time being present in BOTH base files AND log
+    // records. The base-file writer respects hoodie.meta.fields.mode, but the log-write path
+    // (HoodieAppendHandle) does not yet — until that gap is closed, MoR incremental must require
+    // populate.meta.fields=true to avoid silently dropping log-file rows whose commit_time is null.
+    //
+    // Gate on the table type, not just the flag: HoodieCopyOnWriteIncrementalHadoopFsRelationFactory
+    // builds one of these relations for CoW tables too (it backs HoodieIncrementalFileIndex), so an
+    // unconditional check here rejects every selective-mode CoW table — the case this release
+    // actually supports. CoW keeps its own commit-time guard in IncrementalRelationV1/V2.
+    if (metaClient.getTableType == HoodieTableType.MERGE_ON_READ && !this.tableConfig.populateMetaFields()) {
+      throw new HoodieException("Incremental queries on MoR tables are not supported when "
+        + "hoodie.populate.meta.fields=false. Selective meta-field modes (hoodie.meta.fields.mode) "
+        + "are supported for CoW only in this release; MoR support is tracked as a follow-up.")
     }
 
     if (hollowCommitHandling == USE_TRANSITION_TIME && fullTableScan) {

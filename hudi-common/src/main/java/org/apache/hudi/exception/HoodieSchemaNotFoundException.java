@@ -19,10 +19,14 @@
 
 package org.apache.hudi.exception;
 
-import org.apache.hudi.internal.schema.HoodieSchemaException;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 
 public class HoodieSchemaNotFoundException extends HoodieSchemaException {
   public HoodieSchemaNotFoundException(String message) {
     super(message);
+  }
+
+  public HoodieSchemaNotFoundException(String message, Throwable t) {
+    super(message, t);
   }
 }

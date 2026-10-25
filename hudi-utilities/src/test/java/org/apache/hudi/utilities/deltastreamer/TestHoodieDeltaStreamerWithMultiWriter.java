@@ -27,24 +27,24 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.common.testutils.JavaTestUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.sources.TestDataSource;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -68,9 +68,8 @@ import static org.apache.hudi.config.HoodieWriteConfig.UPSERT_PARALLELISM_VALUE;
 import static org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.CHECKPOINT_KEY;
 import static org.apache.hudi.utilities.deltastreamer.TestHoodieDeltaStreamer.deltaStreamerTestRunner;
 
+@Slf4j
 public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerTestBase {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TestHoodieDeltaStreamerWithMultiWriter.class);
 
   String basePath;
   String propsFilePath;
@@ -185,6 +184,11 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     prepJobConfig.configs.add(
         String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    // if we don't disable small file handling, log files may never get created and hence for MOR, compaction may not kick in.
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      prepJobConfig.configs.add(String.format("%s=3", HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key()));
+      prepJobConfig.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
+    }
     HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc);
 
     // Prepare base dataset with some commits
@@ -257,6 +261,11 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     prepJobConfig.configs.add(
         String.format("%s=%d", SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key(), totalRecords));
     prepJobConfig.configs.add(String.format("%s=false", HoodieCleanConfig.AUTO_CLEAN.key()));
+    // if we don't disable small file handling, log files may never get created and hence for MOR, compaction may not kick in.
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      prepJobConfig.configs.add(String.format("%s=3", HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key()));
+      prepJobConfig.configs.add(String.format("%s=0", HoodieCompactionConfig.PARQUET_SMALL_FILE_LIMIT.key()));
+    }
     HoodieDeltaStreamer prepJob = new HoodieDeltaStreamer(prepJobConfig, jsc);
 
     // Prepare base dataset with some commits
@@ -298,6 +307,12 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     meta.reloadActiveTimeline();
     int totalCommits = meta.getCommitsTimeline().filterCompletedInstants().countInstants();
 
+    // Capture the checkpoint after backfillJob.sync() to calculate expected final checkpoint
+    HoodieCommitMetadata commitMetadataAfterBackfill = getLatestMetadata(meta);
+    String checkpointAfterBackfill = CheckpointUtils.getCheckpoint(commitMetadataAfterBackfill).getCheckpointKey();
+    int expectedNextCheckpointNum = Integer.parseInt(checkpointAfterBackfill) + 1;
+    String expectedFinalCheckpoint = String.format("%05d", expectedNextCheckpointNum);
+
     // add a new commit to timeline which may not have the checkpoint in extra metadata
     addCommitToTimeline(meta);
     meta.reloadActiveTimeline();
@@ -307,7 +322,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     new HoodieDeltaStreamer(cfgBackfillJob, jsc).sync(); // if deltastreamer checkpoint fetch does not walk back to older commits, this sync will fail
     meta.reloadActiveTimeline();
     Assertions.assertEquals(totalCommits + 2, meta.getCommitsTimeline().filterCompletedInstants().countInstants());
-    verifyCommitMetadataCheckpoint(meta, "00008");
+    verifyCommitMetadataCheckpoint(meta, expectedFinalCheckpoint);
   }
 
   private void verifyCommitMetadataCheckpoint(HoodieTableMetaClient metaClient, String expectedCheckpoint) throws IOException {
@@ -372,6 +387,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     cfg.transformerClassNames = transformerClassNames;
     cfg.operation = op;
     cfg.enableHiveSync = false;
+    cfg.enableHiveSupport = false;
     cfg.sourceOrderingFields = "timestamp";
     cfg.propsFilePath = propsFilePath;
     cfg.sourceLimit = 1000;
@@ -400,24 +416,25 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
 
     AtomicBoolean continuousFailed = new AtomicBoolean(false);
     AtomicBoolean backfillFailed = new AtomicBoolean(false);
+    AtomicBoolean prerequisiteHeld = new AtomicBoolean(false);
     try {
       Future regularIngestionJobFuture = service.submit(() -> {
         try {
           deltaStreamerTestRunner(ingestionJob, cfgIngestionJob, conditionForRegularIngestion, jobId);
         } catch (Throwable ex) {
           continuousFailed.set(true);
-          LOG.error("Continuous job failed " + ex.getMessage());
+          log.error("Continuous job failed {}", ex.getMessage());
           throw new RuntimeException(ex);
         }
       });
       Future backfillJobFuture = service.submit(() -> {
         try {
-          // trigger backfill atleast after 1 requested entry is added to timeline from continuous job. If not, there is a chance that backfill will complete even before
+          // trigger backfill at least after 1 requested entry is added to timeline from continuous job. If not, there is a chance that backfill will complete even before
           // continuous job starts.
-          awaitCondition(new GetCommitsAfterInstant(tableBasePath, lastSuccessfulCommit));
+          prerequisiteHeld.set(awaitCondition(new GetCommitsAfterInstant(tableBasePath, lastSuccessfulCommit)));
           backfillJob.sync();
         } catch (Throwable ex) {
-          LOG.error("Backfilling job failed " + ex.getMessage());
+          log.error("Backfilling job failed {}", ex.getMessage());
           backfillFailed.set(true);
           throw new RuntimeException(ex);
         }
@@ -425,6 +442,10 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
       backfillJobFuture.get();
       regularIngestionJobFuture.get();
       if (expectConflict) {
+        Assertions.assertTrue(prerequisiteHeld.get(),
+            "The backfill job started before the ingestion job committed anything after " + lastSuccessfulCommit
+                + ", so the two jobs never overlapped and no conflict could be raised. This is a test-side "
+                + "prerequisite that did not hold, not a conflict-handling failure.");
         Assertions.fail("Failed to handle concurrent writes");
       }
     } catch (Exception e) {
@@ -432,27 +453,27 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
        * Need to perform getMessage().contains since the exception coming
        * from {@link org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer.DeltaSyncService} gets wrapped many times into RuntimeExceptions.
        */
-      if (expectConflict && backfillFailed.get() && e.getCause().getMessage().contains(ConcurrentModificationException.class.getName())) {
+      if (expectConflict && backfillFailed.get() && JavaTestUtils.checkNestedExceptionContains(e, ConcurrentModificationException.class.getName())) {
         // expected ConcurrentModificationException since ingestion & backfill will have overlapping writes
         if (!continuousFailed.get()) {
           // if backfill job failed, shutdown the continuous job.
-          LOG.warn("Calling shutdown on ingestion job since the backfill job has failed for " + jobId);
+          log.warn("Calling shutdown on ingestion job since the backfill job has failed for {}", jobId);
           ingestionJob.shutdownGracefully();
         } else {
           // both backfill and ingestion job cannot fail.
           throw new HoodieException("Both backfilling and ingestion job failed ", e);
         }
-      } else if (expectConflict && continuousFailed.get() && e.getCause().getMessage().contains("Ingestion service was shut down with exception")) {
+      } else if (expectConflict && continuousFailed.get() && JavaTestUtils.checkNestedExceptionContains(e, "Ingestion service was shut down with exception")) {
         // incase of regular ingestion job failing, ConcurrentModificationException is not throw all the way.
         if (!backfillFailed.get()) {
-          LOG.warn("Calling shutdown on backfill job since the ingstion/continuous job has failed for " + jobId);
+          log.warn("Calling shutdown on backfill job since the ingstion/continuous job has failed for {}", jobId);
           backfillJob.shutdownGracefully();
         } else {
           // both backfill and ingestion job cannot fail.
           throw new HoodieException("Both backfilling and ingestion job failed ", e);
         }
       } else {
-        LOG.error("Conflict happened, but not expected " + e.getCause().getMessage());
+        log.error("Conflict happened, but not expected {}", e.getCause().getMessage());
         throw e;
       }
     } finally {
@@ -477,18 +498,28 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     }
   }
 
-  private static void awaitCondition(GetCommitsAfterInstant callback) throws InterruptedException {
+  /**
+   * Waits for the continuous ingestion job to place a commit after the instant the callback was built with, the
+   * prerequisite for the backfill job to overlap with it. The return value lets the caller tell a prerequisite
+   * that never held from a genuine conflict-handling failure.
+   *
+   * @return true if the commit landed within the budget, false if the budget expired.
+   */
+  private static boolean awaitCondition(GetCommitsAfterInstant callback) throws InterruptedException {
     long startTime = System.currentTimeMillis();
     long soFar = 0;
     while (soFar <= 5000) {
       if (callback.getCommitsAfterInstant() > 0) {
-        break;
+        log.warn("Awaiting completed in {}", System.currentTimeMillis() - startTime);
+        return true;
       } else {
         Thread.sleep(500);
         soFar += 500;
       }
     }
-    LOG.warn("Awaiting completed in " + (System.currentTimeMillis() - startTime));
+    log.error("The continuous job placed no commit after {} within {} ms, so the backfill job is about to start "
+        + "unsynchronized with it", callback.lastSuccessfulCommit, System.currentTimeMillis() - startTime);
+    return false;
   }
 
 }

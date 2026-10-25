@@ -78,17 +78,17 @@ public abstract class BaseErrorTableWriter<T extends ErrorEvent> implements Seri
    */
   @VisibleForTesting
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option<String> commitedInstantTime);
+  public abstract Option<JavaRDD<HoodieAvroIndexedRecord>> getErrorEvents(String baseTableInstantTime, Option<String> committedInstantTime);
 
   /**
    * This API is called to commit the error events (failed Hoodie Records) processed by the writer so far.
    * These records are committed to a error table.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract boolean upsertAndCommit(String baseTableInstantTime, Option<String> commitedInstantTime);
+  public abstract boolean upsertAndCommit(String baseTableInstantTime, Option<String> committedInstantTime);
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> commitedInstantTime);
+  public abstract JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> committedInstantTime);
 
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   public abstract boolean commit(JavaRDD<WriteStatus> writeStatuses);

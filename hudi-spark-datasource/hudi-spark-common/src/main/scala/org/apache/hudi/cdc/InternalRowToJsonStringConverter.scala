@@ -19,12 +19,17 @@
 package org.apache.hudi.cdc
 
 import com.fasterxml.jackson.annotation.JsonInclude.Include
+import com.fasterxml.jackson.core.{JsonGenerator, JsonProcessingException}
 import com.fasterxml.jackson.databind.{DeserializationFeature, ObjectMapper}
+import com.fasterxml.jackson.databind.util.RawValue
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.util.{ArrayData, MapData}
-import org.apache.spark.sql.types.{ArrayType, DataType, MapType, StringType, StructType}
+import org.apache.spark.sql.catalyst.util.{ArrayData, DateTimeUtils, MapData}
+import org.apache.spark.sql.types.{ArrayType, DataType, DateType, Decimal, DecimalType, MapType, StringType, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
+
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 class InternalRowToJsonStringConverter(schema: StructType) {
 
@@ -32,6 +37,10 @@ class InternalRowToJsonStringConverter(schema: StructType) {
     val _mapper = new ObjectMapper
     _mapper.setSerializationInclusion(Include.NON_ABSENT)
     _mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    // The variant branch below embeds its input verbatim once readTree accepts it, and readTree on
+    // its own is happy to parse a valid prefix and leave the rest unconsumed.
+    _mapper.configure(DeserializationFeature.FAIL_ON_TRAILING_TOKENS, true)
+    _mapper.configure(JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN, true)
     _mapper.registerModule(DefaultScalaModule)
     _mapper
   }
@@ -90,10 +99,57 @@ class InternalRowToJsonStringConverter(schema: StructType) {
               structMap.toMap
             case _ => value // fallback
           }
+        case _: DecimalType => value.asInstanceOf[Decimal].toJavaBigDecimal
+        case DateType => LocalDate.ofEpochDay(value.asInstanceOf[Int]).toString
+        case TimestampType => DateTimeUtils.microsToInstant(value.asInstanceOf[Long]).toString
+        case dt if dt.typeName == InternalRowToJsonStringConverter.TIMESTAMP_NTZ_TYPE_NAME =>
+          DateTimeUtils.microsToLocalDateTime(value.asInstanceOf[Long]).format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+        case dt if dt.typeName == InternalRowToJsonStringConverter.VARIANT_TYPE_NAME =>
+          // VariantVal.toString renders the variant as JSON; embed that rendering verbatim so the
+          // image carries the variant's structure. Falling through to the default would serialize
+          // the VariantVal bean, i.e. its raw value/metadata bytes as base64.
+          // Matched on the type name rather than SparkAdapter.isVariantType: this guard is
+          // evaluated for every non-string/array/map/struct field, and resolving the adapter
+          // needs a version module that is not on hudi-spark-common's own test classpath.
+          val variantJson = value.toString
+          try {
+            // readTree is a validation gate only, and its result is discarded: embedding the parsed
+            // node instead would re-serialize the tree through the generator, and Jackson's write-side
+            // nesting cap (StreamWriteConstraints, also 1000) is enforced by writeValueAsString in
+            // convert, outside this block. A variant deep enough to clear the read limit but not the
+            // write limit once the image's own object levels are added would fail the query there.
+            // RawValue goes out through JsonGenerator.writeRawValue, which keeps no nesting context.
+            val parsed = mapper.readTree(variantJson)
+            // readTree accepts blank input as a MissingNode instead of throwing, and RawValue would
+            // then emit nothing at all, leaving a malformed image. Trailing-token input is refused by
+            // FAIL_ON_TRAILING_TOKENS above, which readTree does not check on its own.
+            if (parsed == null || parsed.isMissingNode) variantJson else new RawValue(variantJson)
+          } catch {
+            // A variant can hold a field name, string or nesting depth past Jackson's default
+            // StreamReadConstraints (50k chars, 20M chars, 1000 levels) while staying well inside
+            // the variant size limit, and all three arrive here as StreamConstraintsException. A
+            // CDC image is diagnostic data rather than the table's data, so keep the rendering as
+            // a plain string instead of failing the query over it.
+            // NOTE: value.toString is deliberately outside this block. It throws MALFORMED_VARIANT
+            // on corrupt bytes, which is a data-integrity problem an operator has to see, not a
+            // rendering quirk to paper over -- and there would be no rendering left to fall back to.
+            case _: JsonProcessingException => variantJson
+          }
         case _ =>
           // For primitive types and other unsupported types, return as is
           value
       }
     }
   }
+}
+
+object InternalRowToJsonStringConverter {
+
+  /**
+   * Type name of Spark's VariantType. Matched by name so this module, which also compiles
+   * against Spark 3 where the type does not exist, needs neither the symbol nor a SparkAdapter.
+   */
+  private val VARIANT_TYPE_NAME = "variant"
+
+  private val TIMESTAMP_NTZ_TYPE_NAME = "timestamp_ntz"
 }

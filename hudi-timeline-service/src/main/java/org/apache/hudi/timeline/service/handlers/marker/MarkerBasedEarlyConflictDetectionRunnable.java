@@ -29,8 +29,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.timeline.service.handlers.MarkerHandler;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -40,8 +39,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
-  private static final Logger LOG = LoggerFactory.getLogger(MarkerBasedEarlyConflictDetectionRunnable.class);
 
   private final MarkerHandler markerHandler;
   private final String markerDir;
@@ -113,10 +112,10 @@ public class MarkerBasedEarlyConflictDetectionRunnable implements Runnable {
       if (!currentFileIDs.isEmpty()
           || (checkCommitConflict && MarkerUtils.hasCommitConflict(activeTimeline,
           currentInstantAllMarkers.stream().map(MarkerUtils::makerToPartitionAndFileID).collect(Collectors.toSet()), completedCommits))) {
-        LOG.error("Conflict writing detected based on markers!\nConflict markers: {}\nTable markers: {}", currentInstantAllMarkers, tableMarkers);
+        log.error("Conflict writing detected based on markers!\nConflict markers: {}\nTable markers: {}", currentInstantAllMarkers, tableMarkers);
         hasConflict.compareAndSet(false, true);
       }
-      LOG.info("Finish batching marker-based conflict detection in {} ms", timer.endTimer());
+      log.info("Finish batching marker-based conflict detection in {} ms", timer.endTimer());
 
     } catch (IOException e) {
       throw new HoodieIOException("IOException occurs during checking marker conflict");

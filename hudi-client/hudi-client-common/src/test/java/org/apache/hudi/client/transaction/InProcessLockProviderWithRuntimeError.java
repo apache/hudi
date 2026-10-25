@@ -18,8 +18,8 @@
 
 package org.apache.hudi.client.transaction;
 
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.config.LockConfiguration;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import java.util.concurrent.TimeUnit;

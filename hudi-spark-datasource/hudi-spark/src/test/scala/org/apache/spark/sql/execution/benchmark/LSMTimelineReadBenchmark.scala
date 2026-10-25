@@ -20,7 +20,7 @@ package org.apache.spark.sql.execution.benchmark
 
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.client.common.HoodieJavaEngineContext
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter
+import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.model.{HoodieAvroPayload, HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.timeline.{ActiveAction, HoodieInstant, LSMTimeline}
 import org.apache.hudi.common.table.timeline.versioning.v2.CompletionTimeQueryViewV2

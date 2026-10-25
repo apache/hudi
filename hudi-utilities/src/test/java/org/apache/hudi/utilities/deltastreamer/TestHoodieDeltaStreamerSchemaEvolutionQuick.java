@@ -21,14 +21,17 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.TestHoodieSparkUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.utilities.UtilHelpers;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
 import org.apache.hudi.utilities.streamer.HoodieStreamer;
 
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -229,7 +232,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       addData(df, false);
       deltaStreamer.sync();
       assertTrue(allowNullForDeletedCols);
-    } catch (MissingSchemaFieldException e) {
+    } catch (HoodieIngestionException e) {
+      assertTrue(e.getCause() instanceof MissingSchemaFieldException,
+          "Expected cause to be MissingSchemaFieldException but was: " + e.getCause());
       assertFalse(allowNullForDeletedCols);
       return;
     }
@@ -246,8 +251,9 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     assertRecordCount(numRecords);
 
     df = sparkSession.read().format("hudi").load(tableBasePath);
-    df.show(100,false);
     df.cache();
+    // assert data can be read
+    df.limit(100).collect();
     assertDataType(df, "tip_history", DataTypes.createArrayType(DataTypes.LongType));
     assertDataType(df, "fare", DataTypes.createStructType(new StructField[]{
         new StructField("amount", DataTypes.StringType, true, Metadata.empty()),
@@ -334,10 +340,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     deltaStreamer.sync();
 
     metaClient.reloadActiveTimeline();
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+    Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
         dsConfig.targetBasePath, metaClient);
-    assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
-        .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+    Option<HoodieSchemaField> riderFieldOpt = latestTableSchemaOpt.get().getField("rider");
+    assertTrue(riderFieldOpt.isPresent());
+    assertTrue(riderFieldOpt.get().schema().getTypes()
+        .stream().anyMatch(t -> HoodieSchemaType.STRING == t.getType()));
     assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
   }
 
@@ -409,12 +417,16 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+      Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
           dsConfig.targetBasePath, metaClient);
-      assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
-          .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+      Option<HoodieSchemaField> riderFieldOpt = latestTableSchemaOpt.get().getField("rider");
+      assertTrue(riderFieldOpt.isPresent());
+      assertTrue(riderFieldOpt.get().schema().getTypes()
+          .stream().anyMatch(t -> HoodieSchemaType.STRING == t.getType()));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
-    } catch (MissingSchemaFieldException e) {
+    } catch (HoodieIngestionException e) {
+      assertTrue(e.getCause() instanceof MissingSchemaFieldException,
+          "Expected cause to be MissingSchemaFieldException but was: " + e.getCause());
       assertFalse(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
     }
   }
@@ -489,10 +501,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertTrue(allowNullForDeletedCols || targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+      Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
           dsConfig.targetBasePath, metaClient);
-      assertTrue(latestTableSchemaOpt.get().getField("rider").schema().getTypes()
-          .stream().anyMatch(t -> t.getType().equals(Schema.Type.STRING)));
+      Option<HoodieSchemaField> riderFieldOpt = latestTableSchemaOpt.get().getField("rider");
+      assertTrue(riderFieldOpt.isPresent());
+      assertTrue(riderFieldOpt.get().schema().getTypes()
+          .stream().anyMatch(t -> HoodieSchemaType.STRING == t.getType()));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
       assertTrue(containsErrorMessage(e, "has no default value and is non-nullable",
@@ -569,11 +583,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       assertFalse(targetSchemaSameAsTableSchema);
 
       metaClient.reloadActiveTimeline();
-      Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+      Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
           dsConfig.targetBasePath, metaClient);
-      assertTrue(latestTableSchemaOpt.get().getField("distance_in_meters").schema().getTypes()
-              .stream().anyMatch(t -> t.getType().equals(Schema.Type.DOUBLE)),
-          latestTableSchemaOpt.get().getField("distance_in_meters").schema().toString());
+      Option<HoodieSchemaField> distanceInMetersFieldOpt = latestTableSchemaOpt.get().getField("distance_in_meters");
+      assertTrue(distanceInMetersFieldOpt.isPresent());
+      assertTrue(distanceInMetersFieldOpt.get().schema().getTypes()
+              .stream().anyMatch(t -> HoodieSchemaType.DOUBLE == t.getType()));
       assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
     } catch (Exception e) {
       assertTrue(targetSchemaSameAsTableSchema);
@@ -657,10 +672,12 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     deltaStreamer.sync();
 
     metaClient.reloadActiveTimeline();
-    Option<Schema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
+    Option<HoodieSchema> latestTableSchemaOpt = UtilHelpers.getLatestTableSchema(jsc, storage,
         dsConfig.targetBasePath, metaClient);
-    assertTrue(latestTableSchemaOpt.get().getField("current_ts").schema().getTypes()
-        .stream().anyMatch(t -> t.getType().equals(Schema.Type.LONG)));
+    Option<HoodieSchemaField> currentTsFieldOpt = latestTableSchemaOpt.get().getField("current_ts");
+    assertTrue(currentTsFieldOpt.isPresent());
+    assertTrue(currentTsFieldOpt.get().schema().getTypes()
+        .stream().anyMatch(t -> HoodieSchemaType.LONG == t.getType()));
     assertTrue(metaClient.reloadActiveTimeline().lastInstant().get().compareTo(lastInstant) > 0);
   }
 

@@ -35,7 +35,6 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -89,7 +88,7 @@ public class SparkSingleFileSortExecutionStrategy<T>
                                                                  int numOutputGroups,
                                                                  String instantTime,
                                                                  Map<String, String> strategyParams,
-                                                                 Schema schema,
+                                                                 HoodieSchema schema,
                                                                  List<HoodieFileGroupId> fileGroupIdList,
                                                                  boolean shouldPreserveHoodieMetadata,
                                                                  Map<String, String> extraMetadata) {
@@ -105,7 +104,7 @@ public class SparkSingleFileSortExecutionStrategy<T>
     newConfig.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(Long.MAX_VALUE));
 
     return (HoodieData<WriteStatus>) SparkBulkInsertHelper.newInstance().bulkInsert(inputRecords, instantTime, getHoodieTable(), newConfig,
-        false, getRDDPartitioner(strategyParams, HoodieSchema.fromAvroSchema(schema)), true, numOutputGroups,
+        false, getRDDPartitioner(strategyParams, schema), true, numOutputGroups,
         new SingleFileHandleCreateFactory(fileGroupIdList.get(0).getFileId(), shouldPreserveHoodieMetadata));
   }
 }

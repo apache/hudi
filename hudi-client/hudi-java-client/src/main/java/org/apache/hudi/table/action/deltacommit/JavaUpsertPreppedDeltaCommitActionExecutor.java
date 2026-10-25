@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -36,8 +37,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+
+import static org.apache.hudi.common.util.HoodieRecordUtils.sortRecordsByRecordKey;
 
 @Slf4j
 public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDeltaCommitActionExecutor<T> {
@@ -75,8 +79,10 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDelta
     List<WriteStatus> allWriteStatuses = new ArrayList<>();
     try {
       recordsByFileId.forEach((k, v) -> {
-        HoodieAppendHandle<?, ?, ?, ?> appendHandle = new HoodieAppendHandle(config, instantTime, table,
-            k.getRight(), k.getLeft(), v.iterator(), taskContextSupplier);
+        Iterator<HoodieRecord<T>> recordItr = table.requireSortedRecords()
+            ? sortRecordsByRecordKey(v.iterator()) : v.iterator();
+        HoodieAppendHandle<?, ?, ?, ?> appendHandle = new AppendHandleFactory()
+            .create(config, instantTime, table, k.getRight(), k.getLeft(), recordItr, taskContextSupplier);
         appendHandle.doAppend();
         allWriteStatuses.addAll(appendHandle.close());
       });

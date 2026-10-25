@@ -18,7 +18,7 @@
 
 package org.apache.hudi.util;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -68,7 +68,7 @@ public class OrderingValueEngineTypeConverter {
       if (fieldSchemaOpt.isEmpty()) {
         return Function.<Comparable>identity();
       } else {
-        DataType fieldType = AvroConversionUtils.convertAvroSchemaToDataType(fieldSchemaOpt.get().toAvroSchema());
+        DataType fieldType = HoodieSchemaConversionUtils.convertHoodieSchemaToDataType(fieldSchemaOpt.get());
         return createConverter(fieldType, fieldSchemaOpt.get());
       }
     }).collect(Collectors.toList());

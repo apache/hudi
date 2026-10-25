@@ -114,7 +114,11 @@ public class HoodieTestCommitMetadataGenerator extends HoodieTestDataGenerator {
   }
 
   static <T> void createFileWithMetadata(String basePath, StorageConfiguration<?> configuration, String name, T metadata) throws IOException {
-    Path commitFilePath = new Path(basePath + "/" + HoodieTableMetaClient.METAFOLDER_NAME + "/" + name);
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+        .setConf(configuration)
+        .setBasePath(basePath)
+        .build();
+    Path commitFilePath = new Path(metaClient.getTimelinePath().toString(), name);
     try (OutputStream os = HadoopFSUtils.getFs(basePath, configuration).create(commitFilePath, true)) {
       COMMIT_METADATA_SER_DE.getInstantWriter(metadata).get().writeToStream(os);
     }

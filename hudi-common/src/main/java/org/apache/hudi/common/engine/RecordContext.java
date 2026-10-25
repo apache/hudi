@@ -24,17 +24,19 @@ import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.LocalHoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.JavaTypeConverter;
-import org.apache.hudi.common.util.LocalHoodieSchemaCache;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.keygen.KeyGenerator;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 
@@ -63,15 +65,18 @@ public abstract class RecordContext<T> implements Serializable {
 
   private final SerializableBiFunction<T, HoodieSchema, String> recordKeyExtractor;
   // for encoding and decoding schemas to the spillable map
-  private final LocalHoodieSchemaCache localSchemaCache = LocalHoodieSchemaCache.getInstance();
+  private final LocalHoodieSchemaCache localSchemaCache = LocalHoodieSchemaCache.create();
 
+  @Getter
   protected final JavaTypeConverter typeConverter;
+  @Setter
   protected String partitionPath;
 
   protected RecordContext(HoodieTableConfig tableConfig, JavaTypeConverter typeConverter) {
     this.typeConverter = typeConverter;
-    this.recordKeyExtractor = tableConfig.populateMetaFields() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
-        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")));
+    this.recordKeyExtractor = tableConfig.isRecordKeyPopulated() ? metadataKeyExtractor() : virtualKeyExtractor(tableConfig.getRecordKeyFields()
+        .orElseThrow(() -> new IllegalArgumentException("No record keys specified and meta fields are not populated")),
+        tableConfig.getPartitionFields().map(fields -> fields.length).orElse(0));
   }
 
   /**
@@ -82,10 +87,6 @@ public abstract class RecordContext<T> implements Serializable {
       throw new UnsupportedOperationException("Record key extractor is not initialized");
     };
     this.typeConverter = typeConverter;
-  }
-
-  public void setPartitionPath(String partitionPath) {
-    this.partitionPath = partitionPath;
   }
 
   public T extractDataFromRecord(HoodieRecord record, HoodieSchema schema, Properties properties) {
@@ -170,9 +171,13 @@ public abstract class RecordContext<T> implements Serializable {
    */
   public abstract T constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues);
 
-  public JavaTypeConverter getTypeConverter() {
-    return typeConverter;
-  }
+  /**
+   * Returns the engine record type produced by this context (e.g. {@code AVRO}, {@code SPARK}, {@code FLINK},
+   * {@code HIVE}). This mirrors the concrete type of records built by {@link #constructEngineRecord}, so callers that
+   * feed those engine records into a {@link org.apache.hudi.io.storage.HoodieFileWriter} can pick a writer that
+   * matches. Used by the native log delete writer, where the record object type and the writer must agree.
+   */
+  public abstract HoodieRecord.HoodieRecordType getEngineRecordType();
 
   /**
    * Gets the record key in String.
@@ -206,32 +211,33 @@ public abstract class RecordContext<T> implements Serializable {
   public abstract String getMetaFieldValue(T record, int pos);
 
   /**
-   * Returns the value to a type representation in a specific engine.
+   * Converts the value to the engine-native type representation that can be stored directly
+   * as a field value inside an engine record, e.g., {@code UTF8String} for a {@link String}
+   * value in Spark. An ordering value in its comparable form, see {@link #ensureComparability},
+   * is converted back to the stored form, e.g., {@code HoodieUTF8String} to {@code UTF8String} in Spark.
    * <p>
-   * This can be overridden by the reader context implementation on a specific engine to handle
-   * engine-specific field type system.  For example, Spark uses {@code UTF8String} to represent
-   * {@link String} field values, so we need to convert the values to {@code UTF8String} type
-   * in Spark for proper value comparison.
+   * NOTE: The returned value is NOT guaranteed to support comparison on every engine
+   * (e.g., Spark's {@code UTF8String} no longer supports {@code compareTo}, see SPARK-46832).
+   * Callers that need a comparable value, e.g., for ordering, should use
+   * {@link #convertOrderingValueToEngineType} or {@link #ensureComparability} instead.
    *
    * @param value {@link Comparable} value to be converted.
    *
-   * @return the converted value in a type representation in a specific engine.
+   * @return the converted value in the engine-native type representation.
    */
   public Comparable convertValueToEngineType(Comparable value) {
     return value;
   }
 
-  public Comparable convertPartitionValueToEngineType(Comparable value) {
-    return convertValueToEngineType(value);
-  }
-
   /**
-   * Converts the ordering value to the specific engine type.
+   * Converts the ordering value to the specific engine type, guaranteeing the returned
+   * value supports comparison, e.g., by wrapping engine types that do not implement
+   * {@code compareTo} (see {@link #ensureComparability}).
    */
   public Comparable convertOrderingValueToEngineType(Comparable value) {
     return value instanceof ArrayComparable
-        ? ((ArrayComparable) value).apply(this::convertValueToEngineType)
-        : convertValueToEngineType(value);
+        ? ((ArrayComparable) value).apply(val -> ensureComparability(convertValueToEngineType(val)))
+        : ensureComparability(convertValueToEngineType(value));
   }
 
   /**
@@ -306,10 +312,11 @@ public abstract class RecordContext<T> implements Serializable {
   /**
    * Seals the engine-specific record to make sure the data referenced in memory do not change.
    *
+   * @param schema The schema of the record.
    * @param record The record.
    * @return The record containing the same data that do not change in memory over time.
    */
-  public abstract T seal(T record);
+  public abstract T seal(HoodieSchema schema, T record);
 
   /**
    * Converts engine specific row into binary format.
@@ -435,11 +442,8 @@ public abstract class RecordContext<T> implements Serializable {
     return (record, schema) -> getValue(record, schema, RECORD_KEY_METADATA_FIELD).toString();
   }
 
-  private SerializableBiFunction<T, HoodieSchema, String> virtualKeyExtractor(String[] recordKeyFields) {
-    if (recordKeyFields.length == 1) {
-      // there might be consistency for record key encoding when partition fields are multiple for cow merging,
-      // currently the incoming records are using the keys from HoodieRecord which utilities the write config and by default encodes the field name with the value
-      // while here the field names are ignored, this function would be used to extract record keys from old base file.
+  private SerializableBiFunction<T, HoodieSchema, String> virtualKeyExtractor(String[] recordKeyFields, int numPartitionFields) {
+    if (recordKeyFields.length == 1 && numPartitionFields <= 1) {
       return (record, schema) -> {
         Object result = getValue(record, schema, recordKeyFields[0]);
         if (result == null) {

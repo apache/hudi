@@ -21,9 +21,11 @@ package org.apache.hudi.aws.sync;
 import org.apache.hudi.aws.testutils.GlueTestUtil;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.sync.common.HoodieSyncTool;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +40,7 @@ import software.amazon.awssdk.services.sts.model.GetCallerIdentityRequest;
 import software.amazon.awssdk.services.sts.model.GetCallerIdentityResponse;
 
 import java.io.IOException;
+import java.util.Properties;
 
 import static org.apache.hudi.aws.testutils.GlueTestUtil.getHadoopConf;
 import static org.apache.hudi.aws.testutils.GlueTestUtil.glueSyncProps;
@@ -103,6 +106,34 @@ class TestAwsGlueSyncTool {
           Option.empty());
       assertTrue(syncTool instanceof AwsGlueCatalogSyncTool);
       syncTool.close();
+    }
+  }
+
+  /**
+   * Verifies the 3-arg {@code (Properties, Configuration, Option)} reflection path used by Flink's
+   * {@code HiveSyncContext#hiveSyncTool()} can fully instantiate {@link AwsGlueCatalogSyncTool}.
+   */
+  @Test
+  void validateInitThroughHiveSyncContextReflectionSignature() throws Exception {
+    try (MockedStatic<GlueAsyncClient> mockedStatic = mockStatic(GlueAsyncClient.class);
+         MockedStatic<StsClient> mockedStsStatic = mockStatic(StsClient.class)) {
+      GlueAsyncClientBuilder builder = mock(GlueAsyncClientBuilder.class);
+      mockedStatic.when(GlueAsyncClient::builder).thenReturn(builder);
+      when(builder.credentialsProvider(any())).thenReturn(builder);
+      GlueAsyncClient mockClient = mock(GlueAsyncClient.class);
+      when(builder.build()).thenReturn(mockClient);
+      StsClient mockSts = mock(StsClient.class);
+      mockedStsStatic.when(StsClient::create).thenReturn(mockSts);
+      when(mockSts.getCallerIdentity(GetCallerIdentityRequest.builder().build()))
+          .thenReturn(GetCallerIdentityResponse.builder().account("").build());
+
+      Object syncTool = ReflectionUtils.loadClass(
+          AwsGlueCatalogSyncTool.class.getName(),
+          new Class<?>[] {Properties.class, Configuration.class, Option.class},
+          glueSyncProps, getHadoopConf(), Option.empty());
+      assertTrue(syncTool instanceof AwsGlueCatalogSyncTool,
+          "Reflection through the HiveSyncContext signature must yield an AwsGlueCatalogSyncTool instance");
+      ((AwsGlueCatalogSyncTool) syncTool).close();
     }
   }
 }

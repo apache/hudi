@@ -140,12 +140,15 @@ public class BigQuerySchemaResolver {
         break;
       case BYTES:
       case FIXED:
+      case VECTOR:
         standardSQLTypeName = StandardSQLTypeName.BYTES;
         break;
       case DECIMAL:
         standardSQLTypeName = StandardSQLTypeName.NUMERIC;
         break;
       case RECORD:
+      case BLOB:
+      case VARIANT:
         return Field.newBuilder(name, StandardSQLTypeName.STRUCT,
             FieldList.of(getFields(fieldSchema))).setMode(fieldMode).build();
       case ARRAY:
@@ -169,11 +172,15 @@ public class BigQuerySchemaResolver {
   }
 
   private List<Field> getFields(HoodieSchema schema) {
-    return schema.getFields().stream().map(field -> {
-      final HoodieSchema fieldSchema = field.getNonNullSchema();
-      final boolean nullable = field.isNullable();
-      return getField(fieldSchema, field.name(), nullable);
-    }).collect(Collectors.toList());
+    return schema.getFields().stream()
+        // Fields of the "null" type always hold null and are not written to the data files, so they are skipped
+        .filter(field -> !field.schema().isSchemaNull())
+        .map(field -> {
+          final HoodieSchema fieldSchema = field.getNonNullSchema();
+          final boolean nullable = field.isNullable();
+          return getField(fieldSchema, field.name(), nullable);
+        })
+        .collect(Collectors.toList());
   }
 
   private void validateUnion(List<HoodieSchema> subTypes) {

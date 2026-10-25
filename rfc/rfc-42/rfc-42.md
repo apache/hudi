@@ -59,7 +59,7 @@ This simple yet effective design reduce the time complexity of the key lookup to
 
 ![bucket index](./basic_bucket_hashing.png)
 
-However, there are also some limitions.
+However, there are also some limitations.
 As described in [RFC-29](https://cwiki.apache.org/confluence/display/HUDI/RFC+-+29%3A+Hash+Index), the one-one mapping between buckets and file groups may cause data skew and doesn&#39;t scale well.
 One solution to address these problems is allowing one bucket to have multiple file groups, which in turn requires indexing to be performed inside each bucket.
 
@@ -131,7 +131,7 @@ Only three operations will modify the hashing metadata:
 - Clean service: removes outdated metadata files in the same way as removing old file groups.
 
 Though storing hashing metadata in the `.hoodie` path is a straightforward solution, it should be put into hudi's metadata table ultimately.
-And the clean service is no loger necessary.
+And the clean service is no longer necessary.
 Old version hashing metadata will also be cleanup automatically since the metadata table itself is a hudi table.
 ### Bucket Resizing (Splitting & Merging)
 

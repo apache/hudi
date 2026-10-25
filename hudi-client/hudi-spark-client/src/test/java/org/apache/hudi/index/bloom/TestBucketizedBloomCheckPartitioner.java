@@ -41,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBucketizedBloomCheckPartitioner {
+
   private static Stream<Arguments> partitioningTestCases() {
     // Case 1
     Map<HoodieFileGroupId, Long> fileToComparisons = constructFileToComparisons(
@@ -51,7 +52,7 @@ public class TestBucketizedBloomCheckPartitioner {
     // partitioning based on parallelism of 4
     Map<HoodieFileGroupId, List<Integer>> partitioning1 = constructPartitioning(
         Pair.of(new HoodieFileGroupId("p1", "f1"), new Integer[] {0, 0, 3}),
-        Pair.of(new HoodieFileGroupId("p1", "f2"), new Integer[] {2, 2, 3, 1}),
+        Pair.of(new HoodieFileGroupId("p1", "f2"), new Integer[] {1, 2, 2, 1}),
         Pair.of(new HoodieFileGroupId("p1", "f3"), new Integer[] {1, 0})
     );
     List<LookUpKeyAndResult> lookUpKeyAndResults1 = constructLookUpKeyAndResults(
@@ -137,7 +138,7 @@ public class TestBucketizedBloomCheckPartitioner {
     assertEquals(expectedPartitioning.size(), actualPartitioning.size());
     for (HoodieFileGroupId id : actualPartitioning.keySet()) {
       assertTrue(expectedPartitioning.containsKey(id));
-      assertArrayEquals(expectedPartitioning.get(id).toArray(), expectedPartitioning.get(id).toArray());
+      assertArrayEquals(expectedPartitioning.get(id).toArray(), actualPartitioning.get(id).toArray());
     }
     lookUpKeyAndResults.forEach(lookUpKeyAndResult ->
         assertEquals(lookUpKeyAndResult.expectedPartitionId, partitioner.getPartition(

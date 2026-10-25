@@ -18,9 +18,8 @@
 
 package org.apache.hudi.metrics;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.metrics.MetricGroup;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,9 +27,8 @@ import java.util.Map;
 /**
  * Base class for flink read/write metrics.
  */
+@Slf4j
 public abstract class HoodieFlinkMetrics {
-
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieFlinkMetrics.class);
 
   protected Map<String, Long> timers;
   protected final MetricGroup metricGroup;
@@ -44,14 +42,14 @@ public abstract class HoodieFlinkMetrics {
 
   protected void startTimer(String name) {
     if (timers.containsKey(name)) {
-      LOG.info("Restarting timer for name: {}, overriding the existing value", name);
+      log.info("Restarting timer for name: {}, overriding the existing value", name);
     }
     timers.put(name, System.currentTimeMillis());
   }
 
   protected long stopTimer(String name) {
     if (!timers.containsKey(name)) {
-      LOG.warn("Cannot find name {} in timer, potentially caused by inconsistent call", name);
+      log.warn("Cannot find name {} in timer, potentially caused by inconsistent call", name);
       return 0;
     }
     long costs = System.currentTimeMillis() - timers.get(name);

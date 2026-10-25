@@ -66,11 +66,11 @@ public class SqlQuerySingleResultPreCommitValidator<T, I, K, O extends HoodieDat
     }
     Object result = newRows.get(0).apply(0);
     if (result == null || !expectedResult.equals(result.toString())) {
-      log.error("Mismatch query result. Expected: " + expectedResult + " got " + result + " on Query: " + query);
+      log.error("Mismatch query result. Expected: {} got {} on Query: {}", expectedResult, result, query);
       throw new HoodieValidationException("Query validation failed for '" + query
           + "'. Expected " + expectedResult + " row(s), Found " + result);
     } else {
-      log.info("Query validation successful. Expected: " + expectedResult + " got " + result);
+      log.info("Query validation successful. Expected: {} got {}", expectedResult, result);
     }
   }
 }

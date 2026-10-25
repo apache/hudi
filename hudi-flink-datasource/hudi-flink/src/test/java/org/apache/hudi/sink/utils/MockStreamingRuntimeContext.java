@@ -17,6 +17,8 @@
 
 package org.apache.hudi.sink.utils;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.metrics.groups.OperatorMetricGroup;
@@ -38,6 +40,7 @@ import java.util.Map;
  *
  * <p>NOTE: Adapted from Apache Flink, the MockStreamOperator is modified to support MapState.
  */
+@Getter
 public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
 
   private final boolean isCheckpointingEnabled;
@@ -67,8 +70,17 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     this.taskInfo = new MockTaskInfo(numParallelSubtasks, subtaskIndex, 0);
   }
 
-  public MockTaskInfo getTaskInfo() {
-    return taskInfo;
+  public MockStreamingRuntimeContext(
+      boolean isCheckpointingEnabled,
+      int numParallelSubtasks,
+      int subtaskIndex,
+      MockEnvironment environment,
+      ExecutionConfig executionConfig) {
+
+    super(new MockStreamOperator(executionConfig), environment, new HashMap<>());
+
+    this.isCheckpointingEnabled = isCheckpointingEnabled;
+    this.taskInfo = new MockTaskInfo(numParallelSubtasks, subtaskIndex, 0);
   }
 
   public int getIndexOfThisSubtask() {
@@ -83,11 +95,6 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     return taskInfo.getAttemptNumber();
   }
 
-  @Override
-  public boolean isCheckpointingEnabled() {
-    return isCheckpointingEnabled;
-  }
-
   public void setAttemptNumber(int attemptNumber) {
     this.taskInfo.setAttemptNumber(attemptNumber);
   }
@@ -96,13 +103,23 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
     private static final long serialVersionUID = -1153976702711944427L;
 
     private transient TestProcessingTimeService testProcessingTimeService;
+    private final transient ExecutionConfig executionConfig;
 
+    @Setter
     private transient Object currentKey;
     private final transient Map<Object, MockKeyedStateStore> mockKeyedStateStoreMap = new HashMap<>();
 
+    MockStreamOperator() {
+      this(new ExecutionConfig());
+    }
+
+    MockStreamOperator(ExecutionConfig executionConfig) {
+      this.executionConfig = executionConfig;
+    }
+
     @Override
     public ExecutionConfig getExecutionConfig() {
-      return new ExecutionConfig();
+      return executionConfig;
     }
 
     @Override
@@ -116,11 +133,6 @@ public class MockStreamingRuntimeContext extends StreamingRuntimeContext {
         testProcessingTimeService = new TestProcessingTimeService();
       }
       return testProcessingTimeService;
-    }
-
-    @Override
-    public void setCurrentKey(Object key) {
-      this.currentKey = key;
     }
 
     @Override

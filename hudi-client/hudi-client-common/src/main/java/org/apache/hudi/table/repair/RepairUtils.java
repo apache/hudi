@@ -21,12 +21,12 @@ package org.apache.hudi.table.repair;
 
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StoragePath;
@@ -89,16 +89,13 @@ public final class RepairUtils {
 
     switch (instant.getAction()) {
       case COMMIT_ACTION:
-      case DELTA_COMMIT_ACTION: {
-        final HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
-        return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
-            .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
-      }
+      case DELTA_COMMIT_ACTION:
       case REPLACE_COMMIT_ACTION:
       case CLUSTERING_ACTION: {
-        final HoodieReplaceCommitMetadata replaceCommitMetadata =
-            timeline.readReplaceCommitMetadata(instant);
-        return Option.of(replaceCommitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
+        // TimelineUtils#getCommitMetadata dispatches to the replace-commit read for
+        // REPLACE_COMMIT/CLUSTERING actions
+        final HoodieCommitMetadata commitMetadata = TimelineUtils.getCommitMetadata(instant, timeline);
+        return Option.of(commitMetadata.getPartitionToWriteStats().values().stream().flatMap(List::stream)
             .map(HoodieWriteStat::getPath).collect(Collectors.toSet()));
       }
       default:

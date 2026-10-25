@@ -20,23 +20,21 @@ package org.apache.hudi.common.table.cdc;
 
 import org.apache.hudi.exception.HoodieNotSupportedException;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Enumeration of change log operation.
  */
+@AllArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter
 public enum HoodieCDCOperation {
   INSERT("i"),
   UPDATE("u"),
   DELETE("d");
 
   private final String value;
-
-  HoodieCDCOperation(String value) {
-    this.value = value;
-  }
-
-  public String getValue() {
-    return this.value;
-  }
 
   public static HoodieCDCOperation parse(String value) {
     switch (value) {

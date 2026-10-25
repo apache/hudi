@@ -18,10 +18,12 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
 import org.apache.hudi.exception.HoodieValidationException;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedAvroKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTableFactory;
@@ -61,6 +63,7 @@ public class TestRowDataKeyGens {
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     final RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen1.getRecordKey(rowData1), is("id1"));
+    assertThat(keyGen1.getRecordKeyForComparison(rowData1), is("id1"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1"));
 
     // null record key and partition path
@@ -95,6 +98,7 @@ public class TestRowDataKeyGens {
     RowDataKeyGen keyGen1 = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
     String expectedKey = encodeSingleKeyFieldValueOnly ? "id1" : "uuid:id1";
     assertThat(keyGen1.getRecordKey(rowData1), is(expectedKey));
+    assertThat(keyGen1.getRecordKeyForComparison(rowData1), is("id1"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1/1970-01-01T00:00:00.001"));
 
     // null record key and partition path
@@ -115,6 +119,47 @@ public class TestRowDataKeyGens {
     assertThat(keyGen2.getPartitionPath(rowData3), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, "1970-01-01T00:00:00.001")));
   }
 
+  /**
+   * With the complex key generator, a single record key follows the table's persisted encoding ({@code
+   * hoodie.table.complex.keygenerator.encoding}, copied into the job configuration from hoodie.properties), whether
+   * the partition path has one field or several. Spark applies the same rule.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"FIELD_PREFIXED", "VALUE_ONLY"})
+  void testSingleKeyComplexKeygenHonorsPersistedEncoding(String persistedEncoding) {
+    final RowData rowData = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
+    String expectedKey = "FIELD_PREFIXED".equals(persistedEncoding) ? "uuid:id1" : "id1";
+    for (String partitionFields : new String[] {"partition", "partition,ts"}) {
+      Configuration conf = TestConfigurations.getDefaultConf("path1");
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, partitionFields);
+      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+      conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), persistedEncoding);
+      RowDataKeyGen keyGen = RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE);
+      assertThat("partition fields: " + partitionFields, keyGen.getRecordKey(rowData), is(expectedKey));
+      assertThat(keyGen.getRecordKeyForComparison(rowData), is("id1"));
+    }
+  }
+
+  /**
+   * Without a recorded encoding on the job (a table this job does not track) the single-key rule stays as it
+   * was: prefixed only with several partition fields and the legacy new-encoding flag off.
+   */
+  @Test
+  void testSingleKeyWithoutRecordedEncodingFollowsPartitionFields() {
+    final RowData rowData = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("id1"));
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("uuid:id1"));
+    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "true");
+    assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("id1"));
+  }
+
   @Test
   void testComplexKeyAndPartition() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
@@ -124,6 +169,7 @@ public class TestRowDataKeyGens {
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     RowDataKeyGen keyGen1 = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE);
     assertThat(keyGen1.getRecordKey(rowData1), is("uuid:id1,name:Danny"));
+    assertThat(keyGen1.getRecordKeyForComparison(rowData1), is("id1,name:Danny"));
     assertThat(keyGen1.getPartitionPath(rowData1), is("par1/1970-01-01T00:00:00.001"));
 
     // null record key and partition path
@@ -226,7 +272,7 @@ public class TestRowDataKeyGens {
   @Test
   void testPrimaryKeylessWrite() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
-    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+    conf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
     final RowData rowData1 = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
     final int taskId = 3;
@@ -243,6 +289,26 @@ public class TestRowDataKeyGens {
     final RowData rowData3 = insertRow(StringData.fromString(""), StringData.fromString("Danny"), 23,
         TimestampData.fromEpochMillis(1), StringData.fromString(""));
     assertThat(keyGen1.getRecordKey(rowData3), is(instantTime + "_" + taskId + "_2"));
+  }
+
+  @Test
+  void testTimestampBasedKeyGeneratorForKeylessWrite() {
+    final String partitionFormat = "yyyy/MM/dd";
+    final int taskId = 3;
+    final String instantTime = "000001";
+
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "ts");
+    conf.set(FlinkOptions.PARTITION_FORMAT, partitionFormat);
+    HoodieTableFactory.setupTimestampKeygenOptions(conf, DataTypes.TIMESTAMP(3));
+
+    final RowData rowData = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(7200000), StringData.fromString("par1"));
+
+    final RowDataKeyGen keyGen = RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
+    assertThat(keyGen.getRecordKey(rowData), is(instantTime + "_" + taskId + "_0"));
+    assertThat(keyGen.getPartitionPath(rowData), is("1970/01/01"));
   }
 
   @Test
@@ -264,10 +330,21 @@ public class TestRowDataKeyGens {
   }
 
   @Test
-  void testAutoKeyGenRecordKey() {
+  void testAutoKeyGenRecordKeyWithEmptyRecordKeyField() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
-    // without record keys AutoRowDataKeyGen will be used, which expects taskId and instantTime parameters for instantiation
     conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+
+    int taskId = 1;
+    String instantTime = "20250716145212986";
+    final AutoRowDataKeyGen autoKeyGen = (AutoRowDataKeyGen) RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, taskId, instantTime);
+    assertThat(autoKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(0)), is(instantTime + "_" + taskId + "_0"));
+    assertThat(autoKeyGen.getRecordKey(TestData.DATA_SET_INSERT.get(1)), is(instantTime + "_" + taskId + "_1"));
+  }
+
+  @Test
+  void testAutoKeyGenRecordKeyWithoutDeclaringRecordKeyField() {
+    Configuration conf = TestConfigurations.getDefaultConf("path1");
+    conf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
 
     int taskId = 1;
     String instantTime = "20250716145212986";
@@ -280,7 +357,7 @@ public class TestRowDataKeyGens {
   void testAutoKeyGenNotAllowNulls() {
     Configuration conf = TestConfigurations.getDefaultConf("path1");
     // without record keys AutoRowDataKeyGen will be used, which expects taskId and instantTime parameters for instantiation
-    conf.set(FlinkOptions.RECORD_KEY_FIELD, "");
+    conf.removeConfig(FlinkOptions.RECORD_KEY_FIELD);
 
     HoodieValidationException exNullInstant =
         assertThrows(HoodieValidationException.class, () -> RowDataKeyGens.instance(conf, TestConfigurations.ROW_TYPE, 1, null));

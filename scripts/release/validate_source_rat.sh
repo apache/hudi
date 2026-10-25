@@ -20,5 +20,11 @@
 #
 
 echo "Running RAT Check"
-(bash -c "mvn apache-rat:check -DdeployArtifacts=true") || (echo -e "\t\t Rat Check Failed. [ERROR]\n\t\t Please run with --verbose to get details\n" && exit 1)
+# The failure branch must not run in a subshell: `... || ( ... && exit 1 )` exits the
+# subshell, not this script, so the check used to report the error and then fall through
+# to the success message and return 0.
+if ! mvn apache-rat:check -DdeployArtifacts=true; then
+  echo -e "\t\t Rat Check Failed. [ERROR]\n\t\t See the RAT report at target/rat.txt for the offending files\n"
+  exit 1
+fi
 echo -e "\t\tRAT Check Passed [OK]\n"

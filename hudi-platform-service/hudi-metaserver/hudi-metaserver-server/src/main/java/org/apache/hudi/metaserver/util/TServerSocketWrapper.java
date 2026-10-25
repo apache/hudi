@@ -18,20 +18,18 @@
 
 package org.apache.hudi.metaserver.util;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransportException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.net.ServerSocket;
 
 /**
  * A wrapper class of thrift server socket.
  */
+@Slf4j
 public class TServerSocketWrapper extends TServerSocket {
-
-  private static final Logger LOG = LoggerFactory.getLogger(TServerSocketWrapper.class);
 
   public TServerSocketWrapper(ServerSocket serverSocket) throws TTransportException {
     super(serverSocket);
@@ -44,8 +42,7 @@ public class TServerSocketWrapper extends TServerSocket {
   @Override
   protected TSocket acceptImpl() throws TTransportException {
     TSocket socket = super.acceptImpl();
-    LOG.info("received connection from " + socket.getSocket().getInetAddress().getHostAddress()
-        + ":" + socket.getSocket().getPort());
+    log.info("received connection from {}:{}", socket.getSocket().getInetAddress().getHostAddress(), socket.getSocket().getPort());
     return socket;
   }
 }

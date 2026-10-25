@@ -20,7 +20,6 @@ package org.apache.hudi.client.clustering.run.strategy;
 
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.SerializableSchema;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
@@ -28,13 +27,12 @@ import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.ClusteringGroupInfo;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy;
-
-import org.apache.avro.Schema;
 
 import java.util.List;
 import java.util.Map;
@@ -52,16 +50,15 @@ public abstract class SingleSparkJobExecutionStrategy<T>
   }
 
   @Override
-  public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final Schema schema, final String instantTime) {
+  public HoodieWriteMetadata<HoodieData<WriteStatus>> performClustering(final HoodieClusteringPlan clusteringPlan, final HoodieSchema schema, final String instantTime) {
     final TaskContextSupplier taskContextSupplier = getEngineContext().getTaskContextSupplier();
-    final SerializableSchema serializableSchema = new SerializableSchema(schema);
     final List<ClusteringGroupInfo> clusteringGroupInfos = clusteringPlan.getInputGroups().stream().map(ClusteringGroupInfo::create).collect(Collectors.toList());
 
     ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
     HoodieData<WriteStatus> writeStatus = getEngineContext().parallelize(clusteringGroupInfos).map(group -> {
       return performClusteringForGroup(readerContextFactory, group, clusteringPlan.getStrategy().getStrategyParams(),
           Option.ofNullable(clusteringPlan.getPreserveHoodieMetadata()).orElse(false),
-          serializableSchema, taskContextSupplier, instantTime);
+          schema, taskContextSupplier, instantTime);
     }).flatMap(List::iterator);
     HoodieWriteMetadata<HoodieData<WriteStatus>> writeMetadata = new HoodieWriteMetadata<>();
     writeMetadata.setWriteStatuses(writeStatus);
@@ -72,7 +69,7 @@ public abstract class SingleSparkJobExecutionStrategy<T>
    * Submit a task to execute clustering for the group.
    */
   protected abstract List<WriteStatus> performClusteringForGroup(ReaderContextFactory<T> readerContextFactory, ClusteringGroupInfo clusteringGroup, Map<String, String> strategyParams,
-                                                                 boolean preserveHoodieMetadata, SerializableSchema schema,
+                                                                 boolean preserveHoodieMetadata, HoodieSchema schema,
                                                                  TaskContextSupplier taskContextSupplier, String instantTime);
 
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.HoodieSchemaUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -296,7 +297,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     double maxVal = Math.pow(10, decSchema.getPrecision() - decSchema.getScale());
     double minVal = maxVal * 0.1;
     for (GenericRecord record : records) {
-      BigDecimal dec = org.apache.hudi.common.schema.HoodieSchemaUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decSchema);
+      BigDecimal dec = HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decSchema);
       double doubleValue = dec.doubleValue();
       assertTrue(doubleValue <= maxVal && doubleValue >= minVal);
     }
@@ -434,7 +435,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     return new BaseErrorTableWriter<ErrorEvent<String>>(new HoodieDeltaStreamer.Config(),
         spark(), props, new HoodieSparkEngineContext(jsc()), fs()) {
       @Override
-      public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> commitedInstantTime) {
+      public JavaRDD<WriteStatus> upsert(String baseTableInstantTime, Option<String> committedInstantTime) {
         return null;
       }
 
@@ -451,12 +452,12 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
       }
 
       @Override
-      public Option<JavaRDD<HoodieRecord>> getErrorEvents(String baseTableInstantTime, Option commitedInstantTime) {
+      public Option<JavaRDD<HoodieRecord>> getErrorEvents(String baseTableInstantTime, Option committedInstantTime) {
         return Option.of(errorEvents.stream().reduce((rdd1, rdd2) -> rdd1.union(rdd2)).get());
       }
 
       @Override
-      public boolean upsertAndCommit(String baseTableInstantTime, Option commitedInstantTime) {
+      public boolean upsertAndCommit(String baseTableInstantTime, Option committedInstantTime) {
         return false;
       }
     };

@@ -57,6 +57,8 @@ public class HoodieWithTimelineServer implements Serializable {
     public String sparkMaster = null;
     @Parameter(names = {"--spark-memory", "-sm"}, description = "spark memory to use", required = true)
     public String sparkMemory = null;
+    @Parameter(names = {"--enable-hive-support", "-ehs"}, description = "Enables hive support during spark context initialization.", required = false)
+    public Boolean enableHiveSupport = false;
     @Parameter(names = {"--num-partitions", "-n"}, description = "Num Partitions")
     public Integer numPartitions = 100;
     @Parameter(names = {"--server-port", "-p"}, description = " Server Port")
@@ -81,7 +83,7 @@ public class HoodieWithTimelineServer implements Serializable {
     }
 
     HoodieWithTimelineServer service = new HoodieWithTimelineServer(cfg);
-    service.run(UtilHelpers.buildSparkContext("client-server-hoodie", cfg.sparkMaster, cfg.sparkMemory));
+    service.run(UtilHelpers.buildSparkContext("client-server-hoodie", cfg.sparkMaster, cfg.sparkMemory, cfg.enableHiveSupport));
   }
 
   public void run(JavaSparkContext jsc) throws UnknownHostException {

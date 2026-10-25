@@ -37,7 +37,6 @@ import org.apache.hudi.table.action.cluster.strategy.BaseConsistentHashingBucket
 import org.apache.hudi.table.action.commit.SparkBulkInsertHelper;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.avro.Schema;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 
@@ -84,7 +83,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
 
   @Override
   public HoodieData<WriteStatus> performClusteringWithRecordsRDD(HoodieData<HoodieRecord<T>> inputRecords, int numOutputGroups, String instantTime,
-                                                                 Map<String, String> strategyParams, Schema schema, List<HoodieFileGroupId> fileGroupIdList,
+                                                                 Map<String, String> strategyParams, HoodieSchema schema, List<HoodieFileGroupId> fileGroupIdList,
                                                                  boolean preserveHoodieMetadata, Map<String, String> extraMetadata) {
 
     log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);

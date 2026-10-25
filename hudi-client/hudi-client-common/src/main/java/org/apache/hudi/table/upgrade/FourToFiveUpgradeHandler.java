@@ -82,7 +82,9 @@ public class FourToFiveUpgradeHandler implements UpgradeHandler {
     // dt=default/ht=default, only need check dt=default
     if (hiveStylePartitioningEnable) {
       String[] partitions = tableConfig.getPartitionFields().get();
-      checkPartitionPath = partitions[0] + "=" + DEPRECATED_DEFAULT_PARTITION_PATH;
+      if (partitions.length > 0) {
+        checkPartitionPath = partitions[0] + "=" + DEPRECATED_DEFAULT_PARTITION_PATH;
+      }
     }
 
     return table.getStorage().exists(new StoragePath(config.getBasePath() + "/" + checkPartitionPath));

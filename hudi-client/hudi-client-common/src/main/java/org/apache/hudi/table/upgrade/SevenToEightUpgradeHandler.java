@@ -18,8 +18,8 @@
 
 package org.apache.hudi.table.upgrade;
 
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter;
-import org.apache.hudi.client.utils.LegacyArchivedMetaEntryReader;
+import org.apache.hudi.client.timeline.LSMTimelineWriter;
+import org.apache.hudi.client.timeline.LegacyArchivedMetaEntryReader;
 import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -49,7 +49,6 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StoragePath;
@@ -70,8 +69,6 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V1;
 import static org.apache.hudi.common.table.timeline.TimelineLayout.TIMELINE_LAYOUT_V2;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.SIX_TO_EIGHT_TIMELINE_ACTION_MAP;
 import static org.apache.hudi.table.upgrade.UpgradeDowngradeUtils.checkAndHandleMetadataTable;
 
@@ -91,10 +88,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     HoodieTable table = upgradeDowngradeHelper.getTable(config, context);
     HoodieTableMetaClient metaClient = table.getMetaClient();
     HoodieTableConfig tableConfig = metaClient.getTableConfig();
-    if (config.enableComplexKeygenValidation()
-        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage("upgrade"));
-    }
     // If metadata is enabled for the data table, and existing metadata table is behind the data table, then delete it
     checkAndHandleMetadataTable(context, table, config, metaClient, true);
 
@@ -137,7 +130,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       }, instants.size());
     }
 
-    upgradeToLSMTimeline(table, context, config);
+    upgradeToLSMTimeline(table, config);
 
     return new UpgradeDowngrade.TableConfigChangeSet(tablePropsToAdd, Collections.emptySet());
   }
@@ -249,7 +242,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
     }
   }
 
-  static void upgradeToLSMTimeline(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig config) {
+  static void upgradeToLSMTimeline(HoodieTable table, HoodieWriteConfig config) {
     table.getMetaClient().getTableConfig().getTimelineLayoutVersion().ifPresent(
         timelineLayoutVersion -> ValidationUtils.checkState(TimelineLayoutVersion.LAYOUT_VERSION_1.equals(timelineLayoutVersion),
             "Upgrade to LSM timeline is only supported for layout version 1. Given version: " + timelineLayoutVersion));
@@ -257,7 +250,12 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
       LegacyArchivedMetaEntryReader reader = new LegacyArchivedMetaEntryReader(table.getMetaClient());
       StoragePath archivePath = new StoragePath(table.getMetaClient().getMetaPath(), "timeline/history");
       LSMTimelineWriter lsmTimelineWriter = LSMTimelineWriter.getInstance(config, table, Option.of(archivePath));
-      int batchSize = config.getCommitArchivalBatchSize();
+      // Use a dedicated, larger batch size for the one-time migration to minimize the number of parquet
+      // files created on remote storage. Each write() call involves multiple remote storage operations
+      // (exists check, parquet write, manifest update); the regular archival batch size is much smaller
+      // than what migration needs, so with hundreds of actions it creates excessive I/O that
+      // significantly increases the migration time.
+      int batchSize = config.getMigrationCommitArchivalBatchSize();
       List<ActiveAction> activeActionsBatch = new ArrayList<>(batchSize);
       try (ClosableIterator<ActiveAction> iterator = reader.getActiveActionsIterator()) {
         while (iterator.hasNext()) {
@@ -265,7 +263,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
           // If the batch is full, write it to the LSM timeline
           if (activeActionsBatch.size() == batchSize) {
             lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
-            lsmTimelineWriter.compactAndClean(engineContext);
             activeActionsBatch.clear();
           }
         }
@@ -273,7 +270,6 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
         // Write any remaining actions in the final batch
         if (!activeActionsBatch.isEmpty()) {
           lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
-          lsmTimelineWriter.compactAndClean(engineContext);
         }
       }
     } catch (Exception e) {

@@ -26,9 +26,12 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * A schedule node in the DAG of operations for a workflow helps to schedule compact operation.
  */
+@Slf4j
 public class ScheduleCompactNode extends DagNode<Option<String>> {
 
   public ScheduleCompactNode(Config config) {

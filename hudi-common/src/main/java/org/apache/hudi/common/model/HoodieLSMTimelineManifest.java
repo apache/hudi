@@ -21,8 +21,10 @@ package org.apache.hudi.common.model;
 import org.apache.hudi.common.util.JsonUtils;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -34,11 +36,12 @@ import java.util.stream.Collectors;
  * Manifest entry for a version snapshot of the archived timeline.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Slf4j
 public class HoodieLSMTimelineManifest implements Serializable {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieLSMTimelineManifest.class);
 
   public static final HoodieLSMTimelineManifest EMPTY = new HoodieLSMTimelineManifest();
 
+  @Getter
   private final List<LSMFileEntry> files;
 
   // for ser/deser
@@ -56,10 +59,6 @@ public class HoodieLSMTimelineManifest implements Serializable {
 
   public void addFile(LSMFileEntry fileEntry) {
     this.files.add(fileEntry);
-  }
-
-  public List<LSMFileEntry> getFiles() {
-    return files;
   }
 
   public List<String> getFileNames() {
@@ -97,29 +96,16 @@ public class HoodieLSMTimelineManifest implements Serializable {
   /**
    * A file entry.
    */
+  @AllArgsConstructor
+  @NoArgsConstructor
+  @Getter
   public static class LSMFileEntry implements Serializable, Comparable<LSMFileEntry> {
+
     private String fileName;
     private long fileLen;
 
-    // for ser/deser
-    public LSMFileEntry() {
-    }
-
-    private LSMFileEntry(String fileName, long fileLen) {
-      this.fileName = fileName;
-      this.fileLen = fileLen;
-    }
-
     public static LSMFileEntry getInstance(String fileName, long fileLen) {
       return new LSMFileEntry(fileName, fileLen);
-    }
-
-    public String getFileName() {
-      return fileName;
-    }
-
-    public long getFileLen() {
-      return fileLen;
     }
 
     @Override

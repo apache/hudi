@@ -19,8 +19,10 @@
 package org.apache.hudi.table.action.cluster.strategy;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -29,12 +31,19 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class TestPartitionAwareClusteringPlanStrategy {
 
@@ -78,10 +87,76 @@ public class TestPartitionAwareClusteringPlanStrategy {
     assertTrue(list.contains("20210723"));
   }
 
+  @Test
+  public void testResolveMissingPartitionsFromCurrentWindow() {
+    HoodieWriteConfig incrementalConfig = mock(HoodieWriteConfig.class);
+    when(incrementalConfig.isIncrementalTableServiceEnabled()).thenReturn(true);
+    DummyPartitionAwareClusteringPlanStrategy incrementalStrategy =
+        new DummyPartitionAwareClusteringPlanStrategy(table, context, incrementalConfig);
+
+    assertEquals(Arrays.asList("p2", "p4"),
+        incrementalStrategy.resolveMissingPartitionsFromCurrentWindow(
+            Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4")));
+
+    HoodieWriteConfig nonIncrementalConfig = mock(HoodieWriteConfig.class);
+    when(nonIncrementalConfig.isIncrementalTableServiceEnabled()).thenReturn(false);
+    DummyPartitionAwareClusteringPlanStrategy nonIncrementalStrategy =
+        new DummyPartitionAwareClusteringPlanStrategy(table, context, nonIncrementalConfig);
+
+    List<String> nonIncrementalMissingPartitions = nonIncrementalStrategy.resolveMissingPartitionsFromCurrentWindow(
+        Arrays.asList("p1", "p3"), Arrays.asList("p1", "p2", "p3", "p4"));
+    assertTrue(nonIncrementalMissingPartitions.isEmpty());
+    nonIncrementalMissingPartitions.addAll(Collections.singletonList("p5"));
+    assertEquals(Collections.singletonList("p5"), nonIncrementalMissingPartitions);
+  }
+
+  @Test
+  public void testResolveEngineContextUsesLocalWhenEnabled() {
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("dummy_Table_Path")
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .useLocalEngineContextForPlanGeneration(true)
+            .build())
+        .build();
+
+    DummyPartitionAwareClusteringPlanStrategy strategy =
+        new DummyPartitionAwareClusteringPlanStrategy(table, engineContext, config);
+    HoodieEngineContext resolved = strategy.resolveEngineContextForPlanGeneration();
+
+    assertInstanceOf(HoodieLocalEngineContext.class, resolved,
+        "Expected HoodieLocalEngineContext but got " + resolved.getClass().getName());
+    assertNotSame(engineContext, resolved,
+        "Expected a new HoodieLocalEngineContext instance, but got the same instance");
+  }
+
+  @Test
+  public void testResolveEngineContextUsesDistributedWhenDisabled() {
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(new HadoopStorageConfiguration(false));
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath("dummy_Table_Path")
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .useLocalEngineContextForPlanGeneration(false)
+            .build())
+        .build();
+
+    DummyPartitionAwareClusteringPlanStrategy strategy =
+        new DummyPartitionAwareClusteringPlanStrategy(table, engineContext, config);
+    HoodieEngineContext resolved = strategy.resolveEngineContextForPlanGeneration();
+
+    assertSame(engineContext, resolved,
+        "Expected the original engine context to be returned when local engine context is disabled");
+  }
+
   class DummyPartitionAwareClusteringPlanStrategy extends PartitionAwareClusteringPlanStrategy {
 
     public DummyPartitionAwareClusteringPlanStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
       super(table, engineContext, writeConfig);
+    }
+
+    List<String> resolveMissingPartitionsFromCurrentWindow(List<String> partitionsToSchedule,
+                                                           List<String> partitionsInCurrentWindow) {
+      return getMissingPartitionsFromCurrentWindow(partitionsToSchedule, partitionsInCurrentWindow);
     }
 
     @Override

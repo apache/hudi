@@ -24,9 +24,8 @@ import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.hive.SchemaDifference;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -34,6 +33,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -41,15 +41,16 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_CREATE_MANAGED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BUCKET_SYNC_SPEC;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 
 /**
  * Schema Utilities.
  */
+@Slf4j
 public class HiveSchemaUtil {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HiveSchemaUtil.class);
   public static final String HIVE_ESCAPE_CHARACTER = "`";
 
   public static final String BOOLEAN_TYPE_NAME = "boolean";
@@ -77,7 +78,7 @@ public class HiveSchemaUtil {
     } catch (IOException e) {
       throw new HoodieHiveSyncException("Failed to convert schema to hive schema", e);
     }
-    LOG.debug("Getting schema difference for {} \r\n\r\n{}", tableSchema, newTableSchema);
+    log.debug("Getting schema difference for {} \r\n\r\n{}", tableSchema, newTableSchema);
 
     SchemaDifference.Builder schemaDiffBuilder = SchemaDifference.newBuilder(storageSchema, tableSchema);
     Set<String> tableColumns = new HashSet<>();
@@ -96,7 +97,7 @@ public class HiveSchemaUtil {
             continue;
           }
           // We will log this and continue. Hive schema is a superset of all schemas
-          LOG.info("Ignoring table column {} as its not present in the table schema", fieldName);
+          log.info("Ignoring table column {} as its not present in the table schema", fieldName);
           continue;
         }
         tableColumnType = tableColumnType.replaceAll("\\s+", "");
@@ -118,7 +119,7 @@ public class HiveSchemaUtil {
       }
     }
     SchemaDifference result = schemaDiffBuilder.build();
-    LOG.debug("Difference between schemas: {}", result);
+    log.debug("Difference between schemas: {}", result);
     return result;
   }
 
@@ -173,6 +174,11 @@ public class HiveSchemaUtil {
     LinkedHashMap<String, String> hiveSchema = new LinkedHashMap<>();
     List<HoodieSchemaField> fields = schema.getFields();
     for (HoodieSchemaField field : fields) {
+      // Fields of the "null" type always hold null and have no Hive equivalent. They are skipped, the same
+      // way the parquet writer skips them, so the Hive schema matches the columns present in the data files.
+      if (field.schema().isSchemaNull()) {
+        continue;
+      }
       hiveSchema.put(field.name(), convertField(field.schema(), supportTimestamp, doFormat));
     }
     return hiveSchema;
@@ -226,6 +232,7 @@ public class HiveSchemaUtil {
       case BYTES:
       case UUID:
       case FIXED:
+      case VECTOR:
         return BINARY_TYPE_NAME;
       case DATE:
         return "DATE";
@@ -249,6 +256,8 @@ public class HiveSchemaUtil {
         HoodieSchema valueType = nonNullType.getValueType();
         return createHiveMap(convertField(keyType, supportTimestamp, doFormat), convertField(valueType, supportTimestamp, doFormat), doFormat);
       case RECORD:
+      case BLOB:
+      case VARIANT:
         return createHiveStruct(nonNullType.getFields(), supportTimestamp, doFormat);
       default:
         throw new UnsupportedOperationException("Cannot convert type " + nonNullType.getType());
@@ -265,6 +274,9 @@ public class HiveSchemaUtil {
     StringBuilder struct = new StringBuilder();
     struct.append(doFormat ? "STRUCT< " : "STRUCT<");
     for (HoodieSchemaField field : fields) {
+      if (field.schema().isSchemaNull()) {
+        continue;
+      }
       // TODO: struct field name is only translated to support special char($)
       // We will need to extend it to other collection type
       struct.append(hiveCompatibleFieldName(field.name(), true, doFormat)).append(doFormat ? " : " : ":");
@@ -334,12 +346,23 @@ public class HiveSchemaUtil {
   }
 
   public static String generateSchemaString(HoodieSchema storageSchema, List<String> colsToSkip, boolean supportTimestamp) throws IOException {
+    return generateSchemaString(storageSchema, colsToSkip, supportTimestamp, Collections.emptyMap());
+  }
+
+  public static String generateSchemaString(HoodieSchema storageSchema, List<String> colsToSkip, boolean supportTimestamp,
+                                            Map<String, String> fieldDocs) throws IOException {
     Map<String, String> hiveSchema = convertSchemaToHiveSchema(storageSchema, supportTimestamp);
     StringBuilder columns = new StringBuilder();
     for (Map.Entry<String, String> hiveSchemaEntry : hiveSchema.entrySet()) {
-      if (!colsToSkip.contains(removeSurroundingTick(hiveSchemaEntry.getKey()))) {
+      String fieldName = removeSurroundingTick(hiveSchemaEntry.getKey());
+      if (!colsToSkip.contains(fieldName)) {
         columns.append(hiveSchemaEntry.getKey()).append(" ");
-        columns.append(hiveSchemaEntry.getValue()).append(", ");
+        columns.append(hiveSchemaEntry.getValue());
+        String doc = fieldDocs.get(fieldName.toLowerCase(Locale.ROOT));
+        if (doc != null) {
+          columns.append(" COMMENT '").append(escapeSqlString(doc)).append("'");
+        }
+        columns.append(", ");
       }
     }
     // Remove the last ", "
@@ -347,17 +370,43 @@ public class HiveSchemaUtil {
     return columns.toString();
   }
 
+  /**
+   * Backslash-escapes backslashes and single quotes so the value survives as a Hive SQL string literal,
+   * e.g. in COMMENT clauses and TBLPROPERTIES values.
+   */
+  public static String escapeSqlString(String value) {
+    return value.replace("\\", "\\\\").replace("'", "\\'");
+  }
+
+  /**
+   * Returns the doc of each field of the schema keyed by lower-cased field name, fields without doc are skipped.
+   * If two field names collide case-insensitively, the doc of the first one wins; in practice this cannot
+   * happen for a synced table since Hive lower-cases all field names.
+   */
+  public static Map<String, String> getFieldDocs(HoodieSchema schema) {
+    return schema.getFields().stream()
+        .filter(field -> field.doc().map(doc -> !doc.isEmpty()).orElse(false))
+        .collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), field -> field.doc().get(), (existing, duplicate) -> existing));
+  }
+
   public static String generateCreateDDL(String tableName, HoodieSchema storageSchema, HiveSyncConfig config, String inputFormatClass,
                                          String outputFormatClass, String serdeClass, Map<String, String> serdeProperties,
                                          Map<String, String> tableProperties) throws IOException {
     Map<String, String> hiveSchema = convertSchemaToHiveSchema(storageSchema, config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
-    String columns = generateSchemaString(storageSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS), config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE));
+    Map<String, String> fieldDocs = config.getBoolean(HIVE_SYNC_COMMENT) ? getFieldDocs(storageSchema) : Collections.emptyMap();
+    String columns = generateSchemaString(storageSchema, config.getSplitStrings(META_SYNC_PARTITION_FIELDS),
+        config.getBoolean(HIVE_SUPPORT_TIMESTAMP_TYPE), fieldDocs);
 
     List<String> partitionFields = new ArrayList<>();
     for (String partitionKey : config.getSplitStrings(META_SYNC_PARTITION_FIELDS)) {
       String partitionKeyWithTicks = tickSurround(partitionKey);
-      partitionFields.add(partitionKeyWithTicks + " "
-          + getPartitionKeyType(hiveSchema, partitionKeyWithTicks));
+      String partitionField = partitionKeyWithTicks + " "
+          + getPartitionKeyType(hiveSchema, partitionKeyWithTicks);
+      String doc = fieldDocs.get(partitionKey.toLowerCase(Locale.ROOT));
+      if (doc != null) {
+        partitionField += " COMMENT '" + escapeSqlString(doc) + "'";
+      }
+      partitionFields.add(partitionField);
     }
 
     String partitionsStr = String.join(",", partitionFields);
@@ -381,7 +430,7 @@ public class HiveSchemaUtil {
       sb.append(" WITH SERDEPROPERTIES (").append(propertyToString(serdeProperties)).append(")");
     }
     sb.append(" STORED AS INPUTFORMAT '").append(inputFormatClass).append("'");
-    sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(config.getAbsoluteBasePath()).append("'");
+    sb.append(" OUTPUTFORMAT '").append(outputFormatClass).append("' LOCATION '").append(escapeSqlString(config.getAbsoluteBasePath())).append("'");
 
     if (tableProperties != null && !tableProperties.isEmpty()) {
       sb.append(" TBLPROPERTIES(").append(propertyToString(tableProperties)).append(")");
@@ -399,7 +448,7 @@ public class HiveSchemaUtil {
       if (!first) {
         sb.append(",");
       }
-      sb.append("'").append(entry.getKey()).append("'='").append(entry.getValue()).append("'");
+      sb.append("'").append(escapeSqlString(entry.getKey())).append("'='").append(escapeSqlString(entry.getValue())).append("'");
       first = false;
     }
     return sb.toString();

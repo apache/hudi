@@ -34,7 +34,7 @@ public class TestInputBatch {
 
   @Test
   public void getSchemaProviderShouldThrowException() {
-    final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), (String) null, null);
+    final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), null, null);
     Throwable t = assertThrows(HoodieException.class, inputBatch::getSchemaProvider);
     assertEquals("Schema provider is required for this operation and for the source of interest. "
         + "Please set '--schemaprovider-class' in the top level HoodieStreamer config for the source of interest. "
@@ -45,7 +45,7 @@ public class TestInputBatch {
 
   @Test
   public void getSchemaProviderShouldReturnNullSchemaProvider() {
-    final InputBatch<String> inputBatch = new InputBatch<>(Option.empty(), (String) null, null);
+    final InputBatch<String> inputBatch = new InputBatch<>(Option.empty(), null, null);
     SchemaProvider schemaProvider = inputBatch.getSchemaProvider();
     assertTrue(schemaProvider instanceof InputBatch.NullSchemaProvider);
   }
@@ -53,7 +53,7 @@ public class TestInputBatch {
   @Test
   public void getSchemaProviderShouldReturnGivenSchemaProvider() {
     SchemaProvider schemaProvider = new RowBasedSchemaProvider(null);
-    final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), (String) null, schemaProvider);
+    final InputBatch<String> inputBatch = new InputBatch<>(Option.of("foo"), null, schemaProvider);
     assertSame(schemaProvider, inputBatch.getSchemaProvider());
   }
 }

@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.schema;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.utilities.config.ProtoClassBasedSchemaProviderConfig;
 import org.apache.hudi.utilities.test.proto.Parent;
 import org.apache.hudi.utilities.test.proto.Sample;
@@ -82,5 +83,37 @@ public class TestProtoClassBasedSchemaProvider {
     HoodieSchema protoSchema = protoToAvroSchemaProvider.getSourceHoodieSchema();
     HoodieSchema expectedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/oneof_schema.avsc"));
     Assertions.assertEquals(expectedSchema, protoSchema);
+  }
+
+  @Test
+  public void validateTargetSchemaFallsBackToSourceSchema() {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(), Sample.class.getName());
+    ProtoClassBasedSchemaProvider protoToAvroSchemaProvider = new ProtoClassBasedSchemaProvider(properties, null);
+    HoodieSchema expectedSchema = new HoodieSchema.Parser().parse(getClass().getClassLoader().getResourceAsStream("schema-provider/proto/sample_schema_defaults.avsc"));
+    // no target schema is configurable for this provider, so both accessors must serve the source schema
+    Assertions.assertEquals(expectedSchema, HoodieSchema.fromAvroSchema(protoToAvroSchemaProvider.getSourceSchema()));
+    Assertions.assertEquals(expectedSchema, HoodieSchema.fromAvroSchema(protoToAvroSchemaProvider.getTargetSchema()));
+  }
+
+  @Test
+  public void validateUnknownProtoClassFailsOnConstruction() {
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ProtoClassBasedSchemaProviderConfig.PROTO_SCHEMA_CLASS_NAME.key(),
+        "org.apache.hudi.utilities.test.proto.NoSuchMessage");
+    // the proto class is loaded eagerly, so an unknown class is rejected before any schema is served
+    Assertions.assertThrows(HoodieSchemaException.class, () -> new ProtoClassBasedSchemaProvider(properties, null));
+  }
+
+  @Test
+  public void validateDeprecatedConfigConstants() {
+    Assertions.assertEquals("hoodie.streamer.schemaprovider.proto.class.name",
+        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_CLASS_NAME.key());
+    Assertions.assertEquals("hoodie.streamer.schemaprovider.proto.flatten.wrappers",
+        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_WRAPPED_PRIMITIVES_AS_RECORDS.key());
+    Assertions.assertEquals("hoodie.streamer.schemaprovider.proto.timestamps.as.records",
+        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_TIMESTAMPS_AS_RECORDS.key());
+    Assertions.assertEquals("hoodie.streamer.schemaprovider.proto.max.recursion.depth",
+        ProtoClassBasedSchemaProvider.Config.PROTO_SCHEMA_MAX_RECURSION_DEPTH.key());
   }
 }

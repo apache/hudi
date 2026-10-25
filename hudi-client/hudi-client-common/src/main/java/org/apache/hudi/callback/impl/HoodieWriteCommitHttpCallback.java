@@ -18,9 +18,8 @@
 package org.apache.hudi.callback.impl;
 
 import org.apache.hudi.callback.HoodieWriteCommitCallback;
-import org.apache.hudi.callback.client.http.HoodieWriteCommitHttpCallbackClient;
+import org.apache.hudi.callback.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
-import org.apache.hudi.callback.util.HoodieWriteCommitCallbackUtil;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import lombok.extern.slf4j.Slf4j;

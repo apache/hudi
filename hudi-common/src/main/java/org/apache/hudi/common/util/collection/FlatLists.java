@@ -21,6 +21,8 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 
 import java.util.AbstractList;
 import java.util.ArrayList;
@@ -31,9 +33,8 @@ import java.util.stream.Collectors;
 /**
  * Space-efficient, comparable, immutable lists, copied from calcite core.
  */
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class FlatLists {
-  private FlatLists() {
-  }
 
   /**
    * Creates a memory-, CPU- and cache-efficient immutable list from an

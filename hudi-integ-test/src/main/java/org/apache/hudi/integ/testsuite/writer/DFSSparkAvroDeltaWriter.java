@@ -18,10 +18,12 @@
 
 package org.apache.hudi.integ.testsuite.writer;
 
-import java.io.IOException;
-import org.apache.avro.generic.GenericRecord;
 import org.apache.hudi.integ.testsuite.writer.DeltaWriterAdapter.SparkBasedDeltaWriter;
+
+import org.apache.avro.generic.GenericRecord;
 import org.apache.spark.api.java.JavaRDD;
+
+import java.io.IOException;
 
 /**
  * NEED TO IMPLEMENT A CUSTOM SPARK PARTITIONER TO ENSURE WE WRITE LARGE ENOUGH AVRO FILES.

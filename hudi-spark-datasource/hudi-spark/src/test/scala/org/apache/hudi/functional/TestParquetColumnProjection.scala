@@ -340,7 +340,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       else HoodieTestDataGenerator.HOODIE_SCHEMA
 
     val records = dataGen.generateInserts("001", recordCount)
-    val inputDF: Dataset[Row] = toDataset(records, HoodieTestDataGenerator.HOODIE_SCHEMA.getAvroSchema)
+    val inputDF: Dataset[Row] = toDataset(records, HoodieTestDataGenerator.HOODIE_SCHEMA)
 
     inputDF.write.format("org.apache.hudi")
       .options(opts)
@@ -372,7 +372,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       val updatedRecords = dataGen.generateUpdates("002", recordsToUpdate.asJava)
 
       // Step 2: Update M records out of those (t/h update)
-      val inputDF = toDataset(updatedRecords, HoodieTestDataGenerator.AVRO_SCHEMA)
+      val inputDF = toDataset(updatedRecords, HoodieTestDataGenerator.HOODIE_SCHEMA)
 
       inputDF.write.format("org.apache.hudi")
         .options(opts)
@@ -402,7 +402,7 @@ class TestParquetColumnProjection extends SparkClientFunctionalTestHarness with 
       val updatedRecords = dataGen.generateUpdates("%03d".format(i), recordsToUpdate.asJava)
 
       // Step 2: Update M records out of those (t/h update)
-      val inputDF = toDataset(updatedRecords, HoodieTestDataGenerator.AVRO_SCHEMA)
+      val inputDF = toDataset(updatedRecords, HoodieTestDataGenerator.HOODIE_SCHEMA)
 
       val compactScheduleInline = if (inlineCompact) "false" else "true"
       val compactInline = if (inlineCompact) "true" else "false"

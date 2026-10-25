@@ -25,9 +25,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.index.bloom.HoodieBloomIndex;
 import org.apache.hudi.index.bloom.ListBasedHoodieBloomIndexHelper;
-import org.apache.hudi.index.inmemory.HoodieInMemoryHashIndex;
-import org.apache.hudi.index.simple.HoodieGlobalSimpleIndex;
-import org.apache.hudi.index.simple.HoodieSimpleIndex;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieAvroKeyGeneratorFactory;
 

@@ -85,7 +85,7 @@ class RunCleanProcedure extends BaseProcedure with ProcedureBuilder with Logging
       confs += HoodieCleanConfig.CLEAN_TRIGGER_STRATEGY.key() -> getArgValueOrDefault(args, PARAMETERS(6)).get.toString
     }
     if (getArgValueOrDefault(args, PARAMETERS(7)).isDefined) {
-      confs += HoodieCleanConfig.CLEAN_MAX_COMMITS.key() -> getArgValueOrDefault(args, PARAMETERS(7)).get.toString
+      confs += HoodieCleanConfig.CLEAN_TRIGGER_MAX_COMMITS.key() -> getArgValueOrDefault(args, PARAMETERS(7)).get.toString
     }
     if (getArgValueOrDefault(args, PARAMETERS(8)).isDefined) {
       confs ++= HoodieCLIUtils.extractOptions(getArgValueOrDefault(args, PARAMETERS(8)).get.asInstanceOf[String])

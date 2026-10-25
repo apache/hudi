@@ -27,8 +27,10 @@ import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 
 import java.io.Serializable;
@@ -73,12 +75,18 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
    * a completion query for t5 would trigger lazy loading with this cursor instant updated to t5.
    * This sliding window model amortizes redundant loading from different queries.
    */
+  @Getter
   private volatile String cursorInstant;
 
   /**
    * The first write instant on the active timeline, used for query optimization.
    */
   private final String firstNonSavepointCommit;
+
+  /**
+   * The initial cursor instant: write instants before it are archived, except the savepointed ones.
+   */
+  private final String firstActiveWriteInstant;
 
   /**
    * The constructor.
@@ -88,9 +96,15 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   public CompletionTimeQueryViewV2(HoodieTableMetaClient metaClient) {
     this.metaClient = metaClient;
     this.instantTimeToCompletionTimeMap = new ConcurrentHashMap<>();
-    this.cursorInstant = metaClient.getActiveTimeline().firstInstant().map(HoodieInstant::requestedTime).orElse("");
+    HoodieTimeline activeTimeline = metaClient.getActiveTimeline();
+    // Tables upgraded from pre-v8 can have interleaved archived and active instants,
+    // start at the first non-savepointed write so older active instants do not hide archived writes,
+    // fall back to the last active instant when no such write exists.
+    this.firstActiveWriteInstant = activeTimeline.getTimelineOfActions(HoodieTimeline.WRITE_AND_SAVEPOINT_ACTIONS).getFirstNonSavepointCommit()
+        .or(activeTimeline::lastInstant).map(HoodieInstant::requestedTime).orElse("");
+    this.cursorInstant = this.firstActiveWriteInstant;
     // Note: use getWriteTimeline() to keep sync with the fs view visibleCommitsAndCompactionTimeline, see AbstractTableFileSystemView.refreshTimeline.
-    this.firstNonSavepointCommit = metaClient.getActiveTimeline().getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::requestedTime).orElse("");
+    this.firstNonSavepointCommit = activeTimeline.getWriteTimeline().getFirstNonSavepointCommit().map(HoodieInstant::requestedTime).orElse("");
     load();
   }
 
@@ -99,14 +113,17 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
    */
   public boolean isCompleted(String instantTime) {
     // archival does not proceed beyond the first savepoint, so any instant before that is completed.
-    return this.instantTimeToCompletionTimeMap.containsKey(instantTime) || isArchived(instantTime);
+    return this.instantTimeToCompletionTimeMap.containsKey(instantTime)
+        || InstantComparison.compareTimestamps(instantTime, LESSER_THAN, this.firstNonSavepointCommit);
   }
 
   /**
    * Returns whether the instant is archived.
    */
   public boolean isArchived(String instantTime) {
-    return InstantComparison.compareTimestamps(instantTime, LESSER_THAN, this.firstNonSavepointCommit);
+    // A savepointed write or an older clean/rollback can still be active before the write boundary.
+    return InstantComparison.compareTimestamps(instantTime, LESSER_THAN, this.firstActiveWriteInstant)
+        && !this.metaClient.getActiveTimeline().containsInstant(instantTime);
   }
 
   /**
@@ -280,14 +297,13 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
     // This operation is resource costly.
     synchronized (this) {
       if (InstantComparison.compareTimestamps(startTime, LESSER_THAN, this.cursorInstant)) {
-        metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadInstants(metaClient,
+        Option<String> oldestStartTime = metaClient.getTableFormat().getTimelineFactory().createArchivedTimelineLoader().loadAllInstantsFromFilesInRange(metaClient,
             new HoodieArchivedTimeline.ClosedOpenTimeRangeFilter(startTime, this.cursorInstant),
             HoodieArchivedTimeline.LoadMode.TIME,
-            r -> true,
             this::readCompletionTime);
+        // refresh the start instant
+        this.cursorInstant = oldestStartTime.map(time -> InstantComparison.minTimestamp(startTime, time)).orElse(startTime);
       }
-      // refresh the start instant
-      this.cursorInstant = startTime;
     }
   }
 
@@ -302,8 +318,9 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
   }
 
   private void readCompletionTime(String instantTime, GenericRecord record) {
-    final String completionTime = record.get(COMPLETION_TIME_ARCHIVED_META_FIELD).toString();
-    setCompletionTime(instantTime, completionTime);
+    // The field is nullable in HoodieLSMTimelineInstant and is absent for instants archived before it
+    // existed, so leave the fallback to setCompletionTime rather than dereferencing here.
+    setCompletionTime(instantTime, StringUtils.objToString(record.get(COMPLETION_TIME_ARCHIVED_META_FIELD)));
   }
 
   private void setCompletionTime(String beginInstantTime, String completionTime) {
@@ -312,11 +329,6 @@ public class CompletionTimeQueryViewV2 implements CompletionTimeQueryView, Seria
       completionTime = beginInstantTime;
     }
     this.instantTimeToCompletionTimeMap.putIfAbsent(beginInstantTime, completionTime);
-  }
-
-  @Override
-  public String getCursorInstant() {
-    return cursorInstant;
   }
 
   @Override

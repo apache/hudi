@@ -28,6 +28,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
+import static org.apache.hudi.common.util.PartitionPathEncodeUtils.isDefaultPartitionValue;
+
 /**
  * HDFS Path contain hive partition values for the keys it is partitioned on. This mapping is not straight forward and
  * requires a pluggable implementation to extract the partition value from HDFS path.
@@ -52,6 +55,13 @@ public class SlashEncodedDayPartitionValueExtractor implements PartitionValueExt
 
   @Override
   public List<String> extractPartitionValuesInPath(String partitionPath) {
+    // NOTE: A null or empty partition value lands in the default-partition directory, which is a
+    //       single segment rather than the yyyy/mm/dd layout it would otherwise be. Hive uses this
+    //       same marker for a null partition value, so it is passed straight through. The
+    //       pre-0.12 "default" marker is recognised too, matching PartitionPathParser#parseValue
+    if (isDefaultPartitionValue(partitionPath)) {
+      return Collections.singletonList(DEFAULT_PARTITION_PATH);
+    }
     // partition path is expected to be in this format yyyy/mm/dd
     String[] splits = partitionPath.split("/");
     if (splits.length != 3) {

@@ -30,17 +30,18 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile, HoodieRecordMerger}
 import org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
+import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.serialization.DefaultSerializer
 import org.apache.hudi.common.table.{HoodieTableMetaClient, PartialUpdateMode}
 import org.apache.hudi.common.table.cdc.{HoodieCDCFileSplit, HoodieCDCUtils}
 import org.apache.hudi.common.table.cdc.HoodieCDCInferenceCase._
 import org.apache.hudi.common.table.cdc.HoodieCDCOperation._
 import org.apache.hudi.common.table.cdc.HoodieCDCSupplementalLoggingMode._
-import org.apache.hudi.common.table.log.{HoodieCDCLogRecordIterator, HoodieMergedLogRecordReader}
-import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, UpdateProcessor}
+import org.apache.hudi.common.table.log.{HoodieCDCEngineRecordAccessor, HoodieCDCInlineLogRecordIterator, HoodieCDCLogRecord, HoodieCDCLogRecordIterator, HoodieCDCNativeLogRecordIterator, HoodieMergedLogRecordReader}
+import org.apache.hudi.common.table.read.{BufferedRecord, BufferedRecordMerger, BufferedRecordMergerFactory, BufferedRecords, FileGroupReaderSchemaHandler, HoodieFileGroupReader, HoodieReadStats, IteratorMode, TableState, UpdateProcessor}
 import org.apache.hudi.common.table.read.buffer.KeyBasedFileGroupRecordBuffer
-import org.apache.hudi.common.util.{DefaultSizeEstimator, HoodieRecordUtils, Option}
-import org.apache.hudi.common.util.collection.ExternalSpillableMap
+import org.apache.hudi.common.util.{DefaultSizeEstimator, HoodieRecordUtils, HoodieStorageUtils, Option, ValidationUtils}
+import org.apache.hudi.common.util.collection.{ClosableIterator, ExternalSpillableMap}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.io.util.FileIOUtils
@@ -52,7 +53,6 @@ import org.apache.parquet.avro.HoodieAvroParquetSchemaConverter.getAvroSchemaCon
 import org.apache.spark.Partition
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
-import org.apache.spark.sql.avro.HoodieAvroDeserializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Projection
 import org.apache.spark.sql.execution.datasources.SparkColumnarFileReader
@@ -62,6 +62,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.io.Closeable
 import java.util
 import java.util.{Collections, Locale}
+import java.util.function.UnaryOperator
 import java.util.stream.Collectors
 
 import scala.annotation.tailrec
@@ -75,7 +76,7 @@ import scala.collection.mutable
 case class HoodieCDCFileGroupSplit(changes: Array[HoodieCDCFileSplit])
 
 class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
-                           metaClient: HoodieTableMetaClient,
+                           tableState: TableState,
                            conf: StorageConfiguration[Configuration],
                            baseFileReader: SparkColumnarFileReader,
                            originTableSchema: HoodieTableSchema,
@@ -85,29 +86,42 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   extends Iterator[InternalRow]
   with SparkAdapterSupport with AvroDeserializerSupport with Closeable {
 
+  @deprecated("Use the constructor that takes a TableState", "1.3.0")
+  def this(split: HoodieCDCFileGroupSplit,
+           metaClient: HoodieTableMetaClient,
+           conf: StorageConfiguration[Configuration],
+           baseFileReader: SparkColumnarFileReader,
+           originTableSchema: HoodieTableSchema,
+           cdcSchema: StructType,
+           requiredCdcSchema: StructType,
+           props: TypedProperties) = {
+    this(split, TableState.fromMetaClient(metaClient), conf, baseFileReader, originTableSchema, cdcSchema,
+      requiredCdcSchema, props)
+  }
+
   private lazy val readerContext = {
     val bufferedReaderContext = new SparkFileFormatInternalRowReaderContext(baseFileReader,
-      Seq.empty, Seq.empty, conf, metaClient.getTableConfig)
+      Seq.empty, Seq.empty, conf, tableState.getTableConfig)
     bufferedReaderContext.initRecordMerger(readerProperties)
     bufferedReaderContext
   }
 
-  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, metaClient)
+  private lazy val orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(readerContext.getMergeMode, tableState.getTableConfig)
   private lazy val payloadClass: Option[String] = if (recordMerger.getMergingStrategy == PAYLOAD_BASED_MERGE_STRATEGY_UUID) {
-    Option.of(metaClient.getTableConfig.getPayloadClass)
+    Option.of(tableState.getTableConfig.getPayloadClass)
   } else {
     Option.empty.asInstanceOf[Option[String]]
   }
-  private lazy val partialUpdateModeOpt: Option[PartialUpdateMode] = metaClient.getTableConfig.getPartialUpdateMode
+  private lazy val partialUpdateModeOpt: Option[PartialUpdateMode] = tableState.getTableConfig.getPartialUpdateMode
   private var isPartialMergeEnabled = false
   private var bufferedRecordMerger = getBufferedRecordMerger
   private def getBufferedRecordMerger: BufferedRecordMerger[InternalRow] = BufferedRecordMergerFactory.create(readerContext,
     readerContext.getMergeMode, isPartialMergeEnabled, Option.of(recordMerger),
     payloadClass, schema, props, partialUpdateModeOpt)
 
-  private lazy val storage = metaClient.getStorage
+  private lazy val storage = HoodieStorageUtils.getStorage(tableState.getBasePath, conf)
 
-  private lazy val basePath = metaClient.getBasePath
+  private lazy val basePath = tableState.getBasePath
 
   private lazy val readerProperties: TypedProperties = {
     val configuration = conf.unwrapAs(classOf[Configuration])
@@ -124,9 +138,6 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     readerProps.setProperty(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key,
       configuration.getBoolean(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(),
         HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()).toString)
-    readerProps.setProperty(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key,
-      configuration.get(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-        HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()))
     readerProps
   }
 
@@ -136,7 +147,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   protected override val structTypeSchema: StructType = originTableSchema.structTypeSchema
 
-  private val cdcSupplementalLoggingMode = metaClient.getTableConfig.cdcSupplementalLoggingMode
+  private val cdcSupplementalLoggingMode = tableState.getTableConfig.cdcSupplementalLoggingMode
 
   private lazy val cdcHoodieSchema: HoodieSchema = HoodieCDCUtils.schemaBySupplementalLoggingMode(
     cdcSupplementalLoggingMode,
@@ -149,17 +160,10 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
   private lazy val tableSchemaOpt = if (schema != null) {
     val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
-    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(schema.getAvroSchema)
+    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(schema)
     org.apache.hudi.common.util.Option.of(parquetSchema)
   } else {
     org.apache.hudi.common.util.Option.empty[org.apache.parquet.schema.MessageType]()
-  }
-
-  /**
-   * The deserializer used to convert the CDC GenericRecord to Spark InternalRow.
-   */
-  private lazy val cdcRecordDeserializer: HoodieAvroDeserializer = {
-    sparkAdapter.createAvroDeserializer(cdcHoodieSchema, cdcSparkSchema)
   }
 
   private lazy val projection: Projection = generateUnsafeProjection(cdcSchema, requiredCdcSchema)
@@ -191,7 +195,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   /**
    * Only one case where it will be used is that extract the change data from cdc log files.
    */
-  private var cdcLogRecordIterator: HoodieCDCLogRecordIterator = _
+  private var cdcRecordIterator: HoodieCDCLogRecordIterator[_] = HoodieCDCLogRecordIterator.empty()
 
   /**
    * The next record need to be returned when call next().
@@ -231,12 +235,28 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     props.getBoolean(DISK_MAP_BITCASK_COMPRESSION_ENABLED.key(), DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue()),
     getClass.getSimpleName)
 
-  private val internalRowToJsonStringConverterMap: mutable.Map[Integer, InternalRowToJsonStringConverter] = mutable.Map.empty
+  // Per-schema cache of the (image projection, json converter) used to build CDC before/after
+  // images. Keyed by the record's schema id so schema evolution is handled correctly.
+  private val cdcImageConverterMap: mutable.Map[Integer, (UnaryOperator[InternalRow], InternalRowToJsonStringConverter)] = mutable.Map.empty
+
+  private lazy val cdcDataSparkSchema: StructType = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(
+    HoodieSchemaUtils.removeMetadataFields(schema))
+
+  private lazy val nativeCdcParquetSchemaOpt = {
+    val hadoopConf = storage.getConf.unwrapAs(classOf[Configuration])
+    val parquetSchema = getAvroSchemaConverter(hadoopConf).convert(cdcHoodieSchema)
+    org.apache.hudi.common.util.Option.of(parquetSchema)
+  }
+
+  private lazy val cdcImageConverter = new InternalRowToJsonStringConverter(cdcDataSparkSchema)
+
+  private lazy val inlineCdcImageDeserializer = sparkAdapter.createAvroDeserializer(
+    HoodieSchemaUtils.removeMetadataFields(schema), cdcDataSparkSchema)
 
   private def needLoadNextFile: Boolean = {
     !recordIter.hasNext &&
       !logRecordIter.hasNext &&
-      (cdcLogRecordIterator == null || !cdcLogRecordIterator.hasNext)
+      !cdcRecordIterator.hasNext
   }
 
   @tailrec final def hasNextInternal: Boolean = {
@@ -260,7 +280,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
             hasNextInternal
           }
         case AS_IS =>
-          if (cdcLogRecordIterator.hasNext && loadNext()) {
+          if (cdcRecordIterator.hasNext && loadNext()) {
             true
           } else {
             hasNextInternal
@@ -296,46 +316,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
       case LOG_FILE =>
         loaded = loadNextLogRecord()
       case AS_IS =>
-        val record = cdcLogRecordIterator.next().asInstanceOf[GenericRecord]
-        cdcSupplementalLoggingMode match {
-          case `DATA_BEFORE_AFTER` =>
-            recordToLoad.update(0, convertToUTF8String(String.valueOf(record.get(0))))
-            val before = record.get(2).asInstanceOf[GenericRecord]
-            recordToLoad.update(2, recordToJsonAsUTF8String(before))
-            val after = record.get(3).asInstanceOf[GenericRecord]
-            recordToLoad.update(3, recordToJsonAsUTF8String(after))
-          case `DATA_BEFORE` =>
-            val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
-            val op = row.getString(0)
-            val recordKey = row.getString(1)
-            recordToLoad.update(0, convertToUTF8String(op))
-            val before = record.get(2).asInstanceOf[GenericRecord]
-            recordToLoad.update(2, recordToJsonAsUTF8String(before))
-            parse(op) match {
-              case INSERT =>
-                recordToLoad.update(3, convertBufferedRecordToJsonString(afterImageRecords.get(recordKey)))
-              case UPDATE =>
-                recordToLoad.update(3, convertBufferedRecordToJsonString(afterImageRecords.get(recordKey)))
-              case _ =>
-                recordToLoad.update(3, null)
-            }
-          case _ =>
-            val row = cdcRecordDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
-            val op = row.getString(0)
-            val recordKey = row.getString(1)
-            recordToLoad.update(0, convertToUTF8String(op))
-            parse(op) match {
-              case INSERT =>
-                recordToLoad.update(2, null)
-                recordToLoad.update(3, convertBufferedRecordToJsonString(afterImageRecords.get(recordKey)))
-              case UPDATE =>
-                recordToLoad.update(2, convertBufferedRecordToJsonString(beforeImageRecords(recordKey)))
-                recordToLoad.update(3, convertBufferedRecordToJsonString(afterImageRecords.get(recordKey)))
-              case _ =>
-                recordToLoad.update(2, convertBufferedRecordToJsonString(beforeImageRecords(recordKey)))
-                recordToLoad.update(3, null)
-            }
-        }
+        loadNextCdcRecord()
         loaded = true
       case REPLACE_COMMIT =>
         val originRecord = recordIter.next()
@@ -395,14 +376,12 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     // reset all the iterator first.
     recordIter = Iterator.empty
     logRecordIter = Iterator.empty
+    cdcRecordIterator.close()
+    cdcRecordIterator = HoodieCDCLogRecordIterator.empty()
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
     keyBasedFileGroupRecordBuffer = Option.empty.asInstanceOf[Option[KeyBasedFileGroupRecordBuffer[InternalRow]]]
     beforeImageRecords.clear()
     afterImageRecords.clear()
-    if (cdcLogRecordIterator != null) {
-      cdcLogRecordIterator.close()
-      cdcLogRecordIterator = null
-    }
 
     if (cdcFileIter.hasNext) {
       val split = cdcFileIter.next()
@@ -416,8 +395,24 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
 
           val pf = sparkPartitionedFileUtils.createPartitionedFile(
             InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
-          recordIter = baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
-            toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
+          // This read bypasses SparkFileFormatInternalRowReaderContext, so it makes the same
+          // whole-variant request that context makes for top-level variant columns of a parquet
+          // base file and restores native VariantType afterwards (#19578); a variant nested in a
+          // struct, array or map stays native and the reader reconstructs it, shredded or not
+          // (#19775). The restore projection reuses one output buffer, hence the copy before
+          // buffering.
+          val baseRows = SparkFileFormatInternalRowReaderContext
+            .fullVariantReadSchemaWithOrdinals(originTableSchema.structTypeSchema) match {
+            case Some((rewritten, ordinals)) =>
+              val restore = SparkFileFormatInternalRowReaderContext.variantRestoreProjection(rewritten, ordinals)
+              baseFileReader.read(pf, rewritten, new StructType(),
+                toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
+                .map(row => restore(row).copy(): InternalRow)
+            case None =>
+              baseFileReader.read(pf, originTableSchema.structTypeSchema, new StructType(),
+                toJavaOption(originTableSchema.internalSchema), Seq.empty, conf, tableSchemaOpt)
+          }
+          recordIter = baseRows
             .map(record => BufferedRecords.fromEngineRecord(record, schema, readerContext.getRecordContext, orderingFieldNames, false))
         case BASE_FILE_DELETE =>
           assert(currentCDCFileSplit.getBeforeFileSlice.isPresent)
@@ -444,10 +439,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
             }
           }
 
-          val cdcLogFiles = currentCDCFileSplit.getCdcFiles.asScala.map { cdcFile =>
-            new HoodieLogFile(storage.getPathInfo(new StoragePath(basePath, cdcFile)))
-          }.toArray
-          cdcLogRecordIterator = new HoodieCDCLogRecordIterator(storage, cdcLogFiles, cdcHoodieSchema)
+          cdcRecordIterator = createCdcRecordIterator(currentCDCFileSplit)
         case REPLACE_COMMIT =>
           if (currentCDCFileSplit.getBeforeFileSlice.isPresent) {
             loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
@@ -516,13 +508,16 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private def loadFileSlice(fileSlice: FileSlice, readerContext: SparkFileFormatInternalRowReaderContext): Iterator[BufferedRecord[InternalRow]] = {
-    val fileGroupReader = HoodieFileGroupReader.newBuilder()
+    val fileGroupReader = HoodieFileGroupReader.builder()
       .withReaderContext(readerContext)
-      .withHoodieTableMetaClient(metaClient)
-      .withFileSlice(fileSlice)
+      .withTableState(tableState)
+      .withStorage(storage)
+      .withBaseFileOption(fileSlice.getBaseFile)
+      .withLogFiles(fileSlice.getLogFiles)
+      .withPartitionPath(fileSlice.getPartitionPath)
       .withDataSchema(schema)
       .withRequestedSchema(schema)
-      .withInternalSchema(toJavaOption(originTableSchema.internalSchema))
+      .withInternalSchemaOpt(toJavaOption(originTableSchema.internalSchema))
       .withProps(readerProperties)
       .withLatestCommitTime(split.changes.last.getInstant)
       .build()
@@ -530,39 +525,135 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private def loadLogFile(logFile: HoodieLogFile, instant: String): Iterator[BufferedRecord[InternalRow]] = {
-    val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, logFile.getPath.getParent)
+    val partitionPath = FSUtils.getRelativePartitionPath(basePath, logFile.getPath.getParent)
     readerContext.setLatestCommitTime(instant)
     readerContext.setHasBootstrapBaseFile(false)
     readerContext.setHasLogFiles(true)
     readerContext.setSchemaHandler(
-      new FileGroupReaderSchemaHandler[InternalRow](readerContext, schema, schema, Option.empty(), readerProperties, metaClient))
+      new FileGroupReaderSchemaHandler[InternalRow](readerContext, schema, schema, Option.empty[InternalSchema](), readerProperties, tableState))
     val stats = new HoodieReadStats
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
-    keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, metaClient, readerContext.getMergeMode,
-      metaClient.getTableConfig.getPartialUpdateMode, readerProperties, metaClient.getTableConfig.getOrderingFields,
+    keyBasedFileGroupRecordBuffer = Option.of(new KeyBasedFileGroupRecordBuffer[InternalRow](readerContext, readerContext.getMergeMode,
+      tableState.getTableConfig.getPartialUpdateMode, readerProperties, tableState.getTableConfig.getOrderingFields,
       UpdateProcessor.create(stats, readerContext, true, Option.empty(), props)))
 
     HoodieMergedLogRecordReader.newBuilder[InternalRow]
-      .withStorage(metaClient.getStorage)
+      .withStorage(storage)
       .withHoodieReaderContext(readerContext)
       .withLogFiles(Collections.singletonList(logFile))
       .withReverseReader(false)
       .withBufferSize(HoodieMetadataConfig.MAX_READER_BUFFER_SIZE_PROP.defaultValue)
       .withPartition(partitionPath)
-      .withMetaClient(metaClient)
+      .withTableState(tableState)
       .withRecordBuffer(keyBasedFileGroupRecordBuffer.get())
       .build
 
     CloseableIteratorListener.addListener(keyBasedFileGroupRecordBuffer.get().getLogRecordIterator).asScala
   }
 
+  private def readNativeCdcFile(cdcFile: String): Iterator[InternalRow] = {
+    val absCDCPath = new StoragePath(basePath, cdcFile)
+    val fileStatus = storage.getPathInfo(absCDCPath)
+    val pf = sparkPartitionedFileUtils.createPartitionedFile(
+      InternalRow.empty, absCDCPath, 0, fileStatus.getLength)
+    baseFileReader.read(pf, cdcSparkSchema, new StructType(),
+      org.apache.hudi.common.util.Option.empty(), Seq.empty, conf, nativeCdcParquetSchemaOpt)
+  }
+
+  private val nativeCdcRecordAccessor = new HoodieCDCEngineRecordAccessor[InternalRow] {
+    override def getOperation(record: InternalRow): String = record.getString(0)
+    override def getRecordKey(record: InternalRow): String = record.getString(1)
+    override def getImage(record: InternalRow, ordinal: Int, imageArity: Int): InternalRow = {
+      if (record.isNullAt(ordinal)) null else record.getStruct(ordinal, imageArity)
+    }
+  }
+
+  private def createCdcRecordIterator(fileSplit: HoodieCDCFileSplit): HoodieCDCLogRecordIterator[_] = {
+    if (fileSplit.getCdcFiles == null || fileSplit.getCdcFiles.isEmpty) {
+      HoodieCDCLogRecordIterator.empty()
+    } else if (isNativeCdcFileSplit(fileSplit)) {
+      new HoodieCDCNativeLogRecordIterator[InternalRow](
+        fileSplit.getCdcFiles.iterator(),
+        cdcFile => ClosableIterator.wrap(readNativeCdcFile(cdcFile).asJava),
+        nativeCdcRecordAccessor)
+    } else {
+      val cdcLogFiles = fileSplit.getCdcFiles.asScala.map { cdcFile =>
+        new HoodieLogFile(storage.getPathInfo(new StoragePath(basePath, cdcFile)))
+      }.toArray
+      new HoodieCDCInlineLogRecordIterator(storage, cdcLogFiles, cdcHoodieSchema)
+    }
+  }
+
+  private def isNativeCdcFileSplit(fileSplit: HoodieCDCFileSplit): Boolean = {
+    val nativeFlags = fileSplit.getCdcFiles.asScala.map(path => FSUtils.isNativeLogFile(path))
+    ValidationUtils.checkState(nativeFlags.forall(_ == nativeFlags.head),
+      "CDC file split cannot mix inline and native CDC log files")
+    nativeFlags.head
+  }
+
+  private def loadNextCdcRecord(): Unit = {
+    val record = cdcRecordIterator.next()
+    cdcSupplementalLoggingMode match {
+      case `DATA_BEFORE_AFTER` =>
+        recordToLoad.update(0, convertToUTF8String(record.getOperation))
+        recordToLoad.update(2, cdcRecordImageToJson(record, 2))
+        recordToLoad.update(3, cdcRecordImageToJson(record, 3))
+      case `DATA_BEFORE` =>
+        recordToLoad.update(0, convertToUTF8String(record.getOperation))
+        recordToLoad.update(2, cdcRecordImageToJson(record, 2))
+        parse(record.getOperation) match {
+          case INSERT | UPDATE =>
+            recordToLoad.update(3, convertBufferedRecordToJsonString(afterImageRecords.get(record.getRecordKey)))
+          case _ =>
+            recordToLoad.update(3, null)
+        }
+      case _ =>
+        loadNextKeyOnlyCdcRecord(record)
+    }
+  }
+
+  private def loadNextKeyOnlyCdcRecord(record: HoodieCDCLogRecord[_]): Unit = {
+    recordToLoad.update(0, convertToUTF8String(record.getOperation))
+    parse(record.getOperation) match {
+      case INSERT =>
+        recordToLoad.update(2, null)
+        recordToLoad.update(3, convertBufferedRecordToJsonString(afterImageRecords.get(record.getRecordKey)))
+      case UPDATE =>
+        recordToLoad.update(2, convertBufferedRecordToJsonString(beforeImageRecords(record.getRecordKey)))
+        recordToLoad.update(3, convertBufferedRecordToJsonString(afterImageRecords.get(record.getRecordKey)))
+      case _ =>
+        recordToLoad.update(2, convertBufferedRecordToJsonString(beforeImageRecords(record.getRecordKey)))
+        recordToLoad.update(3, null)
+    }
+  }
+
+  private def cdcRecordImageToJson(record: HoodieCDCLogRecord[_], ordinal: Int): UTF8String = {
+    if (record.isNative) {
+      val image = record.getEngineImage(ordinal, cdcDataSparkSchema.length).asInstanceOf[InternalRow]
+      if (image == null) null else cdcImageConverter.convert(image)
+    } else {
+      recordToJsonAsUTF8String(record.getAvroImage(ordinal).asInstanceOf[GenericRecord])
+    }
+  }
+
   /**
    * Convert InternalRow to json string.
    */
   private def convertBufferedRecordToJsonString(record: BufferedRecord[InternalRow]): UTF8String = {
-    internalRowToJsonStringConverterMap.getOrElseUpdate(record.getSchemaId,
-      new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId).toAvroSchema)))
-      .convert(record.getRecord)
+    val (imageProjection, converter) = cdcImageConverterMap.getOrElseUpdate(record.getSchemaId, {
+      val recordSchema = readerContext.getRecordContext.decodeAvroSchema(record.getSchemaId)
+      // CDC before/after images must contain only business columns. Records read from base/log
+      // files carry the _hoodie_* meta columns (kept on the InternalRow because they are needed
+      // internally for record keying and merging), while images served from the supplemental CDC
+      // log already have them stripped at write time (HoodieCDCLogger). Project each record onto
+      // the meta-stripped image schema so every inference case produces a schema-consistent,
+      // business-columns-only image.
+      val imageSchema = HoodieSchemaUtils.removeMetadataFields(recordSchema)
+      val projection = readerContext.getRecordContext.projectRecord(recordSchema, imageSchema)
+      val converter = new InternalRowToJsonStringConverter(HoodieInternalRowUtils.getCachedSchema(imageSchema))
+      (projection, converter)
+    })
+    converter.convert(imageProjection.apply(record.getRecord))
   }
 
   /**
@@ -573,7 +664,12 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   }
 
   private def recordToJsonAsUTF8String(record: GenericRecord): UTF8String = {
-    convertToUTF8String(HoodieCDCUtils.recordToJson(record))
+    if (record == null) {
+      null
+    } else {
+      val row = inlineCdcImageDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+      cdcImageConverter.convert(row)
+    }
   }
 
   private def merge(currentRecord: BufferedRecord[InternalRow], newRecord: BufferedRecord[InternalRow]): BufferedRecord[InternalRow] = {
@@ -592,15 +688,14 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   override def close(): Unit = {
     recordIter = Iterator.empty
     logRecordIter = Iterator.empty
+    cdcRecordIterator.close()
+    cdcRecordIterator = HoodieCDCLogRecordIterator.empty()
     keyBasedFileGroupRecordBuffer.ifPresent(k => k.close())
     keyBasedFileGroupRecordBuffer = Option.empty.asInstanceOf[Option[KeyBasedFileGroupRecordBuffer[InternalRow]]]
     beforeImageRecords.clear()
     afterImageRecords.clear()
-    if (cdcLogRecordIterator != null) {
-      cdcLogRecordIterator.close()
-      cdcLogRecordIterator = null
-    }
   }
+
 }
 
 object CDCFileGroupIterator {

@@ -21,8 +21,9 @@ package org.apache.hudi.common.table.cdc;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -86,8 +87,12 @@ public class HoodieCDCUtils {
   }
 
   private static HoodieSchema createCDCSchema(HoodieSchema tableSchema, boolean withAfterImage) {
-    HoodieSchema imageSchema = HoodieSchemaUtils.createNullableSchema(tableSchema);
-    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchema.create(HoodieSchemaType.STRING));
+    HoodieCDCSupplementalLoggingMode mode = withAfterImage
+        ? HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER : HoodieCDCSupplementalLoggingMode.DATA_BEFORE;
+    // Defer validation until image schema creation so table initialization and schema changes can proceed.
+    validateCdcImageSchema(tableSchema, mode);
+    HoodieSchema imageSchema = HoodieSchema.createNullable(tableSchema);
+    HoodieSchema nullableString = HoodieSchema.createNullable(HoodieSchemaType.STRING);
 
     HoodieSchemaField opField = HoodieSchemaField.of(CDC_OPERATION_TYPE, nullableString, "", HoodieSchema.NULL_VALUE);
     HoodieSchemaField beforeField = HoodieSchemaField.of(CDC_BEFORE_IMAGE, imageSchema, "", HoodieSchema.NULL_VALUE);
@@ -103,6 +108,17 @@ public class HoodieCDCUtils {
     }
 
     return HoodieSchema.createRecord("CDC", tableSchema.getNamespace().orElse(null), "", fields);
+  }
+
+  private static void validateCdcImageSchema(HoodieSchema tableSchema, HoodieCDCSupplementalLoggingMode mode) {
+    // CDC images nest the table schema, but VECTOR columns are only supported at the top level.
+    for (HoodieSchemaField field : tableSchema.getNonNullType().getFields()) {
+      if (field.schema().getNonNullType().getType() == HoodieSchemaType.VECTOR) {
+        throw new HoodieNotSupportedException("CDC supplemental logging mode " + mode
+            + " is not supported for VECTOR column '" + field.name() + "'. Set "
+            + HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE.key() + "=OP_KEY_ONLY or disable CDC.");
+      }
+    }
   }
 
   /**
@@ -138,9 +154,5 @@ public class HoodieCDCUtils {
     record.put(CDC_OPERATION_TYPE, op);
     record.put(CDC_RECORD_KEY, recordKey);
     return record;
-  }
-
-  public static String recordToJson(GenericRecord record) {
-    return GenericData.get().toString(record);
   }
 }

@@ -22,6 +22,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
@@ -49,15 +50,13 @@ import org.apache.hudi.utilities.deltastreamer.HoodieDeltaStreamer;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
-import org.apache.avro.Schema;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.List;
@@ -70,9 +69,8 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
  * This is the entry point for running a Hudi Test Suite. Although this class has similarities with {@link HoodieDeltaStreamer} this class does not extend it since do not want to create a dependency
  * on the changes in DeltaStreamer.
  */
+@Slf4j
 public class HoodieTestSuiteJob {
-
-  private static volatile Logger log = LoggerFactory.getLogger(HoodieTestSuiteJob.class);
 
   private final HoodieTestSuiteConfig cfg;
   /**
@@ -105,7 +103,7 @@ public class HoodieTestSuiteJob {
   }
 
   public HoodieTestSuiteJob(HoodieTestSuiteConfig cfg, JavaSparkContext jsc, boolean stopJsc) throws IOException {
-    log.warn("Running spark job w/ app id " + jsc.sc().applicationId());
+    log.warn("Running spark job w/ app id {}", jsc.sc().applicationId());
     this.cfg = cfg;
     this.jsc = jsc;
     this.stopJsc = stopJsc;
@@ -157,10 +155,10 @@ public class HoodieTestSuiteJob {
       HoodieCommitMetadata commit = timeline.readCommitMetadata(prevInstant);
       Map<String, String> extraMetadata = commit.getExtraMetadata();
       String avroSchemaStr = extraMetadata.get(HoodieCommitMetadata.SCHEMA_KEY);
-      Schema avroSchema = new Schema.Parser().parse(avroSchemaStr);
-      version = Integer.parseInt(avroSchema.getObjectProp("schemaVersion").toString());
+      HoodieSchema schema = HoodieSchema.parse(avroSchemaStr);
+      version = Integer.parseInt(schema.getProp("schemaVersion").toString());
       // DAG will generate & ingest data for 2 versions (n-th version being validated, n-1).
-      log.info(String.format("Last used schemaVersion from latest commit file was %d. Optimizing the DAG.", version));
+      log.info("Last used schemaVersion from latest commit file was {}. Optimizing the DAG.", version);
     } catch (Exception e) {
       // failed to open the commit to read schema version.
       // continue executing the DAG without any changes.
@@ -184,7 +182,7 @@ public class HoodieTestSuiteJob {
     }
 
     JavaSparkContext jssc = UtilHelpers.buildSparkContext("workload-generator-" + cfg.outputTypeName
-        + "-" + cfg.inputFormatName, cfg.sparkMaster);
+        + "-" + cfg.inputFormatName, cfg.sparkMaster, cfg.enableHiveSupport);
     new HoodieTestSuiteJob(cfg, jssc, true).runTestSuite();
   }
 
@@ -201,7 +199,7 @@ public class HoodieTestSuiteJob {
     WriterContext writerContext = null;
     try {
       WorkflowDag workflowDag = createWorkflowDag();
-      log.info("Workflow Dag => " + DagUtils.convertDagToYaml(workflowDag));
+      log.info("Workflow Dag => {}", DagUtils.convertDagToYaml(workflowDag));
       long startTime = System.currentTimeMillis();
       writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);

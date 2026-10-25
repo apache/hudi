@@ -23,11 +23,10 @@ import org.apache.hudi.exception.HoodieException;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -51,9 +50,8 @@ import java.util.Map;
  *
  * Ensure "source-path" has parquet data.
  */
+@Slf4j
 public class StructuredStreamingSinkUtil implements Serializable {
-
-  private static final Logger LOG = LoggerFactory.getLogger(StructuredStreamingSinkUtil.class);
 
   private transient JavaSparkContext jsc;
   private SparkSession sparkSession;
@@ -121,7 +119,7 @@ public class StructuredStreamingSinkUtil implements Serializable {
       StructuredStreamingSinkUtil streamingSinkUtil = new StructuredStreamingSinkUtil(jsc, cfg);
       streamingSinkUtil.run();
     } catch (Throwable throwable) {
-      LOG.error("Fail to execute tpcds read benchmarks for " + cfg, throwable);
+      log.error("Fail to execute tpcds read benchmarks for {}", cfg, throwable);
     } finally {
       jsc.stop();
     }
@@ -129,14 +127,14 @@ public class StructuredStreamingSinkUtil implements Serializable {
 
   public void run() {
     try {
-      LOG.info(cfg.toString());
+      log.info(cfg.toString());
       StructuredStreamingSinkTestWriter.triggerStreaming(sparkSession, cfg.tableType, cfg.sourcePath, cfg.targetPath, cfg.checkpointPath,
           cfg.tableName, cfg.partitionField, cfg.recordKeyField, cfg.preCombineField);
       StructuredStreamingSinkTestWriter.waitUntilCondition(1000 * 60 * 10, 1000 * 30);
     } catch (Exception e) {
       throw new HoodieException("Unable to test spark structured writes to hudi " + cfg.targetPath, e);
     } finally {
-      LOG.warn("Completing Spark Structured Streaming test");
+      log.warn("Completing Spark Structured Streaming test");
     }
   }
 

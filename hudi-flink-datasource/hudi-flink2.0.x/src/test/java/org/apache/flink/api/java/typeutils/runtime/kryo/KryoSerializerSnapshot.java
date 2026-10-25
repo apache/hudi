@@ -34,6 +34,9 @@ public class KryoSerializerSnapshot<T> implements TypeSerializerSnapshot<T> {
 
   private Class<T> type;
 
+  public KryoSerializerSnapshot() {
+  }
+
   public KryoSerializerSnapshot(Class<T> type) {
     this.type = type;
   }

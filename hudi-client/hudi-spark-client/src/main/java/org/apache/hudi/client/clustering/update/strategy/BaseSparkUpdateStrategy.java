@@ -25,7 +25,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.strategy.UpdateStrategy;
 
-import java.util.List;
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -35,8 +35,9 @@ import java.util.Set;
 public abstract class BaseSparkUpdateStrategy<T> extends UpdateStrategy<T, HoodieData<HoodieRecord<T>>> {
 
   public BaseSparkUpdateStrategy(HoodieEngineContext engineContext, HoodieTable table,
-                                 Set<HoodieFileGroupId> fileGroupsInPendingClustering) {
-    super(engineContext, table, fileGroupsInPendingClustering);
+                                 Set<HoodieFileGroupId> fileGroupsInPendingClustering,
+                                 Set<HoodieFileGroupId> fileGroupsToBeReplaced) {
+    super(engineContext, table, fileGroupsInPendingClustering, fileGroupsToBeReplaced);
   }
 
   /**
@@ -44,9 +45,9 @@ public abstract class BaseSparkUpdateStrategy<T> extends UpdateStrategy<T, Hoodi
    * @param inputRecords the records to write, tagged with target file id
    * @return the records matched file group ids
    */
-  protected List<HoodieFileGroupId> getGroupIdsWithUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
-    return inputRecords
+  protected Set<HoodieFileGroupId> getGroupIdsWithUpdate(HoodieData<HoodieRecord<T>> inputRecords) {
+    return new HashSet<>(inputRecords
             .filter(record -> record.getCurrentLocation() != null)
-            .map(record -> new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId())).distinct().collectAsList();
+            .map(record -> new HoodieFileGroupId(record.getPartitionPath(), record.getCurrentLocation().getFileId())).distinct().collectAsList());
   }
 }

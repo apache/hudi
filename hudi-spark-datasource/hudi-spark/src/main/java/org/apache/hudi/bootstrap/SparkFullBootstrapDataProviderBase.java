@@ -19,10 +19,10 @@
 package org.apache.hudi.bootstrap;
 
 import org.apache.hudi.HoodieSparkUtils;
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieFileStatus;
 import org.apache.hudi.client.bootstrap.FullRecordBootstrapDataProvider;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -81,7 +81,7 @@ public abstract class SparkFullBootstrapDataProviderBase extends FullRecordBoots
             gr, orderingFieldsStr, false, props.getBoolean(
                 KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
                 Boolean.parseBoolean(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue())));
-        return HoodieRecordUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr), ConfigUtils.getPayloadClass(props), false, null);
+        return HoodieRecordUtils.createHoodieRecord(gr, orderingVal, keyGenerator.getKey(gr), ConfigUtils.getPayloadClass(props), null);
       });
     } else if (recordType == HoodieRecordType.SPARK) {
       SparkKeyGeneratorInterface sparkKeyGenerator = (SparkKeyGeneratorInterface) keyGenerator;

@@ -21,21 +21,22 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.HoodieMemoryConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordReader;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.storage.HoodieStorage;
 
 import java.util.List;
 
+import static org.apache.hudi.common.table.log.BaseHoodieLogRecordReader.BLOCK_SIZE_IN_BYTES;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 
 abstract class LogScanningRecordBufferLoader {
 
   protected <T> List<String> scanLogFiles(HoodieReaderContext<T> readerContext, HoodieStorage storage,
-                                          InputSplit inputSplit, HoodieTableMetaClient hoodieTableMetaClient,
+                                          InputSplit inputSplit, TableState tableState,
                                           TypedProperties props, ReaderParameters readerParameters,
                                           HoodieReadStats readStats, FileGroupRecordBuffer<T> recordBuffer) {
     try (HoodieMergedLogRecordReader<T> logRecordReader = HoodieMergedLogRecordReader.<T>newBuilder()
@@ -47,15 +48,21 @@ abstract class LogScanningRecordBufferLoader {
         .withInstantRange(readerContext.getInstantRange())
         .withPartition(inputSplit.getPartitionPath())
         .withRecordBuffer(recordBuffer)
-        .withAllowInflightInstants(readerParameters.allowInflightInstants())
-        .withMetaClient(hoodieTableMetaClient)
-        .withOptimizedLogBlocksScan(readerParameters.enableOptimizedLogBlockScan())
+        .withAllowInflightInstants(readerParameters.isInflightInstantsAllowed())
+        .withTableState(tableState)
         .build()) {
       readStats.setTotalLogReadTimeMs(logRecordReader.getTotalTimeTakenToReadAndMergeBlocks());
       readStats.setTotalUpdatedRecordsCompacted(logRecordReader.getNumMergedRecordsInLog());
       readStats.setTotalLogFilesCompacted(logRecordReader.getTotalLogFiles());
       readStats.setTotalLogRecords(logRecordReader.getTotalLogRecords());
       readStats.setTotalLogBlocks(logRecordReader.getTotalLogBlocks());
+      readStats.setTotalValidLogBlocks(logRecordReader.getTotalValidLogBlocks());
+      readStats.setTotalLogBlocksSize(logRecordReader.getTotalLogBlocksSize());
+      readStats.setTotalLogBlocksScanTimeMs(logRecordReader.getBlocksScanDuration());
+      readStats.setTotalLogSizeCompacted(logRecordReader.getBlocksStats().stream()
+          .filter(blockScanMetrics -> blockScanMetrics.containsKey(BLOCK_SIZE_IN_BYTES))
+          .mapToLong(blockScanMetrics -> ((Number) blockScanMetrics.get(BLOCK_SIZE_IN_BYTES)).longValue())
+          .sum());
       readStats.setTotalCorruptLogBlock(logRecordReader.getTotalCorruptBlocks());
       readStats.setTotalRollbackBlocks(logRecordReader.getTotalRollbacks());
       return logRecordReader.getValidBlockInstants();

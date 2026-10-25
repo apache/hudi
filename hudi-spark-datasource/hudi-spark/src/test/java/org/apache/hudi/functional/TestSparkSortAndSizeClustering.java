@@ -34,14 +34,14 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.stats.ValueType;
+import org.apache.hudi.metadata.stats.ValueType;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringPlanPartitionFilterMode;
@@ -270,8 +270,8 @@ public class TestSparkSortAndSizeClustering extends HoodieSparkClientTestHarness
   private List<HoodieRecord> generateInserts(String instant, long ts, int count) {
     HoodieSchema schema = getSchema();
     HoodieSchema decimalSchema = schema.getField("decimal_field").get().schema();
-    HoodieSchema nestedSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(schema.getField("nested_record").get().schema());
-    HoodieSchema enumSchema = HoodieSchemaUtils.getNonNullTypeFromUnion(schema.getField("enum_field").get().schema());
+    HoodieSchema nestedSchema = schema.getField("nested_record").get().schema().getNonNullType();
+    HoodieSchema enumSchema = schema.getField("enum_field").get().schema().getNonNullType();
     Random random = new Random(0);
     return IntStream.range(0, count)
         .mapToObj(i -> {

@@ -39,8 +39,8 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
@@ -49,7 +49,7 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
-import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -59,12 +59,13 @@ import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
 import org.apache.hudi.hive.ddl.HiveQueryDDLExecutor;
 import org.apache.hudi.hive.ddl.QueryBasedDDLExecutor;
 import org.apache.hudi.hive.util.IMetaStoreClientUtil;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.avro.Schema;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -78,15 +79,12 @@ import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.zookeeper.server.ZooKeeperServer;
 import org.junit.platform.commons.JUnitException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
-import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -117,9 +115,9 @@ import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_F
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@Slf4j
 @SuppressWarnings("SameParameterValue")
 public class HiveTestUtil {
-  private static final Logger LOG = LoggerFactory.getLogger(HiveTestUtil.class);
 
   public static final String DB_NAME = "testdb";
   public static final String TABLE_NAME = "test1";
@@ -134,11 +132,18 @@ public class HiveTestUtil {
   private static HiveServer2 hiveServer;
   private static ZookeeperTestService zkService;
   private static Configuration configuration;
+  @Getter
   public static HiveSyncConfig hiveSyncConfig;
   private static DateTimeFormatter dtfOut;
+  @Getter
   private static Set<String> createdTablesSet = new HashSet<>();
 
   public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables) throws Exception {
+    setUp(hiveSyncProperties, shouldClearBasePathAndTables, null);
+  }
+
+  public static void setUp(Option<TypedProperties> hiveSyncProperties, boolean shouldClearBasePathAndTables,
+                           java.nio.file.Path tempDir) throws Exception {
     configuration = new Configuration();
     if (zkServer == null) {
       zkService = new ZookeeperTestService(configuration);
@@ -154,7 +159,10 @@ public class HiveTestUtil {
       hiveSyncProps.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
       basePath = hiveSyncProps.getProperty(META_SYNC_BASE_PATH.key());
     } else {
-      basePath = Files.createTempDirectory("hivesynctest" + Instant.now().toEpochMilli()).toUri().toString();
+      java.nio.file.Path baseDir = tempDir == null
+          ? Files.createTempDirectory("hivesynctest")
+          : Files.createTempDirectory(Files.createDirectories(tempDir), "hivesynctest");
+      basePath = baseDir.toUri().toString();
 
       hiveSyncProps = new TypedProperties();
       hiveSyncProps.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
@@ -169,7 +177,9 @@ public class HiveTestUtil {
     }
     hiveSyncConfig = new HiveSyncConfig(hiveSyncProps, hiveTestService.getHiveConf());
     fileSystem = hiveSyncConfig.getHadoopFileSystem();
-    storage = new HoodieHadoopStorage(fileSystem);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(fileSystem.getWorkingDirectory()),
+        HadoopFSUtils.getStorageConf(fileSystem.getConf()));
 
     dtfOut = DateTimeFormatter.ofPattern("yyyy/MM/dd");
     if (ddlExecutor != null) {
@@ -180,29 +190,31 @@ public class HiveTestUtil {
     if (shouldClearBasePathAndTables) {
       clear();
     }
+    if (!hiveSyncProperties.isPresent()) {
+      HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE)
+          .setTableName(TABLE_NAME)
+          .setPayloadClass(HoodieAvroPayload.class)
+          .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
+    }
   }
 
   public static void clear() throws IOException, HiveException, MetaException {
     fileSystem.delete(new Path(basePath), true);
-    HoodieTableMetaClient.newTableBuilder()
-        .setTableType(HoodieTableType.COPY_ON_WRITE)
-        .setTableName(TABLE_NAME)
-        .setPayloadClass(HoodieAvroPayload.class)
-        .initTable(HadoopFSUtils.getStorageConfWithCopy(configuration), basePath);
 
-    for (String tableName : createdTablesSet) {
-      ddlExecutor.runSQL("drop table if exists " + tableName);
+    if (ddlExecutor != null) {
+      for (String tableName : createdTablesSet) {
+        ddlExecutor.runSQL("drop table if exists " + tableName);
+      }
     }
     createdTablesSet.clear();
-    ddlExecutor.runSQL("drop database if exists " + DB_NAME + " cascade");
+    if (ddlExecutor != null) {
+      ddlExecutor.runSQL("drop database if exists " + DB_NAME + " cascade");
+    }
   }
 
   public static HiveConf getHiveConf() {
     return hiveServer.getHiveConf();
-  }
-
-  public static HiveSyncConfig getHiveSyncConfig() {
-    return hiveSyncConfig;
   }
 
   public static void shutdown() {
@@ -227,6 +239,7 @@ public class HiveTestUtil {
     try {
       if (hiveServer != null) {
         hiveServer.stop();
+        hiveServer = null;
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -236,6 +249,7 @@ public class HiveTestUtil {
     try {
       if (hiveTestService != null) {
         hiveTestService.stop();
+        hiveTestService = null;
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -245,6 +259,7 @@ public class HiveTestUtil {
     try {
       if (zkServer != null) {
         zkServer.shutdown(true);
+        zkServer = null;
       }
     } catch (Exception e) {
       e.printStackTrace();
@@ -254,6 +269,7 @@ public class HiveTestUtil {
     try {
       if (zkService != null) {
         zkService.stop();
+        zkService = null;
       }
     } catch (RuntimeException re) {
       re.printStackTrace();
@@ -263,6 +279,7 @@ public class HiveTestUtil {
     try {
       if (fileSystem != null) {
         fileSystem.close();
+        fileSystem = null;
       }
     } catch (IOException ie) {
       ie.printStackTrace();
@@ -270,7 +287,7 @@ public class HiveTestUtil {
     }
 
     if (!failedReleases.isEmpty()) {
-      LOG.error("Exception happened during releasing: " + String.join(",", failedReleases));
+      log.error("Exception happened during releasing: {}", String.join(",", failedReleases));
     }
   }
 
@@ -329,7 +346,7 @@ public class HiveTestUtil {
           storage.deleteFile(path);
         }
       } catch (IOException e) {
-        LOG.warn("Error deleting file: ", e);
+        log.warn("Error deleting file: ", e);
       }
     });
   }
@@ -378,6 +395,11 @@ public class HiveTestUtil {
 
   public static void createCOWTableWithSchema(String instantTime, String schemaFileName)
       throws IOException, URISyntaxException {
+    createCOWTableWithSchema(instantTime, SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName));
+  }
+
+  public static void createCOWTableWithSchema(String instantTime, HoodieSchema schema)
+      throws IOException, URISyntaxException {
     Path path = new Path(basePath);
     FileIOUtils.deleteDirectory(new File(basePath));
     HoodieTableMetaClient.newTableBuilder()
@@ -400,8 +422,7 @@ public class HiveTestUtil {
     String fileId = UUID.randomUUID().toString();
     Path filePath = new Path(partPath.toString() + "/"
         + FSUtils.makeBaseFileName(instantTime, "1-0-1", fileId, HoodieTableConfig.BASE_FILE_FORMAT.defaultValue().getFileExtension()));
-    HoodieSchema schema = SchemaTestUtil.getSchemaFromResource(HiveTestUtil.class, schemaFileName);
-    generateParquetDataWithSchema(filePath, schema.toAvroSchema());
+    generateParquetDataWithSchema(filePath, schema);
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setFileId(fileId);
     writeStat.setPath(filePath.toString());
@@ -515,10 +536,10 @@ public class HiveTestUtil {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
         StoragePath path = new StoragePath(wStat.getPath());
-        HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(path));
+        HoodieBaseFile baseFile = new HoodieBaseFile(storage.getPathInfo(path));
         HoodieLogFile logFile = generateLogData(path, isLogSchemaSimple);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
-        writeStat.setFileId(dataFile.getFileId());
+        writeStat.setFileId(baseFile.getFileId());
         writeStat.setPath(logFile.getPath().toString());
         writeStat.setNumUpdateWrites(10);
         commitMetadata.addWriteStat(partitionPath, writeStat);
@@ -536,10 +557,10 @@ public class HiveTestUtil {
       String partitionPath = wEntry.getKey();
       for (HoodieWriteStat wStat : wEntry.getValue()) {
         StoragePath path = new StoragePath(wStat.getPath());
-        HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(path));
+        HoodieBaseFile baseFile = new HoodieBaseFile(storage.getPathInfo(path));
         HoodieLogFile logFile = generateLogData(path, logSchemaPath, dataPath);
         HoodieDeltaWriteStat writeStat = new HoodieDeltaWriteStat();
-        writeStat.setFileId(dataFile.getFileId());
+        writeStat.setFileId(baseFile.getFileId());
         writeStat.setPath(logFile.getPath().toString());
         writeStat.setNumUpdateWrites(10);
         commitMetadata.addWriteStat(partitionPath, writeStat);
@@ -642,7 +663,7 @@ public class HiveTestUtil {
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema.toAvroSchema());
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema.toAvroSchema(), Option.of(filter), new Properties());
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
@@ -665,7 +686,7 @@ public class HiveTestUtil {
     org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema.toAvroSchema());
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
-    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema.toAvroSchema(), Option.of(filter), new Properties());
+    HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
     ParquetWriter writer = new ParquetWriter(filePath, writeSupport, CompressionCodecName.GZIP, 120 * 1024 * 1024,
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
@@ -681,9 +702,9 @@ public class HiveTestUtil {
     writer.close();
   }
 
-  private static void generateParquetDataWithSchema(Path filePath, Schema schema)
+  private static void generateParquetDataWithSchema(Path filePath, HoodieSchema schema)
       throws IOException {
-    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema);
+    org.apache.parquet.schema.MessageType parquetSchema = new AvroSchemaConverter().convert(schema.toAvroSchema());
     BloomFilter filter = BloomFilterFactory.createBloomFilter(1000, 0.0001, -1,
         BloomFilterTypeCode.SIMPLE.name());
     HoodieAvroWriteSupport writeSupport = new HoodieAvroWriteSupport(parquetSchema, schema, Option.of(filter), new Properties());
@@ -691,7 +712,7 @@ public class HiveTestUtil {
         ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_PAGE_SIZE, ParquetWriter.DEFAULT_IS_DICTIONARY_ENABLED,
         ParquetWriter.DEFAULT_IS_VALIDATING_ENABLED, ParquetWriter.DEFAULT_WRITER_VERSION, fileSystem.getConf());
 
-    List<IndexedRecord> testRecords = SchemaTestUtil.generateTestRecordsForSchema(HoodieSchema.fromAvroSchema(schema));
+    List<IndexedRecord> testRecords = SchemaTestUtil.generateTestRecordsForSchema(schema);
     testRecords.forEach(s -> {
       try {
         writer.write(s);
@@ -706,16 +727,18 @@ public class HiveTestUtil {
                                                boolean isLogSchemaSimple)
       throws IOException, InterruptedException, URISyntaxException {
     HoodieSchema schema = getTestDataSchema(isLogSchemaSimple);
-    HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
+    HoodieBaseFile baseFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
-    Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
-        .withInstantTime(dataFile.getCommitTime()).withStorage(storage).build();
+    Writer logWriter = HoodieLogFormatWriter.builder()
+        .withParentPath(parquetFilePath.getParent())
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId(baseFile.getFileId())
+        .withInstantTime(baseFile.getCommitTime()).withStorage(storage).build();
     List<HoodieRecord> records = (isLogSchemaSimple ? SchemaTestUtil.generateTestRecords(0, 100)
         : SchemaTestUtil.generateEvolvedTestRecords(100, 100)).stream()
         .map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, baseFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     logWriter.appendBlock(dataBlock);
@@ -726,14 +749,18 @@ public class HiveTestUtil {
   private static HoodieLogFile generateLogData(StoragePath parquetFilePath, String logSchemaPath, String dataPath)
       throws IOException, InterruptedException, URISyntaxException {
     HoodieSchema schema = SchemaTestUtil.getSchema(logSchemaPath);
-    HoodieBaseFile dataFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
+    HoodieBaseFile baseFile = new HoodieBaseFile(storage.getPathInfo(parquetFilePath));
     // Write a log file for this parquet file
-    Writer logWriter = HoodieLogFormat.newWriterBuilder().onParentPath(parquetFilePath.getParent())
-        .withFileExtension(HoodieLogFile.DELTA_EXTENSION).withFileId(dataFile.getFileId())
-        .withInstantTime(dataFile.getCommitTime()).withStorage(storage).build();
+    Writer logWriter = HoodieLogFormatWriter.builder()
+        .withParentPath(parquetFilePath.getParent())
+        .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
+        .withLogFileId(baseFile.getFileId())
+        .withInstantTime(baseFile.getCommitTime())
+        .withStorage(storage)
+        .build();
     List<HoodieRecord> records = SchemaTestUtil.generateTestRecords(logSchemaPath, dataPath).stream().map(HoodieAvroIndexedRecord::new).collect(Collectors.toList());
     Map<HeaderMetadataType, String> header = new HashMap<>(2);
-    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, dataFile.getCommitTime());
+    header.put(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME, baseFile.getCommitTime());
     header.put(HoodieLogBlock.HeaderMetadataType.SCHEMA, schema.toString());
     HoodieAvroDataBlock dataBlock = new HoodieAvroDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD);
     logWriter.appendBlock(dataBlock);
@@ -814,9 +841,5 @@ public class HiveTestUtil {
         writer.get().writeToStream(fsout);
       }
     }
-  }
-
-  public static Set<String> getCreatedTablesSet() {
-    return createdTablesSet;
   }
 }

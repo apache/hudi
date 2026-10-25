@@ -60,7 +60,7 @@ public class BootstrapColumnStichingRecordReader implements RecordReader<NullWri
           .toArray(new String[0]);
       values = new ArrayWritable(vals);
     }
-    LOG.info("Total ArrayWritable Length :" + values.get().length);
+    LOG.info("Total ArrayWritable Length :{}", values.get().length);
   }
 
   @Override
@@ -72,7 +72,7 @@ public class BootstrapColumnStichingRecordReader implements RecordReader<NullWri
     boolean hasMoreOnRight = rightColsRecordReader.next(rightColsRecordReader.createKey(), right);
     if (validate) {
       ValidationUtils.checkArgument(hasMoreOnLeft == hasMoreOnRight,
-          String.format("hasMoreOnLeft:%s, hasMoreOnRight: %s", hasMoreOnLeft, hasMoreOnRight));
+          () -> String.format("hasMoreOnLeft:%s, hasMoreOnRight: %s", hasMoreOnLeft, hasMoreOnRight));
     }
     for (int i = 0; i < numLeftColumns; i++) {
       value.get()[i] = left.get()[i];

@@ -22,11 +22,12 @@ package org.apache.hudi.functional;
 import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.OverwriteWithLatestSparkRecordMerger;
-import org.apache.hudi.avro.HoodieAvroReaderContext;
+import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.expression.Predicate;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -35,9 +36,9 @@ import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieSparkRecord;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
@@ -51,7 +52,6 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.expression.Predicate;
 import org.apache.hudi.io.CustomMerger;
 import org.apache.hudi.io.CustomPayload;
 import org.apache.hudi.storage.HoodieStorage;
@@ -59,7 +59,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -67,13 +66,14 @@ import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.unsafe.types.UTF8String;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -119,7 +119,8 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     storageConfig = mock(StorageConfiguration.class);
     when(tableConfig.getPayloadClass()).thenReturn(
         "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
-    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false);
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"id"}));
     // Create reader context.
     props = new TypedProperties();
@@ -930,7 +931,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
 
     @Override
     public Object getValue(InternalRow record, HoodieSchema schema, String fieldName) {
-      return getFieldValueFromInternalRow(record, schema.toAvroSchema(), fieldName);
+      return getFieldValueFromInternalRow(record, schema, fieldName);
     }
 
     @Override
@@ -956,6 +957,11 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     @Override
     public InternalRow constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
       return new GenericInternalRow(fieldValues);
+    }
+
+    @Override
+    public HoodieRecord.HoodieRecordType getEngineRecordType() {
+      return HoodieRecord.HoodieRecordType.SPARK;
     }
 
     @Override
@@ -986,7 +992,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     }
 
     @Override
-    public InternalRow seal(InternalRow record) {
+    public InternalRow seal(HoodieSchema schema, InternalRow record) {
       return null;
     }
 
@@ -1085,16 +1091,5 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
           throw new UnsupportedOperationException("Unsupported type: " + fieldSchema.getType() + " at " + path);
       }
     }
-  }
-
-  private static Schema getNonNullSchema(Schema schema) {
-    if (schema.getType() == Schema.Type.UNION) {
-      for (Schema s : schema.getTypes()) {
-        if (s.getType() != Schema.Type.NULL) {
-          return s;
-        }
-      }
-    }
-    return schema;
   }
 }

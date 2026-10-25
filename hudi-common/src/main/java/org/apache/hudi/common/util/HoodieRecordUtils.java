@@ -50,7 +50,10 @@ import org.apache.avro.generic.GenericRecord;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -156,14 +159,14 @@ public class HoodieRecordUtils {
     }
   }
 
-  public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey, String payloadClass, boolean requiresPayload, Boolean isDelete) {
-    return createHoodieRecord(data, orderingVal, hKey, payloadClass, null, Option.empty(), requiresPayload, isDelete);
+  public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey, String payloadClass, Boolean isDelete) {
+    return createHoodieRecord(data, orderingVal, hKey, payloadClass, null, Option.empty(), isDelete);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, Comparable orderingVal, HoodieKey hKey,
-                                                String payloadClass, HoodieOperation hoodieOperation, Option<HoodieRecordLocation> recordLocation, boolean requiresPayload, Boolean isDelete) {
+                                                String payloadClass, HoodieOperation hoodieOperation, Option<HoodieRecordLocation> recordLocation, Boolean isDelete) {
     HoodieRecord record;
-    if (!requiresPayload && isPayloadClassDeprecated(payloadClass)) {
+    if (isPayloadClassDeprecated(payloadClass)) {
       record = new HoodieAvroIndexedRecord(hKey, data, orderingVal, hoodieOperation, isDelete);
     } else {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data, orderingVal);
@@ -174,14 +177,14 @@ public class HoodieRecordUtils {
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, HoodieKey hKey,
-                                                String payloadClass, boolean requiresPayload, Boolean isDelete) {
-    return createHoodieRecord(data, hKey, payloadClass, Option.empty(), requiresPayload, isDelete);
+                                                String payloadClass, Boolean isDelete) {
+    return createHoodieRecord(data, hKey, payloadClass, Option.empty(), isDelete);
   }
 
   public static HoodieRecord createHoodieRecord(GenericRecord data, HoodieKey hKey,
-                                                String payloadClass, Option<HoodieRecordLocation> recordLocation, boolean requiresPayload, Boolean isDelete) {
+                                                String payloadClass, Option<HoodieRecordLocation> recordLocation, Boolean isDelete) {
     HoodieRecord record;
-    if (!requiresPayload && isPayloadClassDeprecated(payloadClass)) {
+    if (isPayloadClassDeprecated(payloadClass)) {
       record = new HoodieAvroIndexedRecord(hKey, data, null, (HoodieOperation) null, isDelete);
     } else {
       HoodieRecordPayload payload = HoodieRecordUtils.loadPayload(payloadClass, data);
@@ -218,6 +221,18 @@ public class HoodieRecordUtils {
       return record.getCurrentLocation().getInstantTime();
     }
     return null;
+  }
+
+  /**
+   * Returns an iterator over the input records sorted by record key in UTF-8 byte order. Callers
+   * use this to feed HFile-backed writers ({@code requireSortedRecords()}), and HFiles order keys
+   * by their raw UTF-8 bytes, not String (UTF-16) order.
+   */
+  public static <T> Iterator<HoodieRecord<T>> sortRecordsByRecordKey(Iterator<HoodieRecord<T>> records) {
+    List<HoodieRecord<T>> sortedRecords = new ArrayList<>();
+    records.forEachRemaining(sortedRecords::add);
+    sortedRecords.sort(Comparator.comparing(HoodieRecord::getRecordKey, StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR));
+    return sortedRecords.iterator();
   }
 
   public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,

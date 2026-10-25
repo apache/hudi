@@ -33,12 +33,18 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -49,8 +55,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -118,27 +127,85 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     //now that it is complete, the first instant should be picked
     HoodieInstant complete = metaClient.getActiveTimeline().transitionClusterInflightToComplete(false, inflight, new HoodieReplaceCommitMetadata());
     assertEquals(HoodieInstant.State.COMPLETED, complete.getState());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, complete.getAction());
     lastPendingClustering = metaClient.reloadActiveTimeline().getLastPendingClusterInstant();
     assertEquals("1", lastPendingClustering.get().requestedTime());
   }
 
-  // replacecommit.inflight doesn't have clustering plan.
-  // Verify that getClusteringPlan fetches content from corresponding requested file.
-  @Disabled("Will fail due to avro issue AVRO-3789. This is fixed in avro 1.11.3")
+  /**
+   * A clustering commit completes as a {@code replacecommit} whichever action its inflight instant
+   * carried, {@code clustering} on table version 8+ or {@code replacecommit} before that.
+   */
   @Test
-  public void testClusteringPlanInflight() throws Exception {
+  public void testClusteringAndReplaceInflightBothCompleteAsReplaceCommit() throws Exception {
+    List<String> fileIds = new ArrayList<>();
+    fileIds.add(UUID.randomUUID().toString());
+    List<HoodieInstant> completed = new ArrayList<>();
+
+    HoodieInstant clusterRequested = createRequestedClusterInstant("partition1", "1", fileIds);
+    HoodieInstant clusterInflight = metaClient.getActiveTimeline()
+        .transitionClusterRequestedToInflight(clusterRequested, Option.empty());
+    assertEquals(HoodieTimeline.CLUSTERING_ACTION, clusterInflight.getAction());
+    ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
+        false, clusterInflight, new HoodieReplaceCommitMetadata(), metaClient.getActiveTimeline(),
+        completed::add);
+    assertEquals(1, completed.size());
+    assertEquals(HoodieInstant.State.COMPLETED, completed.get(0).getState());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, completed.get(0).getAction(),
+        "a clustering inflight instant must complete as replacecommit");
+
+    completed.clear();
+    HoodieInstant replaceRequested = createRequestedReplaceInstantNotClustering("2");
+    HoodieInstant replaceInflight = metaClient.getActiveTimeline()
+        .transitionReplaceRequestedToInflight(replaceRequested, Option.empty());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, replaceInflight.getAction());
+    ClusteringUtils.transitionClusteringOrReplaceInflightToComplete(
+        false, replaceInflight, new HoodieReplaceCommitMetadata(), metaClient.getActiveTimeline(),
+        completed::add);
+    assertEquals(1, completed.size());
+    assertEquals(HoodieInstant.State.COMPLETED, completed.get(0).getState());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, completed.get(0).getAction(),
+        "a replacecommit inflight instant must complete as replacecommit");
+
+    List<HoodieInstant> completedInstants =
+        metaClient.reloadActiveTimeline().filterCompletedInstants().getInstants();
+    assertEquals(2, completedInstants.size());
+    completedInstants.forEach(instant ->
+        assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, instant.getAction()));
+  }
+
+  // The inflight instant file carries no clustering plan, so getClusteringPlan has to read it from the
+  // corresponding requested file. Table version 8 and above write the instant with the clustering action;
+  // table version 6 still writes it as a replacecommit (see ClusteringPlanActionExecutor), which is the
+  // only shape that exercises the replacecommit arm of isClusteringInstant.
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testClusteringPlanInflight(boolean preTableVersion8) throws Exception {
+    if (preTableVersion8) {
+      initMetaClient(true);
+    }
+    String expectedAction = preTableVersion8 ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION;
+    InstantGenerator instantGenerator = metaClient.getInstantGenerator();
     String partitionPath1 = "partition1";
     List<String> fileIds1 = new ArrayList<>();
     fileIds1.add(UUID.randomUUID().toString());
     fileIds1.add(UUID.randomUUID().toString());
     String clusterTime1 = "1";
     HoodieInstant requestedInstant = createRequestedClusterInstant(partitionPath1, clusterTime1, fileIds1);
-    HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant, Option.empty());
-    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), requestedInstant, INSTANT_GENERATOR));
+    assertEquals(expectedAction, requestedInstant.getAction());
+    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), requestedInstant, instantGenerator));
     HoodieClusteringPlan requestedClusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, requestedInstant).get().getRight();
-    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), inflightInstant, INSTANT_GENERATOR));
-    HoodieClusteringPlan inflightClusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, inflightInstant).get().getRight();
-    assertEquals(requestedClusteringPlan, inflightClusteringPlan);
+
+    HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant, Option.empty());
+    assertEquals(expectedAction, inflightInstant.getAction());
+    assertTrue(metaClient.getActiveTimeline().isEmpty(inflightInstant));
+    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), inflightInstant, instantGenerator));
+    assertEquals(requestedClusteringPlan, ClusteringUtils.getClusteringPlan(metaClient, inflightInstant).get().getRight());
+
+    HoodieInstant completedInstant = metaClient.getActiveTimeline().transitionClusterInflightToComplete(false, inflightInstant, new HoodieReplaceCommitMetadata());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, completedInstant.getAction());
+    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), completedInstant, instantGenerator));
+    assertEquals(requestedClusteringPlan, ClusteringUtils.getClusteringPlan(metaClient, completedInstant).get().getRight());
   }
 
   @Test
@@ -231,6 +298,143 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
         "retain the first replace commit after the last complete clean ");
   }
 
+  /**
+   * Getting a clustering plan for an instant whose requested file was never written (e.g. the instant
+   * was rolled back before we could read it) should return empty rather than throw an exception.
+   */
+  @Test
+  public void testGetClusteringPlanOnNonExistentInstant() {
+    HoodieInstant requestedInstant = INSTANT_GENERATOR.createNewInstant(
+        HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, "001");
+    assertFalse(ClusteringUtils.getClusteringPlan(metaClient, requestedInstant).isPresent());
+  }
+
+  /**
+   * Simulates a concurrent rollback: a clustering plan is created, then its requested file is
+   * deleted before getClusteringPlan reads it. The method should return empty instead of throwing.
+   */
+  @Test
+  public void testGetClusteringPlanAfterRequestedFileDeleted() throws Exception {
+    String partitionPath = "partition1";
+    List<String> fileIds = new ArrayList<>();
+    fileIds.add(UUID.randomUUID().toString());
+    String clusterTime = "1";
+    HoodieInstant requestedInstant = createRequestedClusterInstant(partitionPath, clusterTime, fileIds);
+    metaClient.reloadActiveTimeline();
+
+    // Verify the plan is readable before deletion
+    Option<Pair<HoodieInstant, HoodieClusteringPlan>> plan = ClusteringUtils.getClusteringPlan(metaClient, requestedInstant);
+    assertTrue(plan.isPresent());
+
+    // Delete the requested file to simulate a concurrent rollback
+    StoragePath instantFilePath = new StoragePath(
+        metaClient.getTimelinePath(),
+        INSTANT_FILE_NAME_GENERATOR.getFileName(requestedInstant));
+    assertTrue(metaClient.getStorage().deleteFile(instantFilePath));
+
+    // Should return empty rather than throw
+    assertFalse(ClusteringUtils.getClusteringPlan(metaClient, requestedInstant).isPresent());
+  }
+
+  /**
+   * When one instant among several pending clustering instants is rolled back concurrently,
+   * getAllPendingClusteringPlans should still return the plans for the remaining valid instants.
+   */
+  @Test
+  public void testGetAllPendingClusteringPlansWithRolledBackInstant() throws Exception {
+    String partitionPath = "partition1";
+
+    List<String> fileIds1 = new ArrayList<>();
+    fileIds1.add(UUID.randomUUID().toString());
+    createRequestedClusterInstant(partitionPath, "1", fileIds1);
+
+    List<String> fileIds2 = new ArrayList<>();
+    fileIds2.add(UUID.randomUUID().toString());
+    HoodieInstant secondInstant = createRequestedClusterInstant(partitionPath, "2", fileIds2);
+
+    metaClient.reloadActiveTimeline();
+
+    // Delete the second instant's requested file to simulate rollback
+    StoragePath instantFilePath = new StoragePath(
+        metaClient.getTimelinePath(),
+        INSTANT_FILE_NAME_GENERATOR.getFileName(secondInstant));
+    assertTrue(metaClient.getStorage().deleteFile(instantFilePath));
+
+    // Should still return the first plan without throwing
+    List<Pair<HoodieInstant, HoodieClusteringPlan>> plans =
+        ClusteringUtils.getAllPendingClusteringPlans(metaClient).collect(Collectors.toList());
+    assertEquals(1, plans.size());
+    assertEquals("1", plans.get(0).getLeft().requestedTime());
+  }
+
+  /**
+   * When the requested file is corrupted but the instant is still in the timeline,
+   * getClusteringPlan should rethrow the exception (genuine error, not a rollback).
+   */
+  @Test
+  public void testGetClusteringPlanRethrowsWhenInstantStillInTimeline() throws Exception {
+    String partitionPath = "partition1";
+    List<String> fileIds = new ArrayList<>();
+    fileIds.add(UUID.randomUUID().toString());
+    String clusterTime = "1";
+    HoodieInstant requestedInstant = createRequestedClusterInstant(partitionPath, clusterTime, fileIds);
+    metaClient.reloadActiveTimeline();
+
+    // Corrupt the requested file by overwriting with invalid (non-empty) content
+    StoragePath instantFilePath = new StoragePath(
+        metaClient.getTimelinePath(),
+        INSTANT_FILE_NAME_GENERATOR.getFileName(requestedInstant));
+    java.io.OutputStream out = metaClient.getStorage().create(instantFilePath, true);
+    out.write(new byte[] {0, 1, 2, 3});
+    out.close();
+
+    assertThrows(HoodieIOException.class,
+        () -> ClusteringUtils.getClusteringPlan(metaClient, requestedInstant));
+  }
+
+  /**
+   * The 3-arg overload (without metaClient) should throw on a missing instant since
+   * it has no metaClient to verify rollback.
+   */
+  @Test
+  public void testGetClusteringPlanWithoutMetaClientThrowsOnMissingInstant() throws Exception {
+    String partitionPath = "partition1";
+    List<String> fileIds = new ArrayList<>();
+    fileIds.add(UUID.randomUUID().toString());
+    String clusterTime = "1";
+    HoodieInstant requestedInstant = createRequestedClusterInstant(partitionPath, clusterTime, fileIds);
+    metaClient.reloadActiveTimeline();
+
+    // Delete the requested file
+    StoragePath instantFilePath = new StoragePath(
+        metaClient.getTimelinePath(),
+        INSTANT_FILE_NAME_GENERATOR.getFileName(requestedInstant));
+    assertTrue(metaClient.getStorage().deleteFile(instantFilePath));
+
+    // The 3-arg overload without metaClient should throw
+    assertThrows(HoodieIOException.class,
+        () -> ClusteringUtils.getClusteringPlan(
+            metaClient.getActiveTimeline(), requestedInstant, INSTANT_GENERATOR));
+  }
+
+  /**
+   * The 3-arg overload (without metaClient) should return the plan successfully on the happy path.
+   */
+  @Test
+  public void testGetClusteringPlanViaTimelineOverload() throws Exception {
+    String partitionPath = "partition1";
+    List<String> fileIds = new ArrayList<>();
+    fileIds.add(UUID.randomUUID().toString());
+    String clusterTime = "1";
+    HoodieInstant requestedInstant = createRequestedClusterInstant(partitionPath, clusterTime, fileIds);
+    metaClient.reloadActiveTimeline();
+
+    Option<Pair<HoodieInstant, HoodieClusteringPlan>> plan = ClusteringUtils.getClusteringPlan(
+        metaClient.getActiveTimeline(), requestedInstant, INSTANT_GENERATOR);
+    assertTrue(plan.isPresent());
+    assertEquals(clusterTime, plan.get().getLeft().requestedTime());
+  }
+
   private void validateClusteringInstant(List<String> fileIds, String partitionPath,
                                          String expectedInstantTime, Map<HoodieFileGroupId, HoodieInstant> fileGroupToInstantMap) {
     for (String fileId : fileIds) {
@@ -255,7 +459,10 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieClusteringPlan clusteringPlan =
         ClusteringUtils.createClusteringPlan(CLUSTERING_STRATEGY_CLASS, STRATEGY_PARAMS, fileSliceGroups, Collections.emptyMap());
 
-    HoodieInstant clusteringInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusterTime);
+    // Table version 6 has no clustering action and schedules clustering as a replacecommit, see ClusteringPlanActionExecutor.
+    String action = TimelineLayoutVersion.LAYOUT_VERSION_2.equals(metaClient.getTimelineLayoutVersion())
+        ? HoodieTimeline.CLUSTERING_ACTION : HoodieTimeline.REPLACE_COMMIT_ACTION;
+    HoodieInstant clusteringInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, action, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
     metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);

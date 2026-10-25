@@ -18,10 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.dag.nodes;
 
-import java.util.List;
-import java.util.function.Function;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
+
+import java.util.List;
+import java.util.function.Function;
 
 /**
  * A validate node helps to validate its parent nodes with given function.

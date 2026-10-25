@@ -18,13 +18,15 @@
 
 package org.apache.hudi.hadoop.hive;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
+import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
@@ -33,18 +35,15 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.SchemaTestUtil;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.util.CommitUtils;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.SchemaEvolutionContext;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.testutils.InputFormatTestUtil;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.convert.InternalSchemaConverter;
-import org.apache.hudi.internal.schema.utils.SerDeHelper;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
-import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
-import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -68,6 +67,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
@@ -81,7 +82,13 @@ import static org.apache.hadoop.hive.ql.exec.Utilities.HAS_MAP_WORK;
 import static org.apache.hadoop.hive.ql.exec.Utilities.MAPRED_MAPPER_CLASS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.COMMIT_METADATA_SER_DE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
 
 public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
@@ -94,7 +101,9 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // Append is not supported in LocalFileSystem. HDFS needs to be setup.
     hdfsTestService = new HdfsTestService();
     fs = hdfsTestService.start(true).getFileSystem();
-    storage = new HoodieHadoopStorage(fs);
+    storage = HoodieStorageUtils.getStorage(
+        HadoopFSUtils.convertToStoragePath(fs.getWorkingDirectory()),
+        HadoopFSUtils.getStorageConf(fs.getConf()));
   }
 
   @AfterAll
@@ -115,6 +124,30 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
   public void tearDown() throws IOException {
     if (fs != null) {
       fs.delete(new Path(tempDir.toAbsolutePath().toString()), true);
+    }
+  }
+
+  @Test
+  public void testClearWorkMapForConfOnGetSplitsFailure() throws Exception {
+    StorageConfiguration<Configuration> conf = HoodieTestUtils.getDefaultStorageConf();
+    File inputDir = tempDir.resolve("input").toFile();
+    assertTrue(inputDir.mkdirs());
+
+    MapredWork mrwork = new MapredWork();
+    Path mapWorkPath = new Path(tempDir.toAbsolutePath().toString());
+    Utilities.setMapRedWork(conf.unwrap(), mrwork, mapWorkPath);
+    JobConf jobConf = new JobConf(conf.unwrap());
+    FileInputFormat.setInputPaths(jobConf, inputDir.getPath());
+    jobConf.set(HAS_MAP_WORK, "true");
+    jobConf.set(MAPRED_MAPPER_CLASS, ExecMapper.class.getName());
+
+    HoodieCombineHiveInputFormat combineHiveInputFormat = spy(new HoodieCombineHiveInputFormat());
+    doThrow(new RuntimeException("path classification failed")).when(combineHiveInputFormat)
+        .getNonCombinablePathIndices(eq(jobConf), any(Path[].class), anyInt());
+
+    try (MockedStatic<Utilities> utilities = Mockito.mockStatic(Utilities.class, Mockito.CALLS_REAL_METHODS)) {
+      assertThrows(IOException.class, () -> combineHiveInputFormat.getSplits(jobConf, 1));
+      utilities.verify(() -> Utilities.clearWorkMapForConf(jobConf));
     }
   }
 
@@ -181,7 +214,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
+    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 2);
     // Check the internal schema and avro is the same as the original one
     for (InputSplit split : splits) {
@@ -191,8 +224,8 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
         SchemaEvolutionContext schemaEvolutionContext = new SchemaEvolutionContext(fileSplit, jobConf);
         Option<InternalSchema> internalSchemaFromCache = schemaEvolutionContext.getInternalSchemaFromCache();
         assertEquals(internalSchemaFromCache.get(), internalSchema);
-        Schema avroSchemaFromCache = schemaEvolutionContext.getAvroSchemaFromCache();
-        assertEquals(avroSchemaFromCache, schema.toAvroSchema());
+        HoodieSchema schemaFromCache = schemaEvolutionContext.getSchemaFromCache();
+        assertEquals(schemaFromCache, schema);
       }
     }
   }
@@ -246,7 +279,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
+    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
 
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
     // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
@@ -336,7 +369,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     String hiveColumnNames = fields.stream().map(HoodieSchemaField::name).collect(Collectors.joining(","));
     hiveColumnNames = hiveColumnNames + ",year,month,day";
-    String modifiedHiveColumnTypes = HoodieAvroUtils.addMetadataColumnTypes(tripsHiveColumnTypes);
+    String modifiedHiveColumnTypes = HoodieSchemaUtils.addMetadataColumnTypes(tripsHiveColumnTypes);
     modifiedHiveColumnTypes = modifiedHiveColumnTypes + ",string,string,string";
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMNS, hiveColumnNames);
     jobConf.set(hive_metastoreConstants.META_TABLE_COLUMN_TYPES, modifiedHiveColumnTypes);
@@ -415,7 +448,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
+    InputFormatTestUtil.setProjectFieldsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);
     // Since the SPLIT_SIZE is large enough, we should create only 1 split with all 3 file groups
     assertEquals(1, splits.length);
@@ -496,7 +529,7 @@ public class TestHoodieCombineHiveInputFormat extends HoodieCommonTestHarness {
     // set SPLIT_MAXSIZE larger  to create one split for 3 files groups
 
     String tripsHiveColumnTypes = "double,string,string,string,double,double,double,double,double";
-    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema.toAvroSchema(), tripsHiveColumnTypes);
+    InputFormatTestUtil.setPropsForInputFormat(jobConf, schema, tripsHiveColumnTypes);
 
     HoodieCombineHiveInputFormat combineHiveInputFormat = new HoodieCombineHiveInputFormat();
     InputSplit[] splits = combineHiveInputFormat.getSplits(jobConf, 1);

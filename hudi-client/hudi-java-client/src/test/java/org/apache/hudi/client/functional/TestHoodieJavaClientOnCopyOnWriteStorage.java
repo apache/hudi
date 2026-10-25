@@ -400,7 +400,7 @@ public class TestHoodieJavaClientOnCopyOnWriteStorage extends HoodieJavaClientTe
    */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void testDeletesWithoutInserts(boolean populateMetaFields) {
+  public void testDeletesWithoutInserts(boolean populateMetaFields) throws IOException {
     testDeletesWithoutInserts(populateMetaFields, IDENTITY, IDENTITY);
   }
 

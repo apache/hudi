@@ -22,6 +22,13 @@ import java.io.Serializable;
 import java.util.Comparator;
 
 /**
- * Comparator interface for HoodieSourceSplit.
+ * A serializable comparator interface for objects that need to be compared
+ * in a distributed environment.
+ *
+ * <p>This interface extends both {@link Comparator} and {@link Serializable},
+ * making it suitable for use in distributed systems where comparators need to be
+ * serialized and sent across network boundaries.
+ *
+ * @param <T> the type of objects that may be compared by this comparator
  */
 public interface SerializableComparator<T> extends Comparator<T>, Serializable {}

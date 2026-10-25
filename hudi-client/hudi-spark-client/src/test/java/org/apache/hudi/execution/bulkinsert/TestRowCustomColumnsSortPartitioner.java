@@ -19,11 +19,18 @@
 package org.apache.hudi.execution.bulkinsert;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.Arrays;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 
@@ -48,5 +55,26 @@ public class TestRowCustomColumnsSortPartitioner {
     } else {
       Assertions.assertArrayEquals(new Object[] {"_hoodie_partition_path", "col1", "col2", "col3"}, sortColumns);
     }
+  }
+
+  @Test
+  void constructorRejectsColumnsWithoutOrdering() {
+    // MultipleSparkJobExecutionStrategy.getPartitioner validates before it constructs a
+    // partitioner, so this constructor check is only reached through a user-defined partitioner
+    // (hoodie.bulkinsert.user.defined.partitioner.class).
+    String schema = HoodieSchema.createRecord("rec", null, null, Arrays.asList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+        HoodieSchemaField.of("v", HoodieSchema.createVariant()))).toString();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig
+        .newBuilder()
+        .withPath("/")
+        .withSchema(schema)
+        .build();
+
+    HoodieException failure = Assertions.assertThrows(HoodieException.class,
+        () -> new RowCustomColumnsSortPartitioner(new String[] {"v"}, writeConfig));
+    Assertions.assertTrue(failure.getMessage().contains("Sorting by column 'v'"),
+        "The error must name the column, got: " + failure.getMessage());
+    Assertions.assertDoesNotThrow(() -> new RowCustomColumnsSortPartitioner(new String[] {"id"}, writeConfig));
   }
 }

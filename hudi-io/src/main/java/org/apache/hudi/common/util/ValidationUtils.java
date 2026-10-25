@@ -81,10 +81,12 @@ public class ValidationUtils {
 
   /**
    * Ensures the truth of an expression, throwing the custom errorMessage otherwise.
+   *
+   * @throws IllegalStateException if {@code expression} is false
    */
   public static void checkState(final boolean expression, final Supplier<String> errorMessageSupplier) {
     if (!expression) {
-      throw new IllegalArgumentException(errorMessageSupplier.get());
+      throw new IllegalStateException(errorMessageSupplier.get());
     }
   }
 }

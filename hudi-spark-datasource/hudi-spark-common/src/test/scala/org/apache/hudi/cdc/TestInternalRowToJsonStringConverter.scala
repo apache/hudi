@@ -18,15 +18,16 @@
 
 package org.apache.hudi.cdc
 
-import org.apache.hudi.HoodieTableSchema
+import org.apache.hudi.{HoodieSparkUtils, HoodieTableSchema}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.common.schema.internal.InternalSchema
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
-import org.apache.spark.sql.types.{ArrayType, DataTypes, MapType, Metadata, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, DataTypes, Decimal, MapType, Metadata, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 class TestInternalRowToJsonStringConverter {
@@ -116,6 +117,32 @@ class TestInternalRowToJsonStringConverter {
   }
 
   @Test
+  def logicalTypes(): Unit = {
+    val row = InternalRow.fromSeq(Seq(
+      1,
+      Decimal(BigDecimal("9.99"), 7, 2),
+      Decimal(BigDecimal("0.00000012"), 10, 8),
+      20739,
+      1791910800000000L,
+      1791910800123456L,
+      ArrayData.toArrayData(Array(Decimal(BigDecimal("1.20"), 7, 2), Decimal(BigDecimal("3.00"), 7, 2)))
+    ))
+    val converted = new InternalRowToJsonStringConverter(logicalTypesSchema.structTypeSchema).convert(row)
+    assertEquals("""{"id":1,"amount":9.99,"rate":0.00000012,"day":"2026-10-13","ts":"2026-10-13T17:00:00Z","""
+      + """"ts_micros":"2026-10-13T17:00:00.123456Z","amounts":[1.20,3.00]}""", converted.toString)
+  }
+
+  @Test
+  def timestampNtzType(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark3_4, "TimestampNTZType requires Spark 3.4 or higher")
+    val schema = new StructType(Array[StructField](
+      StructField("id", DataTypes.IntegerType, nullable = false, Metadata.empty),
+      StructField("ts", DataType.fromDDL("timestamp_ntz"), nullable = true, Metadata.empty)))
+    val row = InternalRow.fromSeq(Seq(1, 1791885600000000L))
+    assertEquals("""{"id":1,"ts":"2026-10-13T10:00:00"}""", new InternalRowToJsonStringConverter(schema).convert(row).toString)
+  }
+
+  @Test
   def arrayWithNulls(): Unit = {
     val row = InternalRow.fromSeq(Seq(
       5,
@@ -165,6 +192,103 @@ class TestInternalRowToJsonStringConverter {
     ))
     val converted = emptyMapConverter.convert(row)
     assertEquals("""{"id":8,"name":"empty_map_test","properties":{}}""", converted.toString)
+  }
+
+  @Test
+  def variantColumnEmbedsItsJson(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // VariantVal.toString renders the variant as JSON, so the image must carry that structure
+    // rather than a bean rendering of the raw value/metadata bytes.
+    val row = InternalRow.fromSeq(Seq(1, variantRendering("""{"key":"value1"}""")))
+    assertEquals("""{"id":1,"v":{"key":"value1"}}""",
+      new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
+  }
+
+  @Test
+  def variantColumnFallsBackToRawRenderingWhenJacksonRejectsIt(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // Jackson's default StreamReadConstraints cap nesting at 1000 levels, field names at 50k chars
+    // and strings at 20M; a variant can exceed all three well inside its own size limit, and
+    // VariantVal.toString renders it faithfully. The image keeps that rendering rather than failing
+    // the whole CDC query. Nesting is the cheapest of the three to provoke.
+    val tooDeeplyNested = ("[" * 1001) + "1" + ("]" * 1001)
+    val row = InternalRow.fromSeq(Seq(1, variantRendering(tooDeeplyNested)))
+    assertEquals(s"""{"id":1,"v":"$tooDeeplyNested"}""",
+      new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
+  }
+
+  @Test
+  def variantColumnSurvivesJacksonWriteSideNestingCap(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // Jackson caps nesting on the write side too, and the image adds its own object level on top of
+    // the variant, so a depth the read side accepts could still fail in writeValueAsString -- outside
+    // the fallback, taking the whole CDC query with it. The rendering is embedded verbatim rather
+    // than as a parsed node precisely so that write-side accounting never sees it.
+    val atReadLimit = ("[" * 1000) + "1" + ("]" * 1000)
+    val row = InternalRow.fromSeq(Seq(1, variantRendering(atReadLimit)))
+    val image = new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString
+    // Embedded as a real array, i.e. neither the fallback nor a write-side failure.
+    assertEquals(s"""{"id":1,"v":$atReadLimit}""", image)
+  }
+
+  @Test
+  def variantColumnFallsBackWhenRenderingHasTrailingTokens(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "VariantType requires Spark 4.0 or higher")
+    // readTree parses a valid prefix and leaves the rest, so without FAIL_ON_TRAILING_TOKENS a
+    // verbatim embed would splice the trailing text straight into the image and corrupt it.
+    val row = InternalRow.fromSeq(Seq(1, variantRendering("""{"a":1} trailing""")))
+    assertEquals("""{"id":1,"v":"{\"a\":1} trailing"}""",
+      new InternalRowToJsonStringConverter(variantSchema.structTypeSchema).convert(row).toString)
+  }
+
+  /**
+   * Stands in for a VariantVal: the converter reaches the value only through toString, which is
+   * what renders a real variant as JSON. Constructing a genuine VariantVal here would need
+   * Spark-4-only symbols, and this module compiles against Spark 3 as well; the end-to-end
+   * behaviour over real variants is covered by the CDC round trip in TestVariantDataType.
+   *
+   * Note this stands in only for renderings a real variant can produce. Spark quotes non-finite
+   * doubles (Variant.toJsonImpl guards them with isFinite and takes the appendQuoted arm), so no
+   * variant renders a bare NaN or Infinity token.
+   */
+  private def variantRendering(json: String): AnyRef = new AnyRef {
+    override def toString: String = json
+  }
+
+  private def variantSchema: HoodieTableSchema = {
+    val structTypeSchema = new StructType(Array[StructField](
+      StructField("id", DataTypes.IntegerType, nullable = false, Metadata.empty),
+      StructField("v", DataType.fromDDL("variant"), nullable = true, Metadata.empty)))
+    val avroSchemaStr: String =
+      """{"type": "record", "name": "test", "fields": [
+        |{"name": "id", "type": "int"},
+        |{"name": "v", "type": {"type": "record", "name": "variant", "logicalType": "variant",
+        |  "fields": [{"name": "metadata", "type": "bytes"}, {"name": "value", "type": "bytes"}]}}
+        |]}""".stripMargin
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+  }
+
+  private def logicalTypesSchema: HoodieTableSchema = {
+    val structTypeSchema = new StructType(Array[StructField](
+      StructField("id", DataTypes.IntegerType, nullable = false, Metadata.empty),
+      StructField("amount", DataTypes.createDecimalType(7, 2), nullable = true, Metadata.empty),
+      StructField("rate", DataTypes.createDecimalType(10, 8), nullable = true, Metadata.empty),
+      StructField("day", DataTypes.DateType, nullable = true, Metadata.empty),
+      StructField("ts", DataTypes.TimestampType, nullable = true, Metadata.empty),
+      StructField("ts_micros", DataTypes.TimestampType, nullable = true, Metadata.empty),
+      StructField("amounts", ArrayType(DataTypes.createDecimalType(7, 2)), nullable = true, Metadata.empty)))
+    val avroSchemaStr: String =
+      """{"type": "record", "name": "test", "fields": [
+        |{"name": "id", "type": "int"},
+        |{"name": "amount", "type": {"type": "fixed", "name": "amount", "size": 4, "logicalType": "decimal", "precision": 7, "scale": 2}},
+        |{"name": "rate", "type": {"type": "fixed", "name": "rate", "size": 5, "logicalType": "decimal", "precision": 10, "scale": 8}},
+        |{"name": "day", "type": {"type": "int", "logicalType": "date"}},
+        |{"name": "ts", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+        |{"name": "ts_micros", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+        |{"name": "amounts", "type": {"type": "array", "items": {"type": "fixed", "name": "amounts", "size": 4,
+        |  "logicalType": "decimal", "precision": 7, "scale": 2}}}
+        |]}""".stripMargin
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
   }
 
   private def hoodieTableSchema: HoodieTableSchema = {

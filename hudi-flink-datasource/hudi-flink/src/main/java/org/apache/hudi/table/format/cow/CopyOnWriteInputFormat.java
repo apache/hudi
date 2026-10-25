@@ -18,13 +18,19 @@
 
 package org.apache.hudi.table.format.cow;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.source.ExpressionPredicates.Predicate;
 import org.apache.hudi.table.format.FilePathUtils;
+import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
+import org.apache.hudi.util.DataTypeUtils;
+import org.apache.hudi.util.VectorConversionUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.io.FileInputFormat;
 import org.apache.flink.api.common.io.FilePathFilter;
 import org.apache.flink.api.common.io.GlobFilePathFilter;
@@ -32,14 +38,14 @@ import org.apache.flink.api.common.io.compression.InflaterInputStreamFactory;
 import org.apache.flink.core.fs.FileInputSplit;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.parquet.utils.SerializableConfiguration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,6 +54,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -63,14 +70,16 @@ import java.util.Set;
  *
  * @see ParquetSplitReaderUtil
  */
+@Slf4j
 public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private static final long serialVersionUID = 1L;
 
-  private static final Logger LOG = LoggerFactory.getLogger(CopyOnWriteInputFormat.class);
-
   private final String[] fullFieldNames;
   private final DataType[] fullFieldTypes;
+  private final DataType[] readFieldTypes;
   private final int[] selectedFields;
+  private final Map<Integer, HoodieSchema.Vector> vectorColumnInfo;
+  private final HoodieSchema tableSchema;
   private final String partDefaultName;
   private final String partPathField;
   private final boolean hiveStylePartitioning;
@@ -81,6 +90,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   private transient ClosableIterator<RowData> itr;
   private transient long currentReadCount;
+  private transient HoodieSchema requestedSchema;
 
   /**
    * Files filter for determining what files/directories should be included.
@@ -101,7 +111,8 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       long limit,
       Configuration conf,
       boolean utcTimestamp,
-      InternalSchemaManager internalSchemaManager) {
+      InternalSchemaManager internalSchemaManager,
+      HoodieSchema tableSchema) {
     super.setFilePaths(paths);
     this.predicates = predicates;
     this.limit = limit;
@@ -110,7 +121,10 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.hiveStylePartitioning = hiveStylePartitioning;
     this.fullFieldNames = fullFieldNames;
     this.fullFieldTypes = fullFieldTypes;
+    this.readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(fullFieldNames, fullFieldTypes, tableSchema);
     this.selectedFields = selectedFields;
+    this.vectorColumnInfo = VectorConversionUtils.detectVectorColumns(fullFieldNames, selectedFields, tableSchema);
+    this.tableSchema = tableSchema;
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
     this.internalSchemaManager = internalSchemaManager;
@@ -118,30 +132,39 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   @Override
   public void open(FileInputSplit fileSplit) throws IOException {
-    LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
-        fileSplit.getPath().getPath(),
-        Arrays.asList(fullFieldNames),
-        Arrays.asList(fullFieldTypes),
-        this.partDefaultName,
-        this.partPathField,
-        this.hiveStylePartitioning
-    );
+    if (fileSplit.getPath().getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      this.itr = getLanceRecordIterator(fileSplit.getPath());
+    } else {
+      LinkedHashMap<String, Object> partObjects = FilePathUtils.generatePartitionSpecs(
+          fileSplit.getPath().getPath(),
+          Arrays.asList(fullFieldNames),
+          Arrays.asList(fullFieldTypes),
+          this.partDefaultName,
+          this.partPathField,
+          this.hiveStylePartitioning
+      );
 
-    this.itr = RecordIterators.getParquetRecordIterator(
-        internalSchemaManager,
-        utcTimestamp,
-        true,
-        conf.conf(),
-        fullFieldNames,
-        fullFieldTypes,
-        partObjects,
-        selectedFields,
-        2048,
-        fileSplit.getPath(),
-        fileSplit.getStart(),
-        fileSplit.getLength(),
-        predicates);
+      ClosableIterator<RowData> rowDataItr = RecordIterators.getParquetRecordIterator(
+          internalSchemaManager,
+          utcTimestamp,
+          true,
+          conf.conf(),
+          fullFieldNames,
+          readFieldTypes,
+          partObjects,
+          selectedFields,
+          2048,
+          fileSplit.getPath(),
+          fileSplit.getStart(),
+          fileSplit.getLength(),
+          predicates);
+      this.itr = vectorColumnInfo.isEmpty() ? rowDataItr : VectorConversionUtils.wrapVectorColumnIterator(rowDataItr, fullFieldTypes, selectedFields, vectorColumnInfo);
+    }
     this.currentReadCount = 0L;
+  }
+
+  private ClosableIterator<RowData> getLanceRecordIterator(Path path) {
+    return FormatUtils.getLanceRecordIterator(path.toString(), getRequestedSchema(), conf.conf());
   }
 
   @Override
@@ -210,7 +233,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
       if (this.minSplitSize <= blockSize) {
         minSplitSize = this.minSplitSize;
       } else {
-        LOG.warn("Minimal split size of {} is larger than the block size of {}."
+        log.warn("Minimal split size of {} is larger than the block size of {}."
             + " Decreasing minimal split size to block size.", this.minSplitSize, blockSize);
         minSplitSize = blockSize;
       }
@@ -313,7 +336,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           length += addFilesInDir(dir.getPath(), files, logExcludedFiles);
         } else {
           if (logExcludedFiles) {
-            LOG.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
+            log.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
           }
         }
       } else {
@@ -323,7 +346,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
           testForUnsplittable(dir);
         } else {
           if (logExcludedFiles) {
-            LOG.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
+            log.debug("Directory {} did not pass the file-filter and is excluded.", dir.getPath());
           }
         }
       }
@@ -381,6 +404,10 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   }
 
   private boolean testForUnsplittable(FileStatus pathFile) {
+    if (pathFile.getPath().getName().endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+      unsplittable = true;
+      return true;
+    }
     if (getInflaterInputStreamFactory(pathFile.getPath()) != null) {
       unsplittable = true;
       return true;
@@ -397,4 +424,15 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     }
   }
 
+  private HoodieSchema getRequestedSchema() {
+    if (requestedSchema == null) {
+      RowType requestedRowType = (RowType) DataTypes.ROW(Arrays.stream(selectedFields)
+              .mapToObj(i -> DataTypes.FIELD(fullFieldNames[i], fullFieldTypes[i]))
+              .toArray(DataTypes.Field[]::new))
+          .notNull()
+          .getLogicalType();
+      requestedSchema = DataTypeUtils.toHoodieSchema(requestedRowType, tableSchema);
+    }
+    return requestedSchema;
+  }
 }

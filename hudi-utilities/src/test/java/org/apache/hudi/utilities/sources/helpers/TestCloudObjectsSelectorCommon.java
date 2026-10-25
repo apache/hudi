@@ -18,28 +18,56 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.AvroConversionUtils;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
+import org.apache.hudi.utilities.config.CloudSourceConfig;
+import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 
-import org.apache.avro.Schema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.LocalFileSystem;
+import org.apache.spark.api.java.function.MapPartitionsFunction;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness {
 
@@ -71,18 +99,21 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
-  @Test
-  public void partitionValueAddedToRow() {
-    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1));
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void partitionValueAddedToRow(boolean includeSourcePathField) {
+    String dataPath = "src/test/resources/data/partitioned/country=US/state=CA/data.json";
+    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata(dataPath, 1));
 
     TypedProperties properties = new TypedProperties();
     properties.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
+    setIncludeSourcePathField(properties, includeSourcePathField);
     CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(properties);
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
+
     Assertions.assertTrue(result.isPresent());
-    Assertions.assertEquals(1, result.get().count());
-    Row expected = RowFactory.create("some data", "US", "CA");
-    Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
+    assertRowResult(includeSourcePathField, Collections.singletonList(dataPath), result.get(),
+        new Object[]{"some data", "US", "CA"});
   }
 
   @Test
@@ -120,27 +151,38 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
   }
 
-  @Test
-  public void loadDatasetWithSchemaAndRepartition() {
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void loadDatasetWithSchemaAndRepartition(boolean includeSourcePathField) {
     TypedProperties props = new TypedProperties();
-    TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc");
     String schemaFilePath = TestCloudObjectsSelectorCommon.class.getClassLoader().getResource("schema/sample_data_schema.avsc").getPath();
     props.put("hoodie.streamer.schemaprovider.source.schema.file", schemaFilePath);
     props.put("hoodie.streamer.schema.provider.class.name", FilebasedSchemaProvider.class.getName());
     props.put("hoodie.streamer.source.cloud.data.partition.fields.from.path", "country,state");
     // Setting this config so that dataset repartition happens inside `loadAsDataset`
     props.put("hoodie.streamer.source.cloud.data.partition.max.size", "1");
+    setIncludeSourcePathField(props, includeSourcePathField);
+
+    String dataPath1 = "src/test/resources/data/partitioned/country=US/state=CA/data.json";
+    String dataPath2 = "src/test/resources/data/partitioned/country=US/state=TX/data.json";
+    String dataPath3 = "src/test/resources/data/partitioned/country=IND/state=TS/data.json";
+
     List<CloudObjectMetadata> input = Arrays.asList(
-        new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=CA/data.json", 1000),
-        new CloudObjectMetadata("src/test/resources/data/partitioned/country=US/state=TX/data.json", 1000),
-        new CloudObjectMetadata("src/test/resources/data/partitioned/country=IND/state=TS/data.json", 1000)
-    );
+        new CloudObjectMetadata(dataPath1, 1000),
+        new CloudObjectMetadata(dataPath2, 1000),
+        new CloudObjectMetadata(dataPath3, 1000));
+
     CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(props);
     Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.of(new FilebasedSchemaProvider(props, jsc)), 30);
+
     Assertions.assertTrue(result.isPresent());
-    List<Row> expected = Arrays.asList(RowFactory.create("some data", "US", "CA"), RowFactory.create("some data", "US", "TX"), RowFactory.create("some data", "IND", "TS"));
-    List<Row> actual = result.get().collectAsList();
-    Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actual));
+    assertRowResult(
+        includeSourcePathField,
+        Arrays.asList(dataPath1, dataPath2, dataPath3),
+        result.get(),
+        new Object[]{"some data", "US", "CA"},
+        new Object[]{"some data", "US", "TX"},
+        new Object[]{"some data", "IND", "TS"});
   }
 
   @Test
@@ -194,10 +236,63 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     List<Row> expected = Arrays.asList(person1, person2, person3);
     List<Row> actual = result.get().collectAsList();
     Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actual));
-    Schema schema = new Schema.Parser().parse(new File(schemaFilePath));
-    StructType expectedSchema = AvroConversionUtils.convertAvroSchemaToStructType(schema);
+    HoodieSchema schema = HoodieSchema.parse(new FileInputStream(schemaFilePath));
+    StructType expectedSchema = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema);
     // assert final output schema matches with the source schema
     Assertions.assertEquals(expectedSchema, result.get().schema(), "output dataset schema should match source schema");
+  }
+
+  @Test
+  void parquetMixedSchemasMergedByDefault(@TempDir Path tempDir) {
+    String p1 = tempDir.resolve("part1").toString();
+    String p2 = tempDir.resolve("part2").toString();
+
+    StructType schema1 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("b", DataTypes.StringType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, "x")), schema1)
+        .write().parquet(p1);
+
+    StructType schema2 = DataTypes.createStructType(Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.IntegerType, true),
+        DataTypes.createStructField("c", DataTypes.IntegerType, true)));
+    sparkSession.createDataFrame(Collections.singletonList(RowFactory.create(1, 99)), schema2)
+        .write().parquet(p2);
+
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(new TypedProperties());
+    List<CloudObjectMetadata> input = Arrays.asList(
+        new CloudObjectMetadata(p1, 1L),
+        new CloudObjectMetadata(p2, 1L));
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "parquet", Option.empty(), 1);
+    assertTrue(result.isPresent());
+    Dataset<Row> ds = result.get();
+    Assertions.assertEquals(2, ds.count());
+    Set<String> colNames = Arrays.stream(ds.schema().fields()).map(StructField::name).collect(Collectors.toSet());
+    assertTrue(colNames.contains("b"));
+    assertTrue(colNames.contains("c"));
+  }
+
+  /**
+   * Verifies that the format-gating predicate for the cloud-incremental mergeSchema option recognises
+   * Parquet and ORC and rejects everything else. End-to-end ORC ingestion is not exercised here because
+   * {@code hudi-utilities} pulls in {@code orc-core-nohive} while Spark 3.x's ORC writer expects the
+   * regular {@code orc-core}; that classpath conflict makes {@code sparkSession.write().orc(...)} fail
+   * with {@code NoSuchFieldError: type} in this module's tests. The end-to-end behaviour for ORC is
+   * covered by Parquet's tests via the shared helper, plus this predicate test for the format dispatch.
+   */
+  @Test
+  void isParquetOrOrcFileFormatRecognisesBothFormats() {
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("parquet"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("PARQUET"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("orc"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("ORC"));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(" parquet "));
+    assertTrue(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(" orc "));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("json"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("csv"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("avro"));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(""));
+    assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(null));
   }
 
   @Test
@@ -212,5 +307,201 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     Assertions.assertEquals(1, result.get().count());
     Row expected = RowFactory.create("some data", null);
     Assertions.assertEquals(Collections.singletonList(expected), result.get().collectAsList());
+  }
+
+  @Test
+  void sourcePathColumnIsUriEncodedAndOverwritesExistingColumn(@TempDir Path tempDir) throws IOException {
+    // file name with a space: input_file_name() returns the percent-encoded URI, and the fixture already
+    // carries a same-named column that must be overwritten rather than duplicated
+    Path dataFile = tempDir.resolve("we ird.json");
+    Files.write(dataFile, Collections.singletonList(
+        "{\"data\": \"some data\", \"" + CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN + "\": \"existing/path\"}"));
+    TypedProperties properties = new TypedProperties();
+    setIncludeSourcePathField(properties, true);
+    CloudObjectsSelectorCommon cloudObjectsSelectorCommon = new CloudObjectsSelectorCommon(properties);
+    List<CloudObjectMetadata> input = Collections.singletonList(new CloudObjectMetadata(dataFile.toString(), 1));
+    Option<Dataset<Row>> result = cloudObjectsSelectorCommon.loadAsDataset(sparkSession, input, "json", Option.empty(), 1);
+
+    Assertions.assertTrue(result.isPresent());
+    String expectedPath = dataFile.toUri().toString();
+    Assertions.assertTrue(expectedPath.contains("%20"), expectedPath);
+    // JSON schema inference sorts the inferred fields by name, and overwriting a column keeps its position,
+    // so the source path column stays first here instead of being appended
+    Assertions.assertEquals(Arrays.asList(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN, "data"),
+        Arrays.asList(result.get().schema().fieldNames()));
+    Assertions.assertTrue(result.get().schema().apply(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN).nullable());
+    // the streamer derives the writer schema from the row schema; a non-nullable field would be a required avro
+    // field without a default and could not be added to an existing table
+    HoodieSchemaField sourcePathField = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(
+            result.get().schema(), RowBasedSchemaProvider.HOODIE_RECORD_STRUCT_NAME, RowBasedSchemaProvider.HOODIE_RECORD_NAMESPACE)
+        .getField(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN).get();
+    Assertions.assertTrue(sourcePathField.isNullable());
+    Assertions.assertTrue(sourcePathField.hasDefaultValue());
+    Assertions.assertEquals(Collections.singletonList(RowFactory.create(expectedPath, "some data")), result.get().collectAsList());
+  }
+
+  @Test
+  void s3ObjectMetadataDedupesAndFiltersMissingFilesWithExistsCheck(@TempDir Path tempDir) throws IOException {
+    // a space in the name: the event key is percent-encoded and getUrlForFile must decode it
+    Path existingFile1 = Files.write(tempDir.resolve("we ird.json"), Collections.singletonList("{}"));
+    Path existingFile2 = Files.write(tempDir.resolve("file2.json"), Collections.singletonList("{}"));
+    Path missingFile = tempDir.resolve("missing.json");
+    // bucket "" + key = absolute path without its leading separator, so prefix + bucket + "/" + key is a file:// URL
+    List<String> jsonRecords = Arrays.asList(
+        s3EventJson(existingFile1, 100),
+        s3EventJson(existingFile2, 200),
+        s3EventJson(missingFile, 300),
+        // duplicate event, dropped by distinct()
+        s3EventJson(existingFile1, 100));
+    Dataset<Row> cloudObjectMetadataDF = sparkSession.read().json(sparkSession.createDataset(jsonRecords, Encoders.STRING()));
+    TypedProperties props = new TypedProperties();
+    props.put(S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key(), "file");
+    props.put(CloudSourceConfig.EXISTS_CHECK_PARALLELISM.key(), "0");
+    Assertions.assertThrows(IllegalArgumentException.class, () -> CloudObjectsSelectorCommon.getObjectMetadata(
+        CloudObjectsSelectorCommon.Type.S3, jsc, cloudObjectMetadataDF, true, props));
+
+    props.put(CloudSourceConfig.EXISTS_CHECK_PARALLELISM.key(), "4");
+    Assertions.assertEquals(jsc.defaultParallelism(), CloudObjectsSelectorCommon.existsCheckNumPartitions(props, jsc));
+    props.put(CloudSourceConfig.EXISTS_CHECK_PARTITIONS.key(), "2");
+    Assertions.assertEquals(2, CloudObjectsSelectorCommon.existsCheckNumPartitions(props, jsc));
+    List<CloudObjectMetadata> result = CloudObjectsSelectorCommon.getObjectMetadata(
+        CloudObjectsSelectorCommon.Type.S3, jsc, cloudObjectMetadataDF, true, props);
+
+    Assertions.assertEquals(2, result.size(), "distinct() should have collapsed the duplicate event");
+    Map<String, Long> pathToSize = result.stream()
+        .collect(Collectors.toMap(CloudObjectMetadata::getPath, CloudObjectMetadata::getSize));
+    Map<String, Long> expected = new HashMap<>();
+    expected.put("file://" + existingFile1.toAbsolutePath(), 100L);
+    expected.put("file://" + existingFile2.toAbsolutePath(), 200L);
+    Assertions.assertEquals(expected, pathToSize);
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1, 8})
+  void existsCheckDropsMissingFiles(int parallelism, @TempDir Path tempDir) throws Exception {
+    // a space in the name: the event key is percent-encoded and getUrlForFile must decode it
+    Path existingFile1 = Files.write(tempDir.resolve("we ird.json"), Collections.singletonList("{}"));
+    Path existingFile2 = Files.write(tempDir.resolve("file2.json"), Collections.singletonList("{}"));
+    Path missingFile = tempDir.resolve("missing.json");
+    List<Row> rows = Arrays.asList(
+        cloudEventRow(existingFile1, 100L),
+        cloudEventRow(missingFile, 300L),
+        cloudEventRow(existingFile2, 200L));
+
+    Configuration conf = storageConf.unwrapCopy();
+    conf.setClass("fs.file.impl", ThreadRecordingLocalFileSystem.class, FileSystem.class);
+    conf.setBoolean("fs.file.impl.disable.cache", true);
+    ThreadRecordingLocalFileSystem.EXISTS_CALL_THREADS.clear();
+
+    List<CloudObjectMetadata> result = new ArrayList<>();
+    CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition(
+            "file://", new HadoopStorageConfiguration(conf), true, parallelism)
+        .call(rows.iterator()).forEachRemaining(result::add);
+
+    // both branches must produce the same objects, in input order
+    Assertions.assertEquals(
+        Arrays.asList("file://" + existingFile1.toAbsolutePath(), "file://" + existingFile2.toAbsolutePath()),
+        result.stream().map(CloudObjectMetadata::getPath).collect(Collectors.toList()));
+    Assertions.assertEquals(Arrays.asList(100L, 200L),
+        result.stream().map(CloudObjectMetadata::getSize).collect(Collectors.toList()));
+
+    // one exists() per row; on pool threads for the parallel branch, on the caller thread for the sequential one
+    List<String> threads = new ArrayList<>(ThreadRecordingLocalFileSystem.EXISTS_CALL_THREADS);
+    Assertions.assertEquals(3, threads.size(), threads.toString());
+    if (parallelism > 1) {
+      Assertions.assertTrue(threads.stream().allMatch(t -> t.startsWith("cloud-exists-check-")), threads.toString());
+    } else {
+      Assertions.assertEquals(Collections.singleton(Thread.currentThread().getName()), new HashSet<>(threads));
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"1, escape", "8, escape", "1, size", "8, size"})
+  void existsCheckSurfacesRowFailure(int parallelism, String failure, @TempDir Path tempDir) throws Exception {
+    // both branches must throw the same exception instead of dropping the file: a key with a malformed percent
+    // escape fails URL decoding inside getUrlForFile (HoodieException), a non-numeric size string fails
+    // Long.parseLong in processRow (raw NumberFormatException)
+    Path existingFile = Files.write(tempDir.resolve("file1.json"), Collections.singletonList("{}"));
+    Row badRow = failure.equals("escape")
+        ? RowFactory.create("", "path/bad%zz.json", 200L)
+        : RowFactory.create("", localFileKey(existingFile), "not-a-number");
+    List<Row> rows = Arrays.asList(cloudEventRow(existingFile, 100L), badRow);
+    MapPartitionsFunction<Row, CloudObjectMetadata> fn =
+        CloudObjectsSelectorCommon.getCloudObjectMetadataPerPartition("file://", storageConf, true, parallelism);
+
+    if (failure.equals("escape")) {
+      HoodieException e = Assertions.assertThrows(HoodieException.class, () -> fn.call(rows.iterator()));
+      Assertions.assertTrue(e.getMessage().contains("path/bad%zz.json"), e.getMessage());
+      Assertions.assertInstanceOf(IllegalArgumentException.class, e.getCause());
+    } else {
+      Assertions.assertThrows(NumberFormatException.class, () -> fn.call(rows.iterator()));
+    }
+  }
+
+  /**
+   * Asserts that a Dataset contains expected rows; when the source path column is enabled it is expected
+   * to be appended last, nullable, and to hold the file URI of the row's source file.
+   */
+  private static void assertRowResult(
+      boolean includeSourcePathField,
+      List<String> dataPaths,
+      Dataset<Row> actualResult,
+      Object[]... rowContents) {
+    Assertions.assertEquals(dataPaths.size(), rowContents.length, "dataPaths and rowContents must align");
+    Assertions.assertEquals(rowContents.length, actualResult.count());
+    List<String> fieldNames = Arrays.asList(actualResult.schema().fieldNames());
+
+    List<Row> expected = new ArrayList<>();
+    if (includeSourcePathField) {
+      Assertions.assertEquals(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN, fieldNames.get(fieldNames.size() - 1));
+      Assertions.assertTrue(actualResult.schema().apply(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN).nullable());
+      for (int i = 0; i < dataPaths.size(); i++) {
+        List<Object> values = new ArrayList<>(Arrays.asList(rowContents[i]));
+        // input_file_name() returns the file URI, which java.nio's Path.toUri() reproduces byte for byte
+        values.add(new File(dataPaths.get(i)).getAbsoluteFile().toPath().toUri().toString());
+        expected.add(RowFactory.create(values.toArray()));
+      }
+    } else {
+      Assertions.assertFalse(fieldNames.contains(CloudObjectsSelectorCommon.CLOUD_SOURCE_PATH_COLUMN));
+      for (Object[] row : rowContents) {
+        expected.add(RowFactory.create(row));
+      }
+    }
+
+    Assertions.assertEquals(new HashSet<>(expected), new HashSet<>(actualResult.collectAsList()));
+  }
+
+  private static void setIncludeSourcePathField(TypedProperties properties, boolean include) {
+    properties.put(CloudSourceConfig.INCLUDE_SOURCE_PATH_FIELD.key(), String.valueOf(include));
+  }
+
+  /** Row with the [bucket, key, size] shape getCloudObjectMetadataPerPartition expects; see s3EventJson for the key. */
+  private static Row cloudEventRow(Path file, long size) {
+    return RowFactory.create("", localFileKey(file), size);
+  }
+
+  /** S3 event notification whose bucket is empty and whose key is the URL-encoded absolute path without the leading
+   * separator (the shape S3 event notifications carry), so that prefix "file://" + bucket + "/" + key decodes to the
+   * local file. */
+  private static String s3EventJson(Path file, long size) {
+    return "{\"s3\":{\"bucket\":{\"name\":\"\"},\"object\":{\"key\":\"" + localFileKey(file) + "\",\"size\":" + size + "}}}";
+  }
+
+  private static String localFileKey(Path file) {
+    return file.toUri().getRawPath().substring(1);
+  }
+
+  /**
+   * LocalFileSystem that records the thread each exists() call ran on, so the tests can tell the pooled branch
+   * from the sequential one. Registered as fs.file.impl with the FileSystem cache disabled.
+   */
+  public static class ThreadRecordingLocalFileSystem extends LocalFileSystem {
+    static final List<String> EXISTS_CALL_THREADS = Collections.synchronizedList(new ArrayList<>());
+
+    @Override
+    public boolean exists(org.apache.hadoop.fs.Path f) throws IOException {
+      EXISTS_CALL_THREADS.add(Thread.currentThread().getName());
+      return super.exists(f);
+    }
   }
 }

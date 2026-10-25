@@ -26,6 +26,7 @@ import org.apache.hudi.common.bootstrap.index.BootstrapIndex;
 import org.apache.hudi.common.model.BootstrapFileMapping;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
@@ -35,8 +36,7 @@ import org.apache.hudi.io.hfile.HFileWriter;
 import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -52,9 +52,10 @@ import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.f
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getFileGroupKey;
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.getPartitionKey;
 import static org.apache.hudi.common.bootstrap.index.hfile.HFileBootstrapIndex.partitionIndexPath;
+import static org.apache.hudi.io.util.FileIOUtils.closeQuietly;
 
+@Slf4j
 public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
-  private static final Logger LOG = LoggerFactory.getLogger(HFileBootstrapIndexWriter.class);
 
   private final String bootstrapBasePath;
   private final StoragePath indexByPartitionPath;
@@ -80,7 +81,7 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
           || metaClient.getStorage().exists(indexByFileIdPath)) {
         String errMsg = "Previous version of bootstrap index exists. Partition Index Path :" + indexByPartitionPath
             + ", FileId index Path :" + indexByFileIdPath;
-        LOG.info(errMsg);
+        log.info(errMsg);
         throw new HoodieException(errMsg);
       }
     } catch (IOException ioe) {
@@ -97,9 +98,9 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
   private void writeNextPartition(String partitionPath, String bootstrapPartitionPath,
                                   List<BootstrapFileMapping> bootstrapFileMappings) {
     try {
-      LOG.info("Adding bootstrap partition Index entry for partition :" + partitionPath
-          + ", bootstrap Partition :" + bootstrapPartitionPath + ", Num Entries :" + bootstrapFileMappings.size());
-      LOG.info("ADDING entries :" + bootstrapFileMappings);
+      log.info("Adding bootstrap partition Index entry for partition :{}, bootstrap Partition :{}, Num Entries :{}",
+          partitionPath, bootstrapPartitionPath, bootstrapFileMappings.size());
+      log.info("ADDING entries :{}", bootstrapFileMappings);
       HoodieBootstrapPartitionMetadata bootstrapPartitionMetadata = new HoodieBootstrapPartitionMetadata();
       bootstrapPartitionMetadata.setBootstrapPartitionPath(bootstrapPartitionPath);
       bootstrapPartitionMetadata.setPartitionPath(partitionPath);
@@ -148,14 +149,14 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
             .setNumKeys(numPartitionKeysAdded)
             .setBootstrapBasePath(bootstrapBasePath)
             .build();
-        LOG.info("Adding Partition FileInfo :" + partitionIndexInfo);
+        log.info("Adding Partition FileInfo :{}", partitionIndexInfo);
 
         HoodieBootstrapIndexInfo fileIdIndexInfo = HoodieBootstrapIndexInfo.newBuilder()
             .setCreatedTimestamp(new Date().getTime())
             .setNumKeys(numFileIdKeysAdded)
             .setBootstrapBasePath(bootstrapBasePath)
             .build();
-        LOG.info("Appending FileId FileInfo :" + fileIdIndexInfo);
+        log.info("Appending FileId FileInfo :{}", fileIdIndexInfo);
 
         indexByPartitionWriter.appendFileInfo(
             INDEX_INFO_KEY_STRING,
@@ -175,14 +176,16 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
    * Close Writer Handles.
    */
   public void close() {
-    try {
-      if (!closed) {
-        indexByPartitionWriter.close();
-        indexByFileIdWriter.close();
-        closed = true;
-      }
-    } catch (IOException ioe) {
-      throw new HoodieIOException(ioe.getMessage(), ioe);
+    if (closed) {
+      return;
+    }
+    Exception failure = closeHFileWriter(indexByPartitionWriter, null);
+    failure = closeHFileWriter(indexByFileIdWriter, failure);
+    indexByPartitionWriter = null;
+    indexByFileIdWriter = null;
+    closed = true;
+    if (failure != null) {
+      throw new HoodieException(failure.getMessage(), failure);
     }
   }
 
@@ -190,13 +193,43 @@ public class HFileBootstrapIndexWriter extends BootstrapIndex.IndexWriter {
   public void begin() {
     try {
       HFileContext context = HFileContext.builder().build();
-      OutputStream outputStreamForPartitionWriter = metaClient.getStorage().create(indexByPartitionPath);
-      this.indexByPartitionWriter = new HFileWriterImpl(context, outputStreamForPartitionWriter);
-      OutputStream outputStreamForFileIdWriter = metaClient.getStorage().create(indexByFileIdPath);
-      this.indexByFileIdWriter = new HFileWriterImpl(context, outputStreamForFileIdWriter);
+      this.indexByPartitionWriter = createHFileWriter(indexByPartitionPath, context);
+      this.indexByFileIdWriter = createHFileWriter(indexByFileIdPath, context);
     } catch (IOException ioe) {
+      CloseableUtils.closeSuppressing(this::close, ioe);
       throw new HoodieIOException(ioe.getMessage(), ioe);
+    } catch (RuntimeException re) {
+      CloseableUtils.closeSuppressing(this::close, re);
+      throw re;
     }
+  }
+
+  private HFileWriter createHFileWriter(StoragePath path, HFileContext context) throws IOException {
+    OutputStream outputStream = metaClient.getStorage().create(path);
+    HFileWriter writer = null;
+    try {
+      writer = new HFileWriterImpl(context, outputStream);
+      return writer;
+    } finally {
+      if (writer == null) {
+        closeQuietly(outputStream);
+      }
+    }
+  }
+
+  private Exception closeHFileWriter(HFileWriter writer, Exception failure) {
+    if (writer == null) {
+      return failure;
+    }
+    try {
+      writer.close();
+    } catch (IOException | RuntimeException e) {
+      if (failure == null) {
+        return e;
+      }
+      failure.addSuppressed(e);
+    }
+    return failure;
   }
 
   @Override

@@ -219,9 +219,9 @@ public class HoodieCDCExtractor {
     try {
       Set<String> requiredActions = new HashSet<>(Arrays.asList(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION));
       HoodieActiveTimeline activeTimeLine = metaClient.getActiveTimeline();
-      if (instantRange.getStartInstant().isPresent() && !metaClient.getArchivedTimeline().empty()
-          && InstantComparison.compareTimestamps(metaClient.getArchivedTimeline().lastInstant().get().requestedTime(), InstantComparison.GREATER_THAN, instantRange.getStartInstant().get())) {
-        throw new HoodieException("Start instant time " + instantRange.getStartInstant().get()
+      if (instantRange.getStartInstantOpt().isPresent() && !metaClient.getArchivedTimeline().empty()
+          && InstantComparison.compareTimestamps(metaClient.getArchivedTimeline().lastInstant().get().requestedTime(), InstantComparison.GREATER_THAN, instantRange.getStartInstantOpt().get())) {
+        throw new HoodieException("Start instant time " + instantRange.getStartInstantOpt().get()
             + " for CDC query has to be in the active timeline. Beginning of active timeline " + activeTimeLine.firstInstant().get().requestedTime());
       }
       this.commits = activeTimeLine.getInstantsAsStream()
@@ -330,8 +330,8 @@ public class HoodieCDCExtractor {
     if (instant.getAction().equals(DELTA_COMMIT_ACTION)) {
       String currentLogFileName = new StoragePath(currentLogFile).getName();
       Option<Pair<String, List<String>>> fileSliceOpt =
-          HoodieCommitMetadata.getFileSliceForFileGroupFromDeltaCommit(
-              metaClient.getActiveTimeline().getInstantContentStream(instant), fgId);
+          HoodieCommitMetadata.getDependentFileSliceForFileGroupFromDeltaCommit(
+              metaClient.getActiveTimeline().getInstantContentStream(instant), fgId, currentLogFileName);
       if (fileSliceOpt.isPresent()) {
         Pair<String, List<String>> fileSlice = fileSliceOpt.get();
         try {
@@ -339,7 +339,6 @@ public class HoodieCDCExtractor {
               ? null
               : new HoodieBaseFile(storage.getPathInfo(new StoragePath(partitionPath, fileSlice.getLeft())));
           List<StoragePath> logFilePaths = fileSlice.getRight().stream()
-              .filter(logFile -> !logFile.equals(currentLogFileName))
               .map(logFile -> new StoragePath(partitionPath, logFile))
               .collect(Collectors.toList());
           // get files list from unfinished compaction commit

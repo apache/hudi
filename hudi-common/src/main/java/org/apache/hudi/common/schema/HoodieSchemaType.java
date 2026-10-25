@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.schema;
 
+import org.apache.hudi.common.schema.HoodieSchema.VariantLogicalType;
+
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -115,6 +117,15 @@ public enum HoodieSchemaType {
 
   UUID(Schema.Type.STRING),
 
+  VARIANT(Schema.Type.RECORD),
+
+  /**
+   * BLOB type - represents binary large objects, stored as records with either inline bytes or a reference to a file and range within that file.
+   */
+  BLOB(Schema.Type.RECORD),
+
+  VECTOR(Schema.Type.FIXED),
+
   /**
    * Null type - represents the absence of a value
    */
@@ -150,6 +161,12 @@ public enum HoodieSchemaType {
         return DATE;
       } else if (logicalType == LogicalTypes.uuid()) {
         return UUID;
+      } else if (logicalType == VariantLogicalType.variant()) {
+        return VARIANT;
+      } else if (logicalType == HoodieSchema.BlobLogicalType.blob()) {
+        return BLOB;
+      } else if (logicalType instanceof HoodieSchema.VectorLogicalType) {
+        return VECTOR;
       }
     }
     switch (avroSchema.getType()) {
@@ -216,6 +233,9 @@ public enum HoodieSchemaType {
       case ARRAY:
       case MAP:
       case UNION:
+      case VARIANT:
+      case BLOB:
+      case VECTOR:
         return true;
       default:
         return false;

@@ -27,7 +27,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.junit.jupiter.api.{AfterEach, Assertions, BeforeEach}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -119,8 +119,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         try {
           // convert int to string first before conversion to binary
           val initDF = prepDataFrame(df1, colInitType)
-          initDF.printSchema()
-          initDF.show(false)
+          Assertions.assertNotNull(initDF.schema.toString())
+          initDF.collect
 
           // recreate table
           initialiseTable(initDF, tempRecordPath, tableType)
@@ -128,8 +128,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
           // perform avro supported casting
           var upsertDf = prepDataFrame(df2, colInitType)
           upsertDf = castColToX(a, colToCast, upsertDf)
-          upsertDf.printSchema()
-          upsertDf.show(false)
+          Assertions.assertNotNull(upsertDf.schema.toString())
+          upsertDf.collect
 
           // upsert
           upsertData(upsertDf, tempRecordPath, tableType)
@@ -137,9 +137,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
           // read out the table
           val readDf = spark.read.format("hudi")
             .load(tempRecordPath)
-          readDf.printSchema()
-          readDf.show(false)
-          readDf.foreach(_ => {})
+          Assertions.assertNotNull(readDf.schema.toString())
+          readDf.collect
 
           assert(true)
         } catch {
@@ -177,16 +176,16 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // convert int to string first before conversion to binary
     val initDF = df1
-    initDF.printSchema()
-    initDF.show(false)
+    initDF.schema.toString()
+    initDF.collect
 
     // recreate table
     initialiseTable(initDF, tempRecordPath, tableType)
 
     // perform avro supported operation of adding a new column at the end of the table
     val upsertDf = df2
-    upsertDf.printSchema()
-    upsertDf.show(false)
+    upsertDf.schema.toString()
+    upsertDf.collect
 
     // upsert
     upsertData(upsertDf, tempRecordPath, tableType)
@@ -194,9 +193,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -217,16 +215,16 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // convert int to string first before conversion to binary
     val initDF = df1
-    initDF.printSchema()
-    initDF.show(false)
+    initDF.schema.toString()
+    initDF.collect
 
     // recreate table
     initialiseTable(initDF, tempRecordPath, tableType)
 
     // perform avro supported operation of deleting a column
     val upsertDf = df2
-    upsertDf.printSchema()
-    upsertDf.show(false)
+    upsertDf.schema.toString()
+    upsertDf.collect
 
     // upsert
     assertThrows(classOf[SchemaCompatibilityException]) {
@@ -240,9 +238,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     //same param since that will only affect the reader
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -258,16 +255,16 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // convert int to string first before conversion to binary
     val initDF = df1
-    initDF.printSchema()
-    initDF.show(false)
+    initDF.schema.toString()
+    initDF.collect
 
     // recreate table
     initialiseTable(initDF, tempRecordPath, tableType)
 
     // perform avro supported operation of deleting a column
     val upsertDf = df2
-    upsertDf.printSchema()
-    upsertDf.show(false)
+    upsertDf.schema.toString()
+    upsertDf.collect
 
     // upsert
     upsertData(upsertDf, tempRecordPath, tableType)
@@ -275,9 +272,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -297,8 +293,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("pages", IntegerType)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayStructData), arrayStructSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -318,17 +314,16 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       ))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayStructData), newArrayStructSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -348,8 +343,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("pages", IntegerType)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayStructData), arrayStructSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -367,8 +362,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("pages", LongType)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayStructData), newArrayStructSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType)
 
@@ -376,9 +371,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       // read out the table
       val readDf = spark.read.format("hudi")
         .load(tempRecordPath)
-      readDf.printSchema()
-      readDf.show(false)
-      readDf.foreach(_ => {})
+      readDf.schema.toString()
+      readDf.collect
     }
   }
 
@@ -399,8 +393,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("pages", IntegerType)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayStructData), arrayStructSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -418,17 +412,16 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         .add("author", StringType)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayStructData), newArrayStructSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -446,8 +439,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, IntegerType, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -463,8 +456,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, LongType, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType)
 
@@ -472,9 +465,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       // read out the table
       val readDf = spark.read.format("hudi")
         .load(tempRecordPath)
-      readDf.printSchema()
-      readDf.show(false)
-      readDf.foreach(_ => {})
+      readDf.schema.toString()
+      readDf.collect
     }
   }
 
@@ -502,8 +494,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, innerStructSchema, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -528,8 +520,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, newInnerStructSchema, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType)
 
@@ -537,9 +529,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
       // read out the table
       val readDf = spark.read.format("hudi")
         .load(tempRecordPath)
-      readDf.printSchema()
-      readDf.show(false)
-      readDf.foreach(_ => {})
+      readDf.schema.toString()
+      readDf.collect
     }
   }
 
@@ -567,8 +558,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, innerStructSchema, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -594,17 +585,16 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, newInnerStructSchema, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -631,8 +621,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, innerStructSchema, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -657,17 +647,16 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, newInnerStructSchema, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType)
 
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -695,8 +684,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, innerStructSchema, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -720,17 +709,16 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, newInnerStructSchema, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType, true)
 
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -751,42 +739,42 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
 
     // 1. Initialise table
     val df1 = Seq((1, 100, newPartition)).toDF("id", "userid", "name")
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
     initialiseTable(df1, tempRecordPath, tableType)
 
     // 2. Promote INT type to LONG into a different partition
     val df2 = Seq((2, 200L, newPartition)).toDF("id", "userid", "name")
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     upsertData(df2, tempRecordPath, tableType)
 
     // 3. Promote LONG to FLOAT
     var df3 = Seq((3, 300, newPartition)).toDF("id", "userid", "name")
     df3 = df3.withColumn("userid", df3.col("userid").cast("float"))
-    df3.printSchema()
-    df3.show(false)
+    df3.schema.toString()
+    df3.collect
     upsertData(df3, tempRecordPath)
 
     // 4. Promote FLOAT to DOUBLE
     var df4 = Seq((4, 400, newPartition)).toDF("id", "userid", "name")
     df4 = df4.withColumn("userid", df4.col("userid").cast("float"))
-    df4.printSchema()
-    df4.show(false)
+    df4.schema.toString()
+    df4.collect
     upsertData(df4, tempRecordPath)
 
     // 5. Add two new column
     var df5 = Seq((5, 500, "newcol1", "newcol2", newPartition)).toDF("id", "userid", "newcol1", "newcol2", "name")
     df5 = df5.withColumn("userid", df5.col("userid").cast("float"))
-    df5.printSchema()
-    df5.show(false)
+    df5.schema.toString()
+    df5.collect
     upsertData(df5, tempRecordPath)
 
     // 6. Delete a column
     var df6 = Seq((6, 600, "newcol1", newPartition)).toDF("id", "userid", "newcol1", "name")
     df6 = df6.withColumn("userid", df6.col("userid").cast("float"))
-    df6.printSchema()
-    df6.show(false)
+    df6.schema.toString()
+    df6.collect
     assertThrows(classOf[SchemaCompatibilityException]) {
       upsertData(df6, tempRecordPath)
     }
@@ -795,16 +783,15 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // 7. Rearrange column position
     var df7 = Seq((7, "newcol1", 700, newPartition)).toDF("id", "newcol1", "userid", "name")
     df7 = df7.withColumn("userid", df7.col("userid").cast("float"))
-    df7.printSchema()
-    df7.show(false)
+    df7.schema.toString()
+    df7.collect
     upsertData(df7, tempRecordPath)
 
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(tempRecordPath)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   @ParameterizedTest
@@ -822,8 +809,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, IntegerType, true)))
       .add("name", StringType)
     val df1 = spark.createDataFrame(spark.sparkContext.parallelize(arrayMapData), arrayMapSchema)
-    df1.printSchema()
-    df1.show(false)
+    df1.schema.toString()
+    df1.collect
 
     // recreate table
     initialiseTable(df1, tempRecordPath, tableType)
@@ -842,8 +829,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
         new MapType(StringType, LongType, true)))
       .add("name", StringType)
     val df2 = spark.createDataFrame(spark.sparkContext.parallelize(newArrayMapData), newArrayMapSchema)
-    df2.printSchema()
-    df2.show(false)
+    df2.schema.toString()
+    df2.collect
     // upsert
     upsertData(df2, tempRecordPath, tableType)
 
@@ -870,9 +857,8 @@ class TestAvroSchemaResolutionSupport extends HoodieClientTestBase with ScalaAss
     // read out the table
     val readDf = spark.read.format("hudi")
       .load(path)
-    readDf.printSchema()
-    readDf.show(false)
-    readDf.foreach(_ => {})
+    readDf.schema.toString()
+    readDf.collect
   }
 
   protected def withSQLConf[T](pairs: (String, String)*)(f: => T): T = {

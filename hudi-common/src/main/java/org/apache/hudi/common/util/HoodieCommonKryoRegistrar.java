@@ -44,6 +44,7 @@ import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
@@ -114,7 +115,8 @@ public class HoodieCommonKryoRegistrar {
         HoodieTableMetaClient.class,
         HoodieFileGroupId.class,
         ArrayList.class,
-        SerializableIndexedRecord.class
+        SerializableIndexedRecord.class,
+        BufferedRecord.class
     })
         .forEachOrdered(kryo::register);
   }

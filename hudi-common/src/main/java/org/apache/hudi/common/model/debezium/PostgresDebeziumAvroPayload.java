@@ -21,12 +21,11 @@ package org.apache.hudi.common.model.debezium;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieDebeziumAvroPayloadException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -47,9 +46,9 @@ import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
  * <p>
  * This payload implementation will issue matching insert, delete, updates against the hudi table
  */
+@Slf4j
 public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
 
-  private static final Logger LOG = LoggerFactory.getLogger(PostgresDebeziumAvroPayload.class);
   public static final String DEBEZIUM_TOASTED_VALUE = "__debezium_unavailable_value";
 
   public PostgresDebeziumAvroPayload(GenericRecord record, Comparable orderingVal) {
@@ -84,7 +83,7 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     Option<IndexedRecord> insertOrDeleteRecord = super.combineAndGetUpdateValue(currentValue, schema, properties);
 
     if (insertOrDeleteRecord.isPresent()) {
-      mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue);
+      return Option.of(mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue));
     }
     return insertOrDeleteRecord;
   }
@@ -97,22 +96,41 @@ public class PostgresDebeziumAvroPayload extends AbstractDebeziumAvroPayload {
     Option<IndexedRecord> insertOrDeleteRecord = super.combineAndGetUpdateValue(currentValue, schema);
 
     if (insertOrDeleteRecord.isPresent()) {
-      mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue);
+      return Option.of(mergeToastedValuesIfPresent(insertOrDeleteRecord.get(), currentValue));
     }
     return insertOrDeleteRecord;
   }
 
-  private void mergeToastedValuesIfPresent(IndexedRecord incomingRecord, IndexedRecord currentRecord) {
+  /**
+   * Returns the incoming record with any TOASTed column backfilled from {@code currentRecord}, or
+   * {@code incomingRecord} itself when there is nothing to backfill.
+   *
+   * <p>The backfill is applied to a copy rather than in place: record mergers treat "the payload
+   * handed back the same reference" as "the payload changed nothing" and skip rebuilding the
+   * engine-native record from the Avro result, which would silently drop the backfill. The copy is
+   * only allocated once a TOASTed column is actually found, so records without a sentinel are
+   * unaffected.
+   */
+  private IndexedRecord mergeToastedValuesIfPresent(IndexedRecord incomingRecord, IndexedRecord currentRecord) {
     List<Schema.Field> fields = incomingRecord.getSchema().getFields();
+    GenericRecord incoming = (GenericRecord) incomingRecord;
+    GenericRecord merged = null;
 
-    fields.forEach(field -> {
+    for (Schema.Field field : fields) {
       // There are only four avro data types that have unconstrained sizes, which are
       // NON-NULLABLE STRING, NULLABLE STRING, NON-NULLABLE BYTES, NULLABLE BYTES
-      if (((GenericRecord) incomingRecord).get(field.name()) != null
+      if (incoming.get(field.name()) != null
           && (containsStringToastedValues(incomingRecord, field) || containsBytesToastedValues(incomingRecord, field))) {
-        ((GenericRecord) incomingRecord).put(field.name(), ((GenericData.Record) currentRecord).get(field.name()));
+        if (merged == null) {
+          merged = new GenericData.Record(incomingRecord.getSchema());
+          for (Schema.Field f : fields) {
+            merged.put(f.pos(), incoming.get(f.pos()));
+          }
+        }
+        merged.put(field.name(), ((GenericRecord) currentRecord).get(field.name()));
       }
-    });
+    }
+    return merged == null ? incomingRecord : merged;
   }
 
   /**

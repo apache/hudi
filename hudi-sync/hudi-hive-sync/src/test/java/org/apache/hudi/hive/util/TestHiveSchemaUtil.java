@@ -148,7 +148,20 @@ public class TestHiveSchemaUtil {
             HoodieSchemaField.of("time_millis_field", HoodieSchema.createTimeMillis()),
             HoodieSchemaField.of("time_micros_field", HoodieSchema.createTimeMicros()),
             HoodieSchemaField.of("decimal_field", HoodieSchema.createDecimal(10, 2)),
-            HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID))
+            HoodieSchemaField.of("uuid_field", HoodieSchema.create(HoodieSchemaType.UUID)),
+            HoodieSchemaField.of("vector_field", HoodieSchema.createVector(128)),
+            HoodieSchemaField.of("blob_field", HoodieSchema.createBlob()),
+            HoodieSchemaField.of("nullable_blob_field", HoodieSchema.createNullable(HoodieSchema.createBlob())),
+            HoodieSchemaField.of("nested_blob_field", HoodieSchema.createRecord("media", null, null, false, Arrays.asList(
+                HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("content", HoodieSchema.createBlob())
+            ))),
+            HoodieSchemaField.of("variant_field", HoodieSchema.createVariant()),
+            HoodieSchemaField.of("nullable_variant_field", HoodieSchema.createNullable(HoodieSchema.createVariant())),
+            HoodieSchemaField.of("nested_variant_field", HoodieSchema.createRecord("container", null, null, false, Arrays.asList(
+                HoodieSchemaField.of("title", HoodieSchema.create(HoodieSchemaType.STRING)),
+                HoodieSchemaField.of("variant_data", HoodieSchema.createVariant())
+            )))
         )
     );
 
@@ -172,6 +185,68 @@ public class TestHiveSchemaUtil {
     expected.put("`time_micros_field`", "bigint");
     expected.put("`decimal_field`", "DECIMAL(10 , 2)");
     expected.put("`uuid_field`", "binary");
+    expected.put("`vector_field`", "binary");
+    expected.put("`blob_field`",
+        "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
+    expected.put("`nullable_blob_field`",
+        "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
+    expected.put("`nested_blob_field`",
+        "STRUCT< `title` : string, `content` : STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>>");
+    expected.put("`variant_field`", "STRUCT< `metadata` : binary, `value` : binary>");
+    expected.put("`nullable_variant_field`", "STRUCT< `metadata` : binary, `value` : binary>");
+    expected.put("`nested_variant_field`",
+        "STRUCT< `title` : string, `variant_data` : STRUCT< `metadata` : binary, `value` : binary>>");
     assertEquals(expected, actual);
+  }
+
+  /**
+   * Fields of the Avro primitive type "null" (not a nullable union) are valid Avro but carry no data.
+   * They are not written to parquet and have no Hive equivalent, so Hive sync must skip them,
+   * at the top level as well as inside nested records.
+   */
+  @Test
+  void testNullTypeFieldsAreSkipped() throws IOException {
+    Map<String, String> actual = HiveSchemaUtil.convertSchemaToHiveSchema(schemaWithNullTypeFields(), false);
+    Map<String, String> expected = new HashMap<>();
+    expected.put("`id`", "string");
+    expected.put("`msg`",
+        "STRUCT< `fare` : STRUCT< `breakdown` : STRUCT< `profile` : string, `currency` : string, `total` : string>>>");
+    assertEquals(expected, actual);
+  }
+
+  /**
+   * A table whose Hive schema was synced before (without the "null" type fields) must not
+   * fail or report a schema difference.
+   */
+  @Test
+  void testSchemaDiffIgnoresNullTypeFields() {
+    Map<String, String> tableSchema = new HashMap<>();
+    tableSchema.put("id", "string");
+    tableSchema.put("msg", "struct<fare:struct<breakdown:struct<profile:string,currency:string,total:string>>>");
+    SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schemaWithNullTypeFields(),
+        tableSchema, Collections.emptyList(), false);
+    assertTrue(schemaDifference.isEmpty(), "Unexpected schema difference: " + schemaDifference);
+  }
+
+  /**
+   * Mirrors a Kafka topic schema where some fields are declared with the primitive type "null",
+   * nested three records deep.
+   */
+  private static HoodieSchema schemaWithNullTypeFields() {
+    return HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":[\"null\",\"string\"],\"default\":null},"
+        + "{\"name\":\"top_level_null\",\"type\":\"null\",\"default\":null},"
+        + "{\"name\":\"msg\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"msg\",\"fields\":["
+        + "{\"name\":\"fare\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"fare\",\"fields\":["
+        + "{\"name\":\"breakdown\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"breakdown\",\"fields\":["
+        + "{\"name\":\"profile\",\"type\":[\"null\",\"string\"],\"default\":null},"
+        + "{\"name\":\"clientPromotion\",\"type\":\"null\",\"default\":null},"
+        + "{\"name\":\"currency\",\"type\":[\"null\",\"string\"],\"default\":null},"
+        + "{\"name\":\"personalizedDiscount\",\"type\":\"null\",\"default\":null},"
+        + "{\"name\":\"total\",\"type\":[\"null\",\"string\"],\"default\":null}"
+        + "]}],\"default\":null}"
+        + "]}],\"default\":null}"
+        + "]}],\"default\":null}"
+        + "]}");
   }
 }

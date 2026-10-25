@@ -24,11 +24,8 @@ singleStatement
     ;
 
 statement
-    : query                                                            #queryStatement
-    | ctes? dmlStatementNoWith                                         #dmlStatement
-    | createTableHeader ('(' colTypeList ')')? tableProvider?
-        createTableClauses
-        (AS? query)?                                                   #createTable
+    : createTableHeader ('(' colTypeList ')')? tableProvider?
+        createTableClauses                                             #createTable
     | CREATE INDEX (IF NOT EXISTS)? identifier ON TABLE?
           tableIdentifier (USING indexType=identifier)?
           LEFT_PAREN columns=multipartIdentifierPropertyList RIGHT_PAREN

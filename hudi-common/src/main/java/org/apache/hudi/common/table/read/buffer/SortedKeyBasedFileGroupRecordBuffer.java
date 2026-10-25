@@ -22,11 +22,11 @@ package org.apache.hudi.common.table.read.buffer;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
-import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import java.io.IOException;
@@ -47,25 +47,28 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
   private Queue<String> logRecordKeysSorted = null;
 
   SortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<T> readerContext,
-                                      HoodieTableMetaClient hoodieTableMetaClient,
                                       RecordMergeMode recordMergeMode,
                                       Option<PartialUpdateMode> partialUpdateModeOpt,
                                       TypedProperties props,
                                       List<String> orderingFieldNames,
                                       UpdateProcessor<T> updateProcessor) {
-    super(readerContext, hoodieTableMetaClient, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
+    super(readerContext, recordMergeMode, partialUpdateModeOpt, props, orderingFieldNames, updateProcessor);
   }
 
   @Override
   protected void initializeLogRecordIterator() {
-    logRecordIterator = records.values().stream().sorted(Comparator.comparing(BufferedRecord::getRecordKey)).iterator();
+    // This buffer is only used when the base file format is HFile (requireSortedRecords()), which orders
+    // keys by UTF-8 bytes, not String (UTF-16) order, so sort with the matching comparator.
+    logRecordIterator = records.values().stream()
+        .sorted(Comparator.comparing(BufferedRecord::getRecordKey, StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR))
+        .iterator();
   }
 
   @Override
   protected boolean hasNextBaseRecord(T baseRecord) throws IOException {
     String recordKey = readerContext.getRecordContext().getRecordKey(baseRecord, readerSchema);
     int comparison = 0;
-    while (!getLogRecordKeysSorted().isEmpty() && (comparison = getLogRecordKeysSorted().peek().compareTo(recordKey)) <= 0) {
+    while (!getLogRecordKeysSorted().isEmpty() && (comparison = StringUtils.compareUtf8Bytes(getLogRecordKeysSorted().peek(), recordKey)) <= 0) {
       String nextLogRecordKey = getLogRecordKeysSorted().poll();
       if (comparison == 0) {
         break; // Log record key matches the base record key, exit loop after removing the key from the queue of log record keys
@@ -102,7 +105,8 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
 
   private Queue<String> getLogRecordKeysSorted() {
     if (logRecordKeysSorted == null) {
-      logRecordKeysSorted = records.keySet().stream().map(Object::toString).collect(Collectors.toCollection(PriorityQueue::new));
+      logRecordKeysSorted = records.keySet().stream().map(Object::toString)
+          .collect(Collectors.toCollection(() -> new PriorityQueue<>(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR)));
     }
     return logRecordKeysSorted;
   }

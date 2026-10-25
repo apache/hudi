@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.avro
 
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.schema.HoodieSchema.VectorLogicalType
+
 import org.apache.avro.{LogicalTypes, Schema, SchemaBuilder}
 import org.apache.avro.Conversions.DecimalConversion
 import org.apache.avro.LogicalTypes.{LocalTimestampMicros, LocalTimestampMillis, TimestampMicros, TimestampMillis}
@@ -32,10 +35,11 @@ import org.apache.spark.sql.catalyst.util.DateTimeConstants.MILLIS_PER_DAY
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
 import org.apache.spark.sql.internal.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
-import org.apache.spark.unsafe.types.UTF8String
+import org.apache.spark.unsafe.types.{UTF8String, VariantVal}
 
 import java.math.BigDecimal
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.TimeZone
 
 import scala.collection.JavaConverters._
@@ -212,11 +216,74 @@ private[sql] class AvroDeserializer(rootAvroType: Schema,
         val decimal = createDecimal(bigDecimal, d.getPrecision, d.getScale)
         updater.setDecimal(ordinal, decimal)
 
+      // Handle VECTOR logical type (FLOAT, DOUBLE, INT8)
+      case (FIXED, ArrayType(elementType, false)) => avroType.getLogicalType match {
+        case vectorLogicalType: VectorLogicalType =>
+          val dimension = vectorLogicalType.getDimension
+          val vecElementType = HoodieSchema.Vector.VectorElementType.fromString(vectorLogicalType.getElementType)
+          val elementSize = vecElementType.getElementSize
+          (updater, ordinal, value) => {
+            val bytes = value.asInstanceOf[GenericData.Fixed].bytes()
+            val expectedSize = Math.multiplyExact(dimension, elementSize)
+            if (bytes.length != expectedSize) {
+              throw new IncompatibleSchemaException(
+                s"VECTOR byte size mismatch: expected=$expectedSize, actual=${bytes.length}")
+            }
+            elementType match {
+              case FloatType =>
+                val buffer = ByteBuffer.wrap(bytes).order(VectorLogicalType.VECTOR_BYTE_ORDER)
+                val floats = new Array[Float](dimension)
+                var i = 0; while (i < dimension) { floats(i) = buffer.getFloat(); i += 1 }
+                updater.set(ordinal, ArrayData.toArrayData(floats))
+              case DoubleType =>
+                val buffer = ByteBuffer.wrap(bytes).order(VectorLogicalType.VECTOR_BYTE_ORDER)
+                val doubles = new Array[Double](dimension)
+                var i = 0; while (i < dimension) { doubles(i) = buffer.getDouble(); i += 1 }
+                updater.set(ordinal, ArrayData.toArrayData(doubles))
+              case ByteType =>
+                updater.set(ordinal, ArrayData.toArrayData(bytes.clone()))
+            }
+          }
+        case _ => throw new IncompatibleSchemaException(incompatibleMsg)
+      }
+
       case (BYTES, _: DecimalType) => (updater, ordinal, value) =>
         val d = avroType.getLogicalType.asInstanceOf[LogicalTypes.Decimal]
         val bigDecimal = decimalConversions.fromBytes(value.asInstanceOf[ByteBuffer], avroType, d)
         val decimal = createDecimal(bigDecimal, d.getPrecision, d.getScale)
         updater.setDecimal(ordinal, decimal)
+
+      case (RECORD, VariantType) if avroType.getLogicalType != null
+        && avroType.getLogicalType.getName == HoodieSchema.VARIANT_TYPE_NAME =>
+        // Validation & Pre-calculation with fail fast logic
+        val valueField = avroType.getField(HoodieSchema.Variant.VARIANT_VALUE_FIELD)
+        val metadataField = avroType.getField(HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+
+        if (valueField == null || metadataField == null) {
+          throw new IncompatibleSchemaException(incompatibleMsg +
+            ": Variant logical type requires 'value' and 'metadata' fields")
+        }
+
+        val valueIdx = valueField.pos()
+        val metadataIdx = metadataField.pos()
+
+        // Variant types are stored as records with "value" and "metadata" binary fields
+        // Deserialize them back to VariantVal
+        (updater, ordinal, value) =>
+          val record = value.asInstanceOf[IndexedRecord]
+
+          val valueBuffer = record.get(valueIdx).asInstanceOf[ByteBuffer]
+          val valueBytes = new Array[Byte](valueBuffer.remaining)
+          valueBuffer.get(valueBytes)
+          valueBuffer.rewind()
+
+          val metadataBuffer = record.get(metadataIdx).asInstanceOf[ByteBuffer]
+          val metadataBytes = new Array[Byte](metadataBuffer.remaining)
+          metadataBuffer.get(metadataBytes)
+          metadataBuffer.rewind()
+
+          val variant = new VariantVal(valueBytes, metadataBytes)
+          updater.set(ordinal, variant)
 
       case (RECORD, st: StructType) =>
         // Avro datasource doesn't accept filters with nested attributes. See SPARK-32328.

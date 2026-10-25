@@ -19,8 +19,8 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.expression.{Expression, Literal, NameReference, Predicates}
-import org.apache.hudi.internal.schema.{Type, Types}
+import org.apache.hudi.common.expression.{Expression, Literal, NameReference, Predicates}
+import org.apache.hudi.common.schema.internal.{Type, Types}
 
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.sources._
@@ -110,7 +110,7 @@ object SparkFilterHelper {
       Types.FloatType.get()
     case DoubleType =>
       Types.DoubleType.get()
-    case StringType | CharType(_) | VarcharType(_) =>
+    case StringType | (_: CharType) | (_: VarcharType) =>
       Types.StringType.get()
     case DateType =>
       Types.DateType.get()

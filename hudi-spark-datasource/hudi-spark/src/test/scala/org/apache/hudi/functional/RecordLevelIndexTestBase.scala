@@ -72,6 +72,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
                                                      saveMode: SaveMode,
                                                      validate: Boolean = true,
                                                      numUpdates: Int = 1,
+                                                     numInserts: Int = 5,
                                                      onlyUpdates: Boolean = false,
                                                      schemaStr: String = HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
                                                      timestamp: Long = System.currentTimeMillis()): DataFrame = {
@@ -87,7 +88,7 @@ class RecordLevelIndexTestBase extends HoodieStatsIndexTestBase {
       latestBatch = recordsToStrings(dataGen.generateInsertsForPartitionPerSchema(
         getInstantTime(), 5, dataGen.getPartitionPaths.last, schemaStr)).asScala
     } else {
-      latestBatch = recordsToStrings(dataGen.generateInsertsAsPerSchema(getInstantTime(), 5, schemaStr, timestamp)).asScala
+      latestBatch = recordsToStrings(dataGen.generateInsertsAsPerSchema(getInstantTime(), numInserts, schemaStr, timestamp)).asScala
     }
     val latestBatchDf = spark.read.json(spark.sparkContext.parallelize(latestBatch.toSeq, 2))
     latestBatchDf.cache()

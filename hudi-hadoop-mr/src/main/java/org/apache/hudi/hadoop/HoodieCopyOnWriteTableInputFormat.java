@@ -212,7 +212,7 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
 
   private BootstrapBaseFileSplit makeExternalFileSplit(PathWithBootstrapFileStatus file, FileSplit split) {
     try {
-      LOG.info("Making external data split for " + file);
+      LOG.info("Making external data split for {}", file);
       FileStatus externalFileStatus = file.getBootstrapFileStatus();
       FileSplit externalFileSplit = makeSplit(externalFileStatus.getPath(), 0, externalFileStatus.getLen(),
           new String[0], new String[0]);

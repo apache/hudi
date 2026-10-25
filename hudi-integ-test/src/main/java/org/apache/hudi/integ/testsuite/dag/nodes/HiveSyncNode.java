@@ -24,11 +24,13 @@ import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
 import org.apache.hudi.integ.testsuite.dag.ExecutionContext;
 import org.apache.hudi.sync.common.util.SyncUtilHelpers;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.Path;
 
 /**
  * Represents a hive sync node in the DAG of operations for a workflow. Helps to sync hoodie data to hive table.
  */
+@Slf4j
 public class HiveSyncNode extends DagNode<Boolean> {
 
   public HiveSyncNode(Config config) {

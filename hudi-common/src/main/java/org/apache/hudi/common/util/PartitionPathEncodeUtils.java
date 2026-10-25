@@ -17,6 +17,8 @@
 
 package org.apache.hudi.common.util;
 
+import org.apache.hudi.exception.HoodieKeyException;
+
 import java.util.BitSet;
 import java.util.function.Function;
 
@@ -28,6 +30,19 @@ public class PartitionPathEncodeUtils {
 
   public static final String DEPRECATED_DEFAULT_PARTITION_PATH = "default";
   public static final String DEFAULT_PARTITION_PATH = "__HIVE_DEFAULT_PARTITION__";
+
+  /**
+   * Returns whether {@code partitionValue} is the marker Hudi writes for a null or empty partition
+   * value. Both the current marker and the pre-0.12 {@code default} one are recognised, matching
+   * {@code PartitionPathParser#parseValue}. The value may be a whole partition directory, in which
+   * case a Hive-style column prefix (e.g. {@code datestr=__HIVE_DEFAULT_PARTITION__}) is stripped
+   * before comparing.
+   */
+  public static boolean isDefaultPartitionValue(String partitionValue) {
+    int separator = partitionValue.indexOf('=');
+    String value = separator < 0 ? partitionValue : partitionValue.substring(separator + 1);
+    return DEFAULT_PARTITION_PATH.equals(value) || DEPRECATED_DEFAULT_PARTITION_PATH.equals(value);
+  }
 
   static BitSet charToEscape = new BitSet(128);
   static BitSet charToEscapeFilename = new BitSet(128);
@@ -64,6 +79,10 @@ public class PartitionPathEncodeUtils {
 
   static boolean needsEscapingFilename(char c) {
     return c >= 0 && c < charToEscapeFilename.size() && charToEscapeFilename.get(c);
+  }
+
+  static boolean needsEscapingFilenameWithDot(char c) {
+    return c == '.' || needsEscapingFilename(c);
   }
 
   public static String escapePathName(String path) {
@@ -105,9 +124,25 @@ public class PartitionPathEncodeUtils {
     return sb.toString();
   }
 
+  /**
+   * Escapes a filename derived from a partition path for use in metadata-table file ids.
+   * For a single-level hive-style segment (like "fare.currency=USD"), dots in the column name
+   * (before the first '=') are escaped, since a literal dot there makes the metadata log file
+   * name unparseable by the log-file pattern. Dots in the partition value (after '=') are left
+   * as-is. Partition values that contain dots, and nested or non-hive-style dotted paths, are
+   * not handled here.
+   */
   public static String escapeFileName(String filename) {
     if (filename == null || filename.length() == 0) {
       return filename;
+    }
+    int eqIdx = filename.indexOf('=');
+    if (eqIdx > 0) {
+      // Hive-style partition path: escape dots only in the column name (before '=')
+      String columnName = filename.substring(0, eqIdx);
+      String value = filename.substring(eqIdx); // includes '='
+      return doEscape(columnName, PartitionPathEncodeUtils::needsEscapingFilenameWithDot)
+          + doEscape(value, PartitionPathEncodeUtils::needsEscapingFilename);
     }
     return doEscape(filename, PartitionPathEncodeUtils::needsEscapingFilename);
   }
@@ -140,5 +175,63 @@ public class PartitionPathEncodeUtils {
     } else {
       return escapePathName(value);
     }
+  }
+
+  /**
+   * Validates that the given (relative) partition path does not contain a directory-traversal
+   * segment, throwing {@link HoodieKeyException} if it does. This is enforced regardless of the
+   * {@code hoodie.datasource.write.partitionpath.urlencode} setting, since url-encoding is opt-in
+   * (disabled by default) and does not escape {@code '.'}, so it never neutralizes {@code ".."}.
+   *
+   * @param partitionPath the relative partition path (or a single partition field value).
+   * @return the same {@code partitionPath} if it is safe.
+   * @throws HoodieKeyException if the partition path contains a {@code ".."} traversal segment.
+   */
+  public static String validateNoPathTraversal(String partitionPath) {
+    if (hasPathTraversal(partitionPath)) {
+      throw new HoodieKeyException("Invalid partition path \"" + partitionPath + "\": partition paths "
+          + "must not contain \"..\" path-traversal segments, which could let a record write Hudi files "
+          + "outside the table base path. This is most often caused by an unsanitized data field being "
+          + "used as the partition path; sanitize or remap the offending value in the upstream source "
+          + "or via a transformer before ingesting it.");
+    }
+    return partitionPath;
+  }
+
+  /**
+   * Returns {@code true} if the given (relative) partition path contains a directory-traversal
+   * segment (a path segment equal to {@code ".."}). Such a partition path, once resolved against
+   * the table base path, can escape the base path and write Hudi-managed files into arbitrary
+   * directories reachable by the writer's credentials.
+   *
+   * <p>The check is intentionally value-content only: it tolerates {@code '.'} inside a segment
+   * (e.g. date partitions like {@code 2024.01.01}) and only rejects the standalone {@code ".."}
+   * segment. Both forward slash {@code '/'} and the platform-independent literal are treated as
+   * separators, since a partition path is always stored using forward slashes.
+   *
+   * @param partitionPath the relative partition path (or a single partition field value).
+   * @return {@code true} if a {@code ".."} traversal segment is present, {@code false} otherwise.
+   */
+  public static boolean hasPathTraversal(String partitionPath) {
+    if (partitionPath == null || partitionPath.isEmpty()) {
+      return false;
+    }
+    // Normalize backslashes to forward slashes so a "..\.." style value cannot slip through on
+    // any platform. Partition paths are always persisted using forward slashes.
+    String normalized = partitionPath.replace('\\', '/');
+    int start = 0;
+    int len = normalized.length();
+    while (start <= len) {
+      int end = normalized.indexOf('/', start);
+      if (end < 0) {
+        end = len;
+      }
+      // A segment of exactly ".." is a traversal segment.
+      if (end - start == 2 && normalized.charAt(start) == '.' && normalized.charAt(start + 1) == '.') {
+        return true;
+      }
+      start = end + 1;
+    }
+    return false;
   }
 }

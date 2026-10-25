@@ -20,16 +20,15 @@ package org.apache.hudi.timeline.service.handlers.marker;
 
 import org.apache.hudi.common.util.HoodieTimer;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
 /**
  * A runnable for batch processing marker creation requests.
  */
+@Slf4j
 public class BatchedMarkerCreationRunnable implements Runnable {
-  private static final Logger LOG = LoggerFactory.getLogger(BatchedMarkerCreationRunnable.class);
 
   private final List<BatchedMarkerCreationContext> requestContextList;
 
@@ -39,13 +38,13 @@ public class BatchedMarkerCreationRunnable implements Runnable {
 
   @Override
   public void run() {
-    LOG.debug("Start processing create marker requests");
+    log.debug("Start processing create marker requests");
     HoodieTimer timer = HoodieTimer.start();
 
     for (BatchedMarkerCreationContext requestContext : requestContextList) {
       requestContext.getMarkerDirState().processMarkerCreationRequests(
           requestContext.getFutures(), requestContext.getFileIndex());
     }
-    LOG.debug("Finish batch processing of create marker requests in {} ms", timer.endTimer());
+    log.debug("Finish batch processing of create marker requests in {} ms", timer.endTimer());
   }
 }

@@ -1,0 +1,550 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+package org.apache.spark.sql.execution.datasources.parquet
+
+import org.apache.hudi.client.utils.SparkInternalSchemaConverter
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaField, HoodieSchemaType}
+import org.apache.hudi.common.schema.internal.{InternalSchema, Type => InternalType, Types => InternalTypes}
+import org.apache.hudi.common.schema.internal.action.TableChanges
+import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter
+import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils
+import org.apache.hudi.common.util
+import org.apache.hudi.common.util.{Option => HOption}
+import org.apache.hudi.exception.HoodieException
+
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.parquet.filter2.compat.FilterCompat
+import org.apache.parquet.filter2.predicate.{FilterApi, FilterPredicate}
+import org.apache.parquet.hadoop.ParquetInputFormat
+import org.apache.parquet.hadoop.metadata.FileMetaData
+import org.apache.parquet.schema.{MessageType, Type, Types}
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
+import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.sources.{AlwaysFalse, AlwaysTrue, And, EqualNullSafe, EqualTo, Filter, GreaterThan, GreaterThanOrEqual, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Not, Or, StringContains, StringEndsWith, StringStartsWith}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, LongType, MapType, MetadataBuilder, StringType, StructField, StructType}
+import org.junit.jupiter.api.{Assertions, Test}
+
+import java.util.{Arrays, Collections, HashMap}
+
+/**
+ * Unit tests for the two shredded-variant read guards of [[ParquetSchemaEvolutionUtils]]:
+ * validateNoShreddedVariants, the schema-on-read guard that fails a read the merged
+ * internal-schema request would otherwise serve with the typed_value clipped away, and
+ * validateNoShreddedVariantStructs, the Spark 3.x guard for a variant requested as its
+ * unshredded struct shape. No SparkSession: both guards are pure schema walks.
+ */
+class TestParquetSchemaEvolutionUtils {
+
+  /** Mirrors SparkInternalSchemaConverter.SPARK_VARIANT_METADATA_KEY, which is private there. */
+  private val variantRewriteMarker = "__VARIANT_METADATA_KEY"
+
+  // requiredSchema is read only by the PushVariantIntoScan rewrite arm, which keys on the marker
+  // metadata above; the walk itself runs off querySchema. A plain marker-free schema therefore
+  // keeps that arm silent, and VariantType is a Spark-4-only symbol this module cannot name.
+  private val noVariantRewrite = new StructType().add("v", BinaryType)
+
+  @Test
+  def testValidateNoShreddedVariantsRejectsTopLevelShreddedVariant(): Unit = {
+    val querySchema = querySchemaOf("v", HoodieSchema.createVariant())
+    val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(
+        noVariantRewrite, querySchema, footerOf(shreddedVariant("v"))))
+    Assertions.assertTrue(
+      failure.getMessage.contains("shredded variant") && failure.getMessage.contains("'v'"),
+      s"The error must name the shredded variant column, got: ${failure.getMessage}")
+
+    // The unshredded twin is exactly what the internal schema models, so it must read.
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariants(
+      noVariantRewrite, querySchema, footerOf(unshreddedVariant("v")))
+  }
+
+  /**
+   * An array of variants: the element is resolved through all three list layouts Hudi files can
+   * carry - Spark's 3-level list, parquet-avro's 2-level list and parquet-thrift's tuple list.
+   * A single-field repeated group is unwrapped everywhere except under the two reserved names,
+   * so the 2-level shapes wrap the variant one struct deeper: only the name arms of
+   * [[ParquetSchemaEvolutionUtils.parquetListElement]] then land on the right element.
+   */
+  @Test
+  def testValidateNoShreddedVariantsRejectsShreddedVariantInList(): Unit = {
+    // Pins the unwrapping arm: the repeated "list" group is not the element, its only field is.
+    val threeLevel = threeLevelList("v", shreddedVariant("element"))
+    // Pins the "array" name arm: parquet-avro's repeated group is itself the element record.
+    val twoLevel = twoLevelList("v", "array", nestedVariantElement)
+    // Pins the "<field>_tuple" name arm: parquet-thrift's spelling of the same 2-level layout.
+    val thriftTuple = twoLevelList("v", "v_tuple", nestedVariantElement)
+
+    val variantElement = querySchemaOf("v", HoodieSchema.createArray(HoodieSchema.createVariant()))
+    // array<struct<e: struct<inner: variant>>>, the query side of the two 2-level shapes: without
+    // the name arms the walk would take "e" for the element and never pair "inner" up.
+    val innerStruct = HoodieSchema.createRecord("e_record", "org.apache.hudi.test", null,
+      Collections.singletonList(HoodieSchemaField.of("inner", HoodieSchema.createVariant())))
+    val elementStruct = HoodieSchema.createRecord("element_record", "org.apache.hudi.test", null,
+      Collections.singletonList(HoodieSchemaField.of("e", innerStruct)))
+    val nestedElement = querySchemaOf("v", HoodieSchema.createArray(elementStruct))
+
+    Seq(
+      ("3-level", threeLevel, variantElement, "'v.element'"),
+      ("2-level", twoLevel, nestedElement, "'v.element.e.inner'"),
+      ("thrift", thriftTuple, nestedElement, "'v.element.e.inner'")
+    ).foreach { case (shape, list, querySchema, path) =>
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(noVariantRewrite, querySchema, footerOf(list)))
+      Assertions.assertTrue(failure.getMessage.contains(path),
+        s"The $shape list error must name $path, got: ${failure.getMessage}")
+    }
+  }
+
+  @Test
+  def testValidateNoShreddedVariantsRejectsShreddedVariantInMap(): Unit = {
+    val querySchema = querySchemaOf("v", HoodieSchema.createMap(HoodieSchema.createVariant()))
+    val map = stringKeyMap("v", shreddedVariant("value"))
+
+    val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(noVariantRewrite, querySchema, footerOf(map)))
+    Assertions.assertTrue(failure.getMessage.contains("'v.value'"),
+      s"The error must name the map value path, got: ${failure.getMessage}")
+  }
+
+  /**
+   * The variant arm anchors on the sentinel negative field ids, so a user struct of the very same
+   * shape over the very same file is left alone - both the two-field twin of the internal
+   * variant record and the three-field twin of the shredded parquet group.
+   */
+  @Test
+  def testValidateNoShreddedVariantsLeavesPlainUserStructsAlone(): Unit = {
+    val bytes = HoodieSchema.create(HoodieSchemaType.BYTES)
+    val typedValue = HoodieSchema.createRecord("plain_typed_value", "org.apache.hudi.test", null,
+      Collections.singletonList(HoodieSchemaField.of("a", HoodieSchema.create(HoodieSchemaType.INT))))
+    val threeFieldStruct = HoodieSchema.createRecord("plain_three", "org.apache.hudi.test", null, Arrays.asList(
+      HoodieSchemaField.of("metadata", bytes),
+      HoodieSchemaField.of("value", bytes),
+      HoodieSchemaField.of("typed_value", typedValue)))
+    val twoFieldStruct = HoodieSchema.createRecord("plain_two", "org.apache.hudi.test", null, Arrays.asList(
+      HoodieSchemaField.of("metadata", bytes),
+      HoodieSchemaField.of("value", bytes)))
+
+    Seq(threeFieldStruct, twoFieldStruct).foreach { struct =>
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(
+        noVariantRewrite, querySchemaOf("v", struct), footerOf(shreddedVariant("v")))
+    }
+  }
+
+  /** A column added after the file was written has no footer field to walk. */
+  @Test
+  def testValidateNoShreddedVariantsSkipsColumnsAbsentFromTheFooter(): Unit = {
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariants(
+      noVariantRewrite, querySchemaOf("added", HoodieSchema.createVariant()), footerOf(shreddedVariant("v")))
+  }
+
+  @Test
+  def testValidateNoShreddedVariantsRejectsNestedShreddedVariant(): Unit = {
+    val struct = HoodieSchema.createRecord("nested", "org.apache.hudi.test", null,
+      Collections.singletonList(HoodieSchemaField.of("inner", HoodieSchema.createVariant())))
+    val footer = footerOf(Types.optionalGroup().addField(shreddedVariant("inner")).named("s"))
+
+    val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(noVariantRewrite, querySchemaOf("s", struct), footer))
+    Assertions.assertTrue(failure.getMessage.contains("'s.inner'"),
+      s"The error must name the nested variant path, got: ${failure.getMessage}")
+  }
+
+  /**
+   * A scan rewritten by PushVariantIntoScan fails regardless of the file's layout: the merged
+   * request materializes {metadata, value} while codegen expects the extraction struct. Spark
+   * rewrites variants at the root of the relation output schema and variants nested in struct
+   * types (PushVariantIntoScan), so the walk has to reach both.
+   */
+  @Test
+  def testValidateNoShreddedVariantsRejectsVariantRewriteOverUnshreddedFile(): Unit = {
+    val nested = HoodieSchema.createRecord("nested", "org.apache.hudi.test", null,
+      Collections.singletonList(HoodieSchemaField.of("inner", HoodieSchema.createVariant())))
+
+    Seq(
+      ("top-level", new StructType().add("v", variantRewriteStruct),
+        querySchemaOf("v", HoodieSchema.createVariant()), footerOf(unshreddedVariant("v")), "'v'"),
+      ("nested", new StructType().add("s", new StructType().add("inner", variantRewriteStruct)),
+        querySchemaOf("s", nested),
+        footerOf(Types.optionalGroup().addField(unshreddedVariant("inner")).named("s")), "'s.inner'")
+    ).foreach { case (leg, requiredSchema, querySchema, footer, path) =>
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchema, footer))
+      Assertions.assertTrue(
+        failure.getMessage.contains("pushVariantIntoScan") && failure.getMessage.contains(path),
+        s"The $leg rewrite error must name the rewrite and $path, got: ${failure.getMessage}")
+    }
+  }
+
+  /**
+   * Spark's PushVariantIntoScan rewrite of one variant column: ordinal-named extraction fields,
+   * every one carrying the marker metadata the guard keys on.
+   */
+  private def variantRewriteStruct: StructType = {
+    val marker = new MetadataBuilder().putString(variantRewriteMarker, "v").build()
+    new StructType()
+      .add(StructField("0", BinaryType, nullable = true, marker))
+      .add(StructField("1", BinaryType, nullable = true, marker))
+  }
+
+  /** The query-side internal schema for a table of one top-level column. */
+  private def querySchemaOf(name: String, schema: HoodieSchema): InternalSchema =
+    InternalSchemaConverter.convert(HoodieSchema.createRecord("query", "org.apache.hudi.test", null,
+      Collections.singletonList(HoodieSchemaField.of(name, schema))))
+
+  /** A footer over a file of one top-level column. */
+  private def footerOf(column: Type): FileMetaData =
+    new FileMetaData(Types.buildMessage().addField(column).named("test"), new HashMap[String, String](), "test")
+
+  /** The parquet schema of a file of one top-level column. */
+  private def schemaOf(column: Type): MessageType = Types.buildMessage().addField(column).named("test")
+
+  /**
+   * The Spark 3.x shape: no VariantType there, so a variant column is declared as
+   * struct&lt;value: binary, metadata: binary&gt; (the shape Hive sync also writes). Either member
+   * order is the same column, and the unshredded twin of the same file must still read.
+   */
+  @Test
+  def testValidateNoShreddedVariantStructsRejectsTopLevelShreddedVariant(): Unit = {
+    Seq(
+      ("metadata first", new StructType().add("metadata", BinaryType).add("value", BinaryType)),
+      ("value first", new StructType().add("value", BinaryType).add("metadata", BinaryType))
+    ).foreach { case (order, variant) =>
+      val requiredSchema = new StructType().add("v", variant)
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, schemaOf(shreddedVariant("v"))))
+      Assertions.assertTrue(
+        failure.getMessage.contains("shredded variant") && failure.getMessage.contains("'v'"),
+        s"The $order error must name the shredded variant column, got: ${failure.getMessage}")
+
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, schemaOf(unshreddedVariant("v")))
+    }
+  }
+
+  /** The walk has to reach a variant below a struct, a list element and a map value. */
+  @Test
+  def testValidateNoShreddedVariantStructsRejectsNestedShreddedVariant(): Unit = {
+    Seq(
+      ("struct", new StructType().add("s", new StructType().add("inner", variantStruct)),
+        schemaOf(Types.optionalGroup().addField(shreddedVariant("inner")).named("s")), "'s.inner'"),
+      ("list", new StructType().add("v", ArrayType(variantStruct)),
+        schemaOf(threeLevelList("v", shreddedVariant("element"))), "'v.element'"),
+      ("map", new StructType().add("v", MapType(StringType, variantStruct)),
+        schemaOf(stringKeyMap("v", shreddedVariant("value"))), "'v.value'")
+    ).foreach { case (leg, requiredSchema, footer, path) =>
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, footer))
+      Assertions.assertTrue(failure.getMessage.contains(path),
+        s"The $leg error must name $path, got: ${failure.getMessage}")
+    }
+  }
+
+  /**
+   * The requested side must be the variant shape exactly, so a user struct that merely contains
+   * those two names, or carries them with another type, reads the same file untouched - as does a
+   * column the file does not hold at all. Each leg fails the test by throwing.
+   */
+  @Test
+  def testValidateNoShreddedVariantStructsLeavesOtherRequestsAlone(): Unit = {
+    Seq(
+      new StructType().add("metadata", BinaryType).add("value", BinaryType).add("extra", BinaryType),
+      new StructType().add("metadata", BinaryType).add("value", IntegerType),
+      new StructType().add("a", BinaryType).add("b", BinaryType)
+    ).foreach { requested =>
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
+        new StructType().add("v", requested), schemaOf(shreddedVariant("v")))
+    }
+
+    // A column added after the file was written has no footer field to walk.
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
+      new StructType().add("added", variantStruct), schemaOf(shreddedVariant("v")))
+
+    // The file side is anchored too: a user struct that merely holds a typed_value member has no
+    // binary metadata beside it, so even a request pruned down to `value` alone - which on the
+    // requested side is indistinguishable from a variant - is left to read.
+    val userStructWithTypedValue = Types.optionalGroup()
+      .addField(Types.optional(PrimitiveTypeName.BINARY).named("value"))
+      .addField(Types.optional(PrimitiveTypeName.INT32).named("typed_value"))
+      .named("v")
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
+      new StructType().add("v", new StructType().add("value", BinaryType)), schemaOf(userStructWithTypedValue))
+  }
+
+  /**
+   * Nested schema pruning narrows the request to the leaves a query touches, so `SELECT v.value`
+   * arrives here as a one-member struct. That member is exactly the one a shredded file returns
+   * null for, so a subset has to be rejected too.
+   */
+  @Test
+  def testValidateNoShreddedVariantStructsRejectsPrunedVariantStruct(): Unit = {
+    Seq("value", "metadata").foreach { member =>
+      val requiredSchema = new StructType().add("v", new StructType().add(member, BinaryType))
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, schemaOf(shreddedVariant("v"))))
+      Assertions.assertTrue(failure.getMessage.contains("'v'"),
+        s"The pruned-to-$member error must name the column, got: ${failure.getMessage}")
+
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, schemaOf(unshreddedVariant("v")))
+    }
+  }
+
+  /**
+   * The Spark 3.x readers force spark.sql.caseSensitive=false, so a request spelled in another case
+   * still resolves onto the file's lower-case group - at the column, at the member, and below a
+   * struct. The guard has to follow the same resolution or the mixed-case spelling reads past it.
+   */
+  @Test
+  def testValidateNoShreddedVariantStructsIgnoresCase(): Unit = {
+    val mixedCaseVariant = new StructType().add("Value", BinaryType).add("Metadata", BinaryType)
+    Seq(
+      ("column", new StructType().add("V", mixedCaseVariant), schemaOf(shreddedVariant("v")), "'V'"),
+      ("nested", new StructType().add("S", new StructType().add("Inner", mixedCaseVariant)),
+        schemaOf(Types.optionalGroup().addField(shreddedVariant("inner")).named("s")), "'S.Inner'")
+    ).foreach { case (leg, requiredSchema, fileSchema, path) =>
+      val failure = Assertions.assertThrows(classOf[HoodieException], () =>
+        ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(requiredSchema, fileSchema))
+      Assertions.assertTrue(failure.getMessage.contains(path),
+        s"The mixed-case $leg error must name $path as requested, got: ${failure.getMessage}")
+    }
+
+    ParquetSchemaEvolutionUtils.validateNoShreddedVariantStructs(
+      new StructType().add("V", mixedCaseVariant), schemaOf(unshreddedVariant("v")))
+  }
+
+  /** How a variant column is declared on Spark 3.x, which has no VariantType. */
+  private def variantStruct: StructType =
+    new StructType().add("value", BinaryType).add("metadata", BinaryType)
+
+  /**
+   * What a 2-level repeated group wraps here: a single struct field "e" holding the shredded
+   * variant "inner". The repeated group is itself the element record, so without the name arms
+   * of [[ParquetSchemaEvolutionUtils.parquetListElement]] the walk would take "e" for the element.
+   */
+  private def nestedVariantElement: Type =
+    Types.optionalGroup().addField(shreddedVariant("inner")).named("e")
+
+  /**
+   * The filter rebuild the four legacy parquet formats share with the SparkNNParquetReader family.
+   * Field ids are positional, so the file's "original" carries the same id 1 the query spells
+   * "renamed", and "added" (id 2) has no field in the file at all.
+   */
+  @Test
+  def testRebuildFilterFromParquetRespellsFiltersOntoFileNames(): Unit = {
+    val intType = HoodieSchema.create(HoodieSchemaType.INT)
+    val stringType = HoodieSchema.create(HoodieSchemaType.STRING)
+    val querySchema = internalSchemaOf(("id", intType), ("renamed", stringType), ("added", intType))
+    val fileSchema = internalSchemaOf(("id", intType), ("original", stringType))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    // A renamed column is re-spelled to the name the file carries; an untouched one is left alone.
+    Assertions.assertEquals(EqualTo("original", "x"), rebuild(EqualTo("renamed", "x")))
+    Assertions.assertEquals(StringStartsWith("original", "a"), rebuild(StringStartsWith("renamed", "a")))
+    Assertions.assertEquals(GreaterThan("id", 1), rebuild(GreaterThan("id", 1)))
+
+    // A column added after the file was written has no field to filter on, and a filter that
+    // cannot be evaluated must not skip any of the file's row groups.
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("added")))
+
+    // Every leaf filter type takes all three arms: re-spelled when the file holds the column under
+    // another name, AlwaysTrue when it does not hold it at all, and AlwaysTrue when even the query
+    // schema does not hold the name, which is how a predicate on a PushVariantIntoScan projection
+    // member arrives (before, that threw IllegalArgumentException).
+    val leafFilters: Seq[String => Filter] = Seq(
+      EqualTo(_, "x"), EqualNullSafe(_, "x"), GreaterThan(_, "x"), GreaterThanOrEqual(_, "x"),
+      LessThan(_, "x"), LessThanOrEqual(_, "x"), In(_, Array[Any]("x", "y")), IsNull(_), IsNotNull(_),
+      StringStartsWith(_, "x"), StringEndsWith(_, "x"), StringContains(_, "x"))
+    leafFilters.foreach { leaf =>
+      Assertions.assertEquals(leaf("original"), rebuild(leaf("renamed")))
+      Assertions.assertEquals(AlwaysTrue, rebuild(leaf("added")), s"${leaf("added")} on an absent column")
+      Assertions.assertEquals(AlwaysTrue, rebuild(leaf("v.`0`")), s"${leaf("v.`0`")} on a name the query schema lacks")
+    }
+
+    // The constant filters reference no column and pass through as they are.
+    Assertions.assertEquals(AlwaysTrue, rebuild(AlwaysTrue))
+    Assertions.assertEquals(AlwaysFalse, rebuild(AlwaysFalse))
+
+    // And/Or/Not rebuild their children.
+    Assertions.assertEquals(
+      And(EqualTo("original", "x"), AlwaysTrue),
+      rebuild(And(EqualTo("renamed", "x"), IsNull("added"))))
+    Assertions.assertEquals(
+      And(EqualTo("original", "x"), AlwaysTrue),
+      rebuild(And(EqualTo("renamed", "x"), GreaterThan("v.`0`", 5))))
+    Assertions.assertEquals(
+      Or(Not(EqualTo("original", "x")), GreaterThanOrEqual("id", 2)),
+      rebuild(Or(Not(EqualTo("renamed", "x")), GreaterThanOrEqual("id", 2))))
+
+    // A table with no internal schema on either side pushes its filters down untouched.
+    val untouched = EqualTo("renamed", "x")
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, querySchema))
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, fileSchema, null))
+    Assertions.assertSame(untouched,
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(untouched, null, null))
+  }
+
+  /**
+   * A nested field renamed under schema-on-read is re-spelled onto the file's name, as a dotted
+   * path, rather than collapsing to AlwaysTrue (which would read correctly but skip nothing).
+   */
+  @Test
+  def testRebuildFilterFromParquetRespellsNestedFilters(): Unit = {
+    val intType = HoodieSchema.create(HoodieSchemaType.INT)
+    val stringType = HoodieSchema.create(HoodieSchemaType.STRING)
+    val fileSchema = internalSchemaOf(("id", intType),
+      ("item", recordOf("item", ("name", stringType), ("price", intType))))
+    val querySchema = evolve(fileSchema, renames = Seq("item.name" -> "title"), adds = Seq(("item", "added")))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    Assertions.assertEquals(EqualTo("item.name", "a1"), rebuild(EqualTo("item.title", "a1")))
+    Assertions.assertEquals(GreaterThan("item.price", 5), rebuild(GreaterThan("item.price", 5)))
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("item.added")))
+  }
+
+  /**
+   * With nested predicate pushdown, Spark quotes every name part that is not a plain identifier
+   * (non-ASCII, hyphens, dots), so the filter carries e.g. `名字` or item.`my-title`. The rebuild
+   * must resolve those against the internal schema and hand ParquetFilters the file's name quoted
+   * the same way, since that is how ParquetFilters keys its columns.
+   */
+  @Test
+  def testRebuildFilterFromParquetHandlesQuotedNames(): Unit = {
+    // Built from internal types directly, since these names are not valid Avro names.
+    def field(id: Int, name: String, fieldType: InternalType): InternalTypes.Field =
+      InternalTypes.Field.get(id, true, name, fieldType)
+    val fileSchema = new InternalSchema(InternalTypes.RecordType.get(
+      field(0, "名字", InternalTypes.StringType.get()),
+      field(1, "old col", InternalTypes.IntType.get()),
+      field(2, "a.b", InternalTypes.IntType.get()),
+      field(3, "item", InternalTypes.RecordType.get(
+        field(4, "my-name", InternalTypes.StringType.get()),
+        field(5, "price", InternalTypes.IntType.get())))))
+    val querySchema = evolve(fileSchema,
+      renames = Seq("old col" -> "new-col", "item.my-name" -> "my-title"), adds = Seq(("", "新增")))
+
+    def rebuild(filter: Filter): Filter =
+      ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchema)
+
+    // Untouched columns keep their quoted spelling.
+    Assertions.assertEquals(EqualTo("`名字`", "x"), rebuild(EqualTo("`名字`", "x")))
+    Assertions.assertEquals(EqualTo("`a.b`", 1), rebuild(EqualTo("`a.b`", 1)))
+    // Renamed columns are re-spelled onto the file's name, quoted where it needs to be.
+    Assertions.assertEquals(GreaterThan("`old col`", 1), rebuild(GreaterThan("`new-col`", 1)))
+    Assertions.assertEquals(EqualTo("item.`my-name`", "x"), rebuild(EqualTo("item.`my-title`", "x")))
+    // A quoted column the file does not hold collapses to AlwaysTrue.
+    Assertions.assertEquals(AlwaysTrue, rebuild(IsNotNull("`新增`")))
+    // Without nested pushdown Spark passes top-level names through raw, which must keep working.
+    Assertions.assertEquals(EqualTo("名字", "x"), rebuild(EqualTo("名字", "x")))
+    Assertions.assertEquals(GreaterThan("old col", 1), rebuild(GreaterThan("new-col", 1)))
+  }
+
+  /** Applies schema-on-read renames, then adds int columns under the given parent ("" for top level). */
+  private def evolve(schema: InternalSchema,
+                     renames: Seq[(String, String)],
+                     adds: Seq[(String, String)]): InternalSchema = {
+    val updates = TableChanges.ColumnUpdateChange.get(schema)
+    renames.foreach { case (name, newName) => updates.renameColumn(name, newName) }
+    val renamed = SchemaChangeUtils.applyTableChanges2Schema(schema, updates)
+    val addChange = TableChanges.ColumnAddChange.get(renamed)
+    adds.foreach { case (parent, name) => addChange.addColumns(parent, name, InternalTypes.IntType.get(), null) }
+    SchemaChangeUtils.applyTableChanges2Schema(renamed, addChange)
+  }
+
+  private def recordOf(name: String, fields: (String, HoodieSchema)*): HoodieSchema =
+    HoodieSchema.createRecord(name, "org.apache.hudi.test", null,
+      Arrays.asList(fields.map { case (n, schema) => HoodieSchemaField.of(n, schema) }: _*))
+
+  /**
+   * The read configuration may be shared by other readers: a file that needs its own requested schema or a
+   * pushed filter gets a copy, and any other file reads with the read configuration itself.
+   */
+  @Test
+  def testGetFileReadConfNeverModifiesTheReadConf(): Unit = {
+    val readConf = new Configuration(false)
+    // The flags ParquetToSparkSchemaConverter needs, as SparkParquetReaderBase.read sets them
+    readConf.setBoolean(SQLConf.CASE_SENSITIVE.key, false)
+    readConf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, false)
+    readConf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, true)
+    readConf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, false)
+    readConf.setBoolean("spark.sql.parquet.inferTimestampNTZ.enabled", true)
+    val requiredSchema = new StructType().add("id", LongType)
+    readConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+
+    def fileReadConf(fileType: PrimitiveTypeName, pushedFilter: Option[FilterPredicate]): Configuration =
+      new ParquetSchemaEvolutionUtils(readConf, new Path("/tmp/file.parquet"), requiredSchema, new StructType(), util.Option.empty())
+        .getFileReadConf(footerOf(Types.optional(fileType).named("id")), enableVectorizedReader = false, pushedFilter)
+
+    def pushedFilterOf(conf: Configuration): FilterPredicate = ParquetInputFormat.getFilter(conf) match {
+      case predicate: FilterCompat.FilterPredicateCompat => predicate.getFilterPredicate
+      case _ => null
+    }
+
+    val filter = FilterApi.eq(FilterApi.longColumn("id"), java.lang.Long.valueOf(1L))
+    Assertions.assertSame(readConf, fileReadConf(PrimitiveTypeName.INT64, None))
+    val filtered = fileReadConf(PrimitiveTypeName.INT64, Some(filter))
+    Assertions.assertNotSame(readConf, filtered)
+    Assertions.assertEquals(requiredSchema.json, filtered.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    Assertions.assertEquals(filter, pushedFilterOf(filtered))
+    // An int file read as long gets a copy that requests the int column
+    for (pushedFilter <- Seq(None, Some(filter))) {
+      val promoted = fileReadConf(PrimitiveTypeName.INT32, pushedFilter)
+      Assertions.assertNotSame(readConf, promoted)
+      Assertions.assertEquals(new StructType().add("id", IntegerType).json, promoted.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+      Assertions.assertEquals(pushedFilter.orNull, pushedFilterOf(promoted))
+    }
+    Assertions.assertEquals(requiredSchema.json, readConf.get(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA))
+    Assertions.assertNull(pushedFilterOf(readConf))
+  }
+
+  /**
+   * An empty projection (count(*), select 1, a partition-only select) reads no column data, so it
+   * must bypass the schema-on-read merge. Its query schema is the UNPRUNED table schema, and merging
+   * that would request every column - a variant one as the plain struct the internal-schema
+   * converter emits, which Spark 4.x's vectorized reader rejects for a VARIANT-annotated group.
+   */
+  @Test
+  def testEmptyProjectionBypassesInternalSchema(): Unit = {
+    val tablePath = "/tmp/hudi_table"
+    val conf = new Configuration()
+    conf.set(SparkInternalSchemaConverter.HOODIE_TABLE_PATH, tablePath)
+    val internalSchema = internalSchemaOf(
+      "id" -> HoodieSchema.create(HoodieSchemaType.INT),
+      "v" -> HoodieSchema.createVariant())
+    def utilsFor(requiredSchema: StructType): ParquetSchemaEvolutionUtils =
+      new ParquetSchemaEvolutionUtils(conf, new Path(s"$tablePath/f1_0-1-1_20260101000000000.parquet"),
+        requiredSchema, new StructType(), HOption.of(internalSchema))
+
+    Assertions.assertFalse(utilsFor(new StructType()).shouldUseInternalSchema,
+      "An empty projection must be read without the internal schema")
+    Assertions.assertTrue(utilsFor(new StructType().add("id", IntegerType)).shouldUseInternalSchema,
+      "A non-empty projection on a table with an internal schema must still use it")
+  }
+
+  /** An internal schema over the given top-level columns, in order; field ids are positional. */
+  private def internalSchemaOf(fields: (String, HoodieSchema)*): InternalSchema =
+    InternalSchemaConverter.convert(HoodieSchema.createRecord("query", "org.apache.hudi.test", null,
+      Arrays.asList(fields.map { case (name, schema) => HoodieSchemaField.of(name, schema) }: _*)))
+}

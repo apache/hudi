@@ -1,0 +1,196 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Hive Metastore for LOCAL DEVELOPMENT ONLY -- Derby-backed, single replica,
+# fixed credentials. Real deployments point the hudi-trino chart at an
+# existing HMS or AWS Glue instead.
+#
+# Uses the stock apache/hive image; the container command symlinks the
+# hadoop-aws + aws-sdk jars (bundled with the image but not on the metastore
+# classpath) into $HIVE_HOME/lib so HMS can validate s3a:// table locations.
+# Note: apache/hive:3.1.3 is amd64-only; ARM minikube runs it under emulation.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hive-metastore-conf
+  namespace: hudi-lakehouse
+  labels:
+    app.kubernetes.io/part-of: hudi-lakehouse
+data:
+  metastore-site.xml: |
+    <?xml version="1.0"?>
+    <configuration>
+      <property>
+        <name>metastore.thrift.uris</name>
+        <value>thrift://hive-metastore:9083</value>
+      </property>
+      <property>
+        <name>metastore.task.threads.always</name>
+        <value>org.apache.hadoop.hive.metastore.events.EventCleanerTask</value>
+      </property>
+      <property>
+        <name>metastore.expression.proxy</name>
+        <value>org.apache.hadoop.hive.metastore.DefaultPartitionExpressionProxy</value>
+      </property>
+      <property>
+        <name>metastore.warehouse.dir</name>
+        <value>s3a://warehouse/hive</value>
+      </property>
+      <property>
+        <name>javax.jdo.option.ConnectionURL</name>
+        <value>jdbc:derby:;databaseName=/opt/hive/data/metastore_db;create=true</value>
+      </property>
+    </configuration>
+  # schematool (used for one-time schema init) reads hive-site.xml, not
+  # metastore-site.xml -- both must agree on the Derby location.
+  hive-site.xml: |
+    <?xml version="1.0"?>
+    <configuration>
+      <property>
+        <name>javax.jdo.option.ConnectionURL</name>
+        <value>jdbc:derby:;databaseName=/opt/hive/data/metastore_db;create=true</value>
+      </property>
+    </configuration>
+  core-site.xml: |
+    <?xml version="1.0"?>
+    <configuration>
+      <property>
+        <name>fs.s3a.impl</name>
+        <value>org.apache.hadoop.fs.s3a.S3AFileSystem</value>
+      </property>
+      <property>
+        <name>fs.s3a.endpoint</name>
+        <value>http://minio:9000</value>
+      </property>
+      <property>
+        <name>fs.s3a.access.key</name>
+        <value>admin</value>
+      </property>
+      <property>
+        <name>fs.s3a.secret.key</name>
+        <value>password</value>
+      </property>
+      <property>
+        <name>fs.s3a.path.style.access</name>
+        <value>true</value>
+      </property>
+    </configuration>
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hive-metastore-data
+  namespace: hudi-lakehouse
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hive-metastore
+  namespace: hudi-lakehouse
+  labels:
+    app.kubernetes.io/name: hive-metastore
+    app.kubernetes.io/part-of: hudi-lakehouse
+spec:
+  replicas: 1
+  # Derby allows a single process; never run old and new pods concurrently.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hive-metastore
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hive-metastore
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: metastore
+          image: apache/hive:3.1.3
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              # Put the S3A filesystem (bundled with the image's Hadoop, but
+              # not on the metastore classpath) onto the classpath. The image
+              # runs as a non-root user, so $HIVE_HOME/lib is not writable --
+              # HADOOP_CLASSPATH is the supported non-root mechanism.
+              export HADOOP_CLASSPATH="$(echo "$HADOOP_HOME"/share/hadoop/tools/lib/hadoop-aws-*.jar):$(echo "$HADOOP_HOME"/share/hadoop/tools/lib/aws-java-sdk-bundle-*.jar)${HADOOP_CLASSPATH:+:$HADOOP_CLASSPATH}"
+              # Single init authority: initialize the Derby schema at the
+              # PVC-backed location on first boot (schematool reads the
+              # ConnectionURL from the mounted hive-site.xml), and tell the
+              # image entrypoint to skip its own schema init.
+              if [ ! -d /opt/hive/data/metastore_db ]; then
+                "$HIVE_HOME/bin/schematool" -dbType derby -initSchema
+              fi
+              export IS_RESUME=true
+              exec /entrypoint.sh
+          env:
+            - name: SERVICE_NAME
+              value: metastore
+          ports:
+            - name: thrift
+              containerPort: 9083
+          volumeMounts:
+            - name: conf
+              mountPath: /opt/hive/conf/metastore-site.xml
+              subPath: metastore-site.xml
+            - name: conf
+              mountPath: /opt/hive/conf/hive-site.xml
+              subPath: hive-site.xml
+            - name: conf
+              mountPath: /opt/hive/conf/core-site.xml
+              subPath: core-site.xml
+            - name: data
+              mountPath: /opt/hive/data
+          readinessProbe:
+            tcpSocket:
+              port: thrift
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+      volumes:
+        - name: conf
+          configMap:
+            name: hive-metastore-conf
+        - name: data
+          persistentVolumeClaim:
+            claimName: hive-metastore-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hive-metastore
+  namespace: hudi-lakehouse
+  labels:
+    app.kubernetes.io/name: hive-metastore
+spec:
+  ports:
+    - name: thrift
+      port: 9083
+      targetPort: thrift
+  selector:
+    app.kubernetes.io/name: hive-metastore

@@ -20,12 +20,12 @@ package org.apache.spark.sql.hudi.procedure
 import org.apache.hudi.DummyActiveAction
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.avro.model.HoodieArchivedMetaEntry
-import org.apache.hudi.client.timeline.versioning.v2.LSMTimelineWriter
+import org.apache.hudi.client.timeline.LSMTimelineWriter
 import org.apache.hudi.common.engine.{HoodieEngineContext, HoodieLocalEngineContext}
 import org.apache.hudi.common.engine.LocalTaskContextSupplier
 import org.apache.hudi.common.model.{ActionType, HoodieArchivedLogFile, HoodieAvroIndexedRecord, HoodieCommitMetadata, HoodieLogFile, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.common.table.log.HoodieLogFormat
+import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieLogFormatWriter}
 import org.apache.hudi.common.table.log.block.{HoodieAvroDataBlock, HoodieLogBlock}
 import org.apache.hudi.common.table.timeline.{ActiveAction, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
@@ -398,9 +398,9 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
       storage.createDirectory(archivePath)
     }
 
-    val writer = HoodieLogFormat.newWriterBuilder()
-      .onParentPath(archiveFilePath.getParent())
-      .withFileId(archiveFilePath.getName())
+    val writer = HoodieLogFormatWriter.builder()
+      .withParentPath(archiveFilePath.getParent())
+      .withLogFileId(archiveFilePath.getName())
       .withFileExtension(HoodieArchivedLogFile.ARCHIVE_EXTENSION)
       .withStorage(storage)
       .withInstantTime("")

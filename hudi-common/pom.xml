@@ -20,7 +20,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -128,6 +128,7 @@
     <dependency>
       <groupId>org.projectlombok</groupId>
       <artifactId>lombok</artifactId>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Logging -->
@@ -154,12 +155,6 @@
       <artifactId>jackson-module-afterburner</artifactId>
     </dependency>
 
-
-    <dependency>
-      <groupId>com.fasterxml.jackson.module</groupId>
-      <artifactId>jackson-module-afterburner</artifactId>
-    </dependency>
-
     <!-- Avro -->
     <dependency>
       <groupId>org.apache.avro</groupId>
@@ -177,6 +172,7 @@
       <groupId>org.apache.parquet</groupId>
       <artifactId>parquet-avro</artifactId>
     </dependency>
+
 
     <!-- Orc -->
     <dependency>
@@ -233,13 +229,6 @@
     </dependency>
 
     <dependency>
-      <groupId>com.github.stefanbirkner</groupId>
-      <artifactId>system-rules</artifactId>
-      <version>1.17.2</version>
-      <scope>test</scope>
-    </dependency>
-
-    <dependency>
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-server</artifactId>
     </dependency>
@@ -264,9 +253,9 @@
 
     <!-- LZ4 Hash Utils -->
     <dependency>
-      <groupId>org.lz4</groupId>
+      <groupId>${lz4.groupId}</groupId>
       <artifactId>lz4-java</artifactId>
-      <version>1.8.0</version>
+      <version>${lz4.version}</version>
     </dependency>
 
     <dependency>

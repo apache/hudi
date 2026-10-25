@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.table.read.buffer;
 
-import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.table.log.KeySpec;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
@@ -71,11 +70,6 @@ public interface HoodieFileGroupRecordBuffer<T> {
    * @throws IOException
    */
   void processDeleteBlock(HoodieDeleteBlock deleteBlock) throws IOException;
-
-  /**
-   * Process next delete record.
-   */
-  void processNextDeletedRecord(DeleteRecord record, Serializable index);
 
   /**
    * Check if a record exists in the buffered records.

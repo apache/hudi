@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.Test;
@@ -82,11 +81,11 @@ public final class TestTablePathUtils {
     HoodiePartitionMetadata partitionMetadata1 = new HoodiePartitionMetadata(
         storage, Instant.now().toString(), tablePath,
         partitionPath1, partitionMetafileFormat);
-    partitionMetadata1.trySave();
+    partitionMetadata1.trySave("key1=abc/key2=def");
     HoodiePartitionMetadata partitionMetadata2 = new HoodiePartitionMetadata(
         storage, Instant.now().toString(), tablePath,
         partitionPath2, partitionMetafileFormat);
-    partitionMetadata2.trySave();
+    partitionMetadata2.trySave("key1=xyz/key2=def");
 
     // Create files
     URI filePathURI1 =
@@ -162,5 +161,19 @@ public final class TestTablePathUtils {
 
     inferredTablePath = TablePathUtils.getTablePath(storage, filePath2);
     assertEquals(tablePath, inferredTablePath.get());
+  }
+
+  /**
+   * Verifies the parent walk terminates with an empty Option (not an exception) when no
+   * table metadata folder exists anywhere up to the filesystem root.
+   */
+  @Test
+  void getTablePathReturnsEmptyForNonHudiPath() throws IOException {
+    setup();
+    URI nonHudiURI = Paths.get(tempDir.getAbsolutePath(), "not_a_table/some/dir").toUri();
+    assertTrue(new File(nonHudiURI).mkdirs());
+    Option<StoragePath> inferredTablePath =
+        TablePathUtils.getTablePath(storage, new StoragePath(nonHudiURI));
+    assertTrue(!inferredTablePath.isPresent());
   }
 }

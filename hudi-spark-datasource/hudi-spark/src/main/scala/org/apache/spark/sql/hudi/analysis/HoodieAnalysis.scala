@@ -18,8 +18,8 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.{HoodieSchemaUtils, HoodieSparkUtils, SparkAdapterSupport}
-import org.apache.hudi.common.util.{ReflectionUtils, ValidationUtils}
 import org.apache.hudi.common.util.ReflectionUtils.loadClass
+import org.apache.hudi.common.util.ValidationUtils
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -33,6 +33,7 @@ import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
+import org.apache.spark.sql.hudi.blob.ReadBlobRule
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.HoodieLeafRunnableCommand.stripMetaFieldAttributes
 import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQueryOutput
@@ -56,13 +57,17 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     rules += adaptIngestionTargetLogicalRelations
-    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_0)
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_2) {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark42DataSourceV2ToV1Fallback"
+    } else if (HoodieSparkUtils.isSpark4_1) {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark41DataSourceV2ToV1Fallback"
+    } else if (HoodieSparkUtils.isSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark40DataSourceV2ToV1Fallback"
-    else if (HoodieSparkUtils.isSpark3_5)
+    } else if (HoodieSparkUtils.isSpark3_5) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark35DataSourceV2ToV1Fallback"
-    else if (HoodieSparkUtils.isSpark3_4)
+    } else if (HoodieSparkUtils.isSpark3_4) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark34DataSourceV2ToV1Fallback"
-    else {
+    } else {
       // Spark 3.3.x
       "org.apache.spark.sql.hudi.analysis.HoodieSpark33DataSourceV2ToV1Fallback"
     }
@@ -80,7 +85,13 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
     rules ++= Seq(dataSourceV2ToV1Fallback, resolveReferences)
 
-    if (HoodieSparkUtils.isSpark4_0) {
+    if (HoodieSparkUtils.isSpark4_2) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark42ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark4_1) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark41ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark4_0) {
       rules += (_ => instantiateKlass(
         "org.apache.spark.sql.hudi.analysis.HoodieSpark40ResolveColumnsForInsertInto"))
     } else if (HoodieSparkUtils.isSpark3_5) {
@@ -89,14 +100,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
     }
 
     val resolveAlterTableCommandsClass =
-      if (HoodieSparkUtils.gteqSpark4_0) {
-        "org.apache.spark.sql.hudi.Spark40ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.gteqSpark3_5) {
-        "org.apache.spark.sql.hudi.Spark35ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark3_4) {
-        "org.apache.spark.sql.hudi.Spark34ResolveHudiAlterTableCommand"
-      } else if (HoodieSparkUtils.isSpark3_3) {
-        "org.apache.spark.sql.hudi.Spark33ResolveHudiAlterTableCommand"
+      if (HoodieSparkUtils.isSpark4) {
+        "org.apache.spark.sql.hudi.Spark4ResolveHudiAlterTableCommand"
+      } else if (HoodieSparkUtils.isSpark3) {
+        "org.apache.spark.sql.hudi.Spark3ResolveHudiAlterTableCommand"
       } else {
         throw new IllegalStateException("Unsupported Spark version")
       }
@@ -135,20 +142,6 @@ object HoodieAnalysis extends SparkAdapterSupport {
       // Default rules
     )
 
-    val nestedSchemaPruningClass = if (HoodieSparkUtils.gteqSpark4_0) {
-        "org.apache.spark.sql.execution.datasources.Spark40NestedSchemaPruning"
-      } else if (HoodieSparkUtils.gteqSpark3_5) {
-        "org.apache.spark.sql.execution.datasources.Spark35NestedSchemaPruning"
-      } else if (HoodieSparkUtils.gteqSpark3_4) {
-        "org.apache.spark.sql.execution.datasources.Spark34NestedSchemaPruning"
-      } else {
-        // spark 3.3
-        "org.apache.spark.sql.execution.datasources.Spark33NestedSchemaPruning"
-      }
-
-    val nestedSchemaPruningRule = ReflectionUtils.loadClass(nestedSchemaPruningClass).asInstanceOf[Rule[LogicalPlan]]
-    rules += (_ => nestedSchemaPruningRule)
-
     // NOTE: [[HoodiePruneFileSourcePartitions]] is a replica in kind to Spark's
     //       [[PruneFileSourcePartitions]] and as such should be executed at the same stage.
     //       However, currently Spark doesn't allow [[SparkSessionExtensions]] to inject into
@@ -160,10 +153,16 @@ object HoodieAnalysis extends SparkAdapterSupport {
     //          - Precedes actual [[customEarlyScanPushDownRules]] invocation
     val pruneFileSourcePartitionsClass = if (HoodieSparkUtils.gteqSpark4_0) {
       "org.apache.spark.sql.hudi.analysis.Spark4HoodiePruneFileSourcePartitions"
-    } else {
+    } else if (HoodieSparkUtils.gteqSpark3_4) {
+      // Spark 3.4 and 3.5: PhysicalOperation and ScanOperation unified (SPARK-39764)
       "org.apache.spark.sql.hudi.analysis.Spark3HoodiePruneFileSourcePartitions"
+    } else {
+      // Spark 3.3: Use ScanOperation for better compatibility
+      "org.apache.spark.sql.hudi.analysis.Spark33HoodiePruneFileSourcePartitions"
     }
     rules += (spark => instantiateKlass(pruneFileSourcePartitionsClass, spark))
+
+    rules += (session => ReadBlobRule(session))
 
     rules.toSeq
   }
@@ -305,7 +304,12 @@ object HoodieAnalysis extends SparkAdapterSupport {
           analyzer.execute(plan)
         }
 
-        if (resolved.output.exists(attr => isMetaField(attr.name))) {
+        // If the plan is still not fully resolved (e.g., it references non-existent
+        // tables or columns), fall through. Spark's CheckAnalysis runs later and
+        // produces precise UNRESOLVED_COLUMN / TABLE_OR_VIEW_NOT_FOUND errors with
+        // "did you mean" suggestions; intercepting UnresolvedException here would
+        // discard that context. Only inspect the output once the plan is resolved.
+        if (resolved.resolved && resolved.output.exists(attr => isMetaField(attr.name))) {
           Some(resolved.output)
         } else {
           None
@@ -406,7 +410,8 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
       // Convert to CreateHoodieTableAsSelectCommand
       case ct @ CreateTable(table, mode, Some(query))
         if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
-        val alignedQuery = stripMetaFieldAttributes(query)
+        val alignedQuery = alignCtasQueryByPartitionOrder(
+          stripMetaFieldAttributes(query), table.partitionColumnNames)
         CreateHoodieTableAsSelectCommand(table, mode, alignedQuery)
 
       case ct: CreateTable =>
@@ -426,6 +431,37 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
         plan
 
       case _ => plan
+    }
+  }
+
+  private def alignCtasQueryByPartitionOrder(query: LogicalPlan, partitionColumns: Seq[String]): LogicalPlan = {
+    if (partitionColumns.isEmpty) {
+      query
+    } else {
+      val resolver = spark.sessionState.conf.resolver
+      val (dataAttrs, partitionAttrs) = query.output.partition { attr =>
+        !partitionColumns.exists(partition => resolver(partition, attr.name))
+      }
+
+      if (partitionAttrs.size != partitionColumns.size) {
+        throw new HoodieAnalysisException(s"Partition columns ${partitionColumns.mkString("[", ", ", "]")} " +
+          s"do not match query output ${query.output.map(_.name).mkString("[", ", ", "]")}")
+      }
+
+      val alreadyAligned = partitionColumns.zip(partitionAttrs).forall {
+        case (partition, attr) => resolver(partition, attr.name)
+      }
+      // Avoid adding a redundant Project when partition columns are already in the table-defined order.
+      if (alreadyAligned) {
+        query
+      } else {
+        val orderedPartitionAttrs = partitionColumns.map { partition =>
+          partitionAttrs.find(attr => resolver(partition, attr.name)).getOrElse {
+            throw new HoodieAnalysisException(s"Cannot resolve partition column $partition in CTAS query output")
+          }
+        }
+        Project(dataAttrs ++ orderedPartitionAttrs, query)
+      }
     }
   }
 }

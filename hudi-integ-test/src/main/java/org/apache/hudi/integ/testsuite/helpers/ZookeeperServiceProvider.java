@@ -18,10 +18,11 @@
 
 package org.apache.hudi.integ.testsuite.helpers;
 
-import org.apache.curator.framework.CuratorFramework;
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
+
+import org.apache.curator.framework.CuratorFramework;
+import org.apache.hadoop.conf.Configuration;
 
 public class ZookeeperServiceProvider {
 

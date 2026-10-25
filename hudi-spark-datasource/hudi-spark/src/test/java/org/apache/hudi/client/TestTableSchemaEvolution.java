@@ -18,7 +18,7 @@
 
 package org.apache.hudi.client;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -40,6 +40,8 @@ import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
+import lombok.AccessLevel;
+import lombok.Getter;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -66,6 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   private final String initCommitTime = "000";
+  @Getter(AccessLevel.PROTECTED)
   private HoodieTableType tableType = HoodieTableType.COPY_ON_WRITE;
   private HoodieTestDataGenerator dataGenEvolved = new HoodieTestDataGenerator();
   private HoodieTestDataGenerator dataGenDevolved = new HoodieTestDataGenerator();
@@ -402,10 +405,5 @@ public class TestTableSchemaEvolution extends HoodieClientTestBase {
 
   private static boolean isSchemaCompatible(String oldSchema, String newSchema, boolean shouldAllowDroppedColumns) {
     return HoodieSchemaCompatibility.isSchemaCompatible(HoodieSchema.parse(oldSchema), HoodieSchema.parse(newSchema), shouldAllowDroppedColumns);
-  }
-
-  @Override
-  protected HoodieTableType getTableType() {
-    return tableType;
   }
 }

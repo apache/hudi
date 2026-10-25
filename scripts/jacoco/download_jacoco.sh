@@ -17,6 +17,26 @@
 # specific language governing permissions and limitations
 # under the License.
 #
-wget https://repo1.maven.org/maven2/org/jacoco/jacoco/0.8.12/jacoco-0.8.12.zip
-unzip jacoco-0.8.12.zip -d jacoco-lib
+set -euo pipefail
+
+JACOCO_VERSION=0.8.12
+JACOCO_ZIP="jacoco-${JACOCO_VERSION}.zip"
+JACOCO_URL="https://repo1.maven.org/maven2/org/jacoco/jacoco/${JACOCO_VERSION}/${JACOCO_ZIP}"
+
+# Maven Central answers 429 (Too Many Requests) when the shared CI egress IP is rate limited, and
+# wget treats every 4xx as fatal. Without a retry a single 429 fails a job whose build and tests
+# have already passed, so back off long enough to outlast the rate-limit window before giving up.
+for backoff in 15 30 60 0; do
+  if wget --tries=1 -O "$JACOCO_ZIP" "$JACOCO_URL"; then
+    break
+  fi
+  if [ "$backoff" -eq 0 ]; then
+    echo "Unable to download $JACOCO_URL" >&2
+    exit 1
+  fi
+  echo "Download failed, retrying in ${backoff}s"
+  sleep "$backoff"
+done
+
+unzip "$JACOCO_ZIP" -d jacoco-lib
 ls -l jacoco-lib/lib/jacococli.jar

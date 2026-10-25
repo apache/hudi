@@ -19,6 +19,11 @@
 package org.apache.hudi.sync.common.util;
 
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Convert the Hoodie schema to spark schema' json string.
@@ -28,14 +33,73 @@ import org.apache.hudi.common.schema.HoodieSchema;
 public class SparkSchemaUtils {
 
   public static String convertToSparkSchemaJson(HoodieSchema schema) {
-    String fieldsJsonString = schema.getFields().stream().map(field ->
-            "{\"name\":\"" + field.name() + "\",\"type\":" + convertFieldType(field.getNonNullSchema())
-                + ",\"nullable\":" + field.isNullable() + ",\"metadata\":{}}")
+    return convertToSparkSchemaJson(schema, false);
+  }
+
+  /**
+   * @param includeFieldDocs whether field docs should be included in the field metadata
+   *                         as {@code comment}, which spark displays as the column comment
+   */
+  public static String convertToSparkSchemaJson(HoodieSchema schema, boolean includeFieldDocs) {
+    // Fields of the "null" type always hold null and are not written to the data files, so they are skipped
+    String fieldsJsonString = schema.getFields().stream()
+        .filter(field -> !field.schema().isSchemaNull())
+        .map(field -> {
+          String metadata = convertFieldMetadata(field, includeFieldDocs);
+          return "{\"name\":\"" + field.name() + "\",\"type\":" + convertFieldType(field.getNonNullSchema(), includeFieldDocs)
+              + ",\"nullable\":" + field.isNullable() + ",\"metadata\":" + metadata + "}";
+        })
         .reduce((a, b) -> a + "," + b).orElse("");
     return "{\"type\":\"struct\",\"fields\":[" + fieldsJsonString + "]}";
   }
 
-  private static String convertFieldType(HoodieSchema originalFieldSchema) {
+  private static String convertFieldMetadata(HoodieSchemaField field, boolean includeFieldDocs) {
+    List<String> entries = new ArrayList<>(2);
+    if (includeFieldDocs) {
+      field.doc().ifPresent(doc -> {
+        if (!doc.isEmpty()) {
+          entries.add("\"comment\":\"" + escapeJsonString(doc) + "\"");
+        }
+      });
+    }
+    if (field.getNonNullSchema().isBlobField()) {
+      entries.add(String.format("\"%s\":\"%s\"", HoodieSchema.TYPE_METADATA_FIELD, HoodieSchemaType.BLOB.name()));
+    }
+    return "{" + String.join(",", entries) + "}";
+  }
+
+  private static String escapeJsonString(String value) {
+    StringBuilder sb = new StringBuilder(value.length());
+    for (int i = 0; i < value.length(); i++) {
+      char c = value.charAt(i);
+      switch (c) {
+        case '"':
+          sb.append("\\\"");
+          break;
+        case '\\':
+          sb.append("\\\\");
+          break;
+        case '\n':
+          sb.append("\\n");
+          break;
+        case '\r':
+          sb.append("\\r");
+          break;
+        case '\t':
+          sb.append("\\t");
+          break;
+        default:
+          if (c < 0x20) {
+            sb.append(String.format("\\u%04x", (int) c));
+          } else {
+            sb.append(c);
+          }
+      }
+    }
+    return sb.toString();
+  }
+
+  private static String convertFieldType(HoodieSchema originalFieldSchema, boolean includeFieldDocs) {
     HoodieSchema fieldSchema = originalFieldSchema.getNonNullType();
     switch (fieldSchema.getType()) {
       case BOOLEAN: return "\"boolean\"";
@@ -51,6 +115,7 @@ public class SparkSchemaUtils {
         return "\"string\"";
       case BYTES:
       case FIXED:
+      case VECTOR:
         return "\"binary\"";
       case DATE:
         return "\"date\"";
@@ -72,22 +137,24 @@ public class SparkSchemaUtils {
         HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) fieldSchema;
         return "\"decimal(" + decimal.getPrecision() + "," + decimal.getScale() + ")\"";
       case ARRAY:
-        return arrayType(fieldSchema.getElementType());
+        return arrayType(fieldSchema.getElementType(), includeFieldDocs);
       case MAP:
         HoodieSchema keyType = fieldSchema.getKeyType();
         HoodieSchema valueType = fieldSchema.getValueType();
         boolean valueOptional = valueType.isNullable();
-        return "{\"type\":\"map\", \"keyType\":" + convertFieldType(keyType)
-            + ",\"valueType\":" + convertFieldType(valueType)
+        return "{\"type\":\"map\", \"keyType\":" + convertFieldType(keyType, includeFieldDocs)
+            + ",\"valueType\":" + convertFieldType(valueType, includeFieldDocs)
             + ",\"valueContainsNull\":" + valueOptional + "}";
       case RECORD:
-        return convertToSparkSchemaJson(fieldSchema);
+      case BLOB:
+      case VARIANT:
+        return convertToSparkSchemaJson(fieldSchema, includeFieldDocs);
       default:
         throw new UnsupportedOperationException("Cannot convert " + fieldSchema.getType() + " to spark sql type");
     }
   }
 
-  private static String arrayType(HoodieSchema elementType) {
-    return "{\"type\":\"array\", \"elementType\":" + convertFieldType(elementType) + ",\"containsNull\":" + elementType.isNullable() + "}";
+  private static String arrayType(HoodieSchema elementType, boolean includeFieldDocs) {
+    return "{\"type\":\"array\", \"elementType\":" + convertFieldType(elementType, includeFieldDocs) + ",\"containsNull\":" + elementType.isNullable() + "}";
   }
 }

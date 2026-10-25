@@ -18,10 +18,10 @@
 
 package org.apache.hudi.utilities.sources.helpers;
 
-import org.apache.hudi.avro.MercifulJsonConverter;
+import org.apache.hudi.common.avro.MercifulJsonConverter;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.StringUtils;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 
 import com.google.protobuf.Message;
 import com.twitter.bijection.Injection;
@@ -117,7 +117,7 @@ public class AvroConvertor implements Serializable {
     try {
       initSchema();
       initJsonConvertor();
-      return jsonConverter.convert(json, schema.toAvroSchema());
+      return jsonConverter.convert(json, schema);
     } catch (Exception e) {
       String errorMessage = "Failed to convert JSON string to Avro record: ";
       if (json != null) {

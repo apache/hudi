@@ -20,8 +20,10 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.AvroConversionUtils;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
@@ -32,6 +34,9 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,10 +44,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 
 /**
  * Test against {@link SqlSource}.
@@ -57,6 +65,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   private TypedProperties props;
   private SqlSource sqlSource;
   private SourceFormatAdapter sourceFormatAdapter;
+  private final HoodieIngestionMetrics metrics = mock(HoodieIngestionMetrics.class);
 
   @BeforeAll
   public static void initClass() throws Exception {
@@ -105,7 +114,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceAvroFormat() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     // Test fetching Avro format
@@ -128,7 +137,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceRowFormat() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     // Test fetching Row format
@@ -146,7 +155,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceCheckpoint() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     InputBatch<Dataset<Row>> fetch1AsRows =
@@ -163,7 +172,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceMoreRecordsThanSourceLimit() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     InputBatch<Dataset<Row>> fetch1AsRows =
@@ -180,12 +189,38 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceZeroRecord() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from test_sql_table where 1=0");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     InputBatch<Dataset<Row>> fetch1AsRows =
         sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE);
     assertEquals(0, fetch1AsRows.getBatch().get().count());
+  }
+
+  /**
+   * Runs the test scenario of reading data from a source that already carries hoodie meta columns.
+   * All meta columns but the partition path are expected to be dropped from the fetched dataset.
+   */
+  @Test
+  public void testSqlSourceDropsHoodieMetaColumns() {
+    StructType schema = new StructType();
+    for (String metaColumn : HoodieRecord.HOODIE_META_COLUMNS) {
+      schema = schema.add(metaColumn, DataTypes.StringType, true);
+    }
+    schema = schema.add("id", DataTypes.StringType, true);
+    Row row = RowFactory.create("001", "001_0_1", "key1", "2022/03/12", "f1_1-0-1_001.parquet", "key1");
+    sparkSession.createDataFrame(Collections.singletonList(row), schema)
+        .createOrReplaceTempView("test_sql_meta_table");
+
+    props.setProperty(sqlSourceConfig, "select * from test_sql_meta_table");
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
+    sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
+
+    Dataset<Row> fetchedRows =
+        sourceFormatAdapter.fetchNewDataInRowFormat(Option.empty(), Long.MAX_VALUE).getBatch().get();
+    assertEquals(Arrays.asList(HoodieRecord.PARTITION_PATH_METADATA_FIELD, "id"),
+        Arrays.asList(fetchedRows.columns()));
+    assertEquals(1, fetchedRows.count());
   }
 
   /**
@@ -197,7 +232,7 @@ public class TestSqlSource extends UtilitiesTestBase {
   @Test
   public void testSqlSourceInvalidTable() throws IOException {
     props.setProperty(sqlSourceConfig, "select * from not_exist_sql_table");
-    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider);
+    sqlSource = new SqlSource(props, jsc, sparkSession, schemaProvider, metrics);
     sourceFormatAdapter = new SourceFormatAdapter(sqlSource);
 
     assertThrows(

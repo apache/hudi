@@ -21,11 +21,13 @@ package org.apache.hudi.client;
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.client.transaction.TransactionManager;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -40,12 +42,16 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
-import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
-import org.apache.hudi.index.simple.HoodieSimpleIndex;
+import org.apache.hudi.index.HoodieSimpleIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -54,6 +60,8 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
@@ -63,6 +71,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -71,8 +80,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.testutils.Assertions.assertComplexKeyGeneratorValidationThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -80,6 +90,268 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
+
+  private static HoodieTableConfig tableConfigWithMode(MetaFieldsMode mode) {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, mode.name());
+    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+        Boolean.toString(mode.toLegacyPopulateMetaFields()));
+    tableConfig.setValue(HoodieTableConfig.VERSION,
+        String.valueOf(HoodieTableVersion.current().versionCode()));
+    return tableConfig;
+  }
+
+  private static BaseHoodieWriteClient<?, ?, ?, ?> validatorClient(HoodieWriteConfig writeConfig) {
+    return new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class));
+  }
+
+  private static HoodieTableMetaClient metaClientWithTableConfig(HoodieTableConfig tableConfig) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    return metaClient;
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsMetaFieldsModeMismatch() throws IOException {
+    initMetaClient();
+    // A writer that explicitly asks for NONE against a COMMIT_TIME_ONLY table: both legacy booleans
+    // are false, so a boolean-only check passes and the writer goes on to produce null commit times
+    // while the table still advertises COMMIT_TIME_ONLY.
+    HoodieWriteConfig noneWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
+        .build();
+    assertEquals(MetaFieldsMode.NONE, noneWriteConfig.getMetaFieldsMode());
+
+    HoodieTableConfig commitTimeOnlyTable = tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY);
+    assertFalse(commitTimeOnlyTable.populateMetaFields(),
+        "precondition: both legacy booleans are false, so only the enum comparison can catch this");
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(noneWriteConfig).validateAgainstTableProperties(metaClientWithTableConfig(commitTimeOnlyTable), noneWriteConfig, WriteOperationType.INSERT));
+    assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()),
+        "error must name the mode property: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY") && ex.getMessage().contains("NONE"),
+        "error must name both modes: " + ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesAcceptsAnUnstatedWriterAgainstANonSelectiveTable() throws IOException {
+    initMetaClient();
+    // An ALL or NONE table may be written by a writer that states no meta-field property at all. Those
+    // two modes are exactly what the deprecated boolean expresses, so such a writer resolves to the
+    // right answer on its own -- and the overwhelming majority of callers, including every table
+    // service, build their config this way. Only the three selective modes require a statement, since
+    // no legacy property can express them; see
+    // validateAgainstTablePropertiesRequiresAnUnstatedWriterToStateASelectiveMode.
+    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    assertEquals(MetaFieldsMode.ALL, unstated.getMetaFieldsMode(),
+        "precondition: on its own an unstated writer resolves to the ALL default");
+
+    validatorClient(unstated)
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.ALL)), unstated, WriteOperationType.INSERT);
+
+    assertEquals(MetaFieldsMode.ALL, unstated.getMetaFieldsMode());
+    assertTrue(unstated.populateMetaFields(),
+        "the derived legacy boolean must follow the mode, or the ~55 call sites still reading "
+            + "populateMetaFields() would disagree with the enum");
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRequiresAnUnstatedWriterToStateASelectiveMode() throws IOException {
+    initMetaClient();
+    // A selective table requires every writer to name the mode. Inheriting it here would work, but it
+    // could not be relied upon: the mode is read further down the write path by handles and by writer
+    // factories, three of whose call sites hold no table config at all, so nothing there could repeat
+    // the inference. Requiring the statement is what lets all of them trust the write config.
+    //
+    // Concretely, an unstated writer resolves to the ALL default, so inheriting silently would be the
+    // difference between writing all five meta columns and writing one.
+    HoodieWriteConfig unstated = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    assertEquals(MetaFieldsMode.ALL, unstated.getMetaFieldsMode(),
+        "precondition: on its own an unstated writer resolves to the ALL default");
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(unstated).validateAgainstTableProperties(
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), unstated, WriteOperationType.INSERT));
+    assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()), ex.getMessage());
+    assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY"),
+        "the error must name the mode the writer has to state: " + ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesAcceptsAWriterThatRestatesTheSelectiveMode() throws IOException {
+    initMetaClient();
+    // The migration path for the case above, and what every writer against a selective table must do.
+    HoodieWriteConfig restated = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .build();
+
+    validatorClient(restated)
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), restated, WriteOperationType.INSERT);
+
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, restated.getMetaFieldsMode());
+    assertFalse(restated.populateMetaFields(),
+        "COMMIT_TIME_ONLY does not populate the record key, so the derived boolean stays false");
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsUnstatedWriterNarrowingASelectiveTable() throws IOException {
+    initMetaClient();
+    // The StreamSync-restart case. A writer that resolves to NONE against a COMMIT_TIME_ONLY table
+    // would write base files with a null _hoodie_commit_time while hoodie.properties still says
+    // COMMIT_TIME_ONLY, and incremental queries — which the table is still deemed to support — would
+    // silently drop every one of those rows.
+    //
+    // Stating NONE makes it an explicit mismatch. Stating nothing at all is rejected too, by the
+    // must-state-it rule — see validateAgainstTablePropertiesRequiresAnUnstatedWriterToStateASelectiveMode.
+    HoodieWriteConfig stated = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.NONE)
+        .build();
+    assertEquals(MetaFieldsMode.NONE, stated.getMetaFieldsMode());
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(stated).validateAgainstTableProperties(
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), stated, WriteOperationType.INSERT));
+    assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()), ex.getMessage());
+    assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY") && ex.getMessage().contains("NONE"),
+        "error must name both modes: " + ex.getMessage());
+    // The message must point at the sanctioned mutation path rather than implying a write can do it.
+    assertTrue(ex.getMessage().contains("hudi-cli"), ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsStatedSelectiveToSelectiveNarrowing() throws IOException {
+    initMetaClient();
+    // Same shape one step in: a writer stating COMMIT_TIME_ONLY against COMMIT_TIME_AND_FILE_NAME.
+    // Narrowing between two selective modes is still a conflict — only hudi-cli may do that.
+    HoodieWriteConfig stated = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .build();
+
+    assertThrows(HoodieException.class, () ->
+        validatorClient(stated).validateAgainstTableProperties(
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME)), stated, WriteOperationType.INSERT));
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsSiblingSelectiveModesBothWays() throws IOException {
+    initMetaClient();
+    // COMMIT_TIME_ONLY and FILE_NAME_ONLY are each wider than the other, so neither can stand in for
+    // the other. Nothing tested this before, and it is the case that makes "narrowing is allowed"
+    // subtle: there is no narrowing direction between them at all.
+    HoodieWriteConfig commitTimeOnly = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY).build();
+    HoodieWriteConfig fileNameOnly = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withMetaFieldsMode(MetaFieldsMode.FILE_NAME_ONLY).build();
+
+    assertThrows(HoodieException.class, () -> validatorClient(commitTimeOnly)
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.FILE_NAME_ONLY)), commitTimeOnly, WriteOperationType.INSERT));
+    assertThrows(HoodieException.class, () -> validatorClient(fileNameOnly)
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), fileNameOnly, WriteOperationType.INSERT));
+  }
+
+  @Test
+  void validateAgainstTablePropertiesAllowsSelectiveWriterToNarrowAnAllTable() throws IOException {
+    initMetaClient();
+    // COMMIT_TIME_AND_FILE_NAME against ALL populates strictly fewer columns (no record key), so it
+    // is a narrowing and stays allowed. Pins the one pair the isRecordKeyPopulated clause decides.
+    HoodieWriteConfig selective = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME)
+        .build();
+
+    // Rejected in this direction only because the writer stated the mode explicitly.
+    assertThrows(HoodieException.class, () -> validatorClient(selective)
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.ALL)), selective, WriteOperationType.INSERT));
+    // ...but never as a *widening*: the reverse direction is what isWiderThan must catch.
+    HoodieWriteConfig allWriter = HoodieWriteConfig.newBuilder()
+        .withPath(basePath).withMetaFieldsMode(MetaFieldsMode.ALL).build();
+    HoodieException ex = assertThrows(HoodieException.class, () -> validatorClient(allWriter)
+        .validateAgainstTableProperties(
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME)), allWriter, WriteOperationType.INSERT));
+    assertTrue(ex.getMessage().contains("would leave earlier commits without it"),
+        "the message must name the widening as the reason: " + ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsADefaultWriterAgainstANoneTable() throws IOException {
+    initMetaClient();
+    // A default writer is normalized to the ALL mode. Against a NONE table that is a widening: it
+    // would populate all five meta columns on a table that has none of them. This must be caught here
+    // rather than quietly corrected -- the mode is read again downstream by handles and writer
+    // factories that cannot repeat any correction made at this point.
+    HoodieWriteConfig defaultWriteConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode(),
+        "precondition: a default writer is normalized to ALL");
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(defaultWriteConfig).validateAgainstTableProperties(
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.NONE)), defaultWriteConfig, WriteOperationType.INSERT));
+    assertTrue(ex.getMessage().contains("requests ALL"), ex.getMessage());
+    assertTrue(ex.getMessage().contains("NONE"), ex.getMessage());
+    // The rejected validation must not have mutated the write config.
+    assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode(),
+        "validation must not modify the write config");
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsStatedWidening() throws IOException {
+    initMetaClient();
+    // Widening is rejected when the writer asks for it: ALL against a NONE table would claim meta
+    // columns the table never wrote, and earlier commits cannot be distinguished from later ones.
+    HoodieWriteConfig allWriter = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.ALL)
+        .build();
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(allWriter)
+            .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.NONE)), allWriter, WriteOperationType.INSERT));
+    assertTrue(ex.getMessage().contains("would leave earlier commits without it"),
+        "the message must name the widening as the reason: " + ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesRejectsAnExplicitLegacyBooleanThatDisagrees() throws IOException {
+    initMetaClient();
+    // The one user-visible break in this rule. Passing populate.meta.fields=false against an ALL
+    // table used to narrow it silently (HUDI-2161); it now throws, because the writer explicitly
+    // asked for something the table cannot do. Telling the user beats overriding them — but existing
+    // jobs that pass this flag against a default table will fail until they drop it.
+    HoodieWriteConfig legacyFalse = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withPopulateMetaFields(false)
+        .build();
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(legacyFalse)
+            .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.ALL)), legacyFalse, WriteOperationType.INSERT));
+    assertTrue(ex.getMessage().contains("hudi-cli"),
+        "the message must point at the sanctioned mutation path: " + ex.getMessage());
+  }
+
+  @Test
+  void validateAgainstTablePropertiesAcceptsMatchingMetaFieldsMode() throws IOException {
+    initMetaClient();
+    // Default writer and default table both resolve to ALL — the overwhelmingly common case.
+    HoodieWriteConfig defaultWriteConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode());
+    validatorClient(defaultWriteConfig)
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.ALL)), defaultWriteConfig, WriteOperationType.INSERT);
+
+    // And a selective writer against a table recorded with the same mode.
+    HoodieWriteConfig selectiveWriteConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .build();
+    validatorClient(selectiveWriteConfig).validateAgainstTableProperties(
+        metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), selectiveWriteConfig, WriteOperationType.INSERT);
+  }
 
   @Test
   void startCommitWillRollbackFailedWritesInEagerMode() throws IOException {
@@ -239,19 +511,94 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfigBuilder.build(), table, Option.empty(), tableServiceClient);
 
-    if (tableVersion <= 8 && enableComplexKeyGeneratorValidation
-        && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
+    // the encoding of a single-field complex keygen table is recorded on creation, on every table version and
+    // whatever the validation setting, so neither initTable nor startCommit has anything to object to
+    boolean singleFieldComplexKeygen = (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
-        && recordKeyFields.split(",").length == 1) {
-      assertComplexKeyGeneratorValidationThrows(() -> writeClient.initTable(WriteOperationType.INSERT, Option.empty()), "ingestion");
-    } else {
-      writeClient.initTable(WriteOperationType.INSERT, Option.empty());
-      String requestedTime = writeClient.startCommit("commit");
+        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1;
+    assertEquals(singleFieldComplexKeygen ? Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED) : Option.empty(),
+        metaClient.getTableConfig().getComplexKeyGenEncoding());
+    writeClient.initTable(WriteOperationType.INSERT, Option.empty());
+    String requestedTime = writeClient.startCommit("commit");
 
-      HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
-      assertTrue(writeTimeline.lastInstant().isPresent());
-      assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-      assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
+    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+    assertTrue(writeTimeline.lastInstant().isPresent());
+    assertEquals("commit", writeTimeline.lastInstant().get().getAction());
+    assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = WriteOperationType.class, names = {"INSERT", "INSERT_PREPPED", "UPSERT", "UPSERT_PREPPED",
+      "BULK_INSERT", "BULK_INSERT_PREPPED", "INSERT_OVERWRITE", "INSERT_OVERWRITE_TABLE", "DELETE", "DELETE_PREPPED"})
+  void testValidateAgainstTablePropertiesRequiresRecordedComplexKeygenEncoding(WriteOperationType operationType) throws IOException {
+    initMetaClient();
+    HoodieTableConfig tableConfig = tableConfigWithMode(MetaFieldsMode.ALL);
+    tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id");
+    HoodieTableMetaClient tableMetaClient = metaClientWithTableConfig(tableConfig);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (BaseHoodieWriteClient<?, ?, ?, ?> writeClient = validatorClient(writeConfig)) {
+      HoodieException e = assertThrows(HoodieException.class,
+          () -> writeClient.validateAgainstTableProperties(tableMetaClient, writeConfig, operationType));
+      assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
+    }
+  }
+
+  /** A write that keys records on a tracked table without the property is refused; table services, partition deletes and rollbacks are not. */
+  @Test
+  void testInitTableRequiresRecordedComplexKeygenEncoding() throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (TestWriteClient writeClient = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      HoodieException e = assertThrows(HoodieException.class, () -> writeClient.initTable(WriteOperationType.UPSERT, Option.empty()));
+      assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
+      writeClient.initTable(WriteOperationType.COMPACT, Option.empty());
+      writeClient.initTable(WriteOperationType.DELETE_PARTITION, Option.empty());
+      writeClient.initTable(WriteOperationType.UNKNOWN, Option.empty());
+    }
+  }
+
+  @Test
+  void testComplexKeygenEncodingRecordedBeforeIngestionOnly() throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    metaClient.reloadTableConfig();
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (TestWriteClient writeClient = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding());
+      assertTrue(metaClient.getActiveTimeline().empty(), "Encoding must be recorded before the first commit");
+
+      writeClient.startCommit(Option.of("20260101000000001"), "commit", metaClient);
+      HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+          Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+      metaClient.reloadTableConfig();
+      writeClient.startCommit(Option.of("20260101000000002"), "commit", metaClient);
+      metaClient.reloadTableConfig();
+      assertFalse(metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent(),
+          "Starting another commit must not run initialization again");
+    }
+
+    try (TestWriteClient ignored = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding(),
+          "A restarted ingestion must initialize the encoding again");
     }
   }
 
@@ -398,5 +745,52 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     protected void updateColumnsToIndexWithColStats(HoodieTableMetaClient metaClient, List<String> columnsToIndex) {
 
     }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"BLOOM", "GLOBAL_BLOOM"})
+  void validateAgainstTablePropertiesRejectsABloomIndexWithoutTheRecordKey(String indexTypeName) throws IOException {
+    initMetaClient();
+    // A bloom index needs the record key on disk. Without it the writer never builds a filter --
+    // HoodieFileWriterFactory#enableBloomFilter short-circuits on populateMetaFields, which every
+    // selective mode makes false -- so the reader finds none in the footer,
+    // HoodieKeyLookupHandle#getBloomFilter returns null, and addKey NPEs on the first upsert.
+    //
+    // hoodie.index.type defaults to BLOOM, so a COMMIT_TIME_ONLY table created with defaults would hit
+    // this. Rejecting at init beats an unattributable NullPointerException mid-write.
+    HoodieIndex.IndexType indexType = HoodieIndex.IndexType.valueOf(indexTypeName);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(indexType).build())
+        .build();
+
+    HoodieException ex = assertThrows(HoodieException.class, () ->
+        validatorClient(writeConfig).validateAgainstTableProperties(
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), writeConfig, WriteOperationType.INSERT));
+    assertTrue(ex.getMessage().contains(indexTypeName),
+        "the message must name the index type: " + ex.getMessage());
+    assertTrue(ex.getMessage().contains(HoodieRecord.RECORD_KEY_METADATA_FIELD),
+        "the message must name the missing meta column: " + ex.getMessage());
+  }
+
+  @ParameterizedTest
+  // BUCKET is omitted: its builder requires extra bucket configuration this fixture does not
+  // supply, which is unrelated to the meta-fields restriction under test.
+  @CsvSource({"SIMPLE", "GLOBAL_SIMPLE"})
+  void validateAgainstTablePropertiesAcceptsNonBloomIndexesOnASelectiveTable(String indexTypeName) throws IOException {
+    initMetaClient();
+    // The indexes that do not need a persisted record key stay available -- the restriction is on the
+    // bloom filter specifically, not on selective tables having an index at all. BUCKET is likewise
+    // unrestricted; it is left out of the parameters only because its builder needs extra setup.
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.valueOf(indexTypeName)).build())
+        .build();
+
+    validatorClient(writeConfig).validateAgainstTableProperties(
+        metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), writeConfig, WriteOperationType.INSERT);
   }
 }

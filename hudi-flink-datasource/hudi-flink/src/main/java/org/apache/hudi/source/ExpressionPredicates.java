@@ -20,6 +20,7 @@ package org.apache.hudi.source;
 
 import org.apache.hudi.util.ImplicitTypeConverter;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.Expression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
@@ -30,8 +31,6 @@ import org.apache.flink.table.functions.FunctionDefinition;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.filter2.predicate.Operators;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -64,9 +63,8 @@ import static org.apache.parquet.io.api.Binary.fromString;
 /**
  * Tool to predicate the {@link org.apache.flink.table.expressions.ResolvedExpression}s.
  */
+@Slf4j
 public class ExpressionPredicates {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ExpressionPredicates.class);
 
   /**
    * Converts specific call expression list to the predicate list.
@@ -223,7 +221,7 @@ public class ExpressionPredicates {
       if (literalObject instanceof Serializable) {
         this.literal = (Serializable) literalObject;
       } else {
-        LOG.warn("Encountered a non-serializable literal. "
+        log.warn("Encountered a non-serializable literal. "
             + "Cannot push predicate with value literal [{}] into FileInputFormat. "
             + "This is a bug and should be reported.", valueLiteral);
         this.literal = null;
@@ -417,11 +415,10 @@ public class ExpressionPredicates {
   /**
    * An IN predicate that can be evaluated by the FileInputFormat.
    */
+  @Slf4j
   public static class In extends ColumnPredicate {
 
     private static final long serialVersionUID = 1L;
-
-    private static final Logger LOG = LoggerFactory.getLogger(In.class);
 
     private static final int IN_PREDICATE_LIMIT = 200;
 
@@ -450,7 +447,7 @@ public class ExpressionPredicates {
         if (literalObject instanceof Serializable) {
           return (Serializable) literalObject;
         } else {
-          LOG.warn("Encountered a non-serializable literal. "
+          log.warn("Encountered a non-serializable literal. "
               + "Cannot push predicate with value literal [{}] into FileInputFormat. "
               + "This is a bug and should be reported.", valueLiteral);
           return null;

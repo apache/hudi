@@ -18,16 +18,16 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.DataSourceWriteOptions;
-import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.HoodieDatasetBulkInsertHelper;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
+import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
@@ -36,6 +36,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieSparkClientTestBase;
 
+import lombok.Getter;
 import org.apache.spark.api.java.function.MapFunction;
 import org.apache.spark.api.java.function.ReduceFunction;
 import org.apache.spark.scheduler.SparkListener;
@@ -187,11 +188,13 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
     }
 
     result.toJavaRDD().foreach(entry -> {
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)).equals(""));
-      assertTrue(entry.get(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)).equals(""));
+      // The stub meta columns are now written as null (nullable=true) rather than empty strings —
+      // see HoodieDatasetBulkInsertHelper. Handle handle-level population fills them in later.
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.PARTITION_PATH_METADATA_FIELD)));
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD)));
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)));
+      assertTrue(entry.isNullAt(resultSchema.fieldIndex(HoodieRecord.FILENAME_METADATA_FIELD)));
     });
 
     Dataset<Row> trimmedOutput = result.drop(HoodieRecord.PARTITION_PATH_METADATA_FIELD).drop(HoodieRecord.RECORD_KEY_METADATA_FIELD)
@@ -385,6 +388,7 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
 
     private boolean checkFlag = false;
     private String checkMessage;
+    @Getter
     private int parallelism;
 
     StageCheckBulkParallelismListener(String checkMessage) {
@@ -401,10 +405,6 @@ public class TestHoodieDatasetBulkInsertHelper extends HoodieSparkClientTestBase
       if (stageSubmitted.stageInfo().details().contains(checkMessage)) {
         checkFlag = true;
       }
-    }
-
-    public int getParallelism() {
-      return parallelism;
     }
   }
 }

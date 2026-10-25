@@ -20,26 +20,28 @@ package org.apache.hudi.sink.bucket;
 
 import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.util.Functions;
+import org.apache.hudi.common.util.RemotePartitionHelper;
 import org.apache.hudi.common.util.hash.BucketIndexUtil;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
 import org.apache.hudi.index.bucket.BucketIdentifier;
 import org.apache.hudi.index.bucket.partition.NumBucketsFunction;
 import org.apache.hudi.sink.StreamWriteFunction;
+import org.apache.hudi.sink.partitioner.BucketIndexRemotePartitioner;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.functions.ProcessFunction;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -50,13 +52,14 @@ import java.util.Set;
  * is used for deciding whether the incoming records in an UPDATE or INSERT.
  * The index is local because different partition paths have separate items in the index.
  */
+@Slf4j
 public class BucketStreamWriteFunction extends StreamWriteFunction {
-
-  private static final Logger LOG = LoggerFactory.getLogger(BucketStreamWriteFunction.class);
 
   private int parallelism;
 
-  private String indexKeyFields;
+  // parsed once in open(); the per-record defineRecordLocation path uses the List overload of
+  // getBucketId so the comma-separated config string is not re-split per record
+  private List<String> indexKeyFieldList;
 
   private boolean isNonBlockingConcurrencyControl;
 
@@ -77,6 +80,9 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    * Functions for calculating the task partition to dispatch.
    */
   private Functions.Function3<Integer, String, Integer, Integer> partitionIndexFunc;
+
+  private transient RemotePartitionHelper remotePartitionHelper;
+
   /**
    * Function to calculate num buckets per partition.
    */
@@ -99,7 +105,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
   @Override
   public void open(Configuration parameters) throws IOException {
     super.open(parameters);
-    this.indexKeyFields = OptionsResolver.getIndexKeyField(config);
+    this.indexKeyFieldList = OptionsResolver.getIndexKeyFields(config);
     this.isNonBlockingConcurrencyControl = OptionsResolver.isNonBlockingConcurrencyControl(config);
     this.taskID = RuntimeContextUtils.getIndexOfThisSubtask(getRuntimeContext());
     this.parallelism = RuntimeContextUtils.getNumberOfParallelSubtasks(getRuntimeContext());
@@ -109,6 +115,10 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     this.isInsertOverwrite = OptionsResolver.isInsertOverwrite(config);
     this.numBucketsFunction = new NumBucketsFunction(config.get(FlinkOptions.BUCKET_INDEX_PARTITION_EXPRESSIONS),
         config.get(FlinkOptions.BUCKET_INDEX_PARTITION_RULE), config.get(FlinkOptions.BUCKET_INDEX_NUM_BUCKETS));
+    if (OptionsResolver.shouldUseBucketRemotePartitioner(config)) {
+      this.remotePartitionHelper = new RemotePartitionHelper(writeClient.getConfig().getViewStorageConfig());
+      log.info("BucketStreamWriteFunction enables remote partitioner.");
+    }
   }
 
   @Override
@@ -137,7 +147,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
       bootstrapIndexIfNeed(partition);
     }
     Map<Integer, String> bucketToFileId = bucketIndex.computeIfAbsent(partition, p -> new HashMap<>());
-    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFields, numBucketsFunction.getNumBuckets(record.getPartitionPath()));
+    final int bucketNum = BucketIdentifier.getBucketId(record.getRecordKey(), indexKeyFieldList, numBucketsFunction.getNumBuckets(record.getPartitionPath()));
     final String bucketId = partition + "/" + bucketNum;
 
     if (incBucketIndex.contains(bucketId)) {
@@ -160,6 +170,10 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
    * partitionIndex == this taskID belongs to this task.
    */
   public boolean isBucketToLoad(int bucketNumber, String partition) {
+    if (remotePartitionHelper != null) {
+      return BucketIndexRemotePartitioner.getRemotePartition(
+          remotePartitionHelper, numBucketsFunction, partition, bucketNumber, parallelism) == taskID;
+    }
     int numBuckets = numBucketsFunction.getNumBuckets(partition);
     return this.partitionIndexFunc.apply(numBuckets, partition, bucketNumber) == taskID;
   }
@@ -172,7 +186,7 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
     if (bucketIndex.containsKey(partition)) {
       return;
     }
-    LOG.info("Loading Hoodie Table {}, with path {}/{}", this.metaClient.getTableConfig().getTableName(),
+    log.info("Loading Hoodie Table {}, with path {}/{}", this.metaClient.getTableConfig().getTableName(),
         this.metaClient.getBasePath(), partition);
 
     // Load existing fileID belongs to this task
@@ -181,13 +195,13 @@ public class BucketStreamWriteFunction extends StreamWriteFunction {
       String fileId = fileSlice.getFileId();
       int bucketNumber = BucketIdentifier.bucketIdFromFileId(fileId);
       if (isBucketToLoad(bucketNumber, partition)) {
-        LOG.info(String.format("Should load this partition bucket %s with fileId %s", bucketNumber, fileId));
+        log.info(String.format("Should load this partition bucket %s with fileId %s", bucketNumber, fileId));
         // Validate that one bucketId has only ONE fileId
         if (bucketToFileIDMap.containsKey(bucketNumber)) {
           throw new RuntimeException(String.format("Duplicate fileId %s from bucket %s of partition %s found "
               + "during the BucketStreamWriteFunction index bootstrap.", fileId, bucketNumber, partition));
         } else {
-          LOG.info(String.format("Adding fileId %s to the bucket %s of partition %s.", fileId, bucketNumber, partition));
+          log.info(String.format("Adding fileId %s to the bucket %s of partition %s.", fileId, bucketNumber, partition));
           bucketToFileIDMap.put(bucketNumber, fileId);
         }
       }

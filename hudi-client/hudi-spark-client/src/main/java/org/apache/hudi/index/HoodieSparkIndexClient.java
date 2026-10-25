@@ -36,10 +36,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.index.record.HoodieRecordIndex;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
-import org.apache.hudi.index.record.HoodieRecordIndex;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.index.BaseHoodieIndexClient;
@@ -204,7 +204,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
                                              Option<String> indexTypeOpt, Map<String, String> configs) {
     try {
       TableSchemaResolver schemaUtil = new TableSchemaResolver(metaClient);
-      String schemaStr = schemaUtil.getTableAvroSchema(false).toString();
+      String schemaStr = schemaUtil.getTableSchema(false).toString();
       TypedProperties props = getProps(metaClient, indexDefinitionOpt, indexTypeOpt, schemaStr);
       if (!engineContextOpt.isPresent()) {
         engineContextOpt = Option.of(new HoodieSparkEngineContext(new JavaSparkContext(sparkSessionOpt.get().sparkContext())));
@@ -221,7 +221,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
       if (localWriteConfig.getWriteConcurrencyMode().supportsMultiWriter() && StringUtils.isNullOrEmpty(localWriteConfig.getLockProviderClass())) {
         throw new IllegalArgumentException(
             "To create index asynchronously, multi-writer configurations need to be enabled and hence 'hoodie.write.lock.provider' is expected to be set for such cases. "
-                + "For single writer mode, feel free to set the config value to org.apache.hudi.client.transaction.lock.InProcessLockProvider and retry index creation");
+                + "For single writer mode, feel free to set the config value to org.apache.hudi.core.transaction.lock.InProcessLockProvider and retry index creation");
       }
       return new SparkRDDWriteClient(engineContextOpt.get(), localWriteConfig, Option.empty());
     } catch (Exception e) {

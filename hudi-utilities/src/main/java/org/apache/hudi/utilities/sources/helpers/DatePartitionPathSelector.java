@@ -21,7 +21,6 @@ package org.apache.hudi.utilities.sources.helpers;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
-import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ImmutablePair;
@@ -30,13 +29,12 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaSparkContext;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -45,6 +43,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.table.checkpoint.CheckpointUtils.createCheckpoint;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.DFSPathSelectorConfig.ROOT_INPUT_PATH;
@@ -69,9 +68,8 @@ import static org.apache.hudi.utilities.config.DatePartitionPathSelectorConfig.P
  * <p>The date based partition format can be configured via this property
  * hoodie.streamer.source.dfs.datepartitioned.date.format
  */
+@Slf4j
 public class DatePartitionPathSelector extends DFSPathSelector {
-
-  private static final Logger LOG = LoggerFactory.getLogger(DatePartitionPathSelector.class);
 
   private final String dateFormat;
   private final int datePartitionDepth;
@@ -121,17 +119,12 @@ public class DatePartitionPathSelector extends DFSPathSelector {
         getStringWithAltKeys(props, DatePartitionPathSelectorConfig.CURRENT_DATE, LocalDate.now().toString()));
 
     // obtain all eligible files under root folder.
-    LOG.info(
-        "Root path => "
-            + getStringWithAltKeys(props, ROOT_INPUT_PATH)
-            + " source limit => "
-            + sourceLimit
-            + " depth of day partition => "
-            + datePartitionDepth
-            + " num prev days to list => "
-            + numPrevDaysToList
-            + " from current date => "
-            + currentDate);
+    log.info("Root path => {} "
+            + "source limit => {} "
+            + "depth of day partition => {} "
+            + "num prev days to list => {} "
+            + "from current date => {}", getStringWithAltKeys(props, ROOT_INPUT_PATH), sourceLimit,
+        datePartitionDepth, numPrevDaysToList, currentDate);
     long lastCheckpointTime = lastCheckpoint.map(e -> Long.parseLong(e.getCheckpointKey())).orElse(Long.MIN_VALUE);
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(sparkContext);
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(fs.getConf());
@@ -166,13 +159,13 @@ public class DatePartitionPathSelector extends DFSPathSelector {
 
     // no data to read
     if (filteredFiles.isEmpty()) {
-      return new ImmutablePair<>(Option.empty(), new StreamerCheckpointV2(String.valueOf(newCheckpointTime)));
+      return new ImmutablePair<>(Option.empty(), createCheckpoint(String.valueOf(newCheckpointTime)));
     }
 
     // read the files out.
     String pathStr = filteredFiles.stream().map(f -> f.getPath().toString()).collect(Collectors.joining(","));
 
-    return new ImmutablePair<>(Option.ofNullable(pathStr), new StreamerCheckpointV2(String.valueOf(newCheckpointTime)));
+    return new ImmutablePair<>(Option.ofNullable(pathStr), createCheckpoint(String.valueOf(newCheckpointTime)));
   }
 
   /**

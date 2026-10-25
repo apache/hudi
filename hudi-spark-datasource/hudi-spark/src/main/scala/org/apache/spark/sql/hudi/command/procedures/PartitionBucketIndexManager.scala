@@ -20,13 +20,14 @@ package org.apache.spark.sql.hudi.command.procedures
 import org.apache.hudi.{HoodieCLIUtils, HoodieSchemaConversionUtils, HoodieSparkSqlWriter, SparkAdapterSupport}
 import org.apache.hudi.DataSourceWriteOptions.{BULK_INSERT_OPERATION_OPT_VAL, ENABLE_ROW_WRITER, OPERATION}
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig, SerializableSchema}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieReaderConfig}
 import org.apache.hudi.common.engine.{HoodieEngineContext, ReaderContextFactory}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{PartitionBucketIndexHashingConfig, WriteOperationType}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
+import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
-import org.apache.hudi.common.table.read.HoodieFileGroupReader
+import org.apache.hudi.common.table.read.{HoodieFileGroupReader, TableState}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.{Option, ValidationUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig}
@@ -34,7 +35,6 @@ import org.apache.hudi.config.HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.index.bucket.partition.{PartitionBucketIndexCalculator, PartitionBucketIndexUtils}
-import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.internal.Logging
@@ -113,8 +113,7 @@ class PartitionBucketIndexManager extends BaseProcedure
 
       config = config ++ Map(OPERATION.key -> BULK_INSERT_OPERATION_OPT_VAL,
         HoodieInternalConfig.BULKINSERT_OVERWRITE_OPERATION_TYPE.key -> WriteOperationType.BUCKET_RESCALE.value(),
-        ENABLE_ROW_WRITER.key() -> "true",
-        HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key -> writeClient.getConfig.enableOptimizedLogBlocksScan.toString)
+        ENABLE_ROW_WRITER.key() -> "true")
 
       // Determine which operation to perform
       if (showConfig) {
@@ -221,25 +220,26 @@ class PartitionBucketIndexManager extends BaseProcedure
         spark.sparkContext.emptyRDD
       } else {
         val latestInstantTime = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().lastInstant().get()
+        // Built here, so the tasks carry the table state rather than the meta client
+        val tableState = TableState.snapshotOf(metaClient, true, false)
+        val readerProps = metaClient.getTableConfig.getProps
 
         spark.sparkContext.parallelize(allFileSlice, allFileSlice.size).flatMap(fileSlice => {
           // instantiate other supporting cast
           val internalSchemaOption: Option[InternalSchema] = Option.empty()
-          // get this value from config, which has obtained this from write client
-          val enableOptimizedLogBlockScan = config.getOrElse(HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.key(),
-            HoodieReaderConfig.ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN.defaultValue()).toBoolean
           // instantiate FG reader
-          val fileGroupReader = HoodieFileGroupReader.newBuilder()
+          val fileGroupReader = HoodieFileGroupReader.builder()
             .withReaderContext(readerContextFactory.getContext)
-            .withHoodieTableMetaClient(metaClient)
+            .withTableState(tableState)
             .withLatestCommitTime(latestInstantTime.requestedTime())
-            .withFileSlice(fileSlice)
+            .withBaseFileOption(fileSlice.getBaseFile)
+            .withLogFiles(fileSlice.getLogFiles)
+            .withPartitionPath(fileSlice.getPartitionPath)
             .withDataSchema(tableSchemaWithMetaFields)
             .withRequestedSchema(tableSchemaWithMetaFields)
-            .withInternalSchema(internalSchemaOption) // not support evolution of schema for now
-            .withProps(metaClient.getTableConfig.getProps)
+            .withInternalSchemaOpt(internalSchemaOption) // not support evolution of schema for now
+            .withProps(readerProps)
             .withShouldUseRecordPosition(false)
-            .withEnableOptimizedLogBlockScan(enableOptimizedLogBlockScan)
             .build()
           val iterator = fileGroupReader.getClosableIterator
           CloseableIteratorListener.addListener(iterator)

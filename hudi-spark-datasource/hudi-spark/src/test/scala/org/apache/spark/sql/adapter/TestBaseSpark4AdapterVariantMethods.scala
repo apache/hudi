@@ -1,0 +1,406 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.spark.sql.adapter
+
+import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.exception.HoodieNotSupportedException
+
+import org.apache.parquet.schema.PrimitiveType
+import org.apache.parquet.schema.Type.Repetition
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
+import org.apache.spark.sql.types.{BinaryType, IntegerType, LongType, Metadata, MetadataBuilder, StringType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
+import org.junit.jupiter.api.Test
+
+/**
+ * Tests for the variant-related methods in [[BaseSpark4Adapter]].
+ * These tests cover the Spark 4.x implementations that handle VariantType.
+ */
+class TestBaseSpark4AdapterVariantMethods extends SparkAdapterSupport {
+
+  @Test
+  def testGetVariantDataTypeReturnsSome(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    assertTrue(sparkAdapter.getVariantDataType.isDefined,
+      "getVariantDataType should return Some on Spark 4.x")
+  }
+
+  @Test
+  def testIsVariantTypeReturnsTrueForVariantType(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    assertTrue(sparkAdapter.isVariantType(variantType),
+      "isVariantType should return true for VariantType on Spark 4.x")
+  }
+
+  @Test
+  def testIsVariantTypeReturnsFalseForOtherTypes(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    assertFalse(sparkAdapter.isVariantType(StringType),
+      "isVariantType should return false for StringType")
+    assertFalse(sparkAdapter.isVariantType(IntegerType),
+      "isVariantType should return false for IntegerType")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaVariantAndValidStruct(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+
+    // Valid physical schema: struct with "value" (BinaryType) and "metadata" (BinaryType)
+    val validStruct = StructType(Seq(
+      StructField("value", BinaryType),
+      StructField("metadata", BinaryType)
+    ))
+
+    // VariantType as requiredType, StructType as fileType
+    val result1 = sparkAdapter.isDataTypeEqualForPhysicalSchema(variantType, validStruct)
+    assertTrue(result1.isDefined && result1.get, "Should return Some(true) for VariantType vs valid physical struct")
+
+    // StructType as requiredType, VariantType as fileType
+    val result2 = sparkAdapter.isDataTypeEqualForPhysicalSchema(validStruct, variantType)
+    assertTrue(result2.isDefined && result2.get, "Should return Some(true) for valid physical struct vs VariantType")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaStructWithWrongFieldCount(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+
+    // Struct with 3 fields - should fail isVariantPhysicalSchema (line 212-213)
+    val threeFieldStruct = StructType(Seq(
+      StructField("value", BinaryType),
+      StructField("metadata", BinaryType),
+      StructField("extra", StringType)
+    ))
+
+    // The guard `isVariantPhysicalSchema(s)` fails, so the match falls through to None
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(variantType, threeFieldStruct)
+    assertTrue(result.isEmpty, "Should return None for struct with wrong field count")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaStructWithWrongFieldNames(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+
+    // Struct with 2 fields but wrong names
+    val wrongNameStruct = StructType(Seq(
+      StructField("val", BinaryType),
+      StructField("meta", BinaryType)
+    ))
+
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(variantType, wrongNameStruct)
+    assertTrue(result.isEmpty, "Should return None for struct with wrong field names")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaStructWithWrongFieldTypes(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+
+    // Struct with correct names but wrong types
+    val wrongTypeStruct = StructType(Seq(
+      StructField("value", StringType),
+      StructField("metadata", BinaryType)
+    ))
+
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(variantType, wrongTypeStruct)
+    assertTrue(result.isEmpty, "Should return None for struct with wrong field types")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaNoVariantType(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    // Neither type is VariantType - should return None
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(StringType, IntegerType)
+    assertTrue(result.isEmpty, "Should return None when neither type is VariantType")
+  }
+
+  @Test
+  def testCreateVariantValueWriterWithNonVariantTypeThrows(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    // Passing a non-VariantType should throw IllegalArgumentException (line 240-241)
+    assertThrows(classOf[IllegalArgumentException], () => {
+      sparkAdapter.createVariantValueWriter(StringType, _ => (), _ => ())
+    })
+  }
+
+  @Test
+  def testConvertVariantFieldToParquetTypeWithNonVariantTypeThrows(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val schema = HoodieSchema.create(HoodieSchemaType.BYTES)
+    // Passing a non-VariantType should throw IllegalArgumentException (line 257-258)
+    assertThrows(classOf[IllegalArgumentException], () => {
+      sparkAdapter.convertVariantFieldToParquetType(StringType, "test_field", schema, Repetition.REQUIRED)
+    })
+  }
+
+  @Test
+  def testConvertVariantFieldToParquetTypeUnshredded(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    val variantSchema = HoodieSchema.createVariant()
+
+    val parquetType = sparkAdapter.convertVariantFieldToParquetType(
+      variantType, "variant_col", variantSchema, Repetition.OPTIONAL)
+
+    // Should be a group type with the given name
+    assertEquals("variant_col", parquetType.getName)
+    assertEquals(Repetition.OPTIONAL, parquetType.getRepetition)
+    assertTrue(parquetType.isInstanceOf[org.apache.parquet.schema.GroupType])
+
+    val groupType = parquetType.asGroupType()
+    assertEquals(2, groupType.getFieldCount)
+
+    // Value field should be REQUIRED for unshredded
+    val valueField = groupType.getType("value")
+    assertEquals(Repetition.REQUIRED, valueField.getRepetition)
+    assertTrue(valueField.isPrimitive)
+    assertEquals(PrimitiveType.PrimitiveTypeName.BINARY,
+      valueField.asPrimitiveType().getPrimitiveTypeName)
+
+    // Metadata field should be REQUIRED
+    val metadataField = groupType.getType("metadata")
+    assertEquals(Repetition.REQUIRED, metadataField.getRepetition)
+    assertTrue(metadataField.isPrimitive)
+    assertEquals(PrimitiveType.PrimitiveTypeName.BINARY,
+      metadataField.asPrimitiveType().getPrimitiveTypeName)
+  }
+
+  @Test
+  def testConvertVariantFieldToParquetTypeShredded(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    // Create a shredded variant schema (line 263 - the HoodieSchema.Variant match case)
+    val shreddedSchema = HoodieSchema.createVariantShredded(null)
+
+    val parquetType = sparkAdapter.convertVariantFieldToParquetType(
+      variantType, "shredded_col", shreddedSchema, Repetition.REQUIRED)
+
+    assertEquals("shredded_col", parquetType.getName)
+    assertEquals(Repetition.REQUIRED, parquetType.getRepetition)
+
+    val groupType = parquetType.asGroupType()
+    assertEquals(2, groupType.getFieldCount)
+
+    // Value field should be OPTIONAL for shredded
+    val valueField = groupType.getType("value")
+    assertEquals(Repetition.OPTIONAL, valueField.getRepetition)
+  }
+
+  @Test
+  def testConvertVariantFieldToParquetTypeWithNonVariantSchema(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    // Pass a non-Variant HoodieSchema - should fall through to `case _ => false` (line 264)
+    val bytesSchema = HoodieSchema.create(HoodieSchemaType.BYTES)
+
+    val parquetType = sparkAdapter.convertVariantFieldToParquetType(
+      variantType, "test_field", bytesSchema, Repetition.REQUIRED)
+
+    val groupType = parquetType.asGroupType()
+    // Value field should be REQUIRED when isShredded is false (non-Variant schema)
+    val valueField = groupType.getType("value")
+    assertEquals(Repetition.REQUIRED, valueField.getRepetition)
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaStructMissingMetadataField(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    // Has "value" but not "metadata" — covers line 217 false branch
+    val struct = StructType(Seq(
+      StructField("value", BinaryType),
+      StructField("other", BinaryType)
+    ))
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(variantType, struct)
+    assertTrue(result.isEmpty, "Should return None when metadata field is missing")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaStructWithWrongMetadataType(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    // Both names correct, value is BinaryType, but metadata is StringType — covers line 219 false branch
+    val struct = StructType(Seq(
+      StructField("value", BinaryType),
+      StructField("metadata", StringType)
+    ))
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(variantType, struct)
+    assertTrue(result.isEmpty, "Should return None when metadata field has wrong type")
+  }
+
+  @Test
+  def testIsDataTypeEqualForPhysicalSchemaReversedWithInvalidStruct(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val variantType = sparkAdapter.getVariantDataType.get
+    // Invalid struct as requiredType, VariantType as fileType — covers line 226 guard-false
+    val invalidStruct = StructType(Seq(
+      StructField("val", BinaryType),
+      StructField("meta", BinaryType)
+    ))
+    val result = sparkAdapter.isDataTypeEqualForPhysicalSchema(invalidStruct, variantType)
+    assertTrue(result.isEmpty, "Should return None when reversed struct doesn't match variant physical schema")
+  }
+
+  /**
+   * The per-child metadata PushVariantIntoScan attaches to a projection struct. Built key by key
+   * rather than through Spark 4.1's `VariantMetadata`, which does not exist on the Spark 3.x
+   * profiles this suite also compiles for; the test pins the shape against the adapter before it
+   * relies on it.
+   */
+  private def variantProjectionMetadata(path: String): Metadata =
+    new MetadataBuilder().putMetadata("__VARIANT_METADATA_KEY",
+      new MetadataBuilder()
+        .putString("path", path)
+        .putBoolean("failOnError", true)
+        .putString("timeZoneId", "UTC")
+        .build()).build()
+
+  /** A `VariantVal` holding `json`, reached by reflection for the same cross-version reason. */
+  private def parseJson(json: String): Any = {
+    val cls = Class.forName("org.apache.spark.sql.catalyst.expressions.variant.VariantExpressionEvalUtils$")
+    val module = cls.getField("MODULE$").get(null)
+    // parseJson(UTF8String, allowDuplicateKeys, ...): the trailing flags gained an entry across
+    // 4.x, so every one of them is passed as its default false.
+    val method = cls.getMethods.find(m => m.getName == "parseJson"
+      && m.getParameterTypes.headOption.contains(classOf[UTF8String])).get
+    val args: Seq[AnyRef] = UTF8String.fromString(json) +:
+      Seq.fill(method.getParameterCount - 1)(Boolean.box(false))
+    method.invoke(module, args: _*)
+  }
+
+  @Test
+  def testValidateVariantProjectionReadableRejectsOnlySpark40(): Unit = {
+    assumeTrue(HoodieSparkUtils.isSpark4, "Only applies to Spark 4.x")
+    val projectionStruct = StructType(Seq(
+      StructField("0", StringType, metadata = variantProjectionMetadata("$.k"))))
+    assertTrue(sparkAdapter.isVariantProjectionStruct(projectionStruct),
+      "every Spark 4.x adapter must recognise the projection struct shape")
+
+    // The projection sits at the root of the relation output or below a struct member, the two
+    // places PushVariantIntoScan puts it, so the guard has to look in both.
+    val rootSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("v", projectionStruct)))
+    val nestedSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("s", StructType(Seq(
+        StructField("inner", projectionStruct),
+        StructField("other", IntegerType))))))
+    val plainSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("v", sparkAdapter.getVariantDataType.get)))
+
+    // A native variant request is readable everywhere.
+    sparkAdapter.validateVariantProjectionReadable(plainSchema)
+    if (HoodieSparkUtils.isSpark4_0) {
+      Seq(rootSchema, nestedSchema).foreach { schema =>
+        val e = assertThrows(classOf[HoodieNotSupportedException],
+          () => sparkAdapter.validateVariantProjectionReadable(schema))
+        assertTrue(e.getMessage.contains("spark.sql.variant.pushVariantIntoScan"), e.getMessage)
+      }
+    } else {
+      sparkAdapter.validateVariantProjectionReadable(rootSchema)
+      sparkAdapter.validateVariantProjectionReadable(nestedSchema)
+    }
+  }
+
+  @Test
+  def testBuildVariantProjectorRecursesIntoStructPaths(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_1, "Variant projection structs only exist on Spark 4.1+")
+    val variantType = sparkAdapter.getVariantDataType.get
+    val projectionStruct = StructType(Seq(
+      StructField("0", StringType, metadata = variantProjectionMetadata("$.k"))))
+    assertTrue(sparkAdapter.isVariantProjectionStruct(projectionStruct),
+      "the hand-built metadata must be what Spark recognizes as a projection struct")
+
+    // `cast(s.inner as string)` on `s struct<inner: variant, other: int>`: PushVariantIntoScan
+    // rewrites the variant one struct member down, leaving the struct itself in place.
+    val dataSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("s", StructType(Seq(
+        StructField("inner", variantType),
+        StructField("other", IntegerType))))))
+    val requiredSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("s", StructType(Seq(
+        StructField("inner", projectionStruct),
+        StructField("other", IntegerType))))))
+
+    val projector = sparkAdapter.buildVariantProjector(dataSchema, requiredSchema)
+    assertTrue(projector.isDefined, "a projection below a struct path must build a projector")
+    val project = projector.get
+
+    val row = project(InternalRow(1, InternalRow(parseJson("""{"k":"n1"}"""), 7)))
+    assertEquals(1, row.getInt(0))
+    val struct = row.getStruct(1, 2)
+    assertEquals("n1", struct.getStruct(0, 1).getUTF8String(0).toString,
+      "the nested variant must be projected to its requested extraction")
+    assertEquals(7, struct.getInt(1), "the sibling of the projected variant must survive")
+
+    // CreateNamedStruct is never null on its own, so a null struct has to be preserved explicitly.
+    assertTrue(project(InternalRow(2, null)).isNullAt(1), "a null struct must stay null")
+
+    // A null variant inside a live struct: its projection struct must be NULL, not a struct of
+    // nulls, because PushVariantIntoScan rewrites `s.inner is null` onto that struct.
+    val nullVariant = project(InternalRow(3, InternalRow(null, 9)))
+    val liveStruct = nullVariant.getStruct(1, 2)
+    assertTrue(liveStruct.isNullAt(0), "a null variant must project to a null struct")
+    assertEquals(9, liveStruct.getInt(1), "the sibling of a null variant must survive")
+
+    assertTrue(sparkAdapter.buildVariantProjector(dataSchema, dataSchema).isEmpty,
+      "a required schema with no projection struct anywhere must not build a projector")
+  }
+
+  @Test
+  def testImplicitSchemaChangeKeepsNestedVariantProjection(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_1, "Variant projection structs only exist on Spark 4.1+")
+    val variantType = sparkAdapter.getVariantDataType.get
+    val projectionStruct = StructType(Seq(
+      StructField("0", StringType, metadata = variantProjectionMetadata("$.k"))))
+
+    // The file wrote s.n as int and the table has since widened it to long, so `s` is an implicit
+    // type change on this file and every member of `s` is reconciled by addMissingFields --
+    // including the projected variant next to the widened column.
+    val fileStruct = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("s", StructType(Seq(
+        StructField("inner", variantType),
+        StructField("n", IntegerType))))))
+    val requiredSchema = StructType(Seq(
+      StructField("id", IntegerType),
+      StructField("s", StructType(Seq(
+        StructField("inner", projectionStruct),
+        StructField("n", LongType))))))
+
+    val (typeChanges, readerSchema) = SparkSchemaTransformUtils.buildImplicitSchemaChangeInfo(fileStruct, requiredSchema)
+    val readerS = readerSchema("s").dataType.asInstanceOf[StructType]
+    assertEquals(projectionStruct, readerS("inner").dataType,
+      "the reader must be handed the projection struct, not the file's VariantType")
+    assertEquals(IntegerType, readerS("n").dataType, "the widened sibling is still read at its file type")
+    assertTrue(typeChanges.containsKey(1), "s is an implicit type change")
+    assertEquals(readerS, typeChanges.get(1).getRight, "the recorded reader type is the reconciled struct")
+  }
+}

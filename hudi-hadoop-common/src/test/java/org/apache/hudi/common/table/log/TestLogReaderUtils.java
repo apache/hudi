@@ -19,6 +19,9 @@
 
 package org.apache.hudi.common.table.log;
 
+import org.apache.hudi.common.util.Base64CodecUtil;
+import org.apache.hudi.common.util.Option;
+
 import org.junit.jupiter.api.Test;
 import org.roaringbitmap.longlong.Roaring64NavigableMap;
 
@@ -34,6 +37,7 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.testutils.HoodieTestTable.readLastLineFromResourceFile;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for {@link LogReaderUtils}
@@ -67,6 +71,22 @@ public class TestLogReaderUtils {
     assertPositionEquals(expectedPositions, roaring64NavigableMap);
   }
 
+  @Test
+  public void testEncodeAndDecodePositionsAsOrderedLongList() throws IOException {
+    List<Long> positions = Arrays.asList(7L, 2L, 7L, 128L, 16_384L);
+
+    Option<String> content = LogReaderUtils.encodePositionsAsLongList(positions);
+
+    assertTrue(content.isPresent());
+    assertEquals(positions, LogReaderUtils.decodeRecordPositionsLongList(content.get()));
+    assertTrue(Base64CodecUtil.decode(content.get()).length < Integer.BYTES + positions.size() * Long.BYTES);
+  }
+
+  @Test
+  public void testSkipEncodingInvalidPositionInOrderedLongList() throws IOException {
+    assertFalse(LogReaderUtils.encodePositionsAsLongList(Arrays.asList(7L, -1L)).isPresent());
+  }
+
   public static Set<Long> generatePositions() {
     Random random = new Random(0x2023);
     Set<Long> positions = new HashSet<>();
@@ -81,12 +101,16 @@ public class TestLogReaderUtils {
                                           Roaring64NavigableMap roaring64NavigableMap) {
     List<Long> sortedExpectedPositions =
         expectedPositions.stream().sorted().collect(Collectors.toList());
+    assertPositionListEquals(sortedExpectedPositions, roaring64NavigableMap.iterator());
+  }
+
+  private static void assertPositionListEquals(List<Long> sortedExpectedPositions,
+                                               Iterator<Long> actualIterator) {
     Iterator<Long> expectedIterator = sortedExpectedPositions.iterator();
-    Iterator<Long> iterator = roaring64NavigableMap.iterator();
-    while (expectedIterator.hasNext() && iterator.hasNext()) {
-      assertEquals(expectedIterator.next(), iterator.next());
+    while (expectedIterator.hasNext() && actualIterator.hasNext()) {
+      assertEquals(expectedIterator.next(), actualIterator.next());
     }
     assertFalse(expectedIterator.hasNext());
-    assertFalse(iterator.hasNext());
+    assertFalse(actualIterator.hasNext());
   }
 }

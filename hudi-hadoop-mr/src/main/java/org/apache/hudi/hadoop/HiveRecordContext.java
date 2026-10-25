@@ -31,7 +31,6 @@ import org.apache.hudi.hadoop.utils.HiveJavaTypeConverter;
 import org.apache.hudi.hadoop.utils.HoodieArrayWritableSchemaUtils;
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils;
 
-import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hadoop.hive.serde2.io.DoubleWritable;
@@ -56,9 +55,9 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
     return FIELD_ACCESSOR_INSTANCE;
   }
 
-  private final Map<Schema, HiveAvroSerializer> serializerCache = new ConcurrentHashMap<>();
+  private final Map<HoodieSchema, HiveAvroSerializer> serializerCache = new ConcurrentHashMap<>();
 
-  private HiveAvroSerializer getHiveAvroSerializer(Schema schema) {
+  private HiveAvroSerializer getHiveAvroSerializer(HoodieSchema schema) {
     return serializerCache.computeIfAbsent(schema, HiveAvroSerializer::new);
   }
 
@@ -72,7 +71,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
   @Override
   public Object getValue(ArrayWritable record, HoodieSchema schema, String fieldName) {
-    return getHiveAvroSerializer(schema.toAvroSchema()).getValue(record, fieldName);
+    return getHiveAvroSerializer(schema).getValue(record, fieldName);
   }
 
   @Override
@@ -92,13 +91,18 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
     }
     HoodieSchema schema = getSchemaFromBufferRecord(bufferedRecord);
     ArrayWritable writable = bufferedRecord.getRecord();
-    return new HoodieHiveRecord(key, writable, schema.toAvroSchema(), getHiveAvroSerializer(schema.toAvroSchema()),
+    return new HoodieHiveRecord(key, writable, schema, getHiveAvroSerializer(schema),
         bufferedRecord.getHoodieOperation(), bufferedRecord.getOrderingValue(), bufferedRecord.isDelete());
   }
 
   @Override
   public ArrayWritable constructEngineRecord(HoodieSchema recordSchema, Object[] fieldValues) {
     return new ArrayWritable(Writable.class, (Writable[]) fieldValues);
+  }
+
+  @Override
+  public HoodieRecord.HoodieRecordType getEngineRecordType() {
+    return HoodieRecord.HoodieRecordType.HIVE;
   }
 
   @Override
@@ -143,7 +147,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
 
   @Override
   public GenericRecord convertToAvroRecord(ArrayWritable record, HoodieSchema schema) {
-    return getHiveAvroSerializer(schema.toAvroSchema()).serialize(record);
+    return getHiveAvroSerializer(schema).serialize(record);
   }
 
   @Override
@@ -152,7 +156,7 @@ public class HiveRecordContext extends RecordContext<ArrayWritable> {
   }
 
   @Override
-  public ArrayWritable seal(ArrayWritable record) {
+  public ArrayWritable seal(HoodieSchema schema, ArrayWritable record) {
     return new ArrayWritable(Writable.class, Arrays.copyOf(record.get(), record.get().length));
   }
 

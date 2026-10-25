@@ -17,37 +17,41 @@
 
 package org.apache.spark.sql.adapter
 
-import org.apache.hudi.{AvroConversionUtils, DefaultSource, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, Spark3HoodiePartitionCDCFileGroupMapping, Spark3HoodiePartitionFileSliceMapping}
+import org.apache.hudi.{DefaultSource, HoodieFileScanRDD, HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileSliceMapping, HoodieSchemaConversionUtils, Spark3HoodiePartitionCDCFileGroupMapping, Spark3HoodiePartitionFileSliceMapping}
 import org.apache.hudi.client.model.{HoodieInternalRow, Spark3HoodieInternalRow}
 import org.apache.hudi.common.model.FileSlice
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.cdc.HoodieCDCFileSplit
+import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.JsonUtils
 import org.apache.hudi.spark.internal.ReflectUtil
-import org.apache.hudi.storage.StoragePath
 
-import org.apache.avro.Schema
+import org.apache.parquet.schema.MessageType
+import org.apache.parquet.schema.Type
+import org.apache.parquet.schema.Type.Repetition
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, Dataset, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
+import org.apache.spark.sql.{AnalysisException, Column, DataFrame, DataFrameUtil, Dataset, Encoder, HoodieUnsafeUtils, HoodieUTF8StringFactory, Spark3DataFrameUtil, Spark3HoodieUnsafeUtils, Spark3HoodieUTF8StringFactory, SparkSession, SQLContext}
 import org.apache.spark.sql.FileFormatUtilsForFileGroupReader.applyFiltersToPlan
-import org.apache.spark.sql.avro.{HoodieAvroSchemaConverters, HoodieSparkAvroSchemaConverters, HoodieSparkSchemaConverters}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.EliminateSubqueryAliases
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{Expression, InterpretedPredicate, Predicate}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, InterpretedPredicate, Predicate, SpecializedGetters}
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.Origin
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.execution.{PartitionedFileUtil, QueryExecution, SQLExecution}
 import org.apache.spark.sql.execution.datasources._
-import org.apache.spark.sql.execution.datasources.parquet.HoodieFormatTrait
-import org.apache.spark.sql.hudi.SparkAdapter
+import org.apache.spark.sql.execution.datasources.parquet.{HoodieFormatTrait, HoodieParquetReadSupport, Spark3HoodieParquetReadSupport}
+import org.apache.spark.sql.execution.streaming.MemoryStream
+import org.apache.spark.sql.hudi.{HoodieMemoryStream, SparkAdapter}
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DataType, StructType}
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnVector}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.unsafe.types.UTF8String
@@ -55,6 +59,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import java.time.ZoneId
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentHashMap
+import java.util.function.{BiConsumer, Consumer}
 
 import scala.collection.JavaConverters._
 
@@ -99,11 +104,19 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
     Predicate.createInterpreted(e)
   }
 
+  override def createHoodieFileScanRDD(sparkSession: SparkSession,
+                                       readFunction: PartitionedFile => Iterator[InternalRow],
+                                       filePartitions: Seq[FilePartition],
+                                       readDataSchema: StructType,
+                                       metadataColumns: Seq[AttributeReference] = Seq.empty): FileScanRDD = {
+    new HoodieFileScanRDD(sparkSession, readFunction, filePartitions, readDataSchema, metadataColumns)
+  }
+
   override def createRelation(sqlContext: SQLContext,
                               metaClient: HoodieTableMetaClient,
-                              schema: Schema,
+                              schema: HoodieSchema,
                               parameters: java.util.Map[String, String]): BaseRelation = {
-    val dataSchema = Option(schema).map(AvroConversionUtils.convertAvroSchemaToStructType).orNull
+    val dataSchema = Option(schema).map(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType).orNull
     DefaultSource.createRelation(sqlContext, metaClient, dataSchema, parameters.asScala.toMap)
   }
 
@@ -175,7 +188,77 @@ abstract class BaseSpark3Adapter extends SparkAdapter with Logging {
   def createStreamingDataFrame(sqlContext: SQLContext, relation: HadoopFsRelation, requiredSchema: StructType): DataFrame = {
     val logicalRelation = LogicalRelation(relation, isStreaming = true)
     val resolvedSchema = logicalRelation.resolve(requiredSchema, sqlContext.sparkSession.sessionState.analyzer.resolver)
+    relation.fileFormat.asInstanceOf[HoodieFormatTrait].requiredFiltersAppliedInPlan = true
     Dataset.ofRows(sqlContext.sparkSession, applyFiltersToPlan(logicalRelation, requiredSchema, resolvedSchema,
         relation.fileFormat.asInstanceOf[HoodieFormatTrait].getRequiredFilters))
+  }
+
+  override def getVariantDataType: Option[DataType] = {
+    // Spark 3.x does not support VariantType
+    None
+  }
+
+  override def isDataTypeEqualForPhysicalSchema(requiredType: DataType, fileType: DataType): Option[Boolean] = {
+    // Spark 3.x does not support VariantType, so return None to use default logic
+    None
+  }
+
+  override def isVariantType(dataType: DataType): Boolean = {
+    // Spark 3.x does not support VariantType
+    false
+  }
+
+  override def createVariantValueWriter(
+    dataType: DataType,
+    writeValue: Consumer[Array[Byte]],
+    writeMetadata: Consumer[Array[Byte]]
+  ): BiConsumer[SpecializedGetters, Integer] = {
+    throw new UnsupportedOperationException("Spark 3.x does not support VariantType")
+  }
+
+  override def convertVariantFieldToParquetType(
+    dataType: DataType,
+    fieldName: String,
+    fieldSchema: HoodieSchema,
+    repetition: Repetition
+  ): Type = {
+    throw new UnsupportedOperationException("Spark 3.x does not support VariantType")
+  }
+  override def createParquetReadSupport(convertTz: Option[java.time.ZoneId],
+                                       enableVectorizedReader: Boolean,
+                                       enableTimestampFieldRepair: Boolean,
+                                       datetimeRebaseSpec: RebaseSpec,
+                                       tableSchemaOpt: HOption[MessageType])
+      : HoodieParquetReadSupport = {
+    // Spark 3.x reads a variant as its unshredded struct shape and cannot reconstruct a shredded
+    // one; the subclass rejects such a file rather than returning null values. Needed on this route
+    // specifically because log blocks are read through the read support rather than through the
+    // per-version parquet reader that guards base files.
+    new Spark3HoodieParquetReadSupport(convertTz, enableVectorizedReader, enableTimestampFieldRepair,
+      datetimeRebaseSpec, getRebaseSpec("LEGACY"), tableSchemaOpt)
+  }
+
+  override def isVariantShreddingStruct(structType: StructType): Boolean = {
+    // Spark 3.x does not support Variant shredding
+    false
+  }
+
+  override def generateVariantWriteShreddingSchema(dataType: DataType, isTopLevel: Boolean, isObjectField: Boolean): StructType = {
+    throw new UnsupportedOperationException("Spark 3.x does not support Variant shredding")
+  }
+
+  override def createShreddedVariantWriter(
+    shreddedStructType: StructType,
+    writeStruct: Consumer[InternalRow]
+  ): BiConsumer[SpecializedGetters, Integer] = {
+    throw new UnsupportedOperationException("Spark 3.x does not support Variant shredding")
+  }
+
+  override def createMemoryStream[T: Encoder](id: Int, sparkSession: SparkSession): HoodieMemoryStream[T] = {
+    val memoryStream = new MemoryStream[T](id, sparkSession.sqlContext)
+    new HoodieMemoryStream[T] {
+      override def addData(data: TraversableOnce[T]): Unit = memoryStream.addData(data)
+      override def toDS(): Dataset[T] = memoryStream.toDS()
+    }
   }
 }

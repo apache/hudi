@@ -24,12 +24,12 @@ import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
-import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -48,10 +48,9 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
                                          String latestInstantTime, boolean reverseReader, int bufferSize,
                                          LogRecordScannerCallback callback, RecordDeletionCallback recordDeletionCallback,
                                          Option<InstantRange> instantRange, InternalSchema internalSchema,
-                                         boolean enableOptimizedLogBlocksScan, HoodieRecordMerger recordMerger,
-                                         Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
+                                         HoodieRecordMerger recordMerger, Option<HoodieTableMetaClient> hoodieTableMetaClientOption) {
     super(storage, basePath, logFilePaths, readerSchema, latestInstantTime, reverseReader, bufferSize, instantRange,
-        false, true, Option.empty(), internalSchema, Option.empty(), enableOptimizedLogBlocksScan, recordMerger,
+        false, true, Option.empty(), internalSchema, Option.empty(), recordMerger,
          hoodieTableMetaClientOption);
     this.callback = callback;
     this.recordDeletionCallback = recordDeletionCallback;
@@ -126,7 +125,6 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     // specific configurations
     private LogRecordScannerCallback callback;
     private RecordDeletionCallback recordDeletionCallback;
-    private boolean enableOptimizedLogBlocksScan;
     private HoodieRecordMerger recordMerger = new HoodiePreCombineAvroRecordMerger();
     private HoodieTableMetaClient hoodieTableMetaClient;
 
@@ -195,12 +193,6 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
     }
 
     @Override
-    public Builder withOptimizedLogBlocksScan(boolean enableOptimizedLogBlocksScan) {
-      this.enableOptimizedLogBlocksScan = enableOptimizedLogBlocksScan;
-      return this;
-    }
-
-    @Override
     public Builder withRecordMerger(HoodieRecordMerger recordMerger) {
       this.recordMerger = HoodieRecordUtils.mergerToPreCombineMode(recordMerger);
       return this;
@@ -219,7 +211,7 @@ public class HoodieUnMergedLogRecordScanner extends AbstractHoodieLogRecordScann
 
       return new HoodieUnMergedLogRecordScanner(storage, basePath, logFilePaths, readerSchema,
           latestInstantTime, reverseReader, bufferSize, callback, recordDeletionCallback, instantRange,
-          internalSchema, enableOptimizedLogBlocksScan, recordMerger, Option.ofNullable(hoodieTableMetaClient));
+          internalSchema, recordMerger, Option.ofNullable(hoodieTableMetaClient));
     }
   }
 }

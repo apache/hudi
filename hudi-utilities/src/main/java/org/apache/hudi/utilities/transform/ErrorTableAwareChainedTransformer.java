@@ -20,11 +20,13 @@
 package org.apache.hudi.utilities.transform;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.utilities.streamer.ErrorTableUtils;
 
-import org.apache.avro.Schema;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -33,13 +35,17 @@ import org.apache.spark.sql.types.StructType;
 import java.util.List;
 import java.util.function.Supplier;
 
+import static org.apache.hudi.utilities.streamer.BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
+
 /**
  * A {@link Transformer} to chain other {@link Transformer}s and apply sequentially.
- * Adds errorTableCorruptRecordColumn at the beginning of transformations and validates
- * if that column is not dropped in any of the transformations.
+ * Adds errorTableCorruptRecordColumn at the beginning of transformations and re-adds it as null
+ * if a transformer drops it (e.g. a custom column-projecting transformer). Dropping the column is
+ * rejected only if it held values, since those error records cannot be realigned with the
+ * transformer output and would otherwise be written to the target table.
  */
 public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
-  public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Supplier<Option<Schema>> sourceSchemaSupplier) {
+  public ErrorTableAwareChainedTransformer(List<String> configuredTransformers, Supplier<Option<HoodieSchema>> sourceSchemaSupplier) {
     super(configuredTransformers, sourceSchemaSupplier);
   }
 
@@ -51,14 +57,38 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
                             TypedProperties properties) {
     Dataset<Row> dataset = rowDataset;
+    // Until the source supplies the column or a transformer keeps it, it is known to be all null.
+    boolean corruptRecordMayHaveValues = ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset);
     dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
-      dataset = transformer.apply(jsc, sparkSession, dataset, transformerInfo.getProperties(properties, transformers));
-      // validate in every stage to ensure ErrorRecordColumn not dropped by one of the transformer and added by next transformer.
-      ErrorTableUtils.validate(dataset);
+      Dataset<Row> input = dataset;
+      dataset = transformer.apply(jsc, sparkSession, input, transformerInfo.getProperties(properties, transformers));
+      if (ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset)) {
+        corruptRecordMayHaveValues = true;
+      } else {
+        if (corruptRecordMayHaveValues) {
+          validateNoErrorRecordsDropped(input, transformer);
+        }
+        // The column held no values, so re-adding it as null loses nothing.
+        dataset = ErrorTableUtils.addNullValueErrorTableCorruptRecordColumn(dataset);
+        corruptRecordMayHaveValues = false;
+      }
     }
     return dataset;
+  }
+
+  /**
+   * Fails if {@code transformer} dropped a {@code _corrupt_record} column that held values in its input. Those error
+   * records cannot be realigned with the transformer output, and re-adding the column as null would write them to
+   * the target table.
+   */
+  private static void validateNoErrorRecordsDropped(Dataset<Row> input, Transformer transformer) {
+    if (!input.filter(new Column(ERROR_TABLE_CURRUPT_RECORD_COL_NAME).isNotNull()).isEmpty()) {
+      throw new HoodieValidationException(String.format("Transformer %s dropped column %s, which holds error records "
+          + "marked by the source or an earlier transformer. Keep the column in its output, or apply it before the "
+          + "transformers that mark error records.", transformer.getClass().getName(), ERROR_TABLE_CURRUPT_RECORD_COL_NAME));
+    }
   }
 
   @Override

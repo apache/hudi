@@ -18,9 +18,11 @@
 
 package org.apache.hudi.table;
 
+import org.apache.hudi.SparkFileFormatInternalRecordContext;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -28,17 +30,13 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.SparkHoodieIndexFactory;
-import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
-
-import java.io.IOException;
 
 public abstract class HoodieSparkTable<T>
     extends HoodieTable<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
@@ -87,6 +85,16 @@ public abstract class HoodieSparkTable<T>
     return SparkHoodieIndexFactory.createIndex(config);
   }
 
+  @Override
+  public RecordContext<?> getRecordContextForWrite() {
+    if (config.getRecordMerger().getRecordType() == HoodieRecord.HoodieRecordType.SPARK) {
+      // The engine context is transient and a serialized table falls back to HoodieLocalEngineContext on executors.
+      // Select the Spark record context from the configured record type instead of the table's runtime context.
+      return SparkFileFormatInternalRecordContext.getFieldAccessorInstance();
+    }
+    return super.getRecordContextForWrite();
+  }
+
   /**
    * Fetch instance of {@link HoodieTableMetadataWriter}.
    *
@@ -101,7 +109,15 @@ public abstract class HoodieSparkTable<T>
     if (isMetadataTable()) {
       return Option.empty();
     }
-    if (config.isMetadataTableEnabled()) {
+    // We create a metadata writer if either:
+    // 1. isMetadataTableEnabled() - MDT is explicitly enabled in write config (normal flow).
+    // 2. isMetadataTableAvailable() AND auto-delete is disabled - MDT exists on disk (based on table config)
+    //    and auto-delete is disabled (hoodie.metadata.auto.delete.partitions=false). This ensures writers
+    //    keep the MDT in sync even when config.isMetadataTableEnabled() is false, preventing stale data.
+    //    When auto-delete is enabled (default), we fall through to maybeDeleteMetadataTable() which
+    //    handles cleanup of the MDT when metadata is disabled.
+    if (config.isMetadataTableEnabled()
+        || (getMetaClient().getTableConfig().isMetadataTableAvailable() && !config.isAutoDeleteMdtPartitionsEnabled())) {
       // if any partition is deleted, we need to reload the metadata table writer so that new table configs are picked up
       // to reflect the delete mdt partitions.
       if (autoDetectAndDeleteMetadataPartitions) {
@@ -114,14 +130,9 @@ public abstract class HoodieSparkTable<T>
       HoodieTableMetadataWriter metadataWriter = streamingWrites
           ? SparkMetadataWriterFactory.createWithStreamingWrites(getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(), Option.of(triggeringInstantTimestamp))
           : SparkMetadataWriterFactory.create(getContext().getStorageConf(), config, failedWritesCleaningPolicy, getContext(), Option.of(triggeringInstantTimestamp), metaClient.getTableConfig());
-      try {
-        if (isMetadataTableExists || metaClient.getStorage().exists(
-            HoodieTableMetadata.getMetadataTableBasePath(metaClient.getBasePath()))) {
-          isMetadataTableExists = true;
-          return Option.of(metadataWriter);
-        }
-      } catch (IOException e) {
-        throw new HoodieMetadataException("Checking existence of metadata table failed", e);
+      if (isMetadataTableExists || metadataWriter.isInitialized()) {
+        isMetadataTableExists = true;
+        return Option.of(metadataWriter);
       }
     } else {
       // if metadata is not enabled in the write config, we should try and delete it (if present)

@@ -271,4 +271,87 @@ public class TestDFSPropertiesConfiguration {
     TypedProperties props = cfg.getProps();
     assertEquals(5, props.size());
   }
+
+  @Test
+  public void testIncludeNonExistentFile() throws IOException {
+    // Create a properties file that includes a non-existent file
+    Path filePath = new Path(dfsBasePath + "/t5.props");
+    writePropertiesFile(filePath, new String[] {
+        "existing.prop=value1",
+        "include=" + dfsBasePath + "/non-existent-file.props",
+        "another.prop=value2"
+    });
+
+    // Should not throw an exception, but log a warning and continue
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(),
+        new StoragePath(filePath.toUri()));
+    TypedProperties props = cfg.getProps();
+
+    // Properties before and after the non-existent include should still be loaded
+    assertEquals(2, props.size());
+    assertEquals("value1", props.getString("existing.prop"));
+    assertEquals("value2", props.getString("another.prop"));
+  }
+
+  @Test
+  public void testIncludeNonExistentRelativeFile() throws IOException {
+    // Create a properties file that includes a non-existent relative file
+    Path filePath = new Path(dfsBasePath + "/t6.props");
+    writePropertiesFile(filePath, new String[] {
+        "prop1=val1",
+        "include=non-existent-relative.props",
+        "prop2=val2"
+    });
+
+    // Should not throw an exception for non-existent relative includes
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(),
+        new StoragePath(filePath.toUri()));
+    TypedProperties props = cfg.getProps();
+
+    // Properties before and after the non-existent include should still be loaded
+    assertEquals(2, props.size());
+    assertEquals("val1", props.getString("prop1"));
+    assertEquals("val2", props.getString("prop2"));
+  }
+
+  @Test
+  public void testMixedExistentAndNonExistentIncludes() throws IOException {
+    // Create a properties file with both existent and non-existent includes
+    Path filePath = new Path(dfsBasePath + "/t7.props");
+    writePropertiesFile(filePath, new String[] {
+        "base.prop=base_value",
+        "include=" + dfsBasePath + "/non-existent-1.props",
+        "include=" + dfsBasePath + "/t1.props",  // This exists
+        "include=" + dfsBasePath + "/non-existent-2.props",
+        "override.prop=override_value"
+    });
+
+    // Should load successfully, ignoring non-existent files
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration(dfs.getConf(),
+        new StoragePath(filePath.toUri()));
+    TypedProperties props = cfg.getProps();
+
+    // Should have properties from t1.props and the main file
+    assertEquals("base_value", props.getString("base.prop"));
+    assertEquals("override_value", props.getString("override.prop"));
+    assertEquals(123, props.getInteger("int.prop"));  // From t1.props
+    assertEquals("str", props.getString("string.prop"));  // From t1.props
+    assertTrue(props.getBoolean("boolean.prop"));  // From t1.props
+  }
+
+  @Test
+  public void testExplicitMissingPropertiesFileThrows() {
+    // Explicit user-supplied paths (e.g. --props /typo.props) should fail fast rather than
+    // silently load empty properties. Only include= recursion and optional global-defaults
+    // paths are tolerated.
+    StoragePath missingPath = new StoragePath(dfsBasePath + "/this-file-does-not-exist.props");
+    assertThrows(HoodieIOException.class,
+        () -> new DFSPropertiesConfiguration(dfs.getConf(), missingPath),
+        "Constructor should throw when the explicit properties file is missing");
+
+    DFSPropertiesConfiguration cfg = new DFSPropertiesConfiguration();
+    assertThrows(HoodieIOException.class,
+        () -> cfg.addPropsFromFile(missingPath),
+        "Public addPropsFromFile should throw when the explicit properties file is missing");
+  }
 }

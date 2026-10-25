@@ -40,7 +40,14 @@ if [[ "$SCALA_PROFILE" != 'scala-2.13' ]]; then
   ln -sf $JARS_DIR/hudi-flink*.jar $JARS_DIR/flink.jar
   ln -sf $JARS_DIR/hudi-kafka-connect-bundle*.jar $JARS_DIR/kafka-connect.jar
 fi
-ln -sf $JARS_DIR/hudi-spark*.jar $JARS_DIR/spark.jar
+# The spark native bundle shares the hudi-spark prefix, so match the plain spark bundle only.
+ln -sf $(ls $JARS_DIR/hudi-spark*.jar | grep -v -- '-native-bundle_') $JARS_DIR/spark.jar
+# Only present for the Spark versions Apache DataFusion Comet releases for.
+for nativeBundle in $JARS_DIR/hudi-spark*-native-bundle_*.jar; do
+  if [ -f "$nativeBundle" ]; then
+    ln -sf "$nativeBundle" $JARS_DIR/spark-native.jar
+  fi
+done
 ln -sf $JARS_DIR/hudi-utilities-bundle*.jar $JARS_DIR/utilities.jar
 ln -sf $JARS_DIR/hudi-utilities-slim*.jar $JARS_DIR/utilities-slim.jar
 ln -sf $JARS_DIR/hudi-metaserver-server-bundle*.jar $JARS_DIR/metaserver.jar
@@ -70,6 +77,97 @@ use_default_java_runtime () {
 }
 
 ##
+# Function to test the spark native bundle, which carries Apache DataFusion Comet.
+#
+# Comet needs Java 17 and a glibc JVM for libcomet.so, so this runs on the Java 17 pass and skips on
+# a musl image (the Alpine based image's Java 17 is musl too). Comet's plugin is not enabled without
+# off-heap memory, and nativeLoadRequired makes a libcomet.so load failure an error instead of a
+# silent fallback to Spark. The session uses the in-memory catalog because a Hudi path read looks
+# the table up in the catalog and the Hive metastore only runs inside test_spark_hadoop_mr_bundles.
+#
+# env vars (defined in container):
+#   SPARK_HOME: path to the spark directory
+##
+test_spark_native_bundle () {
+    if ls /lib/ld-musl-*.so.1 > /dev/null 2>&1; then
+        echo "::warning::validate.sh skip validating spark native bundle, libcomet.so needs glibc and this image is musl"
+        return 0
+    fi
+    local outputDir=/tmp/spark-native-bundle
+    rm -rf $outputDir
+    change_java_runtime_version
+    echo "::warning::validate.sh Writing and querying Hudi tables with Comet enabled"
+    $SPARK_HOME/bin/spark-shell --jars $JARS_DIR/spark-native.jar \
+      --conf 'spark.plugins=org.apache.spark.CometPlugin' \
+      --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension,org.apache.comet.CometSparkSessionExtensions' \
+      --conf 'spark.shuffle.manager=org.apache.spark.sql.comet.execution.shuffle.CometShuffleManager' \
+      --conf 'spark.memory.offHeap.enabled=true' \
+      --conf 'spark.memory.offHeap.size=1g' \
+      --conf 'spark.comet.enabled=true' \
+      --conf 'spark.comet.exec.enabled=true' \
+      --conf 'spark.comet.nativeLoadRequired=true' \
+      --conf 'spark.comet.convert.parquet.enabled=true' \
+      --conf 'spark.comet.explain.fallback.enabled=true' \
+      --conf 'spark.comet.metrics.enabled=true' \
+      --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+      --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' \
+      --conf 'spark.sql.catalogImplementation=in-memory' < $WORKDIR/spark_native/validate.scala
+
+    use_default_java_runtime
+
+    # 300 rows per table over three partitions: 100 * 100 joined rows per partition, and each cow
+    # fare summed 100 times (100 * 14850, 100 * 14950, 100 * 15050).
+    local expectedRows='0,10000,1485000.0
+1,10000,1495000.0
+2,10000,1505000.0'
+    local actualRows
+    actualRows=$(cat $outputDir/cow_rows/part-*)
+    if [ "$actualRows" != "$expectedRows" ]; then
+        echo "::error::validate.sh spark native bundle copy-on-write query returned unexpected results"
+        echo "expected:"; echo "$expectedRows"
+        echo "actual:";   echo "$actualRows"
+        return 1
+    fi
+
+    # The second merge-on-read commit adds 1000 to the fare of 50 rows per partition, and it lands
+    # in log files, so a read that skips the logs returns the copy-on-write sums instead
+    # (100 * (14850 + 50000), 100 * (14950 + 50000), 100 * (15050 + 50000)).
+    local expectedMorRows='0,10000,6485000.0
+1,10000,6495000.0
+2,10000,6505000.0'
+    local actualMorRows
+    actualMorRows=$(cat $outputDir/mor_rows/part-*)
+    if [ "$actualMorRows" != "$expectedMorRows" ]; then
+        echo "::error::validate.sh spark native bundle merge-on-read query returned unexpected results"
+        echo "expected:"; echo "$expectedMorRows"
+        echo "actual:";   echo "$actualMorRows"
+        return 1
+    fi
+
+    # Comet declines what it cannot accelerate and hands it back to Spark, so correct results on
+    # their own would still pass with a mis-relocated Comet or a libcomet.so that failed to load.
+    # Copy-on-write keeps the vectorized read and bridges columnar to columnar; merge-on-read reads
+    # row by row because file group merging is row level, and bridges through a row conversion.
+    if ! grep -q 'CometSortMergeJoin' $outputDir/cow_plan/part-*; then
+        echo "::error::validate.sh join over copy-on-write Hudi tables was not executed natively by Comet"
+        cat $outputDir/cow_plan/part-*
+        return 1
+    fi
+    if ! grep -q 'CometSparkColumnarToColumnar' $outputDir/cow_plan/part-* \
+        || grep -q 'CometSparkRowToColumnar' $outputDir/cow_plan/part-*; then
+        echo "::error::validate.sh copy-on-write scan was not bridged into Comet columnar to columnar"
+        cat $outputDir/cow_plan/part-*
+        return 1
+    fi
+    if ! grep -q 'CometSparkRowToColumnar' $outputDir/mor_plan/part-*; then
+        echo "::error::validate.sh merge-on-read scan was not bridged into Comet"
+        cat $outputDir/mor_plan/part-*
+        return 1
+    fi
+    echo "::warning::validate.sh spark native bundle validation was successful"
+}
+
+##
 # Function to test the spark & hadoop-mr bundles with hive sync.
 #
 # env vars (defined in container):
@@ -80,7 +178,7 @@ use_default_java_runtime () {
 test_spark_hadoop_mr_bundles () {
     echo "::warning::validate.sh setting up hive metastore for spark & hadoop-mr bundles validation"
 
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+    if [[ "$SPARK_VERSION" == 4.* ]]; then
         change_java_runtime_version
     fi
     $DERBY_HOME/bin/startNetworkServer -h 0.0.0.0 &
@@ -112,7 +210,7 @@ test_spark_hadoop_mr_bundles () {
     numRecordsHiveQL=$(cat $hiveqlresultsdir/*.csv | wc -l)
     if [ "$numRecordsHiveQL" -ne 10 ]; then
         echo "::error::validate.sh HiveQL validation failed."
-        if [ "$SPARK_VERSION" = "4.0.0" ]; then
+        if [[ "$SPARK_VERSION" == 4.* ]]; then
             echo "::error::validate.sh Debug info for Spark4 validation failure:"
             $HIVE_HOME/bin/beeline --hiveconf hive.input.format=org.apache.hudi.hadoop.HoodieParquetInputFormat \
                       -u jdbc:hive2://localhost:10000/default --showHeader=true --outputformat=csv2 \
@@ -171,7 +269,9 @@ test_utilities_bundle () {
     fi
 
     echo "::warning::validate.sh validating deltastreamer in spark shell"
-    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell $OPT_JARS $MAIN_JAR -i $WORKDIR/utilities/validate.scala"
+    # The bundles go in --jars so spark.sql.extensions can load HoodieSparkSessionExtension from them; Spark 3.5.9+
+    # fails the session when the extension class is missing, and a positional jar is not on the driver classpath.
+    SHELL_COMMAND="$SPARK_HOME/bin/spark-shell --jars $MAIN_JAR${EXTRA_JARS:+,$EXTRA_JARS} -i $WORKDIR/utilities/validate.scala"
     echo "::debug::this is the shell command: $SHELL_COMMAND"
     LOGFILE="$WORKDIR/${FUNCNAME[0]}.log"
     $SHELL_COMMAND >> $LOGFILE
@@ -259,7 +359,7 @@ test_metaserver_bundle () {
     java -jar $JARS_DIR/metaserver.jar &
     local METASEVER_PID=$!
 
-    if [ "$SPARK_VERSION" = "4.0.0" ]; then
+    if [[ "$SPARK_VERSION" == 4.* ]]; then
             change_java_runtime_version
     fi
     echo "::warning::validate.sh Start hive server"
@@ -360,8 +460,8 @@ test_cli_bundle() {
 ############################
 
 # run flink bundle test only for flink2.x case, since there is problem for java 11 and spark3.5 bundle (HUDI-8608).
-if [[ "${FLINK_HOME}" == *"2.0"* || "${FLINK_HOME}" == *"2.1"* ]]; then
-    echo "::warning::validate.sh validating flink 2.0 bundle"
+if [[ "${FLINK_HOME}" == *"flink-2."* ]]; then
+    echo "::warning::validate.sh validating flink 2.x bundle"
     test_flink_bundle
     if [ "$?" -ne 0 ]; then
         exit 1
@@ -377,7 +477,23 @@ if [ "$?" -ne 0 ]; then
 fi
 echo "::warning::validate.sh done validating spark & hadoop-mr bundle"
 
-if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* ]]
+if [ -e $JARS_DIR/spark-native.jar ] && [[ ${JAVA_RUNTIME_VERSION} == 'openjdk17' ]]; then
+  echo "::warning::validate.sh validating spark native bundle"
+  test_spark_native_bundle
+  if [ "$?" -ne 0 ]; then
+      exit 1
+  fi
+  # The slim utilities bundle takes Hudi's relocated third-party classes from the Spark bundle it is
+  # paired with, so it has to work with this one too. No Comet config is set here, so this runs on
+  # musl images as well.
+  echo "::warning::validate.sh validating utilities slim bundle with spark native bundle"
+  test_utilities_bundle $JARS_DIR/utilities-slim.jar $JARS_DIR/spark-native.jar
+  echo "::warning::validate.sh done validating spark native bundle"
+else
+  echo "::warning::validate.sh skip validating spark native bundle, needs openjdk17 and a Spark version Comet releases for"
+fi
+
+if [[ $SPARK_HOME == *"spark-3.5"* || $SPARK_HOME == *"spark-4.0"* || $SPARK_HOME == *"spark-4.1"* ]]
 then
   echo "::warning::validate.sh validating cli bundle"
   test_cli_bundle

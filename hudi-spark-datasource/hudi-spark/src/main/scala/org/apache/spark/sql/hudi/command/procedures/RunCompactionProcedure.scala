@@ -72,7 +72,7 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       confs = confs ++ HoodieCLIUtils.extractOptions(getArgValueOrDefault(args, PARAMETERS(4)).get.asInstanceOf[String])
     }
     var specificInstants = getArgValueOrDefault(args, PARAMETERS(5))
-    val limit = getArgValueOrDefault(args, PARAMETERS(6))
+    val limit = getArgValueOrDefault(args, PARAMETERS(6)).asInstanceOf[Option[Int]]
 
     // For old version compatibility
     if (op.equals("run")) {
@@ -92,26 +92,34 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
       .toSeq.sortBy(f => f)
 
     var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
-      pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op), limit.asInstanceOf[Option[Int]])
+      pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op), limit)
+
+    confs = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, confs,
+      tableName.asInstanceOf[Option[String]])
+    // Apply the lock options before constructing the write client.
+    if (metaClient.getTableConfig.isMetadataTableAvailable
+      && !confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+      confs = HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, confs) ++ confs
+    }
 
     var client: SparkRDDWriteClient[_] = null
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
 
-      if (metaClient.getTableConfig.isMetadataTableAvailable) {
-        if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
-          confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
-        }
-      }
-
       if (operation.isSchedule) {
         val instantTime = client.scheduleCompaction(HOption.empty[java.util.Map[String, String]])
         instantTime.ifPresent(instant => {
-          filteredPendingCompactionInstants = Seq(instant)
+          // If schedule ONLY, return the instant scheduled else, return pending compaction instants too
+          filteredPendingCompactionInstants = if (operation.isExecute) filteredPendingCompactionInstants :+ instant else Seq(instant)
         })
       }
 
+      filteredPendingCompactionInstants = if (limit.isDefined) {
+        filteredPendingCompactionInstants.take(limit.get)
+      } else {
+        filteredPendingCompactionInstants
+      }
       logInfo(s"Compaction instants to run: ${filteredPendingCompactionInstants.mkString(",")}.")
 
       if (operation.isExecute) {

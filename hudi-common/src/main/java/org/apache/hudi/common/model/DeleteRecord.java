@@ -18,8 +18,13 @@
 
 package org.apache.hudi.common.model;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.ToString;
+
 import java.io.Serializable;
-import java.util.Objects;
 
 /**
  * Delete record is a combination of HoodieKey and ordering value.
@@ -36,9 +41,17 @@ import java.util.Objects;
  *       delete, reorder or change types of the fields in this class, make class final, etc)
  *       as this would break its compatibility with already persisted blocks.
  *
+ *       DO NOT use @Value annotation as it makes the class final which breaks Kryo serialization
+ *       backwards compatibility. Use individual Lombok annotations (@Getter, @EqualsAndHashCode, etc.) instead.
+ *
  *       Check out HUDI-5760 for more details
  */
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@EqualsAndHashCode
+@ToString
+@Getter
 public class DeleteRecord implements Serializable {
+
   private static final long serialVersionUID = 1L;
 
   /**
@@ -49,12 +62,7 @@ public class DeleteRecord implements Serializable {
   /**
    * For purposes of preCombining.
    */
-  private final Comparable<?> orderingVal;
-
-  private DeleteRecord(HoodieKey hoodieKey, Comparable orderingVal) {
-    this.hoodieKey = hoodieKey;
-    this.orderingVal = orderingVal;
-  }
+  private final Comparable<?> orderingValue;
 
   public static DeleteRecord create(HoodieKey hoodieKey) {
     return create(hoodieKey, 0);
@@ -78,38 +86,5 @@ public class DeleteRecord implements Serializable {
 
   public String getPartitionPath() {
     return hoodieKey.getPartitionPath();
-  }
-
-  public HoodieKey getHoodieKey() {
-    return hoodieKey;
-  }
-
-  public Comparable<?> getOrderingValue() {
-    return orderingVal;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (!(o instanceof DeleteRecord)) {
-      return false;
-    }
-    DeleteRecord that = (DeleteRecord) o;
-    return this.hoodieKey.equals(that.hoodieKey) && this.orderingVal.equals(that.orderingVal);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(this.hoodieKey, this.orderingVal);
-  }
-
-  @Override
-  public String toString() {
-    return "DeleteRecord {"
-            + " key=" + hoodieKey
-            + " orderingVal=" + this.orderingVal
-            + '}';
   }
 }

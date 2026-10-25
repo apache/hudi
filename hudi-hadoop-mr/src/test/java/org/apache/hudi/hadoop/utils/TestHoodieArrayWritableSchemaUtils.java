@@ -19,13 +19,15 @@
 
 package org.apache.hudi.hadoop.utils;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.schema.HoodieProjectionMask;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaTestUtils;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
-import org.apache.hudi.internal.schema.HoodieSchemaException;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 import org.apache.hudi.hadoop.HiveRecordContext;
 
@@ -47,6 +49,7 @@ import org.apache.hadoop.io.DoubleWritable;
 import org.apache.hadoop.io.FloatWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
@@ -80,14 +83,14 @@ public class TestHoodieArrayWritableSchemaUtils {
 
     //We reuse the ArrayWritable, so we need to get the values before projecting
     ArrayWritable record = convertArrayWritable(dataGen.generateGenericRecord());
-    HiveAvroSerializer fromSerializer = new HiveAvroSerializer(from.toAvroSchema());
+    HiveAvroSerializer fromSerializer = new HiveAvroSerializer(from);
     Object tripType = fromSerializer.getValue(record, "trip_type");
     Object currentTs = fromSerializer.getValue(record, "current_ts");
     Object weight = fromSerializer.getValue(record, "weight");
 
     //Make sure the projected fields can be read
     ArrayWritable projectedRecord = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(record, from, to, Collections.emptyMap());
-    HiveAvroSerializer toSerializer = new HiveAvroSerializer(to.toAvroSchema());
+    HiveAvroSerializer toSerializer = new HiveAvroSerializer(to);
     assertEquals(tripType, toSerializer.getValue(projectedRecord, "trip_type"));
     assertEquals(currentTs, toSerializer.getValue(projectedRecord, "current_ts"));
     assertEquals(weight, toSerializer.getValue(projectedRecord, "weight"));
@@ -314,14 +317,133 @@ public class TestHoodieArrayWritableSchemaUtils {
     validateRewriteWithAvro(oldWritable, oldSchema, result, decimalSchema);
   }
 
+  @Test
+  void testRewritePlainFixedToVectorPassesThrough() {
+    // Pins the fix for the Hive vector-read path. Parquet stores VECTOR as bare
+    // FIXED_LEN_BYTE_ARRAY (AvroSchemaConverterWithTimestampNTZ#convertField),
+    // so Hive's Parquet reader reconstructs the Avro schema as plain FIXED using
+    // the column name; Hudi then projects to the canonical VECTOR schema
+    // (vector_float_3, size 12, logicalType=vector). Sizes match and VECTOR's
+    // FIXED_BYTES backing is byte-identical, so the rewrite must pass through.
+    // Before the fix this threw "cannot support rewrite value for schema type".
+    HoodieSchema oldSchema = HoodieSchema.createFixed("embedding", null, null, 12);
+    HoodieSchema newSchema = HoodieSchema.createVector(3, HoodieSchema.Vector.VectorElementType.FLOAT);
+    BytesWritable bytes = new BytesWritable(new byte[12]);
+
+    Writable rewritten = HoodieArrayWritableSchemaUtils.rewritePrimaryType(bytes, oldSchema, newSchema);
+
+    assertSame(bytes, rewritten);
+  }
+
+  @Test
+  void testRewriteBlobWithPrunedArrayWritableFillsMissingFieldsWithNull() {
+    HoodieSchema oldSchema = HoodieSchemaTestUtils.createPlainBlobRecord("blob_data");
+    HoodieSchema newSchema = HoodieSchema.createBlob();
+    ArrayWritable prunedRecord = new ArrayWritable(Writable.class, new Writable[] {
+        new Text("INLINE")
+    });
+
+    ArrayWritable rewritten = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        prunedRecord, oldSchema, newSchema, Collections.emptyMap());
+
+    assertEquals(3, rewritten.get().length);
+    assertInstanceOf(BytesWritable.class, rewritten.get()[0]);
+    assertEquals("INLINE", new String(((BytesWritable) rewritten.get()[0]).copyBytes()));
+    assertEquals(NullWritable.get(), rewritten.get()[1]);
+    assertEquals(NullWritable.get(), rewritten.get()[2]);
+  }
+
+  @Test
+  void testRewriteBlobWithPrunedReferenceProjection() {
+    // SELECT blob_data.reference: compacted-shape input must round-trip unchanged so
+    // Hive's projected-schema ObjectInspector finds reference at slot 0.
+    HoodieSchema oldSchema = HoodieSchemaTestUtils.createPlainBlobRecord("blob_data");
+    HoodieSchema newSchema = HoodieSchema.createBlob();
+    ArrayWritable referenceSubstruct = new ArrayWritable(Writable.class, new Writable[] {
+        new Text("blobs/updated-1"),
+        new LongWritable(0L),
+        new LongWritable(11L),
+        new BooleanWritable(false)
+    });
+    ArrayWritable prunedRecord = new ArrayWritable(Writable.class, new Writable[] {
+        referenceSubstruct
+    });
+    HoodieProjectionMask mask = HoodieProjectionMask.builder().field("reference").build();
+
+    ArrayWritable rewritten = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        prunedRecord, oldSchema, newSchema, Collections.emptyMap(), mask);
+
+    assertEquals(1, rewritten.get().length);
+    ArrayWritable rewrittenRef = (ArrayWritable) rewritten.get()[0];
+    assertEquals(4, rewrittenRef.get().length);
+    assertEquals(new Text("blobs/updated-1"), rewrittenRef.get()[0]);
+    assertEquals(new LongWritable(0L), rewrittenRef.get()[1]);
+    assertEquals(new LongWritable(11L), rewrittenRef.get()[2]);
+    assertEquals(new BooleanWritable(false), rewrittenRef.get()[3]);
+  }
+
+  @Test
+  void testRewriteBlobWithPrunedReferenceExternalPathProjection() {
+    // SELECT blob_data.reference.external_path — reproducer for the CCE at :149.
+    HoodieSchema oldSchema = HoodieSchemaTestUtils.createPlainBlobRecord("blob_data");
+    HoodieSchema newSchema = HoodieSchema.createBlob();
+    ArrayWritable prunedReference = new ArrayWritable(Writable.class, new Writable[] {
+        new Text("blobs/updated-1")
+    });
+    ArrayWritable prunedRecord = new ArrayWritable(Writable.class, new Writable[] {
+        prunedReference
+    });
+    HoodieProjectionMask mask = HoodieProjectionMask.builder()
+        .field("reference", HoodieProjectionMask.builder().field("external_path").build())
+        .build();
+
+    ArrayWritable rewritten = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        prunedRecord, oldSchema, newSchema, Collections.emptyMap(), mask);
+
+    assertEquals(1, rewritten.get().length);
+    ArrayWritable rewrittenRef = (ArrayWritable) rewritten.get()[0];
+    assertEquals(1, rewrittenRef.get().length);
+    assertEquals(new Text("blobs/updated-1"), rewrittenRef.get()[0]);
+  }
+
+  @Test
+  void testRewriteBlobWithCanonicalShapeStillWorksAfterMaskWiring() {
+    // Regression guard: mask=all() must keep the legacy canonical-shape behavior.
+    HoodieSchema oldSchema = HoodieSchemaTestUtils.createPlainBlobRecord("blob_data");
+    HoodieSchema newSchema = HoodieSchema.createBlob();
+    ArrayWritable referenceSubstruct = new ArrayWritable(Writable.class, new Writable[] {
+        new Text("blobs/path-1"),
+        new LongWritable(0L),
+        new LongWritable(11L),
+        new BooleanWritable(false)
+    });
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[] {
+        new Text("OUT_OF_LINE"),
+        NullWritable.get(),
+        referenceSubstruct
+    });
+
+    ArrayWritable rewritten = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap(), HoodieProjectionMask.all());
+
+    assertInstanceOf(BytesWritable.class, rewritten.get()[0]);
+    assertEquals("OUT_OF_LINE", new String(((BytesWritable) rewritten.get()[0]).copyBytes()));
+    assertEquals(NullWritable.get(), rewritten.get()[1]);
+    ArrayWritable rewrittenRef = (ArrayWritable) rewritten.get()[2];
+    assertEquals(new Text("blobs/path-1"), rewrittenRef.get()[0]);
+    assertEquals(new LongWritable(0L), rewrittenRef.get()[1]);
+    assertEquals(new LongWritable(11L), rewrittenRef.get()[2]);
+    assertEquals(new BooleanWritable(false), rewrittenRef.get()[3]);
+  }
+
   private void validateRewriteWithAvro(
       Writable oldWritable,
       HoodieSchema oldSchema,
       Writable newWritable,
       HoodieSchema newSchema
   ) throws AvroSerdeException {
-    TypeInfo oldTypeInfo = HiveTypeUtils.generateTypeInfo(oldSchema.toAvroSchema(), Collections.emptySet());
-    TypeInfo newTypeInfo = HiveTypeUtils.generateTypeInfo(newSchema.toAvroSchema(), Collections.emptySet());
+    TypeInfo oldTypeInfo = HiveTypeUtils.generateTypeInfo(oldSchema, Collections.emptySet());
+    TypeInfo newTypeInfo = HiveTypeUtils.generateTypeInfo(newSchema, Collections.emptySet());
 
     ObjectInspector oldObjectInspector = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(oldTypeInfo);
     ObjectInspector newObjectInspector = TypeInfoUtils.getStandardJavaObjectInspectorFromTypeInfo(newTypeInfo);
@@ -363,6 +485,84 @@ public class TestHoodieArrayWritableSchemaUtils {
       return new BigDecimal(new BigInteger(bytes), decimalSchema.getScale());
     }
     throw new IllegalArgumentException("Unsupported decimal object: " + value.getClass() + " -> " + value);
+  }
+
+  @Test
+  void testRewriteBlobToBlobProjectionEquivalentShortCircuits() {
+    HoodieSchema blob = HoodieSchema.createBlob();
+    ArrayWritable reference = new ArrayWritable(Writable.class, new Writable[]{
+        new Text("blobs/path-1"),
+        new LongWritable(0L),
+        new LongWritable(11L),
+        new BooleanWritable(false)
+    });
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new Text("OUT_OF_LINE"),
+        NullWritable.get(),
+        reference
+    });
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, blob, blob, Collections.emptyMap());
+    // Same HoodieSchema on both sides -> areSchemasProjectionEquivalent short-circuits.
+    assertSame(record, result);
+  }
+
+  @Test
+  void testRewritePlainBlobRecordToCanonicalBlobSchema() {
+    HoodieSchema oldSchema = HoodieSchemaTestUtils.createPlainBlobRecord("blob_data");
+    HoodieSchema newSchema = HoodieSchema.createBlob();
+    ArrayWritable reference = new ArrayWritable(Writable.class, new Writable[]{
+        new Text("blobs/path-1"),
+        new LongWritable(0L),
+        new LongWritable(11L),
+        new BooleanWritable(false)
+    });
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new Text("OUT_OF_LINE"),
+        NullWritable.get(),
+        reference
+    });
+
+    ArrayWritable rewritten = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap());
+
+    // Type field must have been converted from STRING (Text) to ENUM (BytesWritable).
+    assertInstanceOf(BytesWritable.class, rewritten.get()[0]);
+    assertEquals("OUT_OF_LINE", new String(((BytesWritable) rewritten.get()[0]).copyBytes()));
+    // Data stays null, reference record passes through unchanged field-wise.
+    assertEquals(NullWritable.get(), rewritten.get()[1]);
+    ArrayWritable rewrittenRef = (ArrayWritable) rewritten.get()[2];
+    assertEquals(new Text("blobs/path-1"), rewrittenRef.get()[0]);
+    assertEquals(new LongWritable(0L), rewrittenRef.get()[1]);
+    assertEquals(new LongWritable(11L), rewrittenRef.get()[2]);
+    assertEquals(new BooleanWritable(false), rewrittenRef.get()[3]);
+  }
+
+  @Test
+  void testRewriteVariantToVariantProjectionEquivalentShortCircuits() {
+    HoodieSchema variant = HoodieSchema.createVariant();
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[]{
+        new BytesWritable(new byte[]{1, 2, 3}),
+        new BytesWritable(new byte[]{4, 5, 6})
+    });
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, variant, variant, Collections.emptyMap());
+    assertSame(record, result);
+  }
+
+  @Test
+  void testRewritePlainVariantRecordToCanonicalVariantSchema() {
+    HoodieSchema oldSchema = HoodieSchemaTestUtils.createPlainVariantRecord("variant_data");
+    HoodieSchema newSchema = HoodieSchema.createVariant();
+    BytesWritable metadata = new BytesWritable(new byte[] {1, 2, 3});
+    BytesWritable value = new BytesWritable(new byte[] {4, 5, 6});
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[] {metadata, value});
+
+    ArrayWritable rewritten = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap());
+
+    assertEquals(metadata, rewritten.get()[0]);
+    assertEquals(value, rewritten.get()[1]);
   }
 
   private ObjectInspector getWritableOIForType(TypeInfo typeInfo) {

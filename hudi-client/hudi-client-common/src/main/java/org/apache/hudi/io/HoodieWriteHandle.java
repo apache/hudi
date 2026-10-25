@@ -37,6 +37,7 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
 import org.apache.hudi.common.table.log.LogFileCreationCallback;
 import org.apache.hudi.common.table.read.DeleteContext;
 import org.apache.hudi.common.util.ConfigUtils;
@@ -66,7 +67,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.METADATA_EVENT_TIME_KEY;
 import static org.apache.hudi.common.util.StringUtils.isNullOrEmpty;
 
@@ -140,9 +140,11 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     }
 
     // For tracking event time watermark.
+    // Watermark tracking is independent of the record merge mode: pure freshness
+    // observability is orthogonal to merge semantics, so COW / COMMIT_TIME_ORDERING
+    // tables that opt in still populate per-write-stat min/max event time.
     this.eventTimeFieldName = ConfigUtils.getEventTimeFieldName(config.getProps());
     this.isTrackingEventTimeWatermark = this.eventTimeFieldName != null
-        && hoodieTable.getMetaClient().getTableConfig().getRecordMergeMode() == EVENT_TIME_ORDERING
         && ConfigUtils.isTrackingEventTimeWatermark(config.getProps());
     this.keepConsistentLogicalTimestamp = isTrackingEventTimeWatermark && ConfigUtils.shouldKeepConsistentLogicalTimestamp(config.getProps());
     TypedProperties mergeProps = ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig());
@@ -240,6 +242,10 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     doWrite(record, schema, props);
   }
 
+  public void write(Map<String, HoodieRecord<T>> recordMap) {
+    recordMap.values().forEach(record -> write(record, writeSchema, config.getProps()));
+  }
+
   protected void markClosed() {
     this.closed = true;
   }
@@ -288,9 +294,9 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected HoodieLogFormat.Writer createLogWriter(String instantTime, String fileSuffix, Option<FileSlice> fileSliceOpt) {
     try {
       if (config.getWriteVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-        return HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-            .withFileId(fileId)
+        return HoodieLogFormatWriter.builder()
+            .withParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+            .withLogFileId(fileId)
             .withInstantTime(instantTime)
             .withFileSize(0L)
             .withSizeThreshold(config.getLogFileMaxSize())
@@ -305,11 +311,16 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
         Option<HoodieLogFile> latestLogFile = fileSliceOpt.isPresent()
             ? fileSliceOpt.get().getLatestLogFile()
             : Option.empty();
-        return HoodieLogFormat.newWriterBuilder()
-            .onParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
-            .withFileId(fileId)
+        // Target a new log file version (latest + 1) instead of reopening the latest log file.
+        // Creating a fresh version avoids relying on append support and on locating the latest log slice.
+        int logFileVersion = latestLogFile
+            .map(logFile -> logFile.getLogVersion() + 1)
+            .orElse(HoodieLogFile.LOGFILE_BASE_VERSION);
+        return HoodieLogFormatWriter.builder()
+            .withParentPath(FSUtils.constructAbsolutePath(hoodieTable.getMetaClient().getBasePath(), partitionPath))
+            .withLogFileId(fileId)
             .withInstantTime(instantTime)
-            .withLogVersion(latestLogFile.map(HoodieLogFile::getLogVersion).orElse(HoodieLogFile.LOGFILE_BASE_VERSION))
+            .withLogVersion(logFileVersion)
             .withFileSize(latestLogFile.map(HoodieLogFile::getFileSize).orElse(0L))
             .withSizeThreshold(config.getLogFileMaxSize())
             .withStorage(storage)
@@ -343,7 +354,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
 
   protected static Option<IndexedRecord> toAvroRecord(HoodieRecord record, HoodieSchema writerSchema, TypedProperties props) {
     try {
-      return record.toIndexedRecord(writerSchema.toAvroSchema(), props).map(HoodieAvroIndexedRecord::getData);
+      return record.toIndexedRecord(writerSchema, props).map(HoodieAvroIndexedRecord::getData);
     } catch (IOException e) {
       log.error("Failed to convert to IndexedRecord", e);
       return Option.empty();
@@ -353,13 +364,13 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
   protected Option<Map<String, String>> getRecordMetadata(HoodieRecord record, HoodieSchema schema, Properties props) {
     Option<Map<String, String>> recordMetadata = record.getMetadata();
     if (isTrackingEventTimeWatermark) {
-      Object eventTime = record.getColumnValueAsJava(schema.toAvroSchema(), eventTimeFieldName, props);
+      Object eventTime = record.getColumnValueAsJava(schema, eventTimeFieldName, props);
       if (eventTime != null) {
         // Append event_time.
         Option<HoodieSchemaField> field = HoodieSchemaUtils.findNestedField(schema, eventTimeFieldName);
         // Field should definitely exist.
         eventTime = record.convertColumnValueForLogicalType(
-            field.get().schema().toAvroSchema(), eventTime, keepConsistentLogicalTimestamp);
+            field.get().schema(), eventTime, keepConsistentLogicalTimestamp);
         Map<String, String> metadata = recordMetadata.orElse(new HashMap<>());
         metadata.put(METADATA_EVENT_TIME_KEY, String.valueOf(eventTime));
         return Option.of(metadata);

@@ -1,0 +1,361 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.hudi.sink.partitioner.index;
+
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.sink.event.Correspondent;
+import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.TestConfigurations;
+
+import org.apache.flink.configuration.Configuration;
+import org.apache.flink.metrics.Histogram;
+import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.mockito.Mockito;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.atMost;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * Test cases for {@link RecordLevelIndexBackend}.
+ */
+public class TestRecordLevelIndexBackend {
+
+  private static final long ONE_MB = 1024 * 1024;
+
+  private Configuration conf;
+
+  @TempDir
+  File tempFile;
+
+  @BeforeEach
+  public void before() throws Exception {
+    conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.setString("hadoop.fs.defaultFS", "file:///");
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L);
+    StreamerUtil.initTableIfNotExists(conf);
+  }
+
+  @Test
+  public void testCheckpointCompleteDoesNotEagerEvict() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("par1", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
+
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par1"));
+    }
+  }
+
+  @Test
+  public void testLazyEvictOldPartitionsWhenHeapExceedsLimit() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("par1", cacheWithHeapSize(backend, 800 * 1024, 1L));
+      backend.getPartitionBucketCaches().put("par2", cacheWithHeapSize(backend, 800 * 1024, 1L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+      backend.getPartitionBucketCaches().put("par3", cacheWithHeapSize(backend, 1L, 2L));
+
+      backend.cleanIfNecessary(0L, "par3");
+
+      assertFalse(backend.getPartitionBucketCaches().containsKey("par1"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par2"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par3"));
+    }
+  }
+
+  @Test
+  public void testLazyEvictMultiplePartitionsWithoutRepeatedHeapScans() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      Map<String, ExternalSpillableMap<String, Integer>> maps = new HashMap<>();
+      for (String partition : Arrays.asList("protected", "old1", "recent", "old2", "old3", "retained")) {
+        ExternalSpillableMap<String, Integer> map = mapWithStorage(ONE_MB / 4);
+        maps.put(partition, map);
+        backend.getPartitionBucketCaches().put(partition,
+            backend.newBucketCache(map, partition.equals("recent") ? 2L : 1L));
+        doAnswer(invocation -> {
+          when(map.getCurrentInMemoryMapSize()).thenReturn(0L);
+          return null;
+        }).when(map).close();
+      }
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.singletonMap(2L, "002")), 3L);
+
+      backend.cleanIfNecessary(ONE_MB / 4, "protected");
+
+      assertEquals(Arrays.asList("protected", "recent", "retained"),
+          new ArrayList<>(backend.getPartitionBucketCaches().keySet()));
+      for (Map.Entry<String, ExternalSpillableMap<String, Integer>> entry : maps.entrySet()) {
+        verify(entry.getValue(), atMost(2)).getCurrentInMemoryMapSize();
+        if (backend.getPartitionBucketCaches().containsKey(entry.getKey())) {
+          verify(entry.getValue(), never()).close();
+        } else {
+          verify(entry.getValue()).close();
+        }
+      }
+    }
+  }
+
+  @Test
+  public void testLazyEvictKeepsRecentPartition() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("old", cacheWithHeapSize(backend, 800 * 1024, 1L));
+      backend.getPartitionBucketCaches().put("recent", cacheWithHeapSize(backend, 800 * 1024, 2L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+
+      backend.cleanIfNecessary(0L, null);
+
+      assertFalse(backend.getPartitionBucketCaches().containsKey("old"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("recent"));
+    }
+  }
+
+  @Test
+  public void testGetDoesNotRefreshLastUpdatedCheckpoint() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("old", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
+      backend.onCheckpoint(2L);
+
+      backend.get("old", "key1");
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+      backend.cleanIfNecessary(0L, null);
+
+      assertFalse(backend.getPartitionBucketCaches().containsKey("old"));
+    }
+  }
+
+  @Test
+  public void testGetAndUpdateLazilyCreatedPartitionCache() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(new UnregisteredMetricsGroup());
+
+      assertNull(backend.get("new-partition", "new-key"));
+
+      backend.onCheckpoint(3L);
+      backend.update("new-partition", "new-key", "new-file-group");
+
+      assertEquals("new-file-group", backend.get("new-partition", "new-key"));
+      assertEquals(1, backend.getPartitionBucketCaches().size());
+    }
+  }
+
+  @Test
+  public void testNewPartitionUsesAverageExistingCacheSize() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(new UnregisteredMetricsGroup());
+      backend.getPartitionBucketCaches().put(
+          "existing", cacheWithHeapSize(backend, ONE_MB / 2, 1L));
+
+      assertEquals(ONE_MB / 2, backend.inferMemorySizeForCache());
+      assertNull(backend.get("new-partition", "new-key"));
+
+      assertTrue(backend.getPartitionBucketCaches().containsKey("existing"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("new-partition"));
+    }
+  }
+
+  @Test
+  public void testCheckpointCompletionUsesOldestInflightCheckpoint() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("old", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
+      Map<Long, String> inflightInstants = new HashMap<>();
+      inflightInstants.put(2L, "002");
+      inflightInstants.put(4L, "004");
+
+      backend.onCheckpointComplete(new TestCorrespondent(inflightInstants), 5L);
+      backend.cleanIfNecessary(0L, null);
+
+      assertFalse(backend.getPartitionBucketCaches().containsKey("old"));
+      assertThrows(IllegalArgumentException.class,
+          () -> backend.onCheckpointComplete(
+              new TestCorrespondent(Collections.singletonMap(1L, "001")), 6L));
+    }
+  }
+
+  @Test
+  public void testPartitionCacheDictionaryEncodesFileGroupId() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      ExternalSpillableMap<String, Integer> recordKeyToFileGroupIdCode = mapWithStorage(0L);
+      RecordLevelIndexBackend.BucketCache cache = backend.newBucketCache(recordKeyToFileGroupIdCode, 1L);
+
+      cache.putRecordKey("key1", "file-group-id-000000000000000000000001");
+      cache.putRecordKey("key2", "file-group-id-000000000000000000000001");
+      cache.putRecordKey("key3", "file-group-id-000000000000000000000002");
+      cache.bootstrapRecordKey("key4", "file-group-id-000000000000000000000002");
+
+      assertEquals("file-group-id-000000000000000000000001", cache.getFileGroupId("key1"));
+      assertEquals("file-group-id-000000000000000000000001", cache.getFileGroupId("key2"));
+      assertEquals("file-group-id-000000000000000000000002", cache.getFileGroupId("key3"));
+      assertEquals("file-group-id-000000000000000000000002", cache.getFileGroupId("key4"));
+      assertEquals(4, cache.size());
+      assertEquals(Integer.valueOf(0), recordKeyToFileGroupIdCode.get("key1"));
+      assertEquals(Integer.valueOf(0), recordKeyToFileGroupIdCode.get("key2"));
+      assertEquals(Integer.valueOf(1), recordKeyToFileGroupIdCode.get("key3"));
+    }
+  }
+
+  @Test
+  public void testLazyEvictUsesAccessOrder() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("par1", cacheWithHeapSize(backend, 500 * 1024, 1L));
+      backend.getPartitionBucketCaches().put("par2", cacheWithHeapSize(backend, 500 * 1024, 1L));
+      backend.getPartitionBucketCaches().get("par1");
+      backend.getPartitionBucketCaches().put("par3", cacheWithHeapSize(backend, 100 * 1024, 2L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+
+      backend.cleanIfNecessary(0L, "par3");
+
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par1"));
+      assertFalse(backend.getPartitionBucketCaches().containsKey("par2"));
+      assertTrue(backend.getPartitionBucketCaches().containsKey("par3"));
+    }
+  }
+
+  @Test
+  public void testRegisterMetricsRegistersPartitionBootstrapHistograms() throws Exception {
+    CapturingMetricGroup metricGroup = new CapturingMetricGroup();
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(metricGroup);
+
+      assertNotNull(metricGroup.getHistogram("partition_bootstrap_latency_millis"));
+      assertNotNull(metricGroup.getHistogram("partition_bootstrap_keys_loaded"));
+    }
+  }
+
+  @Test
+  public void testBootstrapCreatesCacheWithoutScanningPersistedIndex() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      // Metrics are intentionally left unregistered: bootstrapPartition() would NPE on the metrics
+      // field if it were invoked, so a clean call here proves bootstrap() skips the persisted-index scan.
+      backend.bootstrap("new-partition", "key1", "file-group-1");
+
+      assertEquals(1, backend.getPartitionBucketCaches().size());
+      assertEquals("file-group-1", backend.get("new-partition", "key1"));
+    }
+  }
+
+  @Test
+  public void testBootstrapReusesExistingPartitionCache() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.registerMetrics(new UnregisteredMetricsGroup());
+      backend.update("partition", "existing-key", "existing-file");
+
+      backend.bootstrap("partition", "new-key", "new-file");
+
+      assertEquals(1, backend.getPartitionBucketCaches().size());
+      assertEquals("existing-file", backend.get("partition", "existing-key"));
+      assertEquals("new-file", backend.get("partition", "new-key"));
+    }
+  }
+
+  @Test
+  public void testBootstrapDoesNotMarkCacheAsRecentlyUpdated() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.onCheckpoint(2L);
+      backend.bootstrap("bootstrapped", "key1", "file1");
+      backend.getPartitionBucketCaches().put("recent", cacheWithHeapSize(backend, 2 * ONE_MB, 2L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+
+      backend.cleanIfNecessary(0L, "recent");
+
+      assertFalse(backend.getPartitionBucketCaches().containsKey("bootstrapped"),
+          "A bootstrapped-only cache must not be protected as a recent update, so it is evicted first");
+      assertTrue(backend.getPartitionBucketCaches().containsKey("recent"));
+    }
+  }
+
+  @Test
+  public void testLazyEvictReturnsWhenOnlyProtectedPartitionExceedsLimit() throws Exception {
+    try (RecordLevelIndexBackend backend = createBackend()) {
+      backend.getPartitionBucketCaches().put("protected", cacheWithHeapSize(backend, 2 * ONE_MB, 1L));
+      backend.onCheckpointComplete(new TestCorrespondent(Collections.emptyMap()), 2L);
+
+      backend.cleanIfNecessary(0L, "protected");
+
+      assertTrue(backend.getPartitionBucketCaches().containsKey("protected"));
+    }
+  }
+
+  private RecordLevelIndexBackend createBackend() {
+    return new RecordLevelIndexBackend(conf, (partitionPath, recordKey, fileId) -> true);
+  }
+
+  private RecordLevelIndexBackend.BucketCache cacheWithHeapSize(
+      RecordLevelIndexBackend indexBackend,
+      long heapSize,
+      long lastUpdatedCheckpoint) {
+    return indexBackend.newBucketCache(mapWithStorage(heapSize), lastUpdatedCheckpoint);
+  }
+
+  private ExternalSpillableMap<String, Integer> mapWithStorage(long heapSize) {
+    Map<String, Integer> storage = new HashMap<>();
+    ExternalSpillableMap<String, Integer> recordKeyToFileGroupIdCode = Mockito.mock(ExternalSpillableMap.class);
+    when(recordKeyToFileGroupIdCode.getCurrentInMemoryMapSize()).thenReturn(heapSize);
+    when(recordKeyToFileGroupIdCode.size()).thenAnswer(invocation -> storage.size());
+    when(recordKeyToFileGroupIdCode.get(Mockito.anyString()))
+        .thenAnswer(invocation -> storage.get(invocation.getArgument(0)));
+    doAnswer(invocation -> storage.put(invocation.getArgument(0), invocation.getArgument(1)))
+        .when(recordKeyToFileGroupIdCode).put(Mockito.anyString(), Mockito.anyInt());
+    return recordKeyToFileGroupIdCode;
+  }
+
+  private static class TestCorrespondent extends Correspondent {
+    private final Map<Long, String> inflightInstants;
+
+    TestCorrespondent(Map<Long, String> inflightInstants) {
+      this.inflightInstants = inflightInstants;
+    }
+
+    @Override
+    public Map<Long, String> requestInflightInstants() {
+      return inflightInstants;
+    }
+  }
+
+  private static class CapturingMetricGroup extends UnregisteredMetricsGroup {
+    private final Map<String, Histogram> histograms = new HashMap<>();
+
+    @Override
+    public <H extends Histogram> H histogram(String name, H histogram) {
+      histograms.put(name, histogram);
+      return histogram;
+    }
+
+    Histogram getHistogram(String name) {
+      return histograms.get(name);
+    }
+  }
+}

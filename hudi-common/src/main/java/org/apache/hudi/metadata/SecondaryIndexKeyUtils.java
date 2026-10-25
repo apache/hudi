@@ -55,12 +55,12 @@ public class SecondaryIndexKeyUtils {
   // Give "<encoded secondaryKey>$<encoded primaryKey>"
   // Extract <secondaryKey>
   public static String getSecondaryKeyFromSecondaryIndexKey(String secIdxRecKey) {
-    return unescapeSpecialChars(getUnescapedSecondaryKeyFromSecondaryIndexKey(secIdxRecKey));
+    return unescapeSpecialChars(getEscapedSecondaryKeyFromSecondaryIndexKey(secIdxRecKey));
   }
 
   // Give "<encoded secondaryKey>$<encoded primaryKey>"
   // Extract "<encoded secondaryKey>$"
-  public static String getUnescapedSecondaryKeyPrefixFromSecondaryIndexKey(String secIdxRecKey) {
+  public static String getEscapedSecondaryKeyPrefixFromSecondaryIndexKey(String secIdxRecKey) {
     int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
     return secIdxRecKey.substring(0, delimiterIndex + 1);
   }
@@ -73,7 +73,7 @@ public class SecondaryIndexKeyUtils {
 
   // Give "<encoded secondaryKey>$<encoded primaryKey>"
   // Extract "<encoded secondaryKey>"
-  public static String getUnescapedSecondaryKeyFromSecondaryIndexKey(String secIdxRecKey) {
+  public static String getEscapedSecondaryKeyFromSecondaryIndexKey(String secIdxRecKey) {
     int delimiterIndex = getSecondaryIndexKeySeparatorPosition(secIdxRecKey);
     return secIdxRecKey.substring(0, delimiterIndex);
   }

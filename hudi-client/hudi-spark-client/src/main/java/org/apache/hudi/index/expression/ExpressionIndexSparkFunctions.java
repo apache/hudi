@@ -18,6 +18,7 @@
 package org.apache.hudi.index.expression;
 
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.core.index.expression.HoodieExpressionIndex;
 
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.functions;
@@ -31,16 +32,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.BLOOM_FILTER_CONFIG_MAPPING;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.DAYS_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.FORMAT_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.LENGTH_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.PATTERN_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.POSITION_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.REPLACEMENT_OPTION;
-import static org.apache.hudi.index.expression.HoodieExpressionIndex.TRIM_STRING_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.BLOOM_FILTER_CONFIG_MAPPING;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.DAYS_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.EXPRESSION_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.FORMAT_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.LENGTH_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.PATTERN_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.POSITION_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.REPLACEMENT_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.TRIM_STRING_OPTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 
 public class ExpressionIndexSparkFunctions {

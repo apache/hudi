@@ -19,39 +19,62 @@
 package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.IncrementalInputSplits;
-import org.apache.hudi.source.ScanContext;
+import org.apache.hudi.util.StreamerUtil;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.flink.core.fs.Path;
+import org.apache.hadoop.conf.Configuration;
+
+import javax.annotation.Nullable;
 
 /**
  * Default implementation of HoodieContinuousSplitDiscover.
  */
+@Slf4j
 public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover {
-  private static final Logger LOG = LoggerFactory.getLogger(DefaultHoodieSplitDiscover.class);
-
-  private final HoodieTableMetaClient metaClient;
-  private final ScanContext scanContext;
+  private final HoodieScanContext scanContext;
   private final IncrementalInputSplits incrementalInputSplits;
+  private final Configuration hadoopConf;
+  private HoodieTableMetaClient metaClient;
 
   public DefaultHoodieSplitDiscover(
-      ScanContext scanContext,
-      HoodieTableMetaClient metaClient) {
+      HoodieScanContext scanContext) {
     this.scanContext = scanContext;
-    this.metaClient = metaClient;
+    this.hadoopConf = HadoopConfigurations.getHadoopConf(scanContext.getConf());
+    this.metaClient = getOrCreateMetaClient();
     this.incrementalInputSplits = IncrementalInputSplits.builder()
         .conf(scanContext.getConf())
-        .path(scanContext.getPath())
+        .path(new Path(scanContext.getPath().toUri()))
         .rowType(scanContext.getRowType())
         .maxCompactionMemoryInBytes(scanContext.getMaxCompactionMemoryInBytes())
-        .skipCompaction(scanContext.skipCompaction())
-        .skipClustering(scanContext.skipClustering())
-        .skipInsertOverwrite(scanContext.skipInsertOverwrite()).build();
+        .skipCompaction(scanContext.isSkipCompaction())
+        .skipClustering(scanContext.isSkipClustering())
+        .skipInsertOverwrite(scanContext.isSkipInsertOverwrite())
+        .partitionPruner(scanContext.getPartitionPruner()).build();
   }
 
   @Override
   public HoodieContinuousSplitBatch discoverSplits(String lastInstant) {
-    return incrementalInputSplits.inputHoodieSourceSplits(metaClient, lastInstant, scanContext.cdcEnabled());
+    if (metaClient == null) {
+      return HoodieContinuousSplitBatch.EMPTY;
+    }
+
+    return incrementalInputSplits.inputHoodieSourceSplits(metaClient, lastInstant, scanContext.isCdcEnabled());
+  }
+
+  @Nullable
+  private HoodieTableMetaClient getOrCreateMetaClient() {
+    if (this.metaClient != null) {
+      return this.metaClient;
+    }
+    if (StreamerUtil.tableExists(this.scanContext.getPath().toString(), hadoopConf)) {
+      this.metaClient = StreamerUtil.createMetaClient(this.scanContext.getPath().toString(), hadoopConf);
+      return this.metaClient;
+    }
+    // fallback
+    return null;
   }
 }

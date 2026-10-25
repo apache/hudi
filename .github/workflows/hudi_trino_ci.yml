@@ -1,0 +1,133 @@
+name: Hudi Trino Connector CI
+
+on:
+  push:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      - 'hudi-trino/**'
+      - '.github/workflows/hudi_trino_ci.yml'
+      - 'scripts/trino/**'
+      # Upstream modules the connector build installs (the -am closure of the JDK 17
+      # install step) plus the poms that own trino.version and the dependency pins.
+      # Keep in sync with the pull_request paths below.
+      - 'pom.xml'
+      - 'hudi-tests-common/**'
+      - 'hudi-io/**'
+      - 'hudi-common/**'
+      - 'hudi-hadoop-common/**'
+      - 'hudi-timeline-service/**'
+      - 'hudi-hadoop-mr/**'
+      - 'hudi-client/pom.xml'
+      - 'hudi-client/hudi-client-common/**'
+      - 'hudi-client/hudi-java-client/**'
+      - 'hudi-sync/hudi-sync-common/**'
+      - 'hudi-sync/hudi-hive-sync/**'
+  # Path-filtered like push. test-hudi-trino-plugin is not a required check, so a PR the filter
+  # skips simply does not show it; it must not be added to the .asf.yaml contexts list.
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+    paths:
+      - 'hudi-trino/**'
+      - '.github/workflows/hudi_trino_ci.yml'
+      - 'scripts/trino/**'
+      # Upstream modules the connector build installs (the -am closure of the JDK 17
+      # install step) plus the poms that own trino.version and the dependency pins.
+      # Keep in sync with the push paths above.
+      - 'pom.xml'
+      - 'hudi-tests-common/**'
+      - 'hudi-io/**'
+      - 'hudi-common/**'
+      - 'hudi-hadoop-common/**'
+      - 'hudi-timeline-service/**'
+      - 'hudi-hadoop-mr/**'
+      - 'hudi-client/pom.xml'
+      - 'hudi-client/hudi-client-common/**'
+      - 'hudi-client/hudi-java-client/**'
+      - 'hudi-sync/hudi-sync-common/**'
+      - 'hudi-sync/hudi-hive-sync/**'
+  workflow_dispatch:
+
+concurrency:
+  group: hudi-trino-ci-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'release-') }}
+
+env:
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log
+
+jobs:
+  build-and-test:
+    name: test-hudi-trino-plugin
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+      - name: Read Trino pin
+        id: trino-pin
+        run: |
+          set -euo pipefail
+          TRINO_SHA=$(sed -n 's|.*<trino.sha>\(.*\)</trino.sha>.*|\1|p' pom.xml)
+          TRINO_VERSION=$(sed -n 's|.*<trino.version>\(.*\)</trino.version>.*|\1|p' pom.xml)
+          # sed -n ...p exits 0 on no match; an empty value would checkout/cache garbage.
+          if [ -z "$TRINO_SHA" ] || [ -z "$TRINO_VERSION" ]; then
+            echo "ERROR: could not read trino.sha/trino.version from pom.xml" >&2
+            exit 1
+          fi
+          echo "Pinned trinodb/trino $TRINO_VERSION at $TRINO_SHA"
+          echo "trino_sha=$TRINO_SHA" >> "$GITHUB_OUTPUT"
+          echo "trino_version=$TRINO_VERSION" >> "$GITHUB_OUTPUT"
+      # Hudi targets Java 11 and uses Lombok 1.18.36, which does not run on JDK 25.
+      # Build the upstream modules hudi-trino depends on under JDK 17 first,
+      # install them into the local m2, then build the connector itself under JDK 25.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+      - name: Install upstream Hudi modules (JDK 17)
+        # hudi-client-common and hudi-java-client are pulled in here for the test stage;
+        # they live behind the hudi-trino-tests profile but the test step needs them.
+        run: mvn $MVN_ARGS install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common,:hudi-client-common,:hudi-java-client -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      - name: Purge Trino artifacts from the local m2
+        # Artifacts an older pin left behind carry the same SNAPSHOT coordinates as the current ones.
+        run: rm -rf ~/.m2/repository/io/trino
+      # Trino publishes neither SNAPSHOT artifacts nor the trino-spi / trino-filesystem /
+      # trino-hive / trino-main test-jars, so every io.trino dependency is built from the
+      # pinned trinodb/trino commit and cached under that commit.
+      - name: Restore Trino artifacts for the pinned commit
+        id: trino-m2
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/io/trino
+          key: trino-m2-v2-${{ hashFiles('scripts/trino/bootstrap_trino.sh') }}-${{ steps.trino-pin.outputs.trino_sha }}
+          # No restore-keys on purpose: a partial restore from another pin collides on the
+          # same SNAPSHOT coordinates and poisons the build.
+      - name: Checkout trinodb/trino at the pinned commit
+        if: steps.trino-m2.outputs.cache-hit != 'true'
+        uses: actions/checkout@v5
+        with:
+          repository: trinodb/trino
+          ref: ${{ steps.trino-pin.outputs.trino_sha }}
+          path: trino-src
+      - name: Build Trino artifacts from source (JDK 25)
+        if: steps.trino-m2.outputs.cache-hit != 'true'
+        run: scripts/trino/bootstrap_trino.sh trino-src --skip-checkout
+      - name: Build connector (JDK 25)
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+      # The release deploy (-DdeployArtifacts=true) runs javadoc:jar with doclint=none,
+      # and the module pom keeps failOnError=true. Reproduce that exact configuration here
+      # so a javadoc break fails the PR instead of surfacing during the staging deploy.
+      - name: Javadoc check (JDK 25)
+        run: mvn $MVN_ARGS -Phudi-trino -pl hudi-trino javadoc:jar -Ddoclint=none
+      - name: Test connector (JDK 25)
+        run: mvn $MVN_ARGS -Phudi-trino,hudi-trino-tests -pl hudi-trino test

@@ -19,8 +19,6 @@
 package org.apache.hudi.config;
 
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
-import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
-import org.apache.hudi.client.transaction.lock.NoopLockProvider;
 import org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -37,6 +35,10 @@ import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig.Builder;
+import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.core.transaction.lock.NoopLockProvider;
+import org.apache.hudi.exception.HoodieIndexException;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
@@ -49,6 +51,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -63,6 +66,27 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieWriteConfig {
+
+  @Test
+  public void testCompactionPlanParallelism() {
+    assertEquals(200, HoodieWriteConfig.newBuilder().withPath("/tmp").build().getCompactionPlanParallelism());
+    assertEquals(8, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCompactionPlanParallelism(8).build())
+        .build().getCompactionPlanParallelism());
+    assertEquals(16, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withProps(Collections.singletonMap(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key(), "16"))
+        .build().getCompactionPlanParallelism());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, -1})
+  public void testCompactionPlanParallelismMustBePositive(int parallelism) {
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        () -> HoodieWriteConfig.newBuilder().withPath("/tmp")
+            .withProps(Collections.singletonMap(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key(), String.valueOf(parallelism)))
+            .build());
+    assertTrue(exception.getMessage().contains(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key()));
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
@@ -96,7 +120,7 @@ public class TestHoodieWriteConfig {
   @Test
   public void testSupportedTableWriteVersions() {
     Set<HoodieTableVersion> supportedVersions = CollectionUtils.createSet(
-        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE
+        HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN
     );
     Arrays.stream(HoodieTableVersion.values())
         .filter(version -> !supportedVersions.contains(version))
@@ -124,12 +148,103 @@ public class TestHoodieWriteConfig {
   }
 
   @Test
+  public void testPartitionTTLStatsMaxParallelismMustBePositive() {
+    // A non-positive value (0 or negative) is a misconfiguration and must fail fast at build time,
+    // rather than being silently coerced when TTL stats collection runs.
+    for (int invalid : new int[] {0, -5}) {
+      IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+          () -> HoodieWriteConfig.newBuilder().withPath("/tmp")
+              .withProps(Collections.singletonMap(
+                  HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), String.valueOf(invalid)))
+              .build());
+      assertTrue(e.getMessage().contains(HoodieTTLConfig.STATS_MAX_PARALLELISM.key()),
+          "Validation error should mention the offending config key");
+    }
+
+    // A positive value builds successfully.
+    assertEquals(8, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withProps(java.util.Collections.singletonMap(
+            HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), "8"))
+        .build().getPartitionTTLStatsMaxParallelism());
+  }
+
+  @Test
   public void testDefaultIndexAccordingToEngineType() {
     testEngineSpecificConfig(HoodieWriteConfig::getIndexType,
         constructConfigMap(
             EngineType.SPARK, HoodieIndex.IndexType.SIMPLE,
             EngineType.FLINK, HoodieIndex.IndexType.INMEMORY,
             EngineType.JAVA, HoodieIndex.IndexType.SIMPLE));
+  }
+
+  @Test
+  public void testDefaultParquetCompressionCodecAccordingToEngine() {
+    assertEquals("zstd", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.FLINK));
+    assertEquals("gzip", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.JAVA));
+
+    HoodieWriteConfig flinkConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.FLINK)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
+        .build();
+    assertEquals("zstd", flinkConfig.getParquetCompressionCodec());
+
+    HoodieWriteConfig javaConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
+        .build();
+    assertEquals("gzip", javaConfig.getParquetCompressionCodec());
+
+    javaConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetCompressionCodec("zstd").build())
+        .build();
+    assertEquals("zstd", javaConfig.getParquetCompressionCodec());
+
+    Properties explicitCodec = new Properties();
+    explicitCodec.setProperty(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key(), "gzip");
+    flinkConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.FLINK)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().fromProperties(explicitCodec).build())
+        .build();
+    assertEquals("gzip", flinkConfig.getParquetCompressionCodec());
+  }
+
+  @Test
+  public void testDefaultBulkInsertSortModeForLsmLayout() {
+    HoodieWriteConfig defaultLayoutConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/default-layout")
+        .build();
+    assertFalse(defaultLayoutConfig.isLSMTreeStorageLayout());
+    assertEquals(BulkInsertSortMode.NONE, defaultLayoutConfig.getBulkInsertSortMode());
+
+    Properties lsmLayoutProps = new Properties();
+    lsmLayoutProps.setProperty(
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    HoodieWriteConfig lsmLayoutConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/lsm-layout")
+        .withProperties(lsmLayoutProps)
+        .build();
+    assertTrue(lsmLayoutConfig.isLSMTreeStorageLayout());
+    assertEquals(BulkInsertSortMode.PARTITION_SORT, lsmLayoutConfig.getBulkInsertSortMode());
+
+    HoodieWriteConfig javaLsmLayoutConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/java-lsm-layout")
+        .withEngineType(EngineType.JAVA)
+        .withProperties(lsmLayoutProps)
+        .build();
+    assertEquals(BulkInsertSortMode.PARTITION_SORT, javaLsmLayoutConfig.getBulkInsertSortMode());
+
+    HoodieWriteConfig explicitlyUnsortedLsmConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp/explicitly-unsorted-lsm-layout")
+        .withProperties(lsmLayoutProps)
+        .withBulkInsertSortMode(BulkInsertSortMode.NONE.name())
+        .build();
+    assertEquals(BulkInsertSortMode.NONE, explicitlyUnsortedLsmConfig.getBulkInsertSortMode());
   }
 
   @Test
@@ -553,7 +668,7 @@ public class TestHoodieWriteConfig {
       }
     });
 
-    // validate the the configured lock provider is honored by the TimeGeneratorConfig as well.
+    // validate the configured lock provider is honored by the TimeGeneratorConfig as well.
     assertEquals(NoopLockProvider.class.getName(), writeConfig.getTimeGeneratorConfig().getLockConfiguration().getConfig().getProperty(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key()));
 
     // if auto adjust lock config is enabled, for a single writer w/ all inline table services, InProcessLockProvider is overriden
@@ -617,6 +732,25 @@ public class TestHoodieWriteConfig {
         .withLayoutConfig(HoodieLayoutConfig.newBuilder().withLayoutPartitioner("org.apache.hudi.table.action.commit.UpsertPartitioner").build())
         .build();
     assertEquals("org.apache.hudi.table.action.commit.UpsertPartitioner", overwritePartitioner.getString(HoodieLayoutConfig.LAYOUT_PARTITIONER_CLASS_NAME));
+  }
+
+  @Test
+  public void testBucketIndexKeyFieldValidationTrimsFields() {
+    Properties props = new Properties();
+    props.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "uuid, name");
+
+    HoodieIndexConfig indexConfig = HoodieIndexConfig.newBuilder()
+        .fromProperties(props)
+        .withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withIndexKeyField(" name")
+        .build();
+    assertEquals(" name", indexConfig.getString(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD));
+
+    assertThrows(HoodieIndexException.class, () -> HoodieIndexConfig.newBuilder()
+        .fromProperties(props)
+        .withIndexType(HoodieIndex.IndexType.BUCKET)
+        .withIndexKeyField("missing")
+        .build());
   }
 
   @Test
@@ -824,5 +958,88 @@ public class TestHoodieWriteConfig {
     assertEquals(expectedConcurrencyMode, writeConfig.getWriteConcurrencyMode());
     assertEquals(expectedCleanPolicy, writeConfig.getFailedWritesCleanPolicy());
     assertEquals(expectedLockProviderName, writeConfig.getLockProviderClass());
+  }
+
+  @Test
+  public void testClusteringExpirationDefaultsToFalse() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .build();
+    assertFalse(writeConfig.isExpirationOfClusteringEnabled());
+    assertEquals(60L, writeConfig.getClusteringExpirationThresholdMins());
+  }
+
+  @Test
+  public void testClusteringExpirationExplicitlyEnabled() {
+    Properties props = new Properties();
+    props.setProperty(HoodieClusteringConfig.ENABLE_EXPIRATIONS.key(), "true");
+    props.setProperty(HoodieClusteringConfig.EXPIRATION_THRESHOLD_MINS.key(), "30");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertTrue(writeConfig.isExpirationOfClusteringEnabled());
+    assertEquals(30L, writeConfig.getClusteringExpirationThresholdMins());
+  }
+
+  @Test
+  public void testClusteringExpirationNotInferredFromPreferWriterStrategy() {
+    Properties props = new Properties();
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(),
+        "org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertFalse(writeConfig.isExpirationOfClusteringEnabled());
+  }
+
+  @Test
+  public void testUpdatesStrategyDefaultsToRejectStrategy() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .build();
+    assertEquals(HoodieClusteringConfig.SPARK_REJECT_UPDATE_STRATEGY_CLASS_NAME,
+        writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @Test
+  public void testUpdatesStrategyRejectWithOtherConflictStrategy() {
+    Properties props = new Properties();
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(),
+        "org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictResolutionStrategy");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertEquals(HoodieClusteringConfig.SPARK_REJECT_UPDATE_STRATEGY_CLASS_NAME,
+        writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @Test
+  public void testUpdatesStrategyInferredFromPreferWriterStrategy() {
+    Properties props = new Properties();
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(),
+        "org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertEquals(HoodieClusteringConfig.SPARK_ALLOW_UPDATE_STRATEGY_CLASS_NAME,
+        writeConfig.getClusteringUpdatesStrategyClass());
+  }
+
+  @Test
+  public void testUpdatesStrategyNotOverriddenWhenExplicitlySet() {
+    Properties props = new Properties();
+    props.setProperty(HoodieLockConfig.WRITE_CONFLICT_RESOLUTION_STRATEGY_CLASS_NAME.key(),
+        "org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy");
+    String customStrategy = "org.apache.hudi.custom.MyCustomStrategy";
+    props.setProperty(HoodieClusteringConfig.UPDATES_STRATEGY.key(), customStrategy);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withProperties(props)
+        .build();
+    assertEquals(customStrategy, writeConfig.getClusteringUpdatesStrategyClass());
   }
 }

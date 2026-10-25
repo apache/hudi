@@ -23,7 +23,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
+import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
@@ -31,7 +33,9 @@ import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.RuntimeContextUtils;
 
-import org.apache.flink.api.common.JobID;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
@@ -41,8 +45,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.FunctionSnapshotContext;
 import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.flink.util.Preconditions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,16 +57,21 @@ import java.util.stream.StreamSupport;
  * @param <I> Type of the input record
  * @see StreamWriteOperatorCoordinator
  */
+@Slf4j
 public abstract class AbstractStreamWriteFunction<I>
     extends AbstractWriteFunction<I>
     implements CheckpointedFunction {
 
-  private static final Logger LOG = LoggerFactory.getLogger(AbstractStreamWriteFunction.class);
-
   /**
    * Config options.
    */
+  @Getter
   protected final Configuration config;
+
+  /**
+   * Whether the write function is writing index records into metadata table.
+   */
+  private final boolean isMetadataTable;
 
   /**
    * Id of current subtask.
@@ -88,7 +96,13 @@ public abstract class AbstractStreamWriteFunction<I>
   /**
    * Correspondent to request the instant time.
    */
+  @Getter
+  @Setter
   protected transient Correspondent correspondent;
+
+  @Getter
+  @Setter
+  protected transient MemorySegmentPoolFactory memorySegmentPoolFactory;
 
   /**
    * Gateway to send operator events to the operator coordinator.
@@ -99,11 +113,6 @@ public abstract class AbstractStreamWriteFunction<I>
    * List state of the write metadata events.
    */
   private transient ListState<WriteMetadataEvent> writeMetadataState;
-
-  /**
-   * List state of the JobID.
-   */
-  private transient ListState<JobID> jobIdState;
 
   /**
    * Write status list for the current checkpoint.
@@ -127,7 +136,18 @@ public abstract class AbstractStreamWriteFunction<I>
    * @param config The config options
    */
   public AbstractStreamWriteFunction(Configuration config) {
+    this(config, false);
+  }
+
+  /**
+   * Constructs a StreamWriteFunctionBase.
+   *
+   * @param config         The config options
+   * @param isMetadataTable Whether the write function is writing index records into metadata table
+   */
+  public AbstractStreamWriteFunction(Configuration config, boolean isMetadataTable) {
     this.config = config;
+    this.isMetadataTable = isMetadataTable;
   }
 
   @Override
@@ -141,15 +161,13 @@ public abstract class AbstractStreamWriteFunction<I>
             "write-metadata-state",
             TypeInformation.of(WriteMetadataEvent.class)
         ));
-    this.jobIdState = context.getOperatorStateStore().getListState(
-        new ListStateDescriptor<>(
-            "job-id-state",
-            TypeInformation.of(JobID.class)
-        ));
 
     int attemptId = RuntimeContextUtils.getAttemptNumber(getRuntimeContext());
     if (context.isRestored()) {
-      initCheckpointId(attemptId, context.getRestoredCheckpointId().orElse(-1L));
+      // sets up the known checkpoint id as the last successful checkpoint id for purposes of:
+      // 1). old events cleaning;
+      // 2). instant time request for current checkpoint.
+      this.checkpointId = context.getRestoredCheckpointId().orElse(-1L);
     }
     sendBootstrapEvent(attemptId, context.isRestored());
   }
@@ -162,8 +180,6 @@ public abstract class AbstractStreamWriteFunction<I>
     snapshotState();
     // Reload the snapshot state as the current state.
     reloadWriteMetaState();
-    // Reload the job ID state
-    reloadJobIdState();
     // Update checkpoint id
     this.checkpointId = functionSnapshotContext.getCheckpointId();
   }
@@ -173,18 +189,6 @@ public abstract class AbstractStreamWriteFunction<I>
   @Override
   public void endInput() {
     this.inputEnded = true;
-  }
-
-  // -------------------------------------------------------------------------
-  //  Getter/Setter
-  // -------------------------------------------------------------------------
-
-  public void setCorrespondent(Correspondent correspondent) {
-    this.correspondent = correspondent;
-  }
-
-  public Correspondent getCorrespondent() {
-    return correspondent;
   }
 
   public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
@@ -199,46 +203,32 @@ public abstract class AbstractStreamWriteFunction<I>
   //  Utilities
   // -------------------------------------------------------------------------
 
-  private void initCheckpointId(int attemptId, long restoredCheckpointId) throws Exception {
-    if (attemptId <= 0) {
-      // returns early if the job/task is initially started.
-      return;
+  protected void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
+    if (isRestored) {
+      HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
+      // Resend pending metadata on every attempt in case an earlier delivery failed.
+      StreamSupport.stream(this.writeMetadataState.get().spliterator(), false)
+          .reduce(WriteMetadataEvent::mergeWithRescale)
+          // A partial failover may restore metadata for an already completed instant.
+          .filter(metadataEvent -> pendingTimeline.containsInstant(metadataEvent.getInstantTime()))
+          .ifPresent(metadataEvent -> {
+            metadataEvent.setTaskID(taskID);
+            sendWriteMetadataEvent(metadataEvent);
+            log.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
+          });
     }
-    JobID currentJobId = RuntimeContextUtils.getJobId(getRuntimeContext());
-    if (StreamSupport.stream(this.jobIdState.get().spliterator(), false)
-        .noneMatch(currentJobId::equals)) {
-      // do not set up the checkpoint id if the state comes from the old job.
-      return;
+    if (attemptId > 0) {
+      // Clear events from the failed attempt at or after the restored checkpoint.
+      sendWriteMetadataEvent(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId, isMetadataTable));
+      log.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
     }
-    // sets up the known checkpoint id as the last successful checkpoint id for purposes of:
-    // 1). old events cleaning;
-    // 2). instant time request for current checkpoint.
-    this.checkpointId = restoredCheckpointId;
   }
 
-  private void sendBootstrapEvent(int attemptId, boolean isRestored) throws Exception {
-    if (attemptId <= 0) {
-      if (isRestored) {
-        HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
-        // if the task is initially started, resend the pending event.
-        for (WriteMetadataEvent event : this.writeMetadataState.get()) {
-          // Must filter out the completed instants in case it is a partial failover,
-          // the write status should not be accumulated in such case.
-          if (pendingTimeline.containsInstant(event.getInstantTime())) {
-            // Reset taskID for event
-            event.setTaskID(taskID);
-            // The checkpoint succeed but the meta does not commit,
-            // re-commit the inflight instant
-            this.eventGateway.sendEventToCoordinator(event);
-            LOG.info("Send uncommitted write metadata event to coordinator, task[{}].", taskID);
-          }
-        }
-      }
-    } else {
-      // otherwise sends an empty bootstrap event instead.
-      this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID, checkpointId));
-      LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
-    }
+  /**
+   * Send the write metadata event to the coordinator.
+   */
+  protected void sendWriteMetadataEvent(WriteMetadataEvent metadataEvent) {
+    this.eventGateway.sendEventToCoordinator(metadataEvent);
   }
 
   /**
@@ -251,18 +241,12 @@ public abstract class AbstractStreamWriteFunction<I>
         .checkpointId(checkpointId)
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
+        .lastBatch(true)
         .bootstrap(true)
+        .metadataTable(isMetadataTable)
         .build();
     this.writeMetadataState.add(event);
     writeStatuses.clear();
-  }
-
-  /**
-   * Reload job id state as current job id.
-   */
-  private void reloadJobIdState() throws Exception {
-    this.jobIdState.clear();
-    this.jobIdState.add(RuntimeContextUtils.getJobId(getRuntimeContext()));
   }
 
   public void handleOperatorEvent(OperatorEvent event) {
@@ -278,6 +262,16 @@ public abstract class AbstractStreamWriteFunction<I>
    * @return The instant time
    */
   protected String instantToWrite(boolean hasData) {
-    return this.correspondent.requestInstantTime(this.checkpointId);
+    return Preconditions.checkNotNull(
+        this.correspondent.requestInstantTime(this.checkpointId, this.config.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT)),
+        "No in-flight instant for checkpoint id: " + checkpointId);
+  }
+
+  @Override
+  public void close() throws Exception {
+    if (this.writeClient != null) {
+      this.writeClient.close();
+    }
+    super.close();
   }
 }

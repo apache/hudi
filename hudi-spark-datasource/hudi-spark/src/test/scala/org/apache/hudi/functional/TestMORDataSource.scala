@@ -104,6 +104,248 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
         JFunction.toJavaConsumer((receiver: SparkSessionExtensions) => new HoodieSparkSessionExtension().apply(receiver)))
     )
 
+  @Test
+  def testLsmUpsertUsesUtf8Ordering(): Unit = {
+    val fullWidthAKey = "Ａ-key"
+    val emojiFaceKey = "😀-key"
+    val _spark = spark
+    import _spark.implicits._
+
+    Seq(HoodieTableType.COPY_ON_WRITE, HoodieTableType.MERGE_ON_READ).foreach { tableType =>
+      val tablePath = s"${basePath}_${tableType.name.toLowerCase}_lsm"
+      val options = Map[String, String](
+        DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+        DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+        DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+        DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+        DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+        HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+        HoodieTableConfig.TABLE_STORAGE_LAYOUT.key -> HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue,
+        HoodieWriteConfig.TBL_NAME.key -> s"hoodie_lsm_${tableType.name.toLowerCase}",
+        HoodieMetadataConfig.ENABLE.key -> "false",
+        HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+        "hoodie.insert.shuffle.parallelism" -> "1",
+        "hoodie.upsert.shuffle.parallelism" -> "1")
+      val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
+
+      Seq(
+        (fullWidthAKey, "full-width-a-v1", 1L),
+        (emojiFaceKey, "emoji-v1", 1L))
+        .toDF("id", "value", "ts")
+        .repartition(1)
+        .write.format("hudi")
+        .options(writeOpts)
+        .mode(SaveMode.Append)
+        .save(tablePath)
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setBasePath(tablePath)
+        .setConf(storageConf.newInstance())
+        .build()
+      assertTrue(metaClient.getTableConfig.isLSMTreeStorageLayout)
+
+      // All LSM sorted runs use UTF-8 byte order, where U+FF21 (Ａ) sorts before U+1F600 (😀).
+      val physicalBaseFileKeys = spark.read.parquet(tablePath)
+        .select(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+        .collect()
+        .map(_.getString(0))
+        .toList
+      assertEquals(Seq(fullWidthAKey, emojiFaceKey), physicalBaseFileKeys)
+
+      Seq(
+        (fullWidthAKey, "full-width-a-v2", 2L),
+        (emojiFaceKey, "emoji-v2", 2L))
+        .toDF("id", "value", "ts")
+        .repartition(1)
+        .write.format("hudi")
+        .options(writeOpts)
+        .mode(SaveMode.Append)
+        .save(tablePath)
+
+      val actual = spark.read.format("hudi")
+        .options(readOpts)
+        .load(tablePath)
+        .select("id", "value")
+        .collect()
+        .map(row => row.getString(0) -> row.getString(1))
+        .toMap
+      assertEquals(Map(
+        fullWidthAKey -> "full-width-a-v2",
+        emojiFaceKey -> "emoji-v2"), actual)
+    }
+  }
+
+  @Test
+  def testLsmBaseFileOnlyReadPreservesDuplicateKeys(): Unit = {
+    val duplicateKey = "duplicate-key"
+    val tablePath = s"${basePath}_mor_lsm_base_file_only_duplicates"
+    val _spark = spark
+    import _spark.implicits._
+
+    val options = Map[String, String](
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+      DataSourceWriteOptions.OPERATION.key -> INSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.INSERT_DUP_POLICY.key -> DataSourceWriteOptions.NONE_INSERT_DUP_POLICY,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieTableConfig.TABLE_STORAGE_LAYOUT.key -> HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue,
+      HoodieWriteConfig.COMBINE_BEFORE_INSERT.key -> "false",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_mor_lsm_base_file_only_duplicates",
+      HoodieMetadataConfig.ENABLE.key -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      "hoodie.insert.shuffle.parallelism" -> "1")
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
+
+    Seq(
+      (duplicateKey, "first", 1L),
+      (duplicateKey, "second", 2L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    val physicalRows = spark.read.parquet(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(2, physicalRows.length)
+    assertEquals(Set("first", "second"), physicalRows.map(_.getString(1)).toSet)
+
+    val dataFiles = storage.listDirectEntries(new StoragePath(tablePath)).asScala
+      .filterNot(_.isDirectory)
+    assertEquals(1, dataFiles.count(_.getPath.getName.endsWith(HoodieFileFormat.PARQUET.getFileExtension)))
+    assertFalse(dataFiles.exists(pathInfo => org.apache.hudi.common.fs.FSUtils.isLogFile(pathInfo.getPath)))
+
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(tablePath)
+      .setConf(storageConf.newInstance())
+      .build()
+    assertTrue(metaClient.getTableConfig.isLSMTreeStorageLayout)
+
+    // With no log records to merge, the LSM reader delegates directly to the base-file iterator and
+    // preserve duplicate record keys just like the classic Spark file-group reader.
+    val snapshotRows = spark.read.format("hudi")
+      .options(readOpts)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(2, snapshotRows.length)
+    assertTrue(snapshotRows.forall(_.getString(0) == duplicateKey))
+    assertEquals(Set("first", "second"), snapshotRows.map(_.getString(1)).toSet)
+
+    Seq((duplicateKey, "latest", 3L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts + (DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL))
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    // Once an update adds a sorted run, the LSM merge treats equal physical keys as one logical key.
+    val mergedRows = spark.read.format("hudi")
+      .options(readOpts)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(1, mergedRows.length)
+    assertEquals(duplicateKey, mergedRows.head.getString(0))
+    assertEquals("latest", mergedRows.head.getString(1))
+  }
+
+  @Test
+  def testLsmIncrementalAndSkipMergeReads(): Unit = {
+    val fullWidthAKey = "Ａ-key"
+    val emojiFaceKey = "😀-key"
+    val tablePath = s"${basePath}_mor_lsm_read_paths"
+    val _spark = spark
+    import _spark.implicits._
+
+    val options = Map[String, String](
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.MERGE_ON_READ.name,
+      DataSourceWriteOptions.OPERATION.key -> UPSERT_OPERATION_OPT_VAL,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.NonpartitionedKeyGenerator",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieTableConfig.TABLE_STORAGE_LAYOUT.key -> HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue,
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_mor_lsm_read_paths",
+      HoodieMetadataConfig.ENABLE.key -> "false",
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key -> "parquet",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1")
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO, options)
+
+    Seq(
+      (fullWidthAKey, "full-width-a-v1", 1L),
+      (emojiFaceKey, "emoji-v1", 1L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(tablePath)
+    val firstCompletionTime = DataSourceTestUtils.latestDeltaCommitCompletionTime(storage, tablePath)
+
+    // Updating only the first physical key makes the base and log sorted runs have different key
+    // sets, exposing an ordering mismatch while the readers merge them.
+    Seq((fullWidthAKey, "full-width-a-v2", 2L))
+      .toDF("id", "value", "ts")
+      .repartition(1)
+      .write.format("hudi")
+      .options(writeOpts)
+      .mode(SaveMode.Append)
+      .save(tablePath)
+
+    val expectedSnapshot = Map(
+      fullWidthAKey -> "full-width-a-v2",
+      emojiFaceKey -> "emoji-v1")
+    val snapshotRows = spark.read.format("hudi")
+      .options(readOpts)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(2, snapshotRows.length)
+    val actualSnapshot = snapshotRows
+      .map(row => row.getString(0) -> row.getString(1))
+      .toMap
+    assertEquals(expectedSnapshot, actualSnapshot)
+
+    val incrementalOptions = readOpts ++ Map(
+      DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+      DataSourceReadOptions.START_COMMIT.key -> firstCompletionTime)
+    val expectedIncremental = Map(fullWidthAKey -> "full-width-a-v2")
+    val incrementalRows = spark.read.format("hudi")
+      .options(incrementalOptions)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(1, incrementalRows.length)
+    val actualIncremental = incrementalRows
+      .map(row => row.getString(0) -> row.getString(1))
+      .toMap
+    assertEquals(expectedIncremental, actualIncremental)
+
+    // Skip-merge intentionally stays on the classic reader and exposes the base and log versions.
+    val skipMergeRows = spark.read.format("hudi")
+      .options(readOpts)
+      .option(DataSourceReadOptions.REALTIME_MERGE.key, DataSourceReadOptions.REALTIME_SKIP_MERGE_OPT_VAL)
+      .load(tablePath)
+      .select("id", "value")
+      .collect()
+    assertEquals(3, skipMergeRows.length)
+    val skipMergeVersions = skipMergeRows
+      .map(row => row.getString(0) -> row.getString(1))
+      .groupBy(_._1)
+      .mapValues(_.map(_._2).toSet)
+    assertEquals(Set("full-width-a-v1", "full-width-a-v2"), skipMergeVersions(fullWidthAKey))
+    assertEquals(Set("emoji-v1"), skipMergeVersions(emojiFaceKey))
+  }
+
   @ParameterizedTest
   @CsvSource(Array(
     // Inferred as COMMIT_TIME_ORDERING
@@ -271,7 +513,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       assertEquals(100, hudiIncDF1.count())
       assertEquals(1, hudiIncDF1.select("_hoodie_commit_time").distinct().count())
       assertEquals(commit1Time, hudiIncDF1.select("_hoodie_commit_time").head().get(0).toString)
-      hudiIncDF1.show(1)
+      hudiIncDF1.limit(1).collect
 
       // log file only
       val hudiIncDF2 = spark.read.format("org.apache.hudi")
@@ -283,7 +525,7 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       assertEquals(100, hudiIncDF2.count())
       assertEquals(1, hudiIncDF2.select("_hoodie_commit_time").distinct().count())
       assertEquals(commit2Time, hudiIncDF2.select("_hoodie_commit_time").head().get(0).toString)
-      hudiIncDF2.show(1)
+      hudiIncDF2.limit(1).collect
 
       // base file + log file
       val hudiIncDF3 = spark.read.format("org.apache.hudi")
@@ -492,6 +734,39 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     spark.sparkContext.hadoopConfiguration.set(
       HoodieMemoryConfig.MAX_MEMORY_FRACTION_FOR_COMPACTION.key,
       HoodieMemoryConfig.DEFAULT_MR_COMPACTION_MEMORY_FRACTION)
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("string;8", "string;9", "decimal(10,2);8", "decimal(10,2);9"), delimiter = ';')
+  def testPrecombinedDeleteWithEngineOrdering(orderingType: String, tableVersion: Int): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.SPARK)
+    val opts = writeOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      RECORDKEY_FIELD.key -> "id",
+      PARTITIONPATH_FIELD.key -> "",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "ts",
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.toString,
+      HoodieTableConfig.VERSION.key -> tableVersion.toString,
+      "hoodie.compact.inline" -> "false")
+
+    def write(rows: Seq[(String, String, Boolean)], mode: SaveMode): Unit = {
+      val localSpark = spark
+      import localSpark.implicits._
+      rows.toDF("id", "ts", "_hoodie_is_deleted")
+        .withColumn("ts", col("ts").cast(orderingType))
+        .coalesce(1).write.format("hudi").options(opts).mode(mode).save(basePath)
+    }
+
+    write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
+    // Both keys go through precombine. The older delete must not remove id1's base row.
+    write(Seq(("id1", "050", false), ("id1", "060", true),
+      ("id2", "050", false), ("id2", "110", true)), SaveMode.Append)
+
+    val rows = spark.read.format("hudi").options(readOpts).load(basePath).select("id", "ts").collect()
+    assertEquals(1, rows.length)
+    assertEquals("id1", rows.head.getString(0))
+    assertEquals(0, BigDecimal(rows.head.get(1).toString).compare(BigDecimal(100)))
   }
 
   @ParameterizedTest
@@ -730,8 +1005,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(sampleRow.getBoolean(2), sampleRow.get(2))
 
     // test show()
-    hudiSnapshotDF1.show(1)
-    hudiSnapshotDF2.show(1)
+    hudiSnapshotDF1.limit(1).collect
+    hudiSnapshotDF2.limit(1).collect
   }
 
   @ParameterizedTest
@@ -810,8 +1085,8 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   }
 
   def verifyShow(df: DataFrame): Unit = {
-    df.show(1)
-    df.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").show(1)
+    df.limit(1).collect()
+    df.select("_hoodie_commit_seqno", "fare.amount", "fare.currency", "tip_history").limit(1).collect()
   }
 
   @ParameterizedTest
@@ -1552,6 +1827,61 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
     assertEquals(metaClient.getTableConfig.getRecordMergeStrategyId, mergerStrategyName)
   }
 
+  @ParameterizedTest
+  @CsvSource(value = Array(
+    "AVRO;AVRO;string;ts", "SPARK;SPARK;string;ts", "SPARK;SPARK;decimal(10,2);ts", "SPARK;SPARK;string;ts,seq",
+    "AVRO;SPARK;string;ts"), delimiter = ';')
+  def testNativeDeleteLogWithEngineOrdering(recordType: HoodieRecordType, logCompactionRecordType: HoodieRecordType,
+                                            orderingType: String, orderingFields: String): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    val opts = writeOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      RECORDKEY_FIELD.key -> "id",
+      PARTITIONPATH_FIELD.key -> "",
+      HoodieTableConfig.ORDERING_FIELDS.key -> orderingFields,
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
+      // Table version 10 writes deletes to native delete log files.
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> HoodieTableVersion.TEN.versionCode().toString,
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      HoodieCompactionConfig.ENABLE_LOG_COMPACTION.key -> "true",
+      HoodieCompactionConfig.LOG_COMPACTION_BLOCKS_THRESHOLD.key -> "1")
+
+    def write(rows: Seq[(String, String, Boolean)], mode: SaveMode): Unit = {
+      val localSpark = spark
+      import localSpark.implicits._
+      rows.toDF("id", "ts", "_hoodie_is_deleted")
+        .withColumn("ts", col("ts").cast(orderingType))
+        .withColumn("seq", when(col("_hoodie_is_deleted"), lit(null)).otherwise(lit("1")).cast(orderingType))
+        .coalesce(1).write.format("hudi").options(opts).mode(mode).save(basePath)
+    }
+
+    write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
+    // The delete leaves seq null, so with two ordering fields its second value is missing.
+    write(Seq(("id1", "110", true)), SaveMode.Append)
+    write(Seq(("id2", "120", false)), SaveMode.Append)
+
+    // Log compaction reads the delete back and writes it into a new native delete log. Its record type can differ
+    // from the writers', e.g. when a Spark-typed job compacts deletes that an Avro-typed one wrote.
+    val logCompactionOpts = if (logCompactionRecordType == HoodieRecordType.SPARK) opts ++ sparkOpts else opts
+    val client = DataSourceUtils.createHoodieClient(spark.sparkContext, "", basePath, tableName, logCompactionOpts.asJava)
+      .asInstanceOf[SparkRDDWriteClient[HoodieRecordPayload[Nothing]]]
+    try {
+      val logCompactionInstant = client.scheduleLogCompaction(Option.empty()).get()
+      client.logCompact(logCompactionInstant, true)
+    } finally {
+      client.close()
+    }
+
+    def readOrdering(): Map[String, Int] = spark.read.format("hudi").options(readOpts).load(basePath)
+      .select("id", "ts").collect().map(row => row.getString(0) -> BigDecimal(row.get(1).toString).toInt).toMap
+
+    // The delete keeps its ordering value: an older update leaves id1 deleted, a newer one brings it back.
+    write(Seq(("id1", "105", false)), SaveMode.Append)
+    assertEquals(Map("id2" -> 120), readOrdering())
+    write(Seq(("id1", "115", false)), SaveMode.Append)
+    assertEquals(Map("id1" -> 115, "id2" -> 120), readOrdering())
+  }
+
   /**
    * Test Read-Optimized and time travel query on MOR table with RECORD_INDEX enabled.
    */
@@ -2258,6 +2588,131 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .option(DataSourceWriteOptions.OPERATION.key, operation)
       .mode(SaveMode.Append)
       .save(basePath)
+  }
+
+  /**
+   * Test that incremental reads work on MOR tables when the data schema contains fields
+   * with the same name as Hudi meta fields (e.g., _hoodie_partition_path). This tests
+   * the fix that filters out duplicate fields when merging skeleton schema with data
+   * schema in IncrementalRelation.
+   *
+   * This simulates the scenario when creating derived datasets using HUDIIncrSource
+   * where the source table's data already contains _hoodie_partition_path as a regular
+   * data column (from a previous Hudi read), but the downstream table uses a different
+   * partition field.
+   *
+   * Without the fix, this would fail with:
+   * org.apache.spark.sql.AnalysisException: Found duplicate column(s) in the data schema
+   */
+  @Test
+  def testIncrementalReadWithDuplicateMetaFieldInDataSchema(): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    // Create a DataFrame with _hoodie_partition_path as a regular data column
+    // while using a separate "partition" column as the actual partition field.
+    val df = Seq(
+      ("row1", "src_partition1", "partition1", 1000L, "value1"),
+      ("row2", "src_partition1", "partition1", 1001L, "value2"),
+      ("row3", "src_partition2", "partition2", 1002L, "value3")
+    ).toDF("_row_key", "_hoodie_partition_path", "partition", "timestamp", "data")
+
+    val writeOpts = Map(
+      "hoodie.insert.shuffle.parallelism" -> "4",
+      "hoodie.upsert.shuffle.parallelism" -> "4",
+      DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "_row_key",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "partition",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test_mor_dup_meta_field"
+    )
+
+    // Write initial data
+    df.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // Add an upsert to create log files in the MOR table
+    val dfUpdate = Seq(
+      ("row1", "src_partition1", "partition1", 2000L, "value1_updated"),
+      ("row4", "src_partition2", "partition2", 2001L, "value4")
+    ).toDF("_row_key", "_hoodie_partition_path", "partition", "timestamp", "data")
+
+    dfUpdate.write.format("hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // Initialize metaClient
+    metaClient = createMetaClient(spark, basePath)
+
+    // Perform incremental read - this should not fail with duplicate field error
+    val incrementalDf = spark.read.format("hudi")
+      .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+      .option(DataSourceReadOptions.START_COMMIT.key, "000")
+      .load(basePath)
+
+    // Verify the data was read correctly (3 original + 1 new = 4 rows)
+    assertEquals(4, incrementalDf.count())
+
+    // Verify that the data columns are present and correct
+    val results = incrementalDf.select("_row_key", "data")
+      .orderBy("_row_key")
+      .collect()
+
+    // row1 was updated with new value
+    assertEquals("row1", results(0).getAs[String]("_row_key"))
+    assertEquals("value1_updated", results(0).getAs[String]("data"))
+
+    assertEquals("row2", results(1).getAs[String]("_row_key"))
+    assertEquals("value2", results(1).getAs[String]("data"))
+
+    assertEquals("row3", results(2).getAs[String]("_row_key"))
+    assertEquals("value3", results(2).getAs[String]("data"))
+
+    // row4 is new from the upsert
+    assertEquals("row4", results(3).getAs[String]("_row_key"))
+    assertEquals("value4", results(3).getAs[String]("data"))
+  }
+
+  @Test
+  def testNestedFieldPartition(): Unit = {
+    TestCOWDataSource.runNestedFieldPartitionTest(spark, basePath, storage, "MOR")
+  }
+
+  @ParameterizedTest
+  @CsvSource(value = Array("AVRO;bigint;8", "SPARK;bigint;9", "SPARK;string;8", "SPARK;decimal(10,2);9"), delimiter = ';')
+  def testDeleteWithNestedOrderingFieldRespectsEventTimeOrdering(recordType: HoodieRecordType, orderingType: String, tableVersion: Int): Unit = {
+    val (writeOpts, readOpts) = getWriterReaderOpts(recordType)
+    val opts = writeOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      RECORDKEY_FIELD.key -> "id",
+      PARTITIONPATH_FIELD.key -> "",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "meta.ts",
+      HoodieWriteConfig.RECORD_MERGE_MODE.key -> RecordMergeMode.EVENT_TIME_ORDERING.name(),
+      HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.toString,
+      HoodieTableConfig.VERSION.key -> tableVersion.toString,
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false")
+
+    def write(rows: Seq[(String, String, Boolean)], mode: SaveMode): Unit = {
+      val localSpark = spark
+      import localSpark.implicits._
+      rows.toDF("id", "ts", "_hoodie_is_deleted")
+        .select(col("id"), struct(col("ts").cast(orderingType).as("ts")).as("meta"), col("_hoodie_is_deleted"))
+        .coalesce(1).write.format("hudi").options(opts).mode(mode).save(basePath)
+    }
+
+    write(Seq(("id1", "100", false), ("id2", "100", false)), SaveMode.Overwrite)
+    // The delete of id1 is older than the stored row and must not remove it; the delete of id2 is newer.
+    // "050" has a leading zero so that it also sorts before "100" as a string.
+    write(Seq(("id1", "050", true), ("id2", "150", true)), SaveMode.Append)
+
+    val rows = spark.read.format("hudi").options(readOpts).load(basePath).select("id", "meta.ts").collect()
+    assertEquals(Seq("id1"), rows.map(_.getString(0)).toSeq)
+    assertEquals(100, BigDecimal(rows.head.get(1).toString).toInt)
   }
 }
 

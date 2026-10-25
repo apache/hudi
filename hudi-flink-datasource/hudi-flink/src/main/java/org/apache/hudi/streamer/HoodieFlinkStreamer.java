@@ -89,6 +89,7 @@ public class HoodieFlinkStreamer {
 
     OptionsInference.setupSinkTasks(conf, env.getParallelism());
     OptionsInference.setupClientId(conf);
+    OptionsInference.setupComplexKeygenEncoding(conf);
     DataStream<RowData> pipeline;
     // Append mode
     if (OptionsResolver.isAppendMode(conf)) {
@@ -97,7 +98,7 @@ public class HoodieFlinkStreamer {
       pipeline = Pipelines.append(conf, rowType, dataStream);
       if (OptionsResolver.needsAsyncClustering(conf)) {
         Pipelines.cluster(conf, rowType, pipeline);
-      } else if (OptionsResolver.isLazyFailedWritesCleanPolicy(conf)) {
+      } else if (OptionsResolver.isLazyFailedWritesCleaning(conf)) {
         // add clean function to rollback failed writes for lazy failed writes cleaning policy
         Pipelines.clean(conf, pipeline);
       } else {
@@ -108,8 +109,10 @@ public class HoodieFlinkStreamer {
       pipeline = Pipelines.hoodieStreamWrite(conf, rowType, hoodieRecordDataStream);
       if (OptionsResolver.needsAsyncCompaction(conf)) {
         Pipelines.compact(conf, pipeline);
-      } else {
+      } else if (OptionsResolver.needsAsyncCleaning(conf)) {
         Pipelines.clean(conf, pipeline);
+      } else {
+        Pipelines.dummySink(pipeline);
       }
     }
 

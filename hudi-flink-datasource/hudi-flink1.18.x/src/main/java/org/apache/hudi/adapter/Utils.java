@@ -18,16 +18,19 @@
 
 package org.apache.hudi.adapter;
 
+import org.apache.hudi.common.schema.internal.InternalSchema;
+import org.apache.hudi.common.schema.internal.Type;
+import org.apache.hudi.common.schema.internal.action.InternalSchemaChangeApplier;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieNotSupportedException;
-import org.apache.hudi.internal.schema.InternalSchema;
-import org.apache.hudi.internal.schema.Type;
-import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.core.memory.ManagedMemoryUseCase;
+import org.apache.flink.runtime.execution.Environment;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
 import org.apache.flink.table.catalog.Column;
 import org.apache.flink.table.catalog.ObjectIdentifier;
@@ -46,9 +49,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
-import static org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
+import static org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType.AFTER;
+import static org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType.FIRST;
+import static org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType.NO_OPERATION;
 
 /**
  * Adapter utils.
@@ -90,6 +93,28 @@ public class Utils {
     return newSchema;
   }
 
+  /**
+   * Computes the managed memory size available for the given stream operator.
+   * <p>
+   * This method retrieves the memory manager from the operator's execution environment
+   * and calculates the memory size allocated for the operator based on the configured
+   * managed memory fraction and the task manager's memory settings.
+   *
+   * @param operator the stream operator for which to compute managed memory
+   * @return the computed managed memory size in bytes
+   */
+  public static long computeManagedMemory(AbstractStreamOperator<?> operator) {
+    final Environment environment = operator.getContainingTask().getEnvironment();
+    return environment
+        .getMemoryManager()
+        .computeMemorySize(
+            operator.getOperatorConfig()
+                .getManagedMemoryFractionOperatorUseCaseOfSlot(
+                    ManagedMemoryUseCase.OPERATOR,
+                    environment.getJobConfiguration(),
+                    environment.getUserCodeClassLoader().asClassLoader()));
+  }
+
   private static InternalSchema applyTableChange(InternalSchema oldSchema, TableChange change, Function<LogicalType, Type> convertFunc) {
     InternalSchemaChangeApplier changeApplier = new InternalSchemaChangeApplier(oldSchema);
     if (change instanceof TableChange.AddColumn) {
@@ -99,7 +124,7 @@ public class Utils {
         String colName = column.getName();
         Type colType = convertFunc.apply(column.getDataType().getLogicalType());
         String comment = column.getComment().orElse(null);
-        Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
+        Pair<org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
             parseColumnPosition(add.getPosition());
         return changeApplier.applyAddChange(
             colName, colType, comment, colPositionPair.getRight(), colPositionPair.getLeft());
@@ -122,7 +147,7 @@ public class Utils {
     } else if (change instanceof TableChange.ModifyColumnPosition) {
       TableChange.ModifyColumnPosition modify = (TableChange.ModifyColumnPosition) change;
       String colName = modify.getOldColumn().getName();
-      Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
+      Pair<org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType, String> colPositionPair =
           parseColumnPosition(modify.getNewPosition());
       return changeApplier.applyReOrderColPositionChange(
           colName, colPositionPair.getRight(), colPositionPair.getLeft());
@@ -138,8 +163,8 @@ public class Utils {
     }
   }
 
-  private static Pair<org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType, String> parseColumnPosition(TableChange.ColumnPosition colPosition) {
-    org.apache.hudi.internal.schema.action.TableChange.ColumnPositionChange.ColumnPositionType positionType;
+  private static Pair<org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType, String> parseColumnPosition(TableChange.ColumnPosition colPosition) {
+    org.apache.hudi.common.schema.internal.action.TableChange.ColumnPositionChange.ColumnPositionType positionType;
     String position = "";
     if (colPosition instanceof TableChange.First) {
       positionType = FIRST;

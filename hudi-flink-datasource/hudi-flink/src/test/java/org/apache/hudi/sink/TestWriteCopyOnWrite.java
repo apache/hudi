@@ -19,13 +19,25 @@
 package org.apache.hudi.sink;
 
 import org.apache.hudi.client.HoodieFlinkWriteClient;
+import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.HoodieFlinkEngineContext;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -35,25 +47,45 @@ import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.sink.partitioner.index.IndexRowUtils;
+import org.apache.hudi.sink.utils.StreamWriteFunctionWrapper;
 import org.apache.hudi.sink.utils.TestWriteBase;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.util.FlinkWriteClients;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestData;
+import org.apache.hudi.utils.TestUtils;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.data.GenericRowData;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -107,9 +139,15 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
-  @Test
-  public void testSubtaskFails() throws Exception {
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class,  names = {"FLINK_STATE", "GLOBAL_RECORD_LEVEL_INDEX"})
+  public void testSubtaskFails(HoodieIndex.IndexType indexType) throws Exception {
     conf.set(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT, 1L);
+    conf.set(FlinkOptions.INDEX_TYPE, indexType.name());
+    if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
+      conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+      conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    }
     // open the function and ingest data
     preparePipeline()
         .checkpoint(1)
@@ -128,13 +166,11 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertEmptyEvent()
         .checkpoint(3)
         .assertEmptyEvent()
-        // 1. triggers a new checkpoint;
-        // 2. triggers task 0 failover, there is no pending instant that needs to recommit,
-        // the task sends an empty bootstrap event to trigger cleaning of legacy events;
-        // 3. triggers a checkpoint ack to simulate a following-up checkpoint success,
-        // the handling of the checkpoint ack event would recommit 3.
+        // Recover the pending checkpoint metadata on retry, then clean events from the failed attempt.
+        // A following checkpoint notification must not commit the recovered instant again.
         .subTaskFails(0, 2)
-        .assertEmptyEvent()
+        .assertEmptyEvent() // recovered metadata
+        .assertEmptyEvent() // cleanup of the failed attempt
         .checkpointComplete(4)
         .checkCompletedInstantCount(3)
         // rollback the last complete instant to inflight state, to simulate an instant commit failure
@@ -146,6 +182,26 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         // another checkpoint ack event would trigger the recommit of restored instant.
         .checkLastPendingInstantCompleted()
         .end();
+
+    if (indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX) {
+      HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+      HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+          HoodieFlinkEngineContext.DEFAULT,
+          metaClient.getStorage(),
+          StreamerUtil.metadataConfig(conf),
+          conf.get(FlinkOptions.PATH));
+
+      // validate the record level index data
+      Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(
+          metadataTable.readRecordIndexLocationsWithKeys(
+              HoodieListData.eager(Arrays.asList("id1", "id2", "id3", "id4"))));
+      assertEquals(4, result.size());
+      result.values().forEach(location -> {
+        assertNotNull(location.getInstantTime());
+        assertNotNull(location.getFileId());
+        assertNotNull(location.getPartitionPath());
+      });
+    }
   }
 
   @Test
@@ -160,7 +216,8 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertEmptyEvent()
         // trigger a partial failure
         .subTaskFails(0, 1)
-        .assertNextEvent()
+        .assertNextEvent() // recovered metadata
+        .assertEmptyEvent() // cleanup of the failed attempt
         // make sure coordinator send an ack event to unblock the writers.
         .assertNextSubTaskEvent()
         // write a set of data and check the result.
@@ -298,6 +355,73 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  @ParameterizedTest
+  @MethodSource("mergeWithMetaFieldsModeParams")
+  public void testMergeWithMetaFieldsMode(MetaFieldsMode mode, String storageLayout, String mergeHandleClass) throws Exception {
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), storageLayout);
+    conf.setString(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    conf.setString(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), mergeHandleClass);
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT.subList(0, 2))
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .consume(TestData.DATA_SET_UPDATE_INSERT.subList(0, 1))
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .end();
+    TestData.checkWrittenData(tempFile, Collections.singletonMap("par1", "[id1:24, id2:33]"), 1,
+        record -> record.get("uuid") + ":" + record.get("age"));
+  }
+
+  private static Stream<Arguments> mergeWithMetaFieldsModeParams() {
+    return Arrays.stream(MetaFieldsMode.values()).flatMap(mode -> Stream.of(
+        Arguments.of(mode, "DEFAULT", HoodieWriteMergeHandle.class.getName()),
+        Arguments.of(mode, "DEFAULT", FileGroupReaderBasedMergeHandle.class.getName()),
+        Arguments.of(mode, "LSM_TREE", FileGroupReaderBasedMergeHandle.class.getName())));
+  }
+
+  @ParameterizedTest
+  @MethodSource("mergeWithMultiplePartitionFieldsParams")
+  public void testMergeWithMultiplePartitionFieldsAndMetaFieldsMode(
+      MetaFieldsMode mode, String storageLayout, String mergeHandleClass) throws Exception {
+    conf.set(FlinkOptions.OPERATION, "upsert");
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,name");
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), storageLayout);
+    conf.setString(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    conf.setString(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), mergeHandleClass);
+    conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "false");
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT.subList(0, 2))
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .consume(TestData.DATA_SET_UPDATE_INSERT.subList(0, 1))
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .end();
+
+    Map<String, String> expected = new HashMap<>();
+    expected.put("par1/Danny", "[id1:24]");
+    expected.put("par1/Stephen", "[id2:33]");
+    // Both leaf partitions share the same top-level directory. The updated key must occur only once.
+    TestData.checkWrittenData(tempFile, expected, 1, record -> {
+      if (mode == MetaFieldsMode.NONE) {
+        assertNull(record.getSchema().getField(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      } else {
+        assertNull(record.get(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      }
+      return record.get("uuid") + ":" + record.get("age");
+    });
+  }
+
+  private static Stream<Arguments> mergeWithMultiplePartitionFieldsParams() {
+    return mergeWithMetaFieldsModeParams().filter(args -> args.get()[0] != MetaFieldsMode.ALL);
+  }
+
   @Test
   public void testInsertDuplicates() throws Exception {
     // reset the config option
@@ -316,6 +440,35 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpointComplete(2)
         .checkWrittenData(EXPECTED3, 1)
         .end();
+  }
+
+  @Test
+  public void testInsertWithTableServiceDisabled() throws Exception {
+    // reset the config option
+    conf.set(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.TABLE_SERVICES_ENABLED, false);
+    conf.set(FlinkOptions.CLUSTERING_SCHEDULE_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
+    conf.set(FlinkOptions.CLUSTERING_DELTA_COMMITS, 1);
+
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .checkpoint(1)
+        .handleEvents(1)
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED4, 1)
+        // insert duplicates again
+        .consume(TestData.DATA_SET_INSERT_SAME_KEY)
+        .checkpoint(2)
+        .handleEvents(1)
+        .checkpointComplete(2)
+        .checkWrittenDataCOW(EXPECTED5)
+        .end();
+    HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf);
+    long completedReplaceCommit = writeClient.getHoodieTable().getActiveTimeline().getCompletedReplaceTimeline().getInstants().stream().count();
+    long pendingReplaceCommit = writeClient.getHoodieTable().getActiveTimeline().filterPendingReplaceTimeline().getInstants().stream().count();
+    assertEquals(0, completedReplaceCommit);
+    assertEquals(0, pendingReplaceCommit);
   }
 
   @Test
@@ -353,6 +506,49 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .assertNextEvent()
         .checkpointComplete(2)
         .checkWrittenData(getUpsertWithDeleteExpected())
+        .end();
+  }
+
+  @ParameterizedTest
+  @CsvSource({"8,false", "8,true", "9,false", "9,true", "10,false", "10,true"})
+  public void testDeduplicationPreservesEventTimeDeleteOrdering(int tableVersion, boolean preCombine) throws Exception {
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, tableVersion);
+    conf.set(FlinkOptions.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
+    conf.set(FlinkOptions.PRE_COMBINE, preCombine);
+
+    List<RowData> inserts = new ArrayList<>();
+    List<RowData> changes = new ArrayList<>();
+    for (String key : Arrays.asList("id1", "id2")) {
+      inserts.add(TestData.insertRow(
+          StringData.fromString(key), StringData.fromString("base"), 100,
+          TimestampData.fromEpochMillis(100), StringData.fromString("par1")));
+      changes.add(TestData.insertRow(
+          StringData.fromString(key), StringData.fromString("older"), 50,
+          TimestampData.fromEpochMillis(50), StringData.fromString("par1")));
+      long deleteTs = key.equals("id1") ? 60 : 110;
+      RowData delete = TestData.insertRow(
+          StringData.fromString(key), StringData.fromString("delete"), 60,
+          TimestampData.fromEpochMillis(deleteTs), StringData.fromString("par1"));
+      delete.setRowKind(RowKind.DELETE);
+      changes.add(delete);
+    }
+
+    preparePipeline()
+        .consume(inserts)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .assertGlobalFailure(false)
+        .checkWrittenData(Collections.singletonMap(
+            "par1", "[id1,par1,id1,base,100,100,par1, id2,par1,id2,base,100,100,par1]"), 1)
+        .consume(changes)
+        .assertDataBuffer(1, 4)
+        .checkpoint(2)
+        .assertNextEvent()
+        .checkpointComplete(2)
+        .assertGlobalFailure(false)
+        // The stale delete must not remove id1 at ts=100; the newer delete must remove id2.
+        .checkWrittenData(Collections.singletonMap("par1", "[id1,par1,id1,base,100,100,par1]"), 1)
         .end();
   }
 
@@ -410,6 +606,32 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .end();
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"DEFAULT", "LSM_TREE"})
+  public void testDeduplicationWithInterleavedKeys(String storageLayout) throws Exception {
+    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), storageLayout);
+    conf.set(FlinkOptions.PRE_COMBINE, true);
+    List<RowData> records = Arrays.asList(
+        TestData.insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 34,
+            TimestampData.fromEpochMillis(4), StringData.fromString("par1")),
+        TestData.insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 24,
+            TimestampData.fromEpochMillis(3), StringData.fromString("par1")),
+        TestData.insertRow(StringData.fromString("id2"), StringData.fromString("Stephen"), 33,
+            TimestampData.fromEpochMillis(2), StringData.fromString("par1")),
+        TestData.insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+            TimestampData.fromEpochMillis(1), StringData.fromString("par1")),
+        TestData.insertRow(StringData.fromString("id3"), StringData.fromString("Julian"), 53,
+            TimestampData.fromEpochMillis(5), StringData.fromString("par1")));
+    preparePipeline(conf)
+        .consume(records)
+        .checkpoint(1)
+        .assertNextEvent()
+        .checkpointComplete(1)
+        .checkWrittenData(Collections.singletonMap("par1",
+            "[id1,par1,id1,Danny,24,3,par1, id2,par1,id2,Stephen,34,4,par1, id3,par1,id3,Julian,53,5,par1]"), 1)
+        .end();
+  }
+
   @Test
   public void testInsertAppendMode() throws Exception {
     conf.set(FlinkOptions.OPERATION, "insert");
@@ -432,9 +654,19 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
    * The test is almost same with {@link #testInsertWithSmallBufferSize} except that
    * it is with insert clustering mode.
    */
-  @Test
-  public void testInsertClustering() throws Exception {
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  public void testInsertClustering(MetaFieldsMode mode) throws Exception {
+    List<String> expected = Arrays.asList(
+        "id1,Danny,23,1970-01-01 00:00:00.0,par1",
+        "id1,Danny,23,1970-01-01 00:00:00.001,par1",
+        "id1,Danny,23,1970-01-01 00:00:00.002,par1",
+        "id1,Danny,23,1970-01-01 00:00:00.003,par1",
+        "id1,Danny,23,1970-01-01 00:00:00.004,par1");
+    List<String> expectedDuplicates = Stream.concat(expected.stream(), expected.stream()).sorted().collect(Collectors.toList());
+
     // reset the config option
+    conf.setString(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
     conf.set(FlinkOptions.OPERATION, "insert");
     conf.set(FlinkOptions.INSERT_CLUSTER, true);
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 64);
@@ -450,13 +682,13 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .allDataFlushed()
         .handleEvents(2)
         .checkpointComplete(1)
-        .checkWrittenData(EXPECTED4, 1)
-        // insert duplicates again
+        .checkWrittenDataNoMeta(Collections.singletonMap("par1", expected.toString()), 1)
+        // Insert duplicates again, exercising concat across checkpoints as well as mini-batches.
         .consume(TestData.DATA_SET_INSERT_SAME_KEY)
         .checkpoint(2)
         .handleEvents(2)
         .checkpointComplete(2)
-        .checkWrittenDataCOW(EXPECTED5)
+        .checkWrittenDataNoMeta(Collections.singletonMap("par1", expectedDuplicates.toString()), 1)
         .end();
   }
 
@@ -486,7 +718,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   @Test
   public void testInsertWithSmallBufferSize() throws Exception {
     // reset the config option
-    // In rowdata write mode, BinaryInMemorySortBuffer need at least 2 memory segments for auxiliary information,
+    // In rowdata write mode, StableSortBuffer need at least 2 memory segments for auxiliary information,
     // the page size is tuned to 64 to make sure 3 records from 5 will trigger a mini-batch write.
     conf.set(FlinkOptions.WRITE_MEMORY_SEGMENT_PAGE_SIZE, 64);
     conf.set(FlinkOptions.WRITE_TASK_MAX_SIZE, 200 + BUFFER_SIZE_MB);
@@ -550,13 +782,9 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
   }
 
   protected Map<String, String> getMiniBatchExpected() {
-    Map<String, String> expected = new HashMap<>();
-    // the last 2 lines are merged
-    expected.put("par1", "["
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1, "
-        + "id1,par1,id1,Danny,23,1,par1" + "]");
-    return expected;
+    // For UPSERT, the classic layout may retain duplicate incoming records when pre-combine is disabled.
+    // In contrast, the LSM merge combines records with the same record key and emits only the winning record.
+    return Collections.singletonMap("par1", "[id1,par1,id1,Danny,23,1,par1]");
   }
 
   protected Map<String, String> getUpsertWithDeleteExpected() {
@@ -567,10 +795,6 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
     expected.put("par3", "[id6,par3,id6,Emma,20,6,par3]");
     expected.put("par4", "[id7,par4,id7,Bob,44,7,par4, id8,par4,id8,Han,56,8,par4]");
     return expected;
-  }
-
-  protected Map<String, String> getExpectedBeforeCheckpointComplete() {
-    return EXPECTED2;
   }
 
   @Test
@@ -608,7 +832,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
         .checkpoint(1)
         .assertBootstrapped()
         .assertNextEvent()
-        .checkWrittenData(getExpectedBeforeCheckpointComplete())
+        .checkWrittenData(EXPECTED1)
         .checkpointComplete(1)
         .checkWrittenData(EXPECTED2)
         .end();
@@ -682,7 +906,7 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
 
   protected void validateNonBlockingConcurrencyControlConditions() {
     assertThrows(
-        IllegalArgumentException.class,
+        HoodieException.class,
         () -> preparePipeline(conf),
         "Non-blocking concurrency control requires the MOR table with simple bucket index");
   }
@@ -817,5 +1041,258 @@ public class TestWriteCopyOnWrite extends TestWriteBase {
       assertTrue(files.stream().noneMatch(f -> f.getPath().getName().endsWith("marker.CREATE")));
     }
     testHarness.checkpointComplete(1).checkWrittenData(EXPECTED1).end();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testBucketAssignWithRLI(boolean mdtCompactionEnabled) throws Exception {
+    // use record level index
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.METADATA_COMPACTION_SCHEDULE_ENABLED, mdtCompactionEnabled);
+    if (mdtCompactionEnabled) {
+      conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 1);
+    }
+    TestHarness testHarness =
+        preparePipeline(conf)
+            .consume(TestData.DATA_SET_INSERT)
+            // no checkpoint, so the coordinator does not accept any events
+            .checkpoint(1)
+            .assertNextEvent(4, "par1,par2,par3,par4")
+            .checkpointComplete(1)
+            .checkWrittenData(EXPECTED1);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        metaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        conf.get(FlinkOptions.PATH));
+
+    // validate the record level index data
+    String firstCommitTime = getTableType() == HoodieTableType.MERGE_ON_READ
+        ? TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH), HoodieTimeline.DELTA_COMMIT_ACTION)
+        : TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH));
+    Map<String, HoodieRecordGlobalLocation> result = HoodieDataUtils.dedupeAndCollectAsMap(
+        metadataTable.readRecordIndexLocationsWithKeys(
+            HoodieListData.eager(Arrays.asList("id1", "id2", "id3", "id4"))));
+    assertEquals(4, result.size());
+    result.values().forEach(location -> assertEquals(firstCommitTime, location.getInstantTime()));
+
+    testHarness.consume(TestData.DATA_SET_INSERT)
+        .checkpoint(2)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED1)
+        .end();
+
+    if (mdtCompactionEnabled) {
+      TestUtils.validateMdtCompactionInstant(conf.get(FlinkOptions.PATH), false);
+    }
+  }
+
+  @Test
+  public void testCacheCleanOfRecordIndexBackend() throws Exception {
+    // use record level index
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    preparePipeline(conf)
+        // should be initialized with 1 inflight caches
+        .assertInflightCachesOfBucketAssigner(1)
+        .consume(TestData.DATA_SET_INSERT)
+        .checkpoint(1)
+        // new cache created since now checkpoint id is updated to 1
+        .assertInflightCachesOfBucketAssigner(2)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .checkpointComplete(1)
+        // the first inflight cache will not be cleaned, since the current total memory size does not exceed the limit.
+        .assertInflightCachesOfBucketAssigner(2)
+        .checkWrittenData(EXPECTED1);
+  }
+
+  @Test
+  public void testIndexWriteFunctionWithSmallBuffer() throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE, 1L);
+
+    StreamWriteFunctionWrapper<RowData> pipeline =
+        (StreamWriteFunctionWrapper<RowData>) TestData.getWritePipeline(tempFile.getAbsolutePath(), conf);
+    pipeline.openFunction();
+    try {
+      // The record cannot fit even after flushing and resetting the 1 MB index buffer.
+      RowData indexRow = GenericRowData.of(IndexRowUtils.RLI_TYPE,
+          StringData.fromString("k".repeat(2 * 1024 * 1024)),
+          StringData.fromString("par1"), StringData.fromString("file1"));
+      HoodieException exception = assertThrows(HoodieException.class,
+          () -> pipeline.getIndexWriteFunction().processElement(indexRow, null, null));
+      assertEquals("Index write buffer is too small to hold a single record.", exception.getMessage());
+    } finally {
+      pipeline.close();
+    }
+  }
+
+  @Test
+  public void testIndexWriteFunctionRetriesAfterBufferFull() throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.INDEX_RLI_WRITE_BUFFER_SIZE, 1L);
+    // Assign buckets immediately so the index buffer fills before the checkpoint.
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    StreamWriteFunctionWrapper<RowData> pipeline =
+        (StreamWriteFunctionWrapper<RowData>) TestData.getWritePipeline(tempFile.getAbsolutePath(), conf);
+    pipeline.openFunction();
+    try {
+      String payload = "k".repeat(4 * 1024);
+      List<String> keys = new ArrayList<>();
+      // Each row fits alone. Stop as soon as their combined size exhausts the 1 MB buffer.
+      for (int i = 0; i < 400; i++) {
+        String key = i + payload;
+        keys.add(key);
+        pipeline.invoke(TestData.insertRow(StringData.fromString(key), StringData.fromString("name"),
+            20, TimestampData.fromEpochMillis(1), StringData.fromString("par1")));
+        if (pipeline.getIndexEventBuffer() != null && pipeline.getIndexEventBuffer()[0] != null) {
+          break;
+        }
+      }
+
+      // Earlier rows were flushed without a checkpoint; the triggering row survived the retry.
+      assertNotNull(pipeline.getIndexEventBuffer());
+      assertNotNull(pipeline.getIndexEventBuffer()[0]);
+      assertTrue(keys.size() > 1);
+      assertEquals(keys.size() - 1L, pipeline.getIndexEventBuffer()[0].getWriteStatuses().stream()
+          .mapToLong(WriteStatus::getTotalRecords).sum());
+      assertEquals(Collections.singletonList(keys.get(keys.size() - 1)), pipeline.getIndexDataBuffer().stream()
+          .map(HoodieRecord::getRecordKey).collect(Collectors.toList()));
+      String fileId = ((HoodieMetadataPayload) pipeline.getIndexDataBuffer().get(0).getData())
+          .getRecordGlobalLocation().getFileId();
+
+      pipeline.checkpointFunction(1);
+      assertTrue(pipeline.getIndexDataBuffer().isEmpty());
+      pipeline.getCoordinator().handleEventFromOperator(0, pipeline.getNextEvent());
+      pipeline.checkpointComplete(1);
+
+      Map<String, HoodieRecordGlobalLocation> locations = getRecordKeyIndex(StreamerUtil.createMetaClient(conf), keys);
+      assertEquals(keys.size(), locations.size());
+      assertTrue(locations.keySet().containsAll(keys));
+      locations.values().forEach(location -> {
+        assertEquals("par1", location.getPartitionPath());
+        assertEquals(fileId, location.getFileId());
+      });
+    } finally {
+      pipeline.close();
+    }
+  }
+
+  @Test
+  public void testIndexWriteFunctionWithCheckpoint() throws Exception {
+    // Test IndexWriteFunction with checkpoint operations
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+
+    preparePipeline(conf)
+        .consume(TestData.DATA_SET_INSERT)
+        .emptyEventBuffer()
+        // no checkpoint, so the coordinator does not accept any events
+        .checkpoint(1)
+        .allDataFlushed()
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        // should only contain write event for record index partition
+        .assertIndexEvent("record_index")
+        .checkpointComplete(1)
+        .checkWrittenData(EXPECTED1)
+        .end();
+  }
+
+  @ParameterizedTest
+  @MethodSource("mdtCompactionParams")
+  public void testIndexWriteFunctionWithMultipleCheckpoints(boolean mdtCompactionEnabled, boolean isLogCompaction) throws Exception {
+    // Test IndexWriteFunction with multiple checkpoint operations
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    conf.setString(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    conf.set(FlinkOptions.METADATA_COMPACTION_SCHEDULE_ENABLED, mdtCompactionEnabled);
+    if (mdtCompactionEnabled) {
+      if (isLogCompaction) {
+        conf.setString(HoodieMetadataConfig.ENABLE_LOG_COMPACTION_ON_METADATA_TABLE.key(), "true");
+        conf.setString(HoodieMetadataConfig.LOG_COMPACT_BLOCKS_THRESHOLD.key(), "1");
+      } else {
+        conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, 1);
+      }
+    }
+
+    TestHarness testHarness =
+        preparePipeline()
+            .consume(TestData.DATA_SET_INSERT)
+            .checkpoint(1)
+            .assertNextEvent(4, "par1,par2,par3,par4")
+            .checkpointComplete(1)
+            .checkWrittenData(EXPECTED1);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    // validate the record level index data
+    String firstCommitTime = getTableType() == HoodieTableType.MERGE_ON_READ
+        ? TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH), HoodieTimeline.DELTA_COMMIT_ACTION)
+        : TestUtils.getLastCompleteInstant(conf.get(FlinkOptions.PATH));
+    Map<String, String> expectedKeyPartitionMap = new HashMap<>();
+    for (RowData rowData: TestData.DATA_SET_INSERT) {
+      expectedKeyPartitionMap.put(rowData.getString(0).toString(), rowData.getString(4).toString());
+    }
+    Map<String, HoodieRecordGlobalLocation> result =
+        getRecordKeyIndex(metaClient, Arrays.asList("id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8"));
+    assertEquals(8, result.size());
+    result.forEach((key, value) -> {
+      assertEquals(firstCommitTime, value.getInstantTime());
+      assertEquals(expectedKeyPartitionMap.get(key), value.getPartitionPath());
+    });
+
+    testHarness.consume(TestData.DATA_SET_GLOBAL_UPDATE_INSERT)
+        .checkpoint(2)
+        .assertNextEvent(4, "par1,par2,par3,par4")
+        .checkpointComplete(2)
+        .checkWrittenData(EXPECTED6)
+        .end();
+
+    // update expected key partition map
+    for (RowData rowData: TestData.DATA_SET_GLOBAL_UPDATE_INSERT) {
+      expectedKeyPartitionMap.put(rowData.getString(0).toString(), rowData.getString(4).toString());
+    }
+    result =
+        getRecordKeyIndex(metaClient, Arrays.asList("id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8", "id9", "id10", "id11"));
+    assertEquals(11, result.size());
+    result.forEach((key, value) -> assertEquals(expectedKeyPartitionMap.get(key), value.getPartitionPath()));
+
+    if (mdtCompactionEnabled) {
+      TestUtils.validateMdtCompactionInstant(conf.get(FlinkOptions.PATH), isLogCompaction);
+    }
+  }
+
+  /**
+   * Return test params => (mdt compaction enabled, log compaction enabled).
+   */
+  private static Stream<Arguments> mdtCompactionParams() {
+    Object[][] data =
+        new Object[][] {
+            {true, false},
+            {true, true},
+            {false, false},
+            {false, true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  private Map<String, HoodieRecordGlobalLocation> getRecordKeyIndex(HoodieTableMetaClient metaClient, List<String> keys) {
+    HoodieTableMetadata metadataTable = metaClient.getTableFormat().getMetadataFactory().create(
+        HoodieFlinkEngineContext.DEFAULT,
+        metaClient.getStorage(),
+        StreamerUtil.metadataConfig(conf),
+        conf.get(FlinkOptions.PATH));
+    return HoodieDataUtils.dedupeAndCollectAsMap(
+        metadataTable.readRecordIndexLocationsWithKeys(HoodieListData.eager(keys)));
   }
 }

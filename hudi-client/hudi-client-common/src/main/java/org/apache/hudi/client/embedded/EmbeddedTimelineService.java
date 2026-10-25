@@ -97,7 +97,7 @@ public class EmbeddedTimelineService {
       synchronized (SERVICE_LOCK) {
         if (RUNNING_SERVICES.containsKey(timelineServiceIdentifier)) {
           RUNNING_SERVICES.get(timelineServiceIdentifier).addBasePath(writeConfig.getBasePath());
-          log.info("Reusing existing embedded timeline server with configuration: " + RUNNING_SERVICES.get(timelineServiceIdentifier).serviceConfig);
+          log.info("Reusing existing embedded timeline server with configuration: {}", RUNNING_SERVICES.get(timelineServiceIdentifier).serviceConfig);
           return RUNNING_SERVICES.get(timelineServiceIdentifier);
         }
         // if no compatible instance is found, create a new one
@@ -123,8 +123,15 @@ public class EmbeddedTimelineService {
   public static void shutdownAllTimelineServers() {
     RUNNING_SERVICES.entrySet().forEach(entry -> {
       log.info("Closing Timeline server");
-      entry.getValue().server.close();
-      METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+      try {
+        entry.getValue().server.close();
+      } catch (Exception e) {
+        // Keep sweeping: an unguarded throw here would abandon every server after this one and
+        // skip the clear() below, leaving the registry pointing at servers nobody can reach.
+        log.warn("Timeline server did not close cleanly during shutdown; continuing", e);
+      } finally {
+        METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+      }
       log.info("Closed Timeline server");
     });
     RUNNING_SERVICES.clear();
@@ -144,7 +151,7 @@ public class EmbeddedTimelineService {
   }
 
   private void startServer(TimelineServiceCreator timelineServiceCreator) throws IOException {
-    TimelineService.Config.Builder timelineServiceConfBuilder = TimelineService.Config.builder()
+    TimelineService.Config.ConfigBuilder timelineServiceConfBuilder = TimelineService.Config.builder()
         .serverPort(writeConfig.getEmbeddedTimelineServerPort())
         .numThreads(writeConfig.getEmbeddedTimelineServerThreads())
         .compress(writeConfig.getEmbeddedTimelineServerCompressOutput())
@@ -165,7 +172,7 @@ public class EmbeddedTimelineService {
           .earlyConflictDetectionCheckCommitConflict(writeConfig.earlyConflictDetectionCheckCommitConflict())
           .asyncConflictDetectorInitialDelayMs(writeConfig.getAsyncConflictDetectorInitialDelayMs())
           .asyncConflictDetectorPeriodMs(writeConfig.getAsyncConflictDetectorPeriodMs())
-          .earlyConflictDetectionMaxAllowableHeartbeatIntervalInMs(
+          .maxAllowableHeartbeatIntervalInMs(
               writeConfig.getHoodieClientHeartbeatIntervalInMs()
                   * writeConfig.getHoodieClientHeartbeatTolerableMisses());
     }
@@ -214,6 +221,7 @@ public class EmbeddedTimelineService {
         .withRemoteTimelineInitialRetryIntervalMs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineInitialRetryIntervalMs())
         .withRemoteTimelineClientMaxRetryIntervalMs(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientMaxRetryIntervalMs())
         .withRemoteTimelineClientRetryExceptions(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteTimelineClientRetryExceptions())
+        .withRemoteResponseCharset(clientWriteConfig.getClientSpecifiedViewStorageConfig().getRemoteResponseCharset())
         .build();
   }
 
@@ -242,17 +250,24 @@ public class EmbeddedTimelineService {
     // continue rest of shutdown outside of the synchronized block to avoid excess blocking
     if (basePaths.isEmpty() && null != server) {
       log.info("Closing Timeline server");
-      this.server.close();
-      METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
-      this.server = null;
-      this.viewManager = null;
+      try {
+        this.server.close();
+      } catch (Exception e) {
+        // Release the references anyway: holding on to a server that failed to close leaves this
+        // instance permanently unclosable, since every later call re-enters this same branch.
+        log.warn("Timeline server did not close cleanly; releasing the reference anyway", e);
+      } finally {
+        METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+        this.server = null;
+        this.viewManager = null;
+      }
       log.info("Closed Timeline server");
     }
   }
 
   private static TimelineServiceIdentifier getTimelineServiceIdentifier(String hostAddr, HoodieWriteConfig writeConfig) {
     return new TimelineServiceIdentifier(hostAddr, writeConfig.getMarkersType(), writeConfig.isMetadataTableEnabled(),
-        writeConfig.isEarlyConflictDetectionEnable());
+        writeConfig.isEarlyConflictDetectionEnable(), writeConfig.isUsingRemotePartitioner());
   }
 
   static class TimelineServiceIdentifier {
@@ -260,15 +275,18 @@ public class EmbeddedTimelineService {
     private final MarkerType markerType;
     private final boolean isMetadataEnabled;
     private final boolean isEarlyConflictDetectionEnable;
+    private final boolean isRemotePartitionerEnabled;
 
     public TimelineServiceIdentifier(String hostAddr,
                                      MarkerType markerType,
                                      boolean isMetadataEnabled,
-                                     boolean isEarlyConflictDetectionEnable) {
+                                     boolean isEarlyConflictDetectionEnable,
+                                     boolean isRemotePartitionerEnabled) {
       this.hostAddr = hostAddr;
       this.markerType = markerType;
       this.isMetadataEnabled = isMetadataEnabled;
       this.isEarlyConflictDetectionEnable = isEarlyConflictDetectionEnable;
+      this.isRemotePartitionerEnabled = isRemotePartitionerEnabled;
     }
 
     @Override
@@ -280,17 +298,16 @@ public class EmbeddedTimelineService {
         return false;
       }
       TimelineServiceIdentifier that = (TimelineServiceIdentifier) o;
-      if (this.hostAddr != null && that.hostAddr != null) {
-        return isMetadataEnabled == that.isMetadataEnabled && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
-            && hostAddr.equals(that.hostAddr) && markerType == that.markerType;
-      } else {
-        return (hostAddr == null && that.hostAddr == null);
-      }
+      return isMetadataEnabled == that.isMetadataEnabled
+          && isEarlyConflictDetectionEnable == that.isEarlyConflictDetectionEnable
+          && isRemotePartitionerEnabled == that.isRemotePartitionerEnabled
+          && Objects.equals(hostAddr, that.hostAddr)
+          && markerType == that.markerType;
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable);
+      return Objects.hash(hostAddr, markerType, isMetadataEnabled, isEarlyConflictDetectionEnable, isRemotePartitionerEnabled);
     }
   }
 }

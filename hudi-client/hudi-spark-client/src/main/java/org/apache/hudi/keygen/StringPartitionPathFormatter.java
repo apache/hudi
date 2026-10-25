@@ -29,9 +29,10 @@ import static org.apache.hudi.keygen.KeyGenUtils.HUDI_DEFAULT_PARTITION_PATH;
 public class StringPartitionPathFormatter extends PartitionPathFormatterBase<String> {
 
   public StringPartitionPathFormatter(Supplier<StringBuilder<String>> stringBuilderFactory,
-                               boolean useHiveStylePartitioning,
-                               boolean useEncoding) {
-    super(stringBuilderFactory, useHiveStylePartitioning, useEncoding);
+                                      boolean useHiveStylePartitioning,
+                                      boolean useEncoding,
+                                      boolean slashSeparatedDatePartitioning) {
+    super(stringBuilderFactory, useHiveStylePartitioning, useEncoding, slashSeparatedDatePartitioning);
   }
 
   @Override
@@ -53,6 +54,16 @@ public class StringPartitionPathFormatter extends PartitionPathFormatterBase<Str
       String keyPartStr = partitionPathPart;
       return keyPartStr.isEmpty() ? HUDI_DEFAULT_PARTITION_PATH : keyPartStr;
     }
+  }
+
+  @Override
+  protected String replaceDashesWithSlashes(String partitionPathPart) {
+    return partitionPathPart.replace('-', '/');
+  }
+
+  @Override
+  protected boolean hasPathBreakingDash(String partitionPathPart) {
+    return KeyGenUtils.hasPathBreakingDash(partitionPathPart);
   }
 
   public static class JavaStringBuilder implements PartitionPathFormatterBase.StringBuilder<String> {

@@ -19,7 +19,7 @@
   <parent>
     <artifactId>hudi</artifactId>
     <groupId>org.apache.hudi</groupId>
-    <version>1.2.0-SNAPSHOT</version>
+    <version>1.3.0-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <modelVersion>4.0.0</modelVersion>
@@ -136,7 +136,10 @@
                   <shadedPattern>org.apache.hudi.com.fasterxml.jackson.</shadedPattern>
                 </relocation>
               </relocations>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <createDependencyReducedPom>true</createDependencyReducedPom>
+              <!-- Keep dependencies that are not absorbed into the shaded jar, so the reduced POM still
+                   declares what consumers need at runtime. -->
+              <promoteTransitiveDependencies>true</promoteTransitiveDependencies>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>

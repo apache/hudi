@@ -20,15 +20,16 @@ package org.apache.spark.sql.hudi.analysis
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
 import org.apache.spark.sql.BaseHoodieCatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
+import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.spark.sql.connector.catalog.{Table, V1Table}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
@@ -38,6 +39,7 @@ import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.{HoodieV1OrV2T
 import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
+import org.apache.spark.sql.types.{ArrayType, DecimalType, DoubleType, FloatType, IntegerType, LongType}
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -59,6 +61,9 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
     case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>
       if (timestamp.isEmpty && version.nonEmpty) {
         throw new HoodieAnalysisException("Version expression is not supported for time travel")
+      }
+      if (timestamp.exists(_.references.nonEmpty) || timestamp.exists(SubqueryExpression.hasSubquery)) {
+        throw new HoodieAnalysisException("timestamp expression cannot refer to any columns or contain subqueries")
       }
 
       val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
@@ -149,6 +154,23 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
           (catalogTable.location.toString + "/.hoodie/metadata")))
         LogicalRelation(relation, catalogTable)
       }
+    case HoodieVectorSearchTableValuedFunction(args) =>
+      val a = HoodieVectorSearchTableValuedFunction.parseArgs(args)
+      val searchAlgorithm = HoodieVectorSearchPlanBuilder.resolveAlgorithm(a.algorithm)
+      val corpusDf = resolveTableToDf(a.table, HoodieVectorSearchTableValuedFunction.FUNC_NAME)
+      val queryVector = evaluateQueryVector(a.queryVectorExpr)
+      searchAlgorithm.buildSingleQueryPlan(
+        spark, corpusDf, a.embeddingCol, queryVector, a.k, a.metric, a.filter, a.maxDistance)
+
+    case HoodieVectorSearchBatchTableValuedFunction(args) =>
+      val a = HoodieVectorSearchBatchTableValuedFunction.parseArgs(args)
+      val searchAlgorithm = HoodieVectorSearchPlanBuilder.resolveAlgorithm(a.algorithm)
+      val corpusDf = resolveTableToDf(a.corpusTable, HoodieVectorSearchBatchTableValuedFunction.FUNC_NAME)
+      val queryDf = resolveTableToDf(a.queryTable, HoodieVectorSearchBatchTableValuedFunction.FUNC_NAME)
+      searchAlgorithm.buildBatchQueryPlan(
+        spark, corpusDf, a.corpusEmbeddingCol, queryDf, a.queryEmbeddingCol,
+        a.k, a.metric, a.filter, a.maxDistance)
+
     case mO@MatchMergeIntoTable(targetTableO, sourceTableO, _)
       // START: custom Hudi change: don't want to go to the spark mit resolution so we resolve the source and target
       // if they haven't been
@@ -166,7 +188,14 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
       val sourceTable = if (sourceTableO.resolved) sourceTableO else analyzer.execute(sourceTableO)
       val m = mO.asInstanceOf[MergeIntoTable].copy(targetTable = targetTable, sourceTable = sourceTable)
       // END: custom Hudi change
-      EliminateSubqueryAliases(targetTable) match {
+      // If the source table still has unresolved references (e.g. a non-existent
+      // column in the source query, or a missing source table), return the
+      // partially-resolved MIT and let Spark's CheckAnalysis surface the error.
+      // Continuing into the resolve-assignments path would either lose the column
+      // context or throw a less informative UnresolvedException.
+      if (!sourceTable.resolved) {
+        m
+      } else EliminateSubqueryAliases(targetTable) match {
         case r: NamedRelation if r.skipSchemaResolution =>
           // Do not resolve the expression if the target table accepts any schema.
           // This allows data sources to customize their own resolution logic using
@@ -174,12 +203,14 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
           m
 
         case _ =>
+          val catalystPlanUtils = sparkAdapter.getCatalystPlanUtils
           val newMatchedActions = m.matchedActions.map {
             case DeleteAction(deleteCondition) =>
               val resolvedDeleteCondition = deleteCondition.map(
                 resolveExpressionByPlanChildren(_, m))
               DeleteAction(resolvedDeleteCondition)
-            case UpdateAction(updateCondition, assignments) =>
+            case action if catalystPlanUtils.unapplyUpdateAction(action).isDefined =>
+              val (updateCondition, assignments) = catalystPlanUtils.unapplyUpdateAction(action).get
               val resolvedUpdateCondition = updateCondition.map(
                 resolveExpressionByPlanChildren(_, m))
               UpdateAction(
@@ -308,6 +339,68 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
   private[sql] object MatchMergeIntoTable {
     def unapply(plan: LogicalPlan): Option[(LogicalPlan, LogicalPlan, Expression)] =
       sparkAdapter.getCatalystPlanUtils.unapplyMergeIntoTable(plan)
+  }
+
+  /**
+   * Resolves a table reference to a DataFrame. Accepts either a table identifier
+   * (including multi-part identifiers like catalog.db.table) or a file path.
+   */
+  private def resolveTableToDf(table: String, funcName: String): DataFrame = {
+    try {
+      if (table.contains(StoragePath.SEPARATOR)) {
+        spark.read.format("hudi").load(table)
+      } else {
+        spark.table(table)
+      }
+    } catch {
+      case e: Exception => throw new HoodieAnalysisException(
+        s"$funcName: unable to resolve table '$table': ${e.getMessage}")
+    }
+  }
+
+  private def evaluateQueryVector(expr: Expression): Array[Double] = {
+    if (!expr.foldable) {
+      throw new HoodieAnalysisException(
+        s"Function '${HoodieVectorSearchTableValuedFunction.FUNC_NAME}': " +
+          "query vector must be a constant expression (e.g., ARRAY(1.0, 2.0, 3.0))")
+    }
+    expr.dataType match {
+      case _: ArrayType => // valid
+      case other => throw new HoodieAnalysisException(
+        s"Function '${HoodieVectorSearchTableValuedFunction.FUNC_NAME}': " +
+          s"query vector must be an array type (e.g., ARRAY(1.0, 2.0, 3.0)), got $other")
+    }
+
+    val value = expr.eval(null)
+    if (value == null) {
+      throw new HoodieAnalysisException(
+        s"Function '${HoodieVectorSearchTableValuedFunction.FUNC_NAME}': query vector cannot be null")
+    }
+
+    val arrayData = value.asInstanceOf[ArrayData]
+    val numElements = arrayData.numElements()
+    val elementType = expr.dataType.asInstanceOf[ArrayType].elementType
+
+    // Resolve element extractor once, before the loop.
+    // Spark SQL infers untyped decimal literals (e.g. ARRAY(1.0, 0.5)) as DecimalType,
+    // not DoubleType, so DecimalType is accepted and converted.
+    val getElement: Int => Double = elementType match {
+      case DoubleType     => i => arrayData.getDouble(i)
+      case FloatType      => i => arrayData.getFloat(i).toDouble
+      case IntegerType    => i => arrayData.getInt(i).toDouble
+      case LongType       => i => arrayData.getLong(i).toDouble
+      case d: DecimalType => i => arrayData.getDecimal(i, d.precision, d.scale).toDouble
+      case other => throw new HoodieAnalysisException(
+        s"Function '${HoodieVectorSearchTableValuedFunction.FUNC_NAME}': " +
+          s"query vector element type $other not supported, expected numeric array")
+    }
+
+    (0 until numElements).map { i =>
+      if (arrayData.isNullAt(i)) throw new HoodieAnalysisException(
+        s"Function '${HoodieVectorSearchTableValuedFunction.FUNC_NAME}': " +
+          s"query vector element at index $i is null")
+      getElement(i)
+    }.toArray
   }
 
 }

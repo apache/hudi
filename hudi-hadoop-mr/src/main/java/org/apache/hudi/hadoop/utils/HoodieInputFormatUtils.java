@@ -25,13 +25,13 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.TablePathUtils;
@@ -40,16 +40,19 @@ import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.BootstrapBaseFileSplit;
 import org.apache.hudi.hadoop.FileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.HoodieHFileInputFormat;
+import org.apache.hudi.hadoop.HoodieLanceInputFormat;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
+import org.apache.hudi.hadoop.HoodieVortexInputFormat;
 import org.apache.hudi.hadoop.LocatedFileStatusWithBootstrapBaseFile;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hadoop.realtime.HoodieHFileRealtimeInputFormat;
+import org.apache.hudi.hadoop.realtime.HoodieLanceRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimeFileSplit;
 import org.apache.hudi.hadoop.realtime.HoodieRealtimePath;
+import org.apache.hudi.hadoop.realtime.HoodieVortexRealtimeInputFormat;
 import org.apache.hudi.hadoop.realtime.RealtimeSplit;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
@@ -72,6 +75,7 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -87,7 +91,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.common.config.HoodieCommonConfig.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
-import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.handleHollowCommitIfNeeded;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
 
@@ -123,6 +126,26 @@ public class HoodieInputFormatUtils {
           inputFormat.setConf(conf);
           return inputFormat;
         }
+      case LANCE:
+        if (realtime) {
+          HoodieLanceRealtimeInputFormat inputFormat = new HoodieLanceRealtimeInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        } else {
+          HoodieLanceInputFormat inputFormat = new HoodieLanceInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        }
+      case VORTEX:
+        if (realtime) {
+          HoodieVortexRealtimeInputFormat inputFormat = new HoodieVortexRealtimeInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        } else {
+          HoodieVortexInputFormat inputFormat = new HoodieVortexInputFormat();
+          inputFormat.setConf(conf);
+          return inputFormat;
+        }
       default:
         throw new HoodieIOException("Hoodie InputFormat not implemented for base file format " + baseFileFormat);
     }
@@ -146,6 +169,18 @@ public class HoodieInputFormatUtils {
         } else {
           return HoodieHFileInputFormat.class.getName();
         }
+      case LANCE:
+        if (realtime) {
+          return HoodieLanceRealtimeInputFormat.class.getName();
+        } else {
+          return HoodieLanceInputFormat.class.getName();
+        }
+      case VORTEX:
+        if (realtime) {
+          return HoodieVortexRealtimeInputFormat.class.getName();
+        } else {
+          return HoodieVortexInputFormat.class.getName();
+        }
       case ORC:
         return OrcInputFormat.class.getName();
       default:
@@ -157,6 +192,8 @@ public class HoodieInputFormatUtils {
     switch (baseFileFormat) {
       case PARQUET:
       case HFILE:
+      case LANCE:
+      case VORTEX:
         return MapredParquetOutputFormat.class.getName();
       case ORC:
         return OrcOutputFormat.class.getName();
@@ -169,6 +206,8 @@ public class HoodieInputFormatUtils {
     switch (baseFileFormat) {
       case PARQUET:
       case HFILE:
+      case LANCE:
+      case VORTEX:
         return ParquetHiveSerDe.class.getName();
       case ORC:
         return OrcSerde.class.getName();
@@ -184,6 +223,12 @@ public class HoodieInputFormatUtils {
     }
     if (extension.equals(HoodieFileFormat.HFILE.getFileExtension())) {
       return getInputFormat(HoodieFileFormat.HFILE, realtime, conf);
+    }
+    if (extension.equals(HoodieFileFormat.LANCE.getFileExtension())) {
+      return getInputFormat(HoodieFileFormat.LANCE, realtime, conf);
+    }
+    if (extension.equals(HoodieFileFormat.VORTEX.getFileExtension())) {
+      return getInputFormat(HoodieFileFormat.VORTEX, realtime, conf);
     }
     // now we support read log file, try to find log file
     if (HadoopFSUtils.isLogFile(new Path(path)) && realtime) {
@@ -358,29 +403,21 @@ public class HoodieInputFormatUtils {
    * Extract HoodieTableMetaClient from a partition path (not base path)
    */
   public static HoodieTableMetaClient getTableMetaClientForBasePathUnchecked(Configuration conf, Path partitionPath) throws IOException {
-    Path baseDir = partitionPath;
     HoodieStorage storage = HoodieStorageUtils.getStorage(
         partitionPath.toString(), HadoopFSUtils.getStorageConf(conf));
-    StoragePath partitionStoragePath = convertToStoragePath(partitionPath);
-    if (HoodiePartitionMetadata.hasPartitionMetadata(storage,  partitionStoragePath)) {
-      HoodiePartitionMetadata metadata = new HoodiePartitionMetadata(storage, partitionStoragePath);
-      metadata.readFromFS();
-      int levels = metadata.getPartitionDepth();
-      baseDir = HoodieHiveUtils.getNthParent(partitionPath, levels);
-    } else {
-      for (int i = 0; i < partitionPath.depth(); i++) {
-        if (storage.exists(new StoragePath(convertToStoragePath(baseDir), METAFOLDER_NAME))) {
-          break;
-        } else if (i == partitionPath.depth() - 1) {
-          throw new TableNotFoundException(partitionPath.toString());
-        } else {
-          baseDir = baseDir.getParent();
-        }
-      }
+    Option<StoragePath> baseDir;
+    try {
+      baseDir = TablePathUtils.getTablePath(storage, convertToStoragePath(partitionPath));
+    } catch (FileNotFoundException e) {
+      // preserve the historical contract: a nonexistent input path surfaces as table-not-found
+      throw new TableNotFoundException(partitionPath.toString());
     }
-    LOG.info("Reading hoodie metadata from path {}", baseDir);
+    if (!baseDir.isPresent()) {
+      throw new TableNotFoundException(partitionPath.toString());
+    }
+    LOG.info("Reading hoodie metadata from path {}", baseDir.get());
     return HoodieTableMetaClient.builder()
-        .setConf(storage.getConf().newInstance()).setBasePath(baseDir.toString()).build();
+        .setConf(storage.getConf().newInstance()).setBasePath(baseDir.get().toString()).build();
   }
 
   public static FileStatus getFileStatus(HoodieBaseFile baseFile) throws IOException {
@@ -458,19 +495,19 @@ public class HoodieInputFormatUtils {
    * 3. Generation of splits looks at FileStatus size to create splits, which skips this file
    *
    * @param conf
-   * @param dataFile
+   * @param baseFile
    * @return
    */
-  private static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile dataFile) {
-    StoragePath dataPath = dataFile.getPathInfo().getPath();
+  private static HoodieBaseFile refreshFileStatus(Configuration conf, HoodieBaseFile baseFile) {
+    StoragePath dataPath = baseFile.getPathInfo().getPath();
     try {
-      if (dataFile.getFileSize() == 0) {
+      if (baseFile.getFileSize() == 0) {
         HoodieStorage storage = HoodieStorageUtils.getStorage(dataPath, HadoopFSUtils.getStorageConf(conf));
-        LOG.info("Refreshing file status {}", dataFile.getPath());
+        LOG.info("Refreshing file status {}", baseFile.getPath());
         return new HoodieBaseFile(storage.getPathInfo(dataPath),
-            dataFile.getBootstrapBaseFile().orElse(null));
+            baseFile.getBootstrapBaseFile().orElse(null));
       }
-      return dataFile;
+      return baseFile;
     } catch (IOException e) {
       throw new HoodieIOException("Could not get FileStatus on path " + dataPath);
     }

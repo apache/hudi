@@ -1,0 +1,61 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# SparkApplication for the Apache Spark Kubernetes Operator
+# (https://github.com/apache/spark-kubernetes-operator), submitted by
+# local-dev/scripts/run-example.sh after uploading hudi_table_writer.py to
+# s3a://warehouse/jobs/.
+#
+# To run your own job: copy this file + your script, adjust pyFiles (or
+# mainClass/jars for JVM jobs), the env block, and any spark conf.
+apiVersion: spark.apache.org/v1alpha1
+kind: SparkApplication
+metadata:
+  name: hudi-table-writer
+  namespace: hudi-lakehouse
+spec:
+  pyFiles: "s3a://warehouse/jobs/hudi_table_writer.py"
+  runtimeVersions:
+    sparkVersion: "3.5.7"
+    scalaVersion: "2.12"
+  sparkConf:
+    # Service account created by the spark-kubernetes-operator helm chart
+    # (the namespace default SA cannot manage executor pods).
+    spark.kubernetes.authenticate.driver.serviceAccountName: "spark"
+    spark.kubernetes.container.image: "hudi-lakehouse-spark:3.5"
+    spark.kubernetes.container.image.pullPolicy: "IfNotPresent"
+    spark.executor.instances: "1"
+    spark.driver.memory: "1g"
+    spark.executor.memory: "1g"
+    spark.serializer: "org.apache.spark.serializer.KryoSerializer"
+    spark.sql.extensions: "org.apache.spark.sql.hudi.HoodieSparkSessionExtension"
+    spark.kryo.registrator: "org.apache.spark.HoodieSparkKryoRegistrar"
+    # Object storage (local-dev MinIO; swap for real S3 on clusters).
+    spark.hadoop.fs.s3a.impl: "org.apache.hadoop.fs.s3a.S3AFileSystem"
+    spark.hadoop.fs.s3a.endpoint: "http://minio.hudi-lakehouse.svc.cluster.local:9000"
+    spark.hadoop.fs.s3a.access.key: "admin"
+    spark.hadoop.fs.s3a.secret.key: "password"
+    spark.hadoop.fs.s3a.path.style.access: "true"
+    # Job parameters consumed by hudi_table_writer.py.
+    spark.kubernetes.driverEnv.TABLE_NAME: "trips"
+    spark.kubernetes.driverEnv.DATABASE: "default"
+    spark.kubernetes.driverEnv.BASE_PATH: "s3a://warehouse/hudi/trips"
+    spark.kubernetes.driverEnv.HMS_URI: "thrift://hive-metastore.hudi-lakehouse.svc.cluster.local:9083"
+    spark.kubernetes.driverEnv.NUM_ROWS: "100"
+  applicationTolerations:
+    # Retain the driver pod after completion so its logs stay inspectable
+    # (run-example.sh reads them; the next run cleans the previous app up).
+    resourceRetainPolicy: Always

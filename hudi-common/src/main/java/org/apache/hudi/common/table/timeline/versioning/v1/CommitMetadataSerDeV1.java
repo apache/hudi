@@ -26,9 +26,8 @@ import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieInstantWriter;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.specific.SpecificRecordBase;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,8 +36,8 @@ import java.util.function.BooleanSupplier;
 import static org.apache.hudi.common.table.timeline.MetadataConversionUtils.removeNullKeyFromMapMembersForCommitMetadata;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
+@Slf4j
 public class CommitMetadataSerDeV1 implements CommitMetadataSerDe {
-  private static final Logger LOG = LoggerFactory.getLogger(CommitMetadataSerDeV1.class);
 
   @Override
   public <T> T deserialize(HoodieInstant instant, InputStream inputStream, BooleanSupplier isEmptyInstant, Class<T> clazz) throws IOException {

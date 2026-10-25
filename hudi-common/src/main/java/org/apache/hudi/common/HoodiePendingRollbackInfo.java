@@ -21,24 +21,16 @@ package org.apache.hudi.common;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Holds rollback instant and rollback plan for a pending rollback.
  */
+@AllArgsConstructor
+@Getter
 public class HoodiePendingRollbackInfo {
 
   private final HoodieInstant rollbackInstant;
   private final HoodieRollbackPlan rollbackPlan;
-
-  public HoodiePendingRollbackInfo(HoodieInstant rollbackInstant, HoodieRollbackPlan rollbackPlan) {
-    this.rollbackInstant = rollbackInstant;
-    this.rollbackPlan = rollbackPlan;
-  }
-
-  public HoodieInstant getRollbackInstant() {
-    return rollbackInstant;
-  }
-
-  public HoodieRollbackPlan getRollbackPlan() {
-    return rollbackPlan;
-  }
 }

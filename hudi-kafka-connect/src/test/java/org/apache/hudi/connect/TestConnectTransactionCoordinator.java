@@ -21,6 +21,7 @@ package org.apache.hudi.connect;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.connect.kafka.KafkaControlAgent;
 import org.apache.hudi.connect.transaction.ConnectTransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionCoordinator;
 import org.apache.hudi.connect.transaction.TransactionParticipant;
@@ -30,9 +31,11 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.helper.MockConnectTransactionServices;
 import org.apache.hudi.helper.MockKafkaControlAgent;
 
+import lombok.Getter;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
@@ -43,9 +46,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 public class TestConnectTransactionCoordinator {
 
@@ -100,6 +107,42 @@ public class TestConnectTransactionCoordinator {
     participant.stop();
   }
 
+  @Test
+  public void testRetryStartCommitWhenPartitionLookupFails() {
+    KafkaControlAgent controlAgent = mock(KafkaControlAgent.class);
+    AtomicInteger partitionLookups = new AtomicInteger();
+    // The first lookup fails, e.g. because the Kafka brokers are briefly unreachable
+    ConnectTransactionCoordinator.KafkaPartitionProvider partitionProvider = (bootstrapServers, topicName) -> {
+      if (partitionLookups.getAndIncrement() == 0) {
+        throw new HoodieException("Failed to fetch the latest number of partitions");
+      }
+      return TOTAL_KAFKA_PARTITIONS;
+    };
+    configs = KafkaConnectConfigs.newBuilder()
+        .withCommitIntervalSecs(60L)
+        .withCoordinatorWriteTimeoutSecs(60L)
+        .build();
+
+    TransactionCoordinator coordinator = new ConnectTransactionCoordinator(
+        configs,
+        new TopicPartition(TOPIC_NAME, 0),
+        controlAgent,
+        transactionServices,
+        partitionProvider);
+    try {
+      coordinator.start();
+
+      // The coordinator retries instead of stalling, and the failed attempt started no instant,
+      // so the commit that starts is the first one handed out by MockConnectTransactionServices
+      verify(controlAgent, timeout(TimeUnit.SECONDS.toMillis(10)))
+          .publishMessage(argThat(message -> message.getType() == ControlMessage.EventType.START_COMMIT
+              && message.getCommitTime().equals("101")));
+      assertEquals(2, partitionLookups.get());
+    } finally {
+      coordinator.stop();
+    }
+  }
+
   /**
    * A mock Transaction Participant, that exercises all the test scenarios
    * for the coordinator as mentioned in {@link TestScenarios}.
@@ -107,6 +150,7 @@ public class TestConnectTransactionCoordinator {
   private static class MockParticipant implements TransactionParticipant {
 
     private final MockKafkaControlAgent kafkaControlAgent;
+    @Getter
     private final TopicPartition partition;
     private final CountDownLatch latch;
     private final TestScenarios testScenario;
@@ -146,11 +190,6 @@ public class TestConnectTransactionCoordinator {
 
     @Override
     public void processRecords() {
-    }
-
-    @Override
-    public TopicPartition getPartition() {
-      return partition;
     }
 
     @Override

@@ -84,6 +84,16 @@ public interface DDLExecutor extends AutoCloseable {
   void updatePartitionsToTable(String tableName, List<String> changedPartitions);
 
   /**
+   * Touches partitions for a given table. Updates partition metadata (e.g. last modified time)
+   * in the metastore for partitions that had new data written but no schema or location change.
+   * Only invoked when {@code META_SYNC_TOUCH_PARTITIONS_ENABLED} is true.
+   *
+   * @param tableName      The table name in the metastore.
+   * @param touchPartitions List of partition paths (storage format) to touch.
+   */
+  void touchPartitionsToTable(String tableName, List<String> touchPartitions);
+
+  /**
    * Drop partitions for a given table.
    *
    * @param tableName
@@ -98,4 +108,11 @@ public interface DDLExecutor extends AutoCloseable {
    * @param newSchema Map key: field name, Map value: [field type, field comment]
    */
   void updateTableComments(String tableName, Map<String, Pair<String, String>> newSchema);
+
+  /**
+   * @return whether this executor can update the comments of partition columns of an existing table.
+   */
+  default boolean supportsUpdatingPartitionColumnComments() {
+    return true;
+  }
 }

@@ -23,7 +23,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.io.FlinkAppendHandle;
+import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.io.HoodieWriteHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
@@ -54,7 +54,7 @@ public class FlinkUpsertDeltaCommitActionExecutor<T> extends BaseFlinkCommitActi
   }
 
   @Override
-  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr) {
+  public Iterator<List<WriteStatus>> handleUpdate(String partitionPath, String fileId, long numUpdates, Iterator<HoodieRecord<T>> recordItr) {
     return handleWrite();
   }
 
@@ -67,7 +67,7 @@ public class FlinkUpsertDeltaCommitActionExecutor<T> extends BaseFlinkCommitActi
    * When using RowData writing mode for MOR upsert path, same write logic is used for UPSERT and INSERT operation.
    */
   private Iterator<List<WriteStatus>> handleWrite() {
-    FlinkAppendHandle logWriteHandle = (FlinkAppendHandle) writeHandle;
+    HoodieAppendHandle logWriteHandle = (HoodieAppendHandle) writeHandle;
     logWriteHandle.doAppend();
     List<WriteStatus> writeStatuses = logWriteHandle.close();
     return Collections.singletonList(writeStatuses).iterator();

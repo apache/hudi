@@ -34,6 +34,11 @@ public class LocalRegistry implements Registry {
   }
 
   @Override
+  public String getName() {
+    return name;
+  }
+
+  @Override
   public void clear() {
     counters.clear();
   }
@@ -67,9 +72,6 @@ public class LocalRegistry implements Registry {
   }
 
   private synchronized Counter getCounter(String name) {
-    if (!counters.containsKey(name)) {
-      counters.put(name, new Counter());
-    }
-    return counters.get(name);
+    return counters.computeIfAbsent(name, key -> new Counter());
   }
 }

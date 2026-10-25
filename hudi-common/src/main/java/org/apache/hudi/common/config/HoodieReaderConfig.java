@@ -45,14 +45,6 @@ public class HoodieReaderConfig extends HoodieConfig {
       .withDocumentation("HoodieLogFormatReader reads a logfile in the forward direction starting from pos=0 to pos=file_length. "
           + "If this config is set to true, the reader reads the logfile in reverse direction, from pos=file_length to pos=0");
 
-  public static final ConfigProperty<String> ENABLE_OPTIMIZED_LOG_BLOCKS_SCAN = ConfigProperty
-      .key("hoodie" + HoodieMetadataConfig.OPTIMIZED_LOG_BLOCKS_SCAN)
-      .defaultValue("false")
-      .markAdvanced()
-      .sinceVersion("0.13.0")
-      .withDocumentation("New optimized scan for log blocks that handles all multi-writer use-cases while appending to log files. "
-          + "It also differentiates original blocks written by ingestion writers and compacted blocks written log compaction.");
-
   public static final ConfigProperty<Boolean> FILE_GROUP_READER_ENABLED = ConfigProperty
       .key("hoodie.file.group.reader.enabled")
       .defaultValue(true)
@@ -66,6 +58,13 @@ public class HoodieReaderConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.0.0")
       .withDocumentation("Whether to use positions in the block header for data blocks containing updates and delete blocks for merging.");
+
+  public static final ConfigProperty<Integer> LSM_SORT_MERGE_SPILL_THRESHOLD = ConfigProperty
+      .key("hoodie.lsm.sort.merge.spill.threshold")
+      .defaultValue(16)
+      .markAdvanced()
+      .withDocumentation("Maximum number of sorted LSM input files to keep as direct readers during sort merge. "
+          + "When the fan-in is larger, remaining inputs are drained to sequential local spill files and read back during merge.");
 
   public static final String REALTIME_SKIP_MERGE = "skip_merge";
   public static final String REALTIME_PAYLOAD_COMBINE = "payload_combine";
@@ -111,4 +110,18 @@ public class HoodieReaderConfig extends HoodieConfig {
           + "from the cache after this duration to prevent memory leaks. "
           + "Only effective when hfile.block.cache.enabled is true.");
 
+  public static final String BLOB_INLINE_READ_MODE_CONTENT = "CONTENT";
+  public static final String BLOB_INLINE_READ_MODE_DESCRIPTOR = "DESCRIPTOR";
+  public static final ConfigProperty<String> BLOB_INLINE_READ_MODE = ConfigProperty
+      .key("hoodie.read.blob.inline.mode")
+      .defaultValue(BLOB_INLINE_READ_MODE_DESCRIPTOR)
+      .markAdvanced()
+      .sinceVersion("1.2.0")
+      .withValidValues(BLOB_INLINE_READ_MODE_CONTENT, BLOB_INLINE_READ_MODE_DESCRIPTOR)
+      .withDocumentation("How Hudi interprets INLINE BLOB values on read. "
+          + "DESCRIPTOR (default) returns an OUT_OF_LINE-shaped reference (position and size) into "
+          + "the backing file, skipping the byte read. CONTENT returns the raw inline bytes in the "
+          + "data field. Materializing INLINE bytes via read_blob() requires CONTENT; under "
+          + "DESCRIPTOR it fails fast asking for CONTENT. Pass this as a read option, not a session "
+          + "config. OUT_OF_LINE blobs ignore this option.");
 }
