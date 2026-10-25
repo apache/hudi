@@ -1204,6 +1204,14 @@ public class FlinkOptions extends HoodieConfig {
               "The cache TTL (e.g. 10min) for the build table in lookup join.");
 
 
+  @AdvancedConfig
+  public static final ConfigOption<String> HADOOP_CONF_DIR = ConfigOptions
+          .key("hadoop_conf.dir")
+          .stringType()
+          .noDefaultValue()
+          .withDescription("The hadoop configuration directory, where the core-site.xml, "
+                  + "hdfs-site.xml etc. lie in. Used to connect to a different HDFS cluster "
+                  + "for cross-cluster writes.");
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
