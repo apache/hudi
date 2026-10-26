@@ -315,9 +315,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   }
 
   /**
-   * Same as HoodieStreamer on a schema change (StreamSync#reInitWriteClient and
-   * HoodieStreamer#onInitializingWriteClient): the async table services switch to the new client for their next
-   * runs, and the previous client is closed right away.
+   * Each handoff waits for the service's current run before switching to the new client. Close the previous
+   * client only after both services have handed it back, without retaining clients until query termination.
    */
   private def retireWriteClient(previousClient: SparkRDDWriteClient[_], newClient: SparkRDDWriteClient[_]): Unit = {
     if (asyncCompactorService != null) {

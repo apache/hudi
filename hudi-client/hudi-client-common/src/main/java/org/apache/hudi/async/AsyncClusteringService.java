@@ -76,7 +76,9 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
           final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
             log.info("Starting clustering for instant {}", instant);
-            clusteringClient.cluster(instant);
+            synchronized (clusteringClient) {
+              clusteringClient.cluster(instant);
+            }
             log.info("Finished clustering for instant {}", instant);
           }
         }
@@ -98,9 +100,11 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   }
 
   /**
-   * Update the write client to be used for clustering.
+   * Switches clients between complete clustering runs. Once this returns, no run uses the old client.
    */
-  public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
-    this.clusteringClient.updateWriteClient(writeClient);
+  public void updateWriteClient(BaseHoodieWriteClient writeClient) {
+    synchronized (clusteringClient) {
+      clusteringClient.updateWriteClient(writeClient);
+    }
   }
 }
