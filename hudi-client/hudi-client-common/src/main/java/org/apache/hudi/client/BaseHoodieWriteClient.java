@@ -76,7 +76,6 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieCommitException;
 import org.apache.hudi.exception.HoodieException;
@@ -870,6 +869,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * @param savepointTime Savepoint time to rollback to
    */
   public void restoreToSavepoint(String savepointTime) {
+    // validate before the metadata table may be deleted below
+    SavepointHelpers.validateNoArchivedCommitsAfterSavepoint(createMetaClient(false), savepointTime);
     boolean initializeMetadataTableIfNecessary = config.isMetadataTableEnabled();
     if (initializeMetadataTableIfNecessary && shouldDeleteMdtBeforeRestore(savepointTime)) {
       HoodieTableMetadataUtil.deleteMetadataTable(config.getBasePath(), context);
@@ -880,8 +881,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
 
     HoodieTable<T, I, K, O> table = initTable(WriteOperationType.UNKNOWN, Option.empty(), initializeMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointPresence(table, savepointTime);
-    ValidationUtils.checkArgument(!config.shouldArchiveBeyondSavepoint(), "Restore is not supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key()
-        + " is enabled");
     restoreToInstant(savepointTime, initializeMetadataTableIfNecessary);
     SavepointHelpers.validateSavepointRestore(table, savepointTime);
   }
