@@ -698,8 +698,14 @@ public class HoodieTableConfig extends HoodieConfig {
 
       MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(hoodieConfig);
       if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+        // The persisted value is the wider projection: false only for NONE. A writer that predates
+        // the mode property compares this against its own `true` default and refuses the table on
+        // a mismatch without ever opening a file, so persisting `false` for a mode that does
+        // populate meta columns locks that writer out of a table it could write. The mode property
+        // is written alongside and every in-process accessor resolves through it first, so this
+        // value is inert except to readers that predate the mode.
         hoodieConfig.setValue(POPULATE_META_FIELDS,
-            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
+            Boolean.toString(metaFieldsMode.toPersistedPopulateMetaFields()));
       }
 
       dropInvalidConfigs(hoodieConfig);
