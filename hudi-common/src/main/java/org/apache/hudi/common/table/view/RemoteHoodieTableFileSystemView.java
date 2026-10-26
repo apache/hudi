@@ -127,6 +127,11 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
   public static final String MULTI_VALUE_SEPARATOR = ",";
+  /**
+   * Upper bound on the characters of the partition paths sent in one load request. The paths travel in the
+   * request URL, so even fully percent-encoded they must stay below the server's request header limit.
+   */
+  static final int MAX_PARTITION_PATHS_LENGTH_PER_REQUEST = 2048;
   private static final TypeReference<List<FileSliceDTO>> FILE_SLICE_DTOS_REFERENCE = new TypeReference<List<FileSliceDTO>>() {};
   private static final TypeReference<List<FileGroupDTO>> FILE_GROUP_DTOS_REFERENCE = new TypeReference<List<FileGroupDTO>>() {};
   private static final TypeReference<Boolean> BOOLEAN_TYPE_REFERENCE = new TypeReference<Boolean>() {};
@@ -455,6 +460,30 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
   @Override
   public void loadPartitions(List<String> partitionPaths) {
+    if (partitionPaths.isEmpty()) {
+      loadPartitionsInOneRequest(partitionPaths);
+      return;
+    }
+    int start = 0;
+    while (start < partitionPaths.size()) {
+      int end = start + 1;
+      int length = jsonLength(partitionPaths.get(start));
+      while (end < partitionPaths.size()
+          && length + jsonLength(partitionPaths.get(end)) <= MAX_PARTITION_PATHS_LENGTH_PER_REQUEST) {
+        length += jsonLength(partitionPaths.get(end));
+        end++;
+      }
+      loadPartitionsInOneRequest(partitionPaths.subList(start, end));
+      start = end;
+    }
+  }
+
+  private static int jsonLength(String partitionPath) {
+    // the quotes and the separator around the path in the JSON array
+    return partitionPath.length() + 3;
+  }
+
+  private void loadPartitionsInOneRequest(List<String> partitionPaths) {
     Map<String, String> paramsMap = getParams();
     try {
       paramsMap.put(PARTITIONS_PARAM, OBJECT_MAPPER.writeValueAsString(partitionPaths));

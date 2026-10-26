@@ -26,11 +26,12 @@ import org.apache.hudi.table.WorkloadProfile;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Packs incoming records to be inserted into buckets (1 bucket = 1 RDD partition).
  */
-public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
+public class SparkInsertOverwritePartitioner<T> extends UpsertPartitioner<T> {
 
   public SparkInsertOverwritePartitioner(WorkloadProfile profile, HoodieEngineContext context, HoodieTable table,
                                          HoodieWriteConfig config, WriteOperationType operationType) {
@@ -42,12 +43,9 @@ public class SparkInsertOverwritePartitioner extends UpsertPartitioner {
     return new InsertOverwriteBucketInfoGetter(bucketInfoMap);
   }
 
-  /**
-   * Returns a list of small files in the given partition path.
-   */
   @Override
-  protected List<SmallFile> getSmallFiles(String partitionPath) {
-    // for overwrite, we ignore all existing files. So do not consider any file to be smallFiles
-    return Collections.emptyList();
+  protected Map<String, List<SmallFile>> getSmallFilesForPartitions(List<String> partitionPaths) {
+    // for overwrite, we ignore all existing files, so no file is a small file
+    return Collections.emptyMap();
   }
 }
