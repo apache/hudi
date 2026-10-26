@@ -14,6 +14,14 @@ inputs:
     description: Days to keep the artifact. It is only needed while jobs of this run can be re-run.
     required: false
     default: '7'
+  exclude:
+    description: >-
+      Newline-separated tar --exclude patterns for files no consumer of this build reads,
+      applied to both the workspace target/ archive (paths start with ./) and the Maven
+      archive (paths start with org/apache/hudi/). Smaller artifacts download faster in
+      every restoring job.
+    required: false
+    default: '*-sources.jar'
 runs:
   using: composite
   steps:
@@ -22,6 +30,7 @@ runs:
       env:
         BUILD_NAME: ${{ inputs.name }}
         PACK_DIR: ${{ runner.temp }}/hudi-build
+        EXCLUDE: ${{ inputs.exclude }}
       run: |
         set -euo pipefail
         rm -rf "$PACK_DIR"
@@ -44,8 +53,12 @@ runs:
           hardlink "${lib_dirs[@]}"
         fi
         # posix (pax) headers keep sub-second modification times, see restore-hudi-build.
-        tar --format=posix -cf - -T "$PACK_DIR/target-dirs" | zstd -T0 -3 -q -o "$PACK_DIR/workspace-target.tar.zst"
-        tar --format=posix -C "$HOME/.m2/repository" -cf - org/apache/hudi | zstd -T0 -3 -q -o "$PACK_DIR/m2-hudi.tar.zst"
+        excludes=()
+        while IFS= read -r pattern; do
+          [ -n "$pattern" ] && excludes+=("--exclude=$pattern")
+        done <<< "$EXCLUDE"
+        tar --format=posix "${excludes[@]}" -cf - -T "$PACK_DIR/target-dirs" | zstd -T0 -3 -q -o "$PACK_DIR/workspace-target.tar.zst"
+        tar --format=posix "${excludes[@]}" -C "$HOME/.m2/repository" -cf - org/apache/hudi | zstd -T0 -3 -q -o "$PACK_DIR/m2-hudi.tar.zst"
         ls -l "$PACK_DIR"
     - name: Upload build outputs
       uses: actions/upload-artifact@v4

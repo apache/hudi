@@ -128,6 +128,16 @@ jobs:
         uses: ./.github/actions/save-hudi-build
         with:
           name: hudi-build-${{ github.sha }}-jdk11-${{ matrix.scalaProfile }}-${{ matrix.sparkProfile }}-${{ matrix.flinkProfile }}
+          # The JDK 11 test jobs only run `mvn test`, so they never read the shaded bundle jars
+          # (hudi-cli resolves hudi-utilities-bundle from .m2, which is kept), the 464 MB
+          # hudi-examples-k8s jar or any -sources.jar. Leaving them out cuts the artifact
+          # from about 3.9 GB to about 1.2 GB.
+          exclude: |
+            *-sources.jar
+            ./packaging/*/target/*.jar
+            ./hudi-examples/hudi-examples-k8s/target/*.jar
+            org/apache/hudi/hudi-examples-k8s
+            org/apache/hudi/hudi-[!u]*bundle*
 
   # Build for the five test-spark-java17-* jobs, which all ran this same command. Part 1
   # additionally listed hudi-spark4-common, which -am pulls in for hudi-spark4.2.x anyway.
