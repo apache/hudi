@@ -813,7 +813,8 @@ def assess_reconciliation(
         "table_identity.table_path",
         desired_table.get("path"),
         observations.get("hudi_table_identity", {}).get("table_path"),
-        mismatch_code="FLINK_EXISTING_TABLE_PROPERTY_CONFLICT",
+        mismatch_code="FLINK_EXISTING_EVIDENCE_CONFLICT",
+        mismatch_result="UNVERIFIED",
         assessment=assessment,
     )
     _add_comparison(

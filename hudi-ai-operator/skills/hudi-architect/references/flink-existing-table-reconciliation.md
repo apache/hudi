@@ -65,7 +65,10 @@ contract. If redaction removes a load-bearing fact, leave it incomplete.
 - `hudi_table_identity` identifies the concrete `table_path` at which the artifacts were observed.
   The path is not a persisted `hoodie.properties` key. Every evidence envelope must repeat the
   desired target path. The validator excludes another table's facts before aggregation, then
-  compares the accepted evidence scope with both the desired path and the identity fact.
+  compares the accepted evidence scope with both the desired path and the identity fact. If an
+  in-scope envelope's identity fact names another path, treat the item as contradictory evidence:
+  emit `FLINK_EXISTING_EVIDENCE_CONFLICT` and leave reconciliation and change disposition
+  `UNVERIFIED`. Do not infer that the target table requires migration.
 - `hoodie_properties` is authoritative for persisted table name, type, table version, timeline
   layout, file format, record key, ordering fields, merge mode, partition fields, key-generator
   type, and hive-style/URL-encoded partitioning flags. Normalize an effective value only when
@@ -160,7 +163,7 @@ Run:
 python validate_flink_existing_table.py --input <reconciliation.json>
 ```
 
-See `../../../tests/fixtures/hudi_architect/flink_pr5/compatible_mutable_cow.json` for a complete
+See `hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr5/compatible_mutable_cow.json` for a complete
 synthetic envelope. Its timestamps and digests are fixture data, not production evidence.
 
 A compatible result exits zero even though `executable_eligible` is false. Other results exit one.
