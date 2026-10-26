@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -35,7 +36,20 @@ import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.execution.bulkinsert.GlobalSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.GlobalSortPartitionerWithRows;
+import org.apache.hudi.execution.bulkinsert.NonSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.NonSortPartitionerWithRows;
+import org.apache.hudi.execution.bulkinsert.PartitionPathRepartitionAndSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.PartitionPathRepartitionAndSortPartitionerWithRows;
+import org.apache.hudi.execution.bulkinsert.PartitionPathRepartitionPartitioner;
+import org.apache.hudi.execution.bulkinsert.PartitionPathRepartitionPartitionerWithRows;
+import org.apache.hudi.execution.bulkinsert.PartitionSortPartitionerWithRows;
 import org.apache.hudi.execution.bulkinsert.RDDCustomColumnsSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.RDDPartitionSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.RowCustomColumnsSortPartitioner;
+import org.apache.hudi.execution.bulkinsert.RowSpatialCurveSortPartitioner;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metadata.stats.ValueMetadata;
@@ -54,6 +68,8 @@ import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
@@ -245,6 +261,95 @@ public class TestDataSourceUtils extends HoodieClientTestBase {
 
     Option<BulkInsertPartitioner<Dataset<Row>>> partitioner = DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config);
     assertThat(partitioner.isPresent(), is(true));
+  }
+
+  /**
+   * Every out of the box bulk insert partitioner has to be usable as a user defined partitioner.
+   * One is instantiated by reflection with only the write config, so each has to expose a
+   * constructor taking only a {@link HoodieWriteConfig}. See HUDI-7526.
+   */
+  @ParameterizedTest
+  @ValueSource(classes = {
+      NonSortPartitioner.class,
+      GlobalSortPartitioner.class,
+      RDDPartitionSortPartitioner.class,
+      RDDCustomColumnsSortPartitioner.class,
+      PartitionPathRepartitionPartitioner.class,
+      PartitionPathRepartitionAndSortPartitioner.class,
+      NonSortPartitionerWithRows.class,
+      GlobalSortPartitionerWithRows.class,
+      PartitionSortPartitionerWithRows.class,
+      RowCustomColumnsSortPartitioner.class,
+      RowSpatialCurveSortPartitioner.class,
+      PartitionPathRepartitionPartitionerWithRows.class,
+      PartitionPathRepartitionAndSortPartitionerWithRows.class
+  })
+  public void testBuiltInPartitionersAreUsableAsUserDefinedPartitioners(Class<?> partitionerClass) {
+    Map<String, String> props = new HashMap<>();
+    // required by the spatial curve partitioner, ignored by the rest
+    props.put(HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS.key(), "column1,column2");
+    config = HoodieWriteConfig.newBuilder()
+        .withPath("/")
+        .withUserDefinedBulkInsertPartitionerClass(partitionerClass.getName())
+        .withUserDefinedBulkInsertPartitionerSortColumns("column1,column2")
+        .withSchema(avroSchemaString)
+        .withProps(props)
+        .build();
+
+    assertThat(DataSourceUtils.createUserDefinedBulkInsertPartitioner(config).isPresent(), is(true));
+    assertThat(DataSourceUtils.createUserDefinedBulkInsertPartitionerWithRows(config).isPresent(), is(true));
+  }
+
+  /**
+   * The partition path partitioners take the flag from the table when built by the factory, so
+   * check the write config only path agrees with the table config the factory path reads.
+   */
+  @Test
+  public void testIsTablePartitionedPrefersTableConfigOverPartitionPathField() {
+    // hoodie.table.partition.fields is what HoodieTable#isPartitioned reads, so it wins when present.
+    HoodieWriteConfig fromTableConfig = HoodieWriteConfig.newBuilder().withPath("/")
+        .withProps(Collections.singletonMap(
+            HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path"))
+        .build();
+    assertThat(BulkInsertPartitioner.isTablePartitioned(fromTableConfig), is(true));
+
+    // Present but empty means a non partitioned table, even with a write side field configured.
+    Map<String, String> emptyTableConfig = new HashMap<>();
+    emptyTableConfig.put(HoodieTableConfig.PARTITION_FIELDS.key(), "");
+    emptyTableConfig.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    HoodieWriteConfig emptyWins = HoodieWriteConfig.newBuilder().withPath("/")
+        .withProps(emptyTableConfig).build();
+    assertThat(BulkInsertPartitioner.isTablePartitioned(emptyWins), is(false));
+
+    // The two sources disagreeing resolves to the table config, matching the factory path.
+    Map<String, String> disagreeing = new HashMap<>();
+    disagreeing.put(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
+    disagreeing.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "");
+    HoodieWriteConfig tableConfigWins = HoodieWriteConfig.newBuilder().withPath("/")
+        .withProps(disagreeing).build();
+    assertThat(BulkInsertPartitioner.isTablePartitioned(tableConfigWins), is(true));
+  }
+
+  /**
+   * Without the table property, which is the case for a write config assembled without the table's
+   * properties, the write side partition path field is the only signal left.
+   */
+  @Test
+  public void testIsTablePartitionedFallsBackToPartitionPathField() {
+    HoodieWriteConfig partitioned = HoodieWriteConfig.newBuilder().withPath("/")
+        .withProps(Collections.singletonMap(
+            KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path"))
+        .build();
+    assertThat(BulkInsertPartitioner.isTablePartitioned(partitioned), is(true));
+
+    HoodieWriteConfig nonPartitioned = HoodieWriteConfig.newBuilder().withPath("/")
+        .withProps(Collections.singletonMap(
+            KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), ""))
+        .build();
+    assertThat(BulkInsertPartitioner.isTablePartitioned(nonPartitioned), is(false));
+
+    HoodieWriteConfig unset = HoodieWriteConfig.newBuilder().withPath("/").build();
+    assertThat(BulkInsertPartitioner.isTablePartitioned(unset), is(false));
   }
 
   @Test
