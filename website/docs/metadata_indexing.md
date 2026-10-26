@@ -2,7 +2,7 @@
 title: Indexing
 summary: "In this page, we describe how to run metadata indexing asynchronously."
 toc: true
-last_modified_at: 2026-05-27T00:00:00-00:00
+last_modified_at: 2026-10-27T01:26:15
 ---
 
 Hudi maintains a scalable [metadata](metadata.md) that has some auxiliary data about the table.
@@ -79,6 +79,11 @@ hoodie.metadata.global.record.level.index.enable=true
 -- [Required Configs] Bloom filter Index
 hoodie.metadata.index.bloom.filter.enable=true
 ```
+
+Lance tables support column statistics and, for partitioned tables, partition statistics using the same
+configuration options above. Lance writers collect column ranges while writing records and include them
+in the commit's write statistics, so normal index updates do not need to read the new base files again.
+When initializing an index over existing Lance files, Hudi reads the selected columns to build their ranges.
 
 Here is an example which shows how to create indexes for a table created using Datasource API.
 
