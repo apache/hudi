@@ -27,7 +27,9 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -36,11 +38,13 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.testutils.providers.SparkProvider;
 
@@ -52,11 +56,13 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.reload;
@@ -73,6 +79,7 @@ import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.utilities.HoodieIndexer.DROP_INDEX;
+import static org.apache.hudi.utilities.UtilHelpers.EXECUTE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE;
 import static org.apache.hudi.utilities.UtilHelpers.SCHEDULE_AND_EXECUTE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -398,6 +405,50 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertTrue(metadataMetaClient.getActiveTimeline().getRollbackTimeline().empty());
   }
 
+  private static Stream<Arguments> indexTypeAndPropsFileParams() {
+    return Stream.of(
+        Arguments.of(COLUMN_STATS, "streamer-config/indexer.properties"),
+        Arguments.of(BLOOM_FILTERS, "streamer-config/indexer-only-bloom.properties"),
+        Arguments.of(RECORD_INDEX, "streamer-config/indexer-record-index.properties"));
+  }
+
+  /**
+   * A commit that completes after the indexing is scheduled and before it is executed does not update
+   * the index being built and is skipped by the catchup, so the index initialization has to cover it.
+   */
+  @ParameterizedTest
+  @MethodSource("indexTypeAndPropsFileParams")
+  void testIndexerCoversCommitBetweenScheduleAndExecute(MetadataPartitionType indexType, String propsFile) throws Exception {
+    String tableName = "indexer_commit_between_schedule_and_execute";
+    HoodieMetadataConfig metadataConfig = getMetadataConfigBuilder(true, false).withMetadataIndexColumnStats(false).build();
+    List<HoodieRecord> records = new ArrayList<>(upsertToTable(metadataConfig, tableName));
+    assertEquals(0, new HoodieIndexer(jsc(), getHoodieIndexConfig(indexType.name(), SCHEDULE, propsFile, tableName)).start(0));
+    records.addAll(upsertToTable(metadataConfig, tableName));
+    assertEquals(0, new HoodieIndexer(jsc(), getHoodieIndexConfig(indexType.name(), EXECUTE, propsFile, tableName)).start(0));
+
+    metaClient = reload(metaClient);
+    assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(indexType.getPartitionPath()));
+    List<HoodieInstant> commits = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
+    assertEquals(2, commits.size());
+    List<Pair<String, String>> partitionAndFileNames = new ArrayList<>();
+    for (HoodieInstant commit : commits) {
+      HoodieCommitMetadata commitMetadata = metaClient.getActiveTimeline().readCommitMetadata(commit);
+      commitMetadata.getPartitionToWriteStats().forEach((partition, writeStats) -> writeStats.forEach(
+          writeStat -> partitionAndFileNames.add(Pair.of(partition, new StoragePath(writeStat.getPath()).getName()))));
+    }
+    try (HoodieBackedTableMetadata metadata = new HoodieBackedTableMetadata(
+        context(), metaClient.getStorage(), HoodieMetadataConfig.newBuilder().enable(true).build(), metaClient.getBasePath().toString())) {
+      if (indexType == COLUMN_STATS) {
+        assertEquals(partitionAndFileNames.size(), metadata.getColumnStats(partitionAndFileNames, "rider").size());
+      } else if (indexType == BLOOM_FILTERS) {
+        assertEquals(partitionAndFileNames.size(), metadata.getBloomFilters(partitionAndFileNames).size());
+      } else {
+        List<String> recordKeys = records.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toList());
+        assertEquals(recordKeys.size(), metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys)).collectAsList().size());
+      }
+    }
+  }
+
   private static Stream<Arguments> colStatsFileGroupCountParams() {
     return Stream.of(
         Arguments.of(1),
@@ -487,7 +538,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
     assertEquals(partitionFileSlices.size(), HoodieMetadataConfig.METADATA_INDEX_COLUMN_STATS_FILE_GROUP_COUNT.defaultValue());
   }
 
-  private void upsertToTable(HoodieMetadataConfig metadataConfig, String tableName) {
+  private List<HoodieRecord> upsertToTable(HoodieMetadataConfig metadataConfig, String tableName) {
     HoodieWriteConfig.Builder writeConfigBuilder = getWriteConfigBuilder(basePath(), tableName);
     HoodieWriteConfig writeConfig = writeConfigBuilder.withMetadataConfig(metadataConfig).build();
     // do one upsert with synchronous metadata update
@@ -497,6 +548,7 @@ public class TestHoodieIndexer extends SparkClientFunctionalTestHarness implemen
       List<WriteStatus> statusList = writeClient.upsert(jsc().parallelize(records, 1), instant).collect();
       writeClient.commit(instant, jsc().parallelize(statusList));
       assertNoWriteErrors(statusList);
+      return records;
     }
   }
 
