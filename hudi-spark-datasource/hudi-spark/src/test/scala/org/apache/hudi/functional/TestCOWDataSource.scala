@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, H
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.{deleteRecordsToStrings, recordsToStrings}
-import org.apache.hudi.common.testutils.HoodieTestUtils.{INSTANT_FILE_NAME_GENERATOR, INSTANT_GENERATOR}
+import org.apache.hudi.common.testutils.HoodieTestUtils.{assertTableConfigs, INSTANT_FILE_NAME_GENERATOR, INSTANT_GENERATOR}
 import org.apache.hudi.common.util.{ClusteringUtils, Option}
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
@@ -144,15 +144,71 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
         .options(writeOptions).mode(SaveMode.Overwrite).save(basePath)
       metaClient = HoodieTableMetaClient.builder.setConf(storageConf).setBasePath(basePath).build
       // If no write version is specified, use current.
-      if (!targetTableVersion.equals("null")) {
-        assertEquals(
-          HoodieTableVersion.fromVersionCode(Integer.valueOf(targetTableVersion)),
-          metaClient.getTableConfig.getTableVersion)
+      val expectedTableVersion = if (targetTableVersion.equals("null")) {
+        HoodieTableVersion.current
       } else {
-        // Otherwise, the table version is the target table version.
-        assertEquals(HoodieTableVersion.current, metaClient.getTableConfig.getTableVersion)
+        HoodieTableVersion.fromVersionCode(Integer.valueOf(targetTableVersion))
       }
+      assertEquals(expectedTableVersion, metaClient.getTableConfig.getTableVersion)
+      assertTableConfigs(storage, basePath, expectedTableConfigs(expectedTableVersion).asJava)
+
+      // the next write backfills the key generator class of a table created without it
+      HoodieTableConfig.delete(storage, metaClient.getMetaPath,
+        java.util.Collections.singleton(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key))
+      inputDF.write.format("hudi").partitionBy("partition")
+        .options(writeOptions).mode(SaveMode.Append).save(basePath)
+      assertTableConfigs(storage, basePath, expectedTableConfigs(expectedTableVersion).asJava)
     }
+  }
+
+  private def expectedTableConfigs(tableVersion: HoodieTableVersion): Map[String, String] = {
+    val commonConfigs = Map(
+      "hoodie.table.name" -> "testTableCreation",
+      "hoodie.table.type" -> "COPY_ON_WRITE",
+      "hoodie.table.version" -> tableVersion.versionCode().toString,
+      "hoodie.table.partition.fields" -> "partition",
+      "hoodie.table.keygenerator.type" -> "SIMPLE",
+      "hoodie.table.base.file.format" -> "PARQUET",
+      "hoodie.table.format" -> "native",
+      "hoodie.table.cdc.enabled" -> "false",
+      "hoodie.table.timeline.timezone" -> "LOCAL",
+      "hoodie.table.metadata.partitions.inflight" -> "",
+      "hoodie.table.index.defs.path" -> ".hoodie/.index_defs/index.json",
+      "hoodie.table.partition_extractor_class" -> "org.apache.hudi.hive.SinglePartPartitionValueExtractor",
+      "hoodie.meta.fields.mode" -> "ALL",
+      "hoodie.partition.metafile.use.base.format" -> "false",
+      "hoodie.datasource.write.drop.partition.columns" -> "false",
+      "hoodie.datasource.write.hive_style_partitioning" -> "false",
+      "hoodie.datasource.write.partitionpath.urlencode" -> "false",
+      "hoodie.archivelog.folder" -> "history",
+      "hoodie.timeline.path" -> "timeline",
+      "hoodie.timeline.history.path" -> "history")
+    val layoutConfigs = if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      Map(
+        "hoodie.timeline.layout.version" -> "1",
+        "hoodie.table.keygenerator.class" -> "org.apache.hudi.keygen.SimpleKeyGenerator",
+        "hoodie.table.metadata.partitions" -> "column_stats,files")
+    } else {
+      Map(
+        "hoodie.timeline.layout.version" -> "2",
+        "hoodie.table.initial.version" -> tableVersion.versionCode().toString,
+        "hoodie.record.merge.mode" -> "COMMIT_TIME_ORDERING",
+        "hoodie.table.multiple.base.file.formats.enable" -> "false",
+        "hoodie.table.metadata.partitions" -> "column_stats,files,partition_stats")
+    }
+    val mergeConfigs = if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      Map(
+        "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload",
+        "hoodie.record.merge.strategy.id" -> "ce9acb64-bde0-424c-9b91-f6ebba25356d")
+    } else {
+      Map.empty[String, String]
+    }
+    val metaFieldsConfigs = if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+      Map("hoodie.populate.meta.fields" -> "true")
+    } else {
+      Map("hoodie.table.storage.layout" -> "default")
+    }
+    commonConfigs ++ layoutConfigs ++ mergeConfigs ++ metaFieldsConfigs
   }
 
   @ParameterizedTest
@@ -2527,9 +2583,14 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
   @ParameterizedTest
   @MethodSource(Array("provideParamsForKeyGenTest"))
   def testUserProvidedKeyGeneratorClass(keyGenClass: Option[String],
-                                        keyGenType: Option[String]): Unit = {
+                                        keyGenType: Option[String],
+                                        tableVersion: Option[HoodieTableVersion]): Unit = {
     val recordType = HoodieRecordType.AVRO
-    var opts: Map[String, String] = Map()
+    // the table is new, so the guard against a legacy single-field complex key encoding below version 9 does not apply
+    var opts: Map[String, String] = Map(HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false")
+    if (tableVersion.isPresent) {
+      opts = opts ++ Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.get.versionCode.toString)
+    }
     if (keyGenClass.isPresent) {
       opts = opts ++ Map(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> keyGenClass.get)
     }
@@ -2560,14 +2621,19 @@ class TestCOWDataSource extends HoodieSparkClientTestBase with ScalaAssertionSup
       .sort("_row_key")
     var actualKeyDF = actualDF.select("_hoodie_record_key").sort("_hoodie_record_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
-    val metaClient = getHoodieMetaClient(storageConf, basePath)
-    val actualKeyGenType = metaClient.getTableConfig
-      .getProps.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key, null)
-    assertEquals(expectedKeyGenType, actualKeyGenType)
-    // For USER_PROVIDED type, the class should exist in table config.
-    if (KeyGeneratorType.USER_PROVIDED.name == actualKeyGenType) {
-      assertEquals(keyGenClass.get(), metaClient.getTableConfig.getKeyGeneratorClassName)
+    val tableConfig = getHoodieMetaClient(storageConf, basePath).getTableConfig
+    val expectedTableVersion = TestCOWDataSource.writeTableVersionOrDefault(tableVersion)
+    assertEquals(expectedTableVersion, tableConfig.getTableVersion)
+    assertEquals(expectedKeyGenType, tableConfig.getProps.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key, null))
+    // A user-provided key generator is persisted as a class at every table version, the others below version 8.
+    val expectedKeyGenClass = if (KeyGeneratorType.USER_PROVIDED.name == expectedKeyGenType) {
+      keyGenClass.get
+    } else if (expectedTableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      KeyGeneratorType.valueOf(expectedKeyGenType).getClassName
+    } else {
+      null
     }
+    assertEquals(expectedKeyGenClass, tableConfig.getProps.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key, null))
 
     // First update.
     val firstUpdate = recordsToStrings(dataGen.generateUpdatesForAllRecords("001")).asScala.toList
@@ -2950,6 +3016,14 @@ object TestCOWDataSource {
       s"Top-level level='L1' should return key1 for $tableType")
   }
 
+  /**
+   * The table version a write with the given write table version produces, falling back to the default write
+   * version when it is unset so that a test arm without one follows a change of the default.
+   */
+  def writeTableVersionOrDefault(tableVersion: Option[HoodieTableVersion]): HoodieTableVersion = {
+    tableVersion.orElse(HoodieTableVersion.fromVersionCode(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue()))
+  }
+
   def convertColumnsToNullable(df: DataFrame, cols: String*): DataFrame = {
     cols.foldLeft(df) { (df, c) =>
       // NOTE: This is the trick to make Spark convert a non-null column "c" into a nullable
@@ -2971,26 +3045,21 @@ object TestCOWDataSource {
 
   def tableVersionCreationTestCases = {
     val autoUpgradeValues = Array("true", "false")
-    val targetVersions = Array("1", "2", "3", "4", "5", "6", "7", "8", "9", "null")
+    val targetVersions = Array("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "null")
     autoUpgradeValues.flatMap(
       (autoUpgrade: String) => targetVersions.map(
         (targetVersion: String) => Arguments.of(autoUpgrade, targetVersion)))
   }
 
   def provideParamsForKeyGenTest(): java.util.List[Arguments] = {
-    java.util.Arrays.asList(
-      Arguments.of(
-        Option.of("org.apache.hudi.keygen.MockUserProvidedKeyGenerator"),
-        Option.of(KeyGeneratorType.USER_PROVIDED.name())),
-      Arguments.of(
-        Option.empty(),
-        Option.of(KeyGeneratorType.SIMPLE.name())),
-      Arguments.of(
-        Option.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator"),
-        Option.of(KeyGeneratorType.SIMPLE.name())),
-      Arguments.of(
-        Option.of("org.apache.hudi.keygen.ComplexKeyGenerator"),
-        Option.empty())
-    )
+    val keyGenSettings = Seq(
+      (Option.of("org.apache.hudi.keygen.MockUserProvidedKeyGenerator"), Option.of(KeyGeneratorType.USER_PROVIDED.name())),
+      (Option.empty[String](), Option.of(KeyGeneratorType.SIMPLE.name())),
+      (Option.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator"), Option.of(KeyGeneratorType.SIMPLE.name())),
+      (Option.of("org.apache.hudi.keygen.ComplexKeyGenerator"), Option.empty[String]()))
+    val tableVersions = Seq(Option.of(HoodieTableVersion.SIX), Option.of(HoodieTableVersion.EIGHT),
+      Option.of(HoodieTableVersion.NINE), Option.of(HoodieTableVersion.TEN), Option.empty[HoodieTableVersion]())
+    (for ((keyGenClass, keyGenType) <- keyGenSettings; tableVersion <- tableVersions)
+      yield Arguments.of(keyGenClass, keyGenType, tableVersion)).asJava
   }
 }
