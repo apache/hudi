@@ -111,21 +111,15 @@ public class HoodieCopyOnWriteTableInputFormat extends HoodieTableInputFormat {
   public FileStatus[] listStatus(JobConf job) throws IOException {
     // Segregate inputPaths[] to incremental, snapshot and non hoodie paths
     List<String> incrementalTables = HoodieHiveUtils.getIncrementalTableNames(Job.getInstance(job));
-    InputPathHandler inputPathHandler = new InputPathHandler(conf, getInputPaths(job), incrementalTables);
+    InputPathHandler inputPathHandler = new InputPathHandler(conf, job, getInputPaths(job), incrementalTables);
     List<FileStatus> returns = new ArrayList<>();
 
     Map<String, HoodieTableMetaClient> tableMetaClientMap = inputPathHandler.getTableMetaClientMap();
     // process incremental pulls first
-    for (String table : incrementalTables) {
-      HoodieTableMetaClient metaClient = tableMetaClientMap.get(table);
-      if (metaClient == null) {
-        /* This can happen when the INCREMENTAL mode is set for a table but there were no InputPaths
-         * in the jobConf
-         */
-        continue;
-      }
-      List<Path> inputPaths = inputPathHandler.getGroupedIncrementalPaths().get(metaClient);
-      List<FileStatus> result = listStatusForIncrementalMode(job, metaClient, inputPaths, table);
+    for (Map.Entry<HoodieTableMetaClient, List<Path>> entry : inputPathHandler.getGroupedIncrementalPaths().entrySet()) {
+      HoodieTableMetaClient metaClient = entry.getKey();
+      List<FileStatus> result = listStatusForIncrementalMode(
+          job, metaClient, entry.getValue(), inputPathHandler.getIncrementalTableName(metaClient));
       if (result != null) {
         returns.addAll(result);
       }

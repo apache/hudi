@@ -19,6 +19,7 @@
 package org.apache.hudi.common.config;
 
 import org.apache.hudi.common.model.ActionType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 
 import javax.annotation.concurrent.Immutable;
 
@@ -50,6 +51,14 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.13.0")
       .withDocumentation("Table service manager URIs (comma-delimited).");
+
+  public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_DATABASE_NAME = ConfigProperty
+      .key(HoodieTableConfig.DATABASE_NAME.key())
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("0.13.0")
+      .withDocumentation("Database of the table, sent to the table service manager with each request. Falls back to "
+          + "the database persisted in the table config by older writers.");
 
   public static final ConfigProperty<String> TABLE_SERVICE_MANAGER_ACTIONS = ConfigProperty
       .key(TABLE_SERVICE_MANAGER_PREFIX + ".actions")
@@ -131,6 +140,10 @@ public class HoodieTableServiceManagerConfig extends HoodieConfig {
 
   public String getTableServiceManagerURIs() {
     return getStringOrDefault(TABLE_SERVICE_MANAGER_URIS);
+  }
+
+  public String getDatabaseName() {
+    return getString(TABLE_SERVICE_MANAGER_DATABASE_NAME);
   }
 
   public String getTableServiceManagerActions() {

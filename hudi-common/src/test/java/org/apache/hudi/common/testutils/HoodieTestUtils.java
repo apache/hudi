@@ -50,6 +50,7 @@ import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -259,12 +260,23 @@ public class HoodieTestUtils {
     return init(storageConf, basePath, tableType, properties);
   }
 
+  /**
+   * Initializes a table that also carries {@code databaseName} in its table config, as tables written by
+   * older releases do.
+   */
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            HoodieFileFormat baseFileFormat, String databaseName)
       throws IOException {
     Properties properties = new Properties();
     properties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), baseFileFormat.toString());
-    return getMetaClientBuilder(tableType, properties, databaseName).initTable(storageConf.newInstance(), basePath);
+    HoodieTableMetaClient metaClient = getMetaClientBuilder(tableType, properties).initTable(storageConf.newInstance(), basePath);
+    if (StringUtils.isNullOrEmpty(databaseName)) {
+      return metaClient;
+    }
+    Properties legacyProps = new Properties();
+    legacyProps.setProperty(HoodieTableConfig.DATABASE_NAME.key(), databaseName);
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), legacyProps);
+    return HoodieTableMetaClient.reload(metaClient);
   }
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
@@ -286,13 +298,12 @@ public class HoodieTestUtils {
 
   public static HoodieTableMetaClient init(StorageConfiguration<?> storageConf, String basePath, HoodieTableType tableType,
                                            Properties properties) throws IOException {
-    return getMetaClientBuilder(tableType, properties, null).initTable(storageConf.newInstance(), basePath);
+    return getMetaClientBuilder(tableType, properties).initTable(storageConf.newInstance(), basePath);
   }
 
-  public static HoodieTableMetaClient.TableBuilder getMetaClientBuilder(HoodieTableType tableType, Properties properties, String databaseName) {
+  public static HoodieTableMetaClient.TableBuilder getMetaClientBuilder(HoodieTableType tableType, Properties properties) {
     HoodieTableMetaClient.TableBuilder builder =
         HoodieTableMetaClient.newTableBuilder()
-            .setDatabaseName(databaseName)
             .setTableName(RAW_TRIPS_TEST_NAME)
             .setTableType(tableType);
 

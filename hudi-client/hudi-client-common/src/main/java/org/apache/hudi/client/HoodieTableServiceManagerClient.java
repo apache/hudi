@@ -84,7 +84,8 @@ public class HoodieTableServiceManagerClient {
 
   public HoodieTableServiceManagerClient(HoodieTableMetaClient metaClient, HoodieTableServiceManagerConfig config) {
     this.basePath = metaClient.getBasePath().toString();
-    this.dbName = metaClient.getTableConfig().getDatabaseName();
+    this.dbName = StringUtils.nonEmpty(config.getDatabaseName())
+        ? config.getDatabaseName() : metaClient.getTableConfig().getDatabaseName();
     this.tableName = metaClient.getTableConfig().getTableName();
     this.uri = config.getTableServiceManagerURIs();
     this.config = config;

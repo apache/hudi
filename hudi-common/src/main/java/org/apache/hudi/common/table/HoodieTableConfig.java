@@ -154,8 +154,11 @@ public class HoodieTableConfig extends HoodieConfig {
   public static final ConfigProperty<String> DATABASE_NAME = ConfigProperty
       .key("hoodie.database.name")
       .noDefaultValue()
+      .deprecatedAfter("1.3.0")
       .withDocumentation("Database name. If different databases have the same table name during incremental query, "
-          + "we can set it to limit the table name under a specific database");
+          + "we can set it to limit the table name under a specific database. New tables do not write it to "
+          + "hoodie.properties since the catalog owns the table's identity; a table that carries it keeps it "
+          + "when re-initialized in place, and it is still honored as a write option.");
 
   public static final ConfigProperty<String> NAME = ConfigProperty
       .key(HOODIE_TABLE_NAME_KEY)
@@ -1197,8 +1200,12 @@ public class HoodieTableConfig extends HoodieConfig {
   }
 
   /**
-   * Read the database name.
+   * Read the database name persisted by older writers.
+   *
+   * @deprecated the catalog owns the table's identity and new tables do not persist it, so this returns
+   * {@code null} for them; resolve the database from the catalog or the write config instead.
    */
+  @Deprecated
   public String getDatabaseName() {
     return getString(DATABASE_NAME);
   }

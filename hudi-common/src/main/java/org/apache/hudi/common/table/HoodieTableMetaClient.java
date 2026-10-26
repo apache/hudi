@@ -997,7 +997,6 @@ public class HoodieTableMetaClient implements Serializable {
   public static class TableBuilder {
 
     private HoodieTableType tableType;
-    private String databaseName;
     private String tableName;
     private String tableCreateSchema;
     private HoodieTableVersion tableVersion;
@@ -1055,8 +1054,14 @@ public class HoodieTableMetaClient implements Serializable {
       return setTableType(HoodieTableType.valueOf(tableType));
     }
 
+    /**
+     * No-op kept for source compatibility: a new table does not persist the database in its table config.
+     *
+     * @deprecated the catalog owns the table's identity, so a new table's database is not written to
+     * {@code hoodie.properties}; {@link #fromProperties} keeps the one an existing table already has.
+     */
+    @Deprecated
     public TableBuilder setDatabaseName(String databaseName) {
-      this.databaseName = databaseName;
       return this;
     }
 
@@ -1344,8 +1349,10 @@ public class HoodieTableMetaClient implements Serializable {
         }
       }
 
+      // Re-initializing a table in place keeps the database it already persisted; paths that create a
+      // new table must not pass a writer-supplied one here.
       if (hoodieConfig.contains(HoodieTableConfig.DATABASE_NAME)) {
-        setDatabaseName(hoodieConfig.getString(HoodieTableConfig.DATABASE_NAME));
+        this.others.put(HoodieTableConfig.DATABASE_NAME.key(), hoodieConfig.getString(HoodieTableConfig.DATABASE_NAME));
       }
       if (hoodieConfig.contains(HoodieTableConfig.NAME)) {
         setTableName(hoodieConfig.getString(HoodieTableConfig.NAME));
@@ -1504,9 +1511,6 @@ public class HoodieTableMetaClient implements Serializable {
 
       tableConfig.setAll(others);
 
-      if (!StringUtils.isNullOrEmpty(databaseName)) {
-        tableConfig.setValue(HoodieTableConfig.DATABASE_NAME, databaseName);
-      }
       tableConfig.setValue(HoodieTableConfig.NAME, tableName);
       tableConfig.setValue(HoodieTableConfig.TYPE, tableType.name());
 

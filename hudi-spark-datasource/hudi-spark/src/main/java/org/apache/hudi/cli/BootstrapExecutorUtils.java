@@ -228,10 +228,12 @@ public class BootstrapExecutorUtils implements Serializable {
     Map<String, Object> timestampKeyGeneratorConfigs =
         extractConfigsRelatedToTimestampBasedKeyGenerator(keyGenClassAndParColsForKeyGenerator.getLeft(), props);
 
+    // A new table never persists the writer's database.
+    TypedProperties tableProps = TypedProperties.copy(props);
+    tableProps.remove(HoodieTableConfig.DATABASE_NAME.key());
     HoodieTableMetaClient.TableBuilder builder = HoodieTableMetaClient.newTableBuilder()
-        .fromProperties(props)
+        .fromProperties(tableProps)
         .setTableType(cfg.tableType)
-        .setDatabaseName(cfg.database)
         .setTableName(cfg.tableName)
         .setTableVersion(bootstrapConfig.getWriteVersion())
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
