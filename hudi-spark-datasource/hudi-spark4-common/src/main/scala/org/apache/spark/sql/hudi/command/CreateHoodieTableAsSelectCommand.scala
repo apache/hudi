@@ -35,6 +35,7 @@ import org.apache.spark.sql.classic.SparkSession
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.DataWritingCommand
 import org.apache.spark.sql.execution.metric.SQLMetric
+import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 
 import scala.collection.JavaConverters._
@@ -83,7 +84,9 @@ case class CreateHoodieTableAsSelectCommand(
         val existingTable = sessionState.catalog.getTableMetadata(qualifiedTableIdentifier)
         val partitionSpec = existingTable.partitionColumnNames.map((_, None)).toMap
         InsertIntoHoodieTableCommand.run(sparkSession, existingTable, plan, partitionSpec,
-          overwrite = false, metrics = metrics)
+          overwrite = false,
+          extraOptions = mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties -- needFilterProps - "path"),
+          metrics = metrics)
         DataWritingCommand.propogateMetrics(sparkSession.sparkContext, this, metrics)
         // scalastyle:off
         return Seq.empty
