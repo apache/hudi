@@ -108,14 +108,11 @@ final class LsmFileIterators {
       HoodieStorage storage,
       HoodieLogFile logFile,
       List<String> orderingFieldNames) throws IOException {
-    StoragePathInfo pathInfo = logFile.getPathInfo();
-    StoragePath storagePath = pathInfo != null ? pathInfo.getPath() : logFile.getPath();
-    if (FSUtils.isNativeDeleteLogFile(storagePath.getName())) {
-      return createNativeDeleteLogIterator(
-          readerContext, storage, pathInfo, storagePath, logFile.getFileSize(), orderingFieldNames);
+    StoragePathInfo pathInfo = FSUtils.getNativeLogFilePathInfo(storage, logFile);
+    if (FSUtils.isNativeDeleteLogFile(pathInfo.getPath().getName())) {
+      return createNativeDeleteLogIterator(readerContext, storage, pathInfo, orderingFieldNames);
     }
-    return createNativeDataLogIterator(
-        readerContext, storage, pathInfo, storagePath, logFile.getFileSize(), orderingFieldNames);
+    return createNativeDataLogIterator(readerContext, storage, pathInfo, orderingFieldNames);
   }
 
   /**
@@ -129,8 +126,6 @@ final class LsmFileIterators {
       HoodieReaderContext<T> readerContext,
       HoodieStorage storage,
       StoragePathInfo pathInfo,
-      StoragePath storagePath,
-      long fileSize,
       List<String> orderingFieldNames) throws IOException {
     HoodieSchema readerSchema = readerContext.getSchemaHandler().getRequiredSchema();
     if (readerContext.getSchemaHandler().getInternalSchema().isEmptySchema()) {
@@ -138,8 +133,6 @@ final class LsmFileIterators {
           readerContext,
           storage,
           pathInfo,
-          storagePath,
-          fileSize,
           readerContext.getSchemaHandler().getTableSchema(),
           readerSchema);
       return toBufferedRecordIterator(
@@ -148,14 +141,15 @@ final class LsmFileIterators {
 
     // Read the writer schema from the footer instead of using the table schema. For partial updates,
     // the footer stores the partial schema written to this log file, which may differ from the table schema.
-    HoodieSchema writerSchema = NativeLogFooterMetadata.readSchemaFromNativeLogFile(storage, storagePath,
+    StoragePath storagePath = pathInfo.getPath();
+    HoodieSchema writerSchema = NativeLogFooterMetadata.readSchemaFromNativeLogFile(storage, pathInfo,
         FileNameParser.parseNativeLogFile(storagePath.getName())
             .orElseThrow(() -> new HoodieException("Not a native log file: " + storagePath)));
     Pair<Function<T, T>, HoodieSchema> schemaEvolutionTransformer =
         readerContext.getSchemaHandler().getSchemaEvolutionTransformer(
             writerSchema, FSUtils.getCommitTime(storagePath.getName())).get();
     ClosableIterator<T> recordIterator = createFileRecordIterator(
-        readerContext, storage, pathInfo, storagePath, fileSize, writerSchema, writerSchema);
+        readerContext, storage, pathInfo, writerSchema, writerSchema);
     recordIterator = new CloseableMappingIterator<>(recordIterator, schemaEvolutionTransformer.getLeft());
     return toBufferedRecordIterator(
         readerContext, recordIterator, schemaEvolutionTransformer.getRight(), orderingFieldNames, false);
@@ -171,13 +165,11 @@ final class LsmFileIterators {
       HoodieReaderContext<T> readerContext,
       HoodieStorage storage,
       StoragePathInfo pathInfo,
-      StoragePath storagePath,
-      long fileSize,
       List<String> orderingFieldNames) throws IOException {
     HoodieSchema deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(
         readerContext.getSchemaHandler().getTableSchema(), orderingFieldNames);
     ClosableIterator<T> recordIterator = createFileRecordIterator(
-        readerContext, storage, pathInfo, storagePath, fileSize, deleteLogSchema, deleteLogSchema);
+        readerContext, storage, pathInfo, deleteLogSchema, deleteLogSchema);
     return new CloseableMappingIterator<>(recordIterator,
         record -> createNativeDeleteRecord(readerContext, record, deleteLogSchema, orderingFieldNames));
   }
@@ -186,17 +178,10 @@ final class LsmFileIterators {
       HoodieReaderContext<T> readerContext,
       HoodieStorage storage,
       StoragePathInfo pathInfo,
-      StoragePath storagePath,
-      long fileSize,
       HoodieSchema dataSchema,
       HoodieSchema requiredSchema) throws IOException {
-    if (pathInfo != null) {
-      return readerContext.getFileRecordIterator(
-          pathInfo, 0, pathInfo.getLength(), dataSchema, requiredSchema, storage);
-    }
-    long length = fileSize >= 0 ? fileSize : storage.getPathInfo(storagePath).getLength();
     return readerContext.getFileRecordIterator(
-        storagePath, 0, length, dataSchema, requiredSchema, storage);
+        pathInfo, 0, pathInfo.getLength(), dataSchema, requiredSchema, storage);
   }
 
   @VisibleForTesting

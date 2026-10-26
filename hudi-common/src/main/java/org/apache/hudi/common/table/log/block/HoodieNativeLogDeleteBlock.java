@@ -35,7 +35,7 @@ import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.HoodieStorage;
-import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -52,6 +52,7 @@ public class HoodieNativeLogDeleteBlock extends HoodieDeleteBlock {
 
   private final HoodieStorage storage;
   private final HoodieLogFile logFile;
+  private final StoragePathInfo pathInfo;
   private final HoodieSchema deleteLogSchema;
   private final List<String> orderingFieldNames;
   private final String partitionPath;
@@ -66,9 +67,21 @@ public class HoodieNativeLogDeleteBlock extends HoodieDeleteBlock {
                                     Properties props,
                                     Map<HeaderMetadataType, String> header,
                                     Map<FooterMetadataType, String> footer) {
-    super(Option.empty(), null, true, getContentLocation(storage, logFile), header, footer);
+    this(storage, logFile, FSUtils.getNativeLogFilePathInfo(storage, logFile), orderingFieldNames, partitionPath, props, header, footer);
+  }
+
+  private HoodieNativeLogDeleteBlock(HoodieStorage storage,
+                                     HoodieLogFile logFile,
+                                     StoragePathInfo pathInfo,
+                                     List<String> orderingFieldNames,
+                                     String partitionPath,
+                                     Properties props,
+                                     Map<HeaderMetadataType, String> header,
+                                     Map<FooterMetadataType, String> footer) {
+    super(Option.empty(), null, true, getContentLocation(storage, logFile, pathInfo.getLength()), header, footer);
     this.storage = storage;
     this.logFile = logFile;
+    this.pathInfo = pathInfo;
     this.deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(getSchemaFromHeader(), orderingFieldNames);
     this.orderingFieldNames = orderingFieldNames;
     this.partitionPath = partitionPath;
@@ -101,11 +114,10 @@ public class HoodieNativeLogDeleteBlock extends HoodieDeleteBlock {
   private DeleteRecord[] readRecordsToDelete() {
     List<DeleteRecord> deleteRecords = new ArrayList<>();
     String[] orderingFields = orderingFieldNames.toArray(new String[0]);
-    StoragePath path = logFile.getPath();
     HoodieFileFormat fileFormat = HoodieFileFormat.fromFileExtension("." + logFile.getSuffix());
     try (HoodieFileReader fileReader = HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, path, fileFormat, Option.empty());
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, pathInfo, fileFormat, Option.empty());
          ClosableIterator<HoodieRecord> recordIterator = fileReader.getRecordIterator(deleteLogSchema, deleteLogSchema)) {
       while (recordIterator.hasNext()) {
         HoodieRecord record = recordIterator.next();
@@ -122,7 +134,7 @@ public class HoodieNativeLogDeleteBlock extends HoodieDeleteBlock {
   private <T> List<BufferedRecord<T>> readBufferedRecordsToDelete(HoodieReaderContext<T> readerContext) {
     List<BufferedRecord<T>> deleteRecords = new ArrayList<>();
     try (ClosableIterator<T> recordIterator = readerContext.getFileRecordIterator(
-        logFile.getPath(), 0, FSUtils.getFileSize(storage, logFile), deleteLogSchema, deleteLogSchema, storage)) {
+        pathInfo, 0, pathInfo.getLength(), deleteLogSchema, deleteLogSchema, storage)) {
       while (recordIterator.hasNext()) {
         T record = recordIterator.next();
         Object recordKey = readerContext.getRecordContext().getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD);
@@ -135,8 +147,7 @@ public class HoodieNativeLogDeleteBlock extends HoodieDeleteBlock {
     return deleteRecords;
   }
 
-  private static Option<HoodieLogBlockContentLocation> getContentLocation(HoodieStorage storage, HoodieLogFile logFile) {
-    long fileSize = FSUtils.getFileSize(storage, logFile);
+  private static Option<HoodieLogBlockContentLocation> getContentLocation(HoodieStorage storage, HoodieLogFile logFile, long fileSize) {
     return Option.of(new HoodieLogBlockContentLocation(storage, logFile, 0, fileSize, fileSize));
   }
 }

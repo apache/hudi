@@ -49,6 +49,8 @@ public class HFileReaderFactory {
   private final TypedProperties properties;
   private final Either<StoragePath, byte[]> fileSource;
   private Option<Long> fileSizeOpt;
+  // Whole-file content downloaded once and shared by every reader created by this factory
+  private byte[] downloadedContent;
 
   private HFileReaderFactory(HoodieStorage storage,
                              TypedProperties properties,
@@ -104,17 +106,30 @@ public class HFileReaderFactory {
     if (fileSource.isLeft()) {
       if (fileSize <= (long) metadataConfig.getFileCacheMaxSizeMB() * 1024L * 1024L) {
         // Download the whole file if the file size is below a configured threshold
-        StoragePath path = fileSource.asLeft();
-        byte[] buffer;
-        try (SeekableDataInputStream stream = storage.openSeekable(path, false)) {
-          buffer = new byte[(int) fileSize];
-          stream.readFully(buffer);
-        }
-        return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(buffer));
+        return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(getOrDownloadContent(fileSize)));
       }
       return storage.openSeekable(fileSource.asLeft(), false);
     }
     return new ByteArraySeekableDataInputStream(new ByteBufferBackedInputStream(fileSource.asRight()));
+  }
+
+  private synchronized byte[] getOrDownloadContent(long fileSize) throws IOException {
+    if (downloadedContent == null) {
+      byte[] buffer = new byte[(int) fileSize];
+      try (SeekableDataInputStream stream = storage.openSeekable(fileSource.asLeft(), false)) {
+        stream.readFully(buffer);
+      }
+      downloadedContent = buffer;
+    }
+    return downloadedContent;
+  }
+
+  /**
+   * Drops the downloaded file content, if any. Readers created before keep reading their own view of it;
+   * the next {@link #createHFileReader()} downloads the file again.
+   */
+  public synchronized void releaseDownloadedContent() {
+    downloadedContent = null;
   }
 
   public static Builder builder() {

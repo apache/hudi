@@ -38,6 +38,7 @@ import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metadata.stats.ValueMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.generic.GenericRecord;
 
@@ -246,6 +247,20 @@ public abstract class FileFormatUtils {
    */
   public abstract Map<String, String> readFooter(HoodieStorage storage, boolean required, StoragePath filePath,
                                                  String... footerNames);
+
+  /**
+   * Read the footer data of the given data file whose path info, including the length, is already known.
+   *
+   * @param storage     {@link HoodieStorage} instance.
+   * @param required    require the footer data to be in data file.
+   * @param pathInfo    the data file path info.
+   * @param footerNames the footer names to read.
+   * @return a map where the key is the footer name and the value is the footer value.
+   */
+  public Map<String, String> readFooter(HoodieStorage storage, boolean required, StoragePathInfo pathInfo,
+                                        String... footerNames) {
+    return readFooter(storage, required, pathInfo.getPath(), footerNames);
+  }
 
   /**
    * Returns the number of records in the data file.

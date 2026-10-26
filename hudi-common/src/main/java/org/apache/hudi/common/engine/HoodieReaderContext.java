@@ -23,7 +23,6 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.expression.Predicate;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
@@ -218,14 +217,14 @@ public abstract class HoodieReaderContext<T> {
    * seeking. The default implementation scans the file and filters records by key.
    */
   public ClosableIterator<T> lookupRecords(
-      StoragePath filePath,
+      StoragePathInfo pathInfo,
       HoodieFileFormat fileFormat,
       HoodieSchema readerSchema,
       HoodieStorage storage,
       List<String> keys,
       boolean fullKey) throws IOException {
     ClosableIterator<T> fileRecordIterator = getFileRecordIterator(
-        filePath, 0, FSUtils.getFileSize(storage, filePath), readerSchema, readerSchema, storage);
+        pathInfo, 0, pathInfo.getLength(), readerSchema, readerSchema, storage);
     if (keys.isEmpty()) {
       return fileRecordIterator;
     }
