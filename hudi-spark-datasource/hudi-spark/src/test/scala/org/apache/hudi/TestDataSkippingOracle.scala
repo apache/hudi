@@ -44,8 +44,9 @@ import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.AllowedTransformatio
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
-import org.junit.jupiter.api.{BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.{BeforeEach, DynamicTest, TestFactory}
+import org.junit.jupiter.api.Assertions.{assertTrue, fail}
+import org.junit.jupiter.api.function.Executable
 import org.mockito.Mockito.{mock, when}
 
 import java.math.{BigDecimal => JBigDecimal}
@@ -62,61 +63,56 @@ import scala.util.control.NonFatal
 object TestDataSkippingOracle {
 
   // ---------------------------------------------------------------------------------------------
-  // Known violations: signature glob -> tracking issue/PR. A fix PR deletes its entries.
-  // Signatures are `<csi|psi>:<transform id>/<shape>`, `<csi|psi>:compound:<op>/<reason>` or
-  // `<csi|psi>:missing_stats/leaf`; `*` matches anything.
+  // Bug families. Every family is one test per index path in `paths`, failing while any observed
+  // signature belongs to it, so that a fix turns its own test green. Signatures are
+  // `<csi|psi>:<transform id>/<shape>`, `<csi|psi>:compound:<op>/<reason>` or `<csi|psi>:missing_stats/leaf`;
+  // in the globs `*` matches anything. A signature belongs to the first family it matches: transforms that
+  // break ordering come before LIKE, which owns LIKE over transforms that only break on DST or extreme
+  // years. Compositions belong to the family of their inner transform.
   // ---------------------------------------------------------------------------------------------
 
-  private def issue(number: Int): String = s"https://github.com/apache/hudi/issues/$number"
+  case class BugFamily(id: String, paths: Set[String], globs: Seq[String], issue: Int, description: String) {
+    def link: String = s"https://github.com/apache/hudi/issues/$issue"
+    def displayName(path: IndexPath): String = s"${path.id}: $description (#$issue)"
+  }
 
-  val KNOWN_VIOLATIONS: Seq[(String, String)] = Seq(
-    // Missing stats prune files and partitions (fix in #20328)
-    "*:compound:*/missing_stats" -> issue(20296),
-    "psi:missing_stats/leaf" -> issue(20296),
-    // Negative factors, narrowing casts that wrap, decimal casts that overflow into NULL bounds (fix in #19475)
-    "*:multiply_neg/*" -> issue(19445),
-    "*:divide_neg/*" -> issue(19445),
-    "*:add_pos(multiply_neg)/*" -> issue(19445),
-    "*:log10(multiply_neg)/*" -> issue(19445),
-    "*:cast:*>tinyint/*" -> issue(19445),
-    "*:cast:*>smallint/*" -> issue(19445),
-    "*:cast:bigint>int/*" -> issue(19445),
-    "*:cast(cast:bigint>int)>bigint/*" -> issue(19445),
-    "*:cast:*>decimal(3,1)/*" -> issue(19445),
-    "*:cast:*>decimal(10,2)/*" -> issue(19445),
-    "*:cast:*>decimal(20,4)/*" -> issue(19445),
-    // String to date/timestamp casts (to_date and to_timestamp without a format are replaced by them), non-sortable
-    // formats, to_unix_timestamp of strings (unparseable ones throw on Spark 3 and give NULL bounds on Spark 4)
-    "*:cast:string>date/*" -> issue(19481),
-    "*:cast:string>timestamp/*" -> issue(19481),
-    "*:to_date/*" -> issue(19481),
-    "*:to_timestamp/*" -> issue(19481),
-    "*:date_format:dd-MM-yyyy/*" -> issue(19481),
-    "*:date_format:MM/dd/yyyy/*" -> issue(19481),
-    "*:date_format:EEE/*" -> issue(19481),
-    "*:from_unixtime:dd-MM-yyyy/*" -> issue(19481),
-    "*:to_unix_timestamp:*" -> issue(19481),
-    // Reproduced in the #20296 thread: BitwiseOr, Add/ShiftLeft overflow, NULL bounds of log functions, DST fall-back
-    "*:bitor/*" -> issue(20296),
-    "*:add_pos/*" -> issue(20296),
-    "*:add_neg/*" -> issue(20296),
-    "*:cast(add_pos)>bigint/*" -> issue(20296),
-    "*:shiftleft/*" -> issue(20296),
-    "*:ln/*" -> issue(20296),
-    "*:log10/*" -> issue(20296),
-    "*:date_format:yyyy-MM-dd HH:mm/*" -> issue(20296),
-    "*:cast:timestamp>string/*" -> issue(20296),
-    "*:from_utc_timestamp:America/New_York/*" -> issue(20296),
-    "*:date_format(from_utc_timestamp:America/New_York):yyyy-MM-dd HH:mm/*" -> issue(20296),
-    // Found by this test, not in the #20296 thread yet: Multiply overflow, NULL bounds of log1p/log2, the
-    // spring-forward gap of to_utc_timestamp, years beyond 9999 out of a year-first from_unixtime format
-    "*:multiply_pos/*" -> issue(20296),
-    "*:log1p/*" -> issue(20296),
-    "*:log2/*" -> issue(20296),
-    "*:to_utc_timestamp:America/New_York/*" -> issue(20296),
-    "*:from_unixtime:yyyy-MM-dd HH:mm:ss/*" -> issue(20296),
-    // LIKE 'prefix%' is translated as an equality on the prefix, whatever the transform (fix in #19169)
-    "*:*/like" -> issue(20430))
+  private val BOTH = Set("csi", "psi")
+  private val CSI_ONLY = Set("csi")
+
+  val BUG_FAMILIES: Seq[BugFamily] = Seq(
+    BugFamily("negative_factor", BOTH, Seq("*:multiply_neg/*", "*:divide_neg/*", "*:add_pos(multiply_neg)/*",
+      "*:log10(multiply_neg)/*"), 19445, "multiply or divide by a negative constant"),
+    BugFamily("narrowing_cast", CSI_ONLY, Seq("*:cast:*>tinyint/*", "*:cast:*>smallint/*", "*:cast:bigint>int/*",
+      "*:cast(cast:bigint>int)>bigint/*"), 19445, "narrowing casts that wrap"),
+    BugFamily("decimal_cast", CSI_ONLY, Seq("*:cast:*>decimal(*"), 19445, "decimal casts that overflow into NULL bounds"),
+    BugFamily("string_to_datetime", CSI_ONLY, Seq("*:cast:string>date/*", "*:cast:string>timestamp/*", "*:to_date/*",
+      "*:to_timestamp/*"), 19481, "string to date or timestamp casts, to_date and to_timestamp"),
+    BugFamily("non_sortable_format", CSI_ONLY, Seq("*:date_format:dd-MM-yyyy/*", "*:date_format:MM/dd/yyyy/*",
+      "*:date_format:EEE/*", "*:from_unixtime:dd-MM-yyyy/*"), 19481, "non-sortable formats in date_format and from_unixtime"),
+    // unparseable strings throw on Spark 3 and give NULL bounds on Spark 4
+    BugFamily("to_unix_timestamp", BOTH, Seq("*:to_unix_timestamp:*"), 19481, "to_unix_timestamp of strings"),
+    BugFamily("bitwise_or", BOTH, Seq("*:bitor/*"), 20296, "BitwiseOr with a constant"),
+    BugFamily("add_overflow", BOTH, Seq("*:add_pos/*", "*:add_neg/*", "*:cast(add_pos)>bigint/*"), 20296,
+      "Add overflow without ANSI"),
+    BugFamily("shiftleft_overflow", BOTH, Seq("*:shiftleft/*"), 20296, "ShiftLeft overflow"),
+    BugFamily("multiply_overflow", BOTH, Seq("*:multiply_pos/*"), 20296, "Multiply overflow with a positive factor"),
+    BugFamily("log_null_bound", CSI_ONLY, Seq("*:ln/*", "*:log10/*", "*:log1p/*", "*:log2/*"), 20296,
+      "NULL bounds of ln, log10, log1p and log2"),
+    BugFamily("like_prefix", BOTH, Seq("*:*/like"), 20430, "LIKE 'prefix%' translated as an equality on the prefix"),
+    BugFamily("dst_fall_back", BOTH, Seq("*:date_format:yyyy-MM-dd HH:mm/*", "*:cast:timestamp>string/*",
+      "*:from_utc_timestamp:America/New_York/*", "*:date_format(from_utc_timestamp:America/New_York):yyyy-MM-dd HH:mm/*"),
+      20296, "DST fall-back in date_format HH:mm, cast(ts as string) and from_utc_timestamp"),
+    BugFamily("to_utc_timestamp_gap", CSI_ONLY, Seq("*:to_utc_timestamp:America/New_York/*"), 20296,
+      "to_utc_timestamp over the spring-forward gap"),
+    BugFamily("from_unixtime_years", CSI_ONLY, Seq("*:from_unixtime:yyyy-MM-dd HH:mm:ss/*"), 20296,
+      "from_unixtime with years outside 0000-9999"),
+    BugFamily("missing_stats_compound", CSI_ONLY, Seq("*:compound:*/missing_stats"), 20296,
+      "missing stats in AND, OR and NOT compounds"),
+    BugFamily("missing_partition_stats", Set("psi"), Seq("psi:missing_stats/leaf"), 20296,
+      "partitions with missing partition stats"))
+
+  def familyOf(signature: String): Option[BugFamily] =
+    BUG_FAMILIES.find(_.globs.exists(glob => signature.matches(glob.split("\\*", -1).map(java.util.regex.Pattern.quote).mkString(".*"))))
 
   // ---------------------------------------------------------------------------------------------
   // Budget and dimensions
@@ -469,18 +465,24 @@ object TestDataSkippingOracle {
     if (rt.template.id == "identity") base + 2 else base
   }
 
+  /**
+   * @param minEvaluated floor on the predicates evaluated, and minPruning on those that pruned anything,
+   *                     so that a degenerate run can not pass
+   */
   sealed abstract class IndexPath(val id: String, val leavesPerTemplatePerDim: Int, val leavesPerTemplatePerOtherZone: Int,
-                                  val compoundsPerDim: Int) {
+                                  val compoundsPerDim: Int, val minEvaluated: Int, val minPruning: Int) {
     def unitsOf(ds: OracleDataset, fids: Set[Int]): Set[Int]
   }
 
-  case object CSI extends IndexPath("csi", leavesPerTemplatePerDim = 3, leavesPerTemplatePerOtherZone = 1, compoundsPerDim = 70) {
+  case object CSI extends IndexPath("csi", leavesPerTemplatePerDim = 3, leavesPerTemplatePerOtherZone = 1, compoundsPerDim = 70,
+    minEvaluated = 2000, minPruning = 1500) {
     override def unitsOf(ds: OracleDataset, fids: Set[Int]): Set[Int] = fids
   }
 
   // NOTE: Partition stats pruning ignores filters holding unary expressions (casts, NOT, unary math, ...),
   //       and every evaluation persists the index view, hence a smaller budget
-  case object PSI extends IndexPath("psi", leavesPerTemplatePerDim = 1, leavesPerTemplatePerOtherZone = 0, compoundsPerDim = 30) {
+  case object PSI extends IndexPath("psi", leavesPerTemplatePerDim = 1, leavesPerTemplatePerOtherZone = 0, compoundsPerDim = 30,
+    minEvaluated = 700, minPruning = 150) {
     override def unitsOf(ds: OracleDataset, fids: Set[Int]): Set[Int] = fids.map(ds.partitionOf)
   }
 
@@ -505,9 +507,6 @@ object TestDataSkippingOracle {
     }
   }
 
-  def knownEntry(signature: String): Option[(String, String)] =
-    KNOWN_VIOLATIONS.find { case (glob, _) => signature.matches(glob.split("\\*", -1).map(java.util.regex.Pattern.quote).mkString(".*")) }
-
   class Results(path: IndexPath) {
     var evaluated = 0
     var pruning = 0
@@ -524,35 +523,45 @@ object TestDataSkippingOracle {
       }
     }
 
-    /**
-     * Prints the report and returns the observed signatures not covered by [[KNOWN_VIOLATIONS]]: every
-     * signature with its count, then the smallest counterexample of every unknown signature and of
-     * every known entry
-     */
-    def report(datasets: Seq[OracleDataset], test: TestDataSkippingOracle): Seq[String] = {
+    def printSummary(datasets: Seq[OracleDataset]): Unit = {
       val tag = s"[oracle:${path.id}]"
-      datasets.foreach(ds => println(s"$tag dataset #${ds.idx}(${ds.profile}, index ${ds.indexVersion}): ${ds.files.size} files, ${ds.rows.size} rows, " +
-        s"unindexed files ${ds.unindexedFiles.toSeq.sorted.mkString("[", ",", "]")}, " +
+      datasets.foreach(ds => println(s"$tag dataset #${ds.idx}(${ds.profile}, index ${ds.indexVersion}): ${ds.files.size} files, " +
+        s"${ds.rows.size} rows, unindexed files ${ds.unindexedFiles.toSeq.sorted.mkString("[", ",", "]")}, " +
         s"unindexed partitions ${ds.unindexedPartitions.toSeq.sorted.mkString("[", ",", "]")}"))
       println(s"$tag evaluated=$evaluated pruned_something=$pruning skipped=${skipped.mkString(", ")}")
       println(s"$tag candidate computation failures (${if (path == CSI) "fallback to no pruning" else "query would fail"}): " +
         s"${failures.values.sum} ${failures.toSeq.sortBy(-_._2).take(15).map { case (k, v) => s"$k=$v" }.mkString(", ")}")
       println(s"$tag ${violationCounts.size} violation signatures (${violationCounts.values.sum} violating predicate/unit pairs):")
       violationCounts.foreach { case (signature, count) =>
-        println(f"    $signature%-72s $count%5d  ${knownEntry(signature).map(_._2).getOrElse("UNKNOWN")}")
+        println(f"    $signature%-72s $count%5d  ${familyOf(signature).filter(_.paths.contains(path.id)).map(_.id).getOrElse("UNATTRIBUTED")}")
       }
-      val unknown = violationCounts.keys.filter(knownEntry(_).isEmpty).toSeq
-      unknown.foreach(signature => println(test.describe(smallest(signature), None)))
-      KNOWN_VIOLATIONS.foreach { case (glob, link) =>
-        val matched = violationCounts.keys.filter(s => knownEntry(s).exists(_._1 == glob)).toSeq
-        if (matched.nonEmpty) {
-          println(s"$tag known $glob -> $link (${matched.size} signatures), smallest counterexample:")
-          println(test.describe(matched.map(smallest).minBy(_.size), Some(link)))
-        } else if (glob.startsWith(s"${path.id}:") || (path == CSI && glob.startsWith("*:"))) {
-          println(s"$tag known violation not observed (delete it if fixed): $glob -> $link")
-        }
+    }
+
+    def sanityFailure(armProblems: Seq[String]): Option[String] = {
+      val problems = armProblems ++
+        (if (evaluated < path.minEvaluated) Seq(s"only $evaluated predicates evaluated, expected at least ${path.minEvaluated}") else Nil) ++
+        (if (pruning < path.minPruning) Seq(s"only $pruning predicates pruned anything, expected at least ${path.minPruning}") else Nil)
+      if (problems.isEmpty) None else Some(problems.mkString("; "))
+    }
+
+    def familyFailure(family: BugFamily, test: TestDataSkippingOracle): Option[String] =
+      failure(violationCounts.keys.filter(s => familyOf(s).contains(family)).toSeq, s"see ${family.link}", test)
+
+    // signatures of no family, or of a family not expected on this path
+    def unattributedFailure(test: TestDataSkippingOracle): Option[String] =
+      failure(violationCounts.keys.filterNot(s => familyOf(s).exists(_.paths.contains(path.id))).toSeq,
+        "add the signatures to a bug family of TestDataSkippingOracle.BUG_FAMILIES", test)
+
+    private def failure(signatures: Seq[String], hint: String, test: TestDataSkippingOracle): Option[String] = {
+      if (signatures.isEmpty) {
+        None
+      } else {
+        val pairs = signatures.map(violationCounts).sum
+        val listed = signatures.sortBy(s => -violationCounts(s)).take(8).map(s => s"$s (${violationCounts(s)})").mkString(", ")
+        Some(s"Data skipping dropped matching ${if (path == CSI) "files" else "partitions"} in $pairs predicate/unit pairs " +
+          s"over ${signatures.size} signatures ($hint): $listed${if (signatures.size > 8) ", ..." else ""}\n" +
+          s"Smallest counterexample:\n${test.describe(signatures.map(smallest).minBy(_.size))}")
       }
-      unknown
     }
   }
 
@@ -653,6 +662,16 @@ object TestDataSkippingOracle {
     metaClient
   }
 
+  /**
+   * Outcome of the oracle for one index path: the failure message, if any, of the sanity test, of every
+   * bug family and of the unattributed violations
+   */
+  case class OracleRun(sanity: Option[String], families: Map[String, Option[String]], unattributed: Option[String])
+
+  // NOTE: Surefire reruns failing tests (rerunFailingTestsCount), which re-invokes the test factories; the
+  //       oracle is deterministic, so reruns within the JVM reuse its outcome instead of running it again
+  private val ORACLE_RUNS = mutable.HashMap[String, OracleRun]()
+
   private val METADATA_CONFIG = HoodieMetadataConfig.newBuilder().enable(true).build()
 
   private def toColumnStats(record: HoodieRecord[_]): HoodieMetadataColumnStats =
@@ -706,8 +725,8 @@ object TestDataSkippingOracle {
  * fed with the conjuncts of the optimized filter, as a query would.
  *
  * Violations are reported by a signature built from the generator ids of [[TestDataSkippingOracle.TEMPLATES]]
- * (stable across Spark versions) and checked against [[TestDataSkippingOracle.KNOWN_VIOLATIONS]]. A fix PR
- * is expected to delete its entries.
+ * (stable across Spark versions) and grouped into [[TestDataSkippingOracle.BUG_FAMILIES]]: the oracle runs once
+ * per index path, and every family is a test that fails while any of its signatures is observed.
  */
 class TestDataSkippingOracle extends HoodieSparkClientTestBase {
 
@@ -719,24 +738,34 @@ class TestDataSkippingOracle extends HoodieSparkClientTestBase {
     spark = sqlContext.sparkSession
   }
 
-  @Test
-  def testColumnStatsIndexOracle(): Unit = runOracle(CSI)
+  @TestFactory
+  def testColumnStatsIndexOracle(): java.util.stream.Stream[DynamicTest] = oracleTests(CSI)
 
-  @Test
-  def testPartitionStatsIndexOracle(): Unit = runOracle(PSI)
+  @TestFactory
+  def testPartitionStatsIndexOracle(): java.util.stream.Stream[DynamicTest] = oracleTests(PSI)
 
   // ---------------------------------------------------------------------------------------------
   // Driver
   // ---------------------------------------------------------------------------------------------
 
-  private def runOracle(path: IndexPath): Unit = {
+  private def oracleTests(path: IndexPath): java.util.stream.Stream[DynamicTest] = {
+    val run = ORACLE_RUNS.getOrElseUpdate(path.id, runOracle(path))
+    // NOTE: Surefire reports dynamic tests by index, so the message repeats the display name
+    def test(name: String, failure: Option[String]): DynamicTest =
+      DynamicTest.dynamicTest(name, new Executable {
+        override def execute(): Unit = failure.foreach(f => fail[Unit](s"[$name] $f"))
+      })
+    (Seq(test(s"${path.id}: harness sanity", run.sanity)) ++
+      BUG_FAMILIES.filter(_.paths.contains(path.id)).map(f => test(f.displayName(path), run.families(f.id))) :+
+      test(s"${path.id}: unattributed violations", run.unattributed)).asJava.stream()
+  }
+
+  private def runOracle(path: IndexPath): OracleRun = {
     val startNanos = System.nanoTime()
     val datasets = (0 until NUM_DATASETS).map(idx => writeDataset(idx, if (idx < NUM_DATASETS - 1) Edge else Clean))
     val templates = resolveTemplates()
     val results = new Results(path)
-    if (path == CSI) {
-      printArmCoverage(templates, datasets.head)
-    }
+    val armProblems = checkArmCoverage(templates, datasets.head, print = path == CSI)
 
     DIMS.zipWithIndex.foreach { case (dim, dimIdx) =>
       withDim(dim) {
@@ -752,11 +781,11 @@ class TestDataSkippingOracle extends HoodieSparkClientTestBase {
       }
     }
 
-    val unknown = results.report(datasets, this)
+    results.printSummary(datasets)
+    val run = OracleRun(results.sanityFailure(armProblems),
+      BUG_FAMILIES.map(f => f.id -> results.familyFailure(f, this)).toMap, results.unattributedFailure(this))
     println(f"[oracle:${path.id}] finished in ${(System.nanoTime() - startNanos) / 1e9}%.1fs")
-    assertTrue(unknown.isEmpty,
-      s"Data skipping dropped files/partitions holding matching rows; ${unknown.size} unknown signatures, e.g. " +
-        s"${unknown.take(10).mkString(", ")}. See the report above for minimal counterexamples")
+    run
   }
 
   private def check(path: IndexPath, dim: Dim, ds: OracleDataset, pred: Pred, results: Results): Unit = {
@@ -1202,7 +1231,7 @@ class TestDataSkippingOracle extends HoodieSparkClientTestBase {
     }.map(t => t.fn(t.column))
   }
 
-  private[hudi] def describe(ce: Counterexample, known: Option[String]): String = withDim(ce.dim) {
+  private[hudi] def describe(ce: Counterexample): String = withDim(ce.dim) {
     val ds = ce.ds
     val path = if (ce.signature.startsWith(CSI.id)) CSI else PSI
     val referenced = collectReferencedColumns(spark, ce.filters, TABLE_SCHEMA)
@@ -1220,7 +1249,7 @@ class TestDataSkippingOracle extends HoodieSparkClientTestBase {
     val unitName = if (path == CSI) s"file ${ce.unit} (${ds.files(ce.unit).partition})" else s"partition ${ds.partitions(ce.unit)}"
     val missing = ds.missingColumns(path, ce.unit).intersect(referenced.toSet).toSeq.sorted
     val nullBound = nullBoundLeaves(path, ce.dim, ds, ce.pred, ce.unit)
-    s"""[${ce.signature}] ${known.map(k => s"known: $k").getOrElse("UNKNOWN")}
+    s"""[${ce.signature}]
        |    dims        : ansi=${ce.dim.ansi} tz=${ce.dim.timeZone} dataset=${ds.idx}(${ds.profile}, ${ds.indexVersion}) $unitName
        |    predicate   : ${ce.pred.sql}
        |    optimized   : ${ce.filters.map(_.sql).mkString(" AND ")}
@@ -1236,33 +1265,36 @@ class TestDataSkippingOracle extends HoodieSparkClientTestBase {
    * templates exercise it and whether the optimized expression actually reaches the matcher on this Spark
    * version (RuntimeReplaceable expressions are rewritten before Hudi sees them)
    */
-  private def printArmCoverage(templates: Seq[ResolvedTemplate], ds: OracleDataset): Unit = withDim(Dim(ansi = false, "UTC")) {
-    val exercised = mutable.LinkedHashMap[String, mutable.Buffer[String]]()
-    val reached = mutable.LinkedHashMap[String, mutable.Buffer[String]]()
-    templates.foreach { rt =>
-      val column = COLUMNS.find(_.name == rt.template.column).get
-      val label = rt.template.fn(column.name)
-      rt.resolved.foreach(e => if (WHITELIST_ARMS.contains(e.getClass.getSimpleName)) {
-        exercised.getOrElseUpdate(e.getClass.getSimpleName, mutable.Buffer()) += label
-      })
-      val value = ds.values(column.name).headOption.getOrElse(ds.pools(column.name).head)
-      optimizedFilters(ds.parquetDf, s"(${rt.template.fn(column.name)}) = (${rt.template.fn(sqlLiteral(value, column.dataType))})")
-        .toOption.toSeq.flatten
-        .collect { case c: BinaryComparison => c.children.filter(_.references.nonEmpty) }
-        .flatten
-        .filter(side => AllowedTransformationExpression.unapply(side).isDefined)
-        .foreach(_.foreach(e => if (WHITELIST_ARMS.contains(e.getClass.getSimpleName)) {
-          reached.getOrElseUpdate(e.getClass.getSimpleName, mutable.Buffer()) += label
-        }))
+  private def checkArmCoverage(templates: Seq[ResolvedTemplate], ds: OracleDataset, print: Boolean): Seq[String] =
+    withDim(Dim(ansi = false, "UTC")) {
+      val exercised = mutable.LinkedHashMap[String, mutable.Buffer[String]]()
+      val reached = mutable.LinkedHashMap[String, mutable.Buffer[String]]()
+      templates.foreach { rt =>
+        val column = COLUMNS.find(_.name == rt.template.column).get
+        val label = rt.template.fn(column.name)
+        rt.resolved.foreach(e => if (WHITELIST_ARMS.contains(e.getClass.getSimpleName)) {
+          exercised.getOrElseUpdate(e.getClass.getSimpleName, mutable.Buffer()) += label
+        })
+        val value = ds.values(column.name).headOption.getOrElse(ds.pools(column.name).head)
+        optimizedFilters(ds.parquetDf, s"(${rt.template.fn(column.name)}) = (${rt.template.fn(sqlLiteral(value, column.dataType))})")
+          .toOption.toSeq.flatten
+          .collect { case c: BinaryComparison => c.children.filter(_.references.nonEmpty) }
+          .flatten
+          .filter(side => AllowedTransformationExpression.unapply(side).isDefined)
+          .foreach(_.foreach(e => if (WHITELIST_ARMS.contains(e.getClass.getSimpleName)) {
+            reached.getOrElseUpdate(e.getClass.getSimpleName, mutable.Buffer()) += label
+          }))
+      }
+      if (print) {
+        println(s"[oracle] whitelist arm coverage (${templates.size} templates resolved):")
+        WHITELIST_ARMS.foreach { arm =>
+          val ex = exercised.get(arm).map(_.distinct).getOrElse(Seq.empty)
+          val re = reached.get(arm).map(_.distinct).getOrElse(Seq.empty)
+          val examples = (if (re.nonEmpty) re else ex).take(2).mkString("; ")
+          println(f"    $arm%-18s exercised=${ex.size}%3d reached_matcher=${re.size}%3d e.g. $examples")
+        }
+      }
+      val unexercised = WHITELIST_ARMS.filterNot(exercised.contains)
+      if (unexercised.isEmpty) Seq.empty else Seq(s"whitelist arms not exercised by any template: ${unexercised.mkString(", ")}")
     }
-    println(s"[oracle] whitelist arm coverage (${templates.size} templates resolved):")
-    WHITELIST_ARMS.foreach { arm =>
-      val ex = exercised.get(arm).map(_.distinct).getOrElse(Seq.empty)
-      val re = reached.get(arm).map(_.distinct).getOrElse(Seq.empty)
-      val examples = (if (re.nonEmpty) re else ex).take(2).mkString("; ")
-      println(f"    $arm%-18s exercised=${ex.size}%3d reached_matcher=${re.size}%3d e.g. $examples")
-    }
-    val unexercised = WHITELIST_ARMS.filterNot(exercised.contains)
-    assertTrue(unexercised.isEmpty, s"Whitelist arms not exercised by any template: ${unexercised.mkString(", ")}")
-  }
 }
