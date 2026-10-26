@@ -1152,7 +1152,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
     txnManager.beginStateChange(Option.empty(), lastCompletedTxnAndMetadata.map(Pair::getLeft));
-    String instantTime;
+    String instantTime = null;
     HoodieInstant instant = null;
     try {
       instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
@@ -1173,6 +1173,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         instant = metaClient.createNewInstant(State.REQUESTED, actionType, instantTime);
         metaClient.getActiveTimeline().createNewInstant(instant);
       }
+    } catch (RuntimeException | Error failure) {
+      // The caller does not know the allocated instant until startCommit returns. In particular, a
+      // failed timeline write must not leave its heartbeat running on a client reused by streaming.
+      if (instantTime != null && config.getFailedWritesCleanPolicy().isLazy()) {
+        try {
+          heartbeatClient.stop(instantTime);
+        } catch (RuntimeException cleanupFailure) {
+          failure.addSuppressed(cleanupFailure);
+        }
+      }
+      throw failure;
     } finally {
       txnManager.endStateChange(Option.ofNullable(instant));
     }
