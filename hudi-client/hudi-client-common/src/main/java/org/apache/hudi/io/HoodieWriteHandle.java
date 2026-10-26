@@ -45,9 +45,11 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.ColumnStatsCollector;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -101,6 +103,7 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
    */
   protected final boolean isSecondaryIndexStatsStreamingWritesEnabled;
   protected List<HoodieIndexDefinition> secondaryIndexDefns = Collections.emptyList();
+  protected Option<ColumnStatsCollector> columnStatsCollector = Option.empty();
 
   @Getter(AccessLevel.PROTECTED)
   private boolean closed = false;
@@ -150,6 +153,15 @@ public abstract class HoodieWriteHandle<T, I, K, O> extends HoodieIOHandle<T, I,
     TypedProperties mergeProps = ConfigUtils.getMergeProps(config.getProps(), hoodieTable.getMetaClient().getTableConfig());
     HoodieSchema deleteContextSchema = preserveMetadata ? writeSchemaWithMetaFields : writeSchema;
     this.deleteContext = new DeleteContext(mergeProps, deleteContextSchema).withReaderSchema(deleteContextSchema);
+  }
+
+  protected void initColumnStatsCollector(HoodieFileWriter<?> writer, StoragePath filePath, HoodieRecord.HoodieRecordType recordType) {
+    columnStatsCollector = ColumnStatsStreamingTracker.createCollector(writer, config, hoodieTable.getMetaClient(),
+        () -> writeSchemaWithMetaFields, filePath.getName(), recordType);
+  }
+
+  protected void updateColumnStats() {
+    columnStatsCollector.ifPresent(collector -> writeStatus.getStat().setRecordsStats(collector.getColumnStats()));
   }
 
   private void initSecondaryIndexStats(boolean preserveMetadata) {
