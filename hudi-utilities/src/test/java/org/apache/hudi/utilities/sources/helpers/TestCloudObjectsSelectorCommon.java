@@ -28,6 +28,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.S3EventsHoodieIncrSourceConfig;
+import org.apache.hudi.utilities.config.UnstructuredFileSourceConfig;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.RowBasedSchemaProvider;
 
@@ -56,6 +57,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -66,6 +68,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -293,6 +296,133 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("avro"));
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(""));
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(null));
+  }
+
+  @Test
+  void unstructuredMaterializerDeniesDataFileExtensionsByDefault() {
+    TypedProperties props = new TypedProperties();
+    // the same materializer serves both stores, so only the object key column differs
+    assertEquals("s3.object.size > 0 and s3.object.key not like '%avro' and s3.object.key not like '%hfile'"
+            + " and s3.object.key not like '%orc' and s3.object.key not like '%parquet'",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props,
+            new UnstructuredFileMaterializer(props, jsc)));
+    assertEquals("size > 0 and name not like '%avro' and name not like '%hfile'"
+            + " and name not like '%orc' and name not like '%parquet'",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props,
+            new UnstructuredFileMaterializer(props, jsc)));
+  }
+
+  @Test
+  void unstructuredMaterializerAllowlistOverridesTheDenylist() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(UnstructuredFileSourceConfig.FILE_EXTENSIONS.key(), "pdf,docx");
+    assertEquals("size > 0 and (name like '%docx' or name like '%pdf')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props,
+            new UnstructuredFileMaterializer(props, jsc)));
+  }
+
+  @Test
+  void unstructuredMaterializerAddsNoPredicateWhenNothingIsFiltered() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(UnstructuredFileSourceConfig.FILE_EXTENSIONS_IGNORE.key(), "");
+    assertEquals("size > 0",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props,
+            new UnstructuredFileMaterializer(props, jsc)));
+  }
+
+  @Test
+  void objectMetadataDeduplicatesOnKeyAndCarriesTheEventTimestamp() {
+    // the object key and bucket are nested columns, so anything referencing them has to do so
+    // before the projection flattens them to their leaf names
+    Dataset<Row> events = sparkSession.read().json(jsc.parallelize(Arrays.asList(
+        "{\"eventTime\":\"2026-08-12T10:00:00.000Z\",\"s3\":{\"bucket\":{\"name\":\"b\"},"
+            + "\"object\":{\"key\":\"docs/a.txt\",\"size\":10}}}",
+        "{\"eventTime\":\"2026-08-12T11:00:00.000Z\",\"s3\":{\"bucket\":{\"name\":\"b\"},"
+            + "\"object\":{\"key\":\"docs/a.txt\",\"size\":20}}}",
+        "{\"eventTime\":\"2026-08-12T10:30:00.000Z\",\"s3\":{\"bucket\":{\"name\":\"b\"},"
+            + "\"object\":{\"key\":\"docs/c.txt\",\"size\":30}}}"), 1));
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key(), "s3a");
+    List<CloudObjectMetadata> objects = CloudObjectsSelectorCommon.getObjectMetadata(
+        CloudObjectsSelectorCommon.Type.S3, jsc, events, false, props);
+
+    Map<String, CloudObjectMetadata> byPath = objects.stream()
+        .collect(Collectors.toMap(CloudObjectMetadata::getPath, o -> o));
+    assertEquals(2, objects.size(), "an object written twice in one batch must be read once: " + byPath.keySet());
+
+    // the later of the two writes to a.txt wins, so its size and timestamp are the newer pair
+    CloudObjectMetadata rewritten = byPath.get("s3a://b/docs/a.txt");
+    assertEquals(20L, rewritten.getSize());
+    assertEquals(Instant.parse("2026-08-12T11:00:00.000Z").toEpochMilli(), rewritten.getModificationTime());
+
+    CloudObjectMetadata once = byPath.get("s3a://b/docs/c.txt");
+    assertEquals(30L, once.getSize());
+    assertEquals(Instant.parse("2026-08-12T10:30:00.000Z").toEpochMilli(), once.getModificationTime());
+  }
+
+  @Test
+  void objectMetadataFallsBackWhenEventsCarryNoTimestamp() {
+    // a metadata table written before the timestamp column existed must keep working
+    Dataset<Row> events = sparkSession.read().json(jsc.parallelize(Arrays.asList(
+        "{\"s3\":{\"bucket\":{\"name\":\"b\"},\"object\":{\"key\":\"docs/a.txt\",\"size\":10}}}"), 1));
+    TypedProperties props = new TypedProperties();
+    props.setProperty(S3EventsHoodieIncrSourceConfig.S3_FS_PREFIX.key(), "s3a");
+    List<CloudObjectMetadata> objects = CloudObjectsSelectorCommon.getObjectMetadata(
+        CloudObjectsSelectorCommon.Type.S3, jsc, events, false, props);
+    assertEquals(1, objects.size());
+    assertEquals(CloudObjectMetadata.UNKNOWN_MODIFICATION_TIME, objects.get(0).getModificationTime());
+  }
+
+  @Test
+  void extensionFilterKeepsASinglePredicateForOneExtension() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "json");
+    assertEquals("s3.object.size > 0 and s3.object.key like '%json'",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
+  }
+
+  @Test
+  void extensionFilterMatchesAnyOneOfSeveralExtensions() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "pdf,docx,html");
+    assertEquals("s3.object.size > 0 and (s3.object.key like '%pdf' or s3.object.key like '%docx'"
+            + " or s3.object.key like '%html')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
+  }
+
+  @Test
+  void extensionFilterTrimsBlanksAndDropsEmptyEntries() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), " pdf , ,docx, ");
+    assertEquals("s3.object.size > 0 and (s3.object.key like '%pdf' or s3.object.key like '%docx')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
+  }
+
+  @Test
+  void extensionFilterFallsBackToTheDataFileFormat() {
+    // pins long-standing behaviour: with nothing configured the filter selects parquet only
+    assertEquals("s3.object.size > 0 and s3.object.key like '%parquet'",
+        CloudObjectsSelectorCommon.generateFilter(
+            CloudObjectsSelectorCommon.Type.S3, new TypedProperties()));
+  }
+
+  @Test
+  void extensionFilterUsesTheGcsObjectKeyAndSizeColumns() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "pdf,png");
+    assertEquals("size > 0 and (name like '%pdf' or name like '%png')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props));
+  }
+
+  @Test
+  void extensionFilterComposesWithThePathPrefixFilter() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX.key(), "docs/");
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "pdf,docx");
+    assertEquals("s3.object.size > 0 and s3.object.key like 'docs/%'"
+            + " and (s3.object.key like '%pdf' or s3.object.key like '%docx')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
   }
 
   @Test

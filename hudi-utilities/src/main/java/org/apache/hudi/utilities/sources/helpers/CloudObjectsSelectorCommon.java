@@ -51,6 +51,7 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.expressions.Window;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.Metadata;
@@ -60,6 +61,8 @@ import org.apache.spark.sql.types.StructType;
 import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -79,7 +82,6 @@ import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_MERGE_SCHEMA;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARALLELISM;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARTITIONS;
@@ -111,6 +113,8 @@ public class CloudObjectsSelectorCommon {
   public static final String S3_BUCKET_NAME = "s3.bucket.name";
   public static final String GCS_OBJECT_KEY = "name";
   public static final String GCS_OBJECT_SIZE = "size";
+  public static final String S3_EVENT_TIME = "eventTime";
+  public static final String GCS_OBJECT_UPDATED = "updated";
   public static final String CLOUD_SOURCE_PATH_COLUMN = "_hoodie_cloud_source_path";
   private static final String SPACE_DELIMTER = " ";
   private static final String GCS_PREFIX = "gs://";
@@ -212,7 +216,26 @@ public class CloudObjectsSelectorCommon {
     } else {
       throw new HoodieIOException("unexpected object size's type in Cloud storage events: " + obj.getClass());
     }
-    return Option.of(new CloudObjectMetadata(url, size));
+    long modificationTime = row.size() > 3
+        ? epochMillis(row.get(3)) : CloudObjectMetadata.UNKNOWN_MODIFICATION_TIME;
+    return Option.of(new CloudObjectMetadata(url, size, modificationTime));
+  }
+
+  /**
+   * Epoch millis for a notification timestamp, which both S3 and GCS report as an ISO-8601 string.
+   * Anything unparseable yields {@link CloudObjectMetadata#UNKNOWN_MODIFICATION_TIME} rather than
+   * failing the batch, since the value only orders writes to the same object.
+   */
+  private static long epochMillis(Object rawValue) {
+    if (rawValue == null) {
+      return CloudObjectMetadata.UNKNOWN_MODIFICATION_TIME;
+    }
+    try {
+      return Instant.parse(rawValue.toString()).toEpochMilli();
+    } catch (DateTimeParseException e) {
+      log.warn("Ignoring unparseable cloud notification timestamp {}", rawValue);
+      return CloudObjectMetadata.UNKNOWN_MODIFICATION_TIME;
+    }
   }
 
   /**
@@ -260,11 +283,21 @@ public class CloudObjectsSelectorCommon {
 
   public static String generateFilter(Type type,
                                       TypedProperties props) {
-    String fileFormat = CloudDataFetcher.getFileFormat(props);
-    Option<String> selectRelativePathPrefix = getPropVal(props, SELECT_RELATIVE_PATH_PREFIX);
-    Option<String> ignoreRelativePathPrefix = getPropVal(props, IGNORE_RELATIVE_PATH_PREFIX);
-    Option<String> ignoreRelativePathSubStr = getPropVal(props, IGNORE_RELATIVE_PATH_SUBSTR);
-    Option<String> selectRelativePathRegex = getPropVal(props, SELECT_RELATIVE_PATH_REGEX);
+    return generateFilter(type, props, new ColumnarFileMaterializer(props));
+  }
+
+  /**
+   * Builds the filter restricting which cloud objects a batch selects. The size and relative-path
+   * restrictions are common to every payload; which object keys are eligible is not, and so comes
+   * from {@code materializer}.
+   */
+  public static String generateFilter(Type type,
+                                      TypedProperties props,
+                                      CloudObjectMaterializer materializer) {
+    Option<String> selectRelativePathPrefix = configuredValue(props, SELECT_RELATIVE_PATH_PREFIX);
+    Option<String> ignoreRelativePathPrefix = configuredValue(props, IGNORE_RELATIVE_PATH_PREFIX);
+    Option<String> ignoreRelativePathSubStr = configuredValue(props, IGNORE_RELATIVE_PATH_SUBSTR);
+    Option<String> selectRelativePathRegex = configuredValue(props, SELECT_RELATIVE_PATH_REGEX);
 
     String objectKey;
     String objectSizeKey;
@@ -272,9 +305,9 @@ public class CloudObjectsSelectorCommon {
     if (type.equals(Type.S3)) {
       objectKey = S3_OBJECT_KEY;
       objectSizeKey = S3_OBJECT_SIZE;
-      selectRelativePathPrefix = selectRelativePathPrefix.or(() -> getPropVal(props, S3_KEY_PREFIX));
-      ignoreRelativePathPrefix = ignoreRelativePathPrefix.or(() -> getPropVal(props, S3_IGNORE_KEY_PREFIX));
-      ignoreRelativePathSubStr = ignoreRelativePathSubStr.or(() -> getPropVal(props, S3_IGNORE_KEY_SUBSTRING));
+      selectRelativePathPrefix = selectRelativePathPrefix.or(() -> configuredValue(props, S3_KEY_PREFIX));
+      ignoreRelativePathPrefix = ignoreRelativePathPrefix.or(() -> configuredValue(props, S3_IGNORE_KEY_PREFIX));
+      ignoreRelativePathSubStr = ignoreRelativePathSubStr.or(() -> configuredValue(props, S3_IGNORE_KEY_SUBSTRING));
     } else {
       objectKey = GCS_OBJECT_KEY;
       objectSizeKey = GCS_OBJECT_SIZE;
@@ -302,11 +335,29 @@ public class CloudObjectsSelectorCommon {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
     }
 
-    // Match files with a given extension, or use the fileFormat as the default.
-    getPropVal(props, CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
-        .map(val -> filter.append(SPACE_DELIMTER).append(String.format("and %s like '%%%s'", objectKey, val)));
+    filter.append(materializer.objectKeyPredicate(objectKey, props));
 
     return filter.toString();
+  }
+
+  /**
+   * Renders the file extension predicate. A comma separated value matches any one of the
+   * extensions, so a prefix holding more than one file type can be selected in a single sync;
+   * a single value renders exactly the predicate it always did. Empty when no usable extension
+   * is configured, which leaves the filter unchanged.
+   */
+  static String extensionPredicate(String objectKey, String extensions) {
+    List<String> predicates = Arrays.stream(extensions.split(","))
+        .map(String::trim)
+        .filter(extension -> !extension.isEmpty())
+        .map(extension -> String.format("%s like '%%%s'", objectKey, extension))
+        .collect(Collectors.toList());
+    if (predicates.isEmpty()) {
+      return "";
+    }
+    return predicates.size() == 1
+        ? SPACE_DELIMTER + "and " + predicates.get(0)
+        : SPACE_DELIMTER + "and (" + String.join(" or ", predicates) + ")";
   }
 
   /**
@@ -331,22 +382,25 @@ public class CloudObjectsSelectorCommon {
     String bucketCol;
     String keyCol;
     String sizeCol;
+    String timeCol;
     if (type == Type.GCS) {
       prefix = GCS_PREFIX;
       bucketCol = "bucket";
       keyCol = GCS_OBJECT_KEY;
       sizeCol = GCS_OBJECT_SIZE;
+      timeCol = GCS_OBJECT_UPDATED;
     } else if (type == Type.S3) {
       String s3FS = getStringWithAltKeys(props, S3_FS_PREFIX, true).toLowerCase();
       prefix = s3FS + "://";
       bucketCol = S3_BUCKET_NAME;
       keyCol = S3_OBJECT_KEY;
       sizeCol = S3_OBJECT_SIZE;
+      timeCol = S3_EVENT_TIME;
     } else {
       throw new UnsupportedOperationException("Invalid cloud type " + type);
     }
 
-    Dataset<Row> distinctObjects = cloudObjectMetadataDF.select(bucketCol, keyCol, sizeCol).distinct();
+    Dataset<Row> distinctObjects = selectDistinctObjects(cloudObjectMetadataDF, bucketCol, keyCol, sizeCol, timeCol);
     if (checkIfExists) {
       // The upstream Window.orderBy() in IncrSourceHelper collapses the dataset to one partition and AQE keeps the
       // distinct() output there, which would serialize every existence check on one task. Spread the checks over
@@ -360,6 +414,31 @@ public class CloudObjectsSelectorCommon {
             getCloudObjectMetadataPerPartition(prefix, storageConf, checkIfExists, existsCheckParallelism),
             Encoders.kryo(CloudObjectMetadata.class))
         .collectAsList();
+  }
+
+  /**
+   * One row per cloud object, carrying the notification timestamp when the events have one.
+   *
+   * <p>An object written more than once inside a single batch produces one event per write. Keying
+   * only on bucket and object key, and keeping the newest event, reads such an object once instead
+   * of once per write. Where the metadata table predates the timestamp column the events cannot be
+   * ordered, so this falls back to the previous behaviour of de-duplicating on size as well.
+   */
+  private static Dataset<Row> selectDistinctObjects(Dataset<Row> events, String bucketCol, String keyCol,
+                                                    String sizeCol, String timeCol) {
+    if (!Arrays.asList(events.schema().fieldNames()).contains(timeCol)) {
+      log.warn("Cloud events carry no {} column; objects rewritten within a batch will be read once per write", timeCol);
+      return events.select(bucketCol, keyCol, sizeCol).distinct();
+    }
+    String rank = "_hoodie_event_rank";
+    // rank before projecting: the columns are nested, so selecting them first renames them to
+    // their leaf names and the window would no longer resolve bucketCol or keyCol
+    return events
+        .withColumn(rank, functions.row_number().over(
+            Window.partitionBy(functions.col(bucketCol), functions.col(keyCol))
+                .orderBy(functions.col(timeCol).desc_nulls_last())))
+        .filter(functions.col(rank).equalTo(1))
+        .select(bucketCol, keyCol, sizeCol, timeCol);
   }
 
   /**
@@ -651,7 +730,7 @@ public class CloudObjectsSelectorCommon {
     return !modifiedNestedSchema.equals(rowField.dataType()) || !field.aliases().isEmpty();
   }
 
-  private static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {
+  static Option<String> configuredValue(TypedProperties props, ConfigProperty<String> configProperty) {
     String value = getStringWithAltKeys(props, configProperty, true);
     if (!StringUtils.isNullOrEmpty(value)) {
       return Option.of(value);
