@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieDataSourceHelpers}
 import org.apache.hudi.DataSourceWriteOptions.{STREAMING_CHECKPOINT_IDENTIFIER, UPSERT_OPERATION_OPT_VAL}
-import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
+import org.apache.hudi.HoodieStreamingSink.{resolveCheckpointIdentifier, SINK_CHECKPOINT_KEY}
 import org.apache.hudi.common.config.HoodieStorageConfig
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -372,8 +372,67 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     query1.processAllAvailable()
     val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
 
-    assertLatestCheckpointInfoMatched(metaClient, STREAMING_CHECKPOINT_IDENTIFIER.defaultValue(), "0")
+    // Without an explicit identifier the sink scopes the default one to the query's checkpoint location.
+    val expectedIdentifier = resolveCheckpointIdentifier(Map("checkpointLocation" -> s"$basePath/checkpoint1"))
+    assertEquals(s"${STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()}@$basePath/checkpoint1", expectedIdentifier)
+    assertLatestCheckpointInfoMatched(metaClient, expectedIdentifier, "0")
     query1.stop()
+  }
+
+  @Test
+  def testStructuredStreamingBatchDedupIsScopedToCheckpointLocation(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val records1 = recordsToStrings(dataGen.generateInsertsForPartition("000", 100, HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    val schema = inputDF1.schema
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+
+    def startQuery(checkpointDir: String): StreamingQuery = {
+      spark.readStream
+        .schema(schema)
+        .json(sourcePath)
+        .writeStream
+        .format("org.apache.hudi")
+        .options(commonOpts)
+        .option(DataSourceWriteOptions.OPERATION.key(), "insert")
+        .outputMode(OutputMode.Append)
+        .option("checkpointLocation", s"$basePath/$checkpointDir")
+        .start(destPath)
+    }
+
+    // given: a stream that committed batch 0 from checkpoint A
+    val queryA = startQuery("checkpointA")
+    queryA.processAllAvailable()
+    queryA.stop()
+    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
+    assertLatestCheckpointInfoMatched(metaClient, resolveCheckpointIdentifier(Map("checkpointLocation" -> s"$basePath/checkpointA")), "0")
+    assertEquals(100, spark.read.format("hudi").load(destPath).count())
+
+    // when: a new stream starts from a fresh checkpoint B, so its batch ids restart at 0
+    val queryB = startQuery("checkpointB")
+    queryB.processAllAvailable()
+    queryB.stop()
+
+    // then: batch 0 of stream B is not mistaken for the already committed batch 0 of stream A
+    assertLatestCheckpointInfoMatched(metaClient, resolveCheckpointIdentifier(Map("checkpointLocation" -> s"$basePath/checkpointB")), "0")
+    assertEquals(200, spark.read.format("hudi").load(destPath).count())
+
+    // and: resuming stream A from its own checkpoint continues to deduplicate against its own high water mark
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val queryA2 = startQuery("checkpointA")
+    queryA2.processAllAvailable()
+    queryA2.stop()
+    assertLatestCheckpointInfoMatched(metaClient, resolveCheckpointIdentifier(Map("checkpointLocation" -> s"$basePath/checkpointA")), "1")
+    assertEquals(300, spark.read.format("hudi").load(destPath).count())
+  }
+
+  @Test
+  def testResolveCheckpointIdentifier(): Unit = {
+    val default = STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()
+    assertEquals(default, resolveCheckpointIdentifier(Map.empty))
+    assertEquals(s"$default@/tmp/ckpt", resolveCheckpointIdentifier(Map("checkpointLocation" -> "/tmp/ckpt/")))
+    assertEquals("explicit", resolveCheckpointIdentifier(
+      Map(STREAMING_CHECKPOINT_IDENTIFIER.key() -> "explicit", "checkpointLocation" -> "/tmp/ckpt")))
   }
 
   def assertLatestCheckpointInfoMatched(metaClient: HoodieTableMetaClient,

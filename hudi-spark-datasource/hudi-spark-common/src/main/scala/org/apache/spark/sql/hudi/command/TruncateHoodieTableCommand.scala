@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.command
 
+import org.apache.hudi.DataSourceWriteOptions.SQL_TRUNCATE_TABLE_PURGE_ENABLED
 import org.apache.hudi.HoodieSparkSqlWriter
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.fs.FSUtils
@@ -66,8 +67,22 @@ case class TruncateHoodieTableCommand(
     val basePath = hoodieCatalogTable.tableLocation
     val properties = hoodieCatalogTable.tableConfig.getProps
 
-    // If we have not specified the partition, truncate will delete all the data in the table path
-    if (partitionSpec.isEmpty) {
+    // If we have not specified the partition, truncate replaces every file group with a single
+    // replacecommit (insert_overwrite_table of an empty dataset). This keeps the timeline, savepoints
+    // and the metadata table intact, so incremental/streaming readers see the truncation as an
+    // instant instead of a vanished table. The legacy purge (delete the base path and re-init
+    // hoodie.properties) remains available behind hoodie.sql.truncate.purge.enabled.
+    if (partitionSpec.isEmpty && !isPurgeEnabled(sparkSession)) {
+      val parameters = buildHoodieInsertConfig(hoodieCatalogTable, sparkSession,
+        isOverwritePartition = false, isOverwriteTable = true, extraOptions = Map.empty)
+      val emptyData = sparkSession.createDataFrame(
+        sparkSession.sparkContext.emptyRDD[Row], hoodieCatalogTable.tableSchemaWithoutMetaFields)
+      val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(
+        sparkSession.sqlContext, SaveMode.Append, parameters, emptyData)
+      if (!success) {
+        throw new HoodieException("Truncate Hoodie Table command failed")
+      }
+    } else if (partitionSpec.isEmpty) {
       val targetPath = new StoragePath(basePath)
       val engineContext = new HoodieSparkEngineContext(sparkSession.sparkContext)
       val storage = HoodieStorageUtils.getStorage(
@@ -109,4 +124,8 @@ case class TruncateHoodieTableCommand(
     logInfo(s"Finish execute truncate table command for $fullTableName")
     Seq.empty[Row]
   }
+
+  private def isPurgeEnabled(sparkSession: SparkSession): Boolean =
+    sparkSession.sessionState.conf.getConfString(
+      SQL_TRUNCATE_TABLE_PURGE_ENABLED.key, SQL_TRUNCATE_TABLE_PURGE_ENABLED.defaultValue).toBoolean
 }

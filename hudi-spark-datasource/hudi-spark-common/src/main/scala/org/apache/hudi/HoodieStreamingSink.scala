@@ -18,7 +18,7 @@ package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
-import org.apache.hudi.HoodieStreamingSink.{QUERY_ID_KEY, SINK_CHECKPOINT_KEY}
+import org.apache.hudi.HoodieStreamingSink.{resolveCheckpointIdentifier, QUERY_ID_KEY, SINK_CHECKPOINT_KEY}
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.common.HoodieSparkEngineContext
@@ -79,6 +79,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   private val disableCompaction = options.getOrElse(STREAMING_DISABLE_COMPACTION.key,
     STREAMING_DISABLE_COMPACTION.defaultValue).toBoolean
 
+  private val checkpointIdentifier: String = resolveCheckpointIdentifier(options)
+  log.info(s"Streaming sink checkpoint identifier: $checkpointIdentifier")
+
   private var isAsyncCompactorServiceShutdownAbnormally = false
   private var isAsyncClusteringServiceShutdownAbnormally = false
 
@@ -120,6 +123,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     // we need auto adjustment enabled for streaming sink since async table services are feasible within the same JVM.
     updatedOptions = updatedOptions.updated(HoodieWriteConfig.AUTO_ADJUST_LOCK_CONFIGS.key, "true")
     updatedOptions = updatedOptions.updated(HoodieSparkSqlWriter.SPARK_STREAMING_BATCH_ID, batchId.toString)
+    // Forward the resolved identifier so write paths that build commit metadata from the options
+    // (e.g. the bulk insert row writer via DataSourceUtils.getExtraMetadata) record the same one as the pre-commit hook.
+    updatedOptions = updatedOptions.updated(STREAMING_CHECKPOINT_IDENTIFIER.key(), checkpointIdentifier)
     if (!options.contains(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key())) {
       // if user does not explicitly override, we are disabling timeline server for streaming sink.
       // refer to HUDI-3636 for more details
@@ -133,8 +139,7 @@ class HoodieStreamingSink(sqlContext: SQLContext,
             if (disableCompaction) None else Some(triggerAsyncCompactor), Some(triggerAsyncClustering),
             extraPreCommitFn = Some(new BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata] {
               override def accept(metaClient: HoodieTableMetaClient, newCommitMetadata: HoodieCommitMetadata): Unit = {
-                val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
-                newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(identifier, String.valueOf(batchId)))
+                newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(checkpointIdentifier, String.valueOf(batchId)))
               }
             }))), writeClient)
       )
@@ -307,10 +312,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   private def canSkipBatch(incomingBatchId: Long, operationType: String): Boolean = {
     if (!DELETE_OPERATION_OPT_VAL.equals(operationType)) {
-      val identifier = options.getOrElse(STREAMING_CHECKPOINT_IDENTIFIER.key(), STREAMING_CHECKPOINT_IDENTIFIER.defaultValue())
       // get the latest checkpoint from the commit metadata to check if the microbatch has already been processed or not
       val lastCheckpoint = CommitUtils.getValidCheckpointForCurrentWriter(
-        metaClient.get.getActiveTimeline.getWriteTimeline, SINK_CHECKPOINT_KEY, identifier)
+        metaClient.get.getActiveTimeline.getWriteTimeline, SINK_CHECKPOINT_KEY, checkpointIdentifier)
       if (lastCheckpoint.isPresent) {
         latestCommittedBatchId = lastCheckpoint.get().toLong
       }
@@ -330,4 +334,26 @@ object HoodieStreamingSink {
   val QUERY_ID_KEY = "sql.streaming.queryId"
   // This constant serves as the checkpoint key for streaming sink so that each microbatch is processed exactly-once.
   val SINK_CHECKPOINT_KEY = "_hudi_streaming_sink_checkpoint"
+  // Option under which Structured Streaming hands the query's checkpoint location to the sink.
+  val CHECKPOINT_LOCATION_OPTION = "checkpointLocation"
+
+  /**
+   * Resolves the identifier under which the sink records its last committed batch id in commit metadata.
+   *
+   * An explicit `hoodie.datasource.write.streaming.checkpoint.identifier` wins. Otherwise the identifier is
+   * scoped to the query's checkpoint location: a stream resumed from the same checkpoint keeps deduplicating
+   * replayed batches, while a stream started from a fresh checkpoint (whose batch ids restart at 0, e.g. a
+   * full refresh under Spark Declarative Pipelines) is no longer matched against the previous stream's high
+   * water mark, which would otherwise make the sink skip its batches silently.
+   */
+  def resolveCheckpointIdentifier(options: Map[String, String]): String = {
+    options.get(STREAMING_CHECKPOINT_IDENTIFIER.key()) match {
+      case Some(explicit) => explicit
+      case None => options.get(CHECKPOINT_LOCATION_OPTION) match {
+        case Some(checkpointLocation) =>
+          s"${STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()}@${checkpointLocation.stripSuffix("/")}"
+        case None => STREAMING_CHECKPOINT_IDENTIFIER.defaultValue()
+      }
+    }
+  }
 }

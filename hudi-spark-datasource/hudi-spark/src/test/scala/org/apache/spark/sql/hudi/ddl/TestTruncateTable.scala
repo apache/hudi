@@ -20,11 +20,15 @@
 package org.apache.spark.sql.hudi.ddl
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.table.HoodieTableConfig
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
+
+import scala.collection.JavaConverters._
 
 class TestTruncateTable extends HoodieSparkSqlTestBase {
 
@@ -147,6 +151,92 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
         checkAnswer(s"select count(1) from $tableName")(Seq(0))
       }
     }
+  }
+
+  Seq("cow", "mor").foreach { tableType =>
+    Seq(true, false).foreach { partitioned =>
+      test(s"Test Truncate table keeps the timeline and issues a replacecommit, type: $tableType, partitioned: $partitioned") {
+        withTempDir { tmp =>
+          val tableName = generateTableName
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          val partitionClause = if (partitioned) "partitioned by (dt)" else ""
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  ts long,
+               |  dt string
+               |) using hudi
+               | options (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  orderingFields = 'ts'
+               | )
+               | $partitionClause
+               | location '$tablePath'
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values(1, 'a1', 1000, '2024-01-01')")
+          spark.sql(s"insert into $tableName values(2, 'a2', 1000, '2024-01-02')")
+          val instantsBeforeTruncate = completedWriteInstants(tablePath)
+          assertResult(2)(instantsBeforeTruncate.size)
+
+          // when
+          spark.sql(s"truncate table $tableName")
+
+          // then: the table is empty, previous instants are retained and the truncation is a replacecommit
+          checkAnswer(s"select count(1) from $tableName")(Seq(0))
+          val instantsAfterTruncate = completedWriteInstants(tablePath)
+          assertResult(instantsBeforeTruncate)(instantsAfterTruncate.take(2))
+          assertResult(3)(instantsAfterTruncate.size)
+          assertResult(HoodieTimeline.REPLACE_COMMIT_ACTION)(instantsAfterTruncate.last.getAction)
+
+          // and: the truncated table keeps accepting writes
+          spark.sql(s"insert into $tableName values(3, 'a3', 1000, '2024-01-03')")
+          checkAnswer(s"select id, name, ts, dt from $tableName")(Seq(3, "a3", 1000, "2024-01-03"))
+          assertResult(4)(completedWriteInstants(tablePath).size)
+        }
+      }
+    }
+  }
+
+  test("Test Truncate table with purge enabled resets the timeline") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long
+           |) using hudi
+           | options (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts'
+           | )
+           | location '$tablePath'
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 1000)")
+      assertResult(1)(completedWriteInstants(tablePath).size)
+
+      withSQLConf(SQL_TRUNCATE_TABLE_PURGE_ENABLED.key -> "true") {
+        spark.sql(s"truncate table $tableName")
+      }
+
+      checkAnswer(s"select count(1) from $tableName")(Seq(0))
+      assertResult(0)(completedWriteInstants(tablePath).size)
+      spark.sql(s"insert into $tableName values(2, 'a2', 1000)")
+      checkAnswer(s"select id, name, ts from $tableName")(Seq(2, "a2", 1000))
+    }
+  }
+
+  private def completedWriteInstants(tablePath: String): Seq[HoodieInstant] = {
+    val metaClient = HoodieTableMetaClient.builder()
+      .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()))
+      .setBasePath(tablePath)
+      .build()
+    metaClient.getActiveTimeline.getWriteTimeline.filterCompletedInstants.getInstants.asScala.toSeq
   }
 
   test("Test Truncate partition for a slash separated date partitioned table") {
