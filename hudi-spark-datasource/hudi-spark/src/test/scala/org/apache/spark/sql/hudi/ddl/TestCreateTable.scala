@@ -104,9 +104,11 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     spark.sql("use default")
   }
 
-  Seq(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN).foreach { tableVersion =>
-    test(s"Test Create Hoodie Table With Options (tableVersion=${tableVersion.versionCode()})") {
+  // the arm without a table version leaves the write table version unset, so the default version is covered as well
+  Seq(Some(HoodieTableVersion.SIX), Some(HoodieTableVersion.EIGHT), Some(HoodieTableVersion.NINE), Some(HoodieTableVersion.TEN), None).foreach { tableVersion =>
+    test(s"Test Create Hoodie Table With Options (tableVersion=${tableVersion.map(_.versionCode().toString).getOrElse("default")})") {
       val tableName = generateTableName
+      val tableVersionOption = tableVersion.map(v => s"hoodie.write.table.version = '${v.versionCode()}',").getOrElse("")
       spark.sql(
         s"""
            | create table $tableName (
@@ -120,7 +122,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
            | options (
            |   hoodie.database.name = "databaseName",
            |   hoodie.table.name = "tableName",
-           |   hoodie.write.table.version = '${tableVersion.versionCode()}',
+           |   $tableVersionOption
            |   primaryKey = 'id',
            |   orderingFields = 'ts',
            |   hoodie.datasource.write.operation = 'upsert'
@@ -149,7 +151,9 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       val tablePath = table.storage.properties("path")
       val metaClient = createMetaClient(spark, tablePath)
       assertTrue(metaClient.getTableConfig.contains(HoodieTableConfig.CREATE_SCHEMA))
-      assertTableConfigs(metaClient.getStorage, tablePath, expectedTableConfigs(tableName, tableVersion).asJava)
+      val expectedTableVersion = tableVersion.getOrElse(
+        HoodieTableVersion.fromVersionCode(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue()))
+      assertTableConfigs(metaClient.getStorage, tablePath, expectedTableConfigs(tableName, expectedTableVersion).asJava)
     }
   }
 

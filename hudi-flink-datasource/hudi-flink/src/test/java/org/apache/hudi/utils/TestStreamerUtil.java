@@ -65,6 +65,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.mockito.Mockito;
 
 import java.io.File;
@@ -215,24 +216,32 @@ class TestStreamerUtil {
     assertTrue(metaClient.getTableConfig().isLSMTreeStorageLayout());
   }
 
+  /**
+   * A null version leaves the write table version unset, so the default version is covered as well.
+   */
   @ParameterizedTest
+  @NullSource
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
   void testInitTableIfNotExists(HoodieTableVersion version) throws IOException {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-    conf.set(FlinkOptions.WRITE_TABLE_VERSION, version.versionCode());
+    if (version != null) {
+      conf.set(FlinkOptions.WRITE_TABLE_VERSION, version.versionCode());
+    }
+    HoodieTableVersion expectedVersion = version == null
+        ? HoodieTableVersion.fromVersionCode(FlinkOptions.WRITE_TABLE_VERSION.defaultValue()) : version;
     conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
 
     // Test for partitioned table.
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "p0,p1");
     StreamerUtil.initTableIfNotExists(conf);
     HoodieStorage storage = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath()).getStorage();
-    assertTableConfigs(storage, tempFile.getAbsolutePath(), expectedTableConfigs(version, true));
+    assertTableConfigs(storage, tempFile.getAbsolutePath(), expectedTableConfigs(expectedVersion, true));
 
     // Test for non-partitioned table.
     conf.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
     FileIOUtils.deleteDirectory(tempFile);
     StreamerUtil.initTableIfNotExists(conf);
-    assertTableConfigs(storage, tempFile.getAbsolutePath(), expectedTableConfigs(version, false));
+    assertTableConfigs(storage, tempFile.getAbsolutePath(), expectedTableConfigs(expectedVersion, false));
   }
 
   private static Map<String, String> expectedTableConfigs(HoodieTableVersion version, boolean partitioned) {

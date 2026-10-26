@@ -297,6 +297,9 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     }
   }
 
+  /**
+   * A null version leaves the table version unset on the builder, so the default version is covered as well.
+   */
   @ParameterizedTest
   @MethodSource("tableVersionsAndKeyGeneratorSettings")
   void testTableConfigsBasedOnVersion(HoodieTableVersion version, boolean setKeyGeneratorType) throws IOException {
@@ -304,22 +307,25 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table-version-test")
-        .setTableVersion(version.versionCode())
         .setRecordKeyFields("key")
         .setPartitionFields("partition")
         .setOrderingFields("ts");
+    if (version != null) {
+      tableBuilder.setTableVersion(version.versionCode());
+    }
     if (setKeyGeneratorType) {
       tableBuilder.setKeyGeneratorType(KeyGeneratorType.SIMPLE.name());
     } else {
       tableBuilder.setKeyGeneratorClassProp(KeyGeneratorType.SIMPLE.getClassName());
     }
+    HoodieTableVersion expectedVersion = version == null ? HoodieTableVersion.current() : version;
     HoodieTableMetaClient createdMetaClient = tableBuilder.initTable(this.metaClient.getStorageConf(), basePath);
-    assertEquals(version, createdMetaClient.getTableConfig().getTableVersion());
-    assertTableConfigs(createdMetaClient.getStorage(), basePath, expectedTableConfigs(version));
+    assertEquals(expectedVersion, createdMetaClient.getTableConfig().getTableVersion());
+    assertTableConfigs(createdMetaClient.getStorage(), basePath, expectedTableConfigs(expectedVersion));
   }
 
   private static Stream<Arguments> tableVersionsAndKeyGeneratorSettings() {
-    return Stream.of(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
+    return Stream.of(null, HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
         .flatMap(version -> Stream.of(Arguments.of(version, false), Arguments.of(version, true)));
   }
 

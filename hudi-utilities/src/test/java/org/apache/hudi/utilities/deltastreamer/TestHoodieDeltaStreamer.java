@@ -171,6 +171,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -618,17 +619,25 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.shutdownGracefully();
   }
 
+  /**
+   * A null version leaves the write table version unset, so the default version is covered as well.
+   */
   @ParameterizedTest
+  @NullSource
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
   void testTableConfigsBasedOnVersion(HoodieTableVersion version) throws IOException {
-    String tablePath = basePath + "/table_configs_v" + version.versionCode();
+    HoodieTableVersion expectedVersion = version == null
+        ? HoodieTableVersion.fromVersionCode(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue()) : version;
+    String tablePath = basePath + "/table_configs_v" + (version == null ? "default" : String.valueOf(version.versionCode()));
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
-    cfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + version.versionCode());
+    if (version != null) {
+      cfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + version.versionCode());
+    }
     cfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + CustomKeyGenerator.class.getName());
     cfg.configs.add("hoodie.datasource.write.partitionpath.field=partition_path:simple");
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.getIngestionService().ingestOnce();
-    assertTableConfigs(storage, tablePath, expectedTableConfigs(version));
+    assertTableConfigs(storage, tablePath, expectedTableConfigs(expectedVersion));
     deltaStreamer.shutdownGracefully();
 
     // the next write backfills the key generator class of a table created without it
@@ -636,7 +645,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
         Collections.singleton(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
     deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.getIngestionService().ingestOnce();
-    assertTableConfigs(storage, tablePath, expectedTableConfigs(version));
+    assertTableConfigs(storage, tablePath, expectedTableConfigs(expectedVersion));
     deltaStreamer.shutdownGracefully();
   }
 
