@@ -243,4 +243,3 @@ public class VectorPostingMatch implements Serializable {
     return Option.of(new HoodieRecordGlobalLocation(partitionPath, baseInstantTime, fileGroupId, rowPosition));
   }
 }
-

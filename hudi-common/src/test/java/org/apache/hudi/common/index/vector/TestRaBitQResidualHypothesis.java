@@ -29,12 +29,9 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * RFC-109 validation experiment (pure JVM, no Spark / no cluster).
- *
- * <p>Goal: prove that approximate-only RaBitQ recall on <b>L2 / large-norm</b> data
- * (BigANN/SIFT-like) is broken when we quantize the <b>full unit vector</b> (current
- * implementation), and is fixed by quantizing the <b>IVF residual</b>
- * {@code x - centroid[cluster]} instead.
+ * Verifies that approximate-only RaBitQ recall on <b>L2 / large-norm</b> data
+ * (BigANN/SIFT-like) is poor when the <b>full unit vector</b> is quantized, and is recovered
+ * by quantizing the <b>IVF residual</b> {@code x - centroid[cluster]} instead.
  *
  * <p>The math: {@code L2^2 = ||q||^2 + ||x||^2 - 2*||q||*||x||*cos}. With SIFT-scale
  * norms (~1000) a 1-bit cosine-estimate error of +/-0.1 becomes an L2^2 error of
@@ -43,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * them, and {@code ||q_res - x_res|| = ||(q-c) - (x-c)|| = ||q - x||} is recovered
  * accurately.
  *
- * <p>This experiment isolates ENCODING QUALITY: both methods probe ALL clusters
+ * <p>The test isolates encoding quality: both methods probe ALL clusters
  * (no IVF pruning), so the only difference measured is full-vector vs residual.
  */
 public class TestRaBitQResidualHypothesis {
@@ -85,7 +82,7 @@ public class TestRaBitQResidualHypothesis {
     // ---- 2. Encoders / encodings ----
     RaBitQEncoder enc = new RaBitQEncoder(DIM, 42L, false);
 
-    // FULL: encode each full vector (current production behavior)
+    // FULL: encode each full vector
     QuantizedVector[] fullCodes = new QuantizedVector[N];
     for (int i = 0; i < N; i++) {
       fullCodes[i] = enc.encode(data[i]);
@@ -152,13 +149,6 @@ public class TestRaBitQResidualHypothesis {
     recallFullAsym /= NUM_QUERIES;
     recallResSym /= NUM_QUERIES;
     recallResAsym /= NUM_QUERIES;
-
-    System.out.println("================ RFC-109 RESIDUAL HYPOTHESIS ================");
-    System.out.printf("Data: N=%d D=%d clusters=%d queries=%d (SIFT-like, L2, non-negative)%n",
-        N, DIM, NUM_CLUSTERS, NUM_QUERIES);
-    System.out.printf("FULL-vector  recall@%d : symmetric=%.3f  asymmetric=%.3f%n", K, recallFullSym, recallFullAsym);
-    System.out.printf("RESIDUAL     recall@%d : symmetric=%.3f  asymmetric=%.3f%n", K, recallResSym, recallResAsym);
-    System.out.println("============================================================");
 
     // The hypothesis: residual encoding dramatically beats full-vector on L2/large-norm.
     assertTrue(recallResSym > recallFullSym + 0.3,

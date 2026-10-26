@@ -103,8 +103,6 @@ public class TestRaBitQResidualRecall {
       recallSum += recall(topKByDist(approx, K), truth);
     }
     double recall = recallSum / NUM_QUERIES;
-    System.out.printf("[RFC-109] residual multibit recall@%d (B=%d) = %.3f%n", K, BITS, recall);
-
     // Floor for 4-bit residual multibit on this easy synthetic corpus (all clusters probed).
     assertTrue(recall >= 0.85,
         "corrected-path recall@" + K + " regressed below floor: " + recall);
