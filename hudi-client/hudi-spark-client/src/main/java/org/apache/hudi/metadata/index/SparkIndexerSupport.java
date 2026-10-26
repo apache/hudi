@@ -21,6 +21,7 @@ package org.apache.hudi.metadata.index;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.utils.SparkMetadataWriterUtils;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.EngineType;
@@ -66,6 +67,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -196,7 +198,9 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
       return jsc.emptyRDD();
     }
 
-    HoodieSchema requestedSchema = buildVectorBootstrapRequestedSchema(dataMetaClient, tableSchema, vectorColumn);
+    HoodieSchema keyedSchema = buildVectorKeyedSchema(dataMetaClient, tableSchema, vectorColumn);
+    HoodieSchema positionalSchema = withRowIndexColumn(keyedSchema);
+    TypedProperties tableProps = dataMetaClient.getTableConfig().getProps();
     ReaderContextFactory<InternalRow> readerContextFactory = engineContext.getReaderContextFactory(dataMetaClient);
     Option<InternalSchema> internalSchemaOption = SerDeHelper.fromJson(dataWriteConfig.getInternalSchema());
     String latestCommitTime = instantTime.get();
@@ -207,6 +211,9 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
           String partitionPath = fileSliceAndPartition.getPartitionPath();
           FileSlice fileSlice = fileSliceAndPartition.getFileSlice();
           HoodieReaderContext<InternalRow> readerContext = readerContextFactory.getContext();
+          HoodieSchema requestedSchema = VectorSliceRowPositions.requestedSchema(fileSlice, positionalSchema, keyedSchema);
+          Map<String, Long> basePositions = VectorSliceRowPositions.basePositions(
+              dataMetaClient, tableProps, partitionPath, fileSlice);
           try (HoodieFileGroupReader<InternalRow> fileGroupReader = HoodieFileGroupReader.<InternalRow>builder()
               .withReaderContext(readerContext)
               .withHoodieTableMetaClient(dataMetaClient)
@@ -217,8 +224,8 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
               .withBaseFileOption(fileSlice.getBaseFile())
               .withLogFiles(fileSlice.getLogFiles())
               .withPartitionPath(partitionPath)
-              .withShouldUseRecordPosition(true)
-              .withProps(dataMetaClient.getTableConfig().getProps())
+              .withShouldUseRecordPosition(VectorSliceRowPositions.readsRowIndex(fileSlice))
+              .withProps(tableProps)
               .build();
                ClosableIterator<InternalRow> iterator = fileGroupReader.getClosableIterator()) {
             List<SparkVectorIndexBootstrap.VectorRow> rows = new ArrayList<>();
@@ -247,8 +254,8 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
                 throw new HoodieMetadataException(
                     "Expected byte[] or ArrayData for VECTOR column, got: " + vectorValue.getClass().getName());
               }
-              long rowPosition = readerContext.getRecordContext().extractRecordPosition(
-                  record, requestedSchema, ROW_INDEX_TEMPORARY_COLUMN_NAME, -1L);
+              long rowPosition = VectorSliceRowPositions.rowPosition(
+                  readerContext, record, requestedSchema, recordKey, fileSlice, basePositions);
               rows.add(new SparkVectorIndexBootstrap.VectorRow(
                   recordKey, partitionPath, fileSlice.getFileId(),
                   fileSlice.getBaseInstantTime(), vectorBytes, rowPosition));
@@ -258,7 +265,8 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
         });
   }
 
-  private HoodieSchema buildVectorBootstrapRequestedSchema(
+  /** Record key + vector column. */
+  private static HoodieSchema buildVectorKeyedSchema(
       HoodieTableMetaClient dataMetaClient, HoodieSchema tableSchema, String vectorColumn) {
     LinkedHashSet<String> projectedFields = new LinkedHashSet<>();
     if (dataMetaClient.getTableConfig().populateMetaFields()) {
@@ -268,7 +276,11 @@ public class SparkIndexerSupport implements EngineIndexerSupport {
           .orElseThrow(() -> new HoodieMetadataException("Cannot bootstrap vector index without record key fields"))));
     }
     projectedFields.add(vectorColumn);
-    HoodieSchema projectedSchema = HoodieSchemaUtils.projectSchema(tableSchema, new ArrayList<>(projectedFields));
+    return HoodieSchemaUtils.projectSchema(tableSchema, new ArrayList<>(projectedFields));
+  }
+
+  /** {@code projectedSchema} plus the reader's row-index column, for slices without log files. */
+  private static HoodieSchema withRowIndexColumn(HoodieSchema projectedSchema) {
     List<HoodieSchemaField> fields = projectedSchema.getFields().stream()
         .map(field -> field.withName(field.name()))
         .collect(Collectors.toCollection(ArrayList::new));
