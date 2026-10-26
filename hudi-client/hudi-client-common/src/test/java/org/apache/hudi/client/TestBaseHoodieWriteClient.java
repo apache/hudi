@@ -20,9 +20,11 @@ package org.apache.hudi.client;
 
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.MetaFieldsMode;
@@ -42,6 +44,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -65,6 +68,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
+import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -82,6 +86,7 @@ import java.util.stream.Stream;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -643,6 +648,51 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     inOrder.verify(transactionManager).beginStateChange(Option.empty(), Option.empty());
     inOrder.verify(timeGenerator).generateTime(true);
     inOrder.verify(transactionManager).endStateChange(Option.of(expectedInstant));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"commit,false", "commit,true", "replacecommit,false", "replacecommit,true"})
+  void testFailedStartCommitStopsOnlyItsHeartbeat(String action, boolean persistBeforeFailure) throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .build();
+    HoodieTableMetaClient failingMetaClient = Mockito.spy(metaClient);
+    HoodieActiveTimeline timeline = Mockito.spy(metaClient.getActiveTimeline());
+    Mockito.doReturn(timeline).when(failingMetaClient).getActiveTimeline();
+    String failedInstant = "20260101000000001";
+    String nextInstant = "20260101000000002";
+    HoodieException failure = new HoodieException("Injected timeline write failure");
+    Answer<Object> failTimelineWrite = invocation -> {
+      assertTrue(HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), basePath, failedInstant));
+      if (persistBeforeFailure) {
+        invocation.callRealMethod();
+      }
+      throw failure;
+    };
+    if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)) {
+      Mockito.doAnswer(failTimelineWrite).when(timeline).createRequestedCommitWithReplaceMetadata(failedInstant, action);
+    } else {
+      Mockito.doAnswer(failTimelineWrite).when(timeline).createNewInstant(Mockito.any(HoodieInstant.class));
+    }
+
+    try (TestWriteClient client = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class), mock(TransactionManager.class), mock(TimeGenerator.class))) {
+      // A reused client can have another live instant; failure cleanup must not stop all heartbeats.
+      client.getHeartbeatClient().start(nextInstant);
+      assertSame(failure, assertThrows(HoodieException.class,
+          () -> client.startCommit(Option.of(failedInstant), action, failingMetaClient)));
+      assertFalse(HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), basePath, failedInstant));
+      assertTrue(HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), basePath, nextInstant));
+      assertEquals(persistBeforeFailure, metaClient.reloadActiveTimeline().containsInstant(failedInstant));
+
+      assertEquals(nextInstant, client.startCommit(Option.of(nextInstant), action, metaClient));
+      assertTrue(metaClient.reloadActiveTimeline().containsInstant(nextInstant));
+      client.releaseResources(nextInstant);
+    }
   }
 
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {
