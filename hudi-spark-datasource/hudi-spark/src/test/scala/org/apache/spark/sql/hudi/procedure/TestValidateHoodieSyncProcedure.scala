@@ -92,8 +92,8 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
 
         assertResult(1)(result.length)
         // The procedure prints the unqualified table name, while generateTableName is db-qualified.
-        val srcName = srcTable.stripPrefix("default.")
-        val dstName = dstTable.stripPrefix("default.")
+        val srcName = srcTable.stripPrefix(s"$testDatabase.")
+        val dstName = dstTable.stripPrefix(s"$testDatabase.")
         // The destination is ahead, so the dst-first branch is taken (count(dst) - count(src)) and the
         // two catch-up commits (one insert record each) are counted. Record counts stay 0 in this mode.
         // "Catach up" mirrors the typo in the procedure's output message.
@@ -118,7 +118,7 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
 
       assertResult(1)(result.length)
       // The procedure prints the unqualified table name, while generateTableName is db-qualified.
-      val name = tableName.stripPrefix("default.")
+      val name = tableName.stripPrefix(s"$testDatabase.")
       // No catch-up suffix: the exact match pins that no commits are found after the (shared) latest.
       assertResult(s"Count difference now is count($name) - count($name) == 0")(
         result.head.getString(0))
@@ -144,8 +144,8 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
 
         assertResult(1)(result.length)
         // The procedure prints the unqualified table name, while generateTableName is db-qualified.
-        val srcName = srcTable.stripPrefix("default.")
-        val dstName = dstTable.stripPrefix("default.")
+        val srcName = srcTable.stripPrefix(s"$testDatabase.")
+        val dstName = dstTable.stripPrefix(s"$testDatabase.")
         // The source is ahead, so the else branch is taken: this pins that it passes the source
         // table first, i.e. count(src) - count(dst), the mirror image of the dst-ahead branch.
         assertResult(s"Count difference now is count($srcName) - count($dstName) == 0. Catach up count is 2")(
@@ -173,8 +173,8 @@ class TestValidateHoodieSyncProcedure extends HoodieSparkProcedureTestBase {
 
         assertResult(1)(result.length)
         // The procedure prints the unqualified table name, while generateTableName is db-qualified.
-        val srcName = srcTable.stripPrefix("default.")
-        val dstName = dstTable.stripPrefix("default.")
+        val srcName = srcTable.stripPrefix(s"$testDatabase.")
+        val dstName = dstTable.stripPrefix(s"$testDatabase.")
         // An empty destination timeline falls back to the sentinel latest commit "0", the realistic
         // "target not yet synced" shape. The sentinel is never greater than the source's latest, so
         // the else branch runs, and findInstantsAfter("0") makes the whole source timeline the

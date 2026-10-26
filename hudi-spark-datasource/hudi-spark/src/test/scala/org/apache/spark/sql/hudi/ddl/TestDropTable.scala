@@ -188,10 +188,10 @@ class TestDropTable extends HoodieSparkSqlTestBase {
 
       spark.sql(s"drop table ${tableName}_ro")
       checkAnswer("show tables")(
-        Seq("default", tableName, false), Seq("default", s"${tableName}_rt", false))
+        Seq(testDatabase, tableName, false), Seq(testDatabase, s"${tableName}_rt", false))
 
       spark.sql(s"drop table ${tableName}_rt")
-      checkAnswer("show tables")(Seq("default", tableName, false))
+      checkAnswer("show tables")(Seq(testDatabase, tableName, false))
 
       spark.sql(s"drop table ${tableName}")
       checkAnswer("show tables")()

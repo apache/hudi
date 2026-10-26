@@ -151,7 +151,7 @@ class TestCopyToTempViewProcedure extends HoodieSparkSqlTestBase {
       assert(copyTableCount.size() == 1 && copyTableCount.get(0).get(0) == 4)
 
       // 2: query view in other session
-      var newSession = spark.newSession()
+      var newSession = newSessionInTestDatabase()
       var hasException = false
       val errorMsg = if (HoodieSparkUtils.gteqSpark3_4) {
         s"[TABLE_OR_VIEW_NOT_FOUND] The table or view `$viewName` cannot be found."

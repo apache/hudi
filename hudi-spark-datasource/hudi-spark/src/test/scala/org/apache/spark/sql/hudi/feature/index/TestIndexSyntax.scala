@@ -39,7 +39,7 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
   test("Test Create/Drop/Show/Refresh Index") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        val databaseName = "default"
+        val databaseName = testDatabase
         val tableName = generateTableName
         val basePath = s"${tmp.getCanonicalPath}/$tableName"
         spark.sql(
@@ -65,7 +65,7 @@ class TestIndexSyntax extends HoodieSparkSqlTestBase {
         val sqlParser: ParserInterface = spark.sessionState.sqlParser
         val analyzer: Analyzer = spark.sessionState.analyzer
 
-        var logicalPlan = sqlParser.parsePlan(s"show indexes from default.$tableName")
+        var logicalPlan = sqlParser.parsePlan(s"show indexes from $testDatabase.$tableName")
         var resolvedLogicalPlan = analyzer.execute(logicalPlan)
         assertTableIdentifier(resolvedLogicalPlan.asInstanceOf[ShowIndexesCommand].table, databaseName, tableName)
 
