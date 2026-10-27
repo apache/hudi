@@ -85,7 +85,8 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
               if (getRunner() == runnerAtStart) {
                 throw e;
               }
-              retryPendingAsyncServiceInstant(context, instantTime, e);
+              log.warn("Compaction for instant {} failed after the write client was replaced; retrying with the new client", instantTime, e);
+              enqueuePendingAsyncServiceInstant(instantTime);
               continue;
             }
             log.info("Finished Compaction for instant {}", instantTime);

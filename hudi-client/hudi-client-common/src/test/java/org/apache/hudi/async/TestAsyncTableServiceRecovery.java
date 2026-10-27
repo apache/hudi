@@ -29,6 +29,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
@@ -58,7 +59,7 @@ import static org.mockito.Mockito.when;
 @Timeout(30)
 class TestAsyncTableServiceRecovery extends HoodieCommonTestHarness {
   private static final String INSTANT = "20261027000000000";
-  private static final String NEXT_INSTANT = "20261027000001000";
+  private static final String COMPLETION_TIME = "20261027000001000";
 
   private HoodieEngineContext context;
   private BaseHoodieWriteClient previousClient;
@@ -180,61 +181,36 @@ class TestAsyncTableServiceRecovery extends HoodieCommonTestHarness {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void completedInstantIsNotEnqueuedAgain(boolean clustering) throws Exception {
+  @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+  void invalidInstantFailureStopsAfterRetry(boolean clustering, boolean completed) throws Exception {
     TestRun run = new TestRun();
     CountDownLatch firstAttempt = new CountDownLatch(1);
     CountDownLatch swapped = new CountDownLatch(1);
-    CountDownLatch nextAttempt = new CountDownLatch(1);
+    RuntimeException firstFailure = new IllegalStateException("previous client failed");
+    RuntimeException retryFailure = new IllegalStateException("instant is no longer pending");
     run.attempt = (client, instant) -> {
-      if (INSTANT.equals(instant)) {
+      if (client == previousClient) {
         firstAttempt.countDown();
         await(swapped);
-        throw new IllegalStateException("post-commit cleanup failed");
+        throw firstFailure;
       }
-      nextAttempt.countDown();
-    };
-    HoodieAsyncTableService service = createService(clustering, run);
-    try {
-      service.enqueuePendingAsyncServiceInstant(INSTANT);
-      service.enqueuePendingAsyncServiceInstant(NEXT_INSTANT);
-      service.start(null);
-      await(firstAttempt);
-      metaClient.getActiveTimeline().createCompleteInstant(metaClient.getInstantGenerator().createNewInstant(
-          HoodieInstant.State.COMPLETED, clustering ? REPLACE_COMMIT_ACTION : COMMIT_ACTION, INSTANT, NEXT_INSTANT));
-      updateClient(service, replacementClient);
-      swapped.countDown();
-      await(nextAttempt);
-      assertEquals(2, run.enqueued.get(), "only the two original instants should be enqueued");
-      assertFalse(service.hasError());
-    } finally {
-      swapped.countDown();
-      service.shutdown(true);
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void missingInstantStopsWithOriginalCause(boolean clustering) throws Exception {
-    TestRun run = new TestRun();
-    CountDownLatch firstAttempt = new CountDownLatch(1);
-    CountDownLatch swapped = new CountDownLatch(1);
-    RuntimeException failure = new IllegalStateException("original failure");
-    run.attempt = (client, instant) -> {
-      firstAttempt.countDown();
-      await(swapped);
-      throw failure;
+      throw retryFailure;
     };
     HoodieAsyncTableService service = createService(clustering, run);
     try {
       service.enqueuePendingAsyncServiceInstant(INSTANT);
       service.start(null);
       await(firstAttempt);
+      if (completed) {
+        metaClient.getActiveTimeline().createCompleteInstant(metaClient.getInstantGenerator().createNewInstant(
+            HoodieInstant.State.COMPLETED, clustering ? REPLACE_COMMIT_ACTION : COMMIT_ACTION, INSTANT, COMPLETION_TIME));
+      }
       updateClient(service, replacementClient);
       swapped.countDown();
       assertThrows(ExecutionException.class, service::waitForShutdown);
-      assertSame(failure, service.getFailure().get().getCause());
-      assertEquals(1, run.enqueued.get());
+      assertTrue(service.hasError());
+      assertSame(retryFailure, service.getFailure().get());
+      assertEquals(2, run.enqueued.get(), "a completed or missing instant must not be retried repeatedly");
     } finally {
       swapped.countDown();
       service.shutdown(true);

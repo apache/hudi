@@ -83,7 +83,8 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
               if (getRunner() == runnerAtStart) {
                 throw e;
               }
-              retryPendingAsyncServiceInstant(context, instant, e);
+              log.warn("Clustering for instant {} failed after the write client was replaced; retrying with the new client", instant, e);
+              enqueuePendingAsyncServiceInstant(instant);
               continue;
             }
             log.info("Finished clustering for instant {}", instant);
