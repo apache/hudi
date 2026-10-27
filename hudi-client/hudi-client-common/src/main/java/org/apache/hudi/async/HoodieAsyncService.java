@@ -27,7 +27,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.Serializable;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -91,6 +90,14 @@ public abstract class HoodieAsyncService implements Serializable {
   }
 
   /**
+   * Publish the cause before the error flag so a caller observing the flag can also read the cause.
+   */
+  protected void recordFailure(Throwable throwable) {
+    failure = throwable;
+    hasError = true;
+  }
+
+  /**
    * Wait till the service shutdown. If the service shutdown with exception, it will be thrown
    *
    * @throws ExecutionException
@@ -145,6 +152,8 @@ public abstract class HoodieAsyncService implements Serializable {
       log.info("The async service already started.");
       return;
     }
+    failure = null;
+    hasError = false;
     Pair<CompletableFuture, ExecutorService> res = startService();
     future = res.getKey();
     executor = res.getValue();
@@ -168,9 +177,8 @@ public abstract class HoodieAsyncService implements Serializable {
       return;
     }
     future.whenComplete((resp, error) -> {
-      if (null != error) {
-        Throwable throwable = (Throwable) error;
-        failure = throwable instanceof CompletionException && throwable.getCause() != null ? throwable.getCause() : throwable;
+      if (null != error && failure == null) {
+        recordFailure((Throwable) error);
       }
       if (null != callback) {
         callback.apply(null != error);

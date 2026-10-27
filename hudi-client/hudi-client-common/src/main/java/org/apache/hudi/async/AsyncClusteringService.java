@@ -76,18 +76,14 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
           final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
             log.info("Starting clustering for instant {}", instant);
-            BaseHoodieWriteClient clientAtStart = getClusteringWriteClient();
+            BaseClusterer runnerAtStart = getRunner();
             try {
-              clusteringClient.cluster(instant);
+              runnerAtStart.cluster(instant);
             } catch (Exception e) {
-              if (getClusteringWriteClient() == clientAtStart) {
+              if (getRunner() == runnerAtStart) {
                 throw e;
               }
-              // The writer switched this service to a new write client while the clustering ran, e.g. on a schema
-              // change, and closes the previous one: run the instant again with the new client.
-              log.warn("Clustering for instant {} failed after the write client was replaced, retrying it with the new write client",
-                  instant, e);
-              enqueuePendingAsyncServiceInstant(instant);
+              retryPendingAsyncServiceInstant(context, instant, e);
               continue;
             }
             log.info("Finished clustering for instant {}", instant);
@@ -95,14 +91,14 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
         }
         log.info("Clustering executor shutting down properly");
       } catch (InterruptedException ie) {
-        hasError = true;
+        recordFailure(ie);
         log.warn("Clustering executor got interrupted exception! Stopping", ie);
       } catch (IOException e) {
-        hasError = true;
+        recordFailure(e);
         log.error("Clustering executor failed due to IOException", e);
         throw new HoodieIOException(e.getMessage(), e);
       } catch (Exception e) {
-        hasError = true;
+        recordFailure(e);
         log.error("Clustering executor failed", e);
         throw e;
       }
@@ -114,10 +110,13 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
    * Update the write client to be used for clustering.
    */
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
-    this.clusteringClient.updateWriteClient(writeClient);
+    // Keep an in-flight runner bound to its original client.
+    if (this.clusteringClient.clusteringClient != writeClient) {
+      this.clusteringClient = createClusteringClient(writeClient);
+    }
   }
 
-  private synchronized BaseHoodieWriteClient getClusteringWriteClient() {
-    return this.clusteringClient.clusteringClient;
+  private synchronized BaseClusterer getRunner() {
+    return this.clusteringClient;
   }
 }

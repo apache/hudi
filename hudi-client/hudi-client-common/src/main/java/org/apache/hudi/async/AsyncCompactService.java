@@ -45,7 +45,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   private static final long serialVersionUID = 1L;
   private final int maxConcurrentCompaction;
   protected transient HoodieEngineContext context;
-  private final transient BaseCompactor compactor;
+  private transient BaseCompactor compactor;
 
   public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client) {
     this(context, client, false);
@@ -78,18 +78,14 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
           if (null != instantTime) {
             log.info("Starting Compaction for instant {}", instantTime);
-            BaseHoodieWriteClient clientAtStart = getCompactionWriteClient();
+            BaseCompactor runnerAtStart = getRunner();
             try {
-              compactor.compact(instantTime);
+              runnerAtStart.compact(instantTime);
             } catch (Exception e) {
-              if (getCompactionWriteClient() == clientAtStart) {
+              if (getRunner() == runnerAtStart) {
                 throw e;
               }
-              // The writer switched this service to a new write client while the compaction ran, e.g. on a schema
-              // change, and closes the previous one: run the instant again with the new client.
-              log.warn("Compaction for instant {} failed after the write client was replaced, retrying it with the new write client",
-                  instantTime, e);
-              enqueuePendingAsyncServiceInstant(instantTime);
+              retryPendingAsyncServiceInstant(context, instantTime, e);
               continue;
             }
             log.info("Finished Compaction for instant {}", instantTime);
@@ -97,14 +93,14 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
         }
         log.info("Compactor shutting down properly!!");
       } catch (InterruptedException ie) {
-        hasError = true;
+        recordFailure(ie);
         log.warn("Compactor executor thread got interrupted exception. Stopping", ie);
       } catch (IOException e) {
-        hasError = true;
+        recordFailure(e);
         log.error("Compactor executor failed due to IOException", e);
         throw new HoodieIOException(e.getMessage(), e);
       } catch (Exception e) {
-        hasError = true;
+        recordFailure(e);
         log.error("Compactor executor failed", e);
         throw e;
       }
@@ -122,10 +118,13 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   }
 
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
-    this.compactor.updateWriteClient(writeClient);
+    // Keep an in-flight runner bound to its original client.
+    if (this.compactor.compactionClient != writeClient) {
+      this.compactor = createCompactor(writeClient);
+    }
   }
 
-  private synchronized BaseHoodieWriteClient getCompactionWriteClient() {
-    return this.compactor.compactionClient;
+  private synchronized BaseCompactor getRunner() {
+    return this.compactor;
   }
 }
