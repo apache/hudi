@@ -273,6 +273,8 @@
     <vortex.version>0.76.0</vortex.version>
     <vortex.spark.artifact>vortex-spark_${scala.binary.version}</vortex.spark.artifact>
     <vortex.skip.tests>false</vortex.skip.tests>
+    <!-- Spark-version specific sources of hudi-spark-common: Spark 3.4+ by default, overridden by the spark3.3 profile -->
+    <hudi.spark.common.version.source>src/main/scala-spark3.4plus</hudi.spark.common.version.source>
     <!-- The following properties are only used for Jacoco coverage report aggregation -->
     <copy.files>false</copy.files>
     <copy.files.target.dir>${maven.multiModuleProjectDirectory}</copy.files.target.dir>
@@ -2731,6 +2733,7 @@
         <lance.skip.tests>true</lance.skip.tests>
         <!-- Vortex: Skip tests for Spark 3.3 due to lack of support -->
         <vortex.skip.tests>true</vortex.skip.tests>
+        <hudi.spark.common.version.source>src/main/scala-spark3.3</hudi.spark.common.version.source>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are

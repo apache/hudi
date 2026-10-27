@@ -2462,12 +2462,18 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
   @ParameterizedTest
   @MethodSource(Array("provideParamsForKeyGenTest"))
   def testUserProvidedKeyGeneratorClass(keyGenClass: Option[String],
-                                        keyGenType: Option[String]): Unit = {
+                                        keyGenType: Option[String],
+                                        tableVersion: Option[HoodieTableVersion]): Unit = {
     val recordType = HoodieRecordType.AVRO
+    // the table is new, so the guard against a legacy single-field complex key encoding below version 9 does not apply
     var opts: Map[String, String] = Map(
       DataSourceWriteOptions.TABLE_TYPE.key -> DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL,
-      HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0"
+      HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key -> "0",
+      HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION.key -> "false"
     )
+    if (tableVersion.isPresent) {
+      opts = opts ++ Map(HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.get.versionCode.toString)
+    }
     if (keyGenClass.isPresent) {
       opts = opts ++ Map(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key -> keyGenClass.get)
     }
@@ -2498,14 +2504,19 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .sort("_row_key")
     var actualKeyDF = actualDF.select("_hoodie_record_key").sort("_hoodie_record_key")
     assertTrue(inputKeyDF.except(actualKeyDF).isEmpty && actualKeyDF.except(inputKeyDF).isEmpty)
-    val metaClient = getHoodieMetaClient(storageConf, basePath)
-    val actualKeyGenType = metaClient.getTableConfig
-      .getProps.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key, null)
-    assertEquals(expectedKeyGenType, actualKeyGenType)
-    // For USER_PROVIDED type, the class should exist in table config.
-    if (KeyGeneratorType.USER_PROVIDED.name == actualKeyGenType) {
-      assertEquals(keyGenClass.get(), metaClient.getTableConfig.getKeyGeneratorClassName)
+    val tableConfig = getHoodieMetaClient(storageConf, basePath).getTableConfig
+    val expectedTableVersion = TestCOWDataSource.writeTableVersionOrDefault(tableVersion)
+    assertEquals(expectedTableVersion, tableConfig.getTableVersion)
+    assertEquals(expectedKeyGenType, tableConfig.getProps.getString(HoodieTableConfig.KEY_GENERATOR_TYPE.key, null))
+    // A user-provided key generator is persisted as a class at every table version, the others below version 8.
+    val expectedKeyGenClass = if (KeyGeneratorType.USER_PROVIDED.name == expectedKeyGenType) {
+      keyGenClass.get
+    } else if (expectedTableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      KeyGeneratorType.valueOf(expectedKeyGenType).getClassName
+    } else {
+      null
     }
+    assertEquals(expectedKeyGenClass, tableConfig.getProps.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key, null))
 
     // First update.
     val firstUpdate = recordsToStrings(dataGen.generateUpdatesForAllRecords("001")).asScala.toList
@@ -2718,19 +2729,14 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
 
 object TestMORDataSource {
   def provideParamsForKeyGenTest(): java.util.List[Arguments] = {
-    java.util.Arrays.asList(
-      Arguments.of(
-        Option.of("org.apache.hudi.keygen.MockUserProvidedKeyGenerator"),
-        Option.of(KeyGeneratorType.USER_PROVIDED.name())),
-      Arguments.of(
-        Option.empty(),
-        Option.of(KeyGeneratorType.SIMPLE.name())),
-      Arguments.of(
-        Option.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator"),
-        Option.of(KeyGeneratorType.SIMPLE.name())),
-      Arguments.of(
-        Option.of("org.apache.hudi.keygen.ComplexKeyGenerator"),
-        Option.empty())
-    )
+    val keyGenSettings = Seq(
+      (Option.of("org.apache.hudi.keygen.MockUserProvidedKeyGenerator"), Option.of(KeyGeneratorType.USER_PROVIDED.name())),
+      (Option.empty[String](), Option.of(KeyGeneratorType.SIMPLE.name())),
+      (Option.of("org.apache.hudi.keygen.SimpleAvroKeyGenerator"), Option.of(KeyGeneratorType.SIMPLE.name())),
+      (Option.of("org.apache.hudi.keygen.ComplexKeyGenerator"), Option.empty[String]()))
+    val tableVersions = Seq(Option.of(HoodieTableVersion.SIX), Option.of(HoodieTableVersion.EIGHT),
+      Option.of(HoodieTableVersion.NINE), Option.of(HoodieTableVersion.TEN), Option.empty[HoodieTableVersion]())
+    (for ((keyGenClass, keyGenType) <- keyGenSettings; tableVersion <- tableVersions)
+      yield Arguments.of(keyGenClass, keyGenType, tableVersion)).asJava
   }
 }

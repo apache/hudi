@@ -45,7 +45,7 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   private static final long serialVersionUID = 1L;
   private final int maxConcurrentCompaction;
   protected transient HoodieEngineContext context;
-  private transient BaseCompactor compactor;
+  private final transient BaseCompactor compactor;
 
   public AsyncCompactService(HoodieEngineContext context, BaseHoodieWriteClient client) {
     this(context, client, false);
@@ -78,16 +78,8 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
           if (null != instantTime) {
             log.info("Starting Compaction for instant {}", instantTime);
-            BaseCompactor runnerAtStart = getRunner();
-            try {
-              runnerAtStart.compact(instantTime);
-            } catch (Exception e) {
-              if (getRunner() == runnerAtStart) {
-                throw e;
-              }
-              log.warn("Compaction for instant {} failed after the write client was replaced; retrying with the new client", instantTime, e);
-              enqueuePendingAsyncServiceInstant(instantTime);
-              continue;
+            synchronized (compactor) {
+              compactor.compact(instantTime);
             }
             log.info("Finished Compaction for instant {}", instantTime);
           }
@@ -118,14 +110,12 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
     return false;
   }
 
-  public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
-    // Keep an in-flight runner bound to its original client.
-    if (this.compactor.compactionClient != writeClient) {
-      this.compactor = createCompactor(writeClient);
+  /**
+   * Switches clients between complete compaction runs. Once this returns, no run uses the old client.
+   */
+  public void updateWriteClient(BaseHoodieWriteClient writeClient) {
+    synchronized (compactor) {
+      compactor.updateWriteClient(writeClient);
     }
-  }
-
-  private synchronized BaseCompactor getRunner() {
-    return this.compactor;
   }
 }

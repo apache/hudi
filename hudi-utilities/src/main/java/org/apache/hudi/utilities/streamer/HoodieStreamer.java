@@ -886,9 +886,8 @@ public class HoodieStreamer implements Serializable {
     }
 
     /**
-     * Stops ingestion when an async table service stopped with an error, with that error as the cause. The services
-     * retry a run that failed because the write client was replaced (e.g. on a schema change), so any error here is
-     * one they could not recover from. Checked on every round of ingestion, not only when a new compaction or
+     * Stops ingestion when an async table service stopped with an error, with that error as the cause.
+     * Checked on every round of ingestion, not only when a new compaction or
      * clustering is scheduled, so that ingestion does not go on without its table services.
      */
     private void throwIfAsyncTableServiceFailed() {
