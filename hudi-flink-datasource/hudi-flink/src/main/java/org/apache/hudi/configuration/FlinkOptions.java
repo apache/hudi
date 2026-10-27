@@ -361,7 +361,8 @@ public class FlinkOptions extends HoodieConfig {
       .withDescription("The backend used to serve record level index lookups. Supported values are "
           + "mdt (default), which reads the record level index directly from the metadata table, and "
           + "rocksdb, which uses a local RocksDB-based partitioned cache in front of the metadata table "
-          + "to accelerate lookups.");
+          + "to accelerate lookups. The rocksdb backend is not selectable yet: it does not bootstrap or "
+          + "fall back to the metadata table, so selecting it currently falls back to mdt.");
 
   @AdvancedConfig
   public static final ConfigOption<String> INDEX_RLI_CACHE_ROCKSDB_BASE_PATH = ConfigOptions
