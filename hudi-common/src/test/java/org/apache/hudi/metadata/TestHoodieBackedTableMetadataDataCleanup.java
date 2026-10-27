@@ -39,7 +39,6 @@ import org.apache.hudi.common.table.read.HoodieFileGroupReader;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
@@ -71,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
@@ -404,15 +404,9 @@ public class TestHoodieBackedTableMetadataDataCleanup {
 
   @Test
   public void testSecondaryIndexEmptyIteratorPath() throws Exception {
-    Method method = HoodieBackedTableMetadata.class.getDeclaredMethod(
-        "readSliceAndFilterByKeys", String.class, List.class, FileSlice.class);
-    method.setAccessible(true);
-    Object iterator = method.invoke(
-        mockMetadata,
-        MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "test",
-        Collections.emptyList(),
-        mock(FileSlice.class));
-    assertFalse(((org.apache.hudi.common.util.collection.ClosableIterator<?>) iterator).hasNext());
+    prepareFileSliceRead(false);
+    MetadataPartitionReader reader = newSecondaryIndexReader();
+    assertFalse(reader.lookupRecords(Collections.emptyList(), mock(FileSlice.class), false).hasNext());
   }
 
   @Test
@@ -479,39 +473,28 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     try (MockedStatic<HoodieFileGroupReader> readerStatic =
              mockStatic(HoodieFileGroupReader.class)) {
       readerStatic.when(HoodieFileGroupReader::builder).thenReturn(builder);
-      Method method = HoodieBackedTableMetadata.class.getDeclaredMethod(
-          "readSliceAndFilterByKeys", String.class, List.class, FileSlice.class);
-      method.setAccessible(true);
-      ClosableIterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>> iterator =
-          (ClosableIterator<Pair<String, HoodieRecord<HoodieMetadataPayload>>>) method.invoke(
-              mockMetadata,
-              MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "test",
-              Collections.singletonList("key"),
-              fileSlice);
+      MetadataPartitionReader reader = newSecondaryIndexReader();
+      ClosableIterator<HoodieRecord<HoodieMetadataPayload>> iterator =
+          reader.lookupRecords(Collections.singletonList("key"), fileSlice, false);
 
       assertTrue(iterator.hasNext());
-      assertEquals("key", iterator.next().getLeft());
+      assertEquals("key", iterator.next().getRecordKey());
       assertFalse(iterator.hasNext());
       iterator.close();
 
       when(fileGroupReader.getClosableIterator())
           .thenThrow(new IOException("iterator failed"));
-      InvocationTargetException exception = assertThrows(
-          InvocationTargetException.class,
-          () -> method.invoke(
-              mockMetadata,
-              MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "test",
-              Collections.singletonList("key"),
-              fileSlice));
-      assertTrue(exception.getCause() instanceof org.apache.hudi.exception.HoodieIOException);
+      assertThrows(org.apache.hudi.exception.HoodieIOException.class,
+          () -> reader.lookupRecords(Collections.singletonList("key"), fileSlice, false));
 
       Method scanMethod = HoodieBackedTableMetadata.class.getDeclaredMethod(
-          "scanRecordsItr", FileSlice.class, SerializableFunctionUnchecked.class);
+          "scanRecordsItr", MetadataPartitionReader.class, FileSlice.class, SerializableFunctionUnchecked.class);
       scanMethod.setAccessible(true);
       InvocationTargetException scanException = assertThrows(
           InvocationTargetException.class,
           () -> scanMethod.invoke(
               mockMetadata,
+              reader,
               fileSlice,
               (SerializableFunctionUnchecked<org.apache.avro.generic.GenericRecord,
                   HoodieRecord<HoodieMetadataPayload>>) record -> null));
@@ -550,6 +533,7 @@ public class TestHoodieBackedTableMetadataDataCleanup {
       ioFactoryStatic.when(() -> HoodieIOFactory.getIOFactory(storage)).thenReturn(ioFactory);
       Method method = HoodieBackedTableMetadata.class.getDeclaredMethod(
           "readSliceWithFilter",
+          MetadataPartitionReader.class,
           org.apache.hudi.common.expression.Predicate.class,
           FileSlice.class);
       method.setAccessible(true);
@@ -557,6 +541,7 @@ public class TestHoodieBackedTableMetadataDataCleanup {
           InvocationTargetException.class,
           () -> method.invoke(
               mockMetadata,
+              mock(MetadataPartitionReader.class),
               mock(org.apache.hudi.common.expression.Predicate.class),
               fileSlice));
       assertTrue(exception.getCause() instanceof org.apache.hudi.exception.HoodieIOException);
@@ -595,8 +580,14 @@ public class TestHoodieBackedTableMetadataDataCleanup {
     assertEquals(emptyResult, result);
   }
 
+  private MetadataPartitionReader newSecondaryIndexReader() {
+    when(mockMetadata.createPartitionReader(anyString(), any())).thenCallRealMethod();
+    return mockMetadata.createPartitionReader(MetadataPartitionType.SECONDARY_INDEX.getPartitionPath() + "test", Collections.emptyList());
+  }
+
   private void prepareFileSliceRead(boolean reuse) throws Exception {
     HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    doReturn(mock(StorageConfiguration.class)).when(metadataMetaClient).getStorageConf();
     HoodieActiveTimeline timeline = mock(HoodieActiveTimeline.class);
     when(metadataMetaClient.getActiveTimeline()).thenReturn(timeline);
     when(timeline.filterCompletedInstants()).thenReturn(timeline);
