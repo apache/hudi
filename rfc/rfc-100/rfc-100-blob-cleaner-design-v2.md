@@ -15,7 +15,32 @@
   limitations under the License.
 -->
 
-# RFC-100 Part 2 (Design v2): File-Granularity Blob Reference Registry
+# RFC-100 Part 2 (Design v2): File-Granularity Blob Reference Registry [SUPERSEDED -- by design v3]
+
+> **This design (v2) is SUPERSEDED (2026-10-27)** by
+> [rfc-100-blob-cleaner-design-v3.md](rfc-100-blob-cleaner-design-v3.md), an append-only
+> registry with FILES-membership liveness. The decision was driven by:
+>
+> 1. The registry source is carried on `HoodieWriteStat`, which is serialized into
+>    `HoodieCommitMetadata`. That stores blob references in the commit file, which was ruled
+>    out on the PR and compounds C10. v3 carries the per-file path sets on the in-memory
+>    `WriteStatus`; a commit file holds only one boolean.
+> 2. Registry tombstones are written under the clean lock and are O(rows) for row-distinct
+>    blobs, serializing writers (R4). v3 never writes to the registry from the clean; an entry
+>    is dead when its file is no longer in FILES, and stale entries are dropped inside MDT
+>    compaction.
+> 3. The plan-time snapshot used the table's cached metadata reader, which the file-system
+>    view resets between the registry read and the FILES read, so the two reads could describe
+>    different instants. v3 uses a dedicated reader and adds a locked check of the
+>    `blobRefsWritten` flag on commits completed since the snapshot.
+> 4. The per-file manifests (a log-block format change), hygiene sidecar, reconciliation
+>    sweep and 24h pending-deletes queue add surface without closing any gap the model check
+>    of v3 found. The queue is kept as an optional later phase.
+>
+> Carried forward: the `blob_refs` partition with routed file groups, the plan sidecar as the
+> durable delete list, the two-step verify, the writer `preCommit` veto (widened in v3 to
+> cleans completed after the writer's instant), and defer-over-annul. The rest is retained
+> for historical context only.
 
 **Status: DRAFT for internal review, revision 2 (2026-07-02) -- incorporates adversarial review
 findings: defaults coherence, two-step drain locking, tombstone lifecycle ownership,
