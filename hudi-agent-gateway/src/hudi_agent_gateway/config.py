@@ -43,7 +43,7 @@ class GatewaySettings(BaseSettings):
 
     # --- LLM ---
     llm_provider: LLMProvider = "ollama"
-    llm_model: str = "qwen3:4b-instruct"
+    llm_model: str = "qwen3:8b"
     llm_timeout_seconds: float = 120.0
     # Standard unprefixed key names, also accepted with the GATEWAY_ prefix.
     anthropic_api_key: str = Field(

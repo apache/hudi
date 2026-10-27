@@ -32,7 +32,7 @@ image:
 gateway:
   # anthropic | openai | ollama | openai-compatible
   provider: ollama
-  model: qwen3:4b-instruct
+  model: qwen3:8b
   # Appended to the built-in system prompt.
   systemPromptExtra: ""
   # Inline API keys are for development only -- they land in a chart-managed

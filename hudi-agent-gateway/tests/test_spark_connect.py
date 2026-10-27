@@ -254,6 +254,51 @@ async def test_ping_cached_and_closed_client_rejected(settings):
             await client.execute("SELECT 1", timeout=1, max_rows=1)
 
 
+async def test_ping_works_when_query_capacity_is_exhausted(settings):
+    sessions = [Session() for _ in range(9)]
+    for session in sessions[:8]:
+        session.release = threading.Event()
+    with pyspark_client(spark_settings(settings), *sessions) as (client, _):
+        tasks = [asyncio.create_task(client.execute("SELECT 1", timeout=5, max_rows=1))
+                 for _ in range(8)]
+        for session in sessions[:8]:
+            assert await asyncio.to_thread(session.started.wait, 1)
+        assert await client.ping(timeout=1)
+        for session in sessions[:8]:
+            session.release.set()
+        await asyncio.gather(*tasks)
+
+
+async def test_concurrent_pings_share_probe_even_if_a_waiter_is_cancelled(settings):
+    session = Session()
+    session.release = threading.Event()
+    with pyspark_client(spark_settings(settings), session) as (client, connect):
+        first = asyncio.create_task(client.ping())
+        assert await asyncio.to_thread(session.started.wait, 1)
+        second = asyncio.create_task(client.ping())
+        await asyncio.sleep(0)
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        assert not second.done()
+        session.release.set()
+        assert await second
+        assert await client.ping()
+        assert connect.call_count == 1
+
+
+async def test_close_interrupts_active_operations(settings):
+    session = Session()
+    session.release = threading.Event()
+    with pyspark_client(spark_settings(settings), session) as (client, _):
+        task = asyncio.create_task(client.execute("SELECT 1", timeout=5, max_rows=1))
+        assert await asyncio.to_thread(session.started.wait, 1)
+        client.close()
+        assert await asyncio.to_thread(session.cancelled.wait, 1)
+        session.release.set()
+        await task
+
+
 @pytest.mark.parametrize(
     "sql",
     [
@@ -304,6 +349,13 @@ def test_spark_sql_quoting_and_functions():
         "SELECT `weird col`, date_trunc('DAY', ts) FROM `t`", 100, dialect="spark"
     )
     assert "`weird col`" in out and "LIMIT 100" in out
+
+
+async def test_query_qualifies_format_named_schema_with_configured_catalog(settings, fake_trino):
+    s = spark_settings(settings).model_copy(update={"spark_connect_catalog": "custom_catalog"})
+    registry = build_registry(s, fake_trino)
+    await registry.get("query_lakehouse").handler(sql="SELECT * FROM text.orders")
+    assert "`custom_catalog`.text.orders" in fake_trino.executed[-1]
 
 
 @pytest.mark.parametrize(

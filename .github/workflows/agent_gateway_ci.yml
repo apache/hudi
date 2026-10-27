@@ -61,7 +61,7 @@ jobs:
           cache: pip
           cache-dependency-path: hudi-agent-gateway/pyproject.toml
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,spark-connect]"
       - name: Fetch pinned Hudi Architect baseline
         run: >-
           git fetch --no-tags --depth=1 origin

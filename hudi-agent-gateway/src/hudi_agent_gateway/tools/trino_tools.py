@@ -155,7 +155,10 @@ def register(registry: ToolRegistry, client: LakehouseClient, settings: GatewayS
         ],
     ) -> str:
         try:
-            safe_sql = enforce_guardrails(sql, row_cap=settings.sql_row_cap, dialect=dialect)
+            safe_sql = enforce_guardrails(
+                sql, row_cap=settings.sql_row_cap, dialect=dialect,
+                spark_catalog=settings.spark_connect_catalog,
+            )
             result = await client.execute(
                 safe_sql, timeout=settings.sql_timeout_seconds, max_rows=settings.sql_row_cap
             )

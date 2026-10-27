@@ -37,7 +37,7 @@ seed of the gateway's trace collection.
 
 ```bash
 cd hudi-agent-gateway
-python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev]"
+python3.12 -m venv .venv && .venv/bin/pip install -e ".[dev,spark-connect]"
 
 # point at a Trino with the Hudi connector (e.g. the local-dev stack, port-forwarded):
 GATEWAY_TRINO_HOST=localhost GATEWAY_TRINO_PORT=18080 \
@@ -58,8 +58,8 @@ For a fully local model, install [Ollama](https://ollama.com), pull a
 tool-capable model, and use the default provider:
 
 ```bash
-ollama pull qwen3:4b-instruct
-GATEWAY_LLM_PROVIDER=ollama GATEWAY_LLM_MODEL=qwen3:4b-instruct hudi-agent-gateway serve
+ollama pull qwen3:8b
+GATEWAY_LLM_PROVIDER=ollama GATEWAY_LLM_MODEL=qwen3:8b hudi-agent-gateway serve
 ```
 
 The chat UI shows progress and elapsed time while a response is running. **Stop**
@@ -90,7 +90,7 @@ Environment variables (prefix `GATEWAY_` except the standard key names):
 | Variable | Default | Purpose |
 |---|---|---|
 | `GATEWAY_LLM_PROVIDER` | `ollama` | `anthropic` \| `openai` \| `ollama` \| `openai-compatible` |
-| `GATEWAY_LLM_MODEL` | `qwen3:4b-instruct` | model name for the provider |
+| `GATEWAY_LLM_MODEL` | `qwen3:8b` | model name for the provider |
 | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | — | required by the matching provider |
 | `GATEWAY_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama endpoint |
 | `GATEWAY_OPENAI_BASE_URL` | — | endpoint for `openai-compatible` (vLLM, Together, …) |
@@ -117,8 +117,9 @@ readiness probe).
 
 ## Spark Connect backend
 
-Install the gateway in a Python 3.11/3.12 environment. Its dependencies include
-`pyspark-client==4.1.3`, matching the chart's Spark version, and PyArrow 18.1.0.
+Install the gateway in a Python 3.11/3.12 environment with the `spark-connect`
+extra. It includes `pyspark-client==4.1.3`, matching the chart's Spark version,
+and PyArrow 18.1.0. The gateway image includes this extra.
 The official Python Connect client sends RPCs to the remote Spark server; the
 gateway image requires no Java runtime, Spark JARs, or native ADBC driver.
 PySpark also brings pandas, gRPC, and protobuf dependencies; use a dedicated
@@ -152,7 +153,8 @@ session in a finally block. Sessions are not shared across tool calls.
 **Bounds:** SQL LIMIT and DataFrame.limit before collect cap query result rows;
 the existing JSON size cap truncates tool responses. Wide rows can still consume
 substantial client memory, and SHOW TABLES can enumerate the whole namespace
-before returning limited rows. The JSON cap is a response limit, not a
+before returning limited rows. When capped, SHOW TABLES can return an arbitrary
+subset, since Spark does not guarantee its order. The JSON cap is a response limit, not a
 server/memory budget. Queries use at most eight workers with no accumulating
 queue. A timed-out call keeps its capacity slot until execution and cleanup
 actually finish.

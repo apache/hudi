@@ -195,7 +195,8 @@ async def _stream_chat(request: Request, body: ChatRequest) -> AsyncIterator[Ser
 
 def _timeout_message(request: Request) -> str:
     seconds = request.app.state.settings.chat_timeout_seconds
-    return f"The response exceeded the {seconds:g}s time limit. Try a narrower question."
+    return (f"The response exceeded the {seconds:g}s time limit. Start a new session "
+            "before retrying, because this session may contain an incomplete tool call.")
 
 
 def _status_event(message: str) -> ServerSentEvent:
