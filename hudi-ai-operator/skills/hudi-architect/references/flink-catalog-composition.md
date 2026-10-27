@@ -71,11 +71,19 @@ Add an optional top-level block to an existing schema 1, 2, or 3 design:
 - `database` is required for catalog resolution or Hive discovery.
 - `catalog_path` is required only for DFS Catalog.
 - `hive_configuration` is required for Hive discovery and forbidden otherwise.
-- Direct/DFS sink-owned sync accepts credential-free `thrift://` `metastore_uris`.
+- Direct/DFS sink-owned sync accepts credential-free `thrift://` `metastore_uris`. Each URI must
+  contain only a host and explicit valid port; user information, paths, query strings, fragments,
+  missing or invalid ports, and credential assignments are rejected before SQL is emitted.
 - HMS Catalog accepts an absolute `hive_conf_dir`, or `classpath` with no location. Embedded HMS
   is not supported.
 - `table_external=true` is mandatory for HMS Catalog. The application owns its data lifecycle.
 - `mor_sync_strategy` applies only to schema 3 plus Hive discovery and is derived from query modes.
+- DFS and HMS Catalog profiles switch the active catalog and database before the INSERT. Their
+  `source.table` must therefore be a three-part `catalog.database.table` identifier so source
+  resolution does not depend on the caller's original session context. For the bounded streaming
+  new-table path, that identifier must not equal the composed target
+  `catalog_name.database.table.name`; same-table read-transform-write needs a separately bounded
+  input snapshot and is outside PR6.
 
 Do not duplicate the table name, table path, table type, schema, or partition fields in this block.
 They are derived from the existing desired contract.
@@ -86,9 +94,15 @@ Direct SQL keeps the explicit desired table path. DFS Catalog derives
 `${catalog.path}/${database}/${table.name}`; the desired path must match exactly, and the table DDL
 must not contain a misleading `path` option. The caller must explicitly accept catalog-owned data:
 Hudi 1.2.0 DFS Catalog recursively deletes data during a table drop. Architect never emits DROP.
+An omitted lifecycle decision remains unresolved, while an explicit application-owned declaration
+conflicts with the DFS Catalog behavior and is blocked.
 
 HMS Catalog must render the desired path in table DDL and must not fall back to a warehouse path.
 Only `table.external=true` is supported so catalog removal does not imply catalog-owned data.
+An omitted `table_external` decision remains unresolved; an explicitly false value requests the
+unsupported managed-table lifecycle and is blocked.
+For multiple partition fields, their order in `table.partition_fields` must match their relative
+order in `table.columns`; Hudi 1.2.0 HMS Catalog rejects a different `PARTITIONED BY` order.
 
 ## Hive sync and MOR naming
 

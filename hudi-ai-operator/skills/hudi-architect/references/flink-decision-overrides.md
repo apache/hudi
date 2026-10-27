@@ -307,13 +307,20 @@ to the executable contract just like `F10_SAFE_APPEND`.
   `FLINK_CATALOG_COMPOSITION_CONFLICT`.
 - DFS Catalog requires exact `${catalog.path}/${database}/${table.name}` path agreement. A
   mismatch is `FLINK_CATALOG_PATH_CONFLICT`. Catalog-owned lifecycle must be explicit; otherwise
-  use `FLINK_CATALOG_LIFECYCLE_UNRESOLVED`.
+  use `FLINK_CATALOG_LIFECYCLE_UNRESOLVED`. An explicit application-owned declaration is a blocked
+  `FLINK_CATALOG_COMPOSITION_CONFLICT`, not an unresolved decision.
 - HMS Catalog is executable only with `table.external=true`, application-owned data, a
-  non-embedded Hive configuration, and an explicit desired table path. Managed HMS stays
-  `FLINK_CATALOG_LIFECYCLE_UNRESOLVED`.
+  non-embedded Hive configuration, and an explicit desired table path. A missing external-table
+  decision is `FLINK_CATALOG_LIFECYCLE_UNRESOLVED`, while explicit `table_external=false` is a
+  blocked `FLINK_CATALOG_COMPOSITION_CONFLICT`. Multiple HMS partition fields must keep the same
+  relative order in the physical schema and partition declaration; a mismatch is also
+  `FLINK_CATALOG_COMPOSITION_CONFLICT`.
+- DFS and HMS Catalog profiles require a three-part `catalog.database.table` source identifier so
+  their generated catalog switch cannot redirect an unqualified source lookup. In the streaming
+  new-table path, the fully qualified source must not equal the composed target object.
 - Direct and DFS sink-owned Hive sync accepts credential-free thrift metastore URIs. Credential
-  fields or secret-bearing URIs are `FLINK_CATALOG_CREDENTIAL_REJECTED`; malformed structure is
-  `FLINK_CATALOG_CONTRACT_INVALID`.
+  fields or secret-bearing URIs are `FLINK_CATALOG_CREDENTIAL_REJECTED`; paths, missing or invalid
+  ports, and other malformed structure are `FLINK_CATALOG_CONTRACT_INVALID`.
 - AWS Glue remains `FLINK_GLUE_CATALOG_UNVERIFIED` until a Flink-specific released-bundle fixture
   proves it. Presence of a Glue implementation in source is insufficient.
 - MOR query modes derive `RO`, `RT`, or `ALL`. Custom suffix/name behavior is

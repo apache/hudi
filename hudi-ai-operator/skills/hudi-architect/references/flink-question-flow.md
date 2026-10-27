@@ -228,6 +228,9 @@ Enter this stage only when F0-F6 have no status-contributing finding. Collect, w
 - Partition fields, or an explicit unpartitioned decision.
 - Stable record-key fields when F5 found a stable business key.
 - The existing source-table identifier and its expected physical columns.
+- For DFS or HMS Catalog resolution, a three-part `catalog.database.table` source identifier; do
+  not preserve an unqualified source across the generated catalog switch, and confirm it is not
+  the same complete object as the new sink target.
 - For mutable input: source primary-key fields, exactly one ordering field, whether deletes occur,
   whether deletes contain the complete projected row, and whether partition values can change.
 
@@ -239,6 +242,10 @@ field name must match `^[A-Za-z_][A-Za-z0-9_]*$`; quoted SQL identifiers do not 
 Avro-backed Hudi schema constraint. `TIME`, `TIMESTAMP`, and `TIMESTAMP_LTZ` precision must be
 between 0 and 6 for the pinned connector. Reject violations instead of renaming a field or
 reducing its precision.
+
+For HMS Catalog, multiple partition fields must appear in `table.partition_fields` in the same
+relative order as they appear in `table.columns`. Reject a mismatch instead of silently reordering
+the declared physical schema.
 
 `BYTES`, `BINARY`, and `VARBINARY` remain valid payload types, but must not be used as stable
 record-key or partition fields. The pinned Hudi 1.2.0 routing path converts their Java arrays to

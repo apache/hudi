@@ -134,6 +134,11 @@ application owns data. Direct and DFS Hive discovery uses sink-owned `hive_sync.
 Catalog supplies those values from catalog context and the validator checks their effective
 configuration without duplicating them.
 
+Sink-owned metastore URIs are limited to credential-free `thrift://host:port` endpoints with no
+path, query, or fragment. Catalog-managed streaming sources use a three-part identifier and cannot
+resolve to the same complete object as the new sink target. Missing lifecycle choices remain
+unresolved; explicit requests for DFS application ownership or managed HMS tables are conflicts.
+
 MOR registration derives `RT`, `RO`, or `ALL` from the declared query modes. With the pinned
 defaults (`skip_ro_suffix=false` and snapshot-with-base-name true), ALL registers `base_ro`,
 `base_rt`, and the base snapshot name. Catalog freshness is always recorded as

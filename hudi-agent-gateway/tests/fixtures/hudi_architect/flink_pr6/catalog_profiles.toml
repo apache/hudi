@@ -30,6 +30,7 @@ catalog = '''
 [[profile]]
 id = "hudi_dfs_catalog_none"
 base_fixture = "flink_pr3/mutable_cow.json"
+source_table = "default_catalog.default_database.orders_mutable_source"
 catalog = '''
 {"contract_schema":1,"resolution_mode":"hudi_dfs_catalog","external_discovery":"none","sync_owner":"none","data_lifecycle_owner":"catalog","catalog_name":"lake","database":"analytics","catalog_path":"file:///tmp/hudi-architect-catalog"}
 '''
@@ -37,6 +38,7 @@ catalog = '''
 [[profile]]
 id = "hudi_dfs_catalog_hive_metastore"
 base_fixture = "flink_pr3/mutable_cow.json"
+source_table = "default_catalog.default_database.orders_mutable_source"
 catalog = '''
 {"contract_schema":1,"resolution_mode":"hudi_dfs_catalog","external_discovery":"hive_metastore","sync_owner":"flink_sink","data_lifecycle_owner":"catalog","catalog_name":"lake","database":"analytics","catalog_path":"file:///tmp/hudi-architect-catalog","hive_configuration":{"source":"metastore_uris","location":"thrift://hms.example:9083"}}
 '''
@@ -44,6 +46,7 @@ catalog = '''
 [[profile]]
 id = "hudi_hms_catalog_hive_metastore"
 base_fixture = "flink_pr3/mutable_cow.json"
+source_table = "default_catalog.default_database.orders_mutable_source"
 catalog = '''
 {"contract_schema":1,"resolution_mode":"hudi_hms_catalog","external_discovery":"hive_metastore","sync_owner":"hudi_hms_catalog","data_lifecycle_owner":"application","catalog_name":"production_hudi","database":"analytics","hive_configuration":{"source":"hive_conf_dir","location":"/etc/hive/conf"},"table_external":true}
 '''

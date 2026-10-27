@@ -419,7 +419,8 @@ rename it.
 
 ## FLINK_SOURCE_CONTRACT_REQUIRED
 
-**Trigger:** The source table, expected physical schema, or changelog semantics are unavailable.
+**Trigger:** The source table, expected physical schema, or changelog semantics are unavailable,
+or a catalog-managed profile supplies a source identifier that is not fully qualified.
 
 **Message:** A sink-side example must identify the existing source table and its expected contract.
 
@@ -722,17 +723,18 @@ identifier or Hive configuration source.
 
 ## FLINK_CATALOG_LIFECYCLE_UNRESOLVED
 
-**Trigger:** DFS catalog-owned deletion semantics are not accepted, or HMS Catalog is not an
-external application-owned table.
+**Trigger:** DFS catalog-owned deletion semantics or the HMS external-table decision is missing.
 
 **Message:** Catalog operations can otherwise imply a different data lifecycle than the design.
 
-**Action:** `REVIEW_REQUIRED`; do not emit executable catalog SQL.
+**Action:** `REVIEW_REQUIRED`; collect the missing lifecycle decision and do not emit executable
+catalog SQL. An explicit conflicting decision uses `FLINK_CATALOG_COMPOSITION_CONFLICT` instead.
 
 ## FLINK_CATALOG_COMPOSITION_CONFLICT
 
-**Trigger:** The legacy boolean gate, resolution/discovery pair, sync owner, or lifecycle owner
-contradicts another explicit field.
+**Trigger:** The legacy boolean gate, resolution/discovery pair, sync owner, lifecycle owner, or
+HMS physical-schema partition order contradicts another explicit field; an HMS managed table is
+explicitly requested; or the streaming new-table source resolves to the composed sink object.
 
 **Message:** The validator does not arbitrate conflicting architecture decisions.
 

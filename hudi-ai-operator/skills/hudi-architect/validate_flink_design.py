@@ -31,7 +31,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, TypeGuard
-from urllib.parse import SplitResult, parse_qsl, urlsplit
+from urllib.parse import SplitResult, parse_qsl, unquote, urlsplit
 
 from validate_flink_capabilities import (
     DEFAULT_MANIFEST,
@@ -45,6 +45,9 @@ APPEND_CONTRACT_SCHEMA_VERSION = 1
 MUTABLE_CONTRACT_SCHEMA_VERSION = 2
 MUTABLE_MOR_CONTRACT_SCHEMA_VERSION = 3
 CATALOG_CONTRACT_SCHEMA_VERSION = 1
+CATALOG_MANAGED_RESOLUTION_MODES = frozenset(
+    {"hudi_dfs_catalog", "hudi_hms_catalog"}
+)
 SUPPORTED_CONTRACT_SCHEMAS = {
     APPEND_CONTRACT_SCHEMA_VERSION,
     MUTABLE_CONTRACT_SCHEMA_VERSION,
@@ -65,6 +68,10 @@ SENSITIVE_QUERY_KEY = re.compile(
 )
 SENSITIVE_CATALOG_KEY = re.compile(
     r"(?:access[_-]?key|api[_-]?key|credential|iam|keytab|password|secret|token|username)",
+    re.IGNORECASE,
+)
+SENSITIVE_URI_ASSIGNMENT = re.compile(
+    r"(?:^|[/;,&])(?:access[_-]?key|api[_-]?key|credential|iam|keytab|password|secret|sig|signature|token|username)\s*=",
     re.IGNORECASE,
 )
 PLACEHOLDER = re.compile(r"(?:<[^>]+>|\$\{[^}]+\}|\b(?:TBD|TODO)\b)", re.IGNORECASE)
@@ -427,13 +434,17 @@ def _metastore_uris_valid(value: Any) -> bool:
         uri = raw_uri.strip()
         try:
             parsed = urlsplit(uri)
+            port = parsed.port
         except ValueError:
             return False
         if (
             parsed.scheme.lower() != "thrift"
             or not parsed.hostname
+            or port is None
+            or not 1 <= port <= 65535
             or parsed.username is not None
             or parsed.password is not None
+            or parsed.path
             or parsed.query
             or parsed.fragment
         ):
@@ -445,6 +456,8 @@ def _metastore_uris_have_credentials(value: Any) -> bool:
     if not isinstance(value, str):
         return False
     for raw_uri in value.split(","):
+        if SENSITIVE_URI_ASSIGNMENT.search(unquote(raw_uri)) is not None:
+            return True
         try:
             parsed = urlsplit(raw_uri.strip())
         except ValueError:
@@ -609,6 +622,9 @@ def _assess_catalog(
     lifecycle_owner_valid = (
         isinstance(lifecycle_owner, str) and lifecycle_owner in lifecycle_owners
     )
+    catalog_managed_resolution = (
+        resolution_valid and resolution_mode in CATALOG_MANAGED_RESOLUTION_MODES
+    )
     if not _non_empty_string(resolution_mode):
         assessment.add(
             "FLINK_CATALOG_CONTRACT_INVALID",
@@ -696,19 +712,16 @@ def _assess_catalog(
                 "FLINK_CATALOG_COMPOSITION_CONFLICT",
                 f"{profile} requires sync_owner={expected_sync_owner}",
             )
-        if not _non_empty_string(lifecycle_owner):
+        if lifecycle_owner is None or (
+            isinstance(lifecycle_owner, str) and not lifecycle_owner.strip()
+        ):
             assessment.add(
                 "FLINK_CATALOG_LIFECYCLE_UNRESOLVED",
                 f"{profile} requires an explicit data lifecycle owner",
             )
         elif lifecycle_owner_valid and lifecycle_owner != expected_lifecycle_owner:
-            code = (
-                "FLINK_CATALOG_LIFECYCLE_UNRESOLVED"
-                if resolution_mode == "hudi_dfs_catalog"
-                else "FLINK_CATALOG_COMPOSITION_CONFLICT"
-            )
             assessment.add(
-                code,
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
                 f"{profile} requires data_lifecycle_owner={expected_lifecycle_owner}",
             )
 
@@ -753,7 +766,7 @@ def _assess_catalog(
     table: dict[str, Any] = raw_table if isinstance(raw_table, dict) else {}
     table_name = table.get("name")
     table_path = table.get("path")
-    if resolution_mode in {"hudi_dfs_catalog", "hudi_hms_catalog"} and (
+    if catalog_managed_resolution and (
         not _non_empty_string(table_name) or "." in table_name
     ):
         assessment.add(
@@ -792,11 +805,23 @@ def _assess_catalog(
         )
 
     if resolution_mode == "hudi_hms_catalog":
-        if catalog.get("table_external") is not True:
+        table_external = catalog.get("table_external")
+        if "table_external" not in catalog:
             assessment.add(
                 "FLINK_CATALOG_LIFECYCLE_UNRESOLVED",
                 "The first HMS Catalog path requires table.external=true and "
                 "application-owned data",
+            )
+        elif not isinstance(table_external, bool):
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "catalog.table_external must be explicitly true or false",
+            )
+        elif table_external is False:
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                "The bounded HMS Catalog path does not support managed tables; "
+                "table.external must be true",
             )
     elif "table_external" in catalog:
         assessment.add(
@@ -911,7 +936,7 @@ def _assess_catalog(
         )
 
     catalog_sql = ""
-    if resolution_mode in {"hudi_dfs_catalog", "hudi_hms_catalog"}:
+    if catalog_managed_resolution:
         options: list[tuple[str, Any]] = [("type", "hudi")]
         if resolution_mode == "hudi_dfs_catalog":
             options.extend([("mode", "dfs"), ("catalog.path", catalog_path)])
@@ -976,7 +1001,7 @@ def _assess_catalog(
         }
 
     required_checks: set[str] = set()
-    if resolution_mode != "direct_sql":
+    if catalog_managed_resolution:
         required_checks.update(
             {"verify_catalog_dependencies", "verify_catalog_database_registration"}
         )
@@ -1034,9 +1059,13 @@ def _render_sql(
     mutable_mor = contract["contract_schema"] == MUTABLE_MOR_CONTRACT_SCHEMA_VERSION
     resolution_mode = catalog_state["resolution_mode"]
     external_discovery = catalog_state["external_discovery"]
+    catalog_managed_resolution = (
+        isinstance(resolution_mode, str)
+        and resolution_mode in CATALOG_MANAGED_RESOLUTION_MODES
+    )
     target_identifier = (
         _quote_identifier(table["name"])
-        if resolution_mode in {"hudi_dfs_catalog", "hudi_hms_catalog"}
+        if catalog_managed_resolution
         else _quote_qualified_identifier(table["name"])
     )
 
@@ -1365,6 +1394,23 @@ def assess_design(
                 f"Partition field {field!r} cannot use binary type "
                 f"{table_by_name[field]['type']!r} until deterministic encoding is verified",
             )
+    if (
+        catalog_state["resolution_mode"] == "hudi_hms_catalog"
+        and partition_fields
+        and len(partition_fields) == len(set(partition_fields))
+        and all(field in table_by_name for field in partition_fields)
+    ):
+        schema_partition_order = [
+            column["name"]
+            for column in table_columns
+            if column["name"] in partition_fields
+        ]
+        if schema_partition_order != partition_fields:
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                "HMS Catalog requires table.partition_fields to follow their order in "
+                "table.columns",
+            )
 
     identity = _dict(contract.get("identity"), "identity", assessment)
     _check_keys(
@@ -1533,10 +1579,36 @@ def assess_design(
         source_keys.update({"delete_payload", "emits_deletes", "primary_key_fields"})
     _check_keys(source, source_keys, "source", assessment)
     source_name = source.get("table")
-    if not _check_concrete_value(source_name) or any(
-        not part for part in str(source_name).split(".")
-    ):
+    source_parts = source_name.split(".") if _check_concrete_value(source_name) else []
+    source_catalog_managed = (
+        isinstance(catalog_state["resolution_mode"], str)
+        and catalog_state["resolution_mode"] in CATALOG_MANAGED_RESOLUTION_MODES
+    )
+    if not source_parts or any(not part for part in source_parts):
         assessment.add("FLINK_SOURCE_CONTRACT_REQUIRED", "A concrete source table is required")
+    elif source_catalog_managed and len(source_parts) != 3:
+        assessment.add(
+            "FLINK_SOURCE_CONTRACT_REQUIRED",
+            "Catalog-managed profiles require source.table to be a fully qualified "
+            "catalog.database.table identifier",
+        )
+    elif expected_table_lifecycle == "new" and source_catalog_managed:
+        raw_catalog = contract.get("catalog")
+        catalog = raw_catalog if isinstance(raw_catalog, dict) else {}
+        target_parts = [
+            catalog.get("catalog_name"),
+            catalog.get("database"),
+            table_name,
+        ]
+        if (
+            all(_check_concrete_value(part) for part in target_parts)
+            and source_parts == target_parts
+        ):
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                "The streaming new-table path cannot read from and write to the same "
+                "catalog.database.table object",
+            )
     source_columns = _columns(source.get("columns"), "source.columns", manifest, assessment)
     if not source_columns:
         assessment.add(

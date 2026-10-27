@@ -120,6 +120,13 @@ class TestFlinkArchitectCatalogFixtures {
         StreamExecutionEnvironment.getExecutionEnvironment();
     StreamTableEnvironment tableEnv = StreamTableEnvironment.create(
         environment, EnvironmentSettings.newInstance().inStreamingMode().build());
+    tableEnv.createTemporaryView(
+        "orders_source",
+        tableEnv.fromValues(
+            DataTypes.ROW(
+                DataTypes.FIELD("id", DataTypes.STRING().notNull()),
+                DataTypes.FIELD("payload", DataTypes.STRING())),
+            Row.of("order-1", "created")));
     String catalogPath = tempDir.toUri().toString();
     tableEnv.executeSql(
         "CREATE CATALOG `lake` WITH ("
@@ -129,13 +136,6 @@ class TestFlinkArchitectCatalogFixtures {
     tableEnv.executeSql("USE CATALOG `lake`");
     tableEnv.executeSql("CREATE DATABASE IF NOT EXISTS `analytics`");
     tableEnv.executeSql("USE `analytics`");
-    tableEnv.createTemporaryView(
-        "orders_source",
-        tableEnv.fromValues(
-            DataTypes.ROW(
-                DataTypes.FIELD("id", DataTypes.STRING().notNull()),
-                DataTypes.FIELD("payload", DataTypes.STRING())),
-            Row.of("order-1", "created")));
     tableEnv.executeSql(
         "CREATE TABLE `orders` ("
             + "`id` STRING NOT NULL, `payload` STRING, "
@@ -145,7 +145,8 @@ class TestFlinkArchitectCatalogFixtures {
 
     String plan = tableEnv.explainSql(
         "INSERT INTO `orders` (`id`, `payload`) "
-            + "SELECT `id`, `payload` FROM `orders_source`");
+            + "SELECT `id`, `payload` "
+            + "FROM `default_catalog`.`default_database`.`orders_source`");
 
     assertTrue(plan.contains("lake.analytics.orders"), plan);
     assertTrue(Files.exists(tempDir.resolve("analytics/orders/.hoodie")));

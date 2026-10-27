@@ -165,6 +165,8 @@ def _pr6_profile(profile_id: str) -> dict:
     catalog = json.loads(profile["catalog"])
     design["catalog"] = catalog
     design["safety"]["external_catalog"] = profile_id != "direct_sql_none"
+    if "source_table" in profile:
+        design["source"]["table"] = profile["source_table"]
     if catalog["resolution_mode"] == "hudi_dfs_catalog":
         design["table"]["path"] = (
             f"{catalog['catalog_path']}/{catalog['database']}/{design['table']['name']}"
@@ -218,6 +220,9 @@ def _pr6_mor_profile(
             "table_external": True,
             "mor_sync_strategy": strategy,
         }
+        design["source"]["table"] = (
+            f"default_catalog.default_database.{design['source']['table']}"
+        )
     return design
 
 
@@ -983,6 +988,10 @@ def test_pr6_supported_catalog_profiles_render_deterministically(
         ]
         positions = [sql.index(marker) for marker in ordered_markers]
         assert positions == sorted(positions)
+        assert (
+            "FROM `default_catalog`.`default_database`.`orders_mutable_source`;"
+            in assessment["artifacts"]["insert_sql"]
+        )
     if design["catalog"]["external_discovery"] == "hive_metastore":
         assert assessment["effective_catalog_configuration"][
             "catalog_freshness"
@@ -1003,6 +1012,88 @@ def test_pr6_supported_catalog_profiles_render_deterministically(
                 "'hive_sync.db'",
                 "'hive_sync.table'",
             ]
+
+
+@pytest.mark.parametrize(
+    "profile_id",
+    [
+        "hudi_dfs_catalog_none",
+        "hudi_dfs_catalog_hive_metastore",
+        "hudi_hms_catalog_hive_metastore",
+    ],
+)
+def test_pr6_catalog_managed_profiles_require_fully_qualified_source(
+    tmp_path: Path, profile_id: str
+) -> None:
+    design = _pr6_profile(profile_id)
+    design["source"]["table"] = "orders_mutable_source"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert assessment["status"] == "INCOMPLETE"
+    assert "FLINK_SOURCE_CONTRACT_REQUIRED" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    "profile_id",
+    [
+        "hudi_dfs_catalog_none",
+        "hudi_dfs_catalog_hive_metastore",
+        "hudi_hms_catalog_hive_metastore",
+    ],
+)
+def test_pr6_catalog_managed_profiles_reject_same_source_and_target(
+    tmp_path: Path, profile_id: str
+) -> None:
+    design = _pr6_profile(profile_id)
+    catalog = design["catalog"]
+    design["source"]["table"] = (
+        f"{catalog['catalog_name']}.{catalog['database']}.{design['table']['name']}"
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert assessment["status"] == "BLOCKED"
+    assert "FLINK_CATALOG_COMPOSITION_CONFLICT" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("partition_fields", "expected_status"),
+    [
+        (["partition_date", "region"], "CONFIG_VALIDATED"),
+        (["region", "partition_date"], "BLOCKED"),
+    ],
+)
+def test_pr6_hms_catalog_validates_physical_partition_order(
+    tmp_path: Path, partition_fields: list[str], expected_status: str
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    region = {"name": "region", "type": "STRING", "nullable": False}
+    design["table"]["columns"].append(region)
+    design["source"]["columns"].append(region)
+    design["table"]["partition_fields"] = partition_fields
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert assessment["status"] == expected_status
+    if expected_status == "CONFIG_VALIDATED":
+        assert result.returncode == 0
+        assert "FLINK_CATALOG_COMPOSITION_CONFLICT" not in assessment["finding_codes"]
+        assert (
+            "PARTITIONED BY (`partition_date`, `region`)"
+            in assessment["artifacts"]["table_ddl"]
+        )
+    else:
+        assert result.returncode == 1
+        assert "FLINK_CATALOG_COMPOSITION_CONFLICT" in assessment["finding_codes"]
+        assert "artifacts" not in assessment
 
 
 @pytest.mark.parametrize(
@@ -1110,8 +1201,34 @@ def test_pr6_hms_catalog_requires_external_table(tmp_path: Path) -> None:
         _run_flink_design_validator(_write_design(tmp_path, design)).stdout
     )
 
+    assert assessment["status"] == "BLOCKED"
+    assert "FLINK_CATALOG_COMPOSITION_CONFLICT" in assessment["finding_codes"]
+
+
+def test_pr6_hms_catalog_requires_external_table_decision(tmp_path: Path) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"].pop("table_external")
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
     assert assessment["status"] == "REVIEW_REQUIRED"
-    assert "FLINK_CATALOG_LIFECYCLE_UNRESOLVED" in assessment["finding_codes"]
+    assert assessment["finding_codes"] == ["FLINK_CATALOG_LIFECYCLE_UNRESOLVED"]
+
+
+def test_pr6_hms_catalog_rejects_malformed_external_table_decision(
+    tmp_path: Path,
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"]["table_external"] = []
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["finding_codes"] == ["FLINK_CATALOG_CONTRACT_INVALID"]
 
 
 def test_pr6_requires_explicit_dfs_lifecycle_acceptance(tmp_path: Path) -> None:
@@ -1125,6 +1242,19 @@ def test_pr6_requires_explicit_dfs_lifecycle_acceptance(tmp_path: Path) -> None:
     assert assessment["status"] == "REVIEW_REQUIRED"
     assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
     assert "FLINK_CATALOG_LIFECYCLE_UNRESOLVED" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+def test_pr6_blocks_declined_dfs_lifecycle_ownership(tmp_path: Path) -> None:
+    design = _pr6_profile("hudi_dfs_catalog_none")
+    design["catalog"]["data_lifecycle_owner"] = "application"
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["finding_codes"] == ["FLINK_CATALOG_COMPOSITION_CONFLICT"]
     assert "artifacts" not in assessment
 
 
@@ -1178,6 +1308,30 @@ def test_pr6_blocks_catalog_gate_and_owner_conflicts(tmp_path: Path) -> None:
             "source": "metastore_uris",
             "location": "thrift://hms.example:9083?token=secret",
         },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:9083/password=secret",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:9083;password=secret",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:9083/path",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:badport",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:70000",
+        },
         {"source": "metastore_uris", "location": "http://hms.example:9083"},
     ],
 )
@@ -1193,9 +1347,27 @@ def test_pr6_rejects_credentialed_or_non_thrift_metastore_uris(
 
     assert assessment["executable_eligible"] is False
     assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert hive_configuration["location"] not in json.dumps(assessment)
     if "secret" in str(hive_configuration):
         assert "FLINK_CATALOG_CREDENTIAL_REJECTED" in assessment["finding_codes"]
-        assert hive_configuration["location"] not in json.dumps(assessment)
+
+
+def test_pr6_accepts_multiple_well_formed_metastore_uris(tmp_path: Path) -> None:
+    design = _pr6_profile("direct_sql_hive_metastore")
+    design["catalog"]["hive_configuration"]["location"] = (
+        "thrift://hms-a.example:9083,thrift://[::1]:9084"
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 0, result.stderr
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert (
+        "'hive_sync.metastore.uris' = "
+        "'thrift://hms-a.example:9083,thrift://[::1]:9084'"
+        in assessment["artifacts"]["table_ddl"]
+    )
 
 
 @pytest.mark.parametrize("catalog", [None, [], "hms"])
@@ -1213,6 +1385,51 @@ def test_pr6_malformed_catalog_contract_fails_closed(
     assert assessment["status"] == "INCOMPLETE"
     assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
     assert "FLINK_CATALOG_MODE_UNSUPPORTED" not in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("resolution_mode", []),
+        ("resolution_mode", {}),
+        ("external_discovery", []),
+        ("sync_owner", {}),
+        ("data_lifecycle_owner", []),
+    ],
+)
+def test_pr6_malformed_catalog_fields_fail_closed(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"][field] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr6_existing_table_malformed_catalog_field_fails_closed(
+    tmp_path: Path,
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"]["resolution_mode"] = {}
+    envelope = _compatible_existing_envelope(design)
+    input_path = tmp_path / "existing-malformed-catalog.json"
+    input_path.write_text(json.dumps(envelope), encoding="utf-8")
+
+    result = _run_flink_existing_table_validator(input_path)
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
     assert "artifacts" not in assessment
 
 
