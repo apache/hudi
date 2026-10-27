@@ -41,6 +41,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataIndexException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.table.action.index.BaseHoodieIndexClient;
 
@@ -93,7 +94,7 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
   public void create(HoodieTableMetaClient metaClient, String userIndexName, String indexType, Map<String, Map<String, String>> columns, Map<String, String> options,
                      Map<String, String> tableProperties) throws Exception {
     if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || indexType.equals(PARTITION_NAME_BLOOM_FILTERS)
-        || indexType.equals(PARTITION_NAME_COLUMN_STATS)) {
+        || indexType.equals(PARTITION_NAME_COLUMN_STATS) || indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX)) {
       createExpressionOrSecondaryIndex(metaClient, userIndexName, indexType, columns, options, tableProperties);
     } else {
       createRecordIndex(metaClient, userIndexName, indexType, options);
@@ -151,7 +152,10 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
 
   private void createExpressionOrSecondaryIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType,
                                                 Map<String, Map<String, String>> columns, Map<String, String> options, Map<String, String> tableProperties) throws Exception {
-    HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(metaClient, userIndexName, indexType, columns, options, tableProperties);
+    boolean fullText = indexType.equals(HoodieTableMetadataUtil.PARTITION_NAME_FULL_TEXT_INDEX);
+    HoodieIndexDefinition indexDefinition = fullText
+        ? HoodieIndexUtils.getFullTextIndexDefinition(metaClient, userIndexName, columns, options)
+        : HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(metaClient, userIndexName, indexType, columns, options, tableProperties);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
         || !metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
       log.info("Index definition is not present. Registering index: {} of type: {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
@@ -163,7 +167,8 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     log.info("Creating index {}", indexDefinition);
     Option<HoodieIndexDefinition> expressionIndexDefinitionOpt = Option.ofNullable(indexDefinition);
     try (SparkRDDWriteClient writeClient = getWriteClient(metaClient, expressionIndexDefinitionOpt, Option.of(indexType), Collections.emptyMap())) {
-      MetadataPartitionType partitionType = indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? MetadataPartitionType.SECONDARY_INDEX : MetadataPartitionType.EXPRESSION_INDEX;
+      MetadataPartitionType partitionType = fullText ? MetadataPartitionType.FULL_TEXT_INDEX
+          : indexType.equals(PARTITION_NAME_SECONDARY_INDEX) ? MetadataPartitionType.SECONDARY_INDEX : MetadataPartitionType.EXPRESSION_INDEX;
       // generate index plan
       HoodieIndexVersion currentVersion = HoodieIndexVersion.getCurrentVersion(metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.RECORD_INDEX);
 
