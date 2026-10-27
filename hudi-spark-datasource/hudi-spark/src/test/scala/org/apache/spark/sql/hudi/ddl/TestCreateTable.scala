@@ -187,6 +187,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     }
     val mergeConfigs = if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
       Map(
+        "hoodie.table.precombine.field" -> "ts",
         "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload",
         "hoodie.record.merge.strategy.id" -> "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5")
     } else {
