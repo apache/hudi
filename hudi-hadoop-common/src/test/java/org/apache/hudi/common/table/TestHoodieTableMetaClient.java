@@ -355,6 +355,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
       configs.put("hoodie.record.merge.mode", "EVENT_TIME_ORDERING");
     }
     if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.table.precombine.field", "ts");
       configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
       configs.put("hoodie.record.merge.strategy.id", "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5");
     }
