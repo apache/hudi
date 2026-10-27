@@ -22,7 +22,7 @@ package org.apache.spark.sql.hudi.catalog
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
@@ -228,7 +228,7 @@ class HoodieCatalog extends DelegatingCatalogExtension
           case _: SetProperty | _: RemoveProperty => true
           case _ => false
         }
-        val catalogPropertyChanges = catalogPropertyChangesToApply(table, propertyChanges)
+        val catalogPropertyChanges = if (propertyChanges.isEmpty) Seq.empty else catalogPropertyChangesToApply(table, propertyChanges)
         otherChanges.groupBy(c => c.getClass).foreach {
           case (t, newColumns) if t == classOf[AddColumn] =>
             AlterHoodieTableAddColumnsCommand(
@@ -280,25 +280,19 @@ class HoodieCatalog extends DelegatingCatalogExtension
    */
   private def catalogPropertyChangesToApply(table: CatalogTable, changes: Seq[TableChange]): Seq[TableChange] = {
     lazy val tableConfig = HoodieCatalogTable(spark, table).tableConfig
-    def catalogValue(key: String): Option[String] = key match {
-      case TableCatalog.PROP_COMMENT => table.comment.orElse(table.properties.get(key))
-      case _ => table.properties.get(key)
-    }
-    def persistedValue(tableConfigKey: String): Option[String] =
-      if (tableConfigKey == HoodieTableConfig.ORDERING_FIELDS.key) {
-        Option(tableConfig.getOrderingFieldsStr.orElse(null))
-      } else {
-        Option(tableConfig.getString(tableConfigKey))
-      }
-    def normalize(value: String): String = value.split(",").map(_.trim).mkString(",")
+    val properties = table.properties
+    lazy val sqlProperties = HoodieOptionConfig.makeOptionsCaseInsensitive(properties)
+    def catalogValue(key: String): Option[String] =
+      sqlProperties.get(HoodieOptionConfig.canonicalizeSqlOptionKey(key))
 
-    changes.filter {
-      case set: SetProperty if catalogValue(set.property).contains(set.value) => false
+    // Only filter immutable properties here. Spark applies mutable changes in order, including repeated keys.
+    val catalogChanges = changes.filter {
       case set: SetProperty =>
         HoodieOptionConfig.mapToTableConfig(set.property, set.value) match {
+          case Some(_) if catalogValue(set.property).contains(set.value) => false
           case Some((tableConfigKey, value)) =>
-            val persisted = persistedValue(tableConfigKey)
-            if (!persisted.exists(normalize(_).equalsIgnoreCase(normalize(value)))) {
+            val persisted = HoodieOptionConfig.getTableConfigValue(tableConfig, tableConfigKey)
+            if (!persisted.contains(value)) {
               throw new HoodieAnalysisException(s"Can't set ${set.property} to '${set.value}' on Hudi table " +
                 s"${table.identifier}: it is persisted in hoodie.properties as $tableConfigKey " +
                 s"(current value: ${persisted.getOrElse("unset")}) and can't be changed by altering the table.")
@@ -306,13 +300,26 @@ class HoodieCatalog extends DelegatingCatalogExtension
             false
           case None => true
         }
-      case remove: RemoveProperty if catalogValue(remove.property).isEmpty => false
       case remove: RemoveProperty =>
-        if (HoodieOptionConfig.mapToTableConfig(remove.property, "").isDefined) {
+        val persisted = HoodieOptionConfig.mapToTableConfig(remove.property, "").isDefined
+        if (persisted && catalogValue(remove.property).isDefined) {
           throw new HoodieAnalysisException(s"Can't remove ${remove.property} from Hudi table ${table.identifier}: " +
             "it is persisted in hoodie.properties and can't be changed by altering the table.")
         }
-        true
+        !persisted
+    }
+
+    val updated = CatalogV2Util.applyPropertiesChanges(properties, catalogChanges)
+    if (updated == properties) {
+      Seq.empty
+    } else {
+      val removed = (properties.keySet -- updated.keySet).toSeq.map(TableChange.removeProperty)
+      val set = updated.toSeq.collect {
+        // The session catalog reconstructs the comment from properties, even though Hive stores it separately.
+        case (key, value) if key == TableCatalog.PROP_COMMENT || !properties.get(key).contains(value) =>
+          TableChange.setProperty(key, value)
+      }
+      set ++ removed
     }
   }
 

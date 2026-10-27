@@ -21,9 +21,11 @@ import org.apache.hudi.HoodieSparkUtils
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
-import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog, TableChange}
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
+import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog, TableChange}
 import org.apache.spark.sql.connector.catalog.TableCapability.{ACCEPT_ANY_SCHEMA, BATCH_READ, OVERWRITE_BY_FILTER, TRUNCATE, V1_BATCH_WRITE}
 import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.ShowHoodieCreateTableCommand
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
@@ -32,6 +34,7 @@ import org.apache.spark.sql.types.{DataType, IntegerType, LongType, StringType, 
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 
 import java.io.File
+import java.util.Locale
 
 import scala.collection.JavaConverters._
 
@@ -129,9 +132,11 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       // Re-sending unchanged values, including SQL aliases and differently cased values, is a no-op.
       catalog.alterTable(ident, props.map { case (k, v) => TableChange.setProperty(k, v) }.toSeq: _*)
       catalog.alterTable(ident,
-        TableChange.setProperty("primaryKey", "id"),
-        TableChange.setProperty("type", "cow"),
+        TableChange.setProperty("PRIMARYKEY", "id"),
+        TableChange.setProperty("TYPE", "cow"),
         TableChange.setProperty("hoodie.table.type", "copy_on_write"),
+        TableChange.setProperty("PRECOMBINEFIELD", "ts"),
+        TableChange.setProperty("hoodie.table.precombine.field", "ts"),
         TableChange.setProperty("hoodie.table.ordering.fields", "ts"))
       assertEquals(propertiesBefore, spark.sessionState.catalog.getTableMetadata(tableIdent).properties)
 
@@ -149,6 +154,26 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       intercept[HoodieAnalysisException] {
         catalog.alterTable(ident, TableChange.removeProperty("primaryKey"))
       }
+      Seq("PRIMARYKEY", "PrimaryKey").foreach { key =>
+        intercept[HoodieAnalysisException] {
+          catalog.alterTable(ident, TableChange.setProperty(key, "name"))
+        }
+        intercept[HoodieAnalysisException] {
+          catalog.alterTable(ident, TableChange.removeProperty(key))
+        }
+      }
+      // Field names and class names are case-sensitive, unlike table-type enum values.
+      intercept[HoodieAnalysisException] {
+        catalog.alterTable(ident, TableChange.setProperty("primaryKey", "ID"))
+      }
+      intercept[HoodieAnalysisException] {
+        catalog.alterTable(ident, TableChange.setProperty("primaryKey", " id "))
+      }
+      val tableConfig = HoodieCatalogTable(spark, spark.sessionState.catalog.getTableMetadata(tableIdent)).tableConfig
+      intercept[HoodieAnalysisException] {
+        catalog.alterTable(ident, TableChange.setProperty("hoodie.table.keygenerator.class",
+          tableConfig.getKeyGeneratorClassName.toUpperCase(Locale.ROOT)))
+      }
       // A rejected change does not apply the other changes of the same call.
       intercept[HoodieAnalysisException] {
         catalog.alterTable(ident,
@@ -160,6 +185,7 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       catalog.alterTable(ident,
         TableChange.setProperty("some.key", "v"), TableChange.setProperty("comment", "new comment"))
       val altered = spark.sessionState.catalog.getTableMetadata(tableIdent)
+      assertEquals((propertiesBefore - "comment") + ("some.key" -> "v"), altered.properties - "comment")
       assertEquals(Some("v"), altered.properties.get("some.key"))
       assertEquals(Some("new comment"), altered.comment)
       catalog.alterTable(ident, TableChange.removeProperty("some.key"))
@@ -168,6 +194,110 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       // The table is still writable with its original configuration.
       spark.sql(s"insert into $tableName values (1, 'a1', 1000)")
       checkAnswer(s"select id, name, ts from $tableName")(Seq(1, "a1", 1000))
+    }
+  }
+
+  test("alterTable applies mutable property changes in order, including table-service write configs") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val ident = Identifier.of(Array("default"), tableName)
+      val tableIdent = TableIdentifier(tableName, Some("default"))
+      val catalog = hoodieCatalog
+      catalog.createTable(ident, StructType(Seq(StructField("id", IntegerType))), Array.empty[Transform],
+        Map("provider" -> "hudi", "primaryKey" -> "id", "location" -> s"${tmp.getCanonicalPath}/$tableName").asJava)
+      def properties: Map[String, String] = spark.sessionState.catalog.getTableMetadata(tableIdent).properties
+      val before = properties
+
+      catalog.alterTable(ident, TableChange.setProperty("some.key", "v"), TableChange.removeProperty("some.key"))
+      assertEquals(before, properties)
+      catalog.alterTable(ident, TableChange.setProperty("some.key", "old"))
+      catalog.alterTable(ident, TableChange.setProperty("some.key", "new"), TableChange.setProperty("some.key", "old"))
+      assertEquals(Some("old"), properties.get("some.key"))
+      catalog.alterTable(ident, TableChange.removeProperty("some.key"), TableChange.setProperty("some.key", "old"))
+      assertEquals(Some("old"), properties.get("some.key"))
+      // Net no-ops on one key must also remain no-ops when another key is changed in the same call.
+      catalog.alterTable(ident, TableChange.setProperty("some.key", "new"), TableChange.setProperty("some.key", "old"),
+        TableChange.setProperty("another.key", "v"), TableChange.removeProperty("absent.key"))
+      assertEquals(Some("old"), properties.get("some.key"))
+      assertEquals(Some("v"), properties.get("another.key"))
+
+      val writeConfigs = Seq("hoodie.table.services.enabled", "hoodie.table.services.incremental.enabled",
+        "hoodie.table.service.manager.enabled")
+      catalog.alterTable(ident, writeConfigs.map(TableChange.setProperty(_, "false")): _*)
+      writeConfigs.foreach(key => assertEquals(Some("false"), properties.get(key)))
+      catalog.alterTable(ident, writeConfigs.map(TableChange.removeProperty): _*)
+      writeConfigs.foreach(key => assertFalse(properties.contains(key)))
+    }
+  }
+
+  test("alterTable preserves unrelated properties changed after the initial catalog read") {
+    withTempDir { tmp =>
+      val session = spark.sessionState.catalog
+      val tableName = generateTableName
+      val ident = Identifier.of(Array("default"), tableName)
+      val tableIdent = TableIdentifier(tableName, Some("default"))
+      hoodieCatalog.createTable(ident, StructType(Seq(StructField("id", IntegerType))), Array.empty[Transform],
+        Map("provider" -> "hudi", "primaryKey" -> "id", "a" -> "old", "location" -> s"${tmp.getCanonicalPath}/$tableName").asJava)
+      val delegate = new V2SessionCatalog(session)
+      def setA(value: String): Unit = {
+        val current = session.getTableMetadata(tableIdent)
+        session.alterTable(current.copy(properties = current.properties + ("a" -> value)))
+      }
+      // The delegate preserves an unrelated update committed before its own read.
+      setA("concurrent")
+      delegate.alterTable(ident, TableChange.setProperty("b", "control"))
+      assertEquals("concurrent", session.getTableMetadata(tableIdent).properties("a"))
+      setA("old")
+
+      val interleaved = new HoodieCatalog {
+        private var inject = true
+        override def loadTable(id: Identifier): Table = {
+          val snapshot = super.loadTable(id)
+          if (inject) {
+            inject = false
+            setA("concurrent")
+          }
+          snapshot
+        }
+      }
+      interleaved.setDelegateCatalog(delegate)
+      interleaved.alterTable(ident, TableChange.setProperty("b", "requested"))
+      val properties = session.getTableMetadata(tableIdent).properties
+      assertEquals("concurrent", properties("a"))
+      assertEquals("requested", properties("b"))
+    }
+  }
+
+  test("alterTable preserves separately stored comments unless explicitly removed") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val ident = Identifier.of(Array("default"), tableName)
+      val tableIdent = TableIdentifier(tableName, Some("default"))
+      val catalog = hoodieCatalog
+      catalog.createTable(ident, StructType(Seq(StructField("id", IntegerType))), Array.empty[Transform],
+        Map("provider" -> "hudi", "primaryKey" -> "id", "comment" -> "keep me",
+          "location" -> s"${tmp.getCanonicalPath}/$tableName").asJava)
+      def metadata = spark.sessionState.catalog.getTableMetadata(tableIdent)
+      def storeCommentSeparately(): Unit = {
+        // HiveClientImpl excludes "comment" from properties and returns it only in CatalogTable.comment.
+        spark.sessionState.catalog.alterTable(metadata.copy(properties = metadata.properties - "comment"))
+      }
+
+      storeCommentSeparately()
+      catalog.alterTable(ident, TableChange.setProperty("some.key", "v"))
+      assertEquals(Some("keep me"), metadata.comment)
+      storeCommentSeparately()
+      catalog.alterTable(ident, TableChange.setProperty("comment", "keep me"), TableChange.removeProperty("some.key"))
+      assertEquals(Some("keep me"), metadata.comment)
+      storeCommentSeparately()
+      catalog.alterTable(ident, TableChange.removeProperty("comment"), TableChange.setProperty("comment", "keep me"),
+        TableChange.setProperty("some.key", "v2"))
+      assertEquals(Some("keep me"), metadata.comment)
+      storeCommentSeparately()
+      catalog.alterTable(ident, TableChange.removeProperty("comment"))
+      assertEquals(None, metadata.comment)
+      catalog.alterTable(ident, TableChange.setProperty("some.key", "v3"))
+      assertEquals(None, metadata.comment)
     }
   }
 
