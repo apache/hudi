@@ -22,7 +22,11 @@ package org.apache.spark.sql.hudi.feature
 import org.apache.hudi.{ColumnStatsIndexSupport, PartitionStatsIndexSupport}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.log.HoodieLogFormat
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
@@ -296,6 +300,90 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
             }
           }
         }
+      }
+    }
+  }
+
+  test("Partition statistics survive MOR delete-only inline log appends") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf(
+        "hoodie.metadata.enable" -> "true",
+        "hoodie.metadata.index.column.stats.enable" -> "true",
+        "hoodie.metadata.index.partition.stats.enable" -> "true",
+        "hoodie.metadata.index.column.stats.column.list" -> "age,name",
+        // Version 10 uses native logs; this regression must exercise HoodieInlineLogAppendHandle.
+        "hoodie.write.table.version" -> "9",
+        "hoodie.compact.inline" -> "false",
+        "hoodie.compact.schedule.inline" -> "false",
+        "hoodie.insert.shuffle.parallelism" -> "1",
+        "hoodie.enable.data.skipping" -> "true"
+      ) {
+        spark.sql(
+          s"""
+             |create table $tableName (id int, name string, age int, ts long, dt string) using hudi
+             | tblproperties (primaryKey = 'id', orderingFields = 'ts', type = 'mor',
+             |   hoodie.write.table.version = '9')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+             |""".stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'alice', 25, 1, 'par1'), " +
+          "(2, 'bob', 30, 1, 'par1'), (3, 'carol', 35, 1, 'par1')")
+        val locations = spark.sql(s"select _hoodie_file_name, _hoodie_partition_path from $tableName").collect()
+        assert(locations.length == 3 && locations.toSet.size == 1, locations.toSeq.toString)
+        val baseFile = locations.head.getString(0)
+        val partitionPath = locations.head.getString(1)
+        assert(!FSUtils.isLogFile(baseFile))
+        val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
+        val indexedColumns = Seq("age", "name")
+        def loadPartitionStats() = {
+          val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+          val partitions = new PartitionStatsIndexSupport(spark, spark.table(tableName).schema,
+            new TableSchemaResolver(metaClient).getTableSchema, metadataConfig, metaClient)
+          partitions.loadColumnStatsIndexRecords(indexedColumns, shouldReadInMemory = true)
+            .collectAsList().asScala.toSeq
+        }
+        val initialStats = loadPartitionStats()
+        assert(initialStats.size == 2 && initialStats.map(_.getColumnName).toSet == indexedColumns.toSet, initialStats.toString)
+        initialStats.foreach { stats =>
+          assert(!stats.getIsDeleted)
+          assert(stats.getValueCount == 3 && stats.getNullCount == 0, stats.toString)
+          assert(stats.getMinValue != null && stats.getMaxValue != null, stats.toString)
+        }
+
+        spark.sql(s"delete from $tableName where id = 2")
+        val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+        val partitionFiles = metaClient.getStorage.listDirectEntries(new StoragePath(tmp.getCanonicalPath, partitionPath)).asScala
+        val logs = partitionFiles.filter(info => FSUtils.isLogFile(info.getPath.getName)).map(new HoodieLogFile(_))
+        assert(logs.size == 1, partitionFiles.toString)
+        val log = logs.head
+        assert(!log.isNativeLogFile)
+        assert(log.getFileId == FSUtils.getFileId(baseFile))
+        val hoodieSchema = new TableSchemaResolver(metaClient).getTableSchema
+        val reader = HoodieLogFormat.newReader(metaClient, log, hoodieSchema)
+        try {
+          assert(reader.hasNext)
+          val block = reader.next()
+          assert(block.isInstanceOf[HoodieDeleteBlock], block.getBlockType.toString)
+          assert(block.asInstanceOf[HoodieDeleteBlock].getRecordsToDelete.map(_.getRecordKey).toSet == Set("2"))
+          assert(!reader.hasNext, "A delete-only append must not contain a data block")
+        } finally {
+          reader.close()
+        }
+
+        // Empty stats must cover every indexed column, so the log does not invalidate partition coverage.
+        val index = new ColumnStatsIndexSupport(spark, spark.table(tableName).schema, hoodieSchema, metadataConfig, metaClient)
+        val logStats = index.loadColumnStatsIndexRecords(indexedColumns, shouldReadInMemory = true)
+          .collectAsList().asScala.filter(_.getFileName == log.getFileName)
+        assert(logStats.size == 2 && logStats.map(_.getColumnName).toSet == indexedColumns.toSet, logStats.toString)
+        logStats.foreach { stats =>
+          assert(!stats.getIsDeleted)
+          assert(stats.getValueCount == 0 && stats.getNullCount == 0, stats.toString)
+          assert(stats.getMinValue == null && stats.getMaxValue == null, stats.toString)
+        }
+        assert(loadPartitionStats().sortBy(_.getColumnName) == initialStats.sortBy(_.getColumnName))
+        checkAnswer(s"select id, name, age from $tableName where age >= 0 and name in ('alice', 'bob', 'carol')")(
+          Seq(1, "alice", 25), Seq(3, "carol", 35))
       }
     }
   }
