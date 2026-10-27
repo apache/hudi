@@ -19,6 +19,7 @@
 
 package org.apache.hudi
 
+import org.apache.hudi.DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieFileIndex.collectReferencedColumns
 import org.apache.hudi.avro.model.{HoodieMetadataColumnStats, HoodieMetadataRecord}
@@ -27,6 +28,7 @@ import org.apache.hudi.common.data.{HoodieData, HoodieListData}
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.InstantComparison.{compareTimestamps, GREATER_THAN_OR_EQUALS}
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.metadata.{ColumnStatsIndexPrefixRawKey, HoodieMetadataPayload, HoodieTableMetadataUtil}
@@ -38,6 +40,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.DataSkippingUtils.{containsNullOrValueCountBasedFilters, translateIntoColumnStatsIndexFilterExpr}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.storage.StorageLevel
 
@@ -57,6 +60,16 @@ class PartitionStatsIndexSupport(spark: SparkSession,
     metadataConfig.isEnabled &&
       metaClient.getTableConfig.getMetadataPartitions.contains(HoodieTableMetadataUtil.PARTITION_NAME_PARTITION_STATS) &&
       metaClient.getIndexMetadata.isPresent
+  }
+
+  override def supportsQueryType(options: Map[String, String]): Boolean = {
+    // Partition statistics describe the latest snapshot. Their bounds can shrink after updates
+    // or partition replacement and exclude historical records.
+    options.get(TIME_TRAVEL_AS_OF_INSTANT.key).forall { instant =>
+      val latestCommit = metaClient.getCommitsTimeline.filterCompletedInstants.lastInstant
+      latestCommit.isPresent && compareTimestamps(HoodieSqlCommonUtils.formatQueryInstant(instant),
+        GREATER_THAN_OR_EQUALS, latestCommit.get.requestedTime)
+    }
   }
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,

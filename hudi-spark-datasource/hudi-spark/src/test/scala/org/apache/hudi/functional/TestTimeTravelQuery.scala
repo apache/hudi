@@ -17,11 +17,11 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, ScalaAssertionSupport}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, ScalaAssertionSupport}
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.{HoodieCleaningPolicy, HoodieTableType}
 import org.apache.hudi.common.model.HoodieTableType.{COPY_ON_WRITE, MERGE_ON_READ}
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.timeline.TimelineUtils
 import org.apache.hudi.common.testutils.{HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.config.{HoodieArchivalConfig, HoodieCleanConfig, HoodieCompactionConfig, HoodieWriteConfig}
@@ -30,6 +30,8 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.SaveMode.{Append, Overwrite}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualTo, Literal}
+import org.apache.spark.sql.types.IntegerType
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
@@ -224,6 +226,62 @@ class TestTimeTravelQuery extends HoodieSparkClientTestBase with ScalaAssertionS
       .collect()
     // since there is no commit before the commit date, the query result should be empty.
     assertTrue(result4.isEmpty)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testTimeTravelWithPartitionStats(tableType: HoodieTableType): Unit = {
+    initMetaClient(tableType)
+    val _spark = spark
+    import _spark.implicits._
+
+    val opts = commonOpts ++ Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "dt",
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "true",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "true",
+      HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key -> "value",
+      HoodieCompactionConfig.INLINE_COMPACT.key -> (tableType == MERGE_ON_READ).toString,
+      HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1"
+    )
+    val firstCommit = writeBatch(
+      Seq((1, 10, 1000, "p1"), (2, 100, 1000, "p2")).toDF("id", "value", "version", "dt"), opts, Overwrite)
+    // Update record id=1 from 10 to 50. The two snapshots contain:
+    //                  partition dt='p1'          partition dt='p2'
+    //   firstCommit:   (id=1, value=10)            (id=2, value=100)
+    //   latestCommit:  (id=1, value=50)            (id=2, value=100)
+    // COW rewrites the base file; MOR compacts inline. The latest min/max for column 'value'
+    // are therefore [50, 50] in partition dt='p1' and [100, 100] in partition dt='p2'.
+    val latestCommit = writeBatch(
+      Seq((1, 50, 1001, "p1")).toDF("id", "value", "version", "dt"), opts)
+
+    val readOpts = Map(
+      "path" -> basePath,
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+    val valueFilter = EqualTo(AttributeReference("value", IntegerType)(), Literal(10))
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    // Query the latest snapshot WHERE value = 10: neither record matches, so statistics should
+    // prune both partitions, with as.of.instant either omitted or set to latestCommit.
+    Seq(None, Some(latestCommit)).foreach { instant =>
+      val options = readOpts ++ instant.map(DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> _)
+      val fileIndex = HoodieFileIndex(spark, metaClient, None, options)
+      val (pruned, partitions) = fileIndex.prunePartitionsAndGetFileSlices(Seq(valueFilter), Seq.empty)
+      assertTrue(pruned)
+      assertTrue(partitions.isEmpty, s"Unexpected partitions: $partitions")
+    }
+
+    // Query AS OF firstCommit WHERE value = 10: expect (id=1, value=10, version=1000, dt='p1').
+    // Applying the latest [50, 50] bounds would skip partition dt='p1' and incorrectly return no rows.
+    // Check both the commit instant string and its formatted date-time representation.
+    Seq(firstCommit, defaultDateTimeFormat(firstCommit)).foreach { instant =>
+      val options = readOpts + (DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> instant)
+      val result = spark.read.format("hudi").options(options).load()
+        .filter("value = 10").select("id", "value", "version", "dt").collect().toSeq
+      assertEquals(Seq(Row(1, 10, 1000, "p1")), result)
+    }
   }
 
   private def writeBatch(df: DataFrame, options: Map[String, String], mode: SaveMode = Append): String = {
