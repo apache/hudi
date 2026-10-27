@@ -17,10 +17,11 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
+import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkSqlWriter.{StreamingWriteParams, WriteClientSchema}
 import org.apache.hudi.HoodieStreamingSink.{QUERY_ID_KEY, SINK_CHECKPOINT_KEY}
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
-import org.apache.hudi.client.SparkRDDWriteClient
+import org.apache.hudi.client.{BaseHoodieWriteClient, SparkRDDWriteClient}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.client.embedded.{EmbeddedTimelineServerHelper, EmbeddedTimelineService}
 import org.apache.hudi.common.model.HoodieCommitMetadata
@@ -41,7 +42,8 @@ import org.slf4j.LoggerFactory
 
 import java.io.IOException
 import java.lang
-import java.util.function.{BiConsumer, Function}
+import java.util.{Collections, WeakHashMap}
+import java.util.function.{BiConsumer, Function, Predicate}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -83,6 +85,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   @volatile private var isAsyncCompactorServiceShutdownAbnormally = false
   @volatile private var isAsyncClusteringServiceShutdownAbnormally = false
+  // failure an async table service stopped with: a failure it does not retry (see retiredWriteClients)
+  @volatile private var asyncTableServiceFailure: Option[Throwable] = Option.empty
 
   private val mode =
     if (outputMode == OutputMode.Append()) {
@@ -97,6 +101,14 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   private var writeClient: Option[SparkRDDWriteClient[_]] = Option.empty
   // schema the current write client was created with; the writer re-creates the client when it changes
   private var writeClientSchema: Option[WriteClientSchema] = Option.empty
+  // write clients the sink replaced and closed. A compaction or clustering run that fails while using one of them is
+  // retried by its service with the current client; weak, so that retired clients are not retained.
+  private val retiredWriteClients: java.util.Set[BaseHoodieWriteClient[_, _, _, _]] =
+    Collections.synchronizedSet(Collections.newSetFromMap(new WeakHashMap[BaseHoodieWriteClient[_, _, _, _], java.lang.Boolean]()))
+  private val isRetiredWriteClient: Predicate[BaseHoodieWriteClient[_, _, _, _]] =
+    new Predicate[BaseHoodieWriteClient[_, _, _, _]] {
+      override def test(client: BaseHoodieWriteClient[_, _, _, _]): Boolean = retiredWriteClients.contains(client)
+    }
   // Owned by the sink and handed to every write client it creates, so that one timeline server is reused across
   // micro-batches (same as HoodieStreamer). Stopped on reset or when the streaming query terminates.
   private var embeddedTimelineService: Option[EmbeddedTimelineService] = Option.empty
@@ -106,11 +118,11 @@ class HoodieStreamingSink(sqlContext: SQLContext,
 
   override def addBatch(batchId: Long, data: DataFrame): Unit = this.synchronized {
     if (isAsyncCompactorServiceShutdownAbnormally) {
-      throw new IllegalStateException("Async Compactor shutdown unexpectedly")
+      throw new IllegalStateException("Async Compactor shutdown unexpectedly", asyncTableServiceFailure.orNull)
     }
     if (isAsyncClusteringServiceShutdownAbnormally) {
       log.error("Async clustering service shutdown unexpectedly")
-      throw new IllegalStateException("Async clustering service shutdown unexpectedly")
+      throw new IllegalStateException("Async clustering service shutdown unexpectedly", asyncTableServiceFailure.orNull)
     }
 
     val queryId = sqlContext.sparkContext.getLocalProperty(QUERY_ID_KEY)
@@ -239,11 +251,14 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (null == asyncCompactorService) {
       log.info("Triggering Async compaction !!")
       val compactorService = new SparkStreamingAsyncCompactService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
-        client)
+        client, isRetiredWriteClient)
       asyncCompactorService = compactorService
       compactorService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async Compactor shutdown. Errored ? $errored")
+          if (errored) {
+            asyncTableServiceFailure = toScalaOption(compactorService.getFailure)
+          }
           isAsyncCompactorServiceShutdownAbnormally = errored
           resetOnAsyncServiceStop(asyncCompactorService eq compactorService)
           true
@@ -269,11 +284,14 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (null == asyncClusteringService) {
       log.info("Triggering async clustering!")
       val clusteringService = new SparkStreamingAsyncClusteringService(new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext)),
-        client)
+        client, isRetiredWriteClient)
       asyncClusteringService = clusteringService
       clusteringService.start(new Function[java.lang.Boolean, java.lang.Boolean] {
         override def apply(errored: lang.Boolean): lang.Boolean = {
           log.info(s"Async clustering service shutdown. Errored ? $errored")
+          if (errored) {
+            asyncTableServiceFailure = toScalaOption(clusteringService.getFailure)
+          }
           isAsyncClusteringServiceShutdownAbnormally = errored
           resetOnAsyncServiceStop(asyncClusteringService eq clusteringService)
           true
@@ -315,18 +333,20 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   }
 
   /**
-   * Same as HoodieStreamer on a schema change (StreamSync#reInitWriteClient and
-   * HoodieStreamer#onInitializingWriteClient): the async table services switch to the new client for their next
-   * runs, and the previous client is closed right away.
+   * Closes the previous client right away, then switches the async table services to the new client for their next
+   * runs; the switch does not wait for a running compaction or clustering. A run still using the previous client can
+   * fail once it is closed: the previous client is marked as retired first, so that its service retries such a
+   * failure with the new client instead of stopping.
    */
   private def retireWriteClient(previousClient: SparkRDDWriteClient[_], newClient: SparkRDDWriteClient[_]): Unit = {
+    retiredWriteClients.add(previousClient)
+    closeQuietly(previousClient)
     if (asyncCompactorService != null) {
       asyncCompactorService.updateWriteClient(newClient)
     }
     if (asyncClusteringService != null) {
       asyncClusteringService.updateWriteClient(newClient)
     }
-    closeQuietly(previousClient)
   }
 
   private def closeQuietly(client: SparkRDDWriteClient[_]): Unit = {
