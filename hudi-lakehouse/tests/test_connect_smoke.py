@@ -114,10 +114,10 @@ class ConnectSmokeTest(unittest.TestCase):
     def test_cleanup_does_not_cascade_or_fetch_results(self):
         self.invoke("cleanup")
         self.assertEqual([call.args[0] for call in self.cursor.execute.call_args_list], [
-            "DROP TABLE IF EXISTS connect_smoke_test.freshness_orders",
-            "DROP TABLE IF EXISTS connect_smoke_test.mor_orders",
-            "DROP TABLE IF EXISTS connect_smoke_test.partitioned_orders",
-            "DROP TABLE IF EXISTS connect_smoke_test.orders",
+            "DROP TABLE IF EXISTS connect_smoke_test.freshness_orders PURGE",
+            "DROP TABLE IF EXISTS connect_smoke_test.mor_orders PURGE",
+            "DROP TABLE IF EXISTS connect_smoke_test.partitioned_orders PURGE",
+            "DROP TABLE IF EXISTS connect_smoke_test.orders PURGE",
             "DROP DATABASE IF EXISTS connect_smoke_test",
         ])
         self.cursor.fetchall.assert_not_called()

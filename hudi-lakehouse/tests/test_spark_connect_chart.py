@@ -51,6 +51,7 @@ class ConnectChartTest(unittest.TestCase):
         docs = render()
         config = docs["ConfigMap"]["data"]["spark-defaults.conf"]
         self.assertIn("spark.master local[2]", config)
+        self.assertIn("spark.connect.grpc.arrow.maxBatchSize 1m", config)
         self.assertIn("spark.hadoop.hive.metastore.uris thrift://hive-metastore.", config)
         self.assertIn("spark.sql.warehouse.dir s3a://warehouse/connect", config)
         self.assertIn("org.apache.spark.sql.hudi.catalog.HoodieCatalog", config)
@@ -121,11 +122,13 @@ class ConnectChartTest(unittest.TestCase):
         docs = render({"spark": {"master": "k8s://https://kubernetes.default.svc:443", "extraConf": {
             "spark.executor.instances": 2, "spark.executor.memory": "1g"}},
             "serviceAccount": {"name": "spark", "automountToken": True},
+            "imagePullSecrets": [{"name": "registry-one"}, {"name": "registry-two"}],
             "storage": {"s3": {"sessionTokenKey": "token"}}})
         conf = docs["ConfigMap"]["data"]["spark-defaults.conf"]
         for setting in ("spark.master k8s://https://kubernetes.default.svc:443",
                         "spark.executor.instances 2", "spark.executor.memory 1g",
                         "spark.kubernetes.namespace default",
+                        "spark.kubernetes.container.image.pullSecrets registry-one,registry-two",
                         "spark.kubernetes.executor.container.image hudi-lakehouse-spark-connect:4.1.3-hudi1.2.0",
                         "spark.kubernetes.executor.secretKeyRef.AWS_SESSION_TOKEN spark-connect-s3:token",
                         "spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID spark-connect-s3:accessKey",
@@ -143,9 +146,19 @@ class ConnectChartTest(unittest.TestCase):
     def test_master_override_and_executor_image_override(self):
         self.assertIn("spark.master local[4]", render({"spark": {"cores": 4}})["ConfigMap"]["data"]["spark-defaults.conf"])
         conf = render({"spark": {"master": "k8s://https://api:443", "extraConf": {
-            "spark.kubernetes.executor.container.image": "custom-executor:v1"}},
+            "spark.kubernetes.executor.container.image": "custom-executor:v1",
+            "spark.kubernetes.container.image.pullSecrets": "executor-only"}},
+            "imagePullSecrets": [{"name": "driver-only"}],
             "serviceAccount": {"name": "spark", "automountToken": True}})["ConfigMap"]["data"]["spark-defaults.conf"]
         self.assertIn("spark.kubernetes.executor.container.image custom-executor:v1", conf)
+        self.assertIn("spark.kubernetes.container.image.pullSecrets executor-only", conf)
+
+    def test_kubernetes_driver_identity_cannot_be_overridden(self):
+        for key in ("spark.driver.host", "spark.kubernetes.driver.pod.name"):
+            with self.subTest(key=key):
+                error = render({"spark": {"master": "k8s://https://api:443", "extraConf": {key: "ignored"}},
+                                "serviceAccount": {"name": "spark", "automountToken": True}}, success=False)
+                self.assertIn(f"{key} is managed by the chart in Kubernetes mode", error)
 
     def test_port_and_names_match(self):
         docs = render({"fullnameOverride": "custom-connect", "service": {"port": 15012}})
@@ -167,6 +180,7 @@ class ConnectChartTest(unittest.TestCase):
             {"spark": {"extraConf": {"spark.foo": "bar\nspark.master local[8]"}}},
             {"spark": {"extraConf": {"spark.foo=bar": "oops"}}},
             {"spark": {"master": "local[0]"}},
+            {"spark": {"master": "spark://standalone:7077"}},
             {"spark": {"master": "k8s://https://api:443"}},
             {"spark": {"master": "k8s://https://api:443"}, "serviceAccount": {"name": "spark"}},
             {"hudi": {"defaults": {"not.hoodie": "value"}}},

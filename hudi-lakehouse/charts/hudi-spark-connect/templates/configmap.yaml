@@ -37,6 +37,9 @@
 {{- $_ := set $conf "spark.hadoop.fs.s3a.endpoint" . -}}
 {{- end -}}
 {{- range $key, $value := .Values.spark.extraConf -}}
+{{- if and (hasPrefix "k8s://" (include "hudi-spark-connect.master" $)) (has $key (list "spark.driver.host" "spark.kubernetes.driver.pod.name")) -}}
+{{- fail (printf "%s is managed by the chart in Kubernetes mode" $key) -}}
+{{- end -}}
 {{- if hasKey $conf $key -}}
 {{- fail (printf "%s is managed by the chart; use the corresponding value instead" $key) -}}
 {{- end -}}
@@ -56,6 +59,13 @@
   "spark.driver.bindAddress" "0.0.0.0"
   "spark.executorEnv.AWS_REGION" .Values.storage.s3.region
 -}}
+{{- with .Values.imagePullSecrets -}}
+{{- $names := list -}}
+{{- range . -}}
+{{- $names = append $names .name -}}
+{{- end -}}
+{{- $_ := set $k8sDefaults "spark.kubernetes.container.image.pullSecrets" (join "," $names) -}}
+{{- end -}}
 {{- with .Values.storage.s3.existingSecret -}}
 {{- $_ := set $k8sDefaults "spark.kubernetes.executor.secretKeyRef.AWS_ACCESS_KEY_ID" (printf "%s:%s" . $.Values.storage.s3.accessKeyKey) -}}
 {{- $_ := set $k8sDefaults "spark.kubernetes.executor.secretKeyRef.AWS_SECRET_ACCESS_KEY" (printf "%s:%s" . $.Values.storage.s3.secretKeyKey) -}}

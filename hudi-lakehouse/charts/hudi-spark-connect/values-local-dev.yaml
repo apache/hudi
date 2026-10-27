@@ -15,6 +15,10 @@
 # limitations under the License.
 
 fullnameOverride: hudi-spark-connect
+spark:
+  extraConf:
+    # Keep Arrow batches below Foundry ADBC 0.2.1's 4 MiB receive limit.
+    spark.connect.grpc.arrow.maxBatchSize: 1m
 hudi:
   defaults:
     # Match the local-dev Trino reader; do not impose this on other deployments.
