@@ -34,12 +34,14 @@ import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.WorkloadStat;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -71,6 +73,7 @@ public class SparkBucketIndexPartitioner<T> extends
   private Map<String, Set<String>> updatePartitionPathFileIds;
 
   private final boolean isNonBlockingConcurrencyControl;
+  private final Map<String, Set<String>> replacedPartitionFileIds;
 
   public SparkBucketIndexPartitioner(WorkloadProfile profile,
                                      HoodieEngineContext context,
@@ -96,6 +99,8 @@ public class SparkBucketIndexPartitioner<T> extends
     WriteOperationType operationType = profile.getOperationType();
     this.isOverwrite = INSERT_OVERWRITE.equals(operationType) || INSERT_OVERWRITE_TABLE.equals(operationType);
     this.isNonBlockingConcurrencyControl = config.isNonBlockingConcurrencyControl();
+    this.replacedPartitionFileIds = isNonBlockingConcurrencyControl
+        ? computeReplacedFileIds(table) : Collections.emptyMap();
   }
 
   private void assignUpdates(WorkloadProfile profile) {
@@ -117,7 +122,21 @@ public class SparkBucketIndexPartitioner<T> extends
   @Override
   public SparkBucketInfoGetter getSparkBucketInfoGetter() {
     return new SparkBucketIndexBucketInfoGetter(numBuckets, partitionPaths,
-        updatePartitionPathFileIds, isOverwrite, isNonBlockingConcurrencyControl);
+        updatePartitionPathFileIds, isOverwrite, isNonBlockingConcurrencyControl, replacedPartitionFileIds);
+  }
+
+  private Map<String, Set<String>> computeReplacedFileIds(HoodieTable table) {
+    Map<String, Set<String>> result = new HashMap<>();
+    for (String partitionPath : partitionPaths) {
+      Set<String> replacedFileIds = table.getFileSystemView()
+          .getAllReplacedFileGroups(partitionPath)
+          .map(fg -> fg.getFileGroupId().getFileId())
+          .collect(Collectors.toSet());
+      if (!replacedFileIds.isEmpty()) {
+        result.put(partitionPath, replacedFileIds);
+      }
+    }
+    return result;
   }
 
   @Override

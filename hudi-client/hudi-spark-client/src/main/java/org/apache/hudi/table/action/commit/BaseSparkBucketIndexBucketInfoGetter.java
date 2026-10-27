@@ -32,10 +32,18 @@ public abstract class BaseSparkBucketIndexBucketInfoGetter implements SparkBucke
   private final Map<String, Set<String>> updatePartitionPathFileIds;
   private final boolean isOverwrite;
   private final boolean isNonBlockingConcurrencyControl;
+  private final Map<String, Set<String>> replacedPartitionFileIds;
 
   public BaseSparkBucketIndexBucketInfoGetter(Map<String, Set<String>> updatePartitionPathFileIds,
                                               boolean isOverwrite,
                                               boolean isNonBlockingConcurrencyControl) {
+    this(updatePartitionPathFileIds, isOverwrite, isNonBlockingConcurrencyControl, Collections.emptyMap());
+  }
+
+  public BaseSparkBucketIndexBucketInfoGetter(Map<String, Set<String>> updatePartitionPathFileIds,
+                                              boolean isOverwrite,
+                                              boolean isNonBlockingConcurrencyControl,
+                                              Map<String, Set<String>> replacedPartitionFileIds) {
     if (isOverwrite) {
       ValidationUtils.checkArgument(!isNonBlockingConcurrencyControl,
           "Insert overwrite is not supported with non-blocking concurrency control");
@@ -43,6 +51,7 @@ public abstract class BaseSparkBucketIndexBucketInfoGetter implements SparkBucke
     this.updatePartitionPathFileIds = updatePartitionPathFileIds;
     this.isOverwrite = isOverwrite;
     this.isNonBlockingConcurrencyControl = isNonBlockingConcurrencyControl;
+    this.replacedPartitionFileIds = replacedPartitionFileIds;
   }
 
   protected BucketInfo getBucketInfo(int bucketId, String partitionPath) {
@@ -60,9 +69,21 @@ public abstract class BaseSparkBucketIndexBucketInfoGetter implements SparkBucke
     } else {
       // Always write into log file instead of base file if using NB-CC
       if (isNonBlockingConcurrencyControl) {
-        return new BucketInfo(BucketType.UPDATE, BucketIdentifier.newBucketFileIdForNBCC(bucketIdStr), partitionPath);
+        String fileId = BucketIdentifier.newBucketFileIdForNBCC(bucketIdStr);
+        // When the default generation file group has been retired by a replacecommit
+        // (e.g. delete_partition), bump the generation so the new file group id
+        // no longer matches the retired one, avoiding silent data loss.
+        if (isFileGroupReplaced(partitionPath, fileId)) {
+          fileId = BucketIdentifier.newBucketFileIdForNBCC(bucketIdStr, 1);
+        }
+        return new BucketInfo(BucketType.UPDATE, fileId, partitionPath);
       }
       return new BucketInfo(BucketType.INSERT, BucketIdentifier.newBucketFileIdPrefix(bucketIdStr), partitionPath);
     }
+  }
+
+  private boolean isFileGroupReplaced(String partitionPath, String fileId) {
+    Set<String> replacedFileIds = replacedPartitionFileIds.getOrDefault(partitionPath, Collections.emptySet());
+    return replacedFileIds.contains(fileId);
   }
 }
