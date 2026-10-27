@@ -168,9 +168,11 @@ async def test_whole_turn_timeout_cancels_active_model(client, streaming):
         assert events[0][0] == "status"
         assert any(kind == "token" for kind, _ in events)
         assert events[-1][1]["code"] == "chat_timeout"
+        assert "Start a new session" in events[-1][1]["message"]
         assert all(kind != "done" for kind, _ in events)
     else:
         assert response.status_code == 504
+        assert "Start a new session" in response.json()["detail"]
 
 
 async def test_disconnected_sse_cancels_agent(client):

@@ -22,6 +22,7 @@
   "spark.connect.grpc.binding.address" "0.0.0.0"
   "spark.connect.grpc.binding.port" "15002"
   "spark.sql.catalogImplementation" "hive"
+  "spark.sql.runSQLOnFiles" "false"
   "spark.hadoop.hive.metastore.uris" $uri
   "spark.sql.warehouse.dir" $warehouse
   "spark.sql.extensions" "org.apache.spark.sql.hudi.HoodieSparkSessionExtension"

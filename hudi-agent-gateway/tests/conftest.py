@@ -83,7 +83,7 @@ def fake_trino() -> FakeTrinoClient:
 
 @pytest.fixture()
 def registry(settings: GatewaySettings, fake_trino: FakeTrinoClient):
-    return build_registry(settings, trino_client=fake_trino)  # type: ignore[arg-type]
+    return build_registry(settings, lakehouse_client=fake_trino)  # type: ignore[arg-type]
 
 
 class ScriptedChatModel(GenericFakeChatModel):

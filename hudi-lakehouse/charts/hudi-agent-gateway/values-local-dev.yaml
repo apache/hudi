@@ -23,8 +23,8 @@ fullnameOverride: hudi-agent-gateway
 
 gateway:
   provider: ollama
-  # A small non-thinking model with tool support; `ollama pull qwen3:4b-instruct`.
-  model: qwen3:4b-instruct
+  # A small tool-capable model that fits a laptop; `ollama pull qwen3:4b`.
+  model: qwen3:4b
   ollama:
     baseUrl: http://host.minikube.internal:11434
 

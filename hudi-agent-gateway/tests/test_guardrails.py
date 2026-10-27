@@ -19,6 +19,8 @@
 from __future__ import annotations
 
 import pytest
+import sqlglot
+from sqlglot import exp
 
 from hudi_agent_gateway.tools.guardrails import enforce_guardrails
 from hudi_agent_gateway.tools.registry import ToolInputError
@@ -102,3 +104,59 @@ def test_string_literal_containing_dml_is_fine() -> None:
 def test_quoted_identifiers_round_trip() -> None:
     out = enforce_guardrails('SELECT "weird col" FROM "my table"', row_cap=CAP)
     assert '"weird col"' in out
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT TRANSFORM(a) USING 'sh -c id' AS (x) FROM t",
+    "SELECT * FROM text.`file:///proc/self/environ`",
+    "SELECT * FROM json.`/var/run/secrets/token`",
+    "SELECT * FROM parquet.`s3a://other-bucket/path`",
+    "WITH x AS (SELECT * FROM text.`file:///etc/passwd`) SELECT * FROM x",
+    "SELECT * FROM (SELECT * FROM parquet.`s3a://bucket/path`) x",
+])
+def test_spark_script_and_path_reads_are_rejected(sql: str) -> None:
+    with pytest.raises(ToolInputError):
+        enforce_guardrails(sql, row_cap=CAP, dialect="spark")
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT * FROM `2024`",
+    "SELECT * FROM `schema with space`.`my-table`",
+    "SELECT * FROM text.orders",
+    "SELECT * FROM `json`.`orders`",
+    "SELECT * FROM other.text.orders",
+])
+def test_spark_catalog_identifiers_are_allowed(sql: str) -> None:
+    out = enforce_guardrails(sql, row_cap=CAP, dialect="spark", spark_catalog="my_catalog")
+    assert "LIMIT 100" in out
+    if sql in ("SELECT * FROM text.orders", "SELECT * FROM `json`.`orders`",
+               "SELECT * FROM `schema with space`.`my-table`"):
+        assert "`my_catalog`." in out
+
+
+def test_spark_relative_datasource_path_cannot_use_file_fallback() -> None:
+    out = enforce_guardrails("SELECT * FROM text.`relative-file`", CAP, dialect="spark")
+    assert "`spark_catalog`.text." in out
+
+
+@pytest.mark.parametrize("sql", [
+    "SELECT * FROM xml.`secrets`",
+    "SELECT * FROM libsvm.`secrets`",
+    "SELECT * FROM `org.apache.spark.sql.execution.datasources.json`.`secrets`",
+    "SELECT * FROM custom_provider.`*`",
+    "WITH x AS (SELECT * FROM xml.`secrets`) SELECT * FROM x",
+    "SELECT * FROM (SELECT * FROM custom_provider.`relative`) x",
+])
+def test_spark_all_two_part_tables_are_catalog_qualified(sql: str) -> None:
+    out = enforce_guardrails(sql, CAP, dialect="spark", spark_catalog="my_catalog")
+    tables = list(sqlglot.parse_one(out, read="spark").find_all(exp.Table))
+    assert any(table.catalog == "my_catalog" for table in tables)
+    assert all(not table.db or table.catalog for table in tables)
+
+
+def test_spark_qualified_tables_and_table_functions_are_preserved() -> None:
+    out = enforce_guardrails(
+        "SELECT * FROM other.text.orders JOIN schema.func(1) ON true", CAP, dialect="spark"
+    )
+    assert "other.text.orders" in out
+    assert "schema.FUNC(1)" in out

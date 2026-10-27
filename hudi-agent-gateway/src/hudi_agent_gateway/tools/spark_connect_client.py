@@ -74,17 +74,29 @@ class SparkConnectClient:
     def __init__(self, settings: GatewaySettings) -> None:
         self._settings = settings
         self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="spark-query")
+        self._ping_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="spark-ping")
         self._cancel_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="spark-cancel")
         # ThreadPoolExecutor's queue is unbounded. Hold a slot until the worker
         # finishes, even after its async caller timed out.
         self._slots = threading.BoundedSemaphore(8)
+        self._ping_slot = threading.BoundedSemaphore(1)
         self._ping_cache: tuple[float, bool] | None = None
+        self._ping_task: asyncio.Task[bool] | None = None
         self._closed = False
+        self._operations_lock = threading.Lock()
+        self._operations: dict[int, _Operation] = {}
 
     def close(self) -> None:
-        self._closed = True
+        with self._operations_lock:
+            self._closed = True
+            operations = list(self._operations.values())
+        for op in operations:
+            op.cancelled.set()
+            with contextlib.suppress(RuntimeError):
+                self._cancel_executor.submit(op.cancel)
         self._executor.shutdown(wait=False, cancel_futures=True)
-        self._cancel_executor.shutdown(wait=False, cancel_futures=True)
+        self._ping_executor.shutdown(wait=False, cancel_futures=True)
+        self._cancel_executor.shutdown(wait=False)
 
     def _execute_sync(
         self, sql: str, max_rows: int, op: _Operation, describe: bool = False
@@ -127,21 +139,32 @@ class SparkConnectClient:
         return await self._run(sql, timeout=timeout, max_rows=max_rows, describe=True)
 
     async def _run(
-        self, sql: str, *, timeout: float, max_rows: int, describe: bool = False
+        self, sql: str, *, timeout: float, max_rows: int, describe: bool = False,
+        probe: bool = False,
     ) -> QueryResult:
-        if self._closed:
-            raise QueryError("Spark Connect client is closed")
-        if not self._slots.acquire(blocking=False):
-            raise QueryError(
-                "Spark Connect query capacity exhausted; retry after active queries finish"
-            )
+        slots = self._ping_slot if probe else self._slots
+        executor = self._ping_executor if probe else self._executor
         op = _Operation()
-        try:
-            work = self._executor.submit(self._execute_sync, sql, max_rows, op, describe)
-        except Exception:
-            self._slots.release()
-            raise
-        work.add_done_callback(lambda _: self._slots.release())
+        with self._operations_lock:
+            if self._closed:
+                raise QueryError("Spark Connect client is closed")
+            if not slots.acquire(blocking=False):
+                raise QueryError(
+                    "Spark Connect query capacity exhausted; retry after active queries finish"
+                )
+            try:
+                work = executor.submit(self._execute_sync, sql, max_rows, op, describe)
+            except Exception:
+                slots.release()
+                raise
+            self._operations[id(op)] = op
+
+        def release_operation(_: Any) -> None:
+            with self._operations_lock:
+                self._operations.pop(id(op), None)
+            slots.release()
+
+        work.add_done_callback(release_operation)
         future = asyncio.wrap_future(work)
         try:
             return await asyncio.wait_for(future, timeout)
@@ -172,13 +195,19 @@ class SparkConnectClient:
             raise QueryError(f"Spark Connect query failed ({type(e).__name__})") from e
 
     async def ping(self, timeout: float = 5.0, cache_seconds: float = 10.0) -> bool:
-        now = time.monotonic()
-        if self._ping_cache is not None and now - self._ping_cache[0] < cache_seconds:
+        if self._ping_cache is not None and time.monotonic() - self._ping_cache[0] < cache_seconds:
             return self._ping_cache[1]
+
+        if self._ping_task is None or self._ping_task.done():
+            self._ping_task = asyncio.create_task(self._probe(timeout))
+        # Cancelling one readiness request must not cancel a shared probe.
+        return await asyncio.shield(self._ping_task)
+
+    async def _probe(self, timeout: float) -> bool:
         try:
-            await self.execute("SELECT 1", timeout=timeout, max_rows=1)
+            await self._run("SELECT 1", timeout=timeout, max_rows=1, probe=True)
             ok = True
         except Exception:
             ok = False
-        self._ping_cache = (now, ok)
+        self._ping_cache = (time.monotonic(), ok)
         return ok

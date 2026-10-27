@@ -46,7 +46,9 @@ _FORBIDDEN_NODES: tuple[type[exp.Expression], ...] = (
 _SPARK_REFLECTION_FUNCTIONS = frozenset({"java_method", "reflect", "try_reflect"})
 
 
-def enforce_guardrails(sql: str, row_cap: int, *, dialect: str = "trino") -> str:
+def enforce_guardrails(
+    sql: str, row_cap: int, *, dialect: str = "trino", spark_catalog: str = "spark_catalog"
+) -> str:
     """Validate ``sql`` as a single read-only SELECT and cap its LIMIT.
 
     Returns the (possibly rewritten) SQL to execute. Raises
@@ -77,6 +79,15 @@ def enforce_guardrails(sql: str, row_cap: int, *, dialect: str = "trino") -> str
             raise ToolInputError(
                 f"read-only: {type(node).__name__} is not allowed", hint=hint
             )
+        if dialect == "spark" and isinstance(node, exp.QueryTransform):
+            raise ToolInputError("read-only: Spark script transforms are not allowed", hint=hint)
+        if dialect == "spark" and isinstance(node, exp.Table):
+            if any(any(char in part.name for char in "/\\:") for part in node.parts):
+                raise ToolInputError("read-only: Spark file paths are not allowed", hint=hint)
+            if not node.catalog and node.db and isinstance(node.this, exp.Identifier):
+                # Any two-part name can be interpreted as a data source and path,
+                # including custom providers. Force catalog table resolution.
+                node.set("catalog", exp.to_identifier(spark_catalog, quoted=True))
         if dialect == "spark" and isinstance(node, exp.Func):
             name = node.name if isinstance(node, exp.Anonymous) else node.sql_name()
             if name.lower() in _SPARK_REFLECTION_FUNCTIONS:
