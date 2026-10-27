@@ -212,9 +212,10 @@ def main():
                 run(cursor, f"SELECT id, region, amount, ts FROM {table} ORDER BY id",
                     [(1, "East", 175, 3), (3, "North", 300, 3)])
             else:
+                # PURGE removes private test data and the MoR RO/RT aliases.
                 # Never CASCADE: fail if unrelated tables appeared in this DB.
                 for name in ("freshness_orders", "mor_orders", "partitioned_orders", "orders"):
-                    run(cursor, f"DROP TABLE IF EXISTS {database}.{name}")
+                    run(cursor, f"DROP TABLE IF EXISTS {database}.{name} PURGE")
                 run(cursor, f"DROP DATABASE IF EXISTS {database}")
     print(f"PASS: {args.phase}", flush=True)
 

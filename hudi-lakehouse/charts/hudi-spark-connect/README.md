@@ -97,6 +97,8 @@ In cluster mode, size executor scratch separately; this setting applies only to 
 
 The service has no authentication or TLS. Keep it on a trusted network:
 any client that can connect can read and write using the server's storage credentials.
+In Kubernetes executor mode, this trust also extends to the driver's ServiceAccount
+permissions, including creating executor pods through the Kubernetes API.
 
 ## Hudi writer defaults and table services
 
@@ -127,6 +129,20 @@ SET hoodie.clean.automatic = true;
 INSERT INTO orders VALUES (1, 100, 1);
 RESET hoodie.clean.automatic;
 ```
+
+Trino needs partition metadata in HMS as well as the Spark catalog entry. Ensure
+the writer syncs partitions to HMS. To configure sync explicitly, add these
+`TBLPROPERTIES` when creating a table (use your metastore URI):
+
+```sql
+'hoodie.datasource.meta.sync.enable' = 'true',
+'hoodie.datasource.hive_sync.enable' = 'true',
+'hoodie.datasource.hive_sync.mode' = 'hms',
+'hoodie.datasource.hive_sync.metastore.uris' = 'thrift://hive-metastore.hudi-lakehouse.svc.cluster.local:9083'
+```
+
+The SQL matrix includes partition sync and Trino readback. These properties are not
+enabled by the generic chart or local-dev defaults.
 
 Table properties and session settings take precedence over global defaults in
 the Spark SQL write configuration; consult the relevant Hudi operation's settings
@@ -180,15 +196,21 @@ an older image will not provide that behavior. Executors receive the configured 
 Secret references, including a session token when present, without embedding values
 in Spark properties. The Hudi defaults file is loaded by the SQL driver; the resolved
 write configuration is passed by Hudi to tasks.
+Set `spark.kubernetes.authenticate.executor.serviceAccountName` to a dedicated,
+minimal-permission executor ServiceAccount; otherwise executors use the namespace's
+default account. Disable token automount on that account unless the workload needs it.
 
 Before using this mode, validate driver/executor networking, resource capacity,
 image availability/pull credentials, and storage access from executor pods. Use
 `spark.kubernetes.executor.container.image` for a different compatible executor image,
-and Spark's executor settings for pull secrets, placement, workload identity, or
+and Spark's executor settings for placement, workload identity, or
 credentials other than the chart's S3 Secret. Driver pod settings do not automatically
 apply to executors. Keep executors in the release namespace when using its Secrets.
+The chart defaults executor pull secrets from `imagePullSecrets`; override
+`spark.kubernetes.container.image.pullSecrets` for a different comma-separated list.
 Dynamic allocation/autoscaling is not enabled by this example and needs separate
 configuration and validation. Keep one driver replica; this is not a tenant-isolated service.
+Standalone (`spark://`) masters are not supported by this chart.
 
 ## Connect and validate with ADBC
 
@@ -261,9 +283,12 @@ hook; it receives the test database and `commit-schema` / `recreate` action.
 
 These acceptance paths require live Spark/ADBC (and optionally Trino). Offline
 tests validate their assertions, configuration and cleanup, not engine behavior.
-The full live SQL/Trino matrix and same-session freshness checks remain pending
-in [#20233](https://github.com/apache/hudi/issues/20233). Adding the test entrypoints
-does not establish that these paths pass.
+With Spark 4.1.3, Hudi 1.2.0 and Foundry 0.2.1, the live SQL matrix, Trino 472
+readback of CoW and partitioned tables, and endpoint restart checks passed.
+An existing session did not see an externally added column until
+`REFRESH TABLE`; with explicit refresh, external writes, schema changes and table
+recreation passed. Further end-to-end validation is tracked in
+[#20233](https://github.com/apache/hudi/issues/20233).
 
 <a id="spark-connect-client-tutorials"></a>
 
@@ -282,6 +307,24 @@ be evaluated separately after the integration stabilizes.
   [Python interpreter guide](https://zeppelin.apache.org/docs/0.12.0/interpreter/python.html).
 
 [Foundry Spark ADBC 0.2.1](https://adbc-drivers.org/drivers/spark/) uses autocommit.
+
+With Spark 4.1.3, Hudi 1.2.0 and Foundry 0.2.1, local fault tests observed that a
+write could commit after client disconnect, and retrying `INSERT` after a lost
+response produced duplicate rows. Check the data or timeline before retrying.
+After a driver restart at the requested-instant stage, the next write rolled back
+the unfinished instant and committed. These observations depend on the write
+configuration and failure stage; they are not a safe-retry guarantee.
+In a local write test, `adbc_cancel()` returned `context canceled` to the client,
+but Spark jobs continued and all 200 inserted rows committed, confirmed by a
+separate connection and the Hudi timeline. Do not treat a client cancellation
+error as proof that a write was stopped or rolled back.
+
+Use `LIMIT` and size client/driver memory for the expected results. Foundry 0.2.1
+rejected Arrow responses exceeding its 4 MiB gRPC receive limit in the 100k-row test.
+Local-dev sets `spark.connect.grpc.arrow.maxBatchSize=1m`, which allowed that test
+to complete. Set the same property in `spark.extraConf` for other deployments using
+this driver. It controls batch size, not total result size or memory; oversized
+individual rows can still exceed the receive limit.
 
 ## Troubleshooting
 

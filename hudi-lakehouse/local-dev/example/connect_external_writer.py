@@ -39,7 +39,8 @@ def write(database, action):
             spark.sql(f"ALTER TABLE {table} ADD COLUMNS (note STRING)").collect()
             spark.sql(f"INSERT INTO {table} VALUES (2, 200, 2, 'external')").collect()
         else:
-            spark.sql(f"DROP TABLE {table}").collect()
+            # Hudi retains the data path without PURGE, preventing recreation.
+            spark.sql(f"DROP TABLE {table} PURGE").collect()
             spark.sql(f"""CREATE TABLE {table} (id INT, replacement STRING, ts BIGINT)
                 USING hudi TBLPROPERTIES (type = 'cow', primaryKey = 'id', preCombineField = 'ts')""").collect()
             spark.sql(f"INSERT INTO {table} VALUES (9, 'recreated', 3)").collect()
