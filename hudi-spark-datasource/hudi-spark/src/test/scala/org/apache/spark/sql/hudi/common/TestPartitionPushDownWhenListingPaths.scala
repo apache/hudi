@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hudi.common
 
+import org.apache.hudi.DataSourceReadOptions
 import org.apache.hudi.common.config.HoodieMetadataConfig
 
 class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
@@ -103,6 +104,44 @@ class TestPartitionPushDownWhenListingPaths extends HoodieSparkSqlTestBase {
             )
           }
         }
+      }
+    }
+  }
+
+  test("Test partition listing reads the file system when listing from the catalog is requested") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = tmp.getCanonicalPath
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  ts long,
+           |  country string
+           |) using hudi
+           | location '$tablePath'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  hoodie.metadata.enable = 'false'
+           | )
+           | partitioned by (country)""".stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a1', 1000, 'US'), (2, 'a2', 1000, 'CN')")
+      spark.sql(s"msck repair table $tableName")
+      // a partition the catalog does not know about yet
+      spark.sql(s"insert into $tableName values(3, 'a3', 1000, 'ID')")
+
+      withSQLConf(HoodieMetadataConfig.ENABLE.key -> "false",
+        DataSourceReadOptions.FILE_INDEX_PARTITION_LISTING_VIA_CATALOG.key -> "true") {
+        checkAnswer(s"select id, name, country from $tableName order by id")(
+          Seq(1, "a1", "US"),
+          Seq(2, "a2", "CN"),
+          Seq(3, "a3", "ID")
+        )
+        checkAnswer(s"select id, name from $tableName where country = 'ID'")(
+          Seq(3, "a3")
+        )
       }
     }
   }
