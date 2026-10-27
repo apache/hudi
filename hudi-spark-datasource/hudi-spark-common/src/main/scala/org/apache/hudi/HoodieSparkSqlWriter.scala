@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceUtils.SparkDataSourceWriteStatusValidator
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.{toProperties, toScalaOption}
 import org.apache.hudi.HoodieSchemaConversionUtils.{convertStructTypeToHoodieSchema, getRecordNameAndNamespace}
-import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
+import org.apache.hudi.HoodieSparkSqlWriter.{StreamingWriteParams, WriteClientSchema}
 import org.apache.hudi.HoodieSparkSqlWriterInternal.{handleInsertDuplicates, shouldDropDuplicatesForInserts, shouldFailWhenDuplicatesFound}
 import org.apache.hudi.HoodieWriterUtils._
 import org.apache.hudi.client.{HoodieWriteResult, SparkRDDWriteClient}
@@ -90,7 +90,21 @@ object HoodieSparkSqlWriter {
                                   extraPreCommitFn: Option[BiConsumer[HoodieTableMetaClient, HoodieCommitMetadata]] = Option.empty,
                                   // When set, the caller constructs the write client from the resolved write config and owns
                                   // its lifecycle: the writer does not close it after the write.
-                                  writeClientFactory: Option[(HoodieSparkEngineContext, HoodieWriteConfig) => SparkRDDWriteClient[_]] = Option.empty)
+                                  writeClientFactory: Option[(HoodieSparkEngineContext, HoodieWriteConfig) => SparkRDDWriteClient[_]] = Option.empty,
+                                  // Schema the caller-owned write client was created with. The client is reused only while
+                                  // it matches the schema of the write, otherwise the factory creates a new one.
+                                  writeClientSchema: Option[WriteClientSchema] = Option.empty)
+
+  /**
+   * Writer schema and internal schema of a write config, captured when a write client is created. The write config
+   * itself is not a stable record of them, since table services running on the client update its schema.
+   */
+  case class WriteClientSchema(schema: String, internalSchema: String)
+
+  object WriteClientSchema {
+    def of(writeConfig: HoodieWriteConfig): WriteClientSchema =
+      WriteClientSchema(StringUtils.nullToEmpty(writeConfig.getSchema), StringUtils.nullToEmpty(writeConfig.getInternalSchema))
+  }
 
   /**
    * Controls whether incoming batch's schema's nullability constraints should be canonicalized
@@ -444,9 +458,16 @@ class HoodieSparkSqlWriterInternal {
 
             // Create a HoodieWriteClient & issue the delete.
             val internalSchemaOpt = HoodieSchemaUtils.getLatestTableInternalSchema(hoodieConfig, tableMetaClient)
-            val client = hoodieWriteClient.getOrElse(createWriteClient(jsc,
-                null, path, tblName,
-                addSchemaEvolutionParameters(parameters, internalSchemaOpt).asJava, streamingWritesParamsOpt))
+            val deleteOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt)
+            // A client that is reused across writes gets the latest table schema upfront, so that a later change of the
+            // table schema is detected. Otherwise the client sets it on its first delete.
+            val deleteSchemaStr = if (writeClientOwnedByCaller) {
+              new TableSchemaResolver(tableMetaClient).getTableSchemaIfPresent(false).map[String](s => s.toString).orElse(null)
+            } else {
+              null
+            }
+            val client = reusableWriteClient(hoodieWriteClient, streamingWritesParamsOpt, deleteSchemaStr, deleteOpts)
+              .getOrElse(createWriteClient(jsc, deleteSchemaStr, path, tblName, deleteOpts.asJava, streamingWritesParamsOpt))
               .asInstanceOf[SparkRDDWriteClient[_]]
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
@@ -499,9 +520,8 @@ class HoodieSparkSqlWriterInternal {
 
             // Issue the delete.
             val schemaStr = new TableSchemaResolver(tableMetaClient).getTableSchema(false).toString
-            val client = hoodieWriteClient.getOrElse(createWriteClient(jsc,
-                schemaStr, path, tblName,
-                parameters.asJava, streamingWritesParamsOpt))
+            val client = reusableWriteClient(hoodieWriteClient, streamingWritesParamsOpt, schemaStr, parameters)
+              .getOrElse(createWriteClient(jsc, schemaStr, path, tblName, parameters.asJava, streamingWritesParamsOpt))
               .asInstanceOf[SparkRDDWriteClient[_]]
             // Issue delete partitions
             instantTime = recordStartedInstant(client, client.startDeletePartitionCommit(tableMetaClient))
@@ -546,11 +566,12 @@ class HoodieSparkSqlWriterInternal {
             }
 
             // Create a HoodieWriteClient & issue the write.
-            val client = hoodieWriteClient.getOrElse {
-              val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema))
-              // TODO(HUDI-4772) proper writer-schema has to be specified here
-              createWriteClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava, streamingWritesParamsOpt)
-            }
+            val finalOpts = addSchemaEvolutionParameters(parameters, internalSchemaOpt, Some(writerSchema))
+            val client = reusableWriteClient(hoodieWriteClient, streamingWritesParamsOpt, processedDataSchema.toString, finalOpts)
+              .getOrElse {
+                // TODO(HUDI-4772) proper writer-schema has to be specified here
+                createWriteClient(jsc, processedDataSchema.toString, path, tblName, finalOpts.asJava, streamingWritesParamsOpt)
+              }
 
             if (isAsyncCompactionEnabled(client, tableConfig, parameters, jsc.hadoopConfiguration())) {
               streamingWritesParamsOpt.map(_.asyncCompactionTriggerFn.get.apply(client))
@@ -628,6 +649,44 @@ class HoodieSparkSqlWriterInternal {
           })
       case None =>
         DataSourceUtils.createHoodieClient(jsc, schemaStr, path, tblName, parameters)
+    }
+  }
+
+  /**
+   * Returns the write client passed in by the caller if it can serve a write with the given schema. A caller-owned
+   * client (streaming sink) is reused across writes, but carries the schema of the write that created it: once the
+   * schema changed (e.g. the table schema evolved under a streaming query), the caller's factory creates a new
+   * client instead, as HoodieStreamer does on a schema change. Otherwise the write and its commit metadata would use
+   * the stale schema.
+   */
+  private def reusableWriteClient(hoodieWriteClient: Option[SparkRDDWriteClient[_]],
+                                  streamingWritesParamsOpt: Option[StreamingWriteParams],
+                                  schemaStr: String,
+                                  writeOpts: Map[String, String]): Option[SparkRDDWriteClient[_]] = {
+    if (!writeClientOwnedByCaller) {
+      hoodieWriteClient
+    } else {
+      hoodieWriteClient.filter { _ =>
+        val requiredSchema = WriteClientSchema(StringUtils.nullToEmpty(schemaStr),
+          StringUtils.nullToEmpty(writeOpts.getOrElse(HoodieWriteConfig.INTERNAL_SCHEMA_STRING.key, null)))
+        val clientSchema = streamingWritesParamsOpt.flatMap(_.writeClientSchema)
+        val reusable = clientSchema.exists(current => current.schema == requiredSchema.schema
+          && isSameInternalSchema(current.internalSchema, requiredSchema.internalSchema))
+        if (!reusable) {
+          log.info(s"Writer schema changed (schema hash ${clientSchema.map(_.schema.hashCode)} -> "
+            + s"${requiredSchema.schema.hashCode}), re-creating the write client")
+        }
+        reusable
+      }
+    }
+  }
+
+  private def isSameInternalSchema(current: String, required: String): Boolean = {
+    // the version id of an internal schema is set to the instant that saved it, so it changes on every commit
+    current == required || {
+      val currentSchema = SerDeHelper.fromJson(current)
+      val requiredSchema = SerDeHelper.fromJson(required)
+      currentSchema.isPresent && requiredSchema.isPresent && currentSchema.get.equalsIgnoringVersion(requiredSchema.get)
     }
   }
 

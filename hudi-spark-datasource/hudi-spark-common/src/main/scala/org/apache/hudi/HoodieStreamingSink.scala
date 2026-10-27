@@ -17,7 +17,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.HoodieSparkSqlWriter.StreamingWriteParams
+import org.apache.hudi.HoodieSparkSqlWriter.{StreamingWriteParams, WriteClientSchema}
 import org.apache.hudi.HoodieStreamingSink.{QUERY_ID_KEY, SINK_CHECKPOINT_KEY}
 import org.apache.hudi.async.{AsyncClusteringService, AsyncCompactService, SparkStreamingAsyncClusteringService, SparkStreamingAsyncCompactService}
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -95,6 +95,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   @volatile private var asyncCompactorService: AsyncCompactService = _
   @volatile private var asyncClusteringService: AsyncClusteringService = _
   private var writeClient: Option[SparkRDDWriteClient[_]] = Option.empty
+  // schema the current write client was created with; the writer re-creates the client when it changes
+  private var writeClientSchema: Option[WriteClientSchema] = Option.empty
   // Owned by the sink and handed to every write client it creates, so that one timeline server is reused across
   // micro-batches (same as HoodieStreamer). Stopped on reset or when the streaming query terminates.
   private var embeddedTimelineService: Option[EmbeddedTimelineService] = Option.empty
@@ -138,7 +140,8 @@ class HoodieStreamingSink(sqlContext: SQLContext,
                 newCommitMetadata.addMetadata(SINK_CHECKPOINT_KEY, CommitUtils.getCheckpointValueAsString(identifier, String.valueOf(batchId)))
               }
             }),
-            writeClientFactory = Some((context, writeConfig) => createWriteClient(context, writeConfig)))), writeClient)
+            writeClientFactory = Some((context, writeConfig) => createWriteClient(context, writeConfig)),
+            writeClientSchema = writeClientSchema)), writeClient)
       )
       match {
         case Success((true, commitOps, compactionInstantOps, clusteringInstant, client, tableConfig)) =>
@@ -299,10 +302,38 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     // register the release first, so that a timeline server started for a client that then fails to build is
     // still stopped when the query terminates
     registerQueryTerminationListener()
+    val clientSchema = WriteClientSchema.of(writeConfig)
     val client = new SparkRDDWriteClient(context, writeConfig, getOrStartTimelineService(context, writeConfig))
+    val previousClient = writeClient
     // track the client as soon as it exists so that a failed micro-batch still reuses and eventually closes it
     writeClient = Some(client)
+    writeClientSchema = Some(clientSchema)
+    // the writer re-creates the client when the write schema changes (as HoodieStreamer does): hand the new client
+    // to the async table services and close the previous one. Its timeline server is the sink's and keeps running.
+    previousClient.foreach(retireWriteClient(_, client))
     client
+  }
+
+  /**
+   * Each handoff waits for the service's current run before switching to the new client. Close the previous
+   * client only after both services have handed it back, without retaining clients until query termination.
+   */
+  private def retireWriteClient(previousClient: SparkRDDWriteClient[_], newClient: SparkRDDWriteClient[_]): Unit = {
+    if (asyncCompactorService != null) {
+      asyncCompactorService.updateWriteClient(newClient)
+    }
+    if (asyncClusteringService != null) {
+      asyncClusteringService.updateWriteClient(newClient)
+    }
+    closeQuietly(previousClient)
+  }
+
+  private def closeQuietly(client: SparkRDDWriteClient[_]): Unit = {
+    try {
+      client.close()
+    } catch {
+      case e: Exception => log.warn("Failed to close a write client of the streaming sink", e)
+    }
   }
 
   private def getOrStartTimelineService(context: HoodieSparkEngineContext,
@@ -401,9 +432,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     if (writeClient.isDefined) {
       writeClient.get.close()
       writeClient = Option.empty
+      writeClientSchema = Option.empty
     }
 
-    // stop the timeline server only after the client using it is closed
+    // stop the timeline server only after the clients using it are closed
     if (embeddedTimelineService.isDefined) {
       embeddedTimelineService.get.stopForBasePath(timelineServiceBasePath)
       embeddedTimelineService = Option.empty

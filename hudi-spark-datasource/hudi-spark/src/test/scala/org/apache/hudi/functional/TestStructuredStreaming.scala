@@ -24,7 +24,7 @@ import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.{HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.engine.RecordContext
 import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode}
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.read.BufferedRecord
 import org.apache.hudi.common.table.timeline.HoodieTimeline
@@ -39,7 +39,7 @@ import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}
 
 import org.apache.spark.sql._
-import org.apache.spark.sql.functions.lit
+import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -561,6 +561,89 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
     }
 
     assertEquals(3, HoodieDataSourceHelpers.allCompletedCommitsCompactions(storage, destPath).countInstants())
+  }
+
+  /**
+   * The sink reuses its write client across micro-batches, so it must re-create the client when the writer schema
+   * changes under a running query, as HoodieStreamer does. Here a batch writer adds a column between two
+   * micro-batches; the next micro-batch fills it with nulls and must commit with the evolved schema.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testStructuredStreamingWithTableSchemaEvolvedMidQuery(tableType: HoodieTableType): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val opts = getOptsWithTableType(tableType) ++ Map(
+      DataSourceWriteOptions.SET_NULL_FOR_MISSING_COLUMNS.key -> "true")
+
+    val records1 = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF1 = spark.read.json(spark.sparkContext.parallelize(records1, 2))
+    inputDF1.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+    val query = initWritingStreamingQuery(inputDF1.schema, sourcePath, destPath, opts)
+    val evolvedDF = spark.read.json(spark.sparkContext.parallelize(
+      recordsToStrings(dataGen.generateUniqueUpdates("001", 10)).asScala.toList, 2))
+      .withColumn("new_col", lit("evolved"))
+    val streamedDF = spark.read.json(spark.sparkContext.parallelize(
+      recordsToStrings(dataGen.generateUniqueUpdates("002", 50)).asScala.toList, 2))
+    try {
+      query.processAllAvailable()
+      // evolve the table schema outside of the streaming query
+      evolvedDF.write.format("org.apache.hudi").options(opts)
+        .option(DataSourceWriteOptions.OPERATION.key, UPSERT_OPERATION_OPT_VAL)
+        .mode(SaveMode.Append).save(destPath)
+      streamedDF.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      query.processAllAvailable()
+    } finally {
+      query.stop()
+    }
+
+    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
+    assertEquals(3, metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().countInstants())
+    val tableSchema = new TableSchemaResolver(metaClient).getTableSchema(false)
+    assertTrue(tableSchema.getField("new_col").isPresent, s"new_col missing from table schema: $tableSchema")
+    val tableDF = spark.read.format("org.apache.hudi").load(destPath)
+    assertEquals(100, tableDF.count())
+    // rows last written by the batch writer keep their value, rows the stream updated afterwards are null
+    val evolvedOnlyKeys = evolvedDF.select("_row_key").except(streamedDF.select("_row_key")).count()
+    assertEquals(evolvedOnlyKeys, tableDF.filter(col("new_col") === "evolved").count())
+  }
+
+  /**
+   * Same as [[testStructuredStreamingWithTableSchemaEvolvedMidQuery]] for a delete stream: delete commits record
+   * the schema of the write client, so a stale client would drop the new column from the table schema.
+   */
+  @Test
+  def testStructuredStreamingDeletesWithTableSchemaEvolvedMidQuery(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val opts = getOptsWithTableType(HoodieTableType.COPY_ON_WRITE)
+    val records = recordsToStrings(dataGen.generateInserts("000", 100)).asScala.toList
+    val inputDF = spark.read.json(spark.sparkContext.parallelize(records, 2))
+    inputDF.write.format("org.apache.hudi").options(opts).mode(SaveMode.Overwrite).save(destPath)
+
+    def recordsDF(from: Int, until: Int): DataFrame =
+      spark.read.schema(inputDF.schema).json(spark.sparkContext.parallelize(records.slice(from, until), 1))
+
+    recordsDF(0, 10).write.mode(SaveMode.Append).json(sourcePath)
+    val query = initWritingStreamingQuery(inputDF.schema, sourcePath, destPath,
+      opts + (DataSourceWriteOptions.OPERATION.key -> DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL))
+    try {
+      query.processAllAvailable()
+      // evolve the table schema outside of the streaming query
+      recordsDF(20, 30).withColumn("new_col", lit("evolved")).write.format("org.apache.hudi").options(opts)
+        .option(DataSourceWriteOptions.OPERATION.key, UPSERT_OPERATION_OPT_VAL)
+        .mode(SaveMode.Append).save(destPath)
+      recordsDF(10, 20).write.mode(SaveMode.Append).json(sourcePath)
+      query.processAllAvailable()
+    } finally {
+      query.stop()
+    }
+
+    val metaClient = HoodieTestUtils.createMetaClient(storage, destPath)
+    assertEquals(4, metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants().countInstants())
+    val tableSchema = new TableSchemaResolver(metaClient).getTableSchema(false)
+    assertTrue(tableSchema.getField("new_col").isPresent, s"new_col missing from table schema: $tableSchema")
+    val tableDF = spark.read.format("org.apache.hudi").load(destPath)
+    assertEquals(80, tableDF.count())
+    assertEquals(10, tableDF.filter(col("new_col") === "evolved").count())
   }
 
   /**

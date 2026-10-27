@@ -78,7 +78,9 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
           if (null != instantTime) {
             log.info("Starting Compaction for instant {}", instantTime);
-            compactor.compact(instantTime);
+            synchronized (compactor) {
+              compactor.compact(instantTime);
+            }
             log.info("Finished Compaction for instant {}", instantTime);
           }
         }
@@ -108,7 +110,12 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
     return false;
   }
 
-  public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
-    this.compactor.updateWriteClient(writeClient);
+  /**
+   * Switches clients between complete compaction runs. Once this returns, no run uses the old client.
+   */
+  public void updateWriteClient(BaseHoodieWriteClient writeClient) {
+    synchronized (compactor) {
+      compactor.updateWriteClient(writeClient);
+    }
   }
 }
