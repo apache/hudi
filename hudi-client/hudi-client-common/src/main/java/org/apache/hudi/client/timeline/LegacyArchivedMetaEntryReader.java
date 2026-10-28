@@ -185,20 +185,6 @@ public class LegacyArchivedMetaEntryReader {
 
         @Override
         public boolean hasNext() {
-          List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails = readNextInstantGroup();
-          // Legacy archives can hold instants that never completed (e.g. a requested-only commit); they are not part of the timeline.
-          while (!instantAndDetails.isEmpty() && instantAndDetails.stream().noneMatch(instantAndDetail -> instantAndDetail.getKey().isCompleted())) {
-            log.warn("Skipping archived instant with no completed state: {}", instantAndDetails.stream().map(Pair::getKey).collect(Collectors.toList()));
-            instantAndDetails = readNextInstantGroup();
-          }
-          if (!instantAndDetails.isEmpty()) {
-            this.activeAction = ActiveActionWithDetails.fromInstantAndDetails(instantAndDetails);
-            return true;
-          }
-          return false;
-        }
-
-        private List<Pair<HoodieInstant, Option<byte[]>>> readNextInstantGroup() {
           List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails = new ArrayList<>();
           String lastInstantTime = null;
           if (nextInstantAndDetail != null) {
@@ -216,13 +202,39 @@ public class LegacyArchivedMetaEntryReader {
                 lastInstantTime = instantTime;
               } else if (lastInstantTime.equals(instantTime)) {
                 instantAndDetails.add(instantAndDetail);
-              } else {
+              } else if (hasCompletedInstant(instantAndDetails)) {
                 nextInstantAndDetail = instantAndDetail;
                 break;
+              } else {
+                discardInstantWithoutCompletedState(instantAndDetails);
+                instantAndDetails.add(instantAndDetail);
+                lastInstantTime = instantTime;
               }
             }
           }
-          return instantAndDetails;
+          if (!hasCompletedInstant(instantAndDetails)) {
+            discardInstantWithoutCompletedState(instantAndDetails);
+          }
+          if (!instantAndDetails.isEmpty()) {
+            this.activeAction = ActiveActionWithDetails.fromInstantAndDetails(instantAndDetails);
+            return true;
+          }
+          return false;
+        }
+
+        private boolean hasCompletedInstant(List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails) {
+          return instantAndDetails.stream().anyMatch(instantAndDetail -> instantAndDetail.getKey().isCompleted());
+        }
+
+        /**
+         * Discards the records of an instant that has no completed record. The 0.x archiver can archive such an
+         * instant when converting one of its state files fails with hoodie.fail.on.timeline.archiving=false.
+         */
+        private void discardInstantWithoutCompletedState(List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails) {
+          if (!instantAndDetails.isEmpty()) {
+            log.warn("Skipping archived instant with no completed state: {}", instantAndDetails.stream().map(Pair::getKey).collect(Collectors.toList()));
+            instantAndDetails.clear();
+          }
         }
 
         @Override

@@ -99,13 +99,15 @@ public class TestLegacyArchivedMetaEntryReader {
       HoodieCommitMetadata metadata = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
       testTable.addCommit(instantTime, Option.of(metadata));
     }
-    // 00000011 is requested only and 00000012 is requested + inflight; neither ever completed
+    // 00000011 and 00000014 are requested only and 00000012 is requested + inflight; none ever completed
     testTable.addRequestedCommit("00000011");
     testTable.addInflightCommit("00000012");
+    testTable.addRequestedCommit("00000014");
     List<HoodieInstant> instants = TIMELINE_FACTORY.createActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
-    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000003") < 0));
+    // archive files are read newest first, so 00000014 is the last record read
+    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000003") < 0 || i.requestedTime().equals("00000014")));
     // 00000013 has its requested and inflight records in one block and its completed record in a later block
-    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000011") >= 0 && !i.isCompleted()));
+    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000011") >= 0 && i.requestedTime().compareTo("00000014") < 0 && !i.isCompleted()));
     archive(metaClient, filter(instants, i -> (i.requestedTime().compareTo("00000003") >= 0 && i.requestedTime().compareTo("00000011") < 0)
         || (i.requestedTime().equals("00000013") && i.isCompleted())));
 
