@@ -1113,7 +1113,7 @@ object DataSourceOptionsHelper {
       case (key, _) =>
         key.startsWith(SPARK_HOODIE_PREFIX) || (includeHoodiePrefix && key.startsWith(HOODIE_PREFIX))
     }
-    normalizeSparkHoodiePrefix(sparkConfs) ++ optParams
+    normalizeSparkHoodiePrefix(sparkConfs) ++ normalizeSparkHoodiePrefix(optParams)
   }
 
   /**

@@ -60,6 +60,19 @@ ZSTD. The GZIP write default on older Spark versions does not eliminate the risk
 files produced by another engine. Explicitly setting `hoodie.parquet.compression.codec` overrides
 the version-specific default.
 
+## Streaming session configuration compatibility
+
+Starting with 1.3.0, Hudi Structured Streaming writes honor the active session's `spark.hoodie.*`
+settings (including `--conf spark.hoodie.*` passed at submit time), just like DataFrame batch writes.
+Previously the streaming sink ignored them. When upgrading an existing `writeStream` application,
+audit ambient `spark.hoodie.*` settings, or pass explicit writer options to keep the previous behavior,
+e.g. `.option("hoodie.datasource.write.operation", "upsert")`.
+
+Precedence: explicit writer/storage options, then session `spark.hoodie.*` settings, then Hudi defaults.
+Settings are captured once when the sink is created; later `SET` statements do not change a running
+query. Bare `hoodie.*` session settings are not forwarded. Table identity settings must still agree with
+the existing table. See the Streaming Writes guide on the Hudi website for details.
+
 ## Key Features
 
 - **DataSource V1 Support**: Full integration with Spark's DataSource API
