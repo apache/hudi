@@ -1,7 +1,7 @@
 ---
 title: Streaming Writes
 keywords: [hudi, spark, flink, streaming, processing]
-last_modified_at: 2024-03-13T15:59:57-04:00
+last_modified_at: 2026-10-28T00:00:00+08:00
 ---
 
 import Tabs from '@theme/Tabs';
@@ -93,9 +93,54 @@ df.writeStream.format("hudi")
 </Tabs
 >
 
+### Session settings and upgrade compatibility
+
+In the upcoming release, Structured Streaming sinks honor the active session's
+`spark.hoodie.*` settings. Previously, the streaming sink ignored these settings,
+even though batch DataFrame writes supported them. Review ambient session configuration
+when upgrading an existing `writeStream` application.
+
+For example, this setting selects inserts for a subsequently started streaming query:
+
+```python
+spark.conf.set("spark.hoodie.datasource.write.operation", "insert")
+```
+
+Explicit writer options take precedence. To retain upsert behavior despite that session setting:
+
+```python
+query = (df.writeStream.format("hudi")
+    .options(**hudi_streaming_options)
+    .option("hoodie.datasource.write.operation", "upsert")
+    .option("path", baseStreamingPath)
+    .option("checkpointLocation", checkpointLocation)
+    .start())
+```
+
+The precedence is explicit writer/storage options, then session `spark.hoodie.*`,
+then Hudi defaults. The sink strips the `spark.` prefix before validation and writing.
+Explicit options may use either prefix; if both forms are supplied explicitly,
+the canonical `hoodie.*` option wins. Bare `hoodie.*` session settings are not forwarded.
+
+Settings are captured when the sink is created. Changing the session afterward does not
+change an existing query; restart it to capture new settings. The same captured options
+control multi-writer validation, checkpoint deduplication, and micro-batch writes.
+Table identity options must still agree with the persisted Hudi table. An incompatible
+record key, ordering field, partition field, key generator, or record-merge setting
+fails validation when opening an existing table, including during checkpoint replay.
+
+For flow-based integrations such as the proposed Spark Declarative Pipelines integration
+([RFC-112](https://github.com/apache/hudi/pull/19997)), supply operation and writer tuning
+through flow-scoped `SET spark.hoodie.*`, and reserve table properties for table identity.
+A `SET` remains active for subsequent flow definitions until overridden. Legacy table
+storage options take precedence over session settings: the sink logs conflicting option
+keys without logging their values. Remove conflicting behavior settings from the table's
+storage options before expecting a flow's `SET` to control them.
+
 ## Related Resources
 
 <h3>Blogs</h3>
 * [An Introduction to the Hudi and Flink Integration](https://www.onehouse.ai/blog/intro-to-hudi-and-flink)
 * [Bulk Insert Sort Modes with Apache Hudi](https://medium.com/@simpsons/bulk-insert-sort-modes-with-apache-hudi-c781e77841bc)
+
 
