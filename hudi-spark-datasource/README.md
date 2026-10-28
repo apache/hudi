@@ -60,6 +60,49 @@ ZSTD. The GZIP write default on older Spark versions does not eliminate the risk
 files produced by another engine. Explicitly setting `hoodie.parquet.compression.codec` overrides
 the version-specific default.
 
+## Streaming session configuration compatibility
+
+Starting with this change, Hudi Structured Streaming writes honor the active session's
+`spark.hoodie.*` settings, just like DataFrame batch writes. For example,
+`SET spark.hoodie.datasource.write.operation=insert` changes the operation of subsequently
+started streaming sinks to `insert`. Previously the streaming sink ignored these session settings.
+Audit ambient `spark.hoodie.*` configuration when upgrading an existing `writeStream` application.
+To retain its previous behavior, unset those settings before starting the query or supply explicit
+writer options, such as `.option("hoodie.datasource.write.operation", "upsert")`.
+
+The sink captures settings once at creation, strips the `spark.` prefix, and uses the resulting
+options for multi-writer validation, checkpoint deduplication and every micro-batch write.
+Later `SET` statements do not change an already running sink. Explicit writer/storage options
+override session settings; session settings override defaults. Explicit options using either
+`hoodie.*` or `spark.hoodie.*` are supported; when both forms occur in the explicit options,
+the `hoodie.*` form wins. Bare `hoodie.*` session keys are not forwarded.
+
+Table identity must agree with the persisted Hudi table, even if an explicit option overrides
+a session value. Conflicting record keys, ordering fields, partition fields, key generators or
+merge settings fail validation when a sink opens an existing table, including on checkpoint replay.
+Settings required for multi-writer operation, including a distinct streaming checkpoint identifier,
+must also be present in the effective options.
+
+For Spark Declarative Pipelines (RFC-112), keep operation and writer tuning in flow-scoped
+`SET spark.hoodie.*` statements, not shared table properties. SDP captures the active settings
+at each flow definition. A `SET` remains active for following definitions until changed.
+New table properties should describe table identity. Legacy storage options still take precedence
+over flow settings; the sink logs the conflicting keys and identifies the writer/storage option
+as the winner. Remove the legacy behavior option from the table's storage options before expecting
+a flow `SET` to control it. Configuration values are not included in this diagnostic.
+
+The [flow settings integration scenario](../hudi-integ-test/spark-pipelines/flow_settings.py)
+uses the real Spark 4.1.1 CLI/Connect harness from issue #20402 to check two SQL flow definitions
+with different operations across repeated runs. Run it with the candidate Spark 4.1 bundle and
+the harness directory (from the #20402 branch until it lands):
+
+```bash
+python hudi-integ-test/spark-pipelines/flow_settings.py \
+  --harness-dir /path/to/harness/checkout/hudi-integ-test/spark-pipelines \
+  --bundle /path/to/hudi-spark4.1-bundle_2.13.jar \
+  --logs /tmp/hudi-flow-settings-logs
+```
+
 ## Key Features
 
 - **DataSource V1 Support**: Full integration with Spark's DataSource API

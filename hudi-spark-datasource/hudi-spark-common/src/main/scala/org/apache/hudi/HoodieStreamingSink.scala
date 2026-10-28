@@ -72,6 +72,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
         Option.empty
     }
   }
+  // Validate captured flow settings before starting a query, including when its first batch
+  // is already committed and would otherwise bypass the writer's table identity validation.
+  metaClient.foreach(client => HoodieWriterUtils.validateTableConfig(sqlContext.sparkSession, options, client.getTableConfig))
+
   private val retryCnt = options.getOrElse(STREAMING_RETRY_CNT.key,
     STREAMING_RETRY_CNT.defaultValue).toInt
   private val retryIntervalMs = options.getOrElse(STREAMING_RETRY_INTERVAL_MS.key,
