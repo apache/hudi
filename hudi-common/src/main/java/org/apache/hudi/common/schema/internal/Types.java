@@ -445,20 +445,8 @@ public class Types {
       return new DecimalType(precision, scale);
     }
 
-    /**
-     * Return the minimum number of bytes needed to store a decimal with a give 'precision'.
-     * reference from Spark release 3.1 .
-     */
-    private static int computeMinBytesForDecimalPrecision(int precision) {
-      int numBytes = 1;
-      while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
-        numBytes += 1;
-      }
-      return numBytes;
-    }
-
     private DecimalType(int precision, int scale) {
-      super(precision, scale, computeMinBytesForDecimalPrecision(precision));
+      super(precision, scale, HoodieSchema.minBytesForDecimalPrecision(precision));
     }
 
     @Override
