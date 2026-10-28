@@ -204,7 +204,7 @@ class DefaultSource extends RelationProvider
     // Capture the flow's SQLConf once. The same canonical options must drive validation,
     // checkpoint deduplication and every micro-batch write, even if the session changes later.
     val sessionOpts = DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, Map.empty)
-    val effectiveOpts = sessionOpts ++ DataSourceOptionsHelper.normalizeSparkHoodiePrefix(optParams)
+    val effectiveOpts = DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, optParams)
     val overriddenKeys = sessionOpts.keys.filter(key => effectiveOpts.get(key) != sessionOpts.get(key)).toSeq.sorted
     if (overriddenKeys.nonEmpty) {
       log.warn(s"Explicit streaming writer/storage options override session spark.hoodie.* settings for: ${overriddenKeys.mkString(", ")}. "
