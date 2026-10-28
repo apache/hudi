@@ -33,6 +33,14 @@ passes AST-level guardrails (single statement, SELECT-only, row cap injected
 as a real `LIMIT`) and every invocation is logged as structured JSON — the
 seed of the gateway's trace collection.
 
+For Spark, dynamic `IDENTIFIER(...)` calls and custom or qualified table functions
+are rejected. Allowed table functions are `range`, `explode`, `explode_outer`,
+`posexplode`, `posexplode_outer`, `inline`, `inline_outer`, `stack`, `json_tuple`,
+and `hudi_query`, `hudi_table_changes`, `hudi_query_timeline`, `hudi_filesystem_view`,
+`hudi_metadata`. Hudi functions require a literal catalog table name such as
+`'default.orders'`; paths and computed table names are rejected.
+`hudi_filesystem_view` accepts only the table argument, without a subpath.
+
 ## Quickstart (local process)
 
 ```bash

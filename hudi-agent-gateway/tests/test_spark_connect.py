@@ -358,6 +358,22 @@ async def test_query_qualifies_format_named_schema_with_configured_catalog(setti
     assert "`custom_catalog`.text.orders" in fake_trino.executed[-1]
 
 
+@pytest.mark.parametrize("sql", [
+    "SELECT * FROM hudi_table_changes('s3a://other-bucket/tbl', 'latest_state', 'earliest')",
+    "SELECT * FROM hudi_query_timeline(concat('s3a:', '//other-bucket/tbl'), 'false')",
+    "SELECT * FROM hudi_filesystem_view('default.orders', '../other-table')",
+    "SELECT * FROM IDENTIFIER('text.`/etc/passwd`')",
+])
+async def test_spark_table_function_bypasses_rejected_before_client(settings, fake_trino, sql):
+    registry = build_registry(spark_settings(settings), fake_trino)
+    result = json.loads(await registry.get("query_lakehouse").handler(sql=sql))
+    assert "read-only:" in result["error"]
+    async with Client(build_mcp(registry)) as mcp:
+        result = await mcp.call_tool("query_lakehouse", {"sql": sql})
+        assert "read-only:" in json.loads(result.content[0].text)["error"]
+    assert not fake_trino.executed
+
+
 @pytest.mark.parametrize(
     "sql",
     [
