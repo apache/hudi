@@ -97,6 +97,12 @@ jobs:
       - name: Build the Comet native library
         # core-amd64-libs is Comet's portable x86 release build (-Ctarget-cpu=x86-64-v3); the default
         # `release` target compiles for the build machine's CPU, which the test runners may not share.
+        # x86-64-v3 turns on SSE4.2 and AVX2 but not PCLMULQDQ, and RocksDB's crc32c.cc (compiled from
+        # source for hudi-rs's spill feature) does not build under GCC 13 with that combination. Cargo
+        # reads CARGO_ENCODED_RUSTFLAGS ahead of the RUSTFLAGS the make target sets, so the feature is
+        # added through it; every x86-64-v3 CPU has the instruction.
+        env:
+          CARGO_ENCODED_RUSTFLAGS: "-Ctarget-cpu=x86-64-v3\x1f-Ctarget-feature=+pclmulqdq"
         run: COMET_MAKE_TARGET=core-amd64-libs "$COMET_DIR/build_comet.sh"
       - name: Install the Comet Maven artifacts
         # core-amd64-libs only builds libcomet.so; the install is the second half of Comet's `release`
