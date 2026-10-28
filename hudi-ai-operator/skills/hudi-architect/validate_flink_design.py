@@ -31,7 +31,7 @@ import re
 import sys
 from pathlib import Path
 from typing import Any, TypeGuard
-from urllib.parse import SplitResult, parse_qsl, urlsplit
+from urllib.parse import SplitResult, parse_qsl, unquote, urlsplit
 
 from validate_flink_capabilities import (
     DEFAULT_MANIFEST,
@@ -44,6 +44,10 @@ from validate_flink_capabilities import (
 APPEND_CONTRACT_SCHEMA_VERSION = 1
 MUTABLE_CONTRACT_SCHEMA_VERSION = 2
 MUTABLE_MOR_CONTRACT_SCHEMA_VERSION = 3
+CATALOG_CONTRACT_SCHEMA_VERSION = 1
+CATALOG_MANAGED_RESOLUTION_MODES = frozenset(
+    {"hudi_dfs_catalog", "hudi_hms_catalog"}
+)
 SUPPORTED_CONTRACT_SCHEMAS = {
     APPEND_CONTRACT_SCHEMA_VERSION,
     MUTABLE_CONTRACT_SCHEMA_VERSION,
@@ -62,6 +66,14 @@ SENSITIVE_QUERY_KEY = re.compile(
     r"(?:access[_-]?key|api[_-]?key|credential|password|secret|signature|token)",
     re.IGNORECASE,
 )
+SENSITIVE_CATALOG_KEY = re.compile(
+    r"(?:access[_-]?key|api[_-]?key|credential|iam|keytab|password|secret|token|username)",
+    re.IGNORECASE,
+)
+SENSITIVE_URI_ASSIGNMENT = re.compile(
+    r"(?:^|[/;,&])(?:access[_-]?key|api[_-]?key|credential|iam|keytab|password|secret|sig|signature|token|username)\s*=",
+    re.IGNORECASE,
+)
 PLACEHOLDER = re.compile(r"(?:<[^>]+>|\$\{[^}]+\}|\b(?:TBD|TODO)\b)", re.IGNORECASE)
 PARAMETERIZED_TYPE = re.compile(
     r"^(?P<name>DECIMAL|CHAR|VARCHAR|BINARY|VARBINARY|TIME|TIMESTAMP|TIMESTAMP_LTZ)"
@@ -75,6 +87,13 @@ FINDING_STATUS = {
     "FLINK_BASELINE_EVIDENCE_INVALID": "BLOCKED",
     "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED": "BLOCKED",
     "FLINK_CATALOG_REQUIREMENT_UNRESOLVED": "REVIEW_REQUIRED",
+    "FLINK_CATALOG_COMPOSITION_CONFLICT": "BLOCKED",
+    "FLINK_CATALOG_CONTRACT_INVALID": "INCOMPLETE",
+    "FLINK_CATALOG_CONTRACT_REQUIRED": "INCOMPLETE",
+    "FLINK_CATALOG_CREDENTIAL_REJECTED": "BLOCKED",
+    "FLINK_CATALOG_LIFECYCLE_UNRESOLVED": "REVIEW_REQUIRED",
+    "FLINK_CATALOG_MODE_UNSUPPORTED": "BLOCKED",
+    "FLINK_CATALOG_PATH_CONFLICT": "BLOCKED",
     "FLINK_CHECKPOINTING_REQUIRED": "BLOCKED",
     "FLINK_CHECKPOINT_INTERVAL_REQUIRED": "INCOMPLETE",
     "FLINK_CHECKPOINT_INTERVAL_UNSUPPORTED": "BLOCKED",
@@ -84,6 +103,7 @@ FINDING_STATUS = {
     "FLINK_EXISTING_EVIDENCE_INVALID": "INCOMPLETE",
     "FLINK_EXISTING_EVIDENCE_REQUIRED": "INCOMPLETE",
     "FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED": "REVIEW_REQUIRED",
+    "FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED": "REVIEW_REQUIRED",
     "FLINK_EXISTING_SCHEMA_CONFLICT": "BLOCKED",
     "FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED": "REVIEW_REQUIRED",
     "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT": "BLOCKED",
@@ -94,6 +114,7 @@ FINDING_STATUS = {
     "FLINK_EXISTING_WRITER_TRANSITION_UNRESOLVED": "REVIEW_REQUIRED",
     "FLINK_EXISTING_WRITER_CONFIG_CONFLICT": "REVIEW_REQUIRED",
     "FLINK_EXTERNAL_CATALOG_REVIEW": "REVIEW_REQUIRED",
+    "FLINK_GLUE_CATALOG_UNVERIFIED": "REVIEW_REQUIRED",
     "FLINK_HUDI_METADATA_FIELD_CONFLICT": "BLOCKED",
     "FLINK_LOAD_BEARING_VALUE_REQUIRED": "INCOMPLETE",
     "FLINK_MULTI_WRITER_REVIEW": "REVIEW_REQUIRED",
@@ -114,6 +135,7 @@ FINDING_STATUS = {
     "FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED": "BLOCKED",
     "FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED": "INCOMPLETE",
     "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED": "BLOCKED",
+    "FLINK_MOR_CATALOG_NAMING_UNVERIFIED": "REVIEW_REQUIRED",
     "FLINK_OPTION_NOT_VERIFIED": "REVIEW_REQUIRED",
     "FLINK_PARTITION_FIELD_MISSING": "BLOCKED",
     "FLINK_PHYSICAL_SCHEMA_REQUIRED": "INCOMPLETE",
@@ -185,6 +207,17 @@ def _check_keys(
     if unknown:
         assessment.add(
             "FLINK_DESIGN_CONTRACT_INVALID",
+            f"{field} contains unsupported fields: {unknown}",
+        )
+
+
+def _check_catalog_keys(
+    value: dict[str, Any], allowed: set[str], field: str, assessment: Assessment
+) -> None:
+    unknown = sorted(set(value) - allowed)
+    if unknown:
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
             f"{field} contains unsupported fields: {unknown}",
         )
 
@@ -382,11 +415,638 @@ def _sql_string(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def _has_sensitive_catalog_key(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(
+            SENSITIVE_CATALOG_KEY.search(str(key)) is not None
+            or _has_sensitive_catalog_key(item)
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return any(_has_sensitive_catalog_key(item) for item in value)
+    return False
+
+
+def _metastore_uris_valid(value: Any) -> bool:
+    if not _check_concrete_value(value):
+        return False
+    for raw_uri in value.split(","):
+        uri = raw_uri.strip()
+        try:
+            parsed = urlsplit(uri)
+            port = parsed.port
+        except ValueError:
+            return False
+        if (
+            parsed.scheme.lower() != "thrift"
+            or not parsed.hostname
+            or port is None
+            or not 1 <= port <= 65535
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+        ):
+            return False
+    return True
+
+
+def _metastore_uris_have_credentials(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    for raw_uri in value.split(","):
+        if SENSITIVE_URI_ASSIGNMENT.search(unquote(raw_uri)) is not None:
+            return True
+        try:
+            parsed = urlsplit(raw_uri.strip())
+        except ValueError:
+            continue
+        if parsed.username is not None or parsed.password is not None:
+            return True
+        parameters = [
+            *parse_qsl(parsed.query, keep_blank_values=True),
+            *parse_qsl(parsed.fragment, keep_blank_values=True),
+        ]
+        if any(_is_sensitive_query_key(key) for key, _ in parameters):
+            return True
+    return False
+
+
+def _catalog_profile_id(resolution_mode: Any, external_discovery: Any) -> str | None:
+    if not isinstance(resolution_mode, str) or not isinstance(external_discovery, str):
+        return None
+    profiles = {
+        ("direct_sql", "none"): "direct_sql_none",
+        ("direct_sql", "hive_metastore"): "direct_sql_hive_metastore",
+        ("hudi_dfs_catalog", "none"): "hudi_dfs_catalog_none",
+        ("hudi_dfs_catalog", "hive_metastore"):
+            "hudi_dfs_catalog_hive_metastore",
+        ("hudi_hms_catalog", "hive_metastore"):
+            "hudi_hms_catalog_hive_metastore",
+    }
+    return profiles.get((resolution_mode, external_discovery))
+
+
+def _mor_sync_strategy(contract: dict[str, Any]) -> str | None:
+    raw_read = contract.get("read")
+    read = raw_read if isinstance(raw_read, dict) else {}
+    raw_modes = read.get("query_modes")
+    modes = (
+        set(raw_modes)
+        if isinstance(raw_modes, list)
+        and all(isinstance(mode, str) for mode in raw_modes)
+        else set()
+    )
+    if modes == {"snapshot"}:
+        return "RT"
+    if modes == {"read_optimized"}:
+        return "RO"
+    if modes == {"snapshot", "read_optimized"}:
+        return "ALL"
+    return None
+
+
+def _registered_table_names(
+    table_name: Any, table_type: Any, strategy: str | None
+) -> list[str]:
+    if not _non_empty_string(table_name):
+        return []
+    base_name = table_name.split(".")[-1]
+    if table_type != "MERGE_ON_READ":
+        return [base_name]
+    if strategy == "RO":
+        return [base_name]
+    if strategy == "RT":
+        return [base_name]
+    if strategy == "ALL":
+        return [f"{base_name}_ro", f"{base_name}_rt", base_name]
+    return []
+
+
+def _assess_catalog(
+    contract: dict[str, Any],
+    manifest: dict[str, Any],
+    assessment: Assessment,
+    *,
+    external_catalog: Any,
+    expected_table_lifecycle: str,
+) -> dict[str, Any]:
+    """Validate the orthogonal PR6 catalog contract without selecting it."""
+
+    explicit = "catalog" in contract
+    raw_catalog = contract.get("catalog")
+    if not explicit:
+        if external_catalog is True:
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_REQUIRED",
+                "safety.external_catalog=true requires an explicit catalog contract",
+            )
+        legacy_profile = external_catalog is False
+        resolution = "direct_sql" if legacy_profile else "unresolved"
+        discovery = "none" if legacy_profile else "unresolved"
+        normalized_sync_owner = "none" if legacy_profile else "unresolved"
+        normalized_lifecycle_owner = "application" if legacy_profile else "unresolved"
+        return {
+            "contract_schema": CATALOG_CONTRACT_SCHEMA_VERSION,
+            "profile": "direct_sql_none" if legacy_profile else "unresolved",
+            "resolution_mode": resolution,
+            "external_discovery": discovery,
+            "sync_owner": normalized_sync_owner,
+            "data_lifecycle_owner": normalized_lifecycle_owner,
+            "catalog_setup_sql": "",
+            "effective_configuration": {
+                "catalog_freshness": "not_applicable",
+                "data_lifecycle_owner": normalized_lifecycle_owner,
+                "external_discovery": discovery,
+                "resolution_mode": resolution,
+                "sync_owner": normalized_sync_owner,
+            },
+            "deployment_checks": [],
+        }
+
+    if isinstance(raw_catalog, dict):
+        catalog = raw_catalog
+    else:
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID", "catalog must be an object"
+        )
+        catalog = {}
+    _check_catalog_keys(
+        catalog,
+        {
+            "catalog_name",
+            "catalog_path",
+            "contract_schema",
+            "data_lifecycle_owner",
+            "database",
+            "external_discovery",
+            "hive_configuration",
+            "mor_sync_strategy",
+            "resolution_mode",
+            "sync_owner",
+            "table_external",
+        },
+        "catalog",
+        assessment,
+    )
+    if _has_sensitive_catalog_key(catalog):
+        assessment.add(
+            "FLINK_CATALOG_CREDENTIAL_REJECTED",
+            "Catalog contracts must reference credential-free deployment configuration",
+        )
+    if catalog.get("contract_schema") != CATALOG_CONTRACT_SCHEMA_VERSION:
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            f"catalog.contract_schema must be {CATALOG_CONTRACT_SCHEMA_VERSION}",
+        )
+
+    resolution_mode = catalog.get("resolution_mode")
+    external_discovery = catalog.get("external_discovery")
+    sync_owner = catalog.get("sync_owner")
+    lifecycle_owner = catalog.get("data_lifecycle_owner")
+    resolution_modes = {
+        "direct_sql",
+        "hudi_dfs_catalog",
+        "hudi_hms_catalog",
+    }
+    discovery_modes = {"none", "hive_metastore", "aws_glue"}
+    sync_owners = {"none", "flink_sink", "hudi_hms_catalog"}
+    lifecycle_owners = {"application", "catalog"}
+    resolution_valid = isinstance(resolution_mode, str) and resolution_mode in resolution_modes
+    discovery_valid = (
+        isinstance(external_discovery, str)
+        and external_discovery in discovery_modes
+    )
+    sync_owner_valid = isinstance(sync_owner, str) and sync_owner in sync_owners
+    lifecycle_owner_valid = (
+        isinstance(lifecycle_owner, str) and lifecycle_owner in lifecycle_owners
+    )
+    catalog_managed_resolution = (
+        resolution_valid and resolution_mode in CATALOG_MANAGED_RESOLUTION_MODES
+    )
+    if not _non_empty_string(resolution_mode):
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.resolution_mode must be explicit",
+        )
+    elif not resolution_valid:
+        assessment.add(
+            "FLINK_CATALOG_MODE_UNSUPPORTED",
+            "catalog.resolution_mode is outside the Hudi 1.2.0 PR6 profiles",
+        )
+    if not _non_empty_string(external_discovery):
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.external_discovery must be explicit",
+        )
+    elif not discovery_valid:
+        assessment.add(
+            "FLINK_CATALOG_MODE_UNSUPPORTED",
+            "catalog.external_discovery is unsupported",
+        )
+    if not _non_empty_string(sync_owner):
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.sync_owner must be explicit",
+        )
+    elif not sync_owner_valid:
+        assessment.add(
+            "FLINK_CATALOG_MODE_UNSUPPORTED", "catalog.sync_owner is unsupported"
+        )
+    if not _non_empty_string(lifecycle_owner):
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.data_lifecycle_owner must be explicit",
+        )
+    elif not lifecycle_owner_valid:
+        assessment.add(
+            "FLINK_CATALOG_MODE_UNSUPPORTED",
+            "catalog.data_lifecycle_owner is unsupported",
+        )
+    if external_discovery == "aws_glue":
+        assessment.add(
+            "FLINK_GLUE_CATALOG_UNVERIFIED",
+            "AWS Glue is present in Hudi 1.2.0 but is not executable without a "
+            "Flink-specific fixture",
+        )
+
+    profile = _catalog_profile_id(resolution_mode, external_discovery)
+    if profile is None:
+        if external_discovery == "aws_glue":
+            profile = "aws_glue_unverified"
+        elif resolution_valid and discovery_valid:
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                "The requested table-resolution and external-discovery composition is unsupported",
+            )
+            profile = "unsupported"
+        else:
+            profile = "unresolved"
+
+    expected_external_gate = (
+        resolution_mode != "direct_sql" or external_discovery != "none"
+    )
+    if (
+        resolution_valid
+        and discovery_valid
+        and isinstance(external_catalog, bool)
+        and external_catalog != expected_external_gate
+    ):
+        assessment.add(
+            "FLINK_CATALOG_COMPOSITION_CONFLICT",
+            "safety.external_catalog conflicts with the explicit catalog composition",
+        )
+
+    expected_owners = {
+        "direct_sql_none": ("none", "application"),
+        "direct_sql_hive_metastore": ("flink_sink", "application"),
+        "hudi_dfs_catalog_none": ("none", "catalog"),
+        "hudi_dfs_catalog_hive_metastore": ("flink_sink", "catalog"),
+        "hudi_hms_catalog_hive_metastore": ("hudi_hms_catalog", "application"),
+    }
+    if profile in expected_owners:
+        expected_sync_owner, expected_lifecycle_owner = expected_owners[profile]
+        if sync_owner_valid and sync_owner != expected_sync_owner:
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                f"{profile} requires sync_owner={expected_sync_owner}",
+            )
+        if lifecycle_owner is None or (
+            isinstance(lifecycle_owner, str) and not lifecycle_owner.strip()
+        ):
+            assessment.add(
+                "FLINK_CATALOG_LIFECYCLE_UNRESOLVED",
+                f"{profile} requires an explicit data lifecycle owner",
+            )
+        elif lifecycle_owner_valid and lifecycle_owner != expected_lifecycle_owner:
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                f"{profile} requires data_lifecycle_owner={expected_lifecycle_owner}",
+            )
+
+    catalog_name = catalog.get("catalog_name")
+    database = catalog.get("database")
+    catalog_path = catalog.get("catalog_path")
+    if resolution_mode == "direct_sql":
+        if "catalog_name" in catalog or "catalog_path" in catalog or "table_external" in catalog:
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "Direct SQL forbids catalog_name, catalog_path, and table_external",
+            )
+    else:
+        if not _check_concrete_value(catalog_name):
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "Catalog resolution requires a concrete catalog_name",
+            )
+        elif re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", catalog_name) is None:
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "catalog.catalog_name must be a simple Flink SQL identifier",
+            )
+    if resolution_mode != "direct_sql" or external_discovery == "hive_metastore":
+        if not _check_concrete_value(database):
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "Catalog or Hive metastore composition requires a concrete database",
+            )
+        elif re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", database) is None:
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "catalog.database must be a simple Flink SQL identifier",
+            )
+    elif "database" in catalog:
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.database is not applicable to direct SQL without external discovery",
+        )
+
+    raw_table = contract.get("table")
+    table: dict[str, Any] = raw_table if isinstance(raw_table, dict) else {}
+    table_name = table.get("name")
+    table_path = table.get("path")
+    if catalog_managed_resolution and (
+        not _non_empty_string(table_name) or "." in table_name
+    ):
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "Catalog-managed table.name must be an unqualified identifier; catalog and "
+            "database are separate fields",
+        )
+    if resolution_mode == "hudi_dfs_catalog":
+        if not _check_concrete_value(catalog_path):
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "DFS catalog resolution requires a concrete catalog_path",
+            )
+        elif path_error := _path_validation_error(catalog_path):
+            assessment.add("FLINK_CATALOG_CREDENTIAL_REJECTED", path_error)
+        if all(
+            _check_concrete_value(value)
+            for value in (catalog_path, database, table_name)
+        ):
+            expected_path = f"{catalog_path}/{database}/{table_name}"
+            if table_path != expected_path:
+                assessment.add(
+                    "FLINK_CATALOG_PATH_CONFLICT",
+                    "The desired table path must exactly equal "
+                    "${catalog.path}/${database}/${table.name}",
+                )
+        if "table_external" in catalog:
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "catalog.table_external applies only to hudi_hms_catalog",
+            )
+    elif "catalog_path" in catalog:
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.catalog_path applies only to hudi_dfs_catalog",
+        )
+
+    if resolution_mode == "hudi_hms_catalog":
+        table_external = catalog.get("table_external")
+        if "table_external" not in catalog:
+            assessment.add(
+                "FLINK_CATALOG_LIFECYCLE_UNRESOLVED",
+                "The first HMS Catalog path requires table.external=true and "
+                "application-owned data",
+            )
+        elif not isinstance(table_external, bool):
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "catalog.table_external must be explicitly true or false",
+            )
+        elif table_external is False:
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                "The bounded HMS Catalog path does not support managed tables; "
+                "table.external must be true",
+            )
+    elif "table_external" in catalog:
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.table_external applies only to hudi_hms_catalog",
+        )
+
+    raw_hive = catalog.get("hive_configuration")
+    hive_configuration: dict[str, Any] = {}
+    if external_discovery == "hive_metastore":
+        if isinstance(raw_hive, dict):
+            hive_configuration = raw_hive
+        else:
+            assessment.add(
+                "FLINK_CATALOG_CONTRACT_INVALID",
+                "catalog.hive_configuration must be an object",
+            )
+        _check_catalog_keys(
+            hive_configuration,
+            {"location", "source"},
+            "catalog.hive_configuration",
+            assessment,
+        )
+        source = hive_configuration.get("source")
+        location = hive_configuration.get("location")
+        if resolution_mode == "hudi_hms_catalog":
+            if source == "hive_conf_dir":
+                if not _check_concrete_value(location) or not Path(location).is_absolute():
+                    assessment.add(
+                        "FLINK_CATALOG_CONTRACT_INVALID",
+                        "hive_conf_dir requires an absolute credential-free location",
+                    )
+                elif _path_validation_error(location) is not None:
+                    assessment.add(
+                        "FLINK_CATALOG_CREDENTIAL_REJECTED",
+                        "hive_conf_dir must not contain credentials or secret parameters",
+                    )
+            elif source == "classpath":
+                if "location" in hive_configuration:
+                    assessment.add(
+                        "FLINK_CATALOG_CONTRACT_INVALID",
+                        "Classpath Hive configuration must not include a location",
+                    )
+            else:
+                assessment.add(
+                    "FLINK_CATALOG_CONTRACT_INVALID",
+                    "HMS Catalog supports hive_conf_dir or classpath Hive configuration",
+                )
+        else:
+            if _metastore_uris_have_credentials(location):
+                assessment.add(
+                    "FLINK_CATALOG_CREDENTIAL_REJECTED",
+                    "Hive metastore URIs must not contain credentials or secret parameters",
+                )
+            if source != "metastore_uris" or not _metastore_uris_valid(location):
+                assessment.add(
+                    "FLINK_CATALOG_CONTRACT_INVALID",
+                    "Direct and DFS sink-owned Hive sync requires credential-free thrift "
+                    "metastore_uris",
+                )
+    elif "hive_configuration" in catalog:
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.hive_configuration is forbidden when external_discovery=none",
+        )
+
+    mutable_mor = contract.get("contract_schema") == MUTABLE_MOR_CONTRACT_SCHEMA_VERSION
+    strategy = catalog.get("mor_sync_strategy")
+    expected_strategy = _mor_sync_strategy(contract) if mutable_mor else None
+    if mutable_mor and external_discovery == "hive_metastore":
+        if strategy != expected_strategy:
+            assessment.add(
+                "FLINK_MOR_CATALOG_NAMING_UNVERIFIED",
+                "MOR sync strategy must be derived from the declared query modes",
+            )
+    elif "mor_sync_strategy" in catalog:
+        assessment.add(
+            "FLINK_CATALOG_CONTRACT_INVALID",
+            "catalog.mor_sync_strategy applies only to mutable MOR with Hive discovery",
+        )
+
+    raw_write = contract.get("write")
+    write = raw_write if isinstance(raw_write, dict) else {}
+    raw_options = write.get("connector_options")
+    connector_options = raw_options if isinstance(raw_options, dict) else {}
+    if _has_sensitive_catalog_key(connector_options):
+        assessment.add(
+            "FLINK_CATALOG_CREDENTIAL_REJECTED",
+            "Connector options must not contain catalog credentials",
+        )
+    if (
+        connector_options.get("hive_sync.skip_ro_suffix") is True
+        or connector_options.get("hive_sync.skip_ro_suffix") in ("true", "TRUE")
+        or connector_options.get("hoodie.meta.sync.sync_snapshot_with_table_name")
+        is False
+        or connector_options.get("hoodie.meta.sync.sync_snapshot_with_table_name")
+        in ("false", "FALSE")
+        or (
+            "hive_sync.table.strategy" in connector_options
+            and connector_options.get("hive_sync.table.strategy") != expected_strategy
+        )
+    ):
+        assessment.add(
+            "FLINK_MOR_CATALOG_NAMING_UNVERIFIED",
+            "Custom MOR catalog naming is outside the fixed PR6 naming contract",
+        )
+
+    if expected_table_lifecycle == "existing" and profile != "direct_sql_none":
+        assessment.add(
+            "FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED",
+            "Existing-table registration, alteration, and catalog takeover remain assessment-only",
+        )
+
+    catalog_sql = ""
+    if catalog_managed_resolution:
+        options: list[tuple[str, Any]] = [("type", "hudi")]
+        if resolution_mode == "hudi_dfs_catalog":
+            options.extend([("mode", "dfs"), ("catalog.path", catalog_path)])
+        else:
+            options.extend([("mode", "hms"), ("table.external", "true")])
+            if hive_configuration.get("source") == "hive_conf_dir":
+                options.append(("hive.conf.dir", hive_configuration.get("location")))
+        options.append(("default-database", database))
+        if all(_check_concrete_value(item) for item in (catalog_name, database)) and all(
+            _check_concrete_value(value) for _, value in options
+        ):
+            option_sql = ",\n".join(
+                f"  {_sql_string(key)} = {_sql_string(str(value))}"
+                for key, value in options
+            )
+            catalog_sql = (
+                f"CREATE CATALOG {_quote_identifier(str(catalog_name))} WITH "
+                f"(\n{option_sql}\n);\n"
+                f"USE CATALOG {_quote_identifier(str(catalog_name))};\n"
+                f"CREATE DATABASE IF NOT EXISTS {_quote_identifier(str(database))};\n"
+                f"USE {_quote_identifier(str(database))};"
+            )
+
+    table_type = write.get("table_type")
+    registered_names = _registered_table_names(table_name, table_type, strategy)
+    effective_configuration: dict[str, Any] = {
+        "catalog_freshness": (
+            "post_commit_eventual"
+            if external_discovery == "hive_metastore"
+            else "not_applicable"
+        ),
+        "data_lifecycle_owner": lifecycle_owner,
+        "external_discovery": external_discovery,
+        "resolution_mode": resolution_mode,
+        "sync_owner": sync_owner,
+    }
+    if external_discovery == "hive_metastore":
+        effective_configuration["hive_sync"] = {
+            "database": database,
+            "enabled": True,
+            "ignore_exceptions": False,
+            "metastore_uris": (
+                hive_configuration.get("location")
+                if hive_configuration.get("source") == "metastore_uris"
+                and _metastore_uris_valid(hive_configuration.get("location"))
+                else (
+                    "unavailable"
+                    if hive_configuration.get("source") == "metastore_uris"
+                    else "from_hive_configuration"
+                )
+            ),
+            "mode": "hms",
+            "partition_fields": table.get("partition_fields", []),
+            "registered_table_names": registered_names,
+            "skip_ro_suffix": False,
+            "snapshot_with_table_name": True,
+            "support_timestamp": True,
+            "table": table_name.split(".")[-1]
+            if _non_empty_string(table_name)
+            else table_name,
+            "table_strategy": strategy if mutable_mor else "NOT_APPLICABLE",
+        }
+
+    required_checks: set[str] = set()
+    if catalog_managed_resolution:
+        required_checks.update(
+            {"verify_catalog_dependencies", "verify_catalog_database_registration"}
+        )
+    if resolution_mode == "hudi_dfs_catalog":
+        required_checks.update(
+            {"verify_catalog_path_exists", "verify_catalog_path_permissions"}
+        )
+    if external_discovery == "hive_metastore":
+        required_checks.update(
+            {
+                "verify_hive_configuration_available",
+                "verify_hms_connectivity",
+                "verify_table_registration_after_commit",
+            }
+        )
+        if table.get("partition_fields"):
+            required_checks.add("verify_partition_registration_after_commit")
+        if mutable_mor:
+            required_checks.add("verify_mor_catalog_table_names")
+        required_checks.add("verify_external_engine_visibility")
+    checks = [
+        check
+        for check in manifest["catalog_composition_contract"]["deployment_checks"]
+        if check in required_checks
+    ]
+
+    return {
+        "contract_schema": CATALOG_CONTRACT_SCHEMA_VERSION,
+        "profile": profile,
+        "resolution_mode": resolution_mode,
+        "external_discovery": external_discovery,
+        "sync_owner": sync_owner,
+        "data_lifecycle_owner": lifecycle_owner,
+        "catalog_setup_sql": catalog_sql,
+        "effective_configuration": effective_configuration,
+        "deployment_checks": checks,
+    }
+
+
 def _render_sql(
     contract: dict[str, Any],
     table_columns: list[dict[str, Any]],
     partition_fields: list[str],
     record_key_fields: list[str],
+    catalog_state: dict[str, Any],
 ) -> dict[str, str]:
     table = contract["table"]
     source = contract["source"]
@@ -397,6 +1057,17 @@ def _render_sql(
         MUTABLE_MOR_CONTRACT_SCHEMA_VERSION,
     }
     mutable_mor = contract["contract_schema"] == MUTABLE_MOR_CONTRACT_SCHEMA_VERSION
+    resolution_mode = catalog_state["resolution_mode"]
+    external_discovery = catalog_state["external_discovery"]
+    catalog_managed_resolution = (
+        isinstance(resolution_mode, str)
+        and resolution_mode in CATALOG_MANAGED_RESOLUTION_MODES
+    )
+    target_identifier = (
+        _quote_identifier(table["name"])
+        if catalog_managed_resolution
+        else _quote_qualified_identifier(table["name"])
+    )
 
     definitions = [
         f"  {_quote_identifier(column['name'])} {column['type']}"
@@ -407,56 +1078,74 @@ def _render_sql(
         key_sql = ", ".join(_quote_identifier(field) for field in record_key_fields)
         definitions.append(f"  PRIMARY KEY ({key_sql}) NOT ENFORCED")
 
-    table_ddl = (
-        f"CREATE TABLE {_quote_qualified_identifier(table['name'])} (\n"
-        + ",\n".join(definitions)
-        + "\n)"
-    )
+    table_ddl = f"CREATE TABLE {target_identifier} (\n" + ",\n".join(definitions) + "\n)"
     if partition_fields:
         partition_sql = ", ".join(_quote_identifier(field) for field in partition_fields)
         table_ddl += f"\nPARTITIONED BY ({partition_sql})"
+    table_options: list[tuple[str, str]] = [("connector", "hudi")]
+    if resolution_mode != "hudi_dfs_catalog":
+        table_options.append(("path", table["path"]))
     if mutable:
         ordering_field = contract["ordering"]["fields"][0]
         table_type = "MERGE_ON_READ" if mutable_mor else "COPY_ON_WRITE"
-        table_ddl += (
-            "\nWITH (\n"
-            "  'connector' = 'hudi',\n"
-            f"  'path' = {_sql_string(table['path'])},\n"
-            f"  'table.type' = '{table_type}',\n"
-            "  'write.operation' = 'upsert',\n"
-            f"  'ordering.fields' = {_sql_string(ordering_field)},\n"
-            "  'hoodie.write.record.merge.mode' = 'EVENT_TIME_ORDERING',\n"
-            "  'index.type' = 'FLINK_STATE',\n"
-            "  'index.global.enabled' = 'true',\n"
-            "  'index.state.ttl' = '0',\n"
-            "  'index.bootstrap.enabled' = 'true',\n"
-            "  'changelog.enabled' = 'false'"
+        table_options.extend(
+            [
+                ("table.type", table_type),
+                ("write.operation", "upsert"),
+                ("ordering.fields", ordering_field),
+                ("hoodie.write.record.merge.mode", "EVENT_TIME_ORDERING"),
+                ("index.type", "FLINK_STATE"),
+                ("index.global.enabled", "true"),
+                ("index.state.ttl", "0"),
+                ("index.bootstrap.enabled", "true"),
+                ("changelog.enabled", "false"),
+            ]
         )
         if mutable_mor:
-            table_ddl += (
-                ",\n  'compaction.schedule.enabled' = 'true',\n"
-                "  'compaction.async.enabled' = 'true',\n"
-                "  'compaction.operation.execute.async.enabled' = 'true',\n"
-                "  'compaction.trigger.strategy' = 'num_commits',\n"
-                "  'compaction.delta_commits' = '5',\n"
-                "  'clustering.schedule.enabled' = 'false',\n"
-                "  'clustering.async.enabled' = 'false'"
+            table_options.extend(
+                [
+                    ("compaction.schedule.enabled", "true"),
+                    ("compaction.async.enabled", "true"),
+                    ("compaction.operation.execute.async.enabled", "true"),
+                    ("compaction.trigger.strategy", "num_commits"),
+                    ("compaction.delta_commits", "5"),
+                    ("clustering.schedule.enabled", "false"),
+                    ("clustering.async.enabled", "false"),
+                ]
             )
-        table_ddl += "\n);"
     else:
-        table_ddl += (
-            "\nWITH (\n"
-            "  'connector' = 'hudi',\n"
-            f"  'path' = {_sql_string(table['path'])},\n"
-            "  'table.type' = 'COPY_ON_WRITE',\n"
-            "  'write.operation' = 'insert',\n"
-            "  'write.insert.cluster' = 'false'\n"
-            ");"
+        table_options.extend(
+            [
+                ("table.type", "COPY_ON_WRITE"),
+                ("write.operation", "insert"),
+                ("write.insert.cluster", "false"),
+            ]
         )
+
+    catalog = contract.get("catalog", {})
+    if external_discovery == "hive_metastore":
+        if catalog_state["sync_owner"] == "flink_sink":
+            hive_configuration = catalog["hive_configuration"]
+            table_options.extend(
+                [
+                    ("hive_sync.enabled", "true"),
+                    ("hive_sync.mode", "hms"),
+                    ("hive_sync.metastore.uris", hive_configuration["location"]),
+                    ("hive_sync.db", catalog["database"]),
+                    ("hive_sync.table", table["name"].split(".")[-1]),
+                ]
+            )
+        if mutable_mor:
+            table_options.append(("hive_sync.table.strategy", catalog["mor_sync_strategy"]))
+
+    option_sql = ",\n".join(
+        f"  {_sql_string(key)} = {_sql_string(value)}" for key, value in table_options
+    )
+    table_ddl += f"\nWITH (\n{option_sql}\n);"
 
     field_sql = ",\n  ".join(_quote_identifier(column["name"]) for column in table_columns)
     insert_sql = (
-        f"INSERT INTO {_quote_qualified_identifier(table['name'])} (\n  {field_sql}\n)\n"
+        f"INSERT INTO {target_identifier} (\n  {field_sql}\n)\n"
         f"SELECT\n  {field_sql}\n"
         f"FROM {_quote_qualified_identifier(source['table'])};"
     )
@@ -465,11 +1154,17 @@ def _render_sql(
         "SET 'execution.checkpointing.interval' = "
         f"'{runtime['checkpoint_interval_ms']} ms';"
     )
+    catalog_setup_sql = catalog_state["catalog_setup_sql"]
+    statements = [runtime_sql]
+    if catalog_setup_sql:
+        statements.append(catalog_setup_sql)
+    statements.extend([table_ddl, insert_sql])
     return {
         "runtime_sql": runtime_sql,
+        "catalog_setup_sql": catalog_setup_sql,
         "table_ddl": table_ddl,
         "insert_sql": insert_sql,
-        "combined_sql": f"{runtime_sql}\n\n{table_ddl}\n\n{insert_sql}",
+        "combined_sql": "\n\n".join(statements),
     }
 
 
@@ -512,6 +1207,7 @@ def assess_design(
         contract,
         {
             "baseline_id",
+            "catalog",
             "contract_schema",
             "flink_version",
             "hudi_version",
@@ -615,10 +1311,15 @@ def assess_design(
     elif writer_model != "single_writer":
         assessment.add("FLINK_WRITER_MODEL_UNRESOLVED", "Writer topology is unresolved")
     external_catalog = safety.get("external_catalog")
-    if external_catalog is True:
-        assessment.add("FLINK_EXTERNAL_CATALOG_REVIEW", "Catalog composition is deferred")
-    elif external_catalog is not False:
+    if type(external_catalog) is not bool:
         assessment.add("FLINK_CATALOG_REQUIREMENT_UNRESOLVED", "Catalog requirement is unresolved")
+    catalog_state = _assess_catalog(
+        contract,
+        manifest,
+        assessment,
+        external_catalog=external_catalog,
+        expected_table_lifecycle=expected_table_lifecycle,
+    )
     mutability = safety.get("mutability")
     if mutable_contract:
         if mutability != "mutable":
@@ -692,6 +1393,23 @@ def assess_design(
                 "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED",
                 f"Partition field {field!r} cannot use binary type "
                 f"{table_by_name[field]['type']!r} until deterministic encoding is verified",
+            )
+    if (
+        catalog_state["resolution_mode"] == "hudi_hms_catalog"
+        and partition_fields
+        and len(partition_fields) == len(set(partition_fields))
+        and all(field in table_by_name for field in partition_fields)
+    ):
+        schema_partition_order = [
+            column["name"]
+            for column in table_columns
+            if column["name"] in partition_fields
+        ]
+        if schema_partition_order != partition_fields:
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                "HMS Catalog requires table.partition_fields to follow their order in "
+                "table.columns",
             )
 
     identity = _dict(contract.get("identity"), "identity", assessment)
@@ -861,10 +1579,36 @@ def assess_design(
         source_keys.update({"delete_payload", "emits_deletes", "primary_key_fields"})
     _check_keys(source, source_keys, "source", assessment)
     source_name = source.get("table")
-    if not _check_concrete_value(source_name) or any(
-        not part for part in str(source_name).split(".")
-    ):
+    source_parts = source_name.split(".") if _check_concrete_value(source_name) else []
+    source_catalog_managed = (
+        isinstance(catalog_state["resolution_mode"], str)
+        and catalog_state["resolution_mode"] in CATALOG_MANAGED_RESOLUTION_MODES
+    )
+    if not source_parts or any(not part for part in source_parts):
         assessment.add("FLINK_SOURCE_CONTRACT_REQUIRED", "A concrete source table is required")
+    elif source_catalog_managed and len(source_parts) != 3:
+        assessment.add(
+            "FLINK_SOURCE_CONTRACT_REQUIRED",
+            "Catalog-managed profiles require source.table to be a fully qualified "
+            "catalog.database.table identifier",
+        )
+    elif expected_table_lifecycle == "new" and source_catalog_managed:
+        raw_catalog = contract.get("catalog")
+        catalog = raw_catalog if isinstance(raw_catalog, dict) else {}
+        target_parts = [
+            catalog.get("catalog_name"),
+            catalog.get("database"),
+            table_name,
+        ]
+        if (
+            all(_check_concrete_value(part) for part in target_parts)
+            and source_parts == target_parts
+        ):
+            assessment.add(
+                "FLINK_CATALOG_COMPOSITION_CONFLICT",
+                "The streaming new-table path cannot read from and write to the same "
+                "catalog.database.table object",
+            )
     source_columns = _columns(source.get("columns"), "source.columns", manifest, assessment)
     if not source_columns:
         assessment.add(
@@ -1304,14 +2048,27 @@ def assess_design(
     result: dict[str, Any] = {
         "status": status,
         "executable_eligible": executable,
+        "catalog_contract_schema": catalog_state["contract_schema"],
+        "catalog_profile": catalog_state["profile"],
+        "catalog_setup_sql": catalog_state["catalog_setup_sql"] if executable else "",
+        "effective_catalog_configuration": catalog_state[
+            "effective_configuration"
+        ],
+        "catalog_deployment_checks": catalog_state["deployment_checks"],
         "finding_codes": [finding["code"] for finding in assessment.findings],
         "findings": assessment.findings,
         "advisory_codes": assessment.advisories,
-        "validation_evidence": validation_evidence(manifest, contract_schema),
+        "validation_evidence": validation_evidence(
+            manifest, contract_schema, catalog_state["profile"]
+        ),
     }
     if executable:
         result["artifacts"] = _render_sql(
-            contract, table_columns, partition_fields, record_key_fields
+            contract,
+            table_columns,
+            partition_fields,
+            record_key_fields,
+            catalog_state,
         )
     return result
 

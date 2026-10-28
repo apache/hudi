@@ -1081,7 +1081,11 @@ def assess_reconciliation(
         deployment_checks.append(
             {"check": "verify_index_bootstrap_before_first_checkpoint", "required": True}
         )
-    baseline_evidence = validation_evidence(manifest, desired.get("contract_schema"))
+    baseline_evidence = validation_evidence(
+        manifest,
+        desired.get("contract_schema"),
+        desired_result.get("catalog_profile", "direct_sql_none"),
+    )
     baseline_evidence["reconciliation_schema"] = RECONCILIATION_SCHEMA_VERSION
     return {
         "status": status,
@@ -1089,6 +1093,15 @@ def assess_reconciliation(
         "reconciliation_complete": complete,
         "writer_transition": transition,
         "executable_eligible": False,
+        "catalog_contract_schema": desired_result.get("catalog_contract_schema"),
+        "catalog_profile": desired_result.get("catalog_profile", "direct_sql_none"),
+        "catalog_setup_sql": "",
+        "effective_catalog_configuration": desired_result.get(
+            "effective_catalog_configuration", {}
+        ),
+        "catalog_deployment_checks": desired_result.get(
+            "catalog_deployment_checks", []
+        ),
         "finding_codes": finding_codes,
         "findings": assessment.findings,
         "advisory_codes": assessment.advisories,
