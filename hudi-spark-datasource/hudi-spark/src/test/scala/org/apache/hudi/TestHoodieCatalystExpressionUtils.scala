@@ -50,9 +50,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   def testArithmeticTransformationsPreserveOrdering(): Unit = {
     assertEquals(Some(intAttr), matched(Add(intAttr, Literal(1))))
     assertEquals(Some(intAttr), matched(Add(Literal(1), intAttr)))
-    assertEquals(Some(intAttr), matched(Multiply(intAttr, Literal(2))))
-    assertEquals(Some(intAttr), matched(Multiply(Literal(2), intAttr)))
-    assertEquals(Some(intAttr), matched(Divide(intAttr, Literal(2))))
+    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.0d))))
+    assertEquals(Some(dblAttr), matched(Multiply(Literal(2.0d), dblAttr)))
+    assertEquals(Some(dblAttr), matched(Divide(dblAttr, Literal(2.0d))))
     assertEquals(Some(intAttr), matched(BitwiseOr(intAttr, Literal(1))))
     assertEquals(Some(intAttr), matched(BitwiseOr(Literal(1), intAttr)))
     assertEquals(Some(intAttr), matched(ShiftLeft(intAttr, Literal(1))))
@@ -98,6 +98,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // Decimal widening is an up-cast; narrowing precision is not.
     assertEquals(Some(decAttr), matched(Cast(decAttr, DecimalType(12, 2))))
     assertEquals(None, matched(Cast(decAttr, DecimalType(8, 2))))
+    // Decimal to float/double rounds monotonically and is allowed explicitly.
+    assertEquals(Some(decAttr), matched(Cast(decAttr, DoubleType)))
+    assertEquals(Some(decAttr), matched(Cast(decAttr, FloatType)))
     // Cast.canUpCast rejects double to float even though rounding is weakly monotonic; the
     // conservative answer only costs pruning opportunity.
     assertEquals(None, matched(Cast(dblAttr, FloatType)))
@@ -108,24 +111,36 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
-  def testMultiplyDivideRequireStrictlyPositiveLiteral(): Unit = {
+  def testMultiplyDivideRequirePositiveFiniteFloatingPointFactor(): Unit = {
     // Negative factors reverse ordering.
-    assertEquals(None, matched(Multiply(intAttr, Literal(-1))))
-    assertEquals(None, matched(Multiply(Literal(-1), intAttr)))
-    assertEquals(None, matched(Divide(intAttr, Literal(-2))))
+    assertEquals(None, matched(Multiply(dblAttr, Literal(-1.0d))))
+    assertEquals(None, matched(Multiply(Literal(-1.0d), dblAttr)))
+    assertEquals(None, matched(Divide(dblAttr, Literal(-2.0d))))
     // Zero collapses ordering and makes division undefined.
-    assertEquals(None, matched(Multiply(intAttr, Literal(0))))
-    assertEquals(None, matched(Divide(intAttr, Literal(0))))
+    assertEquals(None, matched(Multiply(dblAttr, Literal(0.0d))))
+    assertEquals(None, matched(Divide(dblAttr, Literal(0.0d))))
+    // Infinite and NaN factors turn finite values into NaN (for ex, 0 * Infinity).
+    assertEquals(None, matched(Multiply(dblAttr, Literal(Double.PositiveInfinity))))
+    assertEquals(None, matched(Divide(dblAttr, Literal(Double.PositiveInfinity))))
+    assertEquals(None, matched(Multiply(dblAttr, Literal(Double.NaN))))
     // Typed null literals carry a null value.
-    assertEquals(None, matched(Multiply(intAttr, Literal(null, IntegerType))))
+    assertEquals(None, matched(Multiply(dblAttr, Literal(null, DoubleType))))
     // Non-literal operands cannot be validated statically, even when reference-free.
-    assertEquals(None, matched(Multiply(intAttr, Add(Literal(1), Literal(1)))))
+    assertEquals(None, matched(Multiply(dblAttr, Add(Literal(1.0d), Literal(1.0d)))))
     // Self-multiplication is not monotonic over negative values.
-    assertEquals(None, matched(Multiply(intAttr, intAttr)))
-    // Strictly positive literals of any numeric type match in the supported operand positions.
-    assertEquals(Some(intAttr), matched(Multiply(intAttr, Literal(2.5d))))
-    assertEquals(Some(dblAttr), matched(Multiply(Literal(Decimal(2)), dblAttr)))
-    assertEquals(Some(intAttr), matched(Divide(intAttr, Literal(3L))))
+    assertEquals(None, matched(Multiply(dblAttr, dblAttr)))
+    // Integral results wrap around on overflow and decimal results overflow into NULL, so even
+    // positive factors do not preserve ordering for them.
+    assertEquals(None, matched(Multiply(longAttr, Literal(2L))))
+    assertEquals(None, matched(Multiply(Literal(2), intAttr)))
+    assertEquals(None, matched(Multiply(decAttr, Literal(Decimal(2), DecimalType(1, 0)))))
+    assertEquals(None, matched(Divide(decAttr, Literal(Decimal(2), DecimalType(1, 0)))))
+    // Positive finite factors match in the supported operand positions, including after an
+    // up-cast of an integral column.
+    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.5d))))
+    assertEquals(Some(dblAttr), matched(Multiply(Literal(2.5d), dblAttr)))
+    assertEquals(Some(dblAttr), matched(Divide(dblAttr, Literal(3.0d))))
+    assertEquals(Some(intAttr), matched(Multiply(Cast(intAttr, FloatType), Literal(2.0f))))
   }
 
   @Test
@@ -145,7 +160,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testNestedComposition(): Unit = {
-    assertEquals(Some(intAttr), matched(Add(Multiply(intAttr, Literal(2)), Literal(3))))
+    assertEquals(Some(dblAttr), matched(Add(Multiply(dblAttr, Literal(2.0d)), Literal(3.0d))))
   }
 
   @Test

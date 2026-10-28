@@ -799,9 +799,26 @@ object TestDataSkippingUtils {
           IndexRow("file_1", valueCount = 2, A_minValue = -10, A_maxValue = 0, A_nullCount = 0)
         ),
         Seq("file_1")),
-      // Multiplying by a positive constant still translates and prunes
+      // A positive constant does not prevent integral overflow: Long.MaxValue * 2L wraps around
+      // to -2 in non-ANSI mode, so the translated bound would wrongly prune file_1 even though
+      // 51 * 2L = 102 matches; must fall back to always-true
       arguments(
-        "A * 2L < 5",
+        "A * 2L > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 51, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // A decimal column compared with a double is cast to double, which still translates and prunes
+      arguments(
+        "CAST(A AS DECIMAL(20, 0)) > 100.5D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // Multiplying a floating-point value by a positive constant still translates and prunes
+      arguments(
+        "CAST(A AS DOUBLE) * 2.0D < 5.0D",
         Seq(
           IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
           IndexRow("file_2", valueCount = 2, A_minValue = 3, A_maxValue = 4, A_nullCount = 0)

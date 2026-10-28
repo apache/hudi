@@ -18,7 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.Cast
-import org.apache.spark.sql.types.{DataType, DecimalType, NumericType, StringType}
+import org.apache.spark.sql.types.{DataType, DecimalType, DoubleType, FloatType, NumericType, StringType}
 
 // TODO unify w/ DataTypeUtils
 object HoodieSparkTypeUtils {
@@ -45,6 +45,10 @@ object HoodieSparkTypeUtils {
       //       both; casting to a different collation changes the sort order. On Spark 3
       //       StringType is a singleton, making this arm trivially true
       case (fromStr: StringType, toStr: StringType) => fromStr == toStr
+      // NOTE: Cast.canUpCast rejects decimal to float/double as lossy, but rounding is monotonic
+      //       and every decimal fits within float range. Spark's type coercion inserts this cast
+      //       when a decimal column is compared with a float/double (for ex, `price > 99.5D`)
+      case (_: DecimalType, FloatType | DoubleType) => true
       // NOTE: Narrowing numeric casts (for ex, bigint to int) overflow and wrap around in
       //       non-ANSI mode, breaking ordering; only up-casts are guaranteed order-preserving.
       //       This is conservative (for ex, double to float rounds monotonically but is
