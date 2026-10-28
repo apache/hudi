@@ -189,6 +189,11 @@ GATEWAY_IT_SPARK_TABLE=bi_adbc_demo.orders \
 ```
 
 Add `GATEWAY_IT_LLM=1` to exercise the real Agent loop with the configured LLM.
+To additionally test a running gateway's HTTP Agent and MCP interfaces, set
+`GATEWAY_IT_HTTP_URL` to its base URL (for a local port-forward, for example,
+`http://127.0.0.1:18080`). The HTTP MCP check verifies a query and rejection of
+a write; the HTTP Agent check also requires `GATEWAY_IT_LLM=1`. Use a disposable
+read-only fixture table and a gateway accessible only to trusted clients.
 
 ## Development
 

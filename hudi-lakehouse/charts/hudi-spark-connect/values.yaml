@@ -62,6 +62,14 @@ storage:
     # Optional key in existingSecret for temporary credentials.
     sessionTokenKey: ""
 
+# Optional data-path readiness requires an existing non-empty probe table.
+readiness:
+  sql:
+    enabled: false
+    schema: ""
+    table: ""
+    column: ""
+
 # No public ingress or unauthenticated LoadBalancer is provisioned.
 service:
   port: 15002

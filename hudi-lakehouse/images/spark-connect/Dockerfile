@@ -40,6 +40,7 @@ RUN set -eux; \
 RUN python3 -m pip install --no-cache-dir pyspark-client==4.1.3 pyarrow==18.1.0
 
 COPY start-connect.sh /opt/spark/start-connect.sh
+COPY check-ready.py /opt/spark/check-ready.py
 RUN chmod 755 /opt/spark/start-connect.sh && mkdir -p /opt/spark/conf && chown spark:spark /opt/spark/conf
 USER spark
 EXPOSE 15002

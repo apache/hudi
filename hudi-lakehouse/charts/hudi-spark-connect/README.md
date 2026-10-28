@@ -172,8 +172,12 @@ evaluation before changing its lifecycle in a long-running driver.
 ## Kubernetes executor configuration (opt-in)
 
 The chart exposes the configuration needed for a shared driver with separate
-executors. Local mode remains the tested default; rendering this configuration is
-**not** evidence of a validated cluster deployment.
+executors. Local mode remains the default. In a single-node local kind test on
+ARM64, a driver with two 1 GiB executor pods registered both executors and ran
+Hudi INSERT/UPDATE/DELETE/MERGE, readback and driver restart/persistence checks
+against local MinIO and HMS. The test image used the pinned Spark/Hudi image with
+the current repository's executor entrypoint overlaid; the complete Dockerfile
+also built successfully. This is a functional test, not a scale or isolation claim.
 
 ```yaml
 spark:
@@ -188,7 +192,9 @@ serviceAccount:
 ```
 
 Provision this ServiceAccount and its executor-management RBAC in the release
-namespace first. The chart does not grant permissions. In Kubernetes client mode,
+namespace first. The local test allowed get/list/watch/create/delete/patch on pods,
+services and ConfigMaps, plus get/list/watch on persistent volume claims; tune and
+review permissions for your deployment. The chart does not grant permissions. In Kubernetes client mode,
 it advertises the driver's Pod IP and Pod name, selects the release namespace,
 and defaults the executor image to the same Hudi-enabled image. The image delegates
 executor startup to Spark's base entrypoint. Rebuild it when updating the entrypoint;
@@ -208,8 +214,12 @@ credentials other than the chart's S3 Secret. Driver pod settings do not automat
 apply to executors. Keep executors in the release namespace when using its Secrets.
 The chart defaults executor pull secrets from `imagePullSecrets`; override
 `spark.kubernetes.container.image.pullSecrets` for a different comma-separated list.
-Dynamic allocation/autoscaling is not enabled by this example and needs separate
-configuration and validation. Keep one driver replica; this is not a tenant-isolated service.
+Dynamic allocation/autoscaling is not enabled by this example. In a separate local
+kind test with shuffle tracking enabled, min/initial executors 1, max 2, 1-second
+backlog thresholds and a 30-second idle timeout, a 64-partition SQL workload
+scaled from one executor to two and returned to one after becoming idle. Hudi
+CRUD/MERGE and driver restart/readback also passed in this mode. This validates
+only that local configuration and workload, not autoscaling under production load. Keep one driver replica; this is not a tenant-isolated service.
 Standalone (`spark://`) masters are not supported by this chart.
 
 ## Connect and validate with ADBC
@@ -268,8 +278,9 @@ PYTHON="$VIRTUAL_ENV/bin/python" \
   just external-writer tables queried by both engines.
 - `--freshness`: keeps one ADBC connection open while a separate Spark JVM commits
   data, adds a column, and then recreates its test table. The supplied fixture creates
-  short-lived writer pods using the same pinned image and shared catalog/storage;
-  it is **not** another Connect session and does not test Spark 3.5/Flink compatibility.
+  short-lived writer pods using the Connect image by default and shared catalog/storage;
+  it is **not** another Connect session. Set `EXTERNAL_WRITER_IMAGE` to use a
+  separately built writer image, such as the Spark 3.5 fixture below.
   Allow an additional 1 GiB memory request (1.5 GiB limit), CPU, and permissions to
   create/delete pods and ConfigMaps. Only uniquely named test resources are touched.
 
@@ -280,6 +291,52 @@ do not claim automatic visibility based on a refresh-assisted run. The fixture
 does not alter shared example tables, and cleanup never uses `DROP DATABASE CASCADE`.
 Other external writers can use the Python CLI's `--external-writer <command argv>`
 hook; it receives the test database and `commit-schema` / `recreate` action.
+
+For the Spark 3.5 writer fixture, build the image and make it available to the
+cluster (for kind, load it into the cluster), then run the same check:
+
+```bash
+docker build -t hudi-spark35-writer:local hudi-lakehouse/images/spark-3.5-writer
+kind load docker-image hudi-spark35-writer:local --name <cluster-name>
+EXTERNAL_WRITER_IMAGE=hudi-spark35-writer:local \
+  ./hudi-lakehouse/local-dev/scripts/test-spark-connect.sh \
+  --restart-endpoint --freshness --refresh
+```
+
+The fixture uses Spark 3.5.7 and Hudi 1.2.0 in a separate JVM with the endpoint's
+catalog and storage configuration. With a Spark 4.1.3 / Hudi 1.2.0 Connect
+server, explicit refresh passed after external commits, schema evolution, and
+recreation; the original table remained readable after an endpoint restart. Without
+refresh, the existing session could not resolve the externally added column. This
+single combination does not establish general cross-version compatibility.
+
+A separate local-file experiment used Flink 1.20.1 / Hudi 1.2.0 to write a
+CoW table, and Spark 4.1.3 / Hudi 1.2.0 Connect to register and read that path.
+With the same Connect session open, a second Flink upsert was stale until
+`REFRESH TABLE`, after which the updated and inserted rows were visible. Both
+processes shared a disposable Docker volume; this did not exercise Hive
+Metastore sync, object storage, schema evolution, or concurrent writers. To
+reproduce the write side with the Hudi Flink bundle loaded in Flink SQL, use a
+shared path that both runtimes can access:
+
+```sql
+SET 'execution.runtime-mode' = 'batch';
+SET 'table.dml-sync' = 'true';
+SET 'parallelism.default' = '1';
+CREATE TABLE orders (id STRING PRIMARY KEY NOT ENFORCED, amount INT, ts BIGINT)
+WITH ('connector' = 'hudi', 'path' = 'file:///data/flink_orders',
+      'table.type' = 'COPY_ON_WRITE', 'write.precombine.field' = 'ts',
+      'write.tasks' = '1');
+INSERT INTO orders VALUES ('1', 100, CAST(1 AS BIGINT)), ('2', 200, CAST(1 AS BIGINT));
+-- In a later SQL client session, recreate the same table definition, then:
+INSERT INTO orders VALUES ('1', 150, CAST(2 AS BIGINT)), ('3', 300, CAST(2 AS BIGINT));
+```
+
+Register the written path with `CREATE TABLE flink_connect_orders USING hudi
+LOCATION 'file:///data/flink_orders'` in Connect. On the tested combination,
+`SELECT id, amount, ts ... ORDER BY id` returned the original two rows before
+refresh and `(1, 150, 2), (2, 200, 1), (3, 300, 2)` after
+`REFRESH TABLE flink_connect_orders` (the IDs are strings).
 
 These acceptance paths require live Spark/ADBC (and optionally Trino). Offline
 tests validate their assertions, configuration and cleanup, not engine behavior.
@@ -316,21 +373,74 @@ This retains the local-dev Ollama configuration. `/ready` checks Spark with
 `SELECT 1` and checks the configured LLM separately. MCP tool calls themselves
 do not require an LLM. Override the provider as described in the gateway README.
 
+In a single kind environment with the Helm Connect and gateway charts, a local
+Ollama `qwen3:4b-instruct` model completed the HTTP Agent describe and follow-up
+aggregation checks; HTTP MCP returned query results and rejected a DELETE. The
+Superset SQL Lab/chart API and Zeppelin notebook live tests also passed against
+the same Connect deployment. Gateway uses the official PySpark Connect client;
+Superset and Zeppelin use Foundry ADBC. These checks use isolated test tables and
+do not establish production concurrency or authentication behavior.
+
 <a id="spark-connect-client-tutorials"></a>
 
 ## BI clients
 
-BI adapters/examples for Superset and other tools are tracked
-in [#20232](https://github.com/apache/hudi/issues/20232) and will be delivered in follow-up PRs.
-The initial SQLAlchemy adapter is planned under `hudi-lakehouse`; upstreaming can
-be evaluated separately after the integration stabilizes.
+The [experimental Superset adapter](../../superset-spark-connect/README.md)
+provides a SQLAlchemy dialect and Superset engine spec for Foundry ADBC. Follow
+its installation instructions and application-level checks. Those checks are
+separate from the endpoint acceptance tests above.
 
-- **Superset 5.0:** requires a custom SQLAlchemy dialect and engine spec for ADBC;
-  neither is included here. The built-in PyHive connector uses Thrift, not Connect.
-  See [Superset engine specs](https://github.com/apache/superset/blob/5.0.0/superset/db_engine_specs/README.md).
-- **Zeppelin 0.12:** use ADBC from the `%python` interpreter, with the client
-  packages above installed in its Python environment. See the
-  [Python interpreter guide](https://zeppelin.apache.org/docs/0.12.0/interpreter/python.html).
+For Zeppelin 0.12, install the ADBC packages and Foundry driver into the Python
+environment used by the `%python` interpreter. Its official 0.12.0 image uses
+Python 3.9, so the manager 1.12.0 requirements above do not apply to that image.
+The following tested versions are installed as that interpreter's user (or at
+system level where they are readable by that user):
+
+```bash
+python3 -m pip install adbc-driver-manager==1.8.0 pyarrow==18.1.0 dbc==0.3.1
+dbc install 'spark=0.2.1'
+```
+
+In a notebook, connect to the endpoint and render a query (replace the table with
+an isolated test table):
+
+```python
+%python
+from adbc_driver_manager import dbapi
+import pandas as pd
+with dbapi.connect(driver="spark", db_kwargs={"uri": "spark://localhost:15002?api=connect&auth_type=none&tls=false"}, autocommit=True) as conn:
+    with conn.cursor() as cur:
+        cur.execute("SELECT region, SUM(amount) AS total FROM connect_smoke_example.orders GROUP BY region ORDER BY region")
+        rows = cur.fetchall()
+        z.show(pd.DataFrame(rows, columns=["region", "total"]))
+```
+
+The hostname is relative to the Zeppelin interpreter process. Check the rendered
+rows against the test fixture, then run INSERT, UPDATE and DELETE and SELECT after
+each mutation in a disposable table. This uses `%python`, not native `%jdbc`.
+The exact rendered output depends on the installed interpreter. A local run of
+Zeppelin 0.12.0's x86_64 image (emulated on ARM), Python 3.9.15, ADBC manager
+1.8.0, PyArrow 18.1.0 and Foundry Spark ADBC 0.2.1 executed this path against a
+local Spark 4.1.3/Hudi 1.2.0 endpoint. It checked INSERT, UPDATE, DELETE and
+readback and rendered the final aggregation:
+
+![Zeppelin notebook result](../../superset-spark-connect/images/zeppelin-result.png)
+
+For a repeatable API-driven check, install `requests` in the test environment,
+set `HUDI_ZEPPELIN_URL` and `HUDI_ZEPPELIN_CONNECT_URI` (the latter must be
+reachable from the Zeppelin interpreter), and run:
+
+```bash
+python -m unittest discover -s hudi-lakehouse/superset-spark-connect -p 'test_zeppelin_live.py' -v
+```
+
+Use only a disposable endpoint and notebook server. The Connect URI is stored in
+the notebook source, so the test requires `auth_type=none` and rejects credentials
+and secret-bearing options. The test creates a unique notebook and table and removes them; if execution is interrupted or the outcome
+is ambiguous, wait for the notebook to stop before manually cleaning up the
+printed table name. API-created paragraphs must include a table-results config;
+without it this Zeppelin version returned a table result via API but its browser
+UI failed to render the paragraph.
 
 [Foundry Spark ADBC 0.2.1](https://adbc-drivers.org/drivers/spark/) uses autocommit.
 
@@ -343,7 +453,36 @@ configuration and failure stage; they are not a safe-retry guarantee.
 In a local write test, `adbc_cancel()` returned `context canceled` to the client,
 but Spark jobs continued and all 200 inserted rows committed, confirmed by a
 separate connection and the Hudi timeline. Do not treat a client cancellation
-error as proof that a write was stopped or rolled back.
+error as proof that a write was stopped or rolled back. The isolated experiment
+can be repeated on a disposable, unauthenticated localhost endpoint:
+
+```bash
+python hudi-lakehouse/local-dev/example/connect_cancel.py --port 15002 --rows 20000 --delay 1
+```
+
+The observer refreshes the table while looking for the complete expected commit;
+if it cannot determine the outcome, the script leaves the unique table and
+database for inspection after server-side work stops.
+
+To test driver interruption at Hudi timeline stages, start a localhost
+port-forward on 15039 to a **disposable, idle** deployment, then run one stage
+at a time (15040 must be free for reconnection):
+
+```bash
+python hudi-lakehouse/local-dev/example/connect_restart_fault.py --restart-endpoint --stage requested
+# Re-establish the 15039 port-forward before the second run.
+python hudi-lakehouse/local-dev/example/connect_restart_fault.py --restart-endpoint --stage inflight
+```
+
+This forcibly deletes the driver pod and terminates all its sessions. It watches
+driver logs for the selected stage, checks the table after restart, verifies a
+new write and matching rollback log, then cleans up its unique table. Do not run
+other writes on the endpoint during the experiment: the requested-stage log does
+not identify the table. If the stage or rollback is not observed, the outcome is
+inconclusive and the test data is retained. On a local kind deployment, both
+requested and inflight interruptions led to a rollback of the captured instant and
+a successful subsequent write. This does not cover every point within those stages
+or concurrent writers.
 
 Use `LIMIT` and size client/driver memory for the expected results. Foundry 0.2.1
 rejected Arrow responses exceeding its 4 MiB gRPC receive limit in the 100k-row test.
@@ -351,6 +490,175 @@ Local-dev sets `spark.connect.grpc.arrow.maxBatchSize=1m`, which allowed that te
 to complete. Set the same property in `spark.extraConf` for other deployments using
 this driver. It controls batch size, not total result size or memory; oversized
 individual rows can still exceed the receive limit.
+
+### SQL, catalog and storage diagnostics
+
+By default, Kubernetes readiness checks only the TCP listener. To opt into
+SQL-aware readiness, first provision a persistent non-empty storage-backed probe
+table with a non-null ordinary data column and use values like:
+
+```yaml
+readiness:
+  sql:
+    enabled: true
+    schema: probe_database
+    table: probe_table
+    column: probe_column
+```
+
+The driver image must include `check-ready.py`; rebuild older images. Startup
+continues to use TCP so the driver can initialize before the SQL probe runs.
+Readiness checks SQL execution, catalog discovery and an actual table-data query
+in sequence. A missing or empty probe table makes the pod unready; provision it
+before enabling the option. Checks run every 30 seconds with a 30-second timeout.
+In the local kind executor test, the probe passed against a pre-populated Hudi
+probe table; changing the configured column to a nonexistent name made the pod
+unready. Caching and catalog configuration can affect which backing services a
+successful read exercises; this check does not prove write access.
+
+For a separate read-only data-path diagnostic using ADBC, run:
+
+```bash
+python hudi-lakehouse/local-dev/example/connect_readiness.py \
+  --uri 'spark://localhost:15002?api=connect&auth_type=none&tls=false' \
+  --schema probe_database --table probe_table --column probe_column
+```
+
+The command reports SQL, catalog and table-data checks separately and exits
+nonzero at the first failure. It requires read access and never modifies the probe
+table. A missing/empty table is a failure; caching and catalog configuration can
+affect which backing services a successful read actually exercises. This external
+diagnostic does not itself change Kubernetes readiness or prove write access.
+
+### Spark UI, logs and metrics
+
+For local diagnosis, forward the driver UI to loopback only:
+
+```bash
+kubectl -n hudi-lakehouse port-forward --address 127.0.0.1 deployment/hudi-spark-connect 4040:4040
+curl http://127.0.0.1:4040/api/v1/applications
+curl http://127.0.0.1:4040/metrics/json/
+```
+
+These endpoints returned application metadata and metrics in the local kind
+executor test. The UI and event logs can expose SQL, configuration and data;
+restrict access and do not expose them directly on an untrusted network.
+
+To retain Spark event logs, configure `spark.eventLog.enabled=true` and
+`spark.eventLog.dir` in `spark.extraConf` with a pre-created, writable durable
+filesystem location. A separately managed Spark History Server can read the same
+location through `spark.history.fs.logDirectory`; its storage credentials and
+access controls must be configured separately. In a single-node kind experiment,
+a test PVC replaced the driver's `/tmp` scratch volume, with
+`spark.eventLog.dir=file:/tmp/events`. A separate History Server mounted the same
+PVC and used `spark.history.fs.logDirectory=file:/eventlogs/events`. After a
+query and driver restart, its API listed the completed application and its
+successful jobs. This manual PVC configuration is not provisioned by the chart and
+does not validate multi-node volume sharing or production access controls. See
+[Spark monitoring documentation](https://spark.apache.org/docs/4.1.3/monitoring.html)
+for metrics sinks and history server details.
+
+Spark driver logs include Connect session IDs and Spark job details; Hudi SQL
+`CALL show_commits` exposes completed instants. Use timestamps and table names to
+investigate a particular write, but this setup does not provide a guaranteed
+client-request-to-job-to-commit identifier or complete trace correlation.
+
+### Client-disconnect experiment
+
+On a disposable endpoint, the following creates a unique database and terminates
+its own ADBC client during an INSERT. It does not retry the write:
+
+```bash
+python hudi-lakehouse/local-dev/example/connect_disconnect.py \
+  --uri 'spark://localhost:15002?api=connect&auth_type=none&tls=false' \
+  --rows 2000 --delay 1 --wait 90
+```
+
+If the complete expected write is observed after refreshing the table, the script
+cleans up its own table and database. Otherwise it reports an inconclusive outcome
+and leaves them for inspection. Wait until the server-side write has stopped before
+manually dropping those resources. On a local Spark 4.1.3 / Hudi 1.2.0 endpoint,
+a 20,000-row write was observed after the client was terminated one second after
+entering the write. This timing does not guarantee the same outcome in another run.
+Earlier inconclusive runs used an invalid INSERT with ambiguous column names and
+must not be interpreted as evidence about interrupted writes.
+
+For a controlled lost-response experiment, expose a disposable unauthenticated
+endpoint only on localhost and run:
+
+```bash
+python hudi-lakehouse/local-dev/example/connect_lost_response.py --port 15002
+```
+
+A local TCP proxy forwards client requests while discarding server-to-client bytes
+after the connection is established. A separate connection refreshes and checks the
+unique table; once all expected rows are visible, the script terminates the client
+and cleans up. A local 1,000-row run observed the complete commit while responses
+were blocked. With the optional `--retry` flag, the same INSERT is repeated only
+after the original commit is observed; in that run it produced 2,000 rows with
+1,000 distinct IDs. This shows an ambiguous client outcome can coexist with a committed
+write; it does not establish cancellation, automatic retries, idempotency, or behavior
+at every failure phase. If the commit is not observed, the script leaves the table
+for inspection after the server write stops.
+
+### Result-size experiment
+
+The optional `connect_load.py` reads synthetic `range` rows without creating a
+table. Run it only on a disposable endpoint and monitor driver and client memory:
+
+```bash
+python hudi-lakehouse/local-dev/example/connect_load.py \
+  --uri 'spark://localhost:15002?api=connect&auth_type=none&tls=false' \
+  --rows 1000000 --payload-bytes 64 --fetch-size 10000
+```
+
+In a local Spark 4.1.3/Hudi 1.2.0 test with a 2 GiB driver heap,
+`spark.connect.grpc.arrow.maxBatchSize=1m`, Foundry 0.2.1 and Python 3.11 on
+macOS, one million rows each containing an int64 ID and 64-byte ASCII payload
+passed count and checksum validation using `fetchmany(10000)`. Client peak RSS
+was about 170 MiB; a sampled Spark container value was 2.15 GiB, not a peak.
+The standalone container had a 10.2 GiB memory limit; this run does not establish
+behaviour under the chart's 3 GiB pod limit. A single 5,000,000-byte string row
+failed with Foundry's 4,194,304-byte gRPC receive limit despite the 1 MiB Arrow
+batch setting. These are observations, not total-result or memory guarantees.
+
+The opt-in dialect live test also checks Spark `TIMESTAMP_NTZ` with microsecond
+precision, decimal(38,18), nullable array elements in a direct SQL result, nested
+structs and Hudi commit/key metadata columns. A direct SQL array result does not
+establish that Hudi/Parquet can write arrays with NULL elements. In a separate
+local CoW table test, an array containing NULL failed during Hudi write; the
+server log reported Parquet Avro's old-list-structure null-element restriction.
+Setting `spark.hadoop.parquet.avro.write-old-list-structure=false` in the SQL
+session did not resolve the failure. Supplying the same property at driver startup
+allowed a local CoW INSERT containing `[1, NULL, 3]` to succeed and read back
+correctly. In Helm, add the following under `spark.extraConf` before restarting
+the endpoint; test the resulting Parquet representation with your readers:
+
+```yaml
+spark:
+  extraConf:
+    spark.hadoop.parquet.avro.write-old-list-structure: "false"
+```
+
+The opt-in check below creates and removes a unique database and table. It
+requires a disposable endpoint with that startup configuration and a localhost
+port-forward:
+
+```bash
+python hudi-lakehouse/local-dev/example/connect_nullable_array.py --port 15002
+```
+
+The write and readback also passed against the Helm deployment with MinIO and HMS.
+This is a Parquet write configuration finding, not a Connect transport failure.
+With a UTC Spark session, Mac clients launched with `TZ=UTC` and
+`TZ=America/Los_Angeles` both returned the timestamp with UTC zone information
+and the timestamp_ntz without a zone, preserving microseconds. Other server and
+client timezone combinations remain unverified.
+
+The manually triggered `Hudi Spark Connect live acceptance` GitHub Actions workflow
+creates a disposable kind cluster, deploys the chart, runs the SQL matrix and
+restart readback, and deletes the cluster. It is distinct from offline chart and
+script tests. Its first hosted execution still needs to be verified.
 
 ## Troubleshooting
 

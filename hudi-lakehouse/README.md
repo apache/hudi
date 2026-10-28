@@ -179,8 +179,9 @@ The gateway selects the official PySpark Connect client with
 
 See the [BI client notes](charts/hudi-spark-connect/README.md#spark-connect-client-tutorials)
 for Superset and Zeppelin connection requirements and ADBC limitations.
-Gateway integration and BI adapters/examples for Superset and other tools will follow
-in subsequent PRs, tracked in [#20232](https://github.com/apache/hudi/issues/20232).
+The [experimental Superset adapter](superset-spark-connect/README.md) uses ADBC over
+Spark Connect. It includes opt-in SQL Lab and chart-data API checks; browser
+dashboard refresh is documented as a separate manual acceptance step.
 
 ## Version compatibility notes
 
