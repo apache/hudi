@@ -1,7 +1,7 @@
 ---
 title: Streaming Writes
 keywords: [hudi, spark, flink, streaming, processing]
-last_modified_at: 2024-03-13T15:59:57-04:00
+last_modified_at: 2026-10-28T00:00:00+08:00
 ---
 
 import Tabs from '@theme/Tabs';
@@ -92,6 +92,42 @@ df.writeStream.format("hudi")
 
 </Tabs
 >
+
+### Session settings and upgrade compatibility
+
+Starting with 1.3.0, Structured Streaming sinks honor the active session's
+`spark.hoodie.*` settings. Previously, the streaming sink ignored these settings,
+even though batch DataFrame writes supported them. Review ambient session configuration
+when upgrading an existing `writeStream` application.
+
+For example, this setting selects inserts for a subsequently started streaming query:
+
+```python
+spark.conf.set("spark.hoodie.datasource.write.operation", "insert")
+```
+
+Explicit writer options take precedence. To retain upsert behavior despite that session setting:
+
+```python
+query = (df.writeStream.format("hudi")
+    .options(**hudi_streaming_options)
+    .option("hoodie.datasource.write.operation", "upsert")
+    .option("path", baseStreamingPath)
+    .option("checkpointLocation", checkpointLocation)
+    .start())
+```
+
+The precedence is explicit writer/storage options, then session `spark.hoodie.*`,
+then Hudi defaults. The sink strips the `spark.` prefix before validation and writing.
+Explicit options may use either prefix; if both forms are supplied explicitly,
+the canonical `hoodie.*` option wins. Bare `hoodie.*` session settings are not forwarded.
+
+Settings are captured when the sink is created. Changing the session afterward does not
+change an existing query; restart it to capture new settings. The same captured options
+control multi-writer validation, checkpoint deduplication, and micro-batch writes.
+Table identity options must still agree with the persisted Hudi table. An incompatible
+record key, ordering field, partition field, key generator, or record-merge setting
+fails validation when opening an existing table, including during checkpoint replay.
 
 ## Related Resources
 
