@@ -30,7 +30,8 @@ public abstract class BaseCompactor<T, I, K, O> implements Serializable {
 
   private static final long serialVersionUID = 1L;
 
-  protected transient BaseHoodieWriteClient<T, I, K, O> compactionClient;
+  // volatile: switched by the writer while the async service thread reads it at the start of each run
+  protected transient volatile BaseHoodieWriteClient<T, I, K, O> compactionClient;
 
   public BaseCompactor(BaseHoodieWriteClient<T, I, K, O> compactionClient) {
     this.compactionClient = compactionClient;
