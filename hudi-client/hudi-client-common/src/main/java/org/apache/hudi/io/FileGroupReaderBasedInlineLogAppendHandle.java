@@ -66,7 +66,9 @@ public class FileGroupReaderBasedInlineLogAppendHandle<T, I, K, O> extends Hoodi
 
   public FileGroupReaderBasedInlineLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                           CompactionOperation operation, TaskContextSupplier taskContextSupplier, HoodieReaderContext<T> readerContext) {
-    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier);
+    // Convert delete ordering values with the context that produced them.
+    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), null, taskContextSupplier,
+        false, readerContext.getRecordContext());
     this.operation = operation;
     this.readerContext = readerContext;
     // File-group reader output already conforms to the writer schema. Preserve its metadata fields

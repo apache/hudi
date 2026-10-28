@@ -62,7 +62,9 @@ public class FileGroupReaderBasedNativeLogAppendHandle<T, I, K, O> extends Hoodi
   public FileGroupReaderBasedNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                                    CompactionOperation operation, TaskContextSupplier taskContextSupplier,
                                                    HoodieReaderContext<T> readerContext) {
-    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), taskContextSupplier);
+    // The native writer must use the same engine types as the reader's delete records.
+    super(config, instantTime, hoodieTable, operation.getPartitionPath(), operation.getFileId(), null, taskContextSupplier,
+        false, readerContext.getRecordContext());
     this.operation = operation;
     this.readerContext = readerContext;
     // File-group reader output is materialized with the writer schema, including Hudi meta fields.
