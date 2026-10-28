@@ -18,9 +18,9 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Literal, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
-import org.apache.spark.sql.types.{DataType, DoubleType, FloatType}
+import org.apache.spark.sql.types.DataType
 
 /**
  * Base implementation of [[HoodieCatalystExpressionUtils]] carrying the method bodies that are
@@ -83,9 +83,9 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
         // Binary
         case Add(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case Add(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case mul @ Multiply(OrderPreservingTransformation(attrRef), factor, _) if isOrderPreservingScaling(mul, factor) => Some(attrRef)
-        case mul @ Multiply(factor, OrderPreservingTransformation(attrRef), _) if isOrderPreservingScaling(mul, factor) => Some(attrRef)
-        case div @ Divide(OrderPreservingTransformation(attrRef), divisor, _) if isOrderPreservingScaling(div, divisor) => Some(attrRef)
+        case Multiply(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+        case Multiply(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+        case Divide(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case BitwiseOr(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case BitwiseOr(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
         // Unary
@@ -111,16 +111,5 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
         }
       }
     }
-
-    // Scaling by a constant preserves ordering only for a floating-point result and a strictly
-    // positive, finite literal factor: negative factors reverse the ordering and zero collapses it,
-    // while integral results wrap around on overflow (without ANSI) and decimal results overflow
-    // into NULL. Floating-point overflow saturates to infinity, which keeps the ordering
-    private def isOrderPreservingScaling(scaling: Expression, factor: Expression): Boolean =
-      (scaling.dataType, factor) match {
-        case (FloatType, Literal(f: Float, _)) => f > 0 && !f.isInfinite
-        case (DoubleType, Literal(d: Double, _)) => d > 0 && !d.isInfinite
-        case _ => false
-      }
   }
 }

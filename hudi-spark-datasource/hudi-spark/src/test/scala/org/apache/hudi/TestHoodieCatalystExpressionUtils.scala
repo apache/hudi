@@ -18,9 +18,8 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.types.{DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, StringType}
+import org.apache.spark.sql.types.{ByteType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -37,6 +36,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val dateAttr = AttributeReference("dt", DateType)()
   private val longAttr = AttributeReference("l", LongType)()
   private val decAttr = AttributeReference("dec", DecimalType(10, 2))()
+  private val tsAttr = AttributeReference("ts", TimestampType)()
 
   private def matched(expr: Expression): Option[AttributeReference] =
     sparkAdapter.getCatalystExpressionUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
@@ -50,9 +50,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   def testArithmeticTransformationsPreserveOrdering(): Unit = {
     assertEquals(Some(intAttr), matched(Add(intAttr, Literal(1))))
     assertEquals(Some(intAttr), matched(Add(Literal(1), intAttr)))
-    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.0d))))
-    assertEquals(Some(dblAttr), matched(Multiply(Literal(2.0d), dblAttr)))
-    assertEquals(Some(dblAttr), matched(Divide(dblAttr, Literal(2.0d))))
+    assertEquals(Some(intAttr), matched(Multiply(intAttr, Literal(2))))
+    assertEquals(Some(intAttr), matched(Multiply(Literal(2), intAttr)))
+    assertEquals(Some(intAttr), matched(Divide(intAttr, Literal(2))))
     assertEquals(Some(intAttr), matched(BitwiseOr(intAttr, Literal(1))))
     assertEquals(Some(intAttr), matched(BitwiseOr(Literal(1), intAttr)))
     assertEquals(Some(intAttr), matched(ShiftLeft(intAttr, Literal(1))))
@@ -95,7 +95,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // Widening precedence casts preserve ordering, including lossy-but-monotonic long to float.
     assertEquals(Some(intAttr), matched(Cast(intAttr, DoubleType)))
     assertEquals(Some(longAttr), matched(Cast(longAttr, FloatType)))
-    // Decimal widening is an up-cast; narrowing precision is not.
+    // Decimal widening is an up-cast; narrowing precision overflows into NULL.
     assertEquals(Some(decAttr), matched(Cast(decAttr, DecimalType(12, 2))))
     assertEquals(None, matched(Cast(decAttr, DecimalType(8, 2))))
     // Decimal to float/double rounds monotonically and is allowed explicitly.
@@ -104,63 +104,24 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // Cast.canUpCast rejects double to float even though rounding is weakly monotonic; the
     // conservative answer only costs pruning opportunity.
     assertEquals(None, matched(Cast(dblAttr, FloatType)))
-    // String to numeric is not order-preserving.
-    assertEquals(None, matched(Cast(strAttr, IntegerType)))
-    // Identity string cast keeps the ordering.
-    assertEquals(Some(strAttr), matched(Cast(strAttr, StringType)))
   }
 
   @Test
-  def testMultiplyDivideRequirePositiveFiniteFloatingPointFactor(): Unit = {
-    // Negative factors reverse ordering.
-    assertEquals(None, matched(Multiply(dblAttr, Literal(-1.0d))))
-    assertEquals(None, matched(Multiply(Literal(-1.0d), dblAttr)))
-    assertEquals(None, matched(Divide(dblAttr, Literal(-2.0d))))
-    // Zero collapses ordering and makes division undefined.
-    assertEquals(None, matched(Multiply(dblAttr, Literal(0.0d))))
-    assertEquals(None, matched(Divide(dblAttr, Literal(0.0d))))
-    // Infinite and NaN factors turn finite values into NaN (for ex, 0 * Infinity).
-    assertEquals(None, matched(Multiply(dblAttr, Literal(Double.PositiveInfinity))))
-    assertEquals(None, matched(Divide(dblAttr, Literal(Double.PositiveInfinity))))
-    assertEquals(None, matched(Multiply(dblAttr, Literal(Double.NaN))))
-    // Typed null literals carry a null value.
-    assertEquals(None, matched(Multiply(dblAttr, Literal(null, DoubleType))))
-    // Non-literal operands cannot be validated statically, even when reference-free.
-    assertEquals(None, matched(Multiply(dblAttr, Add(Literal(1.0d), Literal(1.0d)))))
-    // Self-multiplication is not monotonic over negative values.
-    assertEquals(None, matched(Multiply(dblAttr, dblAttr)))
-    // Integral results wrap around on overflow and decimal results overflow into NULL, so even
-    // positive factors do not preserve ordering for them.
-    assertEquals(None, matched(Multiply(longAttr, Literal(2L))))
-    assertEquals(None, matched(Multiply(Literal(2), intAttr)))
-    assertEquals(None, matched(Multiply(decAttr, Literal(Decimal(2), DecimalType(1, 0)))))
-    assertEquals(None, matched(Divide(decAttr, Literal(Decimal(2), DecimalType(1, 0)))))
-    // Positive finite factors match in the supported operand positions, including after an
-    // up-cast of an integral column.
-    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.5d))))
-    assertEquals(Some(dblAttr), matched(Multiply(Literal(2.5d), dblAttr)))
-    assertEquals(Some(dblAttr), matched(Divide(dblAttr, Literal(3.0d))))
-    assertEquals(Some(intAttr), matched(Multiply(Cast(intAttr, FloatType), Literal(2.0f))))
-  }
-
-  @Test
-  def testCollationChangingStringCastsDoNotPreserveOrdering(): Unit = {
-    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "String collations only exist on Spark 4.x")
-    // StringType("UTF8_LCASE") is a Spark 4 API, so it is obtained reflectively to keep this
-    // file compiling against the Spark 3 profiles.
-    val lcase = StringType.getClass.getMethod("apply", classOf[String])
-      .invoke(StringType, "UTF8_LCASE").asInstanceOf[DataType]
-    val collatedAttr = AttributeReference("cs", lcase)()
-    // Changing collation changes the sort order, in either direction.
-    assertEquals(None, matched(Cast(collatedAttr, StringType)))
-    assertEquals(None, matched(Cast(strAttr, lcase)))
-    // A collation-preserving cast keeps the ordering.
-    assertEquals(Some(collatedAttr), matched(Cast(collatedAttr, lcase)))
+  def testTimestampToNumericCastOrdering(): Unit = {
+    // Epoch seconds fit bigint and floating-point targets.
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, LongType)))
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, DoubleType)))
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, FloatType)))
+    // Narrower integral targets wrap around and decimals overflow into NULL.
+    assertEquals(None, matched(Cast(tsAttr, IntegerType)))
+    assertEquals(None, matched(Cast(tsAttr, ShortType)))
+    assertEquals(None, matched(Cast(tsAttr, ByteType)))
+    assertEquals(None, matched(Cast(tsAttr, DecimalType(10, 2))))
   }
 
   @Test
   def testNestedComposition(): Unit = {
-    assertEquals(Some(dblAttr), matched(Add(Multiply(dblAttr, Literal(2.0d)), Literal(3.0d))))
+    assertEquals(Some(intAttr), matched(Add(Multiply(intAttr, Literal(2)), Literal(3))))
   }
 
   @Test

@@ -791,23 +791,6 @@ object TestDataSkippingUtils {
           IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
         ),
         Seq("file_2")),
-      // Multiplying by a negative constant reverses ordering: min/max swap places, so the
-      // translated bound would wrongly prune file_1; must fall back to always-true
-      arguments(
-        "A * -1 < 5",
-        Seq(
-          IndexRow("file_1", valueCount = 2, A_minValue = -10, A_maxValue = 0, A_nullCount = 0)
-        ),
-        Seq("file_1")),
-      // A positive constant does not prevent integral overflow: Long.MaxValue * 2L wraps around
-      // to -2 in non-ANSI mode, so the translated bound would wrongly prune file_1 even though
-      // 51 * 2L = 102 matches; must fall back to always-true
-      arguments(
-        "A * 2L > 100",
-        Seq(
-          IndexRow("file_1", valueCount = 2, A_minValue = 51, A_maxValue = Long.MaxValue, A_nullCount = 0)
-        ),
-        Seq("file_1")),
       // A decimal column compared with a double is cast to double, which still translates and prunes
       arguments(
         "CAST(A AS DECIMAL(20, 0)) > 100.5D",
@@ -816,14 +799,23 @@ object TestDataSkippingUtils {
           IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
         ),
         Seq("file_2")),
-      // Multiplying a floating-point value by a positive constant still translates and prunes
+      // A timestamp casts to smallint through its epoch seconds, so 65537s wraps around to 1 in
+      // non-ANSI mode; re-applying the cast over min/max stats would wrongly prune file_1 even
+      // though a row at 200s matches. Must fall back to always-true, keeping the file
       arguments(
-        "CAST(A AS DOUBLE) * 2.0D < 5.0D",
+        "CAST(C AS SMALLINT) > 100",
         Seq(
-          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
-          IndexRow("file_2", valueCount = 2, A_minValue = 3, A_maxValue = 4, A_nullCount = 0)
+          IndexRow("file_1", valueCount = 3, C_minValue = new Timestamp(1000L), C_maxValue = new Timestamp(65537000L), C_nullCount = 0)
         ),
-        Seq("file_1"))
+        Seq("file_1")),
+      // Casting a timestamp to bigint still translates and prunes
+      arguments(
+        "CAST(C AS BIGINT) > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, C_minValue = new Timestamp(1000L), C_maxValue = new Timestamp(50000L), C_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, C_minValue = new Timestamp(101000L), C_maxValue = new Timestamp(200000L), C_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 }

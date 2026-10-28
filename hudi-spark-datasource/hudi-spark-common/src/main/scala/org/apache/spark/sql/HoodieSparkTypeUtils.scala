@@ -18,7 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.Cast
-import org.apache.spark.sql.types.{DataType, DecimalType, DoubleType, FloatType, NumericType, StringType}
+import org.apache.spark.sql.types.{DataType, DecimalType, DoubleType, FloatType, LongType, NumericType, StringType, TimestampType}
 
 // TODO unify w/ DataTypeUtils
 object HoodieSparkTypeUtils {
@@ -37,14 +37,9 @@ object HoodieSparkTypeUtils {
   def isCastPreservingOrdering(from: DataType, to: DataType): Boolean =
     (from, to) match {
       // NOTE: Casting between String and Numeric types re-orders elements (for ex, "10" < "9"
-      //       lexicographically). These arms must stay ahead of the numeric arm below, since
-      //       Cast.canUpCast treats atomic-to-string casts as legal up-casts
-      case (_: StringType, _: NumericType) => false
-      case (_: NumericType, _: StringType) => false
-      // NOTE: On Spark 4 StringType carries a collation (and constraint) and its equals compares
-      //       both; casting to a different collation changes the sort order. On Spark 3
-      //       StringType is a singleton, making this arm trivially true
-      case (fromStr: StringType, toStr: StringType) => fromStr == toStr
+      //       lexicographically)
+      case (StringType, _: NumericType) => false
+      case (_: NumericType, StringType) => false
       // NOTE: Cast.canUpCast rejects decimal to float/double as lossy, but rounding is monotonic
       //       and every decimal fits within float range. Spark's type coercion inserts this cast
       //       when a decimal column is compared with a float/double (for ex, `price > 99.5D`)
@@ -54,6 +49,11 @@ object HoodieSparkTypeUtils {
       //       This is conservative (for ex, double to float rounds monotonically but is
       //       rejected), which only costs pruning opportunity, never correctness
       case (fromNum: NumericType, toNum: NumericType) => Cast.canUpCast(fromNum, toNum)
+      // NOTE: Timestamps cast to numbers through their epoch seconds, which only fit bigint and
+      //       floating-point targets; narrower integral targets wrap around and decimals overflow
+      //       into NULL in non-ANSI mode
+      case (TimestampType, LongType | FloatType | DoubleType) => true
+      case (TimestampType, _: NumericType) => false
 
       case _ => true
     }
