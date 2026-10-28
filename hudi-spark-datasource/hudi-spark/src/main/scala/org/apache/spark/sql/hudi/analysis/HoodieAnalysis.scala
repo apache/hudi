@@ -33,7 +33,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.{CreateTable, LogicalRelation}
 import org.apache.spark.sql.hudi.HoodieOptionConfig.mapSqlOptionsToDataSourceWriteConfigs
-import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, removeMetaFields}
+import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.{isMetaField, makePathQualified, removeMetaFields}
 import org.apache.spark.sql.hudi.analysis.HoodieAnalysis.{sparkAdapter, MatchCreateIndex, MatchCreateTableLike, MatchDropIndex, MatchInsertIntoStatement, MatchMergeIntoTable, MatchRefreshIndex, MatchShowIndexes, ResolvesToHudiTable}
 import org.apache.spark.sql.hudi.blob.ReadBlobRule
 import org.apache.spark.sql.hudi.command._
@@ -42,6 +42,7 @@ import org.apache.spark.sql.hudi.command.InsertIntoHoodieTableCommand.alignQuery
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.command.procedures.{HoodieProcedures, Procedure, ProcedureArgs}
 
+import java.net.URI
 import java.util
 
 import scala.collection.mutable.ListBuffer
@@ -412,12 +413,13 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
       // Convert to CreateHoodieTableAsSelectCommand
       case ct @ CreateTable(table, mode, Some(query))
         if sparkAdapter.isHoodieTable(table) && ct.query.forall(_.resolved) =>
-        val alignedQuery = if (mode == SaveMode.Append && spark.sessionState.catalog.tableExists(table.identifier)) {
+        val appendToExistingTable = mode == SaveMode.Append && spark.sessionState.catalog.tableExists(table.identifier)
+        val alignedQuery = if (appendToExistingTable) {
           alignAppendQuery(table, query)
         } else {
           alignCtasQueryByPartitionOrder(stripMetaFieldAttributes(query), table.partitionColumnNames)
         }
-        CreateHoodieTableAsSelectCommand(table, mode, alignedQuery)
+        CreateHoodieTableAsSelectCommand(table, mode, alignedQuery, appendToExistingTable)
 
       case ct: CreateTable =>
         try {
@@ -445,6 +447,15 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
       throw new HoodieAnalysisException(s"Cannot append using hudi to table ${table.identifier.unquotedString}: " +
         s"the existing table uses ${existingTable.provider.getOrElse("an unspecified provider")}")
     }
+    table.storage.locationUri.foreach { location =>
+      val hadoopConf = spark.sessionState.newHadoopConf()
+      val specifiedLocation = new URI(makePathQualified(location, hadoopConf)).normalize()
+      val existingLocation = new URI(makePathQualified(existingTable.location, hadoopConf)).normalize()
+      if (specifiedLocation != existingLocation) {
+        throw new HoodieAnalysisException(s"The location of the existing table ${existingTable.identifier.unquotedString} " +
+          s"($existingLocation) doesn't match the specified location ($specifiedLocation)")
+      }
+    }
     val conf = spark.sessionState.conf
     val partitionColumns = table.partitionColumnNames
     if (partitionColumns.nonEmpty && (partitionColumns.size != existingTable.partitionColumnNames.size ||
@@ -455,7 +466,7 @@ case class ResolveImplementationsEarly(spark: SparkSession) extends Rule[Logical
     val catalogTable = new HoodieCatalogTable(spark, existingTable)
     val options = mapSqlOptionsToDataSourceWriteConfigs(table.storage.properties -- HoodieCatalogTable.needFilterProps - "path")
     validateTableConfig(spark, options ++ mappingSparkDatasourceConfigsToTableConfigs(options), catalogTable.tableConfig)
-    alignQueryOutput(query, catalogTable, Map.empty, conf)
+    alignQueryOutput(query, catalogTable, Map.empty, conf, allowPositionalFallback = false)
   }
 
   private def alignCtasQueryByPartitionOrder(query: LogicalPlan, partitionColumns: Seq[String]): LogicalPlan = {

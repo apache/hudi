@@ -46,7 +46,8 @@ import scala.collection.JavaConverters._
 case class CreateHoodieTableAsSelectCommand(
    table: CatalogTable,
    mode: SaveMode,
-   query: LogicalPlan) extends DataWritingCommand {
+   query: LogicalPlan,
+   appendToExistingTable: Boolean = false) extends DataWritingCommand {
   override def innerChildren: Seq[QueryPlan[_]] = Seq(query)
 
   override lazy val metrics: Map[String, SQLMetric] = HoodieCommandMetrics.metrics
@@ -65,7 +66,12 @@ case class CreateHoodieTableAsSelectCommand(
     val qualifiedTableIdentifier = table.identifier.copy(database = Some(db))
     val tableName = qualifiedTableIdentifier.unquotedString
 
-    if (sessionState.catalog.tableExists(qualifiedTableIdentifier)) {
+    val tableExists = sessionState.catalog.tableExists(qualifiedTableIdentifier)
+    if (mode == SaveMode.Append && tableExists != appendToExistingTable) {
+      throw new HoodieAnalysisException(s"Table $tableName existence changed after analysis. Retry the append.")
+    }
+
+    if (tableExists) {
       checkState(mode != SaveMode.Overwrite,
         s"Expect the table $tableName has been dropped when the save mode is Overwrite")
 

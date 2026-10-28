@@ -36,7 +36,8 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, HoodieCatalogTable}
+import org.apache.spark.sql.execution.datasources.CreateTable
 import org.apache.spark.sql.functions.{col, concat, expr, lit}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.CreateHoodieTableCommand
@@ -1754,6 +1755,102 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       checkAnswer(s"SELECT id, name, ts, dt FROM $tableName")(Seq(1, "first", 1L, "p1"))
     } finally {
       spark.sql(s"DROP TABLE IF EXISTS $tableName")
+    }
+  }
+
+  for (caseSensitive <- Seq(false, true)) {
+    test(s"saveAsTable append matches columns only by name (caseSensitive=$caseSensitive)") {
+      withSQLConf("spark.sql.caseSensitive" -> caseSensitive.toString) {
+        val tableName = generateTableName
+        spark.sql(s"CREATE TABLE $tableName (id INT, first STRING, last STRING) USING hudi " +
+          "TBLPROPERTIES (primaryKey = 'id')")
+        try {
+          val error = intercept[AnalysisException] {
+            spark.sql("SELECT 1 AS id, 'Doe' AS last, 'John' AS first_name")
+              .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          }
+          assertTrue(error.getMessage.contains("first"))
+          assertEquals(0L, spark.table(tableName).count())
+          val upperCase = spark.sql("SELECT 'Doe' AS LAST, 1 AS ID, 'John' AS FIRST")
+          if (caseSensitive) {
+            intercept[AnalysisException] {
+              upperCase.write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+            }
+            spark.sql("SELECT 'Doe' AS last, 1 AS id, 'John' AS first")
+              .write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          } else {
+            upperCase.write.format("hudi").mode(SaveMode.Append).saveAsTable(tableName)
+          }
+          // SQL INSERT INTO retains its positional fallback for differently named input columns.
+          spark.sql(s"INSERT INTO $tableName SELECT 2 AS other_id, 'Jane' AS other_first, 'Roe' AS other_last")
+          checkAnswer(s"SELECT id, first, last FROM $tableName")(
+            Seq(1, "John", "Doe"), Seq(2, "Jane", "Roe"))
+        } finally {
+          spark.sql(s"DROP TABLE IF EXISTS $tableName")
+        }
+      }
+    }
+  }
+
+  for (external <- Seq(false, true)) {
+    test(s"saveAsTable append validates the qualified location (external=$external)") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val locationClause = if (external) s"LOCATION '${tmp.getCanonicalPath}/$tableName'" else ""
+        spark.sql(s"CREATE TABLE $tableName (id INT) USING hudi $locationClause TBLPROPERTIES (primaryKey = 'id')")
+        try {
+          spark.sql(s"INSERT INTO $tableName VALUES (1)")
+          val location = spark.sessionState.catalog.getTableMetadata(TableIdentifier(tableName)).location
+          val other = new java.io.File(tmp, "other")
+          val error = intercept[AnalysisException] {
+            spark.sql("SELECT 2 AS id").write.format("hudi").mode(SaveMode.Append)
+              .option("path", other.getCanonicalPath).saveAsTable(tableName)
+          }
+          assertTrue(error.getMessage.contains("doesn't match the specified location"))
+          assertFalse(other.exists())
+          checkAnswer(s"SELECT id FROM $tableName")(Seq(1))
+          // Qualified URIs and unqualified paths referring to the same location are both valid.
+          spark.sql("SELECT 2 AS id").write.format("hudi").mode(SaveMode.Append)
+            .option("path", location.getPath).saveAsTable(tableName)
+          spark.sql("SELECT 3 AS id").write.format("hudi").mode(SaveMode.Append)
+            .option("path", location.toString + "/").saveAsTable(tableName)
+          checkAnswer(s"SELECT id FROM $tableName")(Seq(1), Seq(2), Seq(3))
+        } finally {
+          spark.sql(s"DROP TABLE IF EXISTS $tableName")
+        }
+      }
+    }
+  }
+
+  for (existsAtAnalysis <- Seq(false, true)) {
+    test(s"saveAsTable append rejects table existence changes after analysis (existsAtAnalysis=$existsAtAnalysis)") {
+      val tableName = generateTableName
+      val createTable = s"CREATE TABLE $tableName (id INT) USING hudi TBLPROPERTIES (primaryKey = 'id')"
+      if (existsAtAnalysis) {
+        spark.sql(createTable)
+      }
+      try {
+        val table = CatalogTable(TableIdentifier(tableName), CatalogTableType.MANAGED,
+          CatalogStorageFormat.empty, new StructType(), provider = Some("hudi"))
+        val query = spark.sql("SELECT 1 AS id").queryExecution.analyzed
+        val analyzed = spark.sessionState.executePlan(CreateTable(table, SaveMode.Append, Some(query))).analyzed
+        if (existsAtAnalysis) {
+          spark.sql(s"DROP TABLE $tableName")
+        } else {
+          spark.sql(createTable)
+        }
+        val error = intercept[AnalysisException] {
+          spark.sessionState.executePlan(analyzed).executedPlan.executeCollect()
+        }
+        assertTrue(error.getMessage.contains("existence changed after analysis"))
+        if (existsAtAnalysis) {
+          assertFalse(spark.catalog.tableExists(tableName))
+        } else {
+          assertEquals(0L, spark.table(tableName).count())
+        }
+      } finally {
+        spark.sql(s"DROP TABLE IF EXISTS $tableName")
+      }
     }
   }
 
