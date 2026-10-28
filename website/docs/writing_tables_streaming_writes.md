@@ -95,7 +95,7 @@ df.writeStream.format("hudi")
 
 ### Session settings and upgrade compatibility
 
-In the upcoming release, Structured Streaming sinks honor the active session's
+Starting with 1.3.0, Structured Streaming sinks honor the active session's
 `spark.hoodie.*` settings. Previously, the streaming sink ignored these settings,
 even though batch DataFrame writes supported them. Review ambient session configuration
 when upgrading an existing `writeStream` application.
@@ -129,18 +129,9 @@ Table identity options must still agree with the persisted Hudi table. An incomp
 record key, ordering field, partition field, key generator, or record-merge setting
 fails validation when opening an existing table, including during checkpoint replay.
 
-For flow-based integrations such as the proposed Spark Declarative Pipelines integration
-([RFC-112](https://github.com/apache/hudi/pull/19997)), supply operation and writer tuning
-through flow-scoped `SET spark.hoodie.*`, and reserve table properties for table identity.
-A `SET` remains active for subsequent flow definitions until overridden. Legacy table
-storage options take precedence over session settings: the sink logs conflicting option
-keys without logging their values. Remove conflicting behavior settings from the table's
-storage options before expecting a flow's `SET` to control them.
-
 ## Related Resources
 
 <h3>Blogs</h3>
 * [An Introduction to the Hudi and Flink Integration](https://www.onehouse.ai/blog/intro-to-hudi-and-flink)
 * [Bulk Insert Sort Modes with Apache Hudi](https://medium.com/@simpsons/bulk-insert-sort-modes-with-apache-hudi-c781e77841bc)
-
 
