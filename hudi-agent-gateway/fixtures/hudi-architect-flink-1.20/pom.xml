@@ -34,7 +34,7 @@
     <hudi.version>1.2.0</hudi.version>
     <flink.version>1.20.1</flink.version>
     <hadoop.version>2.10.2</hadoop.version>
-    <hive.version>2.3.10</hive.version>
+    <hive.version>4.0.1</hive.version>
     <junit.version>5.11.4</junit.version>
   </properties>
 
