@@ -124,24 +124,27 @@ class ConnectSmokeTest(unittest.TestCase):
 
     def test_sql_matrix_covers_services_incremental_partition_sync_and_versions(self):
         with patch.object(self.smoke, "query", side_effect=[
-            [("20261022000100000",)], [("spark.hadoop.hive.metastore.uris", "thrift://hms:9083")],
+            [("20261022000100000",)],
             [("20261022000200000", 1, "COMPLETED")],
             *[[('hoodie.table.version', '8')]] * 3,
         ]) as query, patch.object(self.smoke, "run") as run:
             self.invoke("sql", "--expected-table-version", "8")
         sqls = "\n".join(call.args[1] for call in run.call_args_list)
         for clause in ("TIMESTAMP AS OF '20261022000100000'", "hudi_table_changes", "PARTITIONED BY (region)",
-                       "'hoodie.datasource.hive_sync.metastore.uris' = 'thrift://hms:9083'",
                        "'hoodie.compact.inline' = 'true'", "'read_optimized'"):
             self.assertIn(clause, sqls)
         self.assertNotIn("hoodie.write.table.version", sqls)
-        self.assertEqual(query.call_count, 6)
+        partitioned_ddl = next(call.args[1] for call in run.call_args_list
+                               if call.args[1].startswith("CREATE TABLE") and "PARTITIONED BY" in call.args[1])
+        self.assertNotIn("hoodie.datasource.meta.sync", partitioned_ddl)
+        self.assertNotIn("hoodie.datasource.hive_sync", partitioned_ddl)
+        self.assertEqual(query.call_count, 5)
 
     def test_sql_matrix_rejects_missing_compaction_or_wrong_version(self):
         for compactions in ([], [("20261022000200000", 1, "COMPLETED")]):
             version = "9" if compactions else "8"
             with self.subTest(compactions=compactions), patch.object(self.smoke, "query", side_effect=[
-                [("20261022000100000",)], [("metastore", "thrift://hms:9083")], compactions,
+                [("20261022000100000",)], compactions,
                 *[[("hoodie.table.version", version)]] * 3,
             ]), patch.object(self.smoke, "run"), self.assertRaises(AssertionError):
                 self.invoke("sql", "--expected-table-version", "8")

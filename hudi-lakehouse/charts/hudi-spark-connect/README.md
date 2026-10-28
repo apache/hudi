@@ -130,19 +130,13 @@ INSERT INTO orders VALUES (1, 100, 1);
 RESET hoodie.clean.automatic;
 ```
 
-Trino needs partition metadata in HMS as well as the Spark catalog entry. Ensure
-the writer syncs partitions to HMS. To configure sync explicitly, add these
-`TBLPROPERTIES` when creating a table (use your metastore URI):
-
-```sql
-'hoodie.datasource.meta.sync.enable' = 'true',
-'hoodie.datasource.hive_sync.enable' = 'true',
-'hoodie.datasource.hive_sync.mode' = 'hms',
-'hoodie.datasource.hive_sync.metastore.uris' = 'thrift://hive-metastore.hudi-lakehouse.svc.cluster.local:9083'
-```
-
-The SQL matrix includes partition sync and Trino readback. These properties are not
-enabled by the generic chart or local-dev defaults.
+With the Hive catalog used by this chart, Hudi Spark SQL writes enable Hive sync
+and default to HMS mode. Trino needs the table and partition metadata in the shared
+metastore. If your deployment needs different settings, configure
+`hoodie.datasource.hive_sync.mode` or `hoodie.datasource.hive_sync.metastore.uris`
+through table properties. The local SQL matrix verifies Trino readback of a
+partitioned table without per-table Hive sync properties. Non-SQL writers may
+require their own sync configuration.
 
 Table properties and session settings take precedence over global defaults in
 the Spark SQL write configuration; consult the relevant Hudi operation's settings

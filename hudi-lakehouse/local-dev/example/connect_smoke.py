@@ -71,21 +71,11 @@ def sql_matrix(cursor, database, expected_version):
     run(cursor, f"SELECT id, amount FROM hudi_table_changes('{table}', 'latest_state', 'earliest') ORDER BY id",
         [(1, 175), (3, 300)])
 
-    # HMS sync must register the partitions, not just the Spark catalog table.
-    hms = query(cursor, "SET spark.hadoop.hive.metastore.uris")[0][1]
+    # Test the chart's Hive catalog defaults without per-table sync properties.
     partitioned = f"{database}.partitioned_orders"
     run(cursor, f"""CREATE TABLE {partitioned} (id INT, amount INT, ts BIGINT, region STRING)
         USING hudi PARTITIONED BY (region) TBLPROPERTIES (
-        type = 'cow', primaryKey = 'id', preCombineField = 'ts',
-        'hoodie.datasource.write.hive_style_partitioning' = 'true',
-        'hoodie.datasource.meta.sync.enable' = 'true',
-        'hoodie.datasource.hive_sync.enable' = 'true',
-        'hoodie.datasource.hive_sync.mode' = 'hms',
-        'hoodie.datasource.hive_sync.metastore.uris' = {sql_literal(hms)},
-        'hoodie.datasource.hive_sync.database' = '{database}',
-        'hoodie.datasource.hive_sync.table' = 'partitioned_orders',
-        'hoodie.datasource.hive_sync.partition_fields' = 'region',
-        'hoodie.datasource.hive_sync.partition_extractor_class' = 'org.apache.hudi.hive.MultiPartKeysValueExtractor'
+        type = 'cow', primaryKey = 'id', preCombineField = 'ts'
         )""")
     run(cursor, f"INSERT INTO {partitioned} VALUES (1, 100, 1, 'East'), (2, 200, 1, 'West')")
     run(cursor, f"SELECT region, SUM(amount) FROM {partitioned} GROUP BY region ORDER BY region",
