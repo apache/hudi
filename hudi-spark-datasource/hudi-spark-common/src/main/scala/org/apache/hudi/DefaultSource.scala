@@ -183,6 +183,9 @@ class DefaultSource extends RelationProvider
     try {
       if (effectiveOpts.get(OPERATION.key).contains(BOOTSTRAP_OPERATION_OPT_VAL)) {
         HoodieSparkSqlWriter.bootstrap(sqlContext, mode, effectiveOpts, df)
+      } else if (isDataFrameWritePathEnabled(effectiveOpts, mode, sqlContext)) {
+        runDataFrameWritePath(sqlContext, mode,
+          DataSourceWriteOptions.mayBeDerivePartitionPath(effectiveOpts), df)
       } else {
         val (success, _, _, _, _, _) = HoodieSparkSqlWriter.write(sqlContext, mode, effectiveOpts, df)
         if (!success) {
@@ -195,6 +198,96 @@ class DefaultSource extends RelationProvider
     }
 
     new HoodieEmptyRelation(sqlContext, df.schema)
+  }
+
+  /**
+   * The DataFrame-native write path handles plain insert and upsert appends; anything else
+   * (other operations, non-append save modes on existing tables, SQL-internal writes, dup
+   * policies, custom index classes, auto-generated keys) stays on the legacy writer even when
+   * the flag is on.
+   */
+  private def isDataFrameWritePathEnabled(opts: Map[String, String],
+                                          mode: SaveMode,
+                                          sqlContext: SQLContext): Boolean = {
+    val enabled = opts.getOrElse(DefaultSource.DATAFRAME_WRITE_PATH_ENABLE, "false").toBoolean
+    if (!enabled) {
+      false
+    } else {
+      fallbackReason(opts, mode, sqlContext) match {
+        case Some(reason) =>
+          log.warn(s"DataFrame write path is enabled but $reason; falling back to the legacy write path")
+          false
+        case None => true
+      }
+    }
+  }
+
+  private def fallbackReason(opts: Map[String, String],
+                             mode: SaveMode,
+                             sqlContext: SQLContext): scala.Option[String] = {
+    val operation = opts.getOrElse(OPERATION.key, DataSourceWriteOptions.OPERATION.defaultValue())
+    val keyGenClass = opts.getOrElse(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key(), "")
+    lazy val tableExists = opts.get("path").exists { path =>
+      val fsPath = new org.apache.hadoop.fs.Path(path, HoodieTableMetaClient.METAFOLDER_NAME)
+      fsPath.getFileSystem(sqlContext.sparkContext.hadoopConfiguration).exists(fsPath)
+    }
+    if (operation != DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
+      && operation != DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL) {
+      Some(s"operation '$operation' is not supported by it")
+    } else if (mode != SaveMode.Append && tableExists) {
+      Some(s"save mode $mode on an existing table is not supported by it")
+    } else if (opts.getOrElse(DataSourceWriteOptions.INSERT_DROP_DUPS.key(), "false").toBoolean
+      || opts.getOrElse(DataSourceWriteOptions.INSERT_DUP_POLICY.key(),
+        DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) != DataSourceWriteOptions.NONE_INSERT_DUP_POLICY) {
+      Some("insert dup policies are not supported by it")
+    } else if (opts.getOrElse(HoodieSparkSqlWriter.SQL_MERGE_INTO_WRITES.key(), "false").toBoolean
+      || opts.getOrElse(DataSourceWriteOptions.SPARK_SQL_WRITES_PREPPED_KEY, "false").toBoolean
+      || opts.getOrElse(org.apache.hudi.config.HoodieWriteConfig.SPARK_SQL_MERGE_INTO_PREPPED_KEY, "false").toBoolean) {
+      Some("SQL-internal writes are not supported by it")
+    } else if (opts.contains(org.apache.spark.sql.hudi.command.SqlKeyGenerator.ORIGINAL_KEYGEN_CLASS_NAME)) {
+      Some("SQL key generators are not supported by it")
+    } else if (keyGenClass.nonEmpty
+      && !DefaultSource.DATAFRAME_PATH_KEY_GENERATORS.contains(keyGenClass.substring(keyGenClass.lastIndexOf('.') + 1))) {
+      Some(s"key generator $keyGenClass is not supported by it")
+    } else if (opts.get(org.apache.hudi.config.HoodieIndexConfig.INDEX_CLASS_NAME.key()).exists(_.nonEmpty)) {
+      Some("custom index classes are not supported by it")
+    } else if (opts.getOrElse("hoodie.datasource.write.drop.partition.columns", "false").toBoolean) {
+      Some("dropping partition columns is not supported by it")
+    } else if (Set("BUCKET", "INMEMORY", "GLOBAL_BLOOM", "HBASE")
+      .contains(opts.getOrElse("hoodie.index.type", "").toUpperCase(java.util.Locale.ROOT))) {
+      Some(s"index type ${opts("hoodie.index.type")} is not supported by it")
+    } else if (!opts.contains(DataSourceWriteOptions.RECORDKEY_FIELD.key()) && !tableExists) {
+      Some("auto-generated record keys are not supported by it")
+    } else {
+      None
+    }
+  }
+
+  /**
+   * Invokes the DataFrame write path reflectively: hudi-spark-dataframe depends on the client
+   * modules only, so the datasource reaches it by name to keep the dependency arrow pointing
+   * one way.
+   */
+  private def runDataFrameWritePath(sqlContext: SQLContext,
+                                    mode: SaveMode,
+                                    opts: Map[String, String],
+                                    df: DataFrame): Unit = {
+    val writerClass = try {
+      getClass.getClassLoader.loadClass(DefaultSource.DATAFRAME_WRITER_CLASS)
+    } catch {
+      case e: ClassNotFoundException =>
+        throw new HoodieException("The DataFrame write path is enabled ("
+          + DefaultSource.DATAFRAME_WRITE_PATH_ENABLE
+          + ") but the hudi-spark-dataframe module is not on the classpath", e)
+    }
+    val method = writerClass.getMethod("write",
+      classOf[SQLContext], classOf[SaveMode], classOf[Map[String, String]], classOf[DataFrame])
+    try {
+      method.invoke(null, sqlContext, mode, opts, df)
+    } catch {
+      case e: java.lang.reflect.InvocationTargetException if e.getCause != null =>
+        throw e.getCause
+    }
   }
 
   override def createSink(sqlContext: SQLContext,
@@ -291,6 +384,17 @@ class DefaultSource extends RelationProvider
 object DefaultSource {
 
   private val log = LoggerFactory.getLogger(classOf[DefaultSource])
+
+  val DATAFRAME_WRITE_PATH_ENABLE = "hoodie.datasource.write.dataframe.path.enable"
+
+  val DATAFRAME_WRITER_CLASS = "org.apache.hudi.dataframe.HoodieDataFrameWriter"
+
+  val DATAFRAME_PATH_KEY_GENERATORS: Set[String] = Set(
+    "SimpleKeyGenerator", "SimpleAvroKeyGenerator",
+    "ComplexKeyGenerator", "ComplexAvroKeyGenerator",
+    "TimestampBasedKeyGenerator", "TimestampBasedAvroKeyGenerator",
+    "CustomKeyGenerator", "CustomAvroKeyGenerator",
+    "NonpartitionedKeyGenerator", "NonpartitionedAvroKeyGenerator")
 
   def createRelation(sqlContext: SQLContext,
                      metaClient: HoodieTableMetaClient,
