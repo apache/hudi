@@ -37,12 +37,18 @@ object HoodieSparkTypeUtils {
   def isCastPreservingOrdering(from: DataType, to: DataType): Boolean =
     (from, to) match {
       // NOTE: Casting between String and Numeric types re-orders elements (for ex, "10" < "9"
-      //       lexicographically)
-      case (StringType, _: NumericType) => false
-      case (_: NumericType, StringType) => false
+      //       lexicographically). These match by type, so that collated strings on Spark 4 are
+      //       rejected as well
+      case (_: StringType, _: NumericType) => false
+      case (_: NumericType, _: StringType) => false
       // NOTE: Timestamps format in the session time zone, so local time repeats across a DST
       //       fall-back (for ex, 01:30 EDT is followed by 01:10 EST) and the strings re-order
-      case (TimestampType, StringType) => false
+      case (TimestampType, _: StringType) => false
+      // NOTE: On Spark 4 StringType carries a collation, and casting to a different collation changes
+      //       the sort order (for ex, "B" < "a" in UTF8_BINARY but "a" < "B" in UTF8_LCASE). Equality
+      //       also compares the char/varchar length constraint, so those casts are conservatively
+      //       rejected too. On Spark 3 StringType is a singleton, making this arm trivially true
+      case (fromStr: StringType, toStr: StringType) => fromStr == toStr
       // NOTE: Casting to boolean maps every non-zero (or "true"-like) value to true, so it is not
       //       monotonic (for ex, min -5 and max 5 both cast to true while 0 casts to false)
       case (BooleanType, BooleanType) => true

@@ -18,8 +18,9 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.types.{BooleanType, ByteType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
+import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 /**
@@ -132,6 +133,24 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // Identity boolean cast and boolean to numeric (false < true, 0 < 1) keep the ordering.
     assertEquals(Some(boolAttr), matched(Cast(boolAttr, BooleanType)))
     assertEquals(Some(boolAttr), matched(Cast(boolAttr, IntegerType)))
+  }
+
+  @Test
+  def testCollationChangingStringCastsDoNotPreserveOrdering(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "String collations only exist on Spark 4.x")
+    // StringType("UTF8_LCASE") is a Spark 4 API, so it is obtained reflectively to keep this
+    // file compiling against the Spark 3 profiles.
+    val lcase = StringType.getClass.getMethod("apply", classOf[String])
+      .invoke(StringType, "UTF8_LCASE").asInstanceOf[DataType]
+    val collatedAttr = AttributeReference("cs", lcase)()
+    // Changing collation changes the sort order, in either direction.
+    assertEquals(None, matched(Cast(collatedAttr, StringType)))
+    assertEquals(None, matched(Cast(strAttr, lcase)))
+    // Collated strings and numbers re-order each other like default strings do.
+    assertEquals(None, matched(Cast(collatedAttr, IntegerType)))
+    assertEquals(None, matched(Cast(intAttr, lcase)))
+    // A collation-preserving cast keeps the ordering.
+    assertEquals(Some(collatedAttr), matched(Cast(collatedAttr, lcase)))
   }
 
   @Test
