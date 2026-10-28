@@ -37,7 +37,7 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
-import org.apache.spark.sql.catalyst.expressions.{And, BinaryComparison, Cast, Expression, FromUTCTimestamp, TimeZoneAwareExpression, ToUTCTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{And, BinaryComparison, Cast, Expression, FromUTCTimestamp, LessThan, Literal, TimeZoneAwareExpression, ToUTCTimestamp}
 import org.apache.spark.sql.catalyst.plans.logical.Filter
 import org.apache.spark.sql.functions.{col, expr}
 import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.AllowedTransformationExpression
@@ -100,8 +100,12 @@ object TestDataSkippingOracle {
       "NULL bounds of ln, log10, log1p and log2"),
     BugFamily("like_prefix", BOTH, Seq("*:*/like"), 20430, "LIKE 'prefix%' translated as an equality on the prefix"),
     BugFamily("dst_fall_back", BOTH, Seq("*:date_format:yyyy-MM-dd HH:mm/*", "*:cast:timestamp>string/*",
-      "*:from_utc_timestamp:America/New_York/*", "*:date_format(from_utc_timestamp:America/New_York):yyyy-MM-dd HH:mm/*"),
+      "*:from_utc_timestamp:America/New_York/*", "*:date_format(from_utc_timestamp:America/New_York):yyyy-MM-dd HH:mm/*",
+      // a timestamp rendered as a string only breaks on DST, whatever the collation of the string
+      "*:cast:timestamp>string collate */*"),
       20296, "DST fall-back in date_format HH:mm, cast(ts as string) and from_utc_timestamp"),
+    BugFamily("collation_cast", CSI_ONLY, Seq("*:cast:*>string collate */*"), 19445,
+      "casts to a string of another collation (Spark 4)"),
     BugFamily("to_utc_timestamp_gap", CSI_ONLY, Seq("*:to_utc_timestamp:America/New_York/*"), 20296,
       "to_utc_timestamp over the spring-forward gap"),
     BugFamily("from_unixtime_years", CSI_ONLY, Seq("*:from_unixtime:yyyy-MM-dd HH:mm:ss/*"), 20296,
@@ -239,6 +243,8 @@ object TestDataSkippingOracle {
     case _: DecimalType => Ordering.fromLessThan[Any]((a, b) => a.asInstanceOf[JBigDecimal].compareTo(b.asInstanceOf[JBigDecimal]) < 0)
     // Spark (and parquet) compare strings by their unsigned UTF-8 bytes
     case StringType => Ordering.fromLessThan[Any]((a, b) => compareUtf8(a.toString, b.toString) < 0)
+    // collated strings (Spark 4 only) sort by their collation, so Spark does the comparison
+    case collated: StringType => Ordering.fromLessThan[Any]((a, b) => LessThan(Literal.create(a, collated), Literal.create(b, collated)).eval() == true)
     case ByteType => Ordering.by[Any, Byte](_.asInstanceOf[Byte])
     case FloatType => Ordering.by[Any, Float](_.asInstanceOf[Float])
     case BooleanType => Ordering.by[Any, Boolean](_.asInstanceOf[Boolean])
@@ -303,8 +309,10 @@ object TestDataSkippingOracle {
 
   val DATE_FORMATS: Seq[String] = Seq("yyyy-MM-dd", "yyyy-MM-dd HH:mm", "yyyyMMdd", "dd-MM-yyyy", "MM/dd/yyyy", "EEE")
   val ZONES: Seq[String] = Seq("America/New_York", "Asia/Kolkata", "UTC")
+  // collated strings only exist on Spark 4: UTF8_LCASE folds case, UNICODE sorts by ICU rules
   val CAST_TARGETS: Seq[String] = Seq("TINYINT", "SMALLINT", "INT", "BIGINT", "DOUBLE", "DECIMAL(10,2)", "DECIMAL(3,1)",
-    "DECIMAL(20,4)", "STRING", "DATE", "TIMESTAMP")
+    "DECIMAL(20,4)", "STRING", "DATE", "TIMESTAMP") ++
+    (if (HoodieSparkUtils.gteqSpark4_0) Seq("STRING COLLATE UTF8_LCASE", "STRING COLLATE UNICODE") else Seq.empty)
   val NUMERIC_COLUMNS: Seq[String] = Seq("i", "l", "sh", "d", "dcm")
 
   val TEMPLATES: Seq[Template] = {
