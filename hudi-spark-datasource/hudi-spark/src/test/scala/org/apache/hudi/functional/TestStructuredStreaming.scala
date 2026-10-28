@@ -40,10 +40,10 @@ import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
-import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, Trigger}
+import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, StreamingQueryException, Trigger}
 import org.apache.spark.sql.types.StructType
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.slf4j.LoggerFactory
@@ -730,8 +730,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   /**
    * When a micro-batch exhausts its retries, the sink resets while holding its lock: it shuts down the async table
    * services and waits for them. The services' shutdown callbacks must not block on the sink in turn, otherwise the
-   * reset never finishes and the query hangs. The reset is driven directly here, with async clustering running,
-   * since a micro-batch that exhausts its retries exits the JVM.
+   * reset never finishes and the query hangs. The reset is driven directly here with async clustering running.
    */
   @Test
   def testSinkResetWithAsyncServiceRunningDoesNotHang(): Unit = {
@@ -748,6 +747,61 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       Await.result(Future(sink.resetHoldingSinkLock()), Duration(2, "minutes"))
     } finally {
       client.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = Array(1, 3))
+  def testExhaustedRetriesFailOnlyTheHudiQuery(retryCount: Int): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val records = recordsToStrings(dataGen.generateInserts("000", 10)).asScala.toList
+    val input = spark.read.json(spark.sparkContext.parallelize(records, 1))
+    input.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+
+    val queryName = s"unrelated_query_$retryCount"
+    val unrelatedQuery = spark.readStream.schema(input.schema).json(sourcePath)
+      .writeStream.format("memory").queryName(queryName)
+      .option("checkpointLocation", s"$basePath/unrelated_checkpoint")
+      .outputMode(OutputMode.Append).start()
+    var failingQuery: StreamingQuery = null
+    try {
+      unrelatedQuery.processAllAvailable()
+      assertEquals(10L, spark.table(queryName).count())
+
+      val failingOpts = (commonOpts - HoodieWriteConfig.TBL_NAME.key) ++ Map(
+        DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> retryCount.toString,
+        DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS.key -> "1")
+      failingQuery = initWritingStreamingQuery(input.schema, sourcePath, destPath, failingOpts)
+      val failure = assertThrows(classOf[StreamingQueryException], () => failingQuery.awaitTermination(60000))
+      assertFalse(failingQuery.isActive)
+      assertTrue(failure.getCause.isInstanceOf[HoodieException])
+      assertEquals("Micro batch id=0 failed after exhausting write retries", failure.getCause.getMessage)
+      assertNotNull(failure.getCause.getCause)
+      assertTrue(Iterator.iterate(failure.getCause)(_.getCause).takeWhile(_ != null)
+        .exists(t => Option(t.getMessage).exists(_.contains("'hoodie.table.name' must be set"))))
+      assertFalse(storage.exists(new StoragePath(s"$basePath/checkpoint/commits/0")))
+
+      assertFalse(spark.sparkContext.isStopped)
+      assertTrue(unrelatedQuery.isActive)
+      input.coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      unrelatedQuery.processAllAvailable()
+      assertEquals(20L, spark.table(queryName).count())
+
+      // Correcting the options and restarting from the same checkpoint must replay the failed batch.
+      val restartedQuery = initWritingStreamingQuery(input.schema, sourcePath, destPath, commonOpts)
+      try {
+        restartedQuery.processAllAvailable()
+        assertEquals(10L, spark.read.format("org.apache.hudi").load(destPath).count())
+        assertTrue(storage.exists(new StoragePath(s"$basePath/checkpoint/commits/0")))
+      } finally {
+        restartedQuery.stop()
+      }
+    } finally {
+      if (failingQuery != null) {
+        failingQuery.stop()
+      }
+      unrelatedQuery.stop()
+      spark.catalog.dropTempView(queryName)
     }
   }
 
