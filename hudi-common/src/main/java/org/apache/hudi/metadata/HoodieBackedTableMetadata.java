@@ -280,6 +280,9 @@ public class HoodieBackedTableMetadata extends BaseTableMetadata {
       List<FileSlice> fileSlicesForDataPartition = fileSlices.stream()
           .filter(fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId()).equals(dataTablePartition.get()))
           .collect(Collectors.toList());
+      if (fileSlicesForDataPartition.isEmpty() || keys.isEmpty()) {
+        return HoodieListData.lazy(Collections.emptyList());
+      }
       // all keys will be from the same shard index so just calculate the first key and reduce partitionFileSlices to 1
       TreeSet<String> distinctSortedKeys = getDistinctSortedKeysForSingleSlice(keys);
       int fileGroupIndex = HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(distinctSortedKeys.stream().findFirst().get(), fileSlicesForDataPartition.size());
