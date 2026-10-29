@@ -288,17 +288,63 @@ recreation passed. Further end-to-end validation is tracked in
 
 ## BI clients
 
-Gateway integration and BI adapters/examples for Superset and other tools are tracked
-in [#20232](https://github.com/apache/hudi/issues/20232) and will be delivered in follow-up PRs.
-The initial SQLAlchemy adapter is planned under `hudi-lakehouse`; upstreaming can
-be evaluated separately after the integration stabilizes.
+For a local, step-by-step Superset and Zeppelin example, see the
+[BI quickstart](../../superset-spark-connect/QUICKSTART.md).
 
-- **Superset 5.0:** requires a custom SQLAlchemy dialect and engine spec for ADBC;
-  neither is included here. The built-in PyHive connector uses Thrift, not Connect.
-  See [Superset engine specs](https://github.com/apache/superset/blob/5.0.0/superset/db_engine_specs/README.md).
-- **Zeppelin 0.12:** use ADBC from the `%python` interpreter, with the client
-  packages above installed in its Python environment. See the
-  [Python interpreter guide](https://zeppelin.apache.org/docs/0.12.0/interpreter/python.html).
+The [experimental Superset adapter](../../superset-spark-connect/README.md)
+provides a SQLAlchemy dialect and Superset engine spec for Foundry ADBC. Follow
+its installation instructions and application-level checks. Those checks are
+separate from the endpoint acceptance tests above.
+
+For Zeppelin 0.12, install the ADBC packages and Foundry driver into the Python
+environment used by the `%python` interpreter. Its official 0.12.0 image uses
+Python 3.9, so the manager 1.12.0 requirements above do not apply to that image.
+The following tested versions are installed as that interpreter's user (or at
+system level where they are readable by that user):
+
+```bash
+python3 -m pip install adbc-driver-manager==1.8.0 pyarrow==18.1.0 dbc==0.3.1
+dbc install 'spark=0.2.1'
+```
+
+In a notebook, connect to the endpoint and render a query (replace the table with
+an isolated test table):
+
+```python
+%python
+from adbc_driver_manager import dbapi
+import pandas as pd
+with dbapi.connect(driver="spark", db_kwargs={"uri": "spark://localhost:15002?api=connect&auth_type=none&tls=false"}, autocommit=True) as conn:
+    with conn.cursor() as cur:
+        cur.execute("SELECT region, SUM(amount) AS total FROM connect_smoke_example.orders GROUP BY region ORDER BY region")
+        rows = cur.fetchall()
+        z.show(pd.DataFrame(rows, columns=["region", "total"]))
+```
+
+The hostname is relative to the Zeppelin interpreter process. Check the rendered
+rows against the test fixture, then run INSERT, UPDATE and DELETE and SELECT after
+each mutation in a disposable table. This uses `%python`, not native `%jdbc`.
+The exact rendered output depends on the installed interpreter. A local run of
+Zeppelin 0.12.0's x86_64 image (emulated on ARM), Python 3.9.15, ADBC manager
+1.8.0, PyArrow 18.1.0 and Foundry Spark ADBC 0.2.1 executed this path against a
+local Spark 4.1.3/Hudi 1.2.0 endpoint. It checked INSERT, UPDATE, DELETE and
+readback and rendered the final aggregation.
+
+For a repeatable API-driven check, install `requests` in the test environment,
+set `HUDI_ZEPPELIN_URL` and `HUDI_ZEPPELIN_CONNECT_URI` (the latter must be
+reachable from the Zeppelin interpreter), and run the CRUD and MERGE test:
+
+```bash
+python -m unittest discover -s hudi-lakehouse/superset-spark-connect -p 'test_zeppelin_live.py' -v
+```
+
+Use only a disposable endpoint and notebook server. The Connect URI is stored in
+the notebook source, so the test requires `auth_type=none` and rejects credentials
+and secret-bearing options. The test creates a unique notebook and table and removes them; if execution is interrupted or the outcome
+is ambiguous, wait for the notebook to stop before manually cleaning up the
+printed table name. API-created paragraphs must include a table-results config;
+without it this Zeppelin version returned a table result via API but its browser
+UI failed to render the paragraph.
 
 [Foundry Spark ADBC 0.2.1](https://adbc-drivers.org/drivers/spark/) uses autocommit.
 
