@@ -45,18 +45,48 @@ github:
       required_pull_request_reviews:
         required_approving_review_count: 1
       required_status_checks:
+        # The merge queue tests each PR against the latest master, so PRs need not be up to date.
         strict: false
         contexts:
-          # The per-job test contexts are no longer required individually. Listing them here
-          # is what made every change to the CI matrix in .github/workflows/bot.yml a
-          # two-sided edit, and a context left without a job to report it blocks merges
-          # indefinitely. Reviewers gate on the checks the PR shows.
-          # Only contexts from always-on workflows may be listed. bot.yml and
-          # java_ci_engines.yml are path-filtered: on a PR the filter skips, GitHub never
-          # instantiates them, so any context of theirs would stay pending forever
-          # (#18598 hit exactly this and worked around it with a gating job).
-          # validate-pr-and-source runs the PR metadata and source release checks in one job
+          # Only contexts that report on every PR and every merge-queue group may be listed: a
+          # context left without a run to report it blocks merges indefinitely (#18598).
+          # The per-job test contexts are not listed. Required Checks in ci.yml aggregates
+          # bot.yml and java_ci_engines.yml, so resharding their jobs never touches this file.
+          # validate-pr-and-source runs the PR metadata and source release checks in one job.
           - validate-pr-and-source
+          - Required Checks
+  # Raw GitHub Rulesets API payload, as in apache/arrow-rs and apache/datafusion-comet.
+  # Rulesets and classic branch protection apply together.
+  rulesets:
+    - name: Merge Queue
+      target: branch
+      enforcement: active
+      bypass_actors:
+        # apache/root (ASF Infra) can recover a blocked queue.
+        - actor_id: 118420
+          actor_type: Team
+          bypass_mode: always
+      conditions:
+        ref_name:
+          include:
+            - "~DEFAULT_BRANCH"
+          exclude: []
+      rules:
+        - type: merge_queue
+          parameters:
+            merge_method: SQUASH
+            grouping_strategy: ALLGREEN
+            # Two groups build at a time. A group invalidated mid-run still runs to the end,
+            # because workflows cannot react to the merge_group destroyed event, so this caps
+            # the waste per failed entry at one full Java CI run.
+            max_entries_to_build: 2
+            # Merges up to five already-green entries together; each PR keeps its own squash
+            # commit, and CI builds are not batched.
+            min_entries_to_merge: 1
+            max_entries_to_merge: 5
+            min_entries_to_merge_wait_minutes: 0
+            # A full Java CI run plus ASF runner queueing.
+            check_response_timeout_minutes: 300
   collaborators:
     - ad1happy2go
     - rangareddy
