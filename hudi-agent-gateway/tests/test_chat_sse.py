@@ -18,11 +18,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import httpx
 import pytest
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, AIMessageChunk
 
 from hudi_agent_gateway.agent import build_agent
 from hudi_agent_gateway.app import create_app
@@ -132,3 +133,143 @@ async def test_validation_rejects_empty_message(client) -> None:
     c, _ = client
     resp = await c.post("/v1/chat", json={"message": "", "session_id": "s"})
     assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+async def test_whole_turn_timeout_cancels_active_model(client, streaming):
+    c, app = client
+    app.state.settings.chat_timeout_seconds = 0.05
+    cancelled = asyncio.Event()
+
+    class EndlessAgent:
+        async def ainvoke(self, *args, **kwargs):
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        async def astream(self, *args, **kwargs):
+            try:
+                while True:
+                    # Active token delivery must not reset the total deadline.
+                    yield "messages", (AIMessageChunk(content="x"), {})
+                    await asyncio.sleep(0.005)
+            finally:
+                cancelled.set()
+
+    app.state.agents = FixedAgents(EndlessAgent())
+    async with asyncio.timeout(2):
+        response = await c.post("/v1/chat", json={
+            "message": "test", "session_id": "deadline", "stream": streaming,
+        })
+    assert cancelled.is_set()
+    if streaming:
+        events = _parse_sse(response.text)
+        assert events[0][0] == "status"
+        assert any(kind == "token" for kind, _ in events)
+        assert events[-1][1]["code"] == "chat_timeout"
+        assert "Start a new session" in events[-1][1]["message"]
+        assert all(kind != "done" for kind, _ in events)
+    else:
+        assert response.status_code == 504
+        assert "Start a new session" in response.json()["detail"]
+
+
+async def test_disconnected_sse_cancels_agent(client):
+    from starlette.requests import Request
+
+    c, app = client
+    started, cancelled = asyncio.Event(), asyncio.Event()
+
+    class WaitingAgent:
+        async def astream(self, *args, **kwargs):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+                yield "updates", {}
+            finally:
+                cancelled.set()
+
+    from hudi_agent_gateway.api.chat import chat
+    from hudi_agent_gateway.api.models import ChatRequest
+
+    app.state.agents = FixedAgents(WaitingAgent())
+    request = Request({"type": "http", "method": "POST", "path": "/v1/chat",
+                       "headers": [], "app": app})
+    response = await chat(request, ChatRequest(message="test", session_id="cancel", stream=True))
+
+    async def receive():
+        await started.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        pass
+
+    async with asyncio.timeout(2):
+        await response(request.scope, receive, send)
+    assert cancelled.is_set()
+
+
+async def test_disconnected_sse_cancels_real_agent_tool(client, settings):
+    from starlette.requests import Request
+
+    from hudi_agent_gateway.api.chat import chat
+    from hudi_agent_gateway.api.models import ChatRequest
+    from hudi_agent_gateway.tools import build_registry
+
+    _, app = client
+    started, cancelled = asyncio.Event(), asyncio.Event()
+
+    class WaitingClient:
+        async def execute(self, *args, **kwargs):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+    registry = build_registry(settings, lakehouse_client=WaitingClient())
+    app.state.agents = FixedAgents(build_agent(
+        scripted_model(TOOL_CALL_THEN_ANSWER), registry, app.state.sessions.checkpointer, settings
+    ))
+    request = Request({"type": "http", "method": "POST", "path": "/v1/chat",
+                       "headers": [], "app": app})
+    response = await chat(
+        request, ChatRequest(message="test", session_id="real-cancel", stream=True)
+    )
+
+    async def receive():
+        await started.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        pass
+
+    async with asyncio.timeout(3):
+        await response(request.scope, receive, send)
+        await cancelled.wait()
+
+
+async def test_cancellation_scope_isolates_turns_and_rejects_late_tools():
+    from hudi_agent_gateway.cancellation import ToolCancellationScope
+
+    first, second = ToolCancellationScope(), ToolCancellationScope()
+    started = asyncio.Event()
+
+    async def wait():
+        started.set()
+        await asyncio.Event().wait()
+
+    first_task, second_task = asyncio.create_task(wait()), asyncio.create_task(wait())
+    first.add(first_task)
+    second.add(second_task)
+    await started.wait()
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first_task
+    assert not second_task.done()
+    with pytest.raises(asyncio.CancelledError):
+        first.add(asyncio.current_task())
+    second.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await second_task

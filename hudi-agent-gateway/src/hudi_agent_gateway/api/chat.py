@@ -18,9 +18,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -33,11 +35,13 @@ from hudi_agent_gateway.api.models import (
     ChatResponse,
     DoneEvent,
     ErrorEvent,
+    StatusEvent,
     TokenEvent,
     ToolCallEvent,
     ToolResultEvent,
     ToolTraceEntry,
 )
+from hudi_agent_gateway.cancellation import ToolCancellationScope, tool_cancellation_scope
 from hudi_agent_gateway.log import log_event, request_id_var, session_id_var
 from hudi_agent_gateway.tools.registry import is_tool_error
 
@@ -46,10 +50,10 @@ logger = logging.getLogger("hudi_agent_gateway.chat")
 
 def _message_text(msg: Any) -> str:
     text = getattr(msg, "text", None)
-    if callable(text):  # langchain-core < 1.x compatibility
-        return text()
     if isinstance(text, str):
         return text
+    if callable(text):  # langchain-core < 1.x compatibility
+        return text()
     return str(getattr(msg, "content", ""))
 
 
@@ -97,10 +101,13 @@ async def chat(request: Request, body: ChatRequest) -> Any:
     if wants_stream:
         return EventSourceResponse(_stream_chat(request, body))
 
-    agent = state.agents.get(body.model)
     inputs = {"messages": [HumanMessage(body.message)]}
     try:
-        result = await agent.ainvoke(inputs, config=_agent_config(request, body.session_id))
+        async with asyncio.timeout(state.settings.chat_timeout_seconds):
+            agent = state.agents.get(body.model)
+            result = await agent.ainvoke(inputs, config=_agent_config(request, body.session_id))
+    except TimeoutError as e:
+        raise HTTPException(status_code=504, detail=_timeout_message(request)) from e
     except GraphRecursionError as e:
         raise HTTPException(
             status_code=422,
@@ -126,27 +133,44 @@ async def chat(request: Request, body: ChatRequest) -> Any:
 
 async def _stream_chat(request: Request, body: ChatRequest) -> AsyncIterator[ServerSentEvent]:
     state = request.app.state
-    agent = state.agents.get(body.model)
     inputs = {"messages": [HumanMessage(body.message)]}
     final_text_parts: list[str] = []
+    yield _status_event("Preparing response…")
+    scope = ToolCancellationScope()
+    scope_token = tool_cancellation_scope.set(scope)
     try:
-        async for mode, chunk in agent.astream(
-            inputs,
-            config=_agent_config(request, body.session_id),
-            stream_mode=["messages", "updates"],
-        ):
-            if mode == "messages":
-                msg_chunk, _meta = chunk
-                if isinstance(msg_chunk, AIMessageChunk):
-                    text = _message_text(msg_chunk)
-                    if text:
-                        final_text_parts.append(text)
-                        yield ServerSentEvent(
-                            event="token", data=TokenEvent(text=text).model_dump_json()
-                        )
-            elif mode == "updates" and isinstance(chunk, dict):
-                for events in _updates_to_events(chunk):
-                    yield events
+        async with asyncio.timeout(state.settings.chat_timeout_seconds):
+            agent = state.agents.get(body.model)
+            async with aclosing(agent.astream(
+                inputs,
+                config=_agent_config(request, body.session_id),
+                stream_mode=["messages", "updates"],
+            )) as stream:
+                async for mode, chunk in stream:
+                    if mode == "messages":
+                        msg_chunk, _meta = chunk
+                        if isinstance(msg_chunk, AIMessageChunk):
+                            text = _message_text(msg_chunk)
+                            if text:
+                                final_text_parts.append(text)
+                                yield ServerSentEvent(
+                                    event="token", data=TokenEvent(text=text).model_dump_json()
+                                )
+                    elif mode == "updates" and isinstance(chunk, dict):
+                        for event in _updates_to_events(chunk):
+                            yield event
+    except TimeoutError:
+        log_event(logger, "chat_timeout", timeout_seconds=state.settings.chat_timeout_seconds)
+        yield ServerSentEvent(
+            event="error",
+            data=ErrorEvent(
+                code="chat_timeout", message=_timeout_message(request)
+            ).model_dump_json(),
+        )
+        return
+    except asyncio.CancelledError:
+        log_event(logger, "chat_cancelled")
+        raise
     except GraphRecursionError:
         yield ServerSentEvent(
             event="error",
@@ -163,6 +187,11 @@ async def _stream_chat(request: Request, body: ChatRequest) -> AsyncIterator[Ser
             data=ErrorEvent(code="agent_error", message=str(e)).model_dump_json(),
         )
         return
+    finally:
+        # LangGraph may run tools in tasks that outlive its streaming iterator.
+        # Cancel only this turn's tasks when the stream ends or disconnects.
+        scope.cancel()
+        tool_cancellation_scope.reset(scope_token)
 
     yield ServerSentEvent(
         event="done",
@@ -172,8 +201,20 @@ async def _stream_chat(request: Request, body: ChatRequest) -> AsyncIterator[Ser
     )
 
 
+def _timeout_message(request: Request) -> str:
+    seconds = request.app.state.settings.chat_timeout_seconds
+    return (f"The response exceeded the {seconds:g}s time limit. Start a new session "
+            "before retrying, because this session may contain an incomplete tool call.")
+
+
+def _status_event(message: str) -> ServerSentEvent:
+    return ServerSentEvent(event="status", data=StatusEvent(message=message).model_dump_json())
+
+
 def _updates_to_events(update: dict[str, Any]) -> list[ServerSentEvent]:
     events: list[ServerSentEvent] = []
+    if "pre_model_hook" in update:
+        events.append(_status_event("Waiting for model…"))
     agent_update = update.get("agent") or {}
     for msg in agent_update.get("messages", []):
         if isinstance(msg, AIMessage):

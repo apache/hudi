@@ -61,7 +61,7 @@ jobs:
           cache: pip
           cache-dependency-path: hudi-agent-gateway/pyproject.toml
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,spark-connect]"
       - name: Fetch pinned Hudi Architect baseline
         run: >-
           git fetch --no-tags --depth=1 origin
@@ -96,6 +96,18 @@ jobs:
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py
+      - name: Test guardrails with minimum sqlglot
+        # Read the lower bound from project metadata so this test follows future bumps.
+        run: |
+          sqlglot_min_requirement=$(python - <<'PY'
+          import tomllib
+          with open("pyproject.toml", "rb") as f:
+              dependencies = tomllib.load(f)["project"]["dependencies"]
+          print(next(dep for dep in dependencies if dep.startswith("sqlglot>=")).replace(">=", "==", 1))
+          PY
+          )
+          python -m pip install "$sqlglot_min_requirement"
+          python -m pytest tests/test_guardrails.py -q
 
   flink-sql-fixtures:
     name: Hudi 1.2.0 / Flink 1.20.1 SQL fixtures
@@ -143,3 +155,7 @@ jobs:
               helm template "$chart" > /dev/null
             fi
           done
+          helm lint hudi-lakehouse/charts/hudi-agent-gateway \
+            -f hudi-lakehouse/charts/hudi-agent-gateway/values-spark-connect.yaml
+          helm template hudi-lakehouse/charts/hudi-agent-gateway \
+            -f hudi-lakehouse/charts/hudi-agent-gateway/values-spark-connect.yaml > /dev/null

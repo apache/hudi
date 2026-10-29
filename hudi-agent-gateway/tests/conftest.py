@@ -63,7 +63,13 @@ class FakeTrinoClient:
             raise self.error
         return self.result
 
-    async def ping(self, timeout: float = 5.0) -> bool:
+    async def describe(self, sql: str, *, timeout: float, max_rows: int) -> QueryResult:
+        return await self.execute(sql, timeout=timeout, max_rows=max_rows)
+
+    def close(self) -> None:
+        pass
+
+    async def ping(self, timeout: float = 5.0, cache_seconds: float = 10.0) -> bool:
         return self.error is None
 
     def fail_with(self, message: str) -> None:
@@ -77,7 +83,7 @@ def fake_trino() -> FakeTrinoClient:
 
 @pytest.fixture()
 def registry(settings: GatewaySettings, fake_trino: FakeTrinoClient):
-    return build_registry(settings, trino_client=fake_trino)  # type: ignore[arg-type]
+    return build_registry(settings, lakehouse_client=fake_trino)  # type: ignore[arg-type]
 
 
 class ScriptedChatModel(GenericFakeChatModel):
