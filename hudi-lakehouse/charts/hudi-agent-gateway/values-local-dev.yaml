@@ -24,7 +24,6 @@ fullnameOverride: hudi-agent-gateway
 gateway:
   provider: ollama
   # A small tool-capable model that fits a laptop; `ollama pull qwen3:4b`.
-  # (1.7b also works but makes more reasoning mistakes on SQL tasks.)
   model: qwen3:4b
   ollama:
     baseUrl: http://host.minikube.internal:11434
