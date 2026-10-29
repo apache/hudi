@@ -20,12 +20,19 @@ name: CI
 # The `paths` filter below applies to push only. pull_request and merge_group runs must always
 # report the `Required Checks` aggregate: GitHub evaluates `paths` before creating any job, so a
 # workflow skipped by the filter never reports its checks, and a required check that never reports
-# stays pending forever. A docs-only PR therefore runs the full suite. The filter replaced a former
-# `changes` job that listed the changed files; every test job waited on it through `needs`, which
-# made each run wait for a shared runner twice, once for the filter and once for the tests.
+# stays pending forever. A docs-only PR therefore runs the full suite; a fork PR to master runs it
+# in the merge queue. The filter replaced a former `changes` job that listed the changed files;
+# every test job waited on it through `needs`, which made each run wait for a shared runner twice,
+# once for the filter and once for the tests.
 # yml/yaml files are deliberately NOT ignored, unlike the old filter: docker/compose/*.yml drives
 # the integration tests, several modules keep yml test resources, and the workflow files themselves
 # need CI to run when they change.
+#
+# Push covers every branch because forks run the full suite on their own runners for each branch
+# push; see "Pull requests from forks" in README.md. Upstream pushes to branches other than master,
+# release-* and branch-0.x skip every job: their PRs test them. Merge-queue branches
+# (gh-readonly-queue/...) are validated by merge_group, not push: a skipped `Required Checks` job
+# on a queue-branch push would report success and could satisfy the gate early.
 on:
   pull_request:
     branches:
@@ -35,10 +42,9 @@ on:
   merge_group:
     types: [checks_requested]
   push:
-    branches:
-      - master
-      - 'release-*'
-      - branch-0.x
+    branches-ignore:
+      - asf-site
+      - 'gh-readonly-queue/**'
     paths:
       - '**'
       # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
@@ -55,49 +61,87 @@ on:
   workflow_dispatch:
 
 # A group holds one running and one pending run, and a newer pending run replaces the older one
-# even when cancel-in-progress is false. Pushes are therefore keyed by SHA, so a burst of queue
-# merges to master never replaces a pending master run. merge_group refs are unique per queue
-# entry and only pull_request runs cancel in progress, so queue runs are never cancelled.
-# event_name keeps workflow_dispatch and push runs apart. The called workflows declare no
-# concurrency of their own: github.workflow there resolves to this caller's name, so both would
-# share one group and cancel each other.
+# even when cancel-in-progress is false. Pushes to apache/hudi are therefore keyed by SHA, so a
+# burst of queue merges to master never replaces a pending master run. Pushes on a fork are keyed
+# by branch and cancel in progress, so a new push to a PR branch replaces the run of the older
+# head instead of spending fork runner time on it. merge_group refs are unique per queue entry
+# and merge_group runs never cancel in progress, so queue runs are never cancelled. event_name
+# keeps workflow_dispatch and push runs apart. The called workflows declare no concurrency of
+# their own: github.workflow there resolves to this caller's name, so both would share one group
+# and cancel each other.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.repository == 'apache/hudi' && github.sha) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.repository != 'apache/hudi') }}
 
+# Two conditions route the suites. GitHub expressions cannot be named, so each `if:` below spells
+# them out in full.
+#
+# FORK_PR, a pull request from a fork to master:
+#   github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master'
+# Its suites already run on the fork's runners when the contributor pushes the branch, and
+# fork_ci_status.yml mirrors that run onto the PR as the informational `CI (fork)` check. The
+# merge queue then runs them on ASF runners against the proposed merge with master. The
+# event_name guard matters: on merge_group the pull_request fields are empty strings, and an
+# empty head repository differs from github.repository. Fork PRs to release-* and branch-0.x
+# keep upstream testing, since only master merges through the queue.
+#
+# UPSTREAM_OTHER_PUSH, a push to apache/hudi other than to master, release-* or branch-0.x:
+#   github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x'
+# Such branches back same-repository PRs, which test them through pull_request.
 jobs:
   java-ci:
     name: Java CI
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master') && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') }}
     uses: ./.github/workflows/bot.yml
     secrets: inherit
 
   java-ci-engines:
     name: Java CI Engines
+    if: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master') && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') }}
     uses: ./.github/workflows/java_ci_engines.yml
     secrets: inherit
 
   # One stable check name for branch protection and the merge queue. It needs the two `uses:` jobs
   # rather than the jobs inside them, so resharding or renaming a job in bot.yml or
   # java_ci_engines.yml never changes what is required. A skipped job reports success to a required
-  # check, so a skipped workflow fails here just like a failed or cancelled one.
+  # check, so a skipped workflow fails here just like a failed or cancelled one. The one exception
+  # is FORK_PR, where both workflows skip on purpose and the merge queue runs them before merge.
+  # UPSTREAM_OTHER_PUSH skips this job too, since nothing ran that it could aggregate.
   required-checks:
     name: Required Checks
     runs-on: ubuntu-slim
-    if: always()
+    if: ${{ always() && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') }}
     permissions: {}
     needs:
       - java-ci
       - java-ci-engines
+    env:
+      FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master' }}
     steps:
       - name: Summarize workflow results
         env:
           NEEDS: ${{ toJSON(needs) }}
         run: echo "$NEEDS"
-      - name: Fail unless both workflows succeeded
-        if: needs.java-ci.result != 'success' || needs.java-ci-engines.result != 'success'
+      # The upstream run of a fork PR tests nothing, so point the contributor at the fork run.
+      - name: Link to fork CI
+        if: env.FORK_PR == 'true'
         env:
+          FORK_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            printf 'Full test results: [CI on %s](https://github.com/%s/actions/workflows/ci.yml).\n\n' "$FORK_REPOSITORY" "$FORK_REPOSITORY"
+            printf 'Look for commit `%s`. Enable Actions in your fork and push your branch if no run exists.\n\n' "$PR_HEAD_SHA"
+            printf 'This upstream PR run skips the Java CI suites. The merge queue runs them on ASF runners before merge.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Fail unless both workflows succeeded
+        if: >-
+          ${{ env.FORK_PR == 'true' && (needs.java-ci.result != 'skipped' || needs.java-ci-engines.result != 'skipped')
+          || env.FORK_PR != 'true' && (needs.java-ci.result != 'success' || needs.java-ci-engines.result != 'success') }}
+        env:
+          REQUIREMENT: ${{ env.FORK_PR == 'true' && 'Both must be skipped on a fork PR to master.' || 'Both must succeed.' }}
           JAVA_CI_RESULT: ${{ needs.java-ci.result }}
           JAVA_CI_ENGINES_RESULT: ${{ needs.java-ci-engines.result }}
         run: |
-          echo "::error::Java CI: $JAVA_CI_RESULT, Java CI Engines: $JAVA_CI_ENGINES_RESULT. Both must succeed."
+          echo "::error::Java CI: $JAVA_CI_RESULT, Java CI Engines: $JAVA_CI_ENGINES_RESULT. $REQUIREMENT"
           exit 1
