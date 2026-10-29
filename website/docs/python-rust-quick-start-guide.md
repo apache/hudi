@@ -72,8 +72,10 @@ changed = table.read(
 )
 print(pa.Table.from_batches(changed).num_rows)   # 4, the re-embedded chunks of doc2
 
-# The current snapshot, as Arrow, for DuckDB or anything else.
+# Query the current snapshot with DuckDB (or Polars, pandas, anything Arrow).
+import duckdb
 snapshot = pa.Table.from_batches(table.read())
+duckdb.sql("SELECT doc_id, count(*) AS chunks FROM snapshot GROUP BY doc_id ORDER BY doc_id").show()
 ```
 
 `append`, `upsert`, and `overwrite` accept a `pyarrow.Table`, `pyarrow.RecordBatch`, `pyarrow.RecordBatchReader`,
