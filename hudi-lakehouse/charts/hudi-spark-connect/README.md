@@ -314,6 +314,9 @@ do not require an LLM. Override the provider as described in the gateway README.
 
 ## BI clients
 
+For a local, step-by-step Superset and Zeppelin example, see the
+[BI quickstart](../../superset-spark-connect/QUICKSTART.md).
+
 The [experimental Superset adapter](../../superset-spark-connect/README.md)
 provides a SQLAlchemy dialect and Superset engine spec for Foundry ADBC. Follow
 its installation instructions and application-level checks. Those checks are
