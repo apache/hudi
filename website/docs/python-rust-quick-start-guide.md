@@ -169,7 +169,28 @@ its definition so the numbers can be reproduced on your own machine.
 | `tpcds-web-returns` | A warehouse fact table | TPC-DS `web_returns`, composite key | upsert 1% matched plus 10% new rows, delete 5% |
 
 {/* BENCHMARK_TABLE_START */}
-_Results pending; see the harness README for the current numbers._
+Median seconds per commit over three runs, five upsert and five delete commits per run, on one Apple M3 Max laptop
+(14 cores, 36 GiB, local SSD). Each library is used through its own Python API with default settings: hudi-rs 0.6.0
+(merge-on-read with the record-level index), deltalake 1.6.6 (delta-rs) and pyiceberg 0.12.0. Lower is better.
+
+| Scenario | Rows | hudi-rs upsert / delete | delta-rs upsert / delete | PyIceberg upsert / delete |
+|---|---|---|---|---|
+| `rag-chunks` | 1M | **0.29 / 0.18** | 2.78 / 4.49 | 11.48 / 9.41 |
+| `training-set` | 1M | **0.25 / 0.20** | 1.10 / 1.83 | 2.88 / 2.19 |
+| `uuid` | 10M | **1.67 / 1.70** | 3.20 / 4.53 | 7.73 / 4.38 |
+| `nyc-taxi` | 2.5M | 0.72 / **0.35** | **0.64** / 1.02 | 2.98 / 1.00 |
+| `tpcds-web-returns` | 0.7M | **0.55** / 1.02 | 0.74 / **0.56** | failed (see below) |
+
+A merge-on-read commit appends only the changed rows. Per upsert commit, hudi-rs wrote 19 MiB on `rag-chunks` where
+delta-rs rewrote 1,689 MiB and PyIceberg 1,449 MiB, and 2 MiB on `uuid` against 671 MiB and 388 MiB.
+
+Bulk load and full-table reads are not where hudi-rs leads today. Loading the 10M-row `uuid` table takes 12.5 s with
+the record-level index (4.8 s without it), against 3.1 s for delta-rs and 0.7 s for PyIceberg; reading it back in full
+takes 0.50 s, against 0.43 s and 0.18 s.
+
+Notes: PyIceberg 0.12 crashed in Arrow while building its filter for the 79,113 composite keys of the first
+`tpcds-web-returns` upsert. Enabling deletion vectors in delta-rs 1.6 and the merge-on-read write modes in PyIceberg
+0.12 did not change their numbers: both still rewrite the files a change touches.
 {/* BENCHMARK_TABLE_END */}
 
 ## Read a table

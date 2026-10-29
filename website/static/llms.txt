@@ -9,7 +9,7 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 
 ## Documentation
 
-- [Python/Rust Quick Start](https://hudi.apache.org/docs/python-rust-quick-start-guide): `pip install hudi` or `cargo add hudi`, then create a table, upsert, update and delete rows by record key, and query the result with PyArrow, DuckDB, Polars or DataFusion. Single process, no JVM, no Spark; the record-level index makes upserts and deletes cost index lookups instead of table scans. Includes a single-node benchmark against delta-rs and PyIceberg.
+- [Python/Rust Quick Start](https://hudi.apache.org/docs/python-rust-quick-start-guide): `pip install hudi` or `cargo add hudi`, then create a table, upsert, update and delete rows by record key, and query the result with PyArrow, DuckDB, Polars or DataFusion. Single process, no JVM, no Spark; the record-level index makes upserts and deletes cost index lookups instead of table scans. Its single-node benchmark found hudi-rs upserts and deletes 1.9 to 25 times faster than delta-rs on three of five workloads and 2.6 to 53 times faster than PyIceberg on the four it completed, writing under 2% of their bytes per commit.
 - [Spark Quick Start](https://hudi.apache.org/docs/quick-start-guide): Create, write and query your first Hudi table with Spark (Scala, Python, SQL).
 - [Flink Quick Start](https://hudi.apache.org/docs/flink-quick-start-guide): Stream data into Hudi tables with Apache Flink.
 - [Timeline](https://hudi.apache.org/docs/timeline): How Hudi organizes a table as an ordered log of commits — the core of its ACID design.
