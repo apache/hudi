@@ -112,6 +112,18 @@ public class HoodieTestUtils {
    * code has no default filesystem, it resolves storage from the path it is about to touch.
    */
   public static final String DEFAULT_URI = "file:///";
+
+  /**
+   * System property carrying surefire's 1-based fork number (set to {@code fork${surefire.forkNumber}} in the root pom).
+   */
+  public static final String TEST_FORK_NUMBER_PROP = "hoodie.test.fork.number";
+  /**
+   * Distance between the port ranges of concurrent test forks. Fork n starts at base + (n - 1) * stride, wrapped into
+   * [1024, 32768) so that it never lands in the Linux ephemeral range used by OS-assigned ports.
+   */
+  private static final int TEST_FORK_PORT_STRIDE = 2000;
+  private static final int TEST_FORK_PORT_MIN = 1024;
+  private static final int TEST_FORK_PORT_MAX = 32768;
   public static final InstantGenerator INSTANT_GENERATOR = new DefaultInstantGenerator();
   public static final TimelineFactory TIMELINE_FACTORY = new DefaultTimelineFactory();
   public static final InstantFileNameGenerator INSTANT_FILE_NAME_GENERATOR = new DefaultInstantFileNameGenerator();
@@ -595,5 +607,30 @@ public class HoodieTestUtils {
     }
 
     return cause;
+  }
+
+  /**
+   * Returns the 1-based surefire fork number of this JVM, or 1 when not running in a numbered surefire fork.
+   */
+  public static int getTestForkNumber() {
+    String forkNumber = System.getProperty(TEST_FORK_NUMBER_PROP);
+    if (forkNumber == null) {
+      return 1;
+    }
+    try {
+      // the pom passes "fork${surefire.forkNumber}": as a bare value surefire handed the forks an empty string
+      return Math.max(1, Integer.parseInt(forkNumber.replaceAll("[^0-9]", "")));
+    } catch (NumberFormatException e) {
+      return 1;
+    }
+  }
+
+  /**
+   * Shifts a fixed test port into a range owned by the current surefire fork, so that test JVMs running concurrently
+   * on the same host (forkCount > 1) do not bind or connect to each other's servers. Fork 1 keeps the port unchanged.
+   */
+  public static int toForkUniquePort(int port) {
+    int offset = (getTestForkNumber() - 1) * TEST_FORK_PORT_STRIDE;
+    return Math.floorMod(port - TEST_FORK_PORT_MIN + offset, TEST_FORK_PORT_MAX - TEST_FORK_PORT_MIN) + TEST_FORK_PORT_MIN;
   }
 }

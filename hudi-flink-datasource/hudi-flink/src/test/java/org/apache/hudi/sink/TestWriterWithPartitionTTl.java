@@ -73,6 +73,10 @@ public class TestWriterWithPartitionTTl extends TestWriteBase {
         .checkpointComplete(1)
         .end();
 
+    // FlinkPartitionTTLTestStrategy expires a partition 1s after its last commit; wait it out explicitly
+    // instead of relying on how long the instant time generation takes.
+    Thread.sleep(1100);
+
     preparePipeline(conf)
         .consume(TestData.DATA_SET_PART2)
         .checkpoint(2)

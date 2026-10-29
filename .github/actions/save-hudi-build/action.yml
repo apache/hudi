@@ -1,0 +1,73 @@
+name: Save Hudi build
+description: >-
+  Packs the Hudi build of this workspace (every module's target/ directory and the
+  org/apache/hudi artifacts installed into the local Maven repository) and uploads it
+  as a workflow artifact, so test jobs of the same run can restore it instead of
+  rebuilding. See restore-hudi-build.
+inputs:
+  name:
+    description: >-
+      Artifact name. Must identify the commit and every build flag that changes the
+      compiled output (JDK, Scala/Spark/Flink profiles, dependency version overrides).
+    required: true
+  retention-days:
+    description: Days to keep the artifact. It is only needed while jobs of this run can be re-run.
+    required: false
+    default: '7'
+  exclude:
+    description: >-
+      Newline-separated tar --exclude patterns for files no consumer of this build reads,
+      applied to both the workspace target/ archive (paths start with ./) and the Maven
+      archive (paths start with org/apache/hudi/). Smaller artifacts download faster in
+      every restoring job.
+    required: false
+    default: '*-sources.jar'
+runs:
+  using: composite
+  steps:
+    - name: Pack build outputs
+      shell: bash
+      env:
+        BUILD_NAME: ${{ inputs.name }}
+        PACK_DIR: ${{ runner.temp }}/hudi-build
+        EXCLUDE: ${{ inputs.exclude }}
+      run: |
+        set -euo pipefail
+        rm -rf "$PACK_DIR"
+        mkdir -p "$PACK_DIR"
+        # The manifest is checked on restore, so an artifact can never be applied to a
+        # different commit or profile set than the one it was built from.
+        printf 'name=%s\nsha=%s\n' "$BUILD_NAME" "$GITHUB_SHA" > "$PACK_DIR/manifest"
+        cd "$GITHUB_WORKSPACE"
+        find . -path ./.git -prune -o -type d -name target -prune -print | sort > "$PACK_DIR/target-dirs"
+        echo "Packing $(wc -l < "$PACK_DIR/target-dirs") target directories"
+        # Modules that copy their dependencies into target/lib (prepare-package) hold the
+        # same jars several times over (about 2.7 GB for the Spark modules). Hard-linking the
+        # identical copies lets tar store each jar once; the restored files are the same.
+        # Builds that ran in a container leave root-owned files; hand them to the runner
+        # user so tar can read all of them.
+        sudo chown -R "$(id -u):$(id -g)" "$HOME/.m2/repository/org/apache/hudi"
+        xargs -a "$PACK_DIR/target-dirs" -d '\n' sudo chown -R "$(id -u):$(id -g)"
+        mapfile -t lib_dirs < <(grep '/target$' "$PACK_DIR/target-dirs" | sed 's|$|/lib|' | while read -r d; do [ -d "$d" ] && echo "$d"; done)
+        if [ "${#lib_dirs[@]}" -gt 0 ]; then
+          hardlink "${lib_dirs[@]}"
+        fi
+        # posix (pax) headers keep sub-second modification times, see restore-hudi-build.
+        excludes=()
+        while IFS= read -r pattern; do
+          [ -n "$pattern" ] && excludes+=("--exclude=$pattern")
+        done <<< "$EXCLUDE"
+        tar --format=posix "${excludes[@]}" -cf - -T "$PACK_DIR/target-dirs" | zstd -T0 -3 -q -o "$PACK_DIR/workspace-target.tar.zst"
+        tar --format=posix "${excludes[@]}" -C "$HOME/.m2/repository" -cf - org/apache/hudi | zstd -T0 -3 -q -o "$PACK_DIR/m2-hudi.tar.zst"
+        ls -l "$PACK_DIR"
+    - name: Upload build outputs
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ runner.temp }}/hudi-build
+        # The archives are already zstd-compressed.
+        compression-level: 0
+        retention-days: ${{ inputs.retention-days }}
+        if-no-files-found: error
+        # A re-run of the build job replaces the artifact of the earlier attempt.
+        overwrite: true

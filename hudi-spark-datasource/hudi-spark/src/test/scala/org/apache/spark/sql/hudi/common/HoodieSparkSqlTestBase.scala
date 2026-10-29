@@ -30,7 +30,7 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, FileSystemViewS
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
+import org.apache.hudi.hadoop.fs.{HadoopFSUtils, NioPermissionLocalFileSystem}
 import org.apache.hudi.index.HoodieInMemoryHashIndex
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
@@ -71,14 +71,21 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
   //       is consistent with the fixtures
   DateTimeZone.setDefault(DateTimeZone.UTC)
   TimeZone.setDefault(DateTimeUtils.getTimeZone("UTC"))
-  protected lazy val spark: SparkSession = SparkSession.builder()
-    .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
-    .config("spark.sql.session.timeZone", "UTC")
-    .config("hoodie.insert.shuffle.parallelism", "4")
-    .config("hoodie.upsert.shuffle.parallelism", "4")
-    .config("hoodie.delete.shuffle.parallelism", "4")
-    .config(sparkConf())
-    .getOrCreate()
+  protected lazy val spark: SparkSession = {
+    val session = SparkSession.builder()
+      .config("spark.sql.warehouse.dir", sparkWareHouse.getCanonicalPath)
+      .config("spark.sql.session.timeZone", "UTC")
+      .config("hoodie.insert.shuffle.parallelism", "4")
+      .config("hoodie.upsert.shuffle.parallelism", "4")
+      .config("hoodie.delete.shuffle.parallelism", "4")
+      // Single-process tests have no cross-host clock skew; avoid the 200ms default sleep per instant time.
+      .config("hoodie.time.generator.max_expected_clock_skew_ms", "1")
+      .config(sparkConf())
+      .getOrCreate()
+    // Avoid a forked chmod per file/directory on local file systems without the Hadoop native library.
+    NioPermissionLocalFileSystem.install(session.sparkContext.hadoopConfiguration)
+    session
+  }
 
   private var tableId = new AtomicInteger(0)
 

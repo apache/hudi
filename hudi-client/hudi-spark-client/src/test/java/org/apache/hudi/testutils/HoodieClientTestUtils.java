@@ -39,6 +39,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.NioPermissionLocalFileSystem;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
@@ -57,6 +58,7 @@ import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.SparkSession;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -128,9 +130,12 @@ public class HoodieClientTestUtils {
       Field hadoopConfigurationField = sparkContext.getClass().getDeclaredField("_hadoopConfiguration");
       hadoopConfigurationField.setAccessible(true);
       Configuration testHadoopConfig = new Configuration(false);
+      NioPermissionLocalFileSystem.install(testHadoopConfig);
       hadoopConfigurationField.set(sparkContext, testHadoopConfig);
     } catch (NoSuchFieldException | IllegalAccessException e) {
       log.warn(e.getMessage());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
     }
   }
 

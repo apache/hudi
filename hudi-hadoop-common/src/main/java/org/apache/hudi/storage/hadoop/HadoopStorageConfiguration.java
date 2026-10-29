@@ -24,17 +24,27 @@ import org.apache.hudi.hadoop.fs.inline.InLineFileSystem;
 import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.Text;
 
+import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PushbackInputStream;
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Implementation of {@link StorageConfiguration} providing Hadoop's {@link Configuration}.
  */
 public class HadoopStorageConfiguration extends StorageConfiguration<Configuration> {
   private static final long serialVersionUID = 1L;
+  // Never the first byte of the legacy Configuration#write payload, whose VInt property count is non-negative.
+  private static final byte FORMAT_MARKER = -1;
+  private static final byte FORMAT_VERSION = 1;
 
   private transient Configuration configuration;
 
@@ -112,7 +122,17 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
    */
   private void writeObject(ObjectOutputStream out) throws IOException {
     out.defaultWriteObject();
-    configuration.write(out);
+    // Writes plain key/value pairs instead of Configuration#write, which gzips every
+    // property's source list separately and is ~10x slower; this runs for every Spark task.
+    List<Map.Entry<String, String>> entries = new ArrayList<>(configuration.size());
+    configuration.forEach(entries::add);
+    out.writeByte(FORMAT_MARKER);
+    out.writeByte(FORMAT_VERSION);
+    out.writeInt(entries.size());
+    for (Map.Entry<String, String> entry : entries) {
+      Text.writeString(out, entry.getKey());
+      Text.writeString(out, entry.getValue());
+    }
   }
 
   /**
@@ -126,6 +146,22 @@ public class HadoopStorageConfiguration extends StorageConfiguration<Configurati
    */
   private void readObject(ObjectInputStream in) throws IOException {
     configuration = new Configuration(false);
-    configuration.readFields(in);
+    byte firstByte = in.readByte();
+    if (firstByte == FORMAT_MARKER) {
+      byte version = in.readByte();
+      if (version != FORMAT_VERSION) {
+        throw new InvalidObjectException("Unsupported HadoopStorageConfiguration format version " + version);
+      }
+      int size = in.readInt();
+      for (int i = 0; i < size; i++) {
+        configuration.set(Text.readString(in), Text.readString(in));
+      }
+    } else {
+      // Payload written by Configuration#write before the plain format existed, e.g. Flink state
+      // from an older Hudi version. Hand the already-consumed first byte back to readFields.
+      PushbackInputStream legacyIn = new PushbackInputStream(in, 1);
+      legacyIn.unread(firstByte);
+      configuration.readFields(new DataInputStream(legacyIn));
+    }
   }
 }
