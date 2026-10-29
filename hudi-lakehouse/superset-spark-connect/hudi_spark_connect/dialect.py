@@ -20,12 +20,23 @@ from urllib.parse import unquote, urlencode
 
 from sqlalchemy import types
 from sqlalchemy.engine import default
+from sqlalchemy.sql.compiler import SQLCompiler
 from sqlalchemy.sql.compiler import IdentifierPreparer
 
 
 class SparkIdentifierPreparer(IdentifierPreparer):
     def __init__(self, dialect):
         super().__init__(dialect, initial_quote="`", escape_quote="`")
+
+
+class SparkConnectCompiler(SQLCompiler):
+    def limit_clause(self, select, **kw):
+        text = ""
+        if select._limit_clause is not None:
+            text += "\n LIMIT " + self.process(select._limit_clause, **kw)
+        if select._offset_clause is not None:
+            text += "\n OFFSET " + self.process(select._offset_clause, **kw)
+        return text
 
 
 def spark_type(name):
@@ -50,6 +61,7 @@ class SparkConnectDialect(default.DefaultDialect):
     name = "sparkconnect"
     driver = "adbc"
     preparer = SparkIdentifierPreparer
+    statement_compiler = SparkConnectCompiler
     supports_statement_cache = False
     supports_native_boolean = True
     default_paramstyle = "qmark"

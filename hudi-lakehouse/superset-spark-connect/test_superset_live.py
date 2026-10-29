@@ -27,6 +27,86 @@ SCHEMA = os.environ.get("HUDI_SUPERSET_SCHEMA", "default")
 
 @unittest.skipUnless(all((URL, USER, PASSWORD, DATABASE)), "set Superset URL, user, password and database ID")
 class SupersetLiveTest(unittest.TestCase):
+    def test_temporal_chart_filters_and_epoch_grouping(self):
+        import requests
+
+        session = requests.Session()
+        base = URL.rstrip("/")
+        response = session.post(base + "/api/v1/security/login", json={
+            "username": USER, "password": PASSWORD, "provider": "db"}, timeout=30)
+        response.raise_for_status()
+        session.headers["Authorization"] = "Bearer " + response.json()["access_token"]
+        response = session.get(base + "/api/v1/security/csrf_token/", timeout=30)
+        response.raise_for_status()
+        session.headers.update({"X-CSRFToken": response.json()["result"], "Referer": base + "/"})
+        table = "temporal_adapter_" + uuid.uuid4().hex
+        dataset_id = None
+        created = False
+
+        def run(sql):
+            response = session.post(base + "/api/v1/sqllab/execute/", json={
+                "database_id": int(DATABASE), "sql": sql, "schema": SCHEMA,
+                "runAsync": False, "client_id": uuid.uuid4().hex[:11]}, timeout=180)
+            response.raise_for_status()
+            result = response.json()
+            self.assertEqual(result.get("status"), "success", result)
+            return result["data"]
+
+        def chart(query):
+            response = session.post(base + "/api/v1/chart/data", json={
+                "datasource": {"id": dataset_id, "type": "table"}, "queries": [query],
+                "result_format": "json", "result_type": "full", "force": True}, timeout=120)
+            response.raise_for_status()
+            result = response.json()["result"][0]
+            self.assertEqual(result["status"], "success", result)
+            return result
+
+        try:
+            run(f"CREATE TABLE {table} (id INT, day DATE, event_ts TIMESTAMP, "
+                "epoch_s BIGINT, epoch_ms BIGINT) USING parquet")
+            created = True
+            run(f"INSERT INTO {table} VALUES "
+                "(1, DATE '2023-11-14', TIMESTAMP '2023-11-14 22:13:20', 1700000000, 1700000000000), "
+                "(2, DATE '2023-11-15', TIMESTAMP '2023-11-15 22:13:20', 1700086400, 1700086400000)")
+            response = session.post(base + "/api/v1/dataset/", json={
+                "database": int(DATABASE), "schema": SCHEMA, "table_name": table}, timeout=120)
+            response.raise_for_status()
+            dataset_id = response.json()["id"]
+            for name in ("day", "event_ts"):
+                result = chart({"columns": ["id"], "filters": [
+                    {"col": name, "op": "==", "val": 1700000000000}], "row_limit": 100})
+                self.assertEqual(result["data"], [{"id": 1}])
+
+            response = session.get(base + f"/api/v1/dataset/{dataset_id}", timeout=30)
+            response.raise_for_status()
+            columns = response.json()["result"]["columns"]
+            for column in columns:
+                if column["column_name"] in ("epoch_s", "epoch_ms"):
+                    column["is_dttm"] = True
+                    column["python_date_format"] = column["column_name"]
+            keys = ("id", "column_name", "is_dttm", "python_date_format", "type", "groupby", "filterable")
+            response = session.put(base + f"/api/v1/dataset/{dataset_id}", json={
+                "columns": [{key: column[key] for key in keys} for column in columns]}, timeout=30)
+            response.raise_for_status()
+            for name in ("epoch_s", "epoch_ms"):
+                result = chart({"columns": [{"columnType": "BASE_AXIS", "sqlExpression": name,
+                                             "label": name, "timeGrain": "P1D"}],
+                                "metrics": [{"expressionType": "SQL", "sqlExpression": "COUNT(*)",
+                                             "label": "count"}], "row_limit": 100})
+                self.assertEqual(sorted((row[name], row["count"]) for row in result["data"]),
+                                 [(1699920000000, 1), (1700006400000, 1)])
+            result = chart({"columns": ["id"], "orderby": [["id", True]],
+                            "row_offset": 1, "row_limit": None})
+            self.assertEqual(result["data"], [{"id": 2}])
+        finally:
+            try:
+                if dataset_id is not None:
+                    session.delete(base + f"/api/v1/dataset/{dataset_id}", timeout=30).raise_for_status()
+            finally:
+                if created:
+                    run(f"DROP TABLE IF EXISTS {table} PURGE")
+                session.close()
+
     def test_sql_lab_queries_and_writes(self):
         import requests
 
