@@ -35,7 +35,8 @@ dependencies = [
   "langchain-ollama>=1.0",
   "fastmcp>=2.10,<3",
   "trino>=0.330",
-  "sqlglot>=25.0",
+  # Guardrails rely on AST shapes verified at this minimum version in CI.
+  "sqlglot>=30.21.0",
   "pydantic>=2.7",
   "pydantic-settings>=2.3",
   "sse-starlette>=2.1",
