@@ -36,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Map;
 
 /**
@@ -63,7 +64,7 @@ public class FlinkClientUtil {
     // create hadoop configuration with hadoop conf directory configured.
     org.apache.hadoop.conf.Configuration hadoopConf = null;
     for (String possibleHadoopConfPath : HadoopUtils.possibleHadoopConfPaths(new Configuration())) {
-      hadoopConf = getHadoopConfiguration(possibleHadoopConfPath, false);
+      hadoopConf = getHadoopConfiguration(possibleHadoopConfPath);
       if (hadoopConf != null) {
         break;
       }
@@ -80,7 +81,8 @@ public class FlinkClientUtil {
    * FLINK_CONF_DIR, as in environment-based discovery. Invalid explicit directories fail fast.
    */
   public static org.apache.hadoop.conf.Configuration getHadoopConf(String hadoopConfDir) {
-    return applyFlinkHadoopOptions(getHadoopConfiguration(hadoopConfDir, true));
+    validateHadoopConfDir(hadoopConfDir);
+    return applyFlinkHadoopOptions(getHadoopConfiguration(hadoopConfDir));
   }
 
   private static org.apache.hadoop.conf.Configuration applyFlinkHadoopOptions(org.apache.hadoop.conf.Configuration hadoopConf) {
@@ -100,32 +102,34 @@ public class FlinkClientUtil {
     return hadoopConf;
   }
 
-  private static org.apache.hadoop.conf.Configuration getHadoopConfiguration(String hadoopConfDir, boolean required) {
-    if (required && StringUtils.isNullOrEmpty(hadoopConfDir == null ? null : hadoopConfDir.trim())) {
+  private static void validateHadoopConfDir(String hadoopConfDir) {
+    if (hadoopConfDir == null || hadoopConfDir.trim().isEmpty()) {
       throw new HoodieValidationException("'hadoop_conf.dir' must not be empty. Leave it unset to use environment discovery");
     }
     File dir = new File(hadoopConfDir);
-    if (required && !dir.isDirectory()) {
+    if (!dir.isDirectory()) {
       throw new HoodieValidationException("Invalid 'hadoop_conf.dir': directory does not exist or is not a directory: " + hadoopConfDir);
     }
+    boolean hasSiteFile = Arrays.stream(HADOOP_SITE_FILES)
+        .map(name -> new File(dir, name))
+        .anyMatch(File::isFile);
+    if (!hasSiteFile) {
+      throw new HoodieValidationException("Invalid 'hadoop_conf.dir': no supported Hadoop site files "
+          + "(core-site.xml, hdfs-site.xml, yarn-site.xml, mapred-site.xml) found under directory: " + hadoopConfDir);
+    }
+  }
+
+  private static org.apache.hadoop.conf.Configuration getHadoopConfiguration(String hadoopConfDir) {
+    File dir = new File(hadoopConfDir);
     if (!dir.exists()) {
       return null;
     }
     org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
-    boolean loaded = false;
     for (String name : HADOOP_SITE_FILES) {
       File site = new File(dir, name);
-      if (required && site.exists() && (!site.isFile() || !site.canRead())) {
-        throw new HoodieValidationException("Invalid 'hadoop_conf.dir': site file is not a readable regular file: " + site);
-      }
       if (site.exists()) {
         hadoopConf.addResource(new Path(site.getAbsolutePath()));
-        loaded = true;
       }
-    }
-    if (required && !loaded) {
-      throw new HoodieValidationException("Invalid 'hadoop_conf.dir': no supported Hadoop site files "
-          + "(core-site.xml, hdfs-site.xml, yarn-site.xml, mapred-site.xml) found under directory: " + hadoopConfDir);
     }
     return hadoopConf;
   }
