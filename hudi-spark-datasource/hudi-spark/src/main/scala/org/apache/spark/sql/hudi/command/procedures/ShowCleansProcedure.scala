@@ -27,7 +27,6 @@ import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
 import java.io.InputStream
 import java.util
-import java.util.Collections
 import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
@@ -176,13 +175,12 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
 
   private[procedures] def getCleansWithPartitionMetadata(timeline: HoodieTimeline,
                                              limit: Int): Seq[Row] = {
-    import scala.collection.JavaConverters._
-
-    val (rows: util.ArrayList[Row], cleanInstants: util.ArrayList[HoodieInstant]) = getSortedCleans(timeline)
+    val rows = new util.ArrayList[Row]
+    val cleanInstants = completedCleansDescending(timeline)
 
     var rowCount = 0
 
-    cleanInstants.asScala.iterator.takeWhile(_ => rowCount < limit).foreach { cleanInstant =>
+    cleanInstants.takeWhile(_ => rowCount < limit).foreach { cleanInstant =>
       val cleanMetadata = timeline.readCleanMetadata(cleanInstant)
 
       cleanMetadata.getPartitionMetadata.entrySet.asScala.iterator.takeWhile(_ => rowCount < limit).foreach { partitionMetadataEntry =>
@@ -210,22 +208,17 @@ class ShowCleansProcedure(includePartitionMetadata: Boolean) extends BaseProcedu
     rows.asScala.toList
   }
 
-  private def getSortedCleans(timeline: HoodieTimeline): (util.ArrayList[Row], util.ArrayList[HoodieInstant]) = {
-    val rows = new util.ArrayList[Row]
-    val cleanInstants: util.List[HoodieInstant] = timeline.getCleanerTimeline.filterCompletedInstants
-      .getInstants.toArray().map(instant => instant.asInstanceOf[HoodieInstant]).toList.asJava
-    val sortedCleanInstants = new util.ArrayList[HoodieInstant](cleanInstants)
-    val layout = TimelineLayout.fromVersion(timeline.getTimelineLayoutVersion)
-    Collections.sort(sortedCleanInstants, layout.getInstantComparator.requestedTimeOrderedComparator.reversed)
-    (rows, sortedCleanInstants)
+  private def completedCleansDescending(timeline: HoodieTimeline): Iterator[HoodieInstant] = {
+    // getCleanTimeline stores the selected instants in ascending order.
+    timeline.getInstants.asScala.reverseIterator.filter(instant => instant.getAction == HoodieTimeline.CLEAN_ACTION && instant.isCompleted)
   }
 
   private def getCleans(timeline: HoodieTimeline,
                         limit: Int): Seq[Row] = {
-    val (rows: util.ArrayList[Row], cleanInstants: util.ArrayList[HoodieInstant]) = getSortedCleans(timeline)
+    val rows = new util.ArrayList[Row]
+    val cleanInstants = completedCleansDescending(timeline)
 
-    for (i <- 0 until Math.min(cleanInstants.size, limit)) {
-      val cleanInstant = cleanInstants.get(i)
+    cleanInstants.take(limit).foreach { cleanInstant =>
       val cleanMetadata = timeline.readCleanMetadata(cleanInstant)
 
       rows.add(Row(

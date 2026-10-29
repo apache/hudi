@@ -29,6 +29,7 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -109,7 +110,8 @@ public class ArchivedCleanTimelineUtils {
         return new ByteArrayInputStream(bytes);
       }
     };
-    return factory.createDefaultTimeline(instants.stream().sorted(
-        TimelineLayout.fromVersion(metaClient.getTimelineLayoutVersion()).getInstantComparator().requestedTimeOrderedComparator()), reader);
+    List<HoodieInstant> ascendingInstants = new ArrayList<>(instants);
+    Collections.reverse(ascendingInstants);
+    return factory.createDefaultTimeline(ascendingInstants.stream(), reader);
   }
 }

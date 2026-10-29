@@ -186,7 +186,7 @@ class ShowCleansPlanProcedure extends BaseProcedure with ProcedureBuilder with S
   private[procedures] def getCleanerPlans(metaClient: HoodieTableMetaClient, limit: Int, showArchived: Boolean): Seq[Row] = {
     val timeline = ShowCleansProcedure.getCleanTimeline(metaClient, showArchived, loadPlans = true,
       limit, batchSize = Math.min(limit, 32))
-    timeline.getReverseOrderedInstants.iterator().asScala.toSeq.map(processCleanPlan(metaClient, timeline, _))
+    timeline.getInstants.asScala.reverseIterator.map(processCleanPlan(metaClient, timeline, _)).toList
   }
 
   private def processCleanPlan(metaClient: HoodieTableMetaClient,
