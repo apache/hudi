@@ -15,6 +15,8 @@
 # limitations under the License.
 import importlib.util
 from pathlib import Path
+import sys
+import types
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +26,10 @@ EXAMPLES = Path(__file__).resolve().parents[1] / 'local-dev/example'
 def load(name):
     spec = importlib.util.spec_from_file_location(name, EXAMPLES / (name + '.py'))
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    package = types.ModuleType('adbc_driver_manager')
+    package.dbapi = MagicMock()
+    with patch.dict(sys.modules, {'adbc_driver_manager': package}):
+        spec.loader.exec_module(module)
     return module
 
 
