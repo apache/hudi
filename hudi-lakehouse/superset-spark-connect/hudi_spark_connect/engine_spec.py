@@ -40,6 +40,25 @@ class SparkConnectEngineSpec(BaseEngineSpec):
     }
 
     @classmethod
+    def convert_dttm(cls, target_type, dttm, db_extra=None):
+        target = target_type.strip().upper()
+        if target == "DATE":
+            return f"CAST('{dttm.date().isoformat()}' AS DATE)"
+        if target in ("DATETIME", "TIMESTAMP", "TIMESTAMP_NTZ"):
+            value = dttm.isoformat(sep=" ", timespec="microseconds")
+            spark_type = "TIMESTAMP" if target == "DATETIME" else target
+            return f"CAST('{value}' AS {spark_type})"
+        return None
+
+    @classmethod
+    def epoch_to_dttm(cls):
+        return "TIMESTAMP_SECONDS({col})"
+
+    @classmethod
+    def epoch_ms_to_dttm(cls):
+        return "TIMESTAMP_MILLIS({col})"
+
+    @classmethod
     def adjust_engine_params(cls, uri, connect_args, catalog=None, schema=None):
         if catalog:
             raise ValueError("Selecting a catalog is not supported")

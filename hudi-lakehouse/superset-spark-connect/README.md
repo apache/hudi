@@ -90,6 +90,16 @@ HUDI_SUPERSET_CONNECT_TEST_URI='sparkconnect://localhost:15002/default?tls=false
   python -m unittest discover -s hudi-lakehouse/superset-spark-connect -p 'test_live.py' -v
 ```
 
+The Superset engine spec tests require Superset 6.1.0. After building the example
+image above, run them against the checkout with:
+
+```bash
+docker run --rm -e SUPERSET_SECRET_KEY=local-test-only -e PYTHONPATH=/work \
+  -v "$PWD/hudi-lakehouse/superset-spark-connect:/work:ro" \
+  --entrypoint /app/.venv/bin/python hudi-superset-connect:local \
+  -m unittest discover -s /work -p 'test_engine_spec.py' -v
+```
+
 The live test creates a uniquely named database and Hudi table, checks discovery,
 queries and CRUD, and drops only its own table and database. It needs a disposable
 server with Hudi extensions and write permissions. A failed cleanup may leave the

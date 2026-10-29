@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 
 from sqlalchemy.engine.url import make_url
 from sqlalchemy import types
+from sqlalchemy import column, select
 from hudi_spark_connect.dialect import SparkConnectDialect, spark_type
 
 
@@ -60,6 +61,16 @@ class DialectTest(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.dialect.do_executemany(cursor, "INSERT INTO t VALUES (?)", [(1,)])
         self.assertEqual(cursor.execute.call_count, 1)
+
+    def test_offset_without_limit_does_not_add_negative_limit(self):
+        stmt = select(column("id")).offset(5)
+        sql = str(stmt.compile(dialect=self.dialect, compile_kwargs={"literal_binds": True}))
+        self.assertIn("OFFSET 5", sql)
+        self.assertNotIn("LIMIT", sql)
+        sql = str(stmt.limit(10).compile(
+            dialect=self.dialect, compile_kwargs={"literal_binds": True}))
+        self.assertIn("LIMIT 10", sql)
+        self.assertIn("OFFSET 5", sql)
 
     def test_reflection_quoting_and_types(self):
         conn = MagicMock()

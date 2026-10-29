@@ -20,7 +20,7 @@ from decimal import Decimal
 import unittest
 import uuid
 
-from sqlalchemy import MetaData, Table, create_engine, inspect
+from sqlalchemy import MetaData, Table, column, create_engine, inspect, select, text
 from sqlalchemy.dialects import registry
 
 URI = os.environ.get("HUDI_SUPERSET_CONNECT_TEST_URI")
@@ -28,6 +28,32 @@ URI = os.environ.get("HUDI_SUPERSET_CONNECT_TEST_URI")
 
 @unittest.skipUnless(URI, "set HUDI_SUPERSET_CONNECT_TEST_URI to a disposable endpoint")
 class LiveDialectTest(unittest.TestCase):
+    def test_offset_only_compiled_sql(self):
+        registry.register("sparkconnect", "hudi_spark_connect.dialect", "SparkConnectDialect")
+        engine = create_engine(URI)
+        try:
+            query = select(column("id")).select_from(text("range(10)"))\
+                .order_by(column("id")).offset(5)
+            sql = str(query.compile(dialect=engine.dialect, compile_kwargs={"literal_binds": True}))
+            with engine.connect() as conn:
+                self.assertEqual(conn.exec_driver_sql(sql).fetchall(), [(5,), (6,), (7,), (8,), (9,)])
+        finally:
+            engine.dispose()
+
+    def test_epoch_seconds_and_milliseconds(self):
+        registry.register("sparkconnect", "hudi_spark_connect.dialect", "SparkConnectDialect")
+        engine = create_engine(URI)
+        try:
+            with engine.connect() as conn:
+                row = conn.exec_driver_sql(
+                    "SELECT unix_micros(timestamp_seconds(1700000000)), "
+                    "unix_micros(timestamp_millis(1700000000123)), "
+                    "unix_micros(timestamp_millis(-1))"
+                ).fetchone()
+                self.assertEqual(tuple(row), (1700000000000000, 1700000000123000, -1000))
+        finally:
+            engine.dispose()
+
     def test_hudi_read_write_and_reflection(self):
         registry.register("sparkconnect", "hudi_spark_connect.dialect", "SparkConnectDialect")
         engine = create_engine(URI)
