@@ -3,7 +3,7 @@ title: "Use Cases"
 keywords: [ hudi, data ingestion, etl, real time, use cases]
 summary: "Following are some sample use-cases for Hudi, which illustrate the benefits in terms of faster processing & increased efficiency"
 toc: true
-last_modified_at: 2019-12-30T15:59:57-04:00
+last_modified_at: 2026-10-29T00:00:00-07:00
 ---
 
 Apache Hudi is a powerful [data lakehouse platform](https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform) that shines in a variety of use cases due to its high-performance design, rich feature set, and 
@@ -135,4 +135,4 @@ For a worked example covering image embeddings, raw bytes, and similarity search
 - Incremental embedding pipelines: Hudi's [incremental query](sql_queries.md#incremental-query) lets feature pipelines re-embed only the rows that changed since a given commit, instead of reprocessing the full batch.
 - Multi-modal transactional guarantees: Vector updates, binary changes, and metadata modifications commit atomically. A similarity query joining the `VECTOR` column with the `BLOB` column never observes a state in which the embedding refers to a deleted or stale binary asset.
 - Automated table services: [File sizing](file_sizing.md), [cleaning](cleaning.md), [compaction](compaction.md), and [clustering](clustering.md) apply to tables that contain `VECTOR`, `BLOB`, and `VARIANT` columns.
-- Open, multi-engine access: Hudi tables are written and read by [Apache Spark](quick-start-guide.md) and [Apache Flink](flink-quick-start-guide.md), and by the upcoming native [Python / Rust client (hudi-rs)](python-rust-quick-start-guide.md) reading the underlying Parquet representation directly.
+- Open, multi-engine access: Hudi tables are written and read by [Apache Spark](quick-start-guide.md) and [Apache Flink](flink-quick-start-guide.md), and by the native [Python / Rust client (hudi-rs)](python-rust-quick-start-guide.md), which creates, upserts, deletes and reads tables from a single process with no JVM.
