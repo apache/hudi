@@ -16,4 +16,4 @@
 
 # Install the native Foundry Spark driver separately with dbc (see README).
 adbc-driver-manager==1.12.0
-pyarrow==18.1.0
+pyarrow==23.0.1
