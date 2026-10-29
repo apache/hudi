@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, TypeGuard
 from urllib.parse import SplitResult, parse_qsl, unquote, urlsplit
 
+from flink_writer_contract import assess_writer_contract
 from validate_flink_capabilities import (
     DEFAULT_MANIFEST,
     load_manifest,
@@ -153,6 +154,11 @@ FINDING_STATUS = {
     "FLINK_VERSION_REQUIRED": "INCOMPLETE",
     "FLINK_VERSION_UNVERIFIED": "REVIEW_REQUIRED",
     "FLINK_WRITER_MODEL_UNRESOLVED": "REVIEW_REQUIRED",
+    "FLINK_WRITER_CONTRACT_REQUIRED": "INCOMPLETE",
+    "FLINK_WRITER_CONTRACT_INVALID": "INCOMPLETE",
+    "FLINK_WRITER_OWNERSHIP_UNRESOLVED": "REVIEW_REQUIRED",
+    "FLINK_WRITER_CONTRACT_CONFLICT": "REVIEW_REQUIRED",
+    "FLINK_WRITER_COMBINATION_UNSUPPORTED": "BLOCKED",
     "FLINK_PR2_WRITE_PATH_UNSUPPORTED": "BLOCKED",
     "FLINK_PR3_WRITE_PATH_UNSUPPORTED": "BLOCKED",
     "FLINK_PR4_WRITE_PATH_UNSUPPORTED": "BLOCKED",
@@ -1220,6 +1226,7 @@ def assess_design(
             "table",
             "table_services",
             "write",
+            "writer_contract",
         },
         "contract",
         assessment,
@@ -1303,13 +1310,11 @@ def assess_design(
     writer_model = safety.get("writer_model")
     if writer_model is None:
         assessment.add("FLINK_WRITER_MODEL_UNRESOLVED", "Writer topology is required")
-    elif writer_model == "multi_writer":
-        assessment.add(
-            "FLINK_MULTI_WRITER_REVIEW",
-            "The executable contracts support only a confirmed single writer",
-        )
-    elif writer_model != "single_writer":
+    elif writer_model not in {"single_writer", "multi_writer"}:
         assessment.add("FLINK_WRITER_MODEL_UNRESOLVED", "Writer topology is unresolved")
+    writer_contract_state = assess_writer_contract(contract)
+    for finding in writer_contract_state["findings"]:
+        assessment.add(finding["code"], finding["message"])
     external_catalog = safety.get("external_catalog")
     if type(external_catalog) is not bool:
         assessment.add("FLINK_CATALOG_REQUIREMENT_UNRESOLVED", "Catalog requirement is unresolved")
@@ -2055,6 +2060,13 @@ def assess_design(
             "effective_configuration"
         ],
         "catalog_deployment_checks": catalog_state["deployment_checks"],
+        "writer_contract_result": writer_contract_state["writer_contract_result"],
+        "multi_writer_capability": writer_contract_state["multi_writer_capability"],
+        "normalized_writer_contract": writer_contract_state[
+            "normalized_writer_contract"
+        ],
+        "writer_capability_notes": writer_contract_state["writer_capability_notes"],
+        "writer_deployment_checks": writer_contract_state["writer_deployment_checks"],
         "finding_codes": [finding["code"] for finding in assessment.findings],
         "findings": assessment.findings,
         "advisory_codes": assessment.advisories,

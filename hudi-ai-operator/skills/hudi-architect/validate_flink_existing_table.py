@@ -34,6 +34,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeGuard
 
+from flink_writer_contract import assess_writer_contract
 from validate_flink_capabilities import (
     DEFAULT_MANIFEST,
     load_manifest,
@@ -90,14 +91,19 @@ ALLOWED_EVIDENCE_FACTS = {
         "index_global",
         "index_state_ttl_days",
         "index_type",
+        "lock_configuration_consistency",
+        "lock_provider_class",
         "operation",
         "timestamp_key_generator",
+        "write_concurrency_mode",
     },
     "timeline_summary": {"pending_instants"},
     "writer_inventory": {
+        "active_writers",
         "concurrent_writers",
         "previous_writer_engine",
         "previous_writer_stopped",
+        "schema_evolution_owner_id",
     },
 }
 REQUIRED_EVIDENCE_KINDS = {
@@ -120,6 +126,7 @@ REQUIRED_TABLE_FACTS = {
     "timeline_layout_version",
 }
 LIST_FACTS = {
+    "active_writers",
     "ordering_fields",
     "partition_fields",
     "pending_instants",
@@ -134,6 +141,8 @@ UPPERCASE_FACTS = {
     "previous_writer_engine",
     "record_merge_mode",
     "table_type",
+    "write_concurrency_mode",
+    "lock_configuration_consistency",
 }
 KNOWN_KEY_GENERATORS = {
     "AUTO_RECORD",
@@ -268,6 +277,8 @@ def _normalize_fact(
         if name == "partition_fields":
             # HoodieTableConfig stores custom partition-key types after a colon.
             return [item.split(":", 1)[0] for item in values]
+        if name == "active_writers":
+            return sorted(values)
         return values
     if name == "columns":
         return _normalize_columns(value, field, assessment)
@@ -342,6 +353,7 @@ def _parse_evidence(
     evidence_ids: set[str] = set()
     collected: dict[tuple[str, str], list[tuple[Any, str]]] = {}
     in_scope_ids: list[str] = []
+    conflicting_facts: set[str] = set()
     for index, raw_item in enumerate(raw_evidence):
         field = f"evidence[{index}]"
         if not isinstance(raw_item, dict):
@@ -449,12 +461,16 @@ def _parse_evidence(
                 "FLINK_EXISTING_EVIDENCE_CONFLICT",
                 f"Evidence sources {', '.join(source_ids)} disagree about {kind}.{name}",
             )
+            conflicting_facts.add(f"{kind}.{name}")
             continue
         observations.setdefault(kind, {})[name] = Observation(first_value, source_ids)
     if target_table_path is not None and in_scope_ids:
         observations.setdefault("evidence_scope", {})["table_path"] = Observation(
             target_table_path, tuple(in_scope_ids)
         )
+    observations["evidence_conflicts"] = {
+        name: Observation(True, ()) for name in sorted(conflicting_facts)
+    }
     return observations, summaries
 
 
@@ -763,6 +779,17 @@ def assess_reconciliation(
     observations, evidence_summary = _parse_evidence(
         envelope.get("evidence"), target_table_path, assessment
     )
+    writer_evidence: dict[str, Any] = {}
+    for kind in ("writer_inventory", "flink_writer_config"):
+        for name, observation in observations.get(kind, {}).items():
+            writer_evidence[f"{kind}.{name}"] = observation.value
+    writer_contract_state = assess_writer_contract(
+        desired,
+        evidence=writer_evidence,
+        conflicting_evidence_fields=set(observations.get("evidence_conflicts", {})),
+    )
+    for finding in writer_contract_state["findings"]:
+        assessment.add(finding["code"], finding["message"])
     for kind in sorted(REQUIRED_EVIDENCE_KINDS - set(observations)):
         assessment.add(
             "FLINK_EXISTING_EVIDENCE_REQUIRED", f"{kind} evidence is required"
@@ -954,12 +981,68 @@ def assess_reconciliation(
     _add_comparison(
         comparisons,
         "writer_inventory.concurrent_writers",
-        False,
+        desired.get("safety", {}).get("writer_model") == "multi_writer"
+        if isinstance(desired.get("safety"), dict)
+        else False,
         concurrent,
         mismatch_code="FLINK_MULTI_WRITER_REVIEW",
         mismatch_result="UNVERIFIED",
         assessment=assessment,
     )
+    normalized_writer_contract = writer_contract_state["normalized_writer_contract"]
+    if normalized_writer_contract:
+        expected_active_writers = sorted(
+            [normalized_writer_contract["primary_writer_id"]]
+            + [
+                writer["writer_id"]
+                for writer in normalized_writer_contract["additional_writers"]
+            ]
+        )
+        optional_writer_expectations = {
+            "writer_inventory.active_writers": (
+                expected_active_writers,
+                inventory.get("active_writers"),
+            ),
+            "writer_inventory.schema_evolution_owner_id": (
+                normalized_writer_contract["ownership"]["schema_evolution_owner_id"],
+                inventory.get("schema_evolution_owner_id"),
+            ),
+        }
+        observed_concurrency = normalized_writer_contract.get("observed_concurrency")
+        if isinstance(observed_concurrency, dict):
+            optional_writer_expectations.update(
+                {
+                    "writer_config.write_concurrency_mode": (
+                        observed_concurrency["mode"],
+                        observations.get("flink_writer_config", {}).get(
+                            "write_concurrency_mode"
+                        ),
+                    ),
+                    "writer_config.lock_provider_class": (
+                        observed_concurrency["lock_provider_class"],
+                        observations.get("flink_writer_config", {}).get(
+                            "lock_provider_class"
+                        ),
+                    ),
+                    "writer_config.lock_configuration_consistency": (
+                        observed_concurrency["lock_configuration_consistency"],
+                        observations.get("flink_writer_config", {}).get(
+                            "lock_configuration_consistency"
+                        ),
+                    ),
+                }
+            )
+        for field, (expected, observed) in optional_writer_expectations.items():
+            if observed is not None:
+                _add_comparison(
+                    comparisons,
+                    field,
+                    expected,
+                    observed,
+                    mismatch_code="FLINK_WRITER_CONTRACT_CONFLICT",
+                    mismatch_result="UNVERIFIED",
+                    assessment=assessment,
+                )
     if transition in {"same_job_restore", "cold_start_new_job", "flink_writer_takeover"}:
         _add_comparison(
             comparisons,
@@ -1102,6 +1185,13 @@ def assess_reconciliation(
         "catalog_deployment_checks": desired_result.get(
             "catalog_deployment_checks", []
         ),
+        "writer_contract_result": writer_contract_state["writer_contract_result"],
+        "multi_writer_capability": writer_contract_state["multi_writer_capability"],
+        "normalized_writer_contract": writer_contract_state[
+            "normalized_writer_contract"
+        ],
+        "writer_capability_notes": writer_contract_state["writer_capability_notes"],
+        "writer_deployment_checks": writer_contract_state["writer_deployment_checks"],
         "finding_codes": finding_codes,
         "findings": assessment.findings,
         "advisory_codes": assessment.advisories,

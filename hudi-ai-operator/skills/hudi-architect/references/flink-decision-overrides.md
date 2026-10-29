@@ -74,6 +74,11 @@ do not replace the shared table-design rules and do not form a standalone planne
 | Table lifecycle unknown | `FLINK_TABLE_LIFECYCLE_REQUIRED` | `INCOMPLETE` | No |
 | Independent writer exists | `FLINK_MULTI_WRITER_REVIEW` | `REVIEW_REQUIRED` | No |
 | Writer model unknown | `FLINK_WRITER_MODEL_UNRESOLVED` | `REVIEW_REQUIRED` | No |
+| Confirmed multi-writer topology has no Writer Contract | `FLINK_WRITER_CONTRACT_REQUIRED` | `INCOMPLETE` | No |
+| Writer Contract is malformed or contains unsupported fields | `FLINK_WRITER_CONTRACT_INVALID` | `INCOMPLETE` | No |
+| Schema or table-configuration ownership is unresolved | `FLINK_WRITER_OWNERSHIP_UNRESOLVED` | `REVIEW_REQUIRED` | No |
+| Writer Contract facts conflict internally or with scoped evidence | `FLINK_WRITER_CONTRACT_CONFLICT` | `REVIEW_REQUIRED` | No |
+| Observed concurrency combination is incompatible with the existing bounded design | `FLINK_WRITER_COMBINATION_UNSUPPORTED` | `BLOCKED` | No |
 | External catalog required | `FLINK_EXTERNAL_CATALOG_REVIEW` | `REVIEW_REQUIRED` | No |
 | Catalog requirement unknown | `FLINK_CATALOG_REQUIREMENT_UNRESOLVED` | `REVIEW_REQUIRED` | No |
 | Physical schema missing, insufficient, or available only through an unreadable pointer | `FLINK_PHYSICAL_SCHEMA_REQUIRED` | `INCOMPLETE` | No |
@@ -261,7 +266,7 @@ to the executable contract just like `F10_SAFE_APPEND`.
   compaction-operation execution are enabled with `num_commits` and five delta commits. Five is a
   fixed Hudi 1.2.0 effective default, not a tuned SLA.
 - A standalone compactor is an independent writer and remains `REVIEW_REQUIRED`; concurrency
-  configuration is deferred to PR7. Unknown ownership also withholds SQL.
+  configuration is not emitted by the PR7 Writer Contract. Unknown ownership also withholds SQL.
 - Snapshot readers see base plus log state at a visible completed instant. Read-optimized readers
   see compacted base-file state and advance only after compaction. Reader `query.type` is not a
   sink option and is not rendered into the DDL.
@@ -332,6 +337,28 @@ to the executable contract just like `F10_SAFE_APPEND`.
   `FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED`. Reconciliation remains `UNVERIFIED`, change
   disposition remains `UNVERIFIED`, executable eligibility remains false, and no catalog SQL is
   emitted.
+
+## PR7 multi-writer Writer Contract invariants
+
+- Writer Contract schema 1 is orthogonal to design schemas 1, 2, and 3. It never changes the
+  established single-writer SQL or creates a fourth design schema.
+- A confirmed single writer omits the block and returns `NOT_APPLICABLE`. An unknown writer model
+  does not fabricate a contract. A confirmed independent writer requires the block and always
+  retains `FLINK_MULTI_WRITER_REVIEW`.
+- The primary writer ID is unique. Additional writers record a bounded role, relationship,
+  engine/version, Hudi version, and canonical Hudi 1.2.0 operation. Primary engine/version and
+  operation facts are derived from the existing design contract.
+- Schema-evolution ownership is required. Table-configuration ownership is optional. Same-job
+  compaction remains in schema 3; separately deployed compaction or clustering is an additional
+  writer role.
+- Observed concurrency is optional and never a recommendation. OCC is recognized but remains
+  `UNVERIFIED`. NBCC requires MOR with simple bucket index, so the existing COW and
+  FLINK_STATE-indexed MOR paths are `UNSUPPORTED`; never switch indexes automatically.
+- Existing-table writer observations retain PR5 provenance and scope. Contradictory observations
+  make the Writer Contract `CONFLICT` and reconciliation/change disposition `UNVERIFIED`, not an
+  invented migration.
+- `COMPLETE` means only that required writer facts were captured. Multi-writer executable
+  eligibility is always false, no SQL is emitted, and deployment checks are not live evidence.
 
 ## Evidence and secret handling
 
