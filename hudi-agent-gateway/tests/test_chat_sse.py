@@ -208,3 +208,68 @@ async def test_disconnected_sse_cancels_agent(client):
     async with asyncio.timeout(2):
         await response(request.scope, receive, send)
     assert cancelled.is_set()
+
+
+async def test_disconnected_sse_cancels_real_agent_tool(client, settings):
+    from starlette.requests import Request
+
+    from hudi_agent_gateway.api.chat import chat
+    from hudi_agent_gateway.api.models import ChatRequest
+    from hudi_agent_gateway.tools import build_registry
+
+    _, app = client
+    started, cancelled = asyncio.Event(), asyncio.Event()
+
+    class WaitingClient:
+        async def execute(self, *args, **kwargs):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+    registry = build_registry(settings, lakehouse_client=WaitingClient())
+    app.state.agents = FixedAgents(build_agent(
+        scripted_model(TOOL_CALL_THEN_ANSWER), registry, app.state.sessions.checkpointer, settings
+    ))
+    request = Request({"type": "http", "method": "POST", "path": "/v1/chat",
+                       "headers": [], "app": app})
+    response = await chat(
+        request, ChatRequest(message="test", session_id="real-cancel", stream=True)
+    )
+
+    async def receive():
+        await started.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        pass
+
+    async with asyncio.timeout(3):
+        await response(request.scope, receive, send)
+        await cancelled.wait()
+
+
+async def test_cancellation_scope_isolates_turns_and_rejects_late_tools():
+    from hudi_agent_gateway.cancellation import ToolCancellationScope
+
+    first, second = ToolCancellationScope(), ToolCancellationScope()
+    started = asyncio.Event()
+
+    async def wait():
+        started.set()
+        await asyncio.Event().wait()
+
+    first_task, second_task = asyncio.create_task(wait()), asyncio.create_task(wait())
+    first.add(first_task)
+    second.add(second_task)
+    await started.wait()
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first_task
+    assert not second_task.done()
+    with pytest.raises(asyncio.CancelledError):
+        first.add(asyncio.current_task())
+    second.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await second_task

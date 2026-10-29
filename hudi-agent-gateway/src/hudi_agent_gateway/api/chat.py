@@ -41,6 +41,7 @@ from hudi_agent_gateway.api.models import (
     ToolResultEvent,
     ToolTraceEntry,
 )
+from hudi_agent_gateway.cancellation import ToolCancellationScope, tool_cancellation_scope
 from hudi_agent_gateway.log import log_event, request_id_var, session_id_var
 from hudi_agent_gateway.tools.registry import is_tool_error
 
@@ -135,6 +136,8 @@ async def _stream_chat(request: Request, body: ChatRequest) -> AsyncIterator[Ser
     inputs = {"messages": [HumanMessage(body.message)]}
     final_text_parts: list[str] = []
     yield _status_event("Preparing response…")
+    scope = ToolCancellationScope()
+    scope_token = tool_cancellation_scope.set(scope)
     try:
         async with asyncio.timeout(state.settings.chat_timeout_seconds):
             agent = state.agents.get(body.model)
@@ -184,6 +187,11 @@ async def _stream_chat(request: Request, body: ChatRequest) -> AsyncIterator[Ser
             data=ErrorEvent(code="agent_error", message=str(e)).model_dump_json(),
         )
         return
+    finally:
+        # LangGraph may run tools in tasks that outlive its streaming iterator.
+        # Cancel only this turn's tasks when the stream ends or disconnects.
+        scope.cancel()
+        tool_cancellation_scope.reset(scope_token)
 
     yield ServerSentEvent(
         event="done",

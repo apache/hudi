@@ -169,8 +169,10 @@ actually finish.
 
 **Timeout/cancellation:** gateway timeouts return promptly and request
 `SparkSession.interruptAll()` on a separate thread; task cancellation follows
-the same path. Each request owns its session, so this interrupts only that
-request's operations. Spark provides a server interruption RPC, but network
+the same path. Stopping a streaming chat also cancels the tool tasks belonging
+to that turn, including those running inside the agent. Each request owns its
+session, so this interrupts only that request's operations. Spark provides a
+server interruption RPC, but network
 failures and races with operation startup mean cancellation remains best-effort.
 A timeout does not prove Spark stopped. Hung RPCs can delay session cleanup;
 worker pools shut down without waiting, and Python cannot forcibly terminate
