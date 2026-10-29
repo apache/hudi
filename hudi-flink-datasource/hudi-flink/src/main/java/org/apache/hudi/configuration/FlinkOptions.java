@@ -1537,12 +1537,15 @@ public class FlinkOptions extends HoodieConfig {
 
   @AdvancedConfig
   public static final ConfigOption<String> HADOOP_CONF_DIR = ConfigOptions
-          .key("hadoop_conf.dir")
-          .stringType()
-          .noDefaultValue()
-          .withDescription("The hadoop configuration directory, where the core-site.xml, "
-                  + "hdfs-site.xml etc. lie in. Used to connect to a different HDFS cluster "
-                  + "for cross-cluster writes.");
+      .key("hadoop_conf.dir")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Local Hadoop configuration directory for cross-cluster reads and writes. "
+          + "It must contain at least one readable core-site.xml, hdfs-site.xml, yarn-site.xml or mapred-site.xml "
+          + "and be available at the same path on the client, JobManager and TaskManagers. "
+          + "Invalid explicit directories fail fast; when unset, environment discovery is used. "
+          + "Hadoop properties from FLINK_CONF_DIR override site files, and table-level hadoop.* options override both.");
+
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------

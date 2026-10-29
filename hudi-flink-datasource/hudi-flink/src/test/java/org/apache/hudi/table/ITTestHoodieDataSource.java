@@ -37,9 +37,9 @@ import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
+import org.apache.hudi.hadoop.fs.NonLocalSchemeLocalFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
-import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.buffer.BufferType;
@@ -87,7 +87,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -132,7 +131,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * IT cases for Hoodie table source and sink.
@@ -3675,43 +3673,45 @@ public class ITTestHoodieDataSource {
   }
 
   // -------------------------------------------------------------------------
-//  Cross-cluster access via hadoop_conf.dir
-// -------------------------------------------------------------------------
+  //  Cross-cluster access via hadoop_conf.dir
+  // -------------------------------------------------------------------------
 
   /**
    * Batch write then batch read, with 'hadoop_conf.dir' pointing at a conf
-   * directory whose fs.defaultFS is file:/// (simulating a remote cluster).
+   * directory that registers a non-local filesystem backed by local files.
    */
   @Test
   public void testWriteAndReadWithHadoopConfDir() throws Exception {
-    File hadoopConfDir = createHadoopConfDirWithFileFs();
+    File hadoopConfDir = createHadoopConfDirWithRemoteFs();
 
-    StoragePath path = new StoragePath(tempFile.toURI());
+    StoragePath path = new StoragePath("viewfs://remote-cluster" + tempFile.getAbsolutePath());
 
     // ---- write ----
     TableEnvironment writeEnv = batchTableEnv;
     String writeDDL = sql("source")
-            .option(FlinkOptions.PATH, path)
-            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
-            .end();
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .end();
     writeEnv.executeSql(writeDDL);
     writeEnv.executeSql(
-                    "insert into source values "
-                            + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),"
-                            + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1')")
-            .await();
+            "insert into source values "
+                + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1'),"
+                + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1')")
+        .await();
 
     // ---- read ----
     String readDDL = sql("t1")
-            .option(FlinkOptions.PATH, path)
-            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
-            .end();
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .end();
     batchTableEnv.executeSql(readDDL);
 
     List<Row> result = CollectionUtil.iterableToList(
-            () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
-    assertEquals(2, result.size(),
-            "Should read back the records written with hadoop_conf.dir");
+        () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, "[+I[id1, Danny, 23, 1970-01-01T00:00:01, par1], "
+        + "+I[id2, Stephen, 33, 1970-01-01T00:00:02, par1]]");
   }
 
   /**
@@ -3721,29 +3721,26 @@ public class ITTestHoodieDataSource {
    */
   @Test
   public void testIncrementalReadWithHadoopConfDir() throws Exception {
-    File hadoopConfDir = createHadoopConfDirWithFileFs();
-    StoragePath path = new StoragePath(tempFile.toURI());
+    File hadoopConfDir = createHadoopConfDirWithRemoteFs();
+    StoragePath path = new StoragePath("viewfs://remote-cluster" + tempFile.getAbsolutePath());
     Configuration conf = TestConfigurations.getDefaultConf(path.toString());
     conf.set(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath());
-    TestData.writeData(TestData.DATA_SET_INSERT, conf);
-
-    String firstCommit = TestUtils.getFirstCompleteInstant(path.toString());
-
-    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+    TestData.writeData(TestData.dataSetInsert(1, 2), conf);
+    TestData.writeData(TestData.dataSetInsert(3, 4), conf);
+    String secondCommit = StreamerUtil.createMetaClient(conf).getCommitsTimeline()
+        .filterCompletedInstants().lastInstant().get().requestedTime();
 
     String ddl = sql("t1")
-            .option(FlinkOptions.PATH, path)
-            .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL)
-            .option(FlinkOptions.READ_START_COMMIT, firstCommit)
-            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
-            .end();
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.QUERY_TYPE, FlinkOptions.QUERY_TYPE_INCREMENTAL)
+        .option(FlinkOptions.READ_START_COMMIT, secondCommit)
+        .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
+        .end();
     batchTableEnv.executeSql(ddl);
 
     List<Row> result = CollectionUtil.iterableToList(
-            () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
-    // second batch contains update + insert records
-    assertFalse(result.isEmpty(),
-            "Incremental read should return records committed after " + firstCommit);
+        () -> batchTableEnv.sqlQuery("select * from t1").execute().collect());
+    assertRowsEquals(result, TestData.dataSetInsert(3, 4));
   }
 
   /**
@@ -3757,19 +3754,19 @@ public class ITTestHoodieDataSource {
     String nonExistentDir = new File(tempFile, "no-such-conf-dir").getAbsolutePath();
 
     String ddl = sql("t1")
-            .option(FlinkOptions.PATH, path)
-            .option(FlinkOptions.HADOOP_CONF_DIR, nonExistentDir)
-            .end();
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.HADOOP_CONF_DIR, nonExistentDir)
+        .end();
 
     // The table source validates the conf dir when the catalog/planner
     // instantiates it (DDL registration or first query planning).
     batchTableEnv.executeSql(ddl);
     Throwable e = assertThrows(Exception.class,
-            () -> batchTableEnv.sqlQuery("select * from t1").execute().collect().next());
+        () -> batchTableEnv.sqlQuery("select * from t1").execute().collect().next());
     assertTrue(getRootMessage(e).contains(nonExistentDir)
-                    && getRootMessage(e).contains(FlinkOptions.HADOOP_CONF_DIR.key()),
-            "Error should name the invalid conf dir and the option key, got: "
-                    + getRootMessage(e));
+            && getRootMessage(e).contains(FlinkOptions.HADOOP_CONF_DIR.key()),
+        "Error should name the invalid conf dir and the option key, got: "
+            + getRootMessage(e));
   }
 
   /**
@@ -3783,15 +3780,15 @@ public class ITTestHoodieDataSource {
     File emptyDir = new File(tempFile, "empty-conf-dir");
     assertTrue(emptyDir.mkdirs());
     String ddl = sql("t1")
-            .option(FlinkOptions.PATH, path)
-            .option(FlinkOptions.HADOOP_CONF_DIR, emptyDir.getAbsolutePath())
-            .end();
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.HADOOP_CONF_DIR, emptyDir.getAbsolutePath())
+        .end();
 
     batchTableEnv.executeSql(ddl);
     Throwable e = assertThrows(Exception.class,
-            () -> batchTableEnv.sqlQuery("select * from t1").execute().collect().next());
+        () -> batchTableEnv.sqlQuery("select * from t1").execute().collect().next());
     assertTrue(getRootMessage(e).contains(emptyDir.getAbsolutePath()),
-            "Error should name the invalid conf dir, got: " + getRootMessage(e));
+        "Error should name the invalid conf dir, got: " + getRootMessage(e));
   }
 
   /**
@@ -3800,30 +3797,29 @@ public class ITTestHoodieDataSource {
    */
   @Test
   public void testHadoopOptionOverridesConfDir() throws Exception {
-    File hadoopConfDir = createHadoopConfDirWithFileFs();
+    File hadoopConfDir = createHadoopConfDirWithRemoteFs();
     StoragePath path = new StoragePath(tempFile.toURI());
     writeSiteXml(new File(hadoopConfDir, "core-site.xml"),
-            "fs.defaultFS", "hdfs://conf-dir-cluster:8020");
+        "test.prop", "site-value");
 
     String ddl = sql("t1")
-            .option(FlinkOptions.PATH, path)
-            .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
-            .option("hadoop.test.prop", "override-value")
-            .end();
+        .option(FlinkOptions.PATH, path)
+        .option(FlinkOptions.HADOOP_CONF_DIR, hadoopConfDir.getAbsolutePath())
+        .option("hadoop.test.prop", "override-value")
+        .end();
     batchTableEnv.executeSql(ddl);
 
     // verify via HadoopConfigurations directly since the DDL path only
     // exercises the conf inside the table source
     Configuration flinkConf = new Configuration();
     flinkConf.setString(FlinkOptions.HADOOP_CONF_DIR.key(),
-            hadoopConfDir.getAbsolutePath());
+        hadoopConfDir.getAbsolutePath());
     flinkConf.setString("hadoop.test.prop", "override-value");
 
     org.apache.hadoop.conf.Configuration hadoopConf =
-            HadoopConfigurations.getHadoopConf(flinkConf);
-    assertEquals("hdfs://conf-dir-cluster:8020", hadoopConf.get("fs.defaultFS"));
+        HadoopConfigurations.getHadoopConf(flinkConf);
     assertEquals("override-value", hadoopConf.get("test.prop"),
-            "hadoop.* options must override values from the conf dir");
+        "hadoop.* options must override values from the conf dir");
   }
 
   @ParameterizedTest
@@ -4514,22 +4510,40 @@ public class ITTestHoodieDataSource {
         .collect(Collectors.toList());
   }
 
-  /** Creates a hadoop conf dir with a minimal core-site.xml using file:/// fs. */
-  private File createHadoopConfDirWithFileFs() throws IOException {
+  /** Local-backed remote filesystem with eagerly loaded permissions for recursive listings. */
+  public static class ConfDirFileSystem extends NonLocalSchemeLocalFileSystem {
+    @Override
+    public org.apache.hadoop.fs.FileStatus getFileStatus(org.apache.hadoop.fs.Path path) throws IOException {
+      org.apache.hadoop.fs.FileStatus status = super.getFileStatus(path);
+      // RawLocalFileSystem loads permissions lazily using java.io.File, which requires a file URI.
+      status.setPath(new org.apache.hadoop.fs.Path(new File(path.toUri().getPath()).toURI()));
+      org.apache.hadoop.fs.FileStatus copy = new org.apache.hadoop.fs.FileStatus(status);
+      copy.setPath(makeQualified(path));
+      return copy;
+    }
+  }
+
+  /** Registers a non-local filesystem that cannot be resolved without the supplied configuration. */
+  private File createHadoopConfDirWithRemoteFs() throws IOException {
     File dir = new File(tempFile, "remote-hadoop-conf");
     assertTrue(dir.mkdirs());
-    writeSiteXml(new File(dir, "core-site.xml"), "fs.defaultFS", "file:///");
+    org.apache.hadoop.conf.Configuration remoteConf = new org.apache.hadoop.conf.Configuration(false);
+    remoteConf.set("fs.viewfs.impl", ConfDirFileSystem.class.getName());
+    remoteConf.setBoolean("fs.viewfs.impl.disable.cache", true);
+    try (FileWriter writer = new FileWriter(new File(dir, "core-site.xml"))) {
+      remoteConf.writeXml(writer);
+    }
     writeSiteXml(new File(dir, "hdfs-site.xml"), "dfs.replication", "1");
     return dir;
   }
 
   private static void writeSiteXml(File file, String name, String value)
-          throws IOException {
+      throws IOException {
     String content = "<?xml version=\"1.0\"?>\n"
-            + "<configuration>\n"
-            + "  <property><name>" + name + "</name><value>" + value
-            + "</value></property>\n"
-            + "</configuration>\n";
+        + "<configuration>\n"
+        + "  <property><name>" + name + "</name><value>" + value
+        + "</value></property>\n"
+        + "</configuration>\n";
     try (FileWriter w = new FileWriter(file)) {
       w.write(content);
     }
