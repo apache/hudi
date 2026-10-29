@@ -93,7 +93,8 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     "testBasicLookupFilterExpressionsSource",
     "testAdvancedLookupFilterExpressionsSource",
     "testCompositeFilterExpressionsSource",
-    "testSupportedAndUnsupportedDataSkippingColumnsSource"
+    "testSupportedAndUnsupportedDataSkippingColumnsSource",
+    "testIntegralOverflowSource"
   ))
   def testLookupFilterExpressions(sourceFilterExprStr: String, input: Seq[IndexRow], expectedOutput: Seq[String]): Unit = {
     // We have to fix the timezone to make sure all date-bound utilities output
@@ -767,6 +768,50 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1"))
 
+    )
+  }
+
+  def testIntegralOverflowSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      // #20460: Long.MaxValue * 2L wraps to -2, so translating A * 2 > 100 would prune a file
+      // that still holds A = 51 (102 > 100). Must fall back to always-true.
+      arguments(
+        "A * 2L > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 51, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // #20460: Long.MaxValue + 1 wraps to Long.MinValue; translating A + 1 > 0 would prune a
+      // file that still holds A = 0 (1 > 0).
+      arguments(
+        "A + 1L > 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // #20460: shiftleft is integral-only and wraps; Long.MaxValue << 1 is -2.
+      arguments(
+        "shiftleft(A, 1) > 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Positive double multiply still translates and prunes (IEEE float cannot wrap).
+      arguments(
+        "CAST(A AS DOUBLE) * 2.0D > 100.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 40, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 51, A_maxValue = 60, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // Positive double add still translates and prunes.
+      arguments(
+        "CAST(A AS DOUBLE) + 1.0D > 50.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 40, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 51, A_maxValue = 60, A_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 }

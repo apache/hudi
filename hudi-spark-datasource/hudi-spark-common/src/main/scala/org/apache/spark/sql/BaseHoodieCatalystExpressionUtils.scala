@@ -18,9 +18,9 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
-import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.{DataType, DoubleType, FloatType}
 
 /**
  * Base implementation of [[HoodieCatalystExpressionUtils]] carrying the method bodies that are
@@ -81,10 +81,18 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
 
         // Math Expressions
         // Binary
-        case Add(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
-        case Add(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case Multiply(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
-        case Multiply(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+        // NOTE: Integral Add/Multiply wrap on overflow in non-ANSI mode, so re-applying them to
+        //       min/max stats can invert the bound and prune matching files (#20460). Decimal can
+        //       overflow into NULL. IEEE float/double saturate to +/- Inf and keep ordering, so
+        //       only those result types are matched. ShiftLeft is integral-only and always wraps.
+        case add @ Add(OrderPreservingTransformation(attrRef), _, _)
+          if isNonWrappingNumericType(add.dataType) => Some(attrRef)
+        case add @ Add(_, OrderPreservingTransformation(attrRef), _)
+          if isNonWrappingNumericType(add.dataType) => Some(attrRef)
+        case mul @ Multiply(OrderPreservingTransformation(attrRef), _, _)
+          if isNonWrappingNumericType(mul.dataType) => Some(attrRef)
+        case mul @ Multiply(_, OrderPreservingTransformation(attrRef), _)
+          if isNonWrappingNumericType(mul.dataType) => Some(attrRef)
         case Divide(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case BitwiseOr(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case BitwiseOr(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
@@ -95,7 +103,6 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
         case Log10(OrderPreservingTransformation(attrRef)) => Some(attrRef)
         case Log1p(OrderPreservingTransformation(attrRef)) => Some(attrRef)
         case Log2(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case ShiftLeft(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case ShiftRight(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
 
         // Other
@@ -110,6 +117,13 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
           case None => None
         }
       }
+    }
+
+    // IEEE float/double saturate to +/- Inf on overflow and keep ordering; integral wraps and
+    // decimal can overflow into NULL, so those result types must not translate into stats filters
+    private def isNonWrappingNumericType(dt: DataType): Boolean = dt match {
+      case FloatType | DoubleType => true
+      case _ => false
     }
   }
 }
