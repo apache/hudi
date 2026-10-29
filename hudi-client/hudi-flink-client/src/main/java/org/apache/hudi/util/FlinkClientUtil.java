@@ -24,6 +24,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 
 import org.apache.flink.api.java.hadoop.mapred.utils.HadoopUtils;
@@ -35,6 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.Map;
 
 /**
@@ -44,6 +46,7 @@ public class FlinkClientUtil {
   private static final Logger LOG = LoggerFactory.getLogger(FlinkClientUtil.class);
   public static String FLINK_HADOOP_CONFIG_PREFIX = "flink.hadoop";
   public static String FLINK_CONF_DIR = "FLINK_CONF_DIR";
+  private static final String[] HADOOP_SITE_FILES = {"core-site.xml", "hdfs-site.xml", "yarn-site.xml", "mapred-site.xml"};
 
   /**
    * Creates the meta client.
@@ -70,6 +73,19 @@ public class FlinkClientUtil {
       hadoopConf = new org.apache.hadoop.conf.Configuration();
     }
 
+    return applyFlinkHadoopOptions(hadoopConf);
+  }
+
+  /**
+   * Loads an explicit Hadoop configuration directory, then applies the Hadoop options from
+   * FLINK_CONF_DIR, as in environment-based discovery. Invalid explicit directories fail fast.
+   */
+  public static org.apache.hadoop.conf.Configuration getHadoopConf(String hadoopConfDir) {
+    validateHadoopConfDir(hadoopConfDir);
+    return applyFlinkHadoopOptions(getHadoopConfiguration(hadoopConfDir));
+  }
+
+  private static org.apache.hadoop.conf.Configuration applyFlinkHadoopOptions(org.apache.hadoop.conf.Configuration hadoopConf) {
     String confDir = System.getenv(FLINK_CONF_DIR);
     if (!StringUtils.isNullOrEmpty(confDir)) {
       LOG.info("Flink conf dir: {}", confDir);
@@ -86,35 +102,36 @@ public class FlinkClientUtil {
     return hadoopConf;
   }
 
-  /**
-   * Returns a new Hadoop Configuration object using the path to the hadoop conf configured.
-   *
-   * @param hadoopConfDir Hadoop conf directory path.
-   * @return A Hadoop configuration instance.
-   */
-  private static org.apache.hadoop.conf.Configuration getHadoopConfiguration(String hadoopConfDir) {
-    if (new File(hadoopConfDir).exists()) {
-      org.apache.hadoop.conf.Configuration hadoopConfiguration = new org.apache.hadoop.conf.Configuration();
-      File coreSite = new File(hadoopConfDir, "core-site.xml");
-      if (coreSite.exists()) {
-        hadoopConfiguration.addResource(new Path(coreSite.getAbsolutePath()));
-      }
-      File hdfsSite = new File(hadoopConfDir, "hdfs-site.xml");
-      if (hdfsSite.exists()) {
-        hadoopConfiguration.addResource(new Path(hdfsSite.getAbsolutePath()));
-      }
-      File yarnSite = new File(hadoopConfDir, "yarn-site.xml");
-      if (yarnSite.exists()) {
-        hadoopConfiguration.addResource(new Path(yarnSite.getAbsolutePath()));
-      }
-      // Add mapred-site.xml. We need to read configurations like compression codec.
-      File mapredSite = new File(hadoopConfDir, "mapred-site.xml");
-      if (mapredSite.exists()) {
-        hadoopConfiguration.addResource(new Path(mapredSite.getAbsolutePath()));
-      }
-      return hadoopConfiguration;
+  private static void validateHadoopConfDir(String hadoopConfDir) {
+    if (hadoopConfDir == null || hadoopConfDir.trim().isEmpty()) {
+      throw new HoodieValidationException("'hadoop_conf.dir' must not be empty. Leave it unset to use environment discovery");
     }
-    return null;
+    File dir = new File(hadoopConfDir);
+    if (!dir.isDirectory()) {
+      throw new HoodieValidationException("Invalid 'hadoop_conf.dir': directory does not exist or is not a directory: " + hadoopConfDir);
+    }
+    boolean hasSiteFile = Arrays.stream(HADOOP_SITE_FILES)
+        .map(name -> new File(dir, name))
+        .anyMatch(File::isFile);
+    if (!hasSiteFile) {
+      throw new HoodieValidationException("Invalid 'hadoop_conf.dir': no supported Hadoop site files "
+          + "(core-site.xml, hdfs-site.xml, yarn-site.xml, mapred-site.xml) found under directory: " + hadoopConfDir);
+    }
+  }
+
+  private static org.apache.hadoop.conf.Configuration getHadoopConfiguration(String hadoopConfDir) {
+    File dir = new File(hadoopConfDir);
+    if (!dir.exists()) {
+      return null;
+    }
+    org.apache.hadoop.conf.Configuration hadoopConf = new org.apache.hadoop.conf.Configuration();
+    for (String name : HADOOP_SITE_FILES) {
+      File site = new File(dir, name);
+      if (site.exists()) {
+        hadoopConf.addResource(new Path(site.getAbsolutePath()));
+      }
+    }
+    return hadoopConf;
   }
 
   /**
