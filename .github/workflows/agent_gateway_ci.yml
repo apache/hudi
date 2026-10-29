@@ -43,6 +43,21 @@ permissions:
   contents: read
 
 jobs:
+  superset-spark-connect-tests:
+    name: Superset Spark Connect dialect tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: hudi-lakehouse/superset-spark-connect/pyproject.toml
+      - name: Install adapter
+        run: pip install ./hudi-lakehouse/superset-spark-connect
+      - name: Run offline dialect tests
+        run: python -m unittest discover -s hudi-lakehouse/superset-spark-connect -p 'test_dialect.py' -v
+
   gateway-tests:
     name: gateway pytest + lint (python ${{ matrix.python }})
     runs-on: ubuntu-24.04

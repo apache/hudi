@@ -1,0 +1,33 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hudi-spark-connect-superset"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = ["SQLAlchemy>=1.4,<2", "adbc-driver-manager==1.12.0", "pyarrow==18.1.0"]
+
+[project.entry-points."sqlalchemy.dialects"]
+sparkconnect = "hudi_spark_connect.dialect:SparkConnectDialect"
+
+[project.entry-points."superset.db_engine_specs"]
+sparkconnect = "hudi_spark_connect.engine_spec:SparkConnectEngineSpec"
+
+[tool.setuptools]
+packages = ["hudi_spark_connect"]
