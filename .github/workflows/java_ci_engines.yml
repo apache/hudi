@@ -80,10 +80,8 @@ jobs:
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
         if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: flink-integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -127,10 +125,8 @@ jobs:
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
         if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: flink-integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -467,10 +463,8 @@ jobs:
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
         if: always() && github.event_name != 'merge_group'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 

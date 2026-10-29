@@ -69,17 +69,17 @@ jobs:
             exit 1
           fi
 
-      # Seconds of node tests of the fork CI status bridge and of the ci.yml routing they check, so
-      # they run on every PR instead of path-filtering on the two workflow files. Unlike the PR
-      # metadata checks they need no PR data, so they also run on merge-queue groups and pushes.
-      # The tests read both workflow files through PyYAML. A pip install into the runner's system
-      # Python can be refused (PEP 668), so the step gets its own Python.
-      - name: Set up Python for the fork_ci_status.yml tests
+      # Seconds of node tests of the fork CI status and coverage bridges and of the ci.yml routing
+      # they check, so they run on every PR instead of path-filtering on the workflow files. Unlike
+      # the PR metadata checks they need no PR data, so they also run on merge-queue groups and
+      # pushes. The tests read the workflow files through PyYAML. A pip install into the runner's
+      # system Python can be refused (PEP 668), so the step gets its own Python.
+      - name: Set up Python for the fork CI bridge tests
         if: ${{ !cancelled() }}
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Test fork_ci_status.yml
+      - name: Test fork CI bridge scripts
         if: ${{ !cancelled() }}
         run: |
           for attempt in 1 2 3; do
@@ -87,7 +87,7 @@ jobs:
             if [ "$attempt" -eq 3 ]; then exit 1; fi
             sleep 5
           done
-          node --test .github/ci/scripts/test-fork-ci-status.cjs
+          node --test .github/ci/scripts/test-fork-ci-status.cjs .github/ci/scripts/test-fork-coverage-bridge.cjs
 
       - name: Check for legacy PR title format using JIRA or MINOR
         id: check-legacy-format

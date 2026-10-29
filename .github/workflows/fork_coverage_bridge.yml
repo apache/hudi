@@ -1,0 +1,316 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Uploads the coverage of fork CI runs to Codecov for their apache/hudi PRs. A fork PR to master
+# runs the Java CI suites on the contributor's fork (see fork_ci_status.yml). A run there cannot
+# use apache/hudi's Codecov token, and Codecov would not link it to the PR anyway, so
+# .github/actions/upload-coverage stores each JaCoCo report as a run artifact named
+# coverage-<sha>__<job id>__<flag> instead. Every 15 minutes, `select` finds the newest completed
+# fork run for the head commit of each recently updated fork PR and lists its coverage artifacts,
+# `upload` uploads each one to Codecov for the PR and its head commit, and `record` marks the run
+# as done with a `Coverage (fork)` check, so later sweeps skip it.
+#
+# This workflow polls because workflow_run in apache/hudi does not fire for runs in a fork.
+#
+# Artifacts are untrusted data from the contributor. Their names are validated against a regex
+# and the flag allowlist, their sizes are capped, only the one XML member is extracted, and
+# nothing from the fork is checked out or executed: of the PR head, `upload` reads only the list
+# of file paths, which Codecov needs to place the report. A fork can still forge its own coverage
+# numbers. That is acceptable because coverage does not gate merging.
+# Test with Python 3.11+, PyYAML, and Node.js 24:
+#   node --test .github/ci/scripts/test-fork-coverage-bridge.cjs
+name: Fork coverage bridge
+
+on:
+  # Offset from fork_ci_status.yml, so the two sweeps do not hit the API at the same minute.
+  schedule:
+    - cron: '12,27,42,57 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+# A sweep that overlaps the previous one would upload the same reports twice. Waiting is cheap,
+# and cancelling a sweep would drop uploads that are already under way.
+concurrency:
+  group: fork-coverage-bridge
+  cancel-in-progress: false
+
+jobs:
+  select:
+    if: github.repository == 'apache/hudi'
+    name: Select fork coverage artifacts
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      checks: read
+      pull-requests: read
+    outputs:
+      artifacts: ${{ steps.select.outputs.artifacts }}
+      prs: ${{ steps.select.outputs.prs }}
+    steps:
+      - name: List the coverage artifacts of recent fork runs
+        id: select
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            const CHECK = 'Coverage (fork)';
+            const WORKFLOW = 'ci.yml';
+            // The flags of the upload steps in bot.yml and java_ci_engines.yml. A fork cannot add
+            // flags of its own to apache/hudi's Codecov reports.
+            const FLAGS = new Set([
+              'common-and-other-modules', 'flink-integration-tests', 'hadoop-mr-java-client',
+              'integration-tests', 'spark-client-hadoop-common', 'spark-java-tests',
+              'spark-scala-tests', 'utilities',
+            ]);
+            // A full fork run uploads 12 reports, so a sweep covers at least 5 PRs. PRs beyond
+            // the cap wait for the next sweep.
+            const MAX_ARTIFACTS = 60;
+            const MAX_BYTES = 50 * 1024 * 1024;
+            const upstream = { owner: context.repo.owner, repo: context.repo.repo };
+            const repository = upstream.owner + '/' + upstream.repo;
+            const listing = { ...upstream, state: 'open', base: 'master', sort: 'updated', direction: 'desc' };
+            const isForkPr = (pr) => pr.state === 'open' && pr.head.repo &&
+              pr.head.repo.full_name.toLowerCase() !== repository.toLowerCase() && pr.base.ref === 'master';
+            const externalId = (pr, run) => 'hudi-fork-coverage:' + pr.number + ':' + run.id;
+
+            // An absent workflow, run or artifact list is expected on a fork with Actions
+            // disabled or without ci.yml. Other API errors must not pass as missing coverage.
+            async function optional(request) {
+              try {
+                return await request();
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+            }
+
+            // Returns the run and the valid coverage artifacts of a PR, or null if there is
+            // nothing to upload.
+            async function collect(pr) {
+              const fork = { owner: pr.head.repo.owner.login, repo: pr.head.repo.name };
+              const sha = pr.head.sha;
+              const runs = await optional(() => github.rest.actions.listWorkflowRuns({
+                ...fork, workflow_id: WORKFLOW, head_sha: sha, branch: pr.head.ref, per_page: 100,
+              }));
+              // As in fork_ci_status.yml, only push and manual runs test the branch head. An
+              // unfinished run has not uploaded all of its reports yet.
+              const run = (runs?.data.workflow_runs || []).filter((item) =>
+                item.status === 'completed' && item.head_sha === sha && item.head_branch === pr.head.ref &&
+                ['push', 'workflow_dispatch'].includes(item.event)
+              ).sort((a, b) => b.id - a.id)[0];
+              if (!run) return null;
+
+              const checks = await github.paginate(github.rest.checks.listForRef, {
+                ...upstream, ref: sha, check_name: CHECK, per_page: 100,
+              });
+              if (checks.some((item) =>
+                item.app?.slug === 'github-actions' && item.external_id === externalId(pr, run))) return null;
+
+              const listed = await optional(() => github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...fork, run_id: run.id, per_page: 100,
+              })) || [];
+              const pattern = new RegExp('^coverage-' + sha + '__([A-Za-z0-9_-]+)__([a-z0-9-]+)$');
+              // A rerun job uploads its artifact again under the same name. Keep the newest.
+              const newest = new Map();
+              for (const artifact of listed) {
+                const match = pattern.exec(artifact.name);
+                if (!match || !FLAGS.has(match[2]) || artifact.expired ||
+                    !(artifact.size_in_bytes <= MAX_BYTES)) continue;
+                if (!(newest.get(artifact.name)?.artifact_id > artifact.id)) {
+                  newest.set(artifact.name, {
+                    pr: pr.number, sha, branch: fork.owner + ':' + pr.head.ref,
+                    fork: pr.head.repo.full_name, run_id: run.id, artifact_id: artifact.id, flags: match[2],
+                  });
+                }
+              }
+              if (!newest.size) return null;
+              return { run, artifacts: [...newest.values()].sort((a, b) => a.artifact_id - b.artifact_id) };
+            }
+
+            const artifacts = [];
+            const prs = [];
+            const cutoff = Date.now() - 24 * 3600 * 1000;
+            const pages = github.paginate.iterator(github.rest.pulls.list, { ...listing, per_page: 100 });
+            sweep: for await (const page of pages) {
+              for (const pr of page.data) {
+                if (new Date(pr.updated_at).getTime() < cutoff) break sweep;
+                if (!isForkPr(pr)) continue;
+                let found;
+                // A failing fork must not hold back the coverage of the other PRs. Its PR is
+                // retried by the next sweep.
+                try {
+                  found = await collect(pr);
+                } catch (error) {
+                  core.warning('#' + pr.number + ': ' + error.message);
+                  continue;
+                }
+                if (!found) continue;
+                const room = MAX_ARTIFACTS - artifacts.length;
+                artifacts.push(...found.artifacts.slice(0, room));
+                // A PR cut by the cap is not recorded, so the next sweep uploads all of its reports.
+                if (found.artifacts.length <= room) {
+                  prs.push({ pr: pr.number, sha: pr.head.sha, run_id: found.run.id });
+                }
+                core.info('#' + pr.number + ': ' + found.artifacts.length + ' reports from run ' + found.run.id);
+                if (artifacts.length >= MAX_ARTIFACTS) break sweep;
+              }
+            }
+            core.setOutput('artifacts', JSON.stringify(artifacts));
+            core.setOutput('prs', JSON.stringify(prs));
+
+  upload:
+    needs: select
+    if: needs.select.outputs.artifacts != '[]'
+    name: 'Upload #${{ matrix.artifact.pr }} ${{ matrix.artifact.flags }} (${{ matrix.artifact.artifact_id }})'
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions:
+      actions: read
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        artifact: ${{ fromJSON(needs.select.outputs.artifacts) }}
+    # bash, unlike the default shell, sets pipefail, so a failed unzip fails the extraction.
+    defaults:
+      run:
+        shell: bash
+    # Nothing from the fork is checked out or executed. Matrix values reach the shell through env
+    # only, never through ${{ }} in a script.
+    steps:
+      # The download endpoint needs a token even for a public repository's artifacts, and accepts
+      # the GITHUB_TOKEN of any workflow. It redirects to a storage URL on another host, to which
+      # curl does not forward the Authorization header.
+      - name: Download the artifact
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FORK: ${{ matrix.artifact.fork }}
+          ARTIFACT_ID: ${{ matrix.artifact.artifact_id }}
+        run: |
+          curl -sS -L --fail --max-filesize 52428800 --proto '=https' --proto-redir '=https' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -o "$RUNNER_TEMP/coverage.zip" \
+            "https://api.github.com/repos/$FORK/actions/artifacts/$ARTIFACT_ID/zip"
+      # The archive is untrusted. It must hold exactly one member, jacoco-report.xml, of at most
+      # 200 MB. The listed size is only declared by the archive, so the extraction is capped too.
+      # unzip -p writes the member to stdout, so no path from the archive is created.
+      - name: Extract the report
+        env:
+          MAX_BYTES: 209715200
+        run: |
+          zip="$RUNNER_TEMP/coverage.zip"
+          report="$RUNNER_TEMP/coverage/jacoco-report.xml"
+          names=$(unzip -Z1 "$zip")
+          read -r size count _ < <(unzip -l "$zip" | tail -n 1)
+          if [ "$names" != 'jacoco-report.xml' ] || [ "$count" != 1 ] || [ "$size" -gt "$MAX_BYTES" ]; then
+            echo "::error::Expected only jacoco-report.xml of at most $MAX_BYTES bytes in the artifact."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/coverage"
+          unzip -p "$zip" jacoco-report.xml | head -c "$((MAX_BYTES + 1))" > "$report"
+          if [ "$(wc -c < "$report")" -gt "$MAX_BYTES" ]; then
+            echo "::error::jacoco-report.xml exceeds $MAX_BYTES bytes."
+            exit 1
+          fi
+          case "$(head -c 7 "$report")" in
+            '<?xml'* | '<report') ;;
+            *)
+              echo '::error::jacoco-report.xml is not an XML report.'
+              exit 1
+              ;;
+          esac
+      # A JaCoCo report names files by package, and Codecov maps them to repository paths through
+      # the file list that its uploader reads with git ls-files. Fetch only the commit and trees
+      # of the PR head from apache/hudi, which keeps every PR head, and load them into the index:
+      # no file content is downloaded, and nothing is written to the work tree. The fetch records
+      # apache/hudi as the only remote, so the uploader still reports the upload for apache/hudi.
+      - name: Load the file list of the PR head
+        env:
+          SHA: ${{ matrix.artifact.sha }}
+        run: |
+          git init -q "$GITHUB_WORKSPACE"
+          git -C "$GITHUB_WORKSPACE" fetch -q --depth=1 --filter=blob:none --no-tags \
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$SHA"
+          git -C "$GITHUB_WORKSPACE" read-tree "$SHA"
+      # File fixes would read source files, which are absent here. They apply to none of the
+      # languages of Hudi.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        with:
+          files: ${{ runner.temp }}/coverage/jacoco-report.xml
+          disable_search: true
+          disable_file_fixes: true
+          flags: ${{ matrix.artifact.flags }}
+          override_commit: ${{ matrix.artifact.sha }}
+          override_pr: ${{ matrix.artifact.pr }}
+          override_branch: ${{ matrix.artifact.branch }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+
+  # `upload` succeeds only when every matrix entry does, so one failed upload leaves every PR of
+  # the sweep unrecorded and the next sweep uploads all of them again. Re-uploading the same report
+  # for a commit is harmless.
+  record:
+    needs: [select, upload]
+    if: needs.select.outputs.prs != '[]' && !cancelled() && needs.upload.result == 'success'
+    name: Record the uploaded runs
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions:
+      checks: write
+    steps:
+      - name: Create the checks
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          ARTIFACTS: ${{ needs.select.outputs.artifacts }}
+          PRS: ${{ needs.select.outputs.prs }}
+        with:
+          script: |
+            const CHECK = 'Coverage (fork)';
+            const upstream = { owner: context.repo.owner, repo: context.repo.repo };
+            const forks = new Map(JSON.parse(process.env.ARTIFACTS).map((item) => [item.pr, item.fork]));
+            const errors = [];
+            for (const entry of JSON.parse(process.env.PRS)) {
+              const runUrl = 'https://github.com/' + forks.get(entry.pr) + '/actions/runs/' + entry.run_id;
+              try {
+                await github.rest.checks.create({
+                  ...upstream,
+                  name: CHECK,
+                  head_sha: entry.sha,
+                  external_id: 'hudi-fork-coverage:' + entry.pr + ':' + entry.run_id,
+                  status: 'completed',
+                  conclusion: 'success',
+                  details_url: runUrl,
+                  output: {
+                    title: 'Fork coverage uploaded to Codecov',
+                    summary: [
+                      'Uploaded the coverage reports of [CI run ' + entry.run_id + ' on ' + forks.get(entry.pr) +
+                        '](' + runUrl + ') for ' + entry.sha + ' to Codecov.',
+                      'This coverage is reported by the contributor\'s fork run, so it is self-reported. ' +
+                        'The merge queue runs the authoritative CI on ASF runners.',
+                    ].join('\n\n'),
+                  },
+                });
+                core.info('#' + entry.pr + ': recorded run ' + entry.run_id);
+              } catch (error) {
+                // An unrecorded PR is uploaded again by the next sweep.
+                errors.push('#' + entry.pr + ': ' + error.message);
+              }
+            }
+            if (errors.length) core.setFailed(errors.join('\n'));
