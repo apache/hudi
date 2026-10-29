@@ -24,6 +24,9 @@ Spark Thrift Server. It is independent of Hudi-specific SQL and can query other
 Spark tables. The repository's Connect deployment instructions are in
 [the chart README](../charts/hudi-spark-connect/README.md).
 
+For a step-by-step local walkthrough, including Superset and Zeppelin, see the
+[BI quickstart](QUICKSTART.md).
+
 Install the package and native driver in **every** Superset web and worker
 runtime. The driver must be accessible to the user running Superset, not just
 installed in the build user's home. The initial target is Superset 6.1.0,
