@@ -63,7 +63,9 @@ import java.util.concurrent.Executors;
 public class HiveTestService {
   private static final int CONNECTION_TIMEOUT_MS = 30000;
   private static final String BIND_HOST = "127.0.0.1";
-  private static final int HS2_THRIFT_PORT = 9999;
+  // Chosen once per JVM rather than fixed at 9999 so that surefire forks running this module concurrently
+  // each get their own HiveServer2 port; within one JVM every HiveTestService instance still shares the port, as before.
+  private static final int HS2_THRIFT_PORT = NetworkTestUtils.nextFreePort();
   public static final String HS2_JDBC_URL = String.format("jdbc:hive2://%s:%s/", BIND_HOST, HS2_THRIFT_PORT);
 
   private final Configuration hadoopConf;
