@@ -136,7 +136,7 @@ async fn main() -> Result<()> {
 
     let result = table.upsert([trips(&[("t2", "sf", 2, 50.0), ("t4", "nyc", 2, 15.0)])]).await?;
     println!(
-        "instant={} updates={} inserts={}",
+        "requested_time={} updates={} inserts={}",
         result.requested_time.as_deref().unwrap_or("none"),
         result.num_updates,
         result.num_inserts
