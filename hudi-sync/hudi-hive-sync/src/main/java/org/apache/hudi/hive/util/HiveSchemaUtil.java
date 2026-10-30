@@ -259,9 +259,23 @@ public class HiveSchemaUtil {
       case BLOB:
       case VARIANT:
         return createHiveStruct(nonNullType.getFields(), supportTimestamp, doFormat);
+      case UNION:
+        // A union of multiple non-null types is written to parquet as a group of optional "member<N>" fields,
+        // so it is synced as a struct of those members, the same as the parquet schema based sync before #14344.
+        return createHiveStruct(getUnionMemberFields(nonNullType), supportTimestamp, doFormat);
       default:
         throw new UnsupportedOperationException("Cannot convert type " + nonNullType.getType());
     }
+  }
+
+  private static List<HoodieSchemaField> getUnionMemberFields(HoodieSchema unionSchema) {
+    List<HoodieSchemaField> memberFields = new ArrayList<>();
+    for (HoodieSchema memberSchema : unionSchema.getTypes()) {
+      if (!memberSchema.isSchemaNull()) {
+        memberFields.add(HoodieSchemaField.of("member" + memberFields.size(), memberSchema));
+      }
+    }
+    return memberFields;
   }
 
   /**

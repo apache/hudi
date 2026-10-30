@@ -200,6 +200,51 @@ public class TestHiveSchemaUtil {
   }
 
   /**
+   * Unions of multiple non-null types are written to parquet as groups of optional "member<N>" fields,
+   * so they must be synced as structs of those members, the same as the parquet schema based sync.
+   */
+  @Test
+  void testUnionTypeConversion() throws IOException {
+    Map<String, String> actual = HiveSchemaUtil.convertSchemaToHiveSchema(schemaWithUnionFields(), false);
+    Map<String, String> expected = new HashMap<>();
+    expected.put("`id`", "string");
+    expected.put("`nullable_union`", "STRUCT< `member0` : int, `member1` : string>");
+    expected.put("`union`", "STRUCT< `member0` : bigint, `member1` : STRUCT< `name` : string, `count` : int>>");
+    expected.put("`single_type_union`", "STRUCT< `member0` : string>");
+    expected.put("`array_of_unions`", "ARRAY< STRUCT< `member0` : int, `member1` : boolean>>");
+    assertEquals(expected, actual);
+  }
+
+  /**
+   * A table whose Hive schema was synced from the parquet schema by an older release must not report
+   * a schema difference for its union columns.
+   */
+  @Test
+  void testSchemaDiffForUnionFieldsSyncedFromParquetSchema() {
+    Map<String, String> tableSchema = new HashMap<>();
+    tableSchema.put("id", "string");
+    tableSchema.put("nullable_union", "struct<member0:int,member1:string>");
+    tableSchema.put("union", "struct<member0:bigint,member1:struct<name:string,count:int>>");
+    tableSchema.put("single_type_union", "struct<member0:string>");
+    tableSchema.put("array_of_unions", "array<struct<member0:int,member1:boolean>>");
+    SchemaDifference schemaDifference = HiveSchemaUtil.getSchemaDifference(schemaWithUnionFields(),
+        tableSchema, Collections.emptyList(), false);
+    assertTrue(schemaDifference.isEmpty(), "Unexpected schema difference: " + schemaDifference);
+  }
+
+  private static HoodieSchema schemaWithUnionFields() {
+    return HoodieSchema.parse("{\"type\":\"record\",\"name\":\"h\",\"fields\":["
+        + "{\"name\":\"id\",\"type\":\"string\"},"
+        + "{\"name\":\"nullable_union\",\"type\":[\"null\",\"int\",\"string\"],\"default\":null},"
+        + "{\"name\":\"union\",\"type\":[\"long\",{\"type\":\"record\",\"name\":\"r\",\"fields\":["
+        + "{\"name\":\"name\",\"type\":\"string\"},"
+        + "{\"name\":\"count\",\"type\":\"int\"}]}]},"
+        + "{\"name\":\"single_type_union\",\"type\":[\"string\"]},"
+        + "{\"name\":\"array_of_unions\",\"type\":{\"type\":\"array\",\"items\":[\"int\",\"boolean\"]}}"
+        + "]}");
+  }
+
+  /**
    * Fields of the Avro primitive type "null" (not a nullable union) are valid Avro but carry no data.
    * They are not written to parquet and have no Hive equivalent, so Hive sync must skip them,
    * at the top level as well as inside nested records.
