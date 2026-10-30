@@ -69,6 +69,12 @@ github:
         - actor_id: 118420
           actor_type: Team
           bypass_mode: always
+        # apache/hudi-committers can merge a PR without the queue, through the PR only (no direct
+        # pushes). A failed entry leaves the queue and is re-queued with "Merge when ready"; the
+        # bypass is for a known flake that keeps failing, a stalled queue, or an urgent fix.
+        - actor_id: 3084687
+          actor_type: Team
+          bypass_mode: pull_request
       conditions:
         ref_name:
           include:
