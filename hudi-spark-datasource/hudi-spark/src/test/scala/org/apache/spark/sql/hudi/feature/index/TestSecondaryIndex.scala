@@ -128,6 +128,7 @@ class TestSecondaryIndex extends HoodieSparkSqlTestBase {
           checkException(s"create index idx_price on $tableName (price)")(
             "Index already exists: idx_price"
           )
+          spark.sql(s"create index if not exists idx_price on $tableName (price)")
 
           // Both indexes should be shown
           checkAnswer(s"show indexes from $tableName")(
