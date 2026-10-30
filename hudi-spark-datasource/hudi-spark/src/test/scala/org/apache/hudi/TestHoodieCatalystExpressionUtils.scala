@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
+import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
@@ -39,6 +39,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val decAttr = AttributeReference("dec", DecimalType(10, 2))()
   private val tsAttr = AttributeReference("ts", TimestampType)()
   private val boolAttr = AttributeReference("b", BooleanType)()
+  private val binAttr = AttributeReference("bin", BinaryType)()
 
   private def matched(expr: Expression): Option[AttributeReference] =
     sparkAdapter.getCatalystExpressionUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
@@ -149,6 +150,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // Collated strings and numbers re-order each other like default strings do.
     assertEquals(None, matched(Cast(collatedAttr, IntegerType)))
     assertEquals(None, matched(Cast(intAttr, lcase)))
+    // Any other source cast to a collated string is rejected too, binary bounds being in byte order.
+    assertEquals(None, matched(Cast(binAttr, lcase)))
+    assertEquals(None, matched(Cast(dateAttr, lcase)))
     // A collation-preserving cast keeps the ordering.
     assertEquals(Some(collatedAttr), matched(Cast(collatedAttr, lcase)))
   }
