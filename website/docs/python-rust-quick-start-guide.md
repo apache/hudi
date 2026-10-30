@@ -1,7 +1,7 @@
 ---
 title: "Python/Rust Quick Start"
 toc: true
-last_modified_at: 2026-10-29T00:00:00-07:00
+last_modified_at: 2026-10-30T00:00:00-07:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -145,6 +145,47 @@ async fn main() -> Result<()> {
 
 Both writers produce the same on-disk layout as the Spark writer: a table written here can be read, compacted,
 and clustered by Spark, and vice versa.
+
+## Compact a merge-on-read table
+
+On a merge-on-read table (`table_type="mor"` in Python, `TableTypeValue::MergeOnRead` in Rust), upserts, updates,
+and deletes append log files. Compaction (experimental) folds them into new base files under one compaction commit;
+rows keep their commit time, so incremental reads see no new rows from it. Run it on demand, or set
+`hoodie.compact.inline=true` (in the write call) or `hoodie.datasource.compaction.async.enable=true` (on a
+background task) to compact once `hoodie.compact.inline.max.delta.commits` (default 5) delta commits accumulate.
+The metadata table compacts itself.
+
+<Tabs>
+<TabItem value="python" label="Python" default>
+
+```python
+result = table.compact()
+print(result.num_file_groups, result.num_log_files)
+
+# Or compact automatically: pass the option when creating the table
+table = HudiTable.create("/tmp/trips_mor", record_key="id", table_type="mor",
+                         hudi_options={"hoodie.compact.inline": "true"})
+```
+
+</TabItem>
+<TabItem value="rust" label="Rust">
+
+```rust
+let result = table.compact().await?;
+println!("{} {}", result.num_file_groups, result.num_log_files);
+
+// Or compact automatically: pass the option when creating the table
+let mut table = Table::create("/tmp/trips_mor")
+    .with_table_name("trips")
+    .with_table_type(TableTypeValue::MergeOnRead)
+    .with_record_key_fields(["id"])
+    .with_option("hoodie.compact.inline", "true")
+    .create()
+    .await?;
+```
+
+</TabItem>
+</Tabs>
 
 ## Why upserts and deletes are fast: the record-level index
 

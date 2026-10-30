@@ -91,7 +91,7 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 
 ## hudi-rs (Python and Rust, no JVM)
 
-- [hudi-rs on GitHub](https://github.com/apache/hudi-rs): Native Rust implementation of Hudi with Python and C++ bindings. Rust and Python read and write Hudi tables (create, append, upsert, update, delete, overwrite) with the metadata table and record-level index maintained on every commit; storage-compatible with the Spark writer.
+- [hudi-rs on GitHub](https://github.com/apache/hudi-rs): Native Rust implementation of Hudi with Python and C++ bindings. Rust and Python read and write Hudi tables (create, append, upsert, update, delete, overwrite, and experimental merge-on-read compaction) with the metadata table and record-level index maintained on every commit; storage-compatible with the Spark writer.
 - [hudi on PyPI](https://pypi.org/project/hudi/): The Python package. `HudiTable.create(path, record_key=...)`, `table.upsert(arrow_table)`, `table.delete("id = ...")`, `table.read()`; accepts PyArrow, Polars and pandas input.
 - [hudi on crates.io](https://crates.io/crates/hudi): The Rust crate; `Table::create(...)`, `upsert`, `delete`, `read`, plus a DataFusion table provider behind the `datafusion` feature.
 - [Rust API reference](https://docs.rs/hudi): docs.rs for the `hudi` crate, which re-exports `hudi-core` and, with the `datafusion` feature, `hudi-datafusion`.
