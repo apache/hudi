@@ -45,6 +45,9 @@ object HoodieSparkTypeUtils {
       //       also compares the char/varchar length constraint, so those casts are conservatively
       //       rejected too. On Spark 3 StringType is a singleton, making this arm trivially true
       case (fromStr: StringType, toStr: StringType) => fromStr == toStr
+      // NOTE: Every type casts to a string, so collated targets are rejected whatever the source
+      //       (for ex, binary bounds are in byte order, which UTF8_LCASE does not follow)
+      case (_, toStr: StringType) => toStr == StringType
 
       case _ => true
     }
