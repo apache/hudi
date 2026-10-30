@@ -376,9 +376,12 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
     if (partitions.length == 1) {
       final String partitionField = partitions[0];
       if (partitionField.isEmpty()) {
-        conf.set(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
-        log.info("Table option [{}] is reset to {} because this is a non-partitioned table",
-            FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
+        // Do not override an explicitly configured key generator on non-partitioned tables
+        if (StringUtils.isNullOrEmpty(conf.get(FlinkOptions.KEYGEN_CLASS_NAME))) {
+          conf.set(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
+          log.info("Table option [{}] is reset to {} because this is a non-partitioned table",
+              FlinkOptions.KEYGEN_CLASS_NAME.key(), NonpartitionedAvroKeyGenerator.class.getName());
+        }
       } else {
         DataType partitionFieldType = table.getSchema().getFieldDataType(partitionField)
             .orElseThrow(() -> new HoodieValidationException("Field " + partitionField + " does not exist"));
