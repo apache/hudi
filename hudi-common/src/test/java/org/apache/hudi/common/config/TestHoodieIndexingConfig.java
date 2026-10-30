@@ -144,6 +144,19 @@ class TestHoodieIndexingConfig {
   }
 
   @Test
+  void testFromVectorIndexDefinition() {
+    HoodieIndexDefinition definition = HoodieIndexDefinition.newBuilder()
+        .withIndexName("vector_index_embedding_idx")
+        .withIndexType(MetadataPartitionType.VECTOR_INDEX.name())
+        .withIndexFunction("embedding")
+        .build();
+
+    HoodieIndexingConfig config = HoodieIndexingConfig.fromIndexDefinition(definition);
+    assertEquals(definition.getIndexName(), config.getIndexName());
+    assertEquals(MetadataPartitionType.VECTOR_INDEX.name(), config.getIndexType());
+  }
+
+  @Test
   void testGenerateAndValidateChecksum() {
     Properties props = new Properties();
     props.setProperty(HoodieIndexingConfig.INDEX_NAME.key(), "column_stats");

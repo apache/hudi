@@ -68,22 +68,7 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
     // A JobConf, so the task attempt context doRead builds on it reuses it instead of copying it again:
     // JobContextImpl reuses a JobConf and copies any other Configuration
     val conf = new JobConf(storageConf.unwrap())
-    conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
-    conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
-
-    conf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, false);
-    conf.setBoolean(SQLConf.CASE_SENSITIVE.key, false);
-    // Sets flags for `ParquetToSparkSchemaConverter`
-    conf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, false)
-    conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, true)
-    // Using string value of this conf to preserve compatibility across spark versions.
-    conf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, false)
-    if (HoodieSparkUtils.gteqSpark3_4) {
-      // PARQUET_INFER_TIMESTAMP_NTZ_ENABLED is required from Spark 3.4.0 or above
-      conf.setBooleanIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", true)
-    }
-
-    ParquetWriteSupport.setSchema(requiredSchema, conf)
+    SparkParquetReaderBase.configureRowRead(conf, requiredSchema)
     doRead(file, requiredSchema, partitionSchema, internalSchemaOpt, filters, conf, tableSchemaOpt)
   }
 
@@ -106,6 +91,31 @@ abstract class SparkParquetReaderBase(enableVectorizedReader: Boolean,
                        filters: Seq[Filter],
                        sharedConf: Configuration,
                        tableSchemaOpt: util.Option[org.apache.parquet.schema.MessageType]): Iterator[InternalRow]
+}
+
+object SparkParquetReaderBase {
+  /**
+   * Sets the Spark flags the row-based Parquet read support and `ParquetToSparkSchemaConverter`
+   * require (the converter fails on unset keys) and the catalyst schema to read into.
+   */
+  def configureRowRead(conf: Configuration, requiredSchema: StructType): Unit = {
+    conf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, requiredSchema.json)
+    conf.set(ParquetWriteSupport.SPARK_ROW_SCHEMA, requiredSchema.json)
+
+    conf.setBoolean(SQLConf.NESTED_SCHEMA_PRUNING_ENABLED.key, false);
+    conf.setBoolean(SQLConf.CASE_SENSITIVE.key, false);
+    // Sets flags for `ParquetToSparkSchemaConverter`
+    conf.setBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key, false)
+    conf.setBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key, true)
+    // Using string value of this conf to preserve compatibility across spark versions.
+    conf.setBoolean(SQLConf.LEGACY_PARQUET_NANOS_AS_LONG.key, false)
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      // PARQUET_INFER_TIMESTAMP_NTZ_ENABLED is required from Spark 3.4.0 or above
+      conf.setBooleanIfUnset("spark.sql.parquet.inferTimestampNTZ.enabled", true)
+    }
+
+    ParquetWriteSupport.setSchema(requiredSchema, conf)
+  }
 }
 
 trait SparkParquetReaderBuilder {
