@@ -484,4 +484,20 @@ public abstract class HoodieStorage implements Closeable {
   public List<StoragePathInfo> globEntries(StoragePath pathPattern) throws IOException {
     return globEntries(pathPattern, e -> true);
   }
+
+  /**
+   * Checks whether the directory at the given storage path is empty.
+   * <p>
+   * Implementation should lean towards memory-efficient approaches (such as lazy-loading
+   * iterators) to avoid loading all file metadata into memory at once, which could cause
+   * Out-of-Memory (OOM) errors in large directories.
+   * </p>
+   *
+   * @param pathPattern The {@link StoragePath} to check.
+   * @return {@code true} if the path does not exist or contains no files/directories;
+   *         {@code false} otherwise.
+   * @throws IOException If any storage system I/O error occurs.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  public abstract boolean isEmpty(StoragePath pathPattern) throws IOException;
 }
