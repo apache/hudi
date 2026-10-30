@@ -360,6 +360,20 @@ For engines that plan their own scans, hudi-rs exposes the planning and executio
 | Query execution | `create_file_group_reader_with_options()` | Create a file group reader instance with the table instance's configs.         |
 | Query execution | `read_file_slice()`                       | Read a file slice, merging base and log files per the table's merge strategy.  |
 
+## Resources
+
+- Rust API reference: [docs.rs/hudi](https://docs.rs/hudi), the `hudi` crate, which re-exports
+  [`hudi-core`](https://docs.rs/hudi-core) and, with the `datafusion` feature,
+  [`hudi-datafusion`](https://docs.rs/hudi-datafusion).
+- Python API reference: the docstrings in the type stubs shipped with the package,
+  [`hudi/_internal.pyi`](https://github.com/apache/hudi-rs/blob/main/python/hudi/_internal.pyi), which IDEs and type checkers read.
+- The [hudi-rs README](https://github.com/apache/hudi-rs#quick-start): a shorter quick start and the full read and write reference.
+- Runnable Rust example: [`crates/core/examples/table_writes.rs`](https://github.com/apache/hudi-rs/blob/main/crates/core/examples/table_writes.rs).
+- Reader semantics: [`docs/reader-spec.md`](https://github.com/apache/hudi-rs/blob/main/docs/reader-spec.md). Writer design:
+  [`docs/writer-design.md`](https://github.com/apache/hudi-rs/blob/main/docs/writer-design.md).
+- Packages: [PyPI](https://pypi.org/project/hudi/) and [crates.io](https://crates.io/crates/hudi). Source:
+  [github.com/apache/hudi-rs](https://github.com/apache/hudi-rs).
+
 ## Contributing
 
 Check out the [contributing guide](https://github.com/apache/hudi-rs/blob/main/CONTRIBUTING.md) for all the details about making contributions to the project.
