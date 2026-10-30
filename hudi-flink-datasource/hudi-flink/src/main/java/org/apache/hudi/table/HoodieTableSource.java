@@ -399,7 +399,10 @@ public class HoodieTableSource extends FileIndexReader implements
     Tuple2<List<ResolvedExpression>, List<ResolvedExpression>> splitFilters = splitExprByPartitionCall(simpleFilters, this.partitionKeys, this.tableRowType);
     this.predicates = ExpressionPredicates.fromExpression(splitFilters.f0);
     this.columnStatsProbe = ColumnStatsProbe.newInstance(splitFilters.f0);
-    this.partitionPruner = createPartitionPruner(splitFilters.f1, columnStatsProbe);
+    // Partition stats only reflect the latest table state and can exclude values in historical incremental reads.
+    boolean incrementalRead = conf.get(FlinkOptions.READ_AS_STREAMING)
+        || FlinkOptions.QUERY_TYPE_INCREMENTAL.equals(conf.get(FlinkOptions.QUERY_TYPE));
+    this.partitionPruner = createPartitionPruner(splitFilters.f1, incrementalRead ? null : columnStatsProbe);
     this.dataBucketFunc = getDataBucketFunc(splitFilters.f0);
     // refuse all the filters now
     return SupportsFilterPushDown.Result.of(new ArrayList<>(splitFilters.f1), new ArrayList<>(filters));

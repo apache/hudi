@@ -2942,6 +2942,51 @@ public class ITTestHoodieDataSource {
             + "+I[id3, id3, Julian, 43, 1970-01-01T00:00:03, par1]]");
   }
 
+  @ParameterizedTest
+  @MethodSource("tableTypeAndSourceV2AndBooleanTrueFalseParams")
+  void testHistoricalIncrementalReadWithDataSkipping(HoodieTableType tableType, boolean useSourceV2, boolean streaming) throws Exception {
+    batchTableEnv.executeSql(sql("writer")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true)
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true)
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), true)
+        .end());
+    execInsertSql(batchTableEnv, "insert into writer values "
+        + "('id1', 'alice', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1'),"
+        + "('id2', 'bob', 23, TIMESTAMP '1970-01-01 00:00:01', 'par2')");
+    String firstCommit = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath())
+        .getCommitsTimeline().filterCompletedInstants().lastInstant().get().getCompletionTime();
+    // The update can remove age 23 from current stats of par1; par2 remains a matching control.
+    execInsertSql(batchTableEnv, "insert into writer values ('id1', 'alice', 50, TIMESTAMP '1970-01-01 00:00:02', 'par1')");
+    assertRowsEquals(execSelectSql(batchTableEnv, "select * from writer where age = 50"),
+        "[+I[id1, alice, 50, 1970-01-01T00:00:02, par1]]");
+
+    TableEnvironment readerEnv = streaming ? streamTableEnv : batchTableEnv;
+    readerEnv.executeSql(sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.READ_AS_STREAMING, streaming)
+        .option(FlinkOptions.READ_STREAMING_CHECK_INTERVAL, 2)
+        .option(FlinkOptions.READ_START_COMMIT, firstCommit)
+        .option(FlinkOptions.READ_END_COMMIT, firstCommit)
+        .option(FlinkOptions.READ_SOURCE_V2_ENABLED, useSourceV2)
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true)
+        .end());
+    String query = "select * from t1 where age = 23";
+    String expected = "[+I[id1, alice, 23, 1970-01-01T00:00:01, par1], "
+        + "+I[id2, bob, 23, 1970-01-01T00:00:01, par2]]";
+    if (streaming) {
+      assertRowsEquals(execSelectSqlWithExpectedNum(readerEnv, query, 2), expected);
+    } else {
+      assertRowsEquals(execSelectSql(readerEnv, query), expected);
+    }
+  }
+
   @Test
   void testDataSkippingWithMissingColumnStatsAfterIndexExpansion() throws Exception {
     TableEnvironment tableEnv = batchTableEnv;
@@ -4170,7 +4215,7 @@ public class ITTestHoodieDataSource {
   }
 
   /**
-   * Return test params => (HoodieTableType, true/false, true/fase).
+   * Return test params => (HoodieTableType, true/false, true/false).
    */
   private static Stream<Arguments> tableTypeAndSourceV2AndBooleanTrueFalseParams() {
     Object[][] data =
