@@ -1624,6 +1624,57 @@ def test_pr7_complete_occ_contract_is_assessment_only(tmp_path: Path) -> None:
     assert "artifacts" not in assessment
 
 
+def test_pr7_additional_flink_writer_version_drift_is_unverified(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR2_FIXTURE_DIR / "stable_key.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    additional_writer = design["writer_contract"]["additional_writers"][0]
+    additional_writer["engine"] = "FLINK"
+    additional_writer["engine_version"] = "1.19.1"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "COMPLETE"
+    assert "FLINK_VERSION_UNVERIFIED" in assessment["finding_codes"]
+    assert "FLINK_CROSS_ENGINE_WRITER_UNVERIFIED" not in {
+        note["code"] for note in assessment["writer_capability_notes"]
+    }
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_invalid_writer_fact_messages_are_deterministic(tmp_path: Path) -> None:
+    design = _pr7_design(
+        PR2_FIXTURE_DIR / "stable_key.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    design["writer_contract"]["additional_writers"] = [{}]
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    invalid = next(
+        finding
+        for finding in assessment["findings"]
+        if finding["code"] == "FLINK_WRITER_CONTRACT_INVALID"
+    )
+    assert invalid["message"] == (
+        "writer_contract.additional_writers[0].engine must be a non-empty string; "
+        "writer_contract.additional_writers[0].engine_version must be a non-empty string; "
+        "writer_contract.additional_writers[0].hudi_version must be a non-empty string; "
+        "writer_contract.additional_writers[0].operation must be a non-empty string; "
+        "writer_contract.additional_writers[0].relationship_to_primary must be a non-empty "
+        "string; writer_contract.additional_writers[0].role must be a non-empty string; "
+        "writer_contract.additional_writers[0].writer_id must be a non-empty string"
+    )
+
+
 @pytest.mark.parametrize(
     "fixture",
     [
@@ -1696,6 +1747,185 @@ def test_pr7_unknown_writer_model_does_not_fabricate_contract(
     assert "artifacts" not in assessment
 
 
+@pytest.mark.parametrize("writer_model", [[], {}])
+def test_pr7_non_string_writer_model_fails_closed(
+    tmp_path: Path, writer_model: object
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["safety"]["writer_model"] = writer_model
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert assessment["multi_writer_capability"] == "NOT_APPLICABLE"
+    assert assessment["finding_codes"] == ["FLINK_WRITER_MODEL_UNRESOLVED"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("writer_model", [[], {}])
+def test_pr7_existing_table_rejects_non_string_writer_model_without_traceback(
+    tmp_path: Path, writer_model: object
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    envelope = _compatible_existing_envelope(design)
+    envelope["desired_contract"]["safety"]["writer_model"] = writer_model
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert "FLINK_WRITER_MODEL_UNRESOLVED" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_single_writer_inventory_disagreement_stays_unverified(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["active_writers"] = ["writer1", "writer2"]
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert assessment["multi_writer_capability"] == "NOT_APPLICABLE"
+    assert "FLINK_MULTI_WRITER_REVIEW" in assessment["finding_codes"]
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" in assessment["finding_codes"]
+    comparison = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == "writer_inventory.active_writers"
+    )
+    assert comparison == {
+        "desired": {"maximum_count": 1},
+        "field": "writer_inventory.active_writers",
+        "observed": ["writer1", "writer2"],
+        "result": "UNVERIFIED",
+        "source_ids": ["writers-1"],
+    }
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_separate_inventory_snapshots_do_not_fabricate_internal_conflict(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    second_inventory = copy.deepcopy(inventory)
+    second_inventory["evidence_id"] = "writers-2"
+    second_inventory["sha256"] = "8" * 64
+    second_inventory["facts"] = {"active_writers": ["writer1", "writer2"]}
+    envelope["evidence"].append(second_inventory)
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert "FLINK_MULTI_WRITER_REVIEW" in assessment["finding_codes"]
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" not in assessment["finding_codes"]
+
+
+@pytest.mark.parametrize(
+    ("concurrency_mode", "expected_status", "expected_capability"),
+    [
+        ("OPTIMISTIC_CONCURRENCY_CONTROL", "REVIEW_REQUIRED", "UNVERIFIED"),
+        ("NON_BLOCKING_CONCURRENCY_CONTROL", "BLOCKED", "UNSUPPORTED"),
+    ],
+)
+def test_pr7_single_writer_concurrency_evidence_prevents_compatibility(
+    tmp_path: Path,
+    concurrency_mode: str,
+    expected_status: str,
+    expected_capability: str,
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    envelope = _compatible_existing_envelope(design)
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"].update(
+        {
+            "write_concurrency_mode": concurrency_mode,
+            "lock_configuration_consistency": "CONFLICTING",
+        }
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == expected_status
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert assessment["multi_writer_capability"] == expected_capability
+    assert "FLINK_MULTI_WRITER_REVIEW" in assessment["finding_codes"]
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" in assessment["finding_codes"]
+    if concurrency_mode == "NON_BLOCKING_CONCURRENCY_CONTROL":
+        assert "FLINK_WRITER_COMBINATION_UNSUPPORTED" in assessment["finding_codes"]
+    writer_fields = {
+        item["field"]: item for item in assessment["comparisons"]
+    }
+    assert writer_fields["writer_config.write_concurrency_mode"]["observed"] == (
+        concurrency_mode
+    )
+    assert writer_fields["writer_config.lock_configuration_consistency"][
+        "observed"
+    ] == "CONFLICTING"
+    assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize(
+    ("fact_name", "invalid_value"),
+    [
+        ("write_concurrency_mode", "MAGIC_CONCURRENCY"),
+        ("lock_configuration_consistency", "PARTIALLY_CONSISTENT"),
+    ],
+)
+def test_pr7_rejects_unbounded_concurrency_evidence_enums(
+    tmp_path: Path, fact_name: str, invalid_value: str
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    envelope = _compatible_existing_envelope(design)
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"][fact_name] = invalid_value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert "FLINK_EXISTING_EVIDENCE_INVALID" in assessment["finding_codes"]
+    assert not any(
+        item["field"] == f"writer_config.{fact_name}"
+        for item in assessment["comparisons"]
+    )
+
+
 def test_pr7_existing_table_matches_optional_writer_facts(tmp_path: Path) -> None:
     design = _pr7_design(
         PR3_FIXTURE_DIR / "mutable_cow.json",
@@ -1745,6 +1975,250 @@ def test_pr7_existing_table_matches_optional_writer_facts(tmp_path: Path) -> Non
     assert writer_fields["writer_config.write_concurrency_mode"] == "MATCH"
     assert writer_fields["writer_config.lock_provider_class"] == "MATCH"
     assert writer_fields["writer_config.lock_configuration_consistency"] == "MATCH"
+    assert "confirm_single_writer" not in {
+        item["check"] for item in assessment["deployment_checks"]
+    }
+    assert "verify_concurrent_writer_inventory" in {
+        item["check"] for item in assessment["writer_deployment_checks"]
+    }
+
+
+def test_pr7_inactive_declared_writer_does_not_conflict_with_active_snapshot(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["active_writers"] = ["flink-orders-stream"]
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "COMPLETE"
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" not in assessment["finding_codes"]
+    comparison = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == "writer_inventory.active_writers"
+    )
+    assert comparison == {
+        "desired": {
+            "allowed_writer_ids": [
+                "flink-orders-stream",
+                "spark-orders-backfill",
+            ]
+        },
+        "field": "writer_inventory.active_writers",
+        "observed": ["flink-orders-stream"],
+        "result": "MATCH",
+        "source_ids": ["writers-1"],
+    }
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+
+
+def test_pr7_undeclared_active_writer_conflicts_with_declared_topology(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"].update(
+        {
+            "active_writers": ["flink-orders-stream", "undeclared-writer"],
+            "concurrent_writers": True,
+        }
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == "CONFLICT"
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" in assessment["finding_codes"]
+    comparison = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == "writer_inventory.active_writers"
+    )
+    assert comparison["result"] == "UNVERIFIED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    ("fact_name", "fact_value", "expected_contract_result", "expected_capability"),
+    [
+        (
+            "write_concurrency_mode",
+            "NON_BLOCKING_CONCURRENCY_CONTROL",
+            "COMPLETE",
+            "UNSUPPORTED",
+        ),
+        (
+            "lock_configuration_consistency",
+            "CONFLICTING",
+            "CONFLICT",
+            "UNVERIFIED",
+        ),
+    ],
+)
+def test_pr7_assesses_concurrency_evidence_without_optional_contract_block(
+    tmp_path: Path,
+    fact_name: str,
+    fact_value: str,
+    expected_contract_result: str,
+    expected_capability: str,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    del design["writer_contract"]["observed_concurrency"]
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["concurrent_writers"] = True
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"][fact_name] = fact_value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == expected_contract_result
+    assert assessment["multi_writer_capability"] == expected_capability
+    expected_finding = (
+        "FLINK_WRITER_COMBINATION_UNSUPPORTED"
+        if fact_name == "write_concurrency_mode"
+        else "FLINK_WRITER_CONTRACT_CONFLICT"
+    )
+    assert expected_finding in assessment["finding_codes"]
+    assert "observed_concurrency" not in assessment["normalized_writer_contract"]
+    comparison = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == f"writer_config.{fact_name}"
+    )
+    assert comparison == {
+        "desired": None,
+        "field": f"writer_config.{fact_name}",
+        "observed": fact_value,
+        "result": "UNVERIFIED",
+        "source_ids": ["writer-config-1"],
+    }
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize("contract_state", ["missing", "invalid"])
+def test_pr7_assesses_nbcc_evidence_even_when_contract_is_incomplete(
+    tmp_path: Path, contract_state: str
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["safety"]["writer_model"] = "multi_writer"
+    if contract_state == "invalid":
+        design["writer_contract"] = []
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["concurrent_writers"] = True
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"]["write_concurrency_mode"] = (
+        "NON_BLOCKING_CONCURRENCY_CONTROL"
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["writer_contract_result"] == "INCOMPLETE"
+    assert assessment["multi_writer_capability"] == "UNSUPPORTED"
+    expected_contract_finding = (
+        "FLINK_WRITER_CONTRACT_REQUIRED"
+        if contract_state == "missing"
+        else "FLINK_WRITER_CONTRACT_INVALID"
+    )
+    assert expected_contract_finding in assessment["finding_codes"]
+    assert "FLINK_WRITER_COMBINATION_UNSUPPORTED" in assessment["finding_codes"]
+    assert assessment["normalized_writer_contract"] == {}
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_conflicting_lock_evidence_does_not_reclassify_missing_contract(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["safety"]["writer_model"] = "multi_writer"
+    envelope = _compatible_existing_envelope(design)
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"]["lock_configuration_consistency"] = "CONFLICTING"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == "INCOMPLETE"
+    assert assessment["multi_writer_capability"] == "UNVERIFIED"
+    assert "FLINK_WRITER_CONTRACT_REQUIRED" in assessment["finding_codes"]
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" in assessment["finding_codes"]
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" not in assessment["finding_codes"]
+
+
+def test_pr7_evidence_nbcc_overrides_explicit_occ_capability_conservatively(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["concurrent_writers"] = True
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"]["write_concurrency_mode"] = (
+        "NON_BLOCKING_CONCURRENCY_CONTROL"
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == "CONFLICT"
+    assert assessment["multi_writer_capability"] == "UNSUPPORTED"
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" in assessment["finding_codes"]
+    assert "FLINK_WRITER_COMBINATION_UNSUPPORTED" in assessment["finding_codes"]
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["executable_eligible"] is False
 
 
 def test_pr7_existing_writer_evidence_conflict_stays_unverified(

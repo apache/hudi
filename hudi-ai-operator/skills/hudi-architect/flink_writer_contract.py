@@ -140,12 +140,17 @@ def _deployment_checks() -> list[dict[str, Any]]:
     ]
 
 
-def _not_applicable(findings: list[dict[str, str]]) -> dict[str, Any]:
+def _not_applicable(
+    findings: list[dict[str, str]],
+    *,
+    capability: str = "NOT_APPLICABLE",
+    notes: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
     return {
         "writer_contract_result": "NOT_APPLICABLE",
-        "multi_writer_capability": "NOT_APPLICABLE",
+        "multi_writer_capability": capability,
         "normalized_writer_contract": {},
-        "writer_capability_notes": [],
+        "writer_capability_notes": notes or [],
         "writer_deployment_checks": [],
         "findings": findings,
     }
@@ -163,7 +168,7 @@ def _normalize_writer(
     _check_keys(raw_writer, _WRITER_KEYS, field, findings)
 
     normalized: dict[str, str] = {}
-    for name in _WRITER_KEYS:
+    for name in sorted(_WRITER_KEYS):
         value = raw_writer.get(name)
         if not _non_empty_string(value):
             _invalid(findings, f"{field}.{name} must be a non-empty string")
@@ -241,7 +246,7 @@ def _normalize_concurrency(
         return None
     _check_keys(raw_concurrency, _CONCURRENCY_KEYS, field, findings)
     normalized: dict[str, str] = {}
-    for name in _CONCURRENCY_KEYS:
+    for name in sorted(_CONCURRENCY_KEYS):
         value = raw_concurrency.get(name)
         if not _non_empty_string(value):
             _invalid(findings, f"{field}.{name} must be a non-empty string")
@@ -260,6 +265,189 @@ def _normalize_concurrency(
     return normalized if set(normalized) == _CONCURRENCY_KEYS else None
 
 
+def _add_note(notes: list[dict[str, str]], code: str, message: str) -> None:
+    if not any(note["code"] == code for note in notes):
+        notes.append({"code": code, "message": message})
+
+
+def _assess_contract_concurrency(
+    concurrency: dict[str, Any],
+    findings: list[dict[str, str]],
+    notes: list[dict[str, str]],
+) -> tuple[bool, bool]:
+    """Assess explicit multi-writer contract concurrency facts."""
+
+    conflict = False
+    unsupported = False
+    mode = concurrency.get("mode")
+    consistency = concurrency.get("lock_configuration_consistency")
+    if mode == "SINGLE_WRITER":
+        _add_finding(
+            findings,
+            "FLINK_WRITER_CONTRACT_CONFLICT",
+            "A multi-writer contract cannot observe SINGLE_WRITER concurrency mode",
+        )
+        conflict = True
+    elif mode == "OPTIMISTIC_CONCURRENCY_CONTROL":
+        _add_note(
+            notes,
+            "FLINK_OCC_DEPLOYMENT_UNVERIFIED",
+            "OCC is recognized by the pinned source, but concurrent, lock, and "
+            "recovery behavior is not exercised by this assessment.",
+        )
+    elif mode == "NON_BLOCKING_CONCURRENCY_CONTROL":
+        unsupported = True
+        _add_finding(
+            findings,
+            "FLINK_WRITER_COMBINATION_UNSUPPORTED",
+            "The existing COW or FLINK_STATE-indexed MOR paths do not satisfy the "
+            "pinned NBCC requirement for MOR with simple bucket index",
+        )
+    if consistency == "CONFLICTING":
+        _add_finding(
+            findings,
+            "FLINK_WRITER_CONTRACT_CONFLICT",
+            "Observed lock configuration is conflicting across writers",
+        )
+        conflict = True
+    return conflict, unsupported
+
+
+def _evidence_concurrency(
+    evidence: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        name: evidence[field]
+        for name, field in {
+            "mode": "flink_writer_config.write_concurrency_mode",
+            "lock_provider_class": "flink_writer_config.lock_provider_class",
+            "lock_configuration_consistency": (
+                "flink_writer_config.lock_configuration_consistency"
+            ),
+        }.items()
+        if field in evidence
+    }
+
+
+def _assess_evidence_concurrency(
+    concurrency: dict[str, Any],
+    writer_model: Any,
+    findings: list[dict[str, str]],
+    notes: list[dict[str, str]],
+) -> tuple[bool, bool, bool, bool]:
+    """Assess observed concurrency independently of Writer Contract validity."""
+
+    if not concurrency:
+        return False, False, False, False
+
+    conflict = False
+    unsupported = False
+    relevant = False
+    conflicting_lock_evidence = False
+    mode = concurrency.get("mode")
+    consistency = concurrency.get("lock_configuration_consistency")
+    if mode == "SINGLE_WRITER":
+        relevant = writer_model == "multi_writer"
+        if writer_model == "multi_writer":
+            _add_finding(
+                findings,
+                "FLINK_WRITER_CONTRACT_CONFLICT",
+                "A multi-writer design cannot observe SINGLE_WRITER concurrency mode",
+            )
+            conflict = True
+    elif mode == "OPTIMISTIC_CONCURRENCY_CONTROL":
+        relevant = True
+        _add_note(
+            notes,
+            "FLINK_OCC_DEPLOYMENT_UNVERIFIED",
+            "OCC is recognized by the pinned source, but concurrent, lock, and "
+            "recovery behavior is not exercised by this assessment.",
+        )
+        if writer_model != "multi_writer":
+            _add_finding(
+                findings,
+                "FLINK_MULTI_WRITER_REVIEW",
+                "Observed concurrency configuration requires multi-writer review",
+            )
+    elif mode == "NON_BLOCKING_CONCURRENCY_CONTROL":
+        relevant = True
+        unsupported = True
+        _add_finding(
+            findings,
+            "FLINK_WRITER_COMBINATION_UNSUPPORTED",
+            "The existing COW or FLINK_STATE-indexed MOR paths do not satisfy the "
+            "pinned NBCC requirement for MOR with simple bucket index",
+        )
+        if writer_model != "multi_writer":
+            _add_finding(
+                findings,
+                "FLINK_MULTI_WRITER_REVIEW",
+                "Observed concurrency configuration requires multi-writer review",
+            )
+
+    if consistency == "CONFLICTING":
+        relevant = True
+        conflicting_lock_evidence = True
+        _add_finding(
+            findings,
+            "FLINK_EXISTING_EVIDENCE_CONFLICT",
+            "Observed lock configuration is conflicting across writers",
+        )
+        if writer_model != "multi_writer":
+            _add_finding(
+                findings,
+                "FLINK_MULTI_WRITER_REVIEW",
+                "Observed concurrency configuration requires multi-writer review",
+            )
+    return conflict, unsupported, relevant, conflicting_lock_evidence
+
+
+def _writer_topology_evidence_findings(
+    writer_model: Any,
+    evidence: dict[str, Any],
+    conflicting_evidence_fields: set[str],
+    evidence_source_ids: dict[str, set[str]],
+    findings: list[dict[str, str]],
+) -> None:
+    inventory_fields = {
+        "writer_inventory.active_writers",
+        "writer_inventory.concurrent_writers",
+    }
+    conflicting = sorted(inventory_fields & conflicting_evidence_fields)
+    if conflicting:
+        _add_finding(
+            findings,
+            "FLINK_EXISTING_EVIDENCE_CONFLICT",
+            f"Existing-table evidence disagrees about writer inventory: {conflicting}",
+        )
+
+    active_writers = evidence.get("writer_inventory.active_writers")
+    concurrent_writers = evidence.get("writer_inventory.concurrent_writers")
+    multiple_active = isinstance(active_writers, list) and len(active_writers) > 1
+    if writer_model != "multi_writer" and (
+        multiple_active or concurrent_writers is True
+    ):
+        _add_finding(
+            findings,
+            "FLINK_MULTI_WRITER_REVIEW",
+            "Existing-table writer inventory requires multi-writer review",
+        )
+    active_sources = evidence_source_ids.get("writer_inventory.active_writers", set())
+    concurrent_sources = evidence_source_ids.get(
+        "writer_inventory.concurrent_writers", set()
+    )
+    if (
+        multiple_active
+        and concurrent_writers is False
+        and bool(active_sources & concurrent_sources)
+    ):
+        _add_finding(
+            findings,
+            "FLINK_EXISTING_EVIDENCE_CONFLICT",
+            "Writer inventory reports multiple active writers while concurrent_writers is false",
+        )
+
+
 def _evidence_conflicts(
     normalized: dict[str, Any],
     evidence: dict[str, Any],
@@ -274,19 +462,20 @@ def _evidence_conflicts(
         "flink_writer_config.lock_configuration_consistency",
     }
     conflicting = sorted(contract_fact_fields & conflicting_evidence_fields)
+    conflict = False
     if conflicting:
         _add_finding(
             findings,
             "FLINK_WRITER_CONTRACT_CONFLICT",
             f"Existing-table evidence disagrees about Writer Contract facts: {conflicting}",
         )
-        return True
+        conflict = True
 
+    declared_writer_ids = {
+        normalized["primary_writer_id"],
+        *(writer["writer_id"] for writer in normalized["additional_writers"]),
+    }
     expected: dict[str, Any] = {
-        "writer_inventory.active_writers": sorted(
-            [normalized["primary_writer_id"]]
-            + [writer["writer_id"] for writer in normalized["additional_writers"]]
-        ),
         "writer_inventory.schema_evolution_owner_id": normalized["ownership"][
             "schema_evolution_owner_id"
         ],
@@ -305,19 +494,23 @@ def _evidence_conflicts(
             }
         )
 
-    mismatches = sorted(
+    mismatches = [
         field
         for field, observed in evidence.items()
         if field in expected and observed != expected[field]
-    )
+    ]
+    active_writers = evidence.get("writer_inventory.active_writers")
+    if isinstance(active_writers, list) and not set(active_writers) <= declared_writer_ids:
+        mismatches.append("writer_inventory.active_writers")
+    mismatches = sorted(mismatches)
     if mismatches:
         _add_finding(
             findings,
             "FLINK_WRITER_CONTRACT_CONFLICT",
             f"Existing-table evidence conflicts with Writer Contract facts: {mismatches}",
         )
-        return True
-    return False
+        conflict = True
+    return conflict
 
 
 def assess_writer_contract(
@@ -325,6 +518,7 @@ def assess_writer_contract(
     *,
     evidence: dict[str, Any] | None = None,
     conflicting_evidence_fields: set[str] | None = None,
+    evidence_source_ids: dict[str, set[str]] | None = None,
 ) -> dict[str, Any]:
     """Return a deterministic, assessment-only Writer Contract result."""
 
@@ -333,6 +527,36 @@ def assess_writer_contract(
     safety = raw_safety if isinstance(raw_safety, dict) else {}
     writer_model = safety.get("writer_model")
     raw_contract = design.get("writer_contract")
+    supplied_evidence = evidence or {}
+    supplied_conflicts = conflicting_evidence_fields or set()
+    supplied_sources = evidence_source_ids or {}
+    notes: list[dict[str, str]] = []
+
+    _writer_topology_evidence_findings(
+        writer_model,
+        supplied_evidence,
+        supplied_conflicts,
+        supplied_sources,
+        findings,
+    )
+    (
+        evidence_conflict,
+        evidence_unsupported,
+        evidence_relevant,
+        conflicting_lock_evidence,
+    ) = _assess_evidence_concurrency(
+        _evidence_concurrency(supplied_evidence),
+        writer_model,
+        findings,
+        notes,
+    )
+    capability = (
+        "UNSUPPORTED"
+        if evidence_unsupported
+        else "UNVERIFIED"
+        if writer_model == "multi_writer" or evidence_relevant
+        else "NOT_APPLICABLE"
+    )
 
     if writer_model == "single_writer":
         if raw_contract is not None:
@@ -341,10 +565,10 @@ def assess_writer_contract(
                 "FLINK_WRITER_CONTRACT_CONFLICT",
                 "writer_contract must be absent for a confirmed single-writer design",
             )
-            result = _not_applicable(findings)
+            result = _not_applicable(findings, capability=capability, notes=notes)
             result["writer_contract_result"] = "CONFLICT"
             return result
-        return _not_applicable(findings)
+        return _not_applicable(findings, capability=capability, notes=notes)
 
     if writer_model != "multi_writer":
         if raw_contract is not None:
@@ -353,7 +577,7 @@ def assess_writer_contract(
                 "FLINK_WRITER_CONTRACT_CONFLICT",
                 "Writer topology must be resolved before a Writer Contract is assessed",
             )
-        return _not_applicable(findings)
+        return _not_applicable(findings, capability=capability, notes=notes)
 
     _add_finding(
         findings,
@@ -368,9 +592,9 @@ def assess_writer_contract(
         )
         return {
             "writer_contract_result": "INCOMPLETE",
-            "multi_writer_capability": "UNVERIFIED",
+            "multi_writer_capability": capability,
             "normalized_writer_contract": {},
-            "writer_capability_notes": [],
+            "writer_capability_notes": notes,
             "writer_deployment_checks": _deployment_checks(),
             "findings": findings,
         }
@@ -378,9 +602,9 @@ def assess_writer_contract(
         _invalid(findings, "writer_contract must be an object")
         return {
             "writer_contract_result": "INCOMPLETE",
-            "multi_writer_capability": "UNVERIFIED",
+            "multi_writer_capability": capability,
             "normalized_writer_contract": {},
-            "writer_capability_notes": [],
+            "writer_capability_notes": notes,
             "writer_deployment_checks": _deployment_checks(),
             "findings": findings,
         }
@@ -444,9 +668,9 @@ def assess_writer_contract(
     if invalid:
         return {
             "writer_contract_result": "INCOMPLETE",
-            "multi_writer_capability": "UNVERIFIED",
+            "multi_writer_capability": capability,
             "normalized_writer_contract": {},
-            "writer_capability_notes": [],
+            "writer_capability_notes": notes,
             "writer_deployment_checks": _deployment_checks(),
             "findings": findings,
         }
@@ -473,61 +697,36 @@ def assess_writer_contract(
     if concurrency is not None:
         normalized["observed_concurrency"] = concurrency
 
-    conflict = False
-    notes: list[dict[str, str]] = []
-    capability = "UNVERIFIED"
+    conflict = evidence_conflict
+    if conflicting_lock_evidence:
+        _add_finding(
+            findings,
+            "FLINK_WRITER_CONTRACT_CONFLICT",
+            "Observed lock configuration is conflicting across writers",
+        )
+        conflict = True
     if concurrency is not None:
-        mode = concurrency["mode"]
-        consistency = concurrency["lock_configuration_consistency"]
-        if mode == "SINGLE_WRITER":
-            _add_finding(
-                findings,
-                "FLINK_WRITER_CONTRACT_CONFLICT",
-                "A multi-writer contract cannot observe SINGLE_WRITER concurrency mode",
-            )
-            conflict = True
-        elif mode == "OPTIMISTIC_CONCURRENCY_CONTROL":
-            notes.append(
-                {
-                    "code": "FLINK_OCC_DEPLOYMENT_UNVERIFIED",
-                    "message": (
-                        "OCC is recognized by the pinned source, but concurrent, lock, "
-                        "and recovery behavior is not exercised by this assessment."
-                    ),
-                }
-            )
-        elif mode == "NON_BLOCKING_CONCURRENCY_CONTROL":
+        contract_conflict, contract_unsupported = _assess_contract_concurrency(
+            concurrency, findings, notes
+        )
+        conflict = conflict or contract_conflict
+        if contract_unsupported:
             capability = "UNSUPPORTED"
-            _add_finding(
-                findings,
-                "FLINK_WRITER_COMBINATION_UNSUPPORTED",
-                "The existing COW or FLINK_STATE-indexed MOR paths do not satisfy the "
-                "pinned NBCC requirement for MOR with simple bucket index",
-            )
-        if consistency == "CONFLICTING":
-            _add_finding(
-                findings,
-                "FLINK_WRITER_CONTRACT_CONFLICT",
-                "Observed lock configuration is conflicting across writers",
-            )
-            conflict = True
 
     if any(writer["engine"] != "FLINK" for writer in normalized_writers):
-        notes.append(
-            {
-                "code": "FLINK_CROSS_ENGINE_WRITER_UNVERIFIED",
-                "message": "Cross-engine writer compatibility is not certified by this assessment.",
-            }
+        _add_note(
+            notes,
+            "FLINK_CROSS_ENGINE_WRITER_UNVERIFIED",
+            "Cross-engine writer compatibility is not certified by this assessment.",
         )
     if any(
         writer["role"] in {"STANDALONE_COMPACTION", "STANDALONE_CLUSTERING"}
         for writer in normalized_writers
     ):
-        notes.append(
-            {
-                "code": "FLINK_STANDALONE_TABLE_SERVICE_UNVERIFIED",
-                "message": "Standalone table-service writers require deployment review.",
-            }
+        _add_note(
+            notes,
+            "FLINK_STANDALONE_TABLE_SERVICE_UNVERIFIED",
+            "Standalone table-service writers require deployment review.",
         )
     if any(
         writer["hudi_version"] != design.get("hudi_version")
@@ -538,12 +737,22 @@ def assess_writer_contract(
             "FLINK_VERSION_UNVERIFIED",
             "Writer Hudi versions are not uniformly pinned to the design baseline",
         )
+    if any(
+        writer["engine"] == "FLINK"
+        and writer["engine_version"] != design.get("flink_version")
+        for writer in normalized_writers
+    ):
+        _add_finding(
+            findings,
+            "FLINK_VERSION_UNVERIFIED",
+            "Flink writer versions are not uniformly pinned to the design baseline",
+        )
 
     conflict = (
         _evidence_conflicts(
             normalized,
-            evidence or {},
-            conflicting_evidence_fields or set(),
+            supplied_evidence,
+            supplied_conflicts,
             findings,
         )
         or conflict

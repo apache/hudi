@@ -1310,7 +1310,10 @@ def assess_design(
     writer_model = safety.get("writer_model")
     if writer_model is None:
         assessment.add("FLINK_WRITER_MODEL_UNRESOLVED", "Writer topology is required")
-    elif writer_model not in {"single_writer", "multi_writer"}:
+    elif not isinstance(writer_model, str) or writer_model not in {
+        "single_writer",
+        "multi_writer",
+    }:
         assessment.add("FLINK_WRITER_MODEL_UNRESOLVED", "Writer topology is unresolved")
     writer_contract_state = assess_writer_contract(contract)
     for finding in writer_contract_state["findings"]:

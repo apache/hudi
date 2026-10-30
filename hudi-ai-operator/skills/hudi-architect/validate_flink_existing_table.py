@@ -34,7 +34,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeGuard
 
-from flink_writer_contract import assess_writer_contract
+from flink_writer_contract import (
+    CONCURRENCY_MODES,
+    LOCK_CONFIGURATION_CONSISTENCY,
+    assess_writer_contract,
+)
 from validate_flink_capabilities import (
     DEFAULT_MANIFEST,
     load_manifest,
@@ -336,7 +340,19 @@ def _normalize_fact(
             f"{field} must be a credential-free path",
         )
         return None
-    return normalized.upper() if name in UPPERCASE_FACTS else normalized
+    normalized = normalized.upper() if name in UPPERCASE_FACTS else normalized
+    enum_values = {
+        "write_concurrency_mode": CONCURRENCY_MODES,
+        "lock_configuration_consistency": LOCK_CONFIGURATION_CONSISTENCY,
+    }
+    allowed = enum_values.get(name)
+    if allowed is not None and normalized not in allowed:
+        assessment.add(
+            "FLINK_EXISTING_EVIDENCE_INVALID",
+            f"{field} must be one of {sorted(allowed)}",
+        )
+        return None
+    return normalized
 
 
 def _parse_evidence(
@@ -780,13 +796,17 @@ def assess_reconciliation(
         envelope.get("evidence"), target_table_path, assessment
     )
     writer_evidence: dict[str, Any] = {}
+    writer_evidence_source_ids: dict[str, set[str]] = {}
     for kind in ("writer_inventory", "flink_writer_config"):
         for name, observation in observations.get(kind, {}).items():
-            writer_evidence[f"{kind}.{name}"] = observation.value
+            field = f"{kind}.{name}"
+            writer_evidence[field] = observation.value
+            writer_evidence_source_ids[field] = set(observation.source_ids)
     writer_contract_state = assess_writer_contract(
         desired,
         evidence=writer_evidence,
         conflicting_evidence_fields=set(observations.get("evidence_conflicts", {})),
+        evidence_source_ids=writer_evidence_source_ids,
     )
     for finding in writer_contract_state["findings"]:
         assessment.add(finding["code"], finding["message"])
@@ -978,71 +998,176 @@ def assess_reconciliation(
     concurrent = inventory.get("concurrent_writers")
     stopped = inventory.get("previous_writer_stopped")
     previous_engine = inventory.get("previous_writer_engine")
-    _add_comparison(
-        comparisons,
-        "writer_inventory.concurrent_writers",
-        desired.get("safety", {}).get("writer_model") == "multi_writer"
-        if isinstance(desired.get("safety"), dict)
-        else False,
-        concurrent,
-        mismatch_code="FLINK_MULTI_WRITER_REVIEW",
-        mismatch_result="UNVERIFIED",
-        assessment=assessment,
-    )
+    raw_safety = desired.get("safety")
+    safety = raw_safety if isinstance(raw_safety, dict) else {}
+    writer_model = safety.get("writer_model")
+    if writer_model == "single_writer":
+        _add_comparison(
+            comparisons,
+            "writer_inventory.concurrent_writers",
+            False,
+            concurrent,
+            mismatch_code="FLINK_MULTI_WRITER_REVIEW",
+            mismatch_result="UNVERIFIED",
+            assessment=assessment,
+        )
+    elif concurrent is None:
+        comparisons.append(
+            {
+                "desired": None,
+                "field": "writer_inventory.concurrent_writers",
+                "observed": None,
+                "result": "UNVERIFIED",
+                "source_ids": [],
+            }
+        )
+        assessment.add(
+            "FLINK_EXISTING_EVIDENCE_REQUIRED",
+            "Evidence is required for writer_inventory.concurrent_writers",
+        )
+    else:
+        comparisons.append(
+            {
+                "desired": None,
+                "field": "writer_inventory.concurrent_writers",
+                "observed": concurrent.value,
+                "result": "UNVERIFIED",
+                "source_ids": list(concurrent.source_ids),
+            }
+        )
+    active_writers = inventory.get("active_writers")
+    if writer_model == "single_writer" and active_writers is not None:
+        comparisons.append(
+            {
+                "desired": {"maximum_count": 1},
+                "field": "writer_inventory.active_writers",
+                "observed": active_writers.value,
+                "result": (
+                    "MATCH" if len(active_writers.value) <= 1 else "UNVERIFIED"
+                ),
+                "source_ids": list(active_writers.source_ids),
+            }
+        )
     normalized_writer_contract = writer_contract_state["normalized_writer_contract"]
     if normalized_writer_contract:
-        expected_active_writers = sorted(
+        declared_writer_ids = sorted(
             [normalized_writer_contract["primary_writer_id"]]
             + [
                 writer["writer_id"]
                 for writer in normalized_writer_contract["additional_writers"]
             ]
         )
-        optional_writer_expectations = {
-            "writer_inventory.active_writers": (
-                expected_active_writers,
-                inventory.get("active_writers"),
-            ),
-            "writer_inventory.schema_evolution_owner_id": (
-                normalized_writer_contract["ownership"]["schema_evolution_owner_id"],
-                inventory.get("schema_evolution_owner_id"),
-            ),
-        }
-        observed_concurrency = normalized_writer_contract.get("observed_concurrency")
-        if isinstance(observed_concurrency, dict):
-            optional_writer_expectations.update(
+        if active_writers is not None:
+            active_writer_result = (
+                "MATCH"
+                if set(active_writers.value) <= set(declared_writer_ids)
+                else "UNVERIFIED"
+            )
+            comparisons.append(
                 {
-                    "writer_config.write_concurrency_mode": (
-                        observed_concurrency["mode"],
-                        observations.get("flink_writer_config", {}).get(
-                            "write_concurrency_mode"
-                        ),
-                    ),
-                    "writer_config.lock_provider_class": (
-                        observed_concurrency["lock_provider_class"],
-                        observations.get("flink_writer_config", {}).get(
-                            "lock_provider_class"
-                        ),
-                    ),
-                    "writer_config.lock_configuration_consistency": (
-                        observed_concurrency["lock_configuration_consistency"],
-                        observations.get("flink_writer_config", {}).get(
-                            "lock_configuration_consistency"
-                        ),
-                    ),
+                    "desired": {"allowed_writer_ids": declared_writer_ids},
+                    "field": "writer_inventory.active_writers",
+                    "observed": active_writers.value,
+                    "result": active_writer_result,
+                    "source_ids": list(active_writers.source_ids),
                 }
             )
-        for field, (expected, observed) in optional_writer_expectations.items():
-            if observed is not None:
-                _add_comparison(
-                    comparisons,
-                    field,
-                    expected,
-                    observed,
-                    mismatch_code="FLINK_WRITER_CONTRACT_CONFLICT",
-                    mismatch_result="UNVERIFIED",
-                    assessment=assessment,
+            if active_writer_result != "MATCH":
+                assessment.add(
+                    "FLINK_WRITER_CONTRACT_CONFLICT",
+                    "Existing-table value differs at writer_inventory.active_writers",
                 )
+        schema_owner = inventory.get("schema_evolution_owner_id")
+        if schema_owner is not None:
+            _add_comparison(
+                comparisons,
+                "writer_inventory.schema_evolution_owner_id",
+                normalized_writer_contract["ownership"]["schema_evolution_owner_id"],
+                schema_owner,
+                mismatch_code="FLINK_WRITER_CONTRACT_CONFLICT",
+                mismatch_result="UNVERIFIED",
+                assessment=assessment,
+            )
+    elif writer_model != "single_writer" and active_writers is not None:
+        comparisons.append(
+            {
+                "desired": None,
+                "field": "writer_inventory.active_writers",
+                "observed": active_writers.value,
+                "result": "UNVERIFIED",
+                "source_ids": list(active_writers.source_ids),
+            }
+        )
+
+    observed_concurrency = (
+        normalized_writer_contract.get("observed_concurrency")
+        if normalized_writer_contract
+        else None
+    )
+    config_observations = observations.get("flink_writer_config", {})
+    concurrency_expectations = {
+        "writer_config.write_concurrency_mode": (
+            observed_concurrency.get("mode")
+            if isinstance(observed_concurrency, dict)
+            else None,
+            config_observations.get("write_concurrency_mode"),
+        ),
+        "writer_config.lock_provider_class": (
+            observed_concurrency.get("lock_provider_class")
+            if isinstance(observed_concurrency, dict)
+            else None,
+            config_observations.get("lock_provider_class"),
+        ),
+        "writer_config.lock_configuration_consistency": (
+            observed_concurrency.get("lock_configuration_consistency")
+            if isinstance(observed_concurrency, dict)
+            else None,
+            config_observations.get("lock_configuration_consistency"),
+        ),
+    }
+    for field, (expected, observed) in concurrency_expectations.items():
+        if observed is None:
+            continue
+        if writer_model == "multi_writer" and expected is not None:
+            _add_comparison(
+                comparisons,
+                field,
+                expected,
+                observed,
+                mismatch_code="FLINK_WRITER_CONTRACT_CONFLICT",
+                mismatch_result="UNVERIFIED",
+                assessment=assessment,
+            )
+        elif writer_model == "single_writer" and field.endswith(
+            "write_concurrency_mode"
+        ):
+            _add_comparison(
+                comparisons,
+                field,
+                "SINGLE_WRITER",
+                observed,
+                mismatch_code="FLINK_MULTI_WRITER_REVIEW",
+                mismatch_result="UNVERIFIED",
+                assessment=assessment,
+            )
+        else:
+            result = "UNVERIFIED"
+            if writer_model == "single_writer":
+                result = (
+                    "UNVERIFIED"
+                    if field.endswith("lock_configuration_consistency")
+                    and observed.value == "CONFLICTING"
+                    else "NOT_APPLICABLE"
+                )
+            comparisons.append(
+                {
+                    "desired": None,
+                    "field": field,
+                    "observed": observed.value,
+                    "result": result,
+                    "source_ids": list(observed.source_ids),
+                }
+            )
     if transition in {"same_job_restore", "cold_start_new_job", "flink_writer_takeover"}:
         _add_comparison(
             comparisons,
@@ -1156,10 +1281,14 @@ def assess_reconciliation(
         change_disposition = "DEPLOYMENT_CONFIGURATION_CHANGE"
     else:
         change_disposition = "UNVERIFIED"
-    deployment_checks = [
-        {"check": "confirm_single_writer", "required": True},
-        {"check": "recheck_pending_instants", "required": True},
-    ]
+    deployment_checks = []
+    if writer_model == "single_writer":
+        deployment_checks.append(
+            {"check": "confirm_single_writer", "required": True}
+        )
+    deployment_checks.append(
+        {"check": "recheck_pending_instants", "required": True}
+    )
     if transition == "cold_start_new_job" and desired.get("contract_schema") in (2, 3):
         deployment_checks.append(
             {"check": "verify_index_bootstrap_before_first_checkpoint", "required": True}

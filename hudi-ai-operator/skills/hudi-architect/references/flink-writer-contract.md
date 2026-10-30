@@ -79,6 +79,19 @@ the explicit Writer Contract produces `FLINK_EXISTING_EVIDENCE_CONFLICT` and/or
 `UNVERIFIED`, change disposition `UNVERIFIED`, and executable eligibility `false`; do not infer a
 migration or silently replace either fact.
 
+Assess supplied concurrency evidence even when `observed_concurrency` is absent from the explicit
+contract. Preserve that evidence and its provenance as an unverified comparison; do not copy it
+into `normalized_writer_contract` or treat missing optional contract facts as inferred values.
+Apply the same independent capability assessment when the Writer Contract is missing or invalid:
+the contract remains `INCOMPLETE`, while bounded NBCC evidence still returns `UNSUPPORTED`.
+Reject concurrency modes and lock-consistency values outside the enumerations above.
+
+Treat `active_writers` as a time-sensitive snapshot, not as the complete declared topology. Every
+observed active writer must be declared, but a declared writer need not be active in that snapshot.
+Multiple active writers cannot validate a single-writer design. Report the combination of multiple
+active writers and `concurrent_writers: false` as internally inconsistent only when both facts come
+from the same evidence source; do not combine separate snapshots into a fabricated contradiction.
+
 ## Result semantics
 
 Return `writer_contract_result` as `NOT_APPLICABLE`, `COMPLETE`, `INCOMPLETE`, or `CONFLICT` and
@@ -87,4 +100,6 @@ normalized contract, capability notes, and deployment checks. Never return `SUPP
 
 Deployment checks remind the operator to verify writer inventory, uniform concurrency mode, lock
 configuration, LAZY failed-write handling, recovery procedure, and schema ownership. They are not
-evidence that a deployment or service was inspected.
+evidence that a deployment or service was inspected. The general existing-table checks include
+`confirm_single_writer` only for a single-writer design; a multi-writer design uses the bounded
+Writer Contract deployment checks instead.

@@ -103,6 +103,21 @@ the explicit Writer Contract, report `FLINK_EXISTING_EVIDENCE_CONFLICT` and/or
 `FLINK_WRITER_CONTRACT_CONFLICT`, keep reconciliation and change disposition `UNVERIFIED`, and do
 not infer migration work.
 
+Evaluate supplied concurrency observations even when the optional Writer Contract concurrency
+block is absent. Retain them as provenance-bearing `UNVERIFIED` comparisons without promoting
+them into the normalized contract. Continue the capability assessment when the contract itself is
+missing or invalid, so structural incompleteness cannot hide an unsupported bounded combination.
+Before accepting the single-writer branch, also reconcile the active-writer inventory: more than
+one active writer contradicts the desired topology. Treat that snapshot as internally inconsistent
+with `concurrent_writers: false` only when both facts share an evidence source.
+
+For a declared multi-writer topology, an active-writer snapshot may contain any subset of declared
+writer IDs; inactive declared writers are not a mismatch. An undeclared active writer remains a
+Writer Contract conflict. `concurrent_writers` is an operational observation, not proof that every
+declared writer is active, so do not require it to be `true` merely because the desired topology is
+multi-writer. General deployment checks require `confirm_single_writer` only for single-writer
+designs.
+
 Do not silently merge contradictory sources. Preserve provenance in each comparison item.
 
 ## Writer transition
