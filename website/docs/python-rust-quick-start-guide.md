@@ -54,7 +54,7 @@ table = HudiTable.create(
     f"{tempfile.mkdtemp()}/contract_chunks",
     record_key="chunk_id",          # the record-level index is built on this key
     ordering_fields="updated_at",   # the later version wins when a key arrives twice
-    enable_record_index=True,       # on by default; locates keys without scanning files
+    record_index_enabled=True,      # on by default; locates keys without scanning files
 )
 
 base = table.append(chunks(["doc1", "doc2", "doc3"], version=1))
