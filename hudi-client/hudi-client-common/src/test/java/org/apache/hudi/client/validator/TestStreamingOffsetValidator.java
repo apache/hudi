@@ -57,6 +57,8 @@ public class TestStreamingOffsetValidator {
    * Mock implementation of StreamingOffsetValidator for testing.
    */
   private static class MockOffsetValidator extends StreamingOffsetValidator {
+    private boolean offsetConsistencyValidated;
+
     public MockOffsetValidator(TypedProperties config) {
       super(config, CHECKPOINT_KEY, CheckpointFormat.SPARK_KAFKA);
     }
@@ -75,6 +77,18 @@ public class TestStreamingOffsetValidator {
     // Expose validateWithMetadata for testing
     public void testValidateWithMetadata(ValidationContext context) {
       validateWithMetadata(context);
+    }
+
+    @Override
+    protected void validateOffsetConsistency(long offsetDiff, long recordsWritten, long writeErrors,
+                                             String currentCheckpoint, String previousCheckpoint) {
+      offsetConsistencyValidated = true;
+      super.validateOffsetConsistency(offsetDiff, recordsWritten, writeErrors,
+          currentCheckpoint, previousCheckpoint);
+    }
+
+    boolean wasOffsetConsistencyValidated() {
+      return offsetConsistencyValidated;
     }
   }
 
@@ -379,6 +393,56 @@ public class TestStreamingOffsetValidator {
         Option.of(prevMetadata));
 
     assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertTrue(validator.wasOffsetConsistencyValidated());
+  }
+
+  @Test
+  public void testValidateWithMetadataSkipsInconclusiveAddedPartition() {
+    MockOffsetValidator validator = createValidator(0.0, ValidationFailurePolicy.FAIL);
+
+    HoodieCommitMetadata currentMetadata = new HoodieCommitMetadata();
+    currentMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:110,1:5");
+
+    HoodieCommitMetadata prevMetadata = new HoodieCommitMetadata();
+    prevMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:100");
+
+    // The known offset difference is 10, while all 15 source records were written. Comparing
+    // the partial difference with the full write count would incorrectly reject this commit.
+    HoodieWriteStat stat = createWriteStat(15, 0);
+    TestValidationContext context = new TestValidationContext(
+        "20260309120000",
+        Option.of(currentMetadata),
+        Option.of(Collections.singletonList(stat)),
+        false,
+        Option.of(prevMetadata));
+
+    assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertFalse(validator.wasOffsetConsistencyValidated());
+  }
+
+  @Test
+  public void testValidateWithMetadataDoesNotPassCompensatingAddedPartitionCount() {
+    MockOffsetValidator validator = createValidator(0.0, ValidationFailurePolicy.FAIL);
+
+    HoodieCommitMetadata currentMetadata = new HoodieCommitMetadata();
+    currentMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:110,1:5");
+
+    HoodieCommitMetadata prevMetadata = new HoodieCommitMetadata();
+    prevMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:100");
+
+    // A partial difference of 10 would match this aggregate write count even if records from
+    // partition 0 were lost and records from the new partition compensated for them. The
+    // comparison must remain inconclusive instead of being reported as validated.
+    HoodieWriteStat stat = createWriteStat(10, 0);
+    TestValidationContext context = new TestValidationContext(
+        "20260309120000",
+        Option.of(currentMetadata),
+        Option.of(Collections.singletonList(stat)),
+        false,
+        Option.of(prevMetadata));
+
+    assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertFalse(validator.wasOffsetConsistencyValidated());
   }
 
   @Test
@@ -404,6 +468,7 @@ public class TestStreamingOffsetValidator {
 
     assertThrows(HoodieValidationException.class,
         () -> validator.testValidateWithMetadata(context));
+    assertTrue(validator.wasOffsetConsistencyValidated());
   }
 
   @Test

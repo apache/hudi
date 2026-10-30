@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.util.KafkaCheckpointUtils;
 import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.OffsetComparisonResult;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig;
 import org.apache.hudi.config.HoodiePreCommitValidatorConfig.ValidationFailurePolicy;
@@ -153,11 +154,18 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
       return;
     }
 
-    // Calculate offset difference using format-specific logic.
-    // Note: calculateOffsetDifference always returns >= 0 because negative per-partition
-    // diffs (offset resets) are handled internally by using the current offset.
-    long offsetDifference = KafkaCheckpointUtils.calculateOffsetDifference(
+    // Calculate the offset difference using format-specific logic. Checkpoint-only comparison
+    // cannot determine the consumed record count for added, reset, or missing partitions.
+    OffsetComparisonResult offsetComparison = KafkaCheckpointUtils.compareOffsets(
         checkpointFormat, previousCheckpoint, currentCheckpoint);
+    if (!offsetComparison.isExact()) {
+      log.warn("Skipping streaming offset validation because the checkpoint comparison is inconclusive. "
+              + "Known offset difference: {}, added partitions: {}, reset partitions: {}, missing partitions: {}.",
+          offsetComparison.getKnownOffsetDifference(), offsetComparison.getAddedPartitions(),
+          offsetComparison.getResetPartitions(), offsetComparison.getMissingPartitions());
+      return;
+    }
+    long offsetDifference = offsetComparison.getKnownOffsetDifference();
 
     // Get actual new record count from write stats.
     // Use numInserts + numUpdateWrites instead of numWrites to avoid counting records

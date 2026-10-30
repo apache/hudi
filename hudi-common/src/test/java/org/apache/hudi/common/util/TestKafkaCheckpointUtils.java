@@ -20,9 +20,11 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.OffsetComparisonResult;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -175,6 +177,66 @@ public class TestKafkaCheckpointUtils {
     long diff = KafkaCheckpointUtils.calculateOffsetDifference(
         CheckpointFormat.SPARK_KAFKA, previous, current);
     assertEquals(500L, diff);
+  }
+
+  @Test
+  public void testCompareOffsetsExact() {
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.SPARK_KAFKA, "topic,0:100,1:200", "topic,0:150,1:300");
+
+    assertTrue(result.isExact());
+    assertEquals(150L, result.getKnownOffsetDifference());
+    assertTrue(result.getAddedPartitions().isEmpty());
+    assertTrue(result.getResetPartitions().isEmpty());
+    assertTrue(result.getMissingPartitions().isEmpty());
+  }
+
+  @Test
+  public void testCompareOffsetsWithAddedPartitionIsIncomplete() {
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.SPARK_KAFKA, "topic,0:100", "topic,0:150,1:200");
+
+    assertFalse(result.isExact());
+    assertEquals(50L, result.getKnownOffsetDifference());
+    assertEquals(Collections.singleton(1), result.getAddedPartitions());
+    assertTrue(result.getResetPartitions().isEmpty());
+    assertTrue(result.getMissingPartitions().isEmpty());
+  }
+
+  @Test
+  public void testCompareOffsetsWithResetPartitionIsIncomplete() {
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.SPARK_KAFKA, "topic,0:1000,1:2000", "topic,0:100,1:2500");
+
+    assertFalse(result.isExact());
+    assertEquals(500L, result.getKnownOffsetDifference());
+    assertTrue(result.getAddedPartitions().isEmpty());
+    assertEquals(Collections.singleton(0), result.getResetPartitions());
+    assertTrue(result.getMissingPartitions().isEmpty());
+  }
+
+  @Test
+  public void testCompareOffsetsWithMissingPartitionIsIncomplete() {
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.SPARK_KAFKA, "topic,0:100,1:200", "topic,0:150");
+
+    assertFalse(result.isExact());
+    assertEquals(50L, result.getKnownOffsetDifference());
+    assertTrue(result.getAddedPartitions().isEmpty());
+    assertTrue(result.getResetPartitions().isEmpty());
+    assertEquals(Collections.singleton(1), result.getMissingPartitions());
+  }
+
+  @Test
+  public void testCompareFlinkOffsetsWithAddedPartitionIsIncomplete() {
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.FLINK_KAFKA,
+        "kafka_metadata%3Aevents%3A0:100",
+        "kafka_metadata%3Aevents%3A0:150;kafka_metadata%3Aevents%3A1:200");
+
+    assertFalse(result.isExact());
+    assertEquals(50L, result.getKnownOffsetDifference());
+    assertEquals(Collections.singleton(1), result.getAddedPartitions());
   }
 
   @Test
