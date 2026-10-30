@@ -32,6 +32,8 @@ The complete loop for a retrieval or training pipeline: a table of document chun
 changed since the last run.
 
 ```python
+import tempfile
+
 import numpy as np
 import pyarrow as pa
 from hudi import HudiTable, HudiReadOptions, HudiQueryType
@@ -49,7 +51,7 @@ def chunks(doc_ids, version):
     })
 
 table = HudiTable.create(
-    "/tmp/contract_chunks",
+    f"{tempfile.mkdtemp()}/contract_chunks",
     record_key="chunk_id",          # the record-level index is built on this key
     ordering_fields="updated_at",   # the later version wins when a key arrives twice
     enable_record_index=True,       # on by default; locates keys without scanning files
