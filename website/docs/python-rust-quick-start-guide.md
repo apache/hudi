@@ -22,7 +22,9 @@ shows how to query it from Python, Rust, DuckDB, Polars, and DataFusion.
 pip install hudi
 
 # Rust
-cargo add hudi tokio
+cargo add hudi
+cargo add arrow@59
+cargo add tokio@1 --features macros,rt-multi-thread
 ```
 
 ## Write a table in Python
@@ -97,8 +99,8 @@ table.delete_keys(["doc1#0", "doc1#1"])
 The same loop with the `hudi` crate. Batches are Arrow `RecordBatch`es.
 
 ```rust
-use arrow_array::{ArrayRef, Float64Array, Int64Array, RecordBatch, StringArray};
-use arrow_schema::{DataType, Field, Schema};
+use arrow::array::{ArrayRef, Float64Array, Int64Array, RecordBatch, StringArray};
+use arrow::datatypes::{DataType, Field, Schema};
 use hudi::config::table::TableTypeValue;
 use hudi::error::Result;
 use hudi::table::{ReadOptions, Table};
@@ -148,8 +150,8 @@ async fn main() -> Result<()> {
 }
 ```
 
-Both writers produce the same on-disk layout as the Spark writer: a table written here can be read, compacted,
-and clustered by Spark, and vice versa.
+Both writers produce the same on-disk layout as the Spark writer: Spark reads a table written here and runs its
+table services on it (compaction, clustering, cleaning), and hudi-rs reads and writes tables Spark wrote.
 
 ## Compact a merge-on-read table
 
@@ -164,29 +166,40 @@ The metadata table compacts itself.
 <TabItem value="python" label="Python" default>
 
 ```python
-result = table.compact()
-print(result.num_file_groups, result.num_log_files)
+mor = HudiTable.create(
+    f"{tempfile.mkdtemp()}/contract_chunks_mor",
+    record_key="chunk_id",
+    ordering_fields="updated_at",
+    table_type="mor",
+    # Optional: also compact in the write call every 5 delta commits
+    hudi_options={"hoodie.compact.inline": "true"},
+)
+mor.append(chunks(["doc1", "doc2"], version=1))
+mor.upsert(chunks(["doc2"], version=2))  # the updates go to log files
 
-# Or compact automatically: pass the option when creating the table
-table = HudiTable.create("/tmp/trips_mor", record_key="id", table_type="mor",
-                         hudi_options={"hoodie.compact.inline": "true"})
+result = mor.compact()
+print(result.num_file_groups, result.num_log_files)
 ```
 
 </TabItem>
 <TabItem value="rust" label="Rust">
 
 ```rust
-let result = table.compact().await?;
-println!("{} {}", result.num_file_groups, result.num_log_files);
-
-// Or compact automatically: pass the option when creating the table
-let mut table = Table::create("/tmp/trips_mor")
-    .with_table_name("trips")
+let mut mor = Table::create("/tmp/trips_mor")
+    .with_table_name("trips_mor")
     .with_table_type(TableTypeValue::MergeOnRead)
     .with_record_key_fields(["id"])
+    .with_partition_fields(["city"])
+    .with_ordering_fields(["ts"])
+    // Optional: also compact in the write call every 5 delta commits
     .with_option("hoodie.compact.inline", "true")
     .create()
     .await?;
+mor.append([trips(&[("t1", "sf", 1, 30.0), ("t2", "nyc", 1, 20.0)])]).await?;
+mor.upsert([trips(&[("t1", "sf", 2, 31.0)])]).await?; // the update goes to a log file
+
+let result = mor.compact().await?;
+println!("{} {}", result.num_file_groups, result.num_log_files); // 1 1
 ```
 
 </TabItem>
@@ -325,7 +338,7 @@ In Rust, the `datafusion` feature of the `hudi` crate registers a Hudi table as 
 
 ```shell
 cargo new my_project --bin && cd my_project
-cargo add tokio@1 datafusion
+cargo add tokio@1 datafusion@55  # the DataFusion major hudi 0.6 builds against
 cargo add hudi --features datafusion
 ```
 
@@ -396,15 +409,12 @@ let reader = HudiTableBuilder::from_base_uri("s3://bucket/trips")
 
 For engines that plan their own scans, hudi-rs exposes the planning and execution primitives directly.
 
-| Stage           | API                                       | Description                                                                    |
-|-----------------|-------------------------------------------|--------------------------------------------------------------------------------|
-| Query planning  | `get_file_slices()`                       | For snapshot query, get a list of file slices.                                 |
-|                 | `get_file_slices_splits()`                | For snapshot query, get a list of file slices in splits.                       |
-|                 | `get_file_slices_as_of()`                 | For time-travel query, get a list of file slices at a given time.              |
-|                 | `get_file_slices_splits_as_of()`          | For time-travel query, get a list of file slices in splits at a given time.    |
-|                 | `get_file_slices_between()`               | For incremental query, get a list of changed file slices between a time range. |
-| Query execution | `create_file_group_reader_with_options()` | Create a file group reader instance with the table instance's configs.         |
-| Query execution | `read_file_slice()`                       | Read a file slice, merging base and log files per the table's merge strategy.  |
+| Stage           | API                                                | Description                                                                                         |
+|-----------------|----------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| Query planning  | `get_file_slices(options)`                         | The file slices a read targets, dispatched on the query type (snapshot, time travel, incremental).  |
+|                 | `compute_table_stats(options)`                     | Estimated row count and byte size for scan planning, from the metadata table (snapshot only).       |
+| Query execution | `create_file_group_reader_with_options()`          | A file group reader with the table's configs; pass the same read options used for `get_file_slices`. |
+|                 | `read_file_slice()` / `read_file_slice_stream()`   | Read one file slice, merging base and log files per the table's merge strategy.                     |
 
 ## Resources
 
@@ -419,6 +429,7 @@ For engines that plan their own scans, hudi-rs exposes the planning and executio
   [`docs/writer-design.md`](https://github.com/apache/hudi-rs/blob/main/docs/writer-design.md).
 - Packages: [PyPI](https://pypi.org/project/hudi/) and [crates.io](https://crates.io/crates/hudi). Source:
   [github.com/apache/hudi-rs](https://github.com/apache/hudi-rs).
+- Hudi concepts (timeline, table types, query types): [overview](overview).
 
 ## Contributing
 
