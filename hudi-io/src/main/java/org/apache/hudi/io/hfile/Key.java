@@ -48,11 +48,28 @@ public class Key implements Comparable<Key> {
   }
 
   public int getContentOffset() {
-    return getOffset() + CONTENT_LENGTH_SIZE;
+    return contentOffset(getOffset());
   }
 
   public int getContentLength() {
-    return readShort(bytes, getOffset());
+    return contentLength(bytes, getOffset());
+  }
+
+  /**
+   * @param keyOffset offset of a serialized key in its backing buffer.
+   * @return offset of the key content, which follows the 2-byte content length.
+   */
+  static int contentOffset(int keyOffset) {
+    return keyOffset + CONTENT_LENGTH_SIZE;
+  }
+
+  /**
+   * @param bytes     backing buffer of a serialized key.
+   * @param keyOffset offset of the serialized key in {@code bytes}.
+   * @return length of the key content, read from its 2-byte prefix.
+   */
+  static int contentLength(byte[] bytes, int keyOffset) {
+    return readShort(bytes, keyOffset);
   }
 
   public String getContentInString() {
