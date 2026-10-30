@@ -50,11 +50,14 @@ github:
         contexts:
           # Only contexts that report on every PR and every merge-queue group may be listed: a
           # context left without a run to report it blocks merges indefinitely (#18598).
-          # The per-job test contexts are not listed. Required Checks in ci.yml aggregates
-          # bot.yml and java_ci_engines.yml, so resharding their jobs never touches this file.
+          # The per-job test contexts are not listed. Each Java CI workflow ends with one aggregate
+          # job over all of its jobs, so resharding a workflow never touches this file. There is
+          # one aggregate per workflow, not one for both, because the ASF Actions policy caps the
+          # jobs running at once per workflow at 20 (15 recommended).
           # validate-pr-and-source runs the PR metadata and source release checks in one job.
           - validate-pr-and-source
-          - Required Checks
+          - Java CI result
+          - Java CI Engines result
   # Raw GitHub Rulesets API payload, as in apache/arrow-rs and apache/datafusion-comet.
   # Rulesets and classic branch protection apply together.
   rulesets:
