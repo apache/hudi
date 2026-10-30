@@ -31,7 +31,11 @@ function workflow(name) {
   }));
 }
 const bridgeWorkflow = workflow('fork_ci_status.yml');
-const ciWorkflow = workflow('ci.yml');
+// The two Java CI workflows the bridge mirrors, each with the id of its aggregate job.
+const javaCi = [
+  { file: 'bot.yml', name: 'Java CI', aggregate: 'java-ci-result' },
+  { file: 'java_ci_engines.yml', name: 'Java CI Engines', aggregate: 'java-ci-engines-result' },
+].map((item) => ({ ...item, workflow: workflow(item.file) }));
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const bridge = new AsyncFunction('github', 'context', 'core', 'Date',
   bridgeWorkflow.jobs.bridge.steps[0].with.script);
@@ -53,14 +57,21 @@ const run = (id = 1, extra = {}) => ({
   ...extra,
 });
 
+// runs and workflowState describe bot.yml; java_ci_engines.yml has the same unless engineRuns or
+// engineWorkflowState says otherwise.
 async function execute({
   event = 'schedule', checks = [], runs = [run()], workflowState = 'active',
+  engineRuns = runs, engineWorkflowState = workflowState,
   recent = [pr], slice = [pr], candidates = [pr], repo = 'hudi',
   owner = 'apache', runError, count = 1, notification = {}, checkErrors = {},
 } = {}) {
   const writes = [], calls = [], failures = [];
   let sweepPage;
   const github = { rest: { checks: {}, actions: {}, pulls: {} } };
+  const byWorkflow = (id, bot, engines) => {
+    assert.ok(['bot.yml', 'java_ci_engines.yml'].includes(id), id);
+    return id === 'bot.yml' ? bot : engines;
+  };
   github.rest.checks.listForRef = async () => {};
   github.rest.pulls.list = async (params) => {
     calls.push(['pulls', params]);
@@ -75,15 +86,15 @@ async function execute({
   github.rest.actions.listWorkflowRuns = async (params) => {
     calls.push(['runs', params]);
     assert.equal(params.owner, 'contributor');
-    assert.equal(params.workflow_id, 'ci.yml');
     assert.equal(params.head_sha, sha);
     assert.equal(params.branch, 'feature');
     if (runError) throw Object.assign(new Error('API failure'), { status: runError });
-    return { data: { workflow_runs: runs } };
+    return { data: { workflow_runs: byWorkflow(params.workflow_id, runs, engineRuns) } };
   };
-  github.rest.actions.getWorkflow = async () => {
-    if (workflowState === null) throw Object.assign(new Error('Not Found'), { status: 404 });
-    return { data: { state: workflowState } };
+  github.rest.actions.getWorkflow = async (params) => {
+    const state = byWorkflow(params.workflow_id, workflowState, engineWorkflowState);
+    if (state === null) throw Object.assign(new Error('Not Found'), { status: 404 });
+    return { data: { state } };
   };
   github.rest.checks.create = async (payload) => writes.push({ method: 'create', ...payload });
   github.rest.checks.update = async (payload) => writes.push({ method: 'update', ...payload });
@@ -163,7 +174,7 @@ for (const [state, expected] of [
     assert.equal(writes[0].conclusion, expected);
     assert.match(writes[0].output.summary, /Enable workflows/);
     assert.match(writes[0].output.summary, /only docs or images is skipped by the path filter/);
-    assert.equal(JSON.parse(writes[0].output.text).run_id, null);
+    assert.deepEqual(JSON.parse(writes[0].output.text).runs.map((item) => item.run_id), [null, null]);
   });
 }
 test('a missing workflow endpoint is handled as missing CI', async () => {
@@ -216,7 +227,7 @@ test('a rerun of the same workflow run updates the existing check', async () => 
   assert.equal(writes[0].method, 'update');
   assert.equal(writes[0].check_run_id, 100);
   assert.equal(writes[0].conclusion, 'success');
-  assert.equal(JSON.parse(writes[0].output.text).run_attempt, 2);
+  assert.deepEqual(JSON.parse(writes[0].output.text).runs.map((item) => item.run_attempt), [2, 2]);
 });
 test('a manual run can replace a failed push run', async () => {
   const check = await existing(run(1, { conclusion: 'failure' }));
@@ -272,7 +283,8 @@ test('the sweep reaches old PRs beyond 500 open PRs', async () => {
 });
 test('an active PR appearing in both lists is polled once', async () => {
   const { calls } = await execute();
-  assert.equal(calls.filter(([kind]) => kind === 'runs').length, 1);
+  assert.deepEqual(calls.filter(([kind]) => kind === 'runs').map(([, params]) => params.workflow_id),
+    ['bot.yml', 'java_ci_engines.yml']);
 });
 test('no open PRs means no fork API calls', async () => {
   const result = await execute({ count: 0 });
@@ -280,11 +292,102 @@ test('no open PRs means no fork API calls', async () => {
   assert.deepEqual(result.writes, []);
 });
 
+// One check combines the fork's runs of both workflows.
+const runUrl = (id) => 'https://github.com/contributor/hudi/actions/runs/' + id;
+test('two successful runs report success, link both and record both', async () => {
+  const { writes } = await execute({ runs: [run(1)], engineRuns: [run(2, { run_attempt: 3 })] });
+  assert.equal(writes[0].status, 'completed');
+  assert.equal(writes[0].conclusion, 'success');
+  assert.equal(writes[0].details_url, runUrl(1));
+  assert.ok(writes[0].output.summary.includes('- [Java CI](' + runUrl(1) + '): success'));
+  assert.ok(writes[0].output.summary.includes('- [Java CI Engines](' + runUrl(2) + '): success'));
+  assert.deepEqual(JSON.parse(writes[0].output.text).runs, [
+    { workflow: 'bot.yml', run_id: 1, run_attempt: 1 },
+    { workflow: 'java_ci_engines.yml', run_id: 2, run_attempt: 3 },
+  ]);
+});
+test('one failed run fails the combined check, whichever workflow it is', async () => {
+  for (const [bot, engines] of [['failure', 'success'], ['success', 'failure']]) {
+    const { writes } = await execute({
+      runs: [run(1, { conclusion: bot })], engineRuns: [run(2, { conclusion: engines })],
+    });
+    assert.equal(writes[0].conclusion, 'failure', bot + ',' + engines);
+    assert.equal(writes[0].details_url, runUrl(1));
+  }
+});
+test('the worst conclusion of the two runs wins', async () => {
+  const order = ['failure', 'timed_out', 'cancelled', 'action_required', 'neutral', 'skipped', 'success'];
+  for (const [index, worse] of order.entries()) {
+    for (const better of order.slice(index)) {
+      for (const [bot, engines] of [[worse, better], [better, worse]]) {
+        const { writes } = await execute({
+          runs: [run(1, { conclusion: bot })], engineRuns: [run(2, { conclusion: engines })],
+        });
+        assert.equal(writes[0].conclusion, worse, bot + ',' + engines);
+      }
+    }
+  }
+});
+test('the combined check stays in progress until both runs complete', async () => {
+  for (const status of ['queued', 'in_progress']) {
+    for (const [bot, engines] of [
+      [run(1), run(2, { status, conclusion: null })],
+      [run(1, { status, conclusion: null }), run(2, { conclusion: 'failure' })],
+    ]) {
+      const { writes } = await execute({ runs: [bot], engineRuns: [engines] });
+      assert.equal(writes[0].status, 'in_progress');
+      assert.equal(writes[0].conclusion, undefined);
+      assert.match(writes[0].output.summary, new RegExp(': ' + status + '$', 'm'));
+    }
+  }
+  const check = await existing(run(1, { status: 'in_progress', conclusion: null }));
+  const { writes } = await execute({ checks: [check], slice: [], runs: [run(1)], engineRuns: [run(2)] });
+  assert.equal(writes[0].status, 'completed');
+  assert.equal(writes[0].conclusion, 'success');
+});
+test('a missing run of one workflow reports no fork CI run and links the other run', async () => {
+  const { writes } = await execute({ runs: [run(1, { conclusion: 'failure' })], engineRuns: [] });
+  assert.equal(writes[0].conclusion, 'neutral');
+  assert.equal(writes[0].output.title, 'No fork CI run for this commit');
+  assert.match(writes[0].output.summary, /^No Java CI Engines run was found for /);
+  assert.ok(writes[0].output.summary.includes('- [Java CI](' + runUrl(1) + '): failure'));
+  assert.match(writes[0].output.summary, /only docs or images is skipped by the path filter/);
+  assert.equal(writes[0].details_url, runUrl(1));
+  assert.deepEqual(JSON.parse(writes[0].output.text).runs.map((item) => item.run_id), [1, null]);
+});
+test('a completed check missing one run keeps being polled outside the sweep slice', async () => {
+  const missing = await execute({ engineRuns: [] });
+  const check = { ...await existing(), ...missing.writes[0] };
+  const { writes } = await execute({ checks: [check], slice: [], engineRuns: [run(2)] });
+  assert.equal(writes[0].conclusion, 'success');
+});
+test('one disabled or missing workflow asks the contributor to enable CI', async () => {
+  for (const options of [
+    { engineRuns: [], engineWorkflowState: 'disabled_manually' },
+    { engineRuns: [], engineWorkflowState: null },
+    { runs: [], engineRuns: [run(2)], workflowState: 'disabled_fork', engineWorkflowState: 'active' },
+  ]) {
+    const { writes } = await execute(options);
+    assert.equal(writes[0].conclusion, 'action_required', JSON.stringify(options));
+    assert.equal(writes[0].output.title, 'Enable CI on your fork');
+    assert.equal(writes[0].details_url, 'https://github.com/contributor/hudi/actions');
+  }
+});
+test('a rerun of one workflow updates the combined check', async () => {
+  const check = await existing();
+  const { writes } = await execute({
+    checks: [check], engineRuns: [run(1, { run_attempt: 2, conclusion: 'failure' })],
+  });
+  assert.equal(writes[0].method, 'update');
+  assert.equal(writes[0].conclusion, 'failure');
+  assert.deepEqual(JSON.parse(writes[0].output.text).runs.map((item) => item.run_attempt), [1, 2]);
+});
 
-// Evaluates the ci.yml expressions as JavaScript, which shares their syntax for the operators used
-// there. Hyphenated job ids become bracket lookups.
+
+// Evaluates the bot.yml and java_ci_engines.yml expressions as JavaScript, which shares their
+// syntax for the operators used there. needs.*.result becomes the list of the job results.
 function evaluate(expression, scope) {
-  const body = expression.replace(/needs\.([\w-]+)/g, "needs['$1']");
+  const body = expression.replace(/needs\.\*\.result/g, 'Object.values(needs).map((job) => job.result)');
   return new Function(...Object.keys(scope), 'return (' + body + ');')(...Object.values(scope));
 }
 function interpolate(value, scope) {
@@ -292,17 +395,23 @@ function interpolate(value, scope) {
   if (whole) return evaluate(whole[1], scope);
   return value.replace(/\$\{\{((?:(?!\}\})[\s\S])*)\}\}/g, (_, expression) => evaluate(expression, scope));
 }
-const functions = { always: () => true, startsWith: (text, prefix) => text.startsWith(prefix) };
-const group = (github) => interpolate(ciWorkflow.concurrency.group, { github });
-const cancels = (github) => interpolate(ciWorkflow.concurrency['cancel-in-progress'], { github });
-const jobIf = (job, github) => interpolate(ciWorkflow.jobs[job].if, { github, ...functions });
+const functions = {
+  always: () => true,
+  startsWith: (text, prefix) => text.startsWith(prefix),
+  contains: (list, item) => list.includes(item),
+};
+const withName = (ci, github) => ({ ...github, workflow: ci.name });
+const group = (ci, github) => interpolate(ci.workflow.concurrency.group, { github: withName(ci, github) });
+const cancels = (ci, github) => interpolate(ci.workflow.concurrency['cancel-in-progress'], { github: withName(ci, github) });
+const jobIf = (ci, job, github) => interpolate(ci.workflow.jobs[job].if, { github: withName(ci, github), ...functions });
+const testJobs = (ci) => Object.keys(ci.workflow.jobs).filter((job) => job !== ci.aggregate);
 // GitHub expressions resolve absent properties to an empty string.
 function context({
   event_name, repository = 'apache/hudi', ref = 'refs/heads/feature', sha = 'first',
   number = '', head = '', base_ref = '',
 }) {
   return {
-    workflow: 'CI', event_name, repository, ref, sha, base_ref,
+    event_name, repository, ref, sha, base_ref,
     event: { pull_request: { number, head: { repo: { full_name: head } } } },
   };
 }
@@ -314,8 +423,26 @@ const queue = context({ event_name: 'merge_group', ref: 'refs/heads/gh-readonly-
 const forkPush = context({ event_name: 'push', repository: 'contributor/hudi' });
 const upstreamPush = (branch) => context({ event_name: 'push', ref: 'refs/heads/' + branch });
 
-// [case, context, whether the suites run, whether Required Checks runs]
-for (const [name, github, suites, required] of [
+const FORK_PR = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master'";
+const UPSTREAM_OTHER_PUSH = "github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x'";
+// PyYAML resolves the `*route` aliases, so every test job shows the expanded condition.
+test('every test job carries the route condition, and the aggregate job does not', () => {
+  for (const ci of javaCi) {
+    const jobs = testJobs(ci);
+    assert.ok(jobs.length > 1, ci.file);
+    for (const job of jobs) {
+      assert.equal(ci.workflow.jobs[job].if, '${{ !(' + FORK_PR + ') && !(' + UPSTREAM_OTHER_PUSH + ') }}', ci.file + ' ' + job);
+    }
+    const aggregate = ci.workflow.jobs[ci.aggregate];
+    assert.equal(aggregate.if, '${{ always() && !(' + UPSTREAM_OTHER_PUSH + ') }}', ci.file);
+    assert.equal(aggregate.env.FORK_PR, '${{ ' + FORK_PR + ' }}', ci.file);
+    // A test job missing from needs would never fail the aggregate.
+    assert.deepEqual([...aggregate.needs].sort(), [...jobs].sort(), ci.file);
+  }
+});
+
+// [case, context, whether the test jobs run, whether the aggregate job runs]
+for (const [name, github, tests, aggregate] of [
   ['fork PR to master', forkPr, false, true],
   ['fork PR to release-1.2', { ...forkPr, base_ref: 'release-1.2' }, true, true],
   ['fork PR to branch-0.x', { ...forkPr, base_ref: 'branch-0.x' }, true, true],
@@ -331,57 +458,83 @@ for (const [name, github, suites, required] of [
   ['manual run on an upstream branch', context({ event_name: 'workflow_dispatch' }), true, true],
 ]) {
   test('routes ' + name, () => {
-    for (const job of ['java-ci', 'java-ci-engines']) assert.equal(jobIf(job, github), suites, job);
-    assert.equal(jobIf('required-checks', github), required);
+    for (const ci of javaCi) {
+      for (const job of testJobs(ci)) assert.equal(jobIf(ci, job, github), tests, ci.file + ' ' + job);
+      assert.equal(jobIf(ci, ci.aggregate, github), aggregate, ci.file + ' ' + ci.aggregate);
+    }
   });
 }
-function requiredChecksFail(github, javaCi, javaCiEngines) {
-  const job = ciWorkflow.jobs['required-checks'];
+function aggregateFails(ci, github, results) {
+  const job = ci.workflow.jobs[ci.aggregate];
   const env = { FORK_PR: String(interpolate(job.env.FORK_PR, { github })) };
-  const step = job.steps.find((item) => item.name === 'Fail unless both workflows succeeded');
-  const needs = { 'java-ci': { result: javaCi }, 'java-ci-engines': { result: javaCiEngines } };
-  return interpolate(step.if, { github, env, needs });
+  const step = job.steps.find((item) => item.name === 'Fail unless every job succeeded');
+  const needs = Object.fromEntries(results.map((result, index) => ['job-' + index, { result }]));
+  return interpolate(step.if, { github, env, needs, ...functions });
 }
-test('Required Checks accepts skipped suites only on fork PRs to master', () => {
-  assert.equal(requiredChecksFail(forkPr, 'skipped', 'skipped'), false);
-  for (const results of [['skipped', 'failure'], ['cancelled', 'skipped']]) {
-    assert.equal(requiredChecksFail(forkPr, ...results), true, results.join());
-  }
-  for (const github of [upstreamPr, queue, forkPush, upstreamPush('master')]) {
-    assert.equal(requiredChecksFail(github, 'success', 'success'), false);
-    for (const results of [['skipped', 'skipped'], ['success', 'skipped'], ['failure', 'success']]) {
-      assert.equal(requiredChecksFail(github, ...results), true, results.join());
+test('the aggregate jobs accept skipped test jobs only on fork PRs to master', () => {
+  for (const ci of javaCi) {
+    assert.equal(aggregateFails(ci, forkPr, ['skipped', 'skipped', 'skipped']), false, ci.file);
+    for (const results of [['skipped', 'failure'], ['cancelled', 'skipped'], ['success', 'skipped'], ['success', 'success']]) {
+      assert.equal(aggregateFails(ci, forkPr, results), true, ci.file + ' ' + results.join());
     }
+    for (const github of [upstreamPr, queue, forkPush, upstreamPush('master'), { ...forkPr, base_ref: 'release-1.2' }]) {
+      assert.equal(aggregateFails(ci, github, ['success', 'success', 'success']), false, ci.file);
+      for (const results of [['skipped', 'skipped'], ['success', 'skipped'], ['failure', 'success'], ['success', 'cancelled']]) {
+        assert.equal(aggregateFails(ci, github, results), true, ci.file + ' ' + results.join());
+      }
+    }
+  }
+});
+test('each aggregate job links the fork run of its own workflow on fork PRs', () => {
+  for (const ci of javaCi) {
+    const step = ci.workflow.jobs[ci.aggregate].steps.find((item) => item.name === 'Link to fork CI');
+    assert.equal(evaluate(step.if, { env: { FORK_PR: 'true' } }), true);
+    assert.equal(evaluate(step.if, { env: { FORK_PR: 'false' } }), false);
+    assert.ok(step.run.includes('/actions/workflows/' + ci.file + ')'), ci.file);
+    assert.doesNotMatch(step.run, /\$\{\{/, ci.file);
   }
 });
 
 test('successive fork pushes share a cancellation group, separate branches do not', () => {
-  assert.equal(cancels(forkPush), true);
-  assert.equal(group(forkPush), group({ ...forkPush, sha: 'second' }));
-  assert.notEqual(group(forkPush), group({ ...forkPush, ref: 'refs/heads/other' }));
+  for (const ci of javaCi) {
+    assert.equal(cancels(ci, forkPush), true);
+    assert.equal(group(ci, forkPush), group(ci, { ...forkPush, sha: 'second' }));
+    assert.notEqual(group(ci, forkPush), group(ci, { ...forkPush, ref: 'refs/heads/other' }));
+  }
+});
+test('the two workflows never share a concurrency group', () => {
+  for (const github of [forkPush, forkPr, queue, upstreamPush('master')]) {
+    assert.notEqual(group(javaCi[0], github), group(javaCi[1], github));
+  }
 });
 // Unlike arrow-rs, event_name keeps manual runs apart from push runs, on forks as upstream.
 test('fork manual runs neither replace nor cancel push runs', () => {
-  const manual = { ...forkPush, event_name: 'workflow_dispatch' };
-  assert.equal(cancels(manual), false);
-  assert.notEqual(group(forkPush), group(manual));
-  assert.notEqual(group(manual), group({ ...manual, ref: 'refs/heads/other' }));
-  assert.notEqual(group(manual), group(forkPr));
+  for (const ci of javaCi) {
+    const manual = { ...forkPush, event_name: 'workflow_dispatch' };
+    assert.equal(cancels(ci, manual), false);
+    assert.notEqual(group(ci, forkPush), group(ci, manual));
+    assert.notEqual(group(ci, manual), group(ci, { ...manual, ref: 'refs/heads/other' }));
+    assert.notEqual(group(ci, manual), group(ci, forkPr));
+  }
 });
 test('upstream pushes and merge queue runs remain separate per commit and never cancel', () => {
-  const push = upstreamPush('master');
-  assert.equal(cancels(push), false);
-  assert.notEqual(group(push), group({ ...push, sha: 'second' }));
-  // Each queue entry has a ref of its own, which names the PR and the commit.
-  assert.equal(cancels(queue), false);
-  assert.notEqual(group(queue), group({
-    ...queue, ref: 'refs/heads/gh-readonly-queue/master/pr-2-second', sha: 'second',
-  }));
-  for (const event_name of ['workflow_dispatch', 'merge_group']) {
-    assert.notEqual(group(push), group({ ...push, event_name }));
+  for (const ci of javaCi) {
+    const push = upstreamPush('master');
+    assert.equal(cancels(ci, push), false);
+    assert.notEqual(group(ci, push), group(ci, { ...push, sha: 'second' }));
+    // Each queue entry has a ref of its own, which names the PR and the commit.
+    assert.equal(cancels(ci, queue), false);
+    assert.notEqual(group(ci, queue), group(ci, {
+      ...queue, ref: 'refs/heads/gh-readonly-queue/master/pr-2-second', sha: 'second',
+    }));
+    for (const event_name of ['workflow_dispatch', 'merge_group']) {
+      assert.notEqual(group(ci, push), group(ci, { ...push, event_name }));
+    }
   }
 });
 test('same-named branches from different fork PRs cannot cancel each other', () => {
-  assert.equal(cancels(forkPr), true);
-  assert.notEqual(group(forkPr), group({ ...forkPr, event: { pull_request: { number: 2 } } }));
+  for (const ci of javaCi) {
+    assert.equal(cancels(ci, forkPr), true);
+    assert.notEqual(group(ci, forkPr), group(ci, { ...forkPr, event: { pull_request: { number: 2 } } }));
+  }
 });
