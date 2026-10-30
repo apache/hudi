@@ -226,6 +226,9 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    */
   HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata);
 
+  HoodieInstant transitionCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata,
+                                                       TableFormatCompletionAction tableFormatCompletionAction);
+
   /**
    * Transition Log Compaction State from inflight to Committed.
    *
@@ -235,6 +238,9 @@ public interface HoodieActiveTimeline extends HoodieTimeline {
    * @return commit instant
    */
   HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata);
+
+  HoodieInstant transitionLogCompactionInflightToComplete(boolean shouldLock, HoodieInstant inflightInstant, HoodieCommitMetadata metadata,
+                                                          TableFormatCompletionAction tableFormatCompletionAction);
 
   //-----------------------------------------------------------------
   //      END - COMPACTION RELATED META-DATA MANAGEMENT
