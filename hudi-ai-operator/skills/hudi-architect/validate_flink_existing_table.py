@@ -345,11 +345,11 @@ def _normalize_fact(
         "write_concurrency_mode": CONCURRENCY_MODES,
         "lock_configuration_consistency": LOCK_CONFIGURATION_CONSISTENCY,
     }
-    allowed = enum_values.get(name)
-    if allowed is not None and normalized not in allowed:
+    allowed_enum_values = enum_values.get(name)
+    if allowed_enum_values is not None and normalized not in allowed_enum_values:
         assessment.add(
             "FLINK_EXISTING_EVIDENCE_INVALID",
-            f"{field} must be one of {sorted(allowed)}",
+            f"{field} must be one of {sorted(allowed_enum_values)}",
         )
         return None
     return normalized
