@@ -133,7 +133,12 @@ async fn main() -> Result<()> {
     table.append([trips(&[("t1", "sf", 1, 30.0), ("t2", "sf", 1, 45.0), ("t3", "nyc", 1, 20.0)])]).await?;
 
     let result = table.upsert([trips(&[("t2", "sf", 2, 50.0), ("t4", "nyc", 2, 15.0)])]).await?;
-    println!("instant={} updates={} inserts={}", result.instant, result.num_updates, result.num_inserts);
+    println!(
+        "instant={} updates={} inserts={}",
+        result.requested_time.as_deref().unwrap_or("none"),
+        result.num_updates,
+        result.num_inserts
+    );
 
     table.delete("id = 't1'").await?;
 
