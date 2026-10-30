@@ -251,6 +251,27 @@ class TestNineToEightDowngradeHandler {
     }
   }
 
+  static Stream<Arguments> singleOrderingFieldCases() {
+    return Stream.of(
+        Arguments.of(null, "ts", "ts"),
+        // a reader below version 9 would look for a field named "ts," with the separator kept
+        Arguments.of(null, "ts,", "ts"),
+        // the binlog file and position the payload orders on since version 9 map back to its single sequence field
+        Arguments.of(MySqlDebeziumAvroPayload.class.getName(), MySqlDebeziumAvroPayload.ORDERING_FIELDS, DebeziumConstants.ADDED_SEQ_COL_NAME));
+  }
+
+  @ParameterizedTest
+  @MethodSource("singleOrderingFieldCases")
+  void testDowngradeRecordsSingleOrderingFieldUnderPrecombineKey(String legacyPayloadClass, String orderingFields, String precombineField) {
+    try (MockedStatic<UpgradeDowngradeUtils> ignored = Mockito.mockStatic(UpgradeDowngradeUtils.class)) {
+      when(tableConfig.getLegacyPayloadClass()).thenReturn(legacyPayloadClass);
+      when(tableConfig.getOrderingFieldsStr()).thenReturn(Option.of(orderingFields));
+      UpgradeDowngrade.TableConfigChangeSet changeSet = handler.downgrade(config, context, "anyInstant", upgradeDowngradeHelper);
+      assertEquals(precombineField, changeSet.propertiesToUpdate().get(HoodieTableConfig.PRECOMBINE_FIELD));
+      assertTrue(changeSet.propertiesToDelete().contains(HoodieTableConfig.ORDERING_FIELDS));
+    }
+  }
+
   @Test
   void testDowngradeDropsOnlyV2OrAboveIndexes() {
     // Use try-with-resources to ensure the static mock is closed
