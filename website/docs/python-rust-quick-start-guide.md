@@ -1,183 +1,346 @@
 ---
 title: "Python/Rust Quick Start"
 toc: true
-last_modified_at: 2024-11-28T12:53:57+08:00
+last_modified_at: 2026-10-30T00:00:00-07:00
 ---
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide will help you get started with [Hudi-rs](https://github.com/apache/hudi-rs), the native Rust implementation for Apache Hudi with Python bindings. Learn how to install, set up, and perform basic operations using both Python and Rust interfaces.
+[hudi-rs](https://github.com/apache/hudi-rs) is the native Rust implementation of Apache Hudi with Python bindings.
+It creates Hudi tables and runs upserts, updates, and deletes on them from a single process, with no JVM and no
+Spark. Every write maintains the table's metadata table and record-level index, so updating or deleting a handful
+of rows in a large table costs a few index lookups and the rewrite of the file groups that hold those rows, not a
+scan of the table.
+
+This page gets you from `pip install` to a table you can upsert into, delete from, and read incrementally, then
+shows how to query it from Python, Rust, DuckDB, Polars, and DataFusion.
 
 ## Installation
 
 ```bash
-# Python
+# Python (3.10+)
 pip install hudi
 
 # Rust
 cargo add hudi
+cargo add arrow@59
+cargo add tokio@1 --features macros,rt-multi-thread
 ```
 
-## Usage Examples
+## Write a table in Python
 
-> [!NOTE]
-> These examples expect a Hudi table exists at `/tmp/trips_table`, created using
-> the [quick start guide](quick-start-guide.md).
-
-### Snapshot Query
-
-Snapshot query reads the latest version of the data from the table. The table API also accepts partition filters.
-
-#### Python
+The complete loop for a retrieval or training pipeline: a table of document chunks with their embeddings, keyed by
+`chunk_id`. Ingest, re-sync the documents that changed, drop the ones that were removed, and read back only what
+changed since the last run.
 
 ```python
-from hudi import HudiTableBuilder
+import tempfile
+
+import numpy as np
 import pyarrow as pa
+from hudi import HudiTable, HudiReadOptions, HudiQueryType
 
-hudi_table = HudiTableBuilder.from_base_uri("/tmp/trips_table").build()
-batches = hudi_table.read_snapshot(filters=[("city", "=", "san_francisco")])
+def chunks(doc_ids, version):
+    rows = [(f"{d}#{i}", d, i, f"chunk {i} of {d}, version {version}") for d in doc_ids for i in range(4)]
+    embeddings = np.random.default_rng(version).random((len(rows), 384), dtype=np.float32)
+    return pa.table({
+        "chunk_id":   [r[0] for r in rows],
+        "doc_id":     [r[1] for r in rows],
+        "pos":        pa.array([r[2] for r in rows], pa.int32()),
+        "text":       [r[3] for r in rows],
+        "embedding":  pa.array(embeddings.tolist(), pa.list_(pa.float32())),
+        "updated_at": pa.array([version] * len(rows), pa.int64()),
+    })
 
-# convert to PyArrow table
-arrow_table = pa.Table.from_batches(batches)
-result = arrow_table.select(["rider", "city", "ts", "fare"])
-print(result)
+table = HudiTable.create(
+    f"{tempfile.mkdtemp()}/contract_chunks",
+    record_key="chunk_id",          # the record-level index is built on this key
+    ordering_fields="updated_at",   # the later version wins when a key arrives twice
+    record_index_enabled=True,      # on by default; locates keys without scanning files
+)
+
+base = table.append(chunks(["doc1", "doc2", "doc3"], version=1))
+
+# doc2 changed: re-embed its chunks and upsert them. The index finds the file
+# groups holding these keys; nothing else in the table is read.
+result = table.upsert(chunks(["doc2"], version=2))
+print(result.num_updates, result.num_inserts)   # 4 0
+
+# doc3 was removed: delete its chunks.
+table.delete("doc_id = 'doc3'")
+
+# Train on what changed after the initial load, not on the whole table.
+changed = table.read(
+    HudiReadOptions()
+    .with_query_type(HudiQueryType.Incremental)
+    .with_start_timestamp(base.completion_time)
+)
+print(pa.Table.from_batches(changed).num_rows)   # 4, the re-embedded chunks of doc2
+
+# Query the current snapshot with DuckDB (or Polars, pandas, anything Arrow).
+import duckdb
+snapshot = pa.Table.from_batches(table.read())
+duckdb.sql("SELECT doc_id, count(*) AS chunks FROM snapshot GROUP BY doc_id ORDER BY doc_id").show()
 ```
 
-#### Rust
+`append`, `upsert`, and `overwrite` accept a `pyarrow.Table`, `pyarrow.RecordBatch`, `pyarrow.RecordBatchReader`,
+or any object that implements the Arrow PyCapsule interface, so a Polars DataFrame or a pandas 2.2+ DataFrame can
+be passed directly. Embeddings may arrive as `list<float32>` or `fixed_size_list<float32>`; both are stored as lists.
+
+`update` sets columns by predicate and `delete_keys` deletes by key:
+
+```python
+table.update("doc_id = 'doc1'", {"text": "redacted"})
+table.delete_keys(["doc1#0", "doc1#1"])
+```
+
+## Write a table in Rust
+
+The same loop with the `hudi` crate. Batches are Arrow `RecordBatch`es.
 
 ```rust
+use arrow::array::{ArrayRef, Float64Array, Int64Array, RecordBatch, StringArray};
+use arrow::datatypes::{DataType, Field, Schema};
+use hudi::config::table::TableTypeValue;
 use hudi::error::Result;
-use hudi::table::builder::TableBuilder as HudiTableBuilder;
-use arrow::compute::concat_batches;
+use hudi::table::{ReadOptions, Table};
+use std::sync::Arc;
+
+fn trips(rows: &[(&str, &str, i64, f64)]) -> RecordBatch {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("id", DataType::Utf8, false),
+        Field::new("city", DataType::Utf8, false),
+        Field::new("ts", DataType::Int64, false),
+        Field::new("fare", DataType::Float64, false),
+    ]));
+    RecordBatch::try_new(schema, vec![
+        Arc::new(StringArray::from(rows.iter().map(|r| r.0).collect::<Vec<_>>())) as ArrayRef,
+        Arc::new(StringArray::from(rows.iter().map(|r| r.1).collect::<Vec<_>>())),
+        Arc::new(Int64Array::from(rows.iter().map(|r| r.2).collect::<Vec<_>>())),
+        Arc::new(Float64Array::from(rows.iter().map(|r| r.3).collect::<Vec<_>>())),
+    ]).unwrap()
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let hudi_table = HudiTableBuilder::from_base_uri("/tmp/trips_table").build().await?;
-    let batches = hudi_table.read_snapshot(&[("city", "=", "san_francisco")]).await?;
-    let batch = concat_batches(&batches[0].schema(), &batches)?;
-    let columns = vec!["rider", "city", "ts", "fare"];
-    for col_name in columns {
-        let idx = batch.schema().index_of(col_name).unwrap();
-        println!("{}: {}", col_name, batch.column(idx));
-    }
+    let mut table = Table::create("/tmp/trips")
+        .with_table_name("trips")
+        .with_table_type(TableTypeValue::CopyOnWrite)   // or MergeOnRead
+        .with_record_key_fields(["id"])
+        .with_partition_fields(["city"])
+        .with_ordering_fields(["ts"])
+        .create()
+        .await?;
+
+    table.append([trips(&[("t1", "sf", 1, 30.0), ("t2", "sf", 1, 45.0), ("t3", "nyc", 1, 20.0)])]).await?;
+
+    let result = table.upsert([trips(&[("t2", "sf", 2, 50.0), ("t4", "nyc", 2, 15.0)])]).await?;
+    println!(
+        "requested_time={} updates={} inserts={}",
+        result.requested_time.as_deref().unwrap_or("none"),
+        result.num_updates,
+        result.num_inserts
+    );
+
+    table.delete("id = 't1'").await?;
+
+    let batches = table.read(&ReadOptions::new()).await?;
+    println!("{} rows", batches.iter().map(|b| b.num_rows()).sum::<usize>());
     Ok(())
 }
 ```
 
-To run read-optimized (RO) query on Merge-on-Read (MOR) tables, set `hoodie.read.use.read_optimized.mode` when creating the table.
+Both writers produce the same on-disk layout as the Spark writer: Spark reads a table written here and runs its
+table services on it (compaction, clustering, cleaning), and hudi-rs reads and writes tables Spark wrote.
 
-#### Python
+## Compact a merge-on-read table
+
+On a merge-on-read table (`table_type="mor"` in Python, `TableTypeValue::MergeOnRead` in Rust), upserts, updates,
+and deletes append log files. Compaction (experimental) folds them into new base files under one compaction commit;
+rows keep their commit time, so incremental reads see no new rows from it. Run it on demand, or set
+`hoodie.compact.inline=true` (in the write call) or `hoodie.datasource.compaction.async.enable=true` (on a
+background task) to compact once `hoodie.compact.inline.max.delta.commits` (default 5) delta commits accumulate.
+The metadata table compacts itself.
+
+<Tabs>
+<TabItem value="python" label="Python" default>
 
 ```python
-hudi_table = (
-    HudiTableBuilder
-    .from_base_uri("/tmp/trips_table")
-    .with_option("hoodie.read.use.read_optimized.mode", "true")
-    .build()
+mor = HudiTable.create(
+    f"{tempfile.mkdtemp()}/contract_chunks_mor",
+    record_key="chunk_id",
+    ordering_fields="updated_at",
+    table_type="mor",
+    # Optional: also compact in the write call every 5 delta commits
+    hudi_options={"hoodie.compact.inline": "true"},
 )
+mor.append(chunks(["doc1", "doc2"], version=1))
+mor.upsert(chunks(["doc2"], version=2))  # the updates go to log files
+
+result = mor.compact()
+print(result.num_file_groups, result.num_log_files)
 ```
 
-#### Rust
+</TabItem>
+<TabItem value="rust" label="Rust">
 
 ```rust
-let hudi_table =
-    HudiTableBuilder::from_base_uri("/tmp/trips_table")
-    .with_option("hoodie.read.use.read_optimized.mode", "true")
-    .build().await?;
+let mut mor = Table::create("/tmp/trips_mor")
+    .with_table_name("trips_mor")
+    .with_table_type(TableTypeValue::MergeOnRead)
+    .with_record_key_fields(["id"])
+    .with_partition_fields(["city"])
+    .with_ordering_fields(["ts"])
+    // Optional: also compact in the write call every 5 delta commits
+    .with_option("hoodie.compact.inline", "true")
+    .create()
+    .await?;
+mor.append([trips(&[("t1", "sf", 1, 30.0), ("t2", "nyc", 1, 20.0)])]).await?;
+mor.upsert([trips(&[("t1", "sf", 2, 31.0)])]).await?; // the update goes to a log file
+
+let result = mor.compact().await?;
+println!("{} {}", result.num_file_groups, result.num_log_files); // 1 1
 ```
 
-> [!NOTE]
-> Currently reading MOR tables is limited to tables with Parquet data blocks.
+</TabItem>
+</Tabs>
 
-### Time-Travel Query
+## Why upserts and deletes are fast: the record-level index
 
-Time-travel query reads the data at a specific timestamp from the table. The table API also accepts partition filters.
+A table format with no index answers "which file holds key `doc2#1`?" by scanning every file, or at best every
+file whose min/max statistics admit the key. With keys like `<doc>#<pos>` or UUIDs that is the whole table on every
+sync, however few documents changed.
 
-#### Python
+Hudi keeps a [record-level index](indexes#record-index) in the table's metadata table: a persistent map from record
+key to file group, sharded by key hash. hudi-rs writes it on `create` and updates it on every commit. A sync that
+touches 10,000 chunks in a table of millions costs 10,000 index lookups, which name the file groups to rewrite (or,
+on a merge-on-read table, to append a log block to). The rest of the table is never read.
+
+## Use cases and numbers
+
+The [`benchmark/upsert`](https://github.com/apache/hudi-rs/tree/main/benchmark/upsert) harness in the hudi-rs
+repository runs five single-node workloads against hudi-rs; the numbers below also include delta-rs and PyIceberg
+run through the same commits on the same machine. Every end state is checked against a plain Parquet copy of the
+expected table, and the machine's load, memory, and disk are recorded next to every timing. Each scenario below links to
+its definition so the numbers can be reproduced on your own machine.
+
+| Scenario | Models | Table | Each commit |
+|---|---|---|---|
+| `rag-chunks` | Re-syncing a retrieval corpus | chunks with a 384-float embedding, keyed by `chunk_id` | re-ingest 1,000 changed documents (10,000 chunks), delete 100 removed documents |
+| `training-set` | Curating a fine-tuning set | training examples keyed by `example_id` | upsert corrected examples, delete rejected ones, then read what changed since the last run and time-travel to the first version |
+| `uuid` | Random-key upserts | 10M rows with UUID keys | upsert 10,000 existing keys plus 1,000 new, delete 1,000 |
+| `nyc-taxi` | Correcting a public dataset | NYC yellow taxi, January 2022 | upsert 1% of trips with new fares, delete 0.1% |
+| `tpcds-web-returns` | A warehouse fact table | TPC-DS `web_returns`, composite key | upsert 1% matched plus 10% new rows, delete 5% |
+
+{/* BENCHMARK_TABLE_START */}
+Median seconds per commit over three runs, five upsert and five delete commits per run, on one Apple M3 Max laptop
+(14 cores, 36 GiB, local SSD). Each library is used through its own Python API with default settings: hudi-rs 0.6.0
+(merge-on-read with the record-level index), deltalake 1.6.6 (delta-rs) and pyiceberg 0.12.0. Lower is better.
+
+| Scenario | Rows | hudi-rs upsert / delete | delta-rs upsert / delete | PyIceberg upsert / delete |
+|---|---|---|---|---|
+| `rag-chunks` | 1M | **0.29 / 0.18** | 2.78 / 4.49 | 11.48 / 9.41 |
+| `training-set` | 1M | **0.25 / 0.20** | 1.10 / 1.83 | 2.88 / 2.19 |
+| `uuid` | 10M | **1.67 / 1.70** | 3.20 / 4.53 | 7.73 / 4.38 |
+| `nyc-taxi` | 2.5M | 0.72 / **0.35** | **0.64** / 1.02 | 2.98 / 1.00 |
+| `tpcds-web-returns` | 0.7M | **0.55** / 1.02 | 0.74 / **0.56** | failed (see below) |
+
+A merge-on-read commit appends only the changed rows. Per upsert commit, hudi-rs wrote 19 MiB on `rag-chunks` where
+delta-rs rewrote 1,689 MiB and PyIceberg 1,449 MiB, and 2 MiB on `uuid` against 671 MiB and 388 MiB.
+
+Bulk load and full-table reads are not where hudi-rs leads today. Loading the 10M-row `uuid` table takes 12.5 s with
+the record-level index (4.8 s without it), against 3.1 s for delta-rs and 0.7 s for PyIceberg; reading it back in full
+takes 0.50 s, against 0.43 s and 0.18 s.
+
+Notes: PyIceberg 0.12 crashed in Arrow while building its filter for the 79,113 composite keys of the first
+`tpcds-web-returns` upsert. Enabling deletion vectors in delta-rs 1.6 and the merge-on-read write modes in PyIceberg
+0.12 did not change their numbers: both still rewrite the files a change touches.
+{/* BENCHMARK_TABLE_END */}
+
+## Read a table
+
+<Tabs>
+<TabItem value="python" label="Python" default>
 
 ```python
-batches = (
-    hudi_table
-    .read_snapshot_as_of("20241231123456789", filters=[("city", "=", "san_francisco")])
-)
+from hudi import HudiReadOptions, HudiTableBuilder
+import pyarrow as pa
+
+table = HudiTableBuilder.from_base_uri("/tmp/trips").build()
+
+# Snapshot, with partition and row filters pushed down
+batches = table.read(HudiReadOptions(filters=[("city", "=", "sf")]))
+print(pa.Table.from_batches(batches))
+
+# Time travel
+batches = table.read(HudiReadOptions().with_as_of_timestamp("20261029120000000"))
+
+# Incremental: rows from commits that completed after a point in time, such as
+# the completion_time of an earlier write
+from hudi import HudiQueryType
+since = "20261029120000000"
+batches = table.read(HudiReadOptions().with_query_type(HudiQueryType.Incremental).with_start_timestamp(since))
+
+# Stream batches instead of materializing the result
+for batch in table.read_stream(HudiReadOptions(projection=["id", "fare"]).with_batch_size(4096)):
+    print(batch.num_rows)
 ```
 
-#### Rust
+</TabItem>
+<TabItem value="rust" label="Rust">
 
 ```rust
-let batches =
-    hudi_table
-    .read_snapshot_as_of("20241231123456789", &[("city", "=", "san_francisco")]).await?;
+use hudi::table::builder::TableBuilder as HudiTableBuilder;
+use hudi::table::{QueryType, ReadOptions};
+
+let table = HudiTableBuilder::from_base_uri("/tmp/trips").build().await?;
+
+// Snapshot, with partition and row filters pushed down
+let batches = table.read(&ReadOptions::new().with_filters([("city", "=", "sf")])?).await?;
+
+// Time travel
+let batches = table.read(&ReadOptions::new().with_as_of_timestamp("20261029120000000")).await?;
+
+// Incremental: rows from commits that completed after a point in time, such as
+// the completion_time of an earlier write
+let since = "20261029120000000";
+let options = ReadOptions::new().with_query_type(QueryType::Incremental).with_start_timestamp(since);
+let batches = table.read(&options).await?;
 ```
 
-### Incremental Query
+</TabItem>
+</Tabs>
 
-Incremental query reads the changed data from the table for a given time range.
+Timestamps accept the Hudi timeline format (`yyyyMMddHHmmssSSS`), Unix epoch in seconds through nanoseconds, and
+RFC 3339 with a timezone offset.
 
-#### Python
+To run a read-optimized query on a merge-on-read table (base files only, no log merge), set
+`hoodie.read.use.read_optimized.mode` to `true` in the read options.
+
+## Query with DuckDB, Polars, and DataFusion
+
+hudi-rs returns Arrow, so anything that consumes Arrow can query a Hudi table in Python.
 
 ```python
-# read the records between t1 (exclusive) and t2 (inclusive)
-batches = hudi_table.read_incremental_records(t1, t2)
+import duckdb, polars as pl, pyarrow as pa
+from hudi import HudiTableBuilder
 
-# read the records after t1
-batches = hudi_table.read_incremental_records(t1)
+trips = pa.Table.from_batches(HudiTableBuilder.from_base_uri("/tmp/trips").build().read())
+
+duckdb.sql("SELECT city, avg(fare) FROM trips GROUP BY city").show()
+print(pl.from_arrow(trips).group_by("city").agg(pl.col("fare").mean()))
 ```
 
-#### Rust
-
-```rust
-// read the records between t1 (exclusive) and t2 (inclusive)
-let batches = hudi_table.read_incremental_records(t1, Some(t2)).await?;
-
-// read the records after t1
-let batches = hudi_table.read_incremental_records(t1, None).await?;
-```
-
-> [!NOTE]
-> Currently the only supported format for the timestamp arguments is Hudi Timeline format: `yyyyMMddHHmmssSSS` or `yyyyMMddHHmmss`.
-
-## Query Engine Integration
-
-Hudi-rs provides APIs to support integration with query engines. The sections below highlight some commonly used APIs.
-
-### Table API
-
-Create a Hudi table instance using its constructor or the `TableBuilder` API.
-
-| Stage           | API                                       | Description                                                                    |
-|-----------------|-------------------------------------------|--------------------------------------------------------------------------------|
-| Query planning  | `get_file_slices()`                       | For snapshot query, get a list of file slices.                                 |
-|                 | `get_file_slices_splits()`                | For snapshot query, get a list of file slices in splits.                       |
-|                 | `get_file_slices_as_of()`                 | For time-travel query, get a list of file slices at a given time.              |
-|                 | `get_file_slices_splits_as_of()`          | For time-travel query, get a list of file slices in splits at a given time.    |
-|                 | `get_file_slices_between()`               | For incremental query, get a list of changed file slices between a time range. |
-| Query execution | `create_file_group_reader_with_options()` | Create a file group reader instance with the table instance's configs.         |
-
-### File Group API
-
-Create a Hudi file group reader instance using its constructor or the Hudi table API `create_file_group_reader_with_options()`.
-
-| Stage           | API                                   | Description                                                                                                                                                                        |
-|-----------------|---------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Query execution | `read_file_slice()`                   | Read records from a given file slice; based on the configs, read records from only base file, or from base file and log files, and merge records based on the configured strategy. |
-
-
-### Apache DataFusion
-
-Enabling the `hudi` crate with `datafusion` feature will provide a [DataFusion](https://datafusion.apache.org/)
-extension to query Hudi tables.
+In Rust, the `datafusion` feature of the `hudi` crate registers a Hudi table as a DataFusion table provider.
 
 <details>
-<summary>Add crate hudi with datafusion feature to your application to query a Hudi table.</summary>
+<summary>Add the hudi crate with the datafusion feature to your application.</summary>
 
 ```shell
 cargo new my_project --bin && cd my_project
-cargo add tokio@1 datafusion@43
+cargo add tokio@1 datafusion@55  # the DataFusion major hudi 0.6 builds against
 cargo add hudi --features datafusion
 ```
-
-Update `src/main.rs` with the code snippet below then `cargo run`.
 
 </details>
 
@@ -191,56 +354,82 @@ use hudi::HudiDataSource;
 #[tokio::main]
 async fn main() -> Result<()> {
     let ctx = SessionContext::new();
-    let hudi = HudiDataSource::new_with_options(
-        "/tmp/trips_table",
-        [("hoodie.read.input.partitions", "5")]).await?;
-    ctx.register_table("trips_table", Arc::new(hudi))?;
-    let df: DataFrame = ctx.sql("SELECT * from trips_table where city = 'san_francisco'").await?;
+    let hudi = HudiDataSource::new_with_options("/tmp/trips", [("hoodie.read.input.partitions", "5")]).await?;
+    ctx.register_table("trips", Arc::new(hudi))?;
+    let df: DataFrame = ctx.sql("SELECT * FROM trips WHERE city = 'sf'").await?;
     df.show().await?;
     Ok(())
 }
 ```
 
-### Other Integrations
+The same provider is available in Python through `HudiDataFusionDataSource` when the `datafusion` extra of the
+`hudi` package is installed. Hudi tables can also be read by [Daft](https://docs.daft.ai/en/stable/io/hudi/) and
+[Ray](https://docs.ray.io/en/latest/data/api/doc/ray.data.read_hudi.html#ray.data.read_hudi).
 
-Hudi is also integrated with
+## Work with cloud storage
 
-- [Daft](https://docs.daft.ai/en/stable/io/hudi/)
-- [Ray](https://docs.ray.io/en/latest/data/api/doc/ray.data.read_hudi.html#ray.data.read_hudi)
+Set the usual cloud credentials as environment variables (`AWS_*`, `AZURE_*`, `GOOGLE_*`) and use an `s3://`,
+`az://`, or `gs://` base URI. Storage options can also be passed explicitly.
 
-### Work with cloud storage
-
-Ensure cloud storage credentials are set properly as environment variables, e.g., `AWS_*`, `AZURE_*`, or `GOOGLE_*`.
-Relevant storage environment variables will then be picked up. The target table's base uri with schemes such
-as `s3://`, `az://`, or `gs://` will be processed accordingly.
-
-Alternatively, you can pass the storage configuration as options via Table APIs.
-
-#### Python
+<Tabs>
+<TabItem value="python" label="Python" default>
 
 ```python
-from hudi import HudiTableBuilder
+from hudi import HudiTable, HudiTableBuilder
 
-hudi_table = (
-    HudiTableBuilder
-    .from_base_uri("s3://bucket/trips_table")
-    .with_option("aws_region", "us-west-2")
-    .build()
-)
+table = HudiTable.create("s3://bucket/trips", record_key="id", storage_options={"aws_region": "us-west-2"})
+
+reader = HudiTableBuilder.from_base_uri("s3://bucket/trips").with_option("aws_region", "us-west-2").build()
 ```
 
-#### Rust
+</TabItem>
+<TabItem value="rust" label="Rust">
 
 ```rust
+use hudi::table::Table;
 use hudi::table::builder::TableBuilder as HudiTableBuilder;
 
-async fn main() -> Result<()> {
-    let hudi_table =
-        HudiTableBuilder::from_base_uri("s3://bucket/trips_table")
-        .with_option("aws_region", "us-west-2")
-        .build().await?;
-}
+let mut table = Table::create("s3://bucket/trips")
+    .with_table_name("trips")
+    .with_record_key_fields(["id"])
+    .with_storage_option("aws_region", "us-west-2")
+    .create()
+    .await?;
+
+let reader = HudiTableBuilder::from_base_uri("s3://bucket/trips")
+    .with_option("aws_region", "us-west-2")
+    .build()
+    .await?;
 ```
+
+</TabItem>
+</Tabs>
+
+## Query engine integration
+
+For engines that plan their own scans, hudi-rs exposes the planning and execution primitives directly.
+
+| Stage           | API                                                | Description                                                                                         |
+|-----------------|----------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| Query planning  | `get_file_slices(options)`                         | The file slices a read targets, dispatched on the query type (snapshot, time travel, incremental).  |
+|                 | `compute_table_stats(options)`                     | Estimated row count and byte size for scan planning, from the metadata table (snapshot only).       |
+| Query execution | `create_file_group_reader_with_options()`          | A file group reader with the table's configs; pass the same read options used for `get_file_slices`. |
+|                 | `read_file_slice()` / `read_file_slice_stream()`   | Read one file slice, merging base and log files per the table's merge strategy.                     |
+
+## Resources
+
+- Rust API reference: [docs.rs/hudi](https://docs.rs/hudi), the `hudi` crate, which re-exports
+  [`hudi-core`](https://docs.rs/hudi-core) and, with the `datafusion` feature,
+  [`hudi-datafusion`](https://docs.rs/hudi-datafusion).
+- Python API reference: the docstrings in the type stubs shipped with the package,
+  [`hudi/_internal.pyi`](https://github.com/apache/hudi-rs/blob/main/python/hudi/_internal.pyi), which IDEs and type checkers read.
+- The [hudi-rs README](https://github.com/apache/hudi-rs#quick-start): a shorter quick start and the full read and write reference.
+- Runnable Rust example: [`crates/core/examples/table_writes.rs`](https://github.com/apache/hudi-rs/blob/main/crates/core/examples/table_writes.rs).
+- Reader semantics: [`docs/reader-spec.md`](https://github.com/apache/hudi-rs/blob/main/docs/reader-spec.md). Writer design:
+  [`docs/writer-design.md`](https://github.com/apache/hudi-rs/blob/main/docs/writer-design.md).
+- Packages: [PyPI](https://pypi.org/project/hudi/) and [crates.io](https://crates.io/crates/hudi). Source:
+  [github.com/apache/hudi-rs](https://github.com/apache/hudi-rs).
+- Hudi concepts (timeline, table types, query types): [overview](overview).
 
 ## Contributing
 

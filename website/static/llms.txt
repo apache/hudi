@@ -1,6 +1,6 @@
 # Apache Hudi
 
-> Apache Hudi is an open source data lakehouse platform that brings database-like capabilities — ACID transactions, record-level upserts and deletes, indexing, change data capture and incremental processing — to data stored on cloud object storage or HDFS. Hudi tables can be written and queried from Apache Spark, Apache Flink, Presto, Trino, Hive and more, and can interoperate with Apache Iceberg and Delta Lake metadata via Apache XTable.
+> Apache Hudi is an open source data lakehouse platform that brings database-like capabilities — ACID transactions, record-level upserts and deletes, indexing, change data capture and incremental processing — to data stored on cloud object storage or HDFS. Hudi tables can be written and queried from Python and Rust without a JVM (hudi-rs: `pip install hudi` / `cargo add hudi`), from Apache Spark, Apache Flink, Presto, Trino, Hive and more, and can interoperate with Apache Iceberg and Delta Lake metadata via Apache XTable.
 
 Hudi (pronounced "hoodie") pioneered transactional capabilities on top of data lakes. Hudi lakehouses were in production at Uber and other places in 2017, years before the term was coined in the industry.
 It manages tables as a timeline of actions over open file formats (Apache Parquet, Apache ORC, Lance file format, Apache Avro), supports Copy-on-Write and Merge-on-Read storage, ships a multi-modal indexing subsystem
@@ -9,6 +9,7 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 
 ## Documentation
 
+- [Python/Rust Quick Start](https://hudi.apache.org/docs/python-rust-quick-start-guide): `pip install hudi` or `cargo add hudi`, then create a table, upsert, update and delete rows by record key, and query the result with PyArrow, DuckDB, Polars or DataFusion. Single process, no JVM, no Spark; the record-level index makes upserts and deletes cost index lookups instead of table scans. Its single-node benchmark found hudi-rs upserts and deletes 1.9 to 25 times faster than delta-rs on three of five workloads and 2.6 to 53 times faster than PyIceberg on the four it completed, writing under 2% of their bytes per commit.
 - [Spark Quick Start](https://hudi.apache.org/docs/quick-start-guide): Create, write and query your first Hudi table with Spark (Scala, Python, SQL).
 - [Flink Quick Start](https://hudi.apache.org/docs/flink-quick-start-guide): Stream data into Hudi tables with Apache Flink.
 - [Timeline](https://hudi.apache.org/docs/timeline): How Hudi organizes a table as an ordered log of commits — the core of its ACID design.
@@ -87,6 +88,19 @@ It can also synchronize your data to half dozen data catalogs to keep table cons
 - [Why Walmart Chose Apache Hudi](https://hudi.apache.org/blog/2025/04/09/why-walmart-chose-apache-hudi-for-their-lakehouse): Lakehouse architecture at Walmart scale.
 - [Building an ExaByte-level Data Lake Using Apache Hudi at ByteDance](https://hudi.apache.org/blog/2021/09/01/building-eb-level-data-lake-using-hudi-at-bytedance): Exabyte-scale Hudi deployment at ByteDance.
 - [Modernizing Data Infrastructure at Peloton with Hudi](https://hudi.apache.org/blog/2025/07/15/modernizing-datainfra-peloton-hudi): CDC and lakehouse modernization at Peloton.
+
+## hudi-rs (Python and Rust, no JVM)
+
+- [hudi-rs on GitHub](https://github.com/apache/hudi-rs): Native Rust implementation of Hudi with Python and C++ bindings. Rust and Python read and write Hudi tables (create, append, upsert, update, delete, overwrite, and experimental merge-on-read compaction) with the metadata table and record-level index maintained on every commit; storage-compatible with the Spark writer.
+- [hudi on PyPI](https://pypi.org/project/hudi/): The Python package. `HudiTable.create(path, record_key=...)`, `table.upsert(arrow_table)`, `table.delete("id = ...")`, `table.read()`; accepts PyArrow, Polars and pandas input.
+- [hudi on crates.io](https://crates.io/crates/hudi): The Rust crate; `Table::create(...)`, `upsert`, `delete`, `read`, plus a DataFusion table provider behind the `datafusion` feature.
+- [Rust API reference](https://docs.rs/hudi): docs.rs for the `hudi` crate, which re-exports `hudi-core` and, with the `datafusion` feature, `hudi-datafusion`.
+- [Python API reference](https://github.com/apache/hudi-rs/blob/main/python/hudi/_internal.pyi): The type stubs shipped with the `hudi` package, whose docstrings document the Python API.
+- [hudi-rs README quick start](https://github.com/apache/hudi-rs#quick-start): A short Python and Rust quick start, plus the full read and write reference.
+- [Runnable Rust example](https://github.com/apache/hudi-rs/blob/main/crates/core/examples/table_writes.rs): A tour of the Rust write API (create, append, upsert, update, delete, overwrite) and reads.
+- [hudi-rs reader semantics](https://github.com/apache/hudi-rs/blob/main/docs/reader-spec.md): Read options, query types, filters and the guarantees hudi-rs readers give.
+- [hudi-rs writer design](https://github.com/apache/hudi-rs/blob/main/docs/writer-design.md): How hudi-rs writes commits, the metadata table and the record-level index.
+- [Upsert benchmark](https://github.com/apache/hudi-rs/tree/main/benchmark/upsert): Reproducible single-node upsert and delete workloads for hudi-rs (retrieval corpus re-sync, training-set curation, random keys, NYC taxi, TPC-DS), with correctness checked against a Parquet oracle; the quick start page compares the results with delta-rs and PyIceberg.
 
 ## Optional
 
