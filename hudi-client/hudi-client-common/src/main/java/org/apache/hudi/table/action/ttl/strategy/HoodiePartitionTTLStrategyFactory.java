@@ -79,6 +79,8 @@ public class HoodiePartitionTTLStrategyFactory {
         return KeepByTimeStrategy.class.getName();
       case KEEP_BY_CREATION_TIME:
         return KeepByCreationTimeStrategy.class.getName();
+      case KEEP_BY_EVENT_TIME:
+        return KeepByEventTimeStrategy.class.getName();
       default:
         throw new HoodieException("Unsupported PartitionTTLStrategy Type " + type);
     }
