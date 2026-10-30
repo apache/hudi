@@ -561,6 +561,15 @@ object TestDataSkippingUtils {
           IndexRow("file_1", valueCount = 2, A_minValue = -20, A_maxValue = 0, A_nullCount = 0)
         ),
         Seq("file_1")),
+      // Adding a term that references the column can carry a negative factor past the Multiply
+      // check: A + A * -2 = -A, so the translated bound A_minValue + A_minValue * -2 < -5 is
+      // 0 < -5 and would wrongly prune file_1, although A = 10 gives -10 < -5
+      arguments(
+        "A + A * -2 < -5",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 10, A_nullCount = 0)
+        ),
+        Seq("file_1")),
       // Multiplying and dividing by a positive constant still translate and prune
       arguments(
         "CAST(A AS DOUBLE) * 2.0D < 5.0D",

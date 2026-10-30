@@ -78,6 +78,14 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
+  def testAddRequiresReferenceFreeOtherOperand(): Unit = {
+    // A + A * -2 = -A reverses ordering, so an operand referencing the column must not match.
+    assertEquals(None, matched(Add(dblAttr, Multiply(dblAttr, Literal(-2.0d)))))
+    assertEquals(None, matched(Add(Multiply(dblAttr, Literal(-2.0d)), dblAttr)))
+    assertEquals(None, matched(Add(intAttr, intAttr)))
+  }
+
+  @Test
   def testUnaryMathTransformationsPreserveOrdering(): Unit = {
     assertEquals(Some(dblAttr), matched(Exp(dblAttr)))
     assertEquals(Some(dblAttr), matched(Log(dblAttr)))
