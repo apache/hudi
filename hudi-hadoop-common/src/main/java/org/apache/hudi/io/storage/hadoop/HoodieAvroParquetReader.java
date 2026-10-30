@@ -49,6 +49,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
@@ -195,11 +196,25 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
     return conf;
   }
 
+  @Override
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema,
+                                                                 FilterPredicate predicate) throws IOException {
+    return getIndexedRecordIteratorInternal(requestedSchema, Collections.emptyMap(), predicate);
+  }
+
   private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(HoodieSchema schema, Map<String, String> renamedColumns) throws IOException {
+    return getIndexedRecordIteratorInternal(schema, renamedColumns, null);
+  }
+
+  private ClosableIterator<IndexedRecord> getIndexedRecordIteratorInternal(HoodieSchema schema, Map<String, String> renamedColumns,
+                                                                          FilterPredicate predicate) throws IOException {
     // NOTE: We have to set both Avro read-schema and projection schema to make
     //       sure that in case the file-schema is not equal to read-schema we'd still
     //       be able to read that file (in case projection is a proper one)
     Configuration hadoopConf = storage.getConf().unwrapCopyAs(Configuration.class);
+    if (predicate != null) {
+      ParquetInputFormat.setFilterPredicate(hadoopConf, predicate);
+    }
     // If the on-disk file shreds variant columns, read them in their shredded (typed_value-bearing)
     // shape and reconstruct the unshredded variant per-record below (#18931). null when not needed.
     HoodieVariantReconstruction reconstruction = HoodieVariantReconstruction.create(getSchema(), getParquetSchema(), schema, storage);

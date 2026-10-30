@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
 
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -52,6 +53,15 @@ public abstract class HoodieAvroFileReader implements HoodieFileReader<IndexedRe
 
   public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
     return getIndexedRecordIterator(readerSchema, requestedSchema, Collections.emptyMap());
+  }
+
+  /**
+   * Reads records with an optional predicate pushed down by readers that support it.
+   * Callers must still apply their record filter, since other formats may ignore this hint.
+   */
+  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema,
+                                                                 FilterPredicate predicate) throws IOException {
+    return getIndexedRecordIterator(readerSchema, requestedSchema);
   }
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) throws IOException;

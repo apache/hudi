@@ -36,6 +36,9 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.parquet.filter2.predicate.FilterApi;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
+import org.apache.parquet.io.api.Binary;
 
 import javax.annotation.Nullable;
 
@@ -91,7 +94,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
           return;
         }
         // Read the archived file
-        try (ClosableIterator<IndexedRecord> iterator = getArchivedInstantIterator(metaClient, fileName, readSchema)) {
+        try (ClosableIterator<IndexedRecord> iterator = getArchivedInstantIterator(metaClient, fileName, readSchema, filter)) {
           while (iterator.hasNext() && (!hasLimit || loadedCount.get() < limit.get())) {
             GenericRecord record = (GenericRecord) iterator.next();
             String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
@@ -122,7 +125,7 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
       Schema readSchema = LSMTimeline.getReadSchema(loadMode);
       return Option.fromJavaOptional(filteredFiles.parallelStream().map(fileName -> {
         // Read the archived file
-        try (ClosableIterator<IndexedRecord> iterator = getArchivedInstantIterator(metaClient, fileName, readSchema)) {
+        try (ClosableIterator<IndexedRecord> iterator = getArchivedInstantIterator(metaClient, fileName, readSchema, null)) {
           while (iterator.hasNext()) {
             GenericRecord record = (GenericRecord) iterator.next();
             String instantTime = record.get(INSTANT_TIME_ARCHIVED_META_FIELD).toString();
@@ -146,12 +149,24 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
     return fileNames.stream().filter(fileName -> fileFilter == null || LSMTimeline.isFileInRange(fileFilter, fileName)).collect(Collectors.toList());
   }
 
-  private ClosableIterator<IndexedRecord> getArchivedInstantIterator(HoodieTableMetaClient metaClient, String fileName, Schema readSchema) throws IOException {
+  protected ClosableIterator<IndexedRecord> getArchivedInstantIterator(HoodieTableMetaClient metaClient, String fileName, Schema readSchema,
+                                                                 @Nullable HoodieArchivedTimeline.TimeRangeFilter filter) throws IOException {
     HoodieAvroFileReader reader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(metaClient.getStorage())
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
         .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, new StoragePath(metaClient.getArchivePath(), fileName));
     //TODO boundary to revisit in later pr to use HoodieSchema directly
-    return reader.getIndexedRecordIterator(HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema()),
-        HoodieSchema.fromAvroSchema(readSchema));
+    // Clean payload windows use inclusive bounds. Push those bounds into Parquet so overlapping
+    // compacted files do not materialize every archived record again for every small window.
+    FilterPredicate predicate = null;
+    if (filter instanceof HoodieArchivedTimeline.ClosedClosedTimeRangeFilter) {
+      HoodieArchivedTimeline.ClosedClosedTimeRangeFilter range = (HoodieArchivedTimeline.ClosedClosedTimeRangeFilter) filter;
+      predicate = FilterApi.and(
+          FilterApi.gtEq(FilterApi.binaryColumn(INSTANT_TIME_ARCHIVED_META_FIELD), Binary.fromString(range.getStartTs())),
+          FilterApi.ltEq(FilterApi.binaryColumn(INSTANT_TIME_ARCHIVED_META_FIELD), Binary.fromString(range.getEndTs())));
+    }
+    HoodieSchema writerSchema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
+    HoodieSchema projectedSchema = HoodieSchema.fromAvroSchema(readSchema);
+    return predicate == null ? reader.getIndexedRecordIterator(writerSchema, projectedSchema)
+        : reader.getIndexedRecordIterator(writerSchema, projectedSchema, predicate);
   }
 }
