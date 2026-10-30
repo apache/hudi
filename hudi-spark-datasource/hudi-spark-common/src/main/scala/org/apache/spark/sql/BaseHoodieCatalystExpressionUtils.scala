@@ -81,8 +81,10 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
 
         // Math Expressions
         // Binary
-        case Add(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
-        case Add(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+        // NOTE: The other operand must not reference the column, or it could reverse the
+        //       ordering (for ex, A + A * -2 = -A)
+        case Add(OrderPreservingTransformation(attrRef), other, _) if other.references.isEmpty => Some(attrRef)
+        case Add(other, OrderPreservingTransformation(attrRef), _) if other.references.isEmpty => Some(attrRef)
         case Multiply(OrderPreservingTransformation(attrRef), factor, _) if isPositiveNumericLiteral(factor) => Some(attrRef)
         case Multiply(factor, OrderPreservingTransformation(attrRef), _) if isPositiveNumericLiteral(factor) => Some(attrRef)
         case Divide(OrderPreservingTransformation(attrRef), divisor, _) if isPositiveNumericLiteral(divisor) => Some(attrRef)
