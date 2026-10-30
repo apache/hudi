@@ -1,8 +1,49 @@
 name: Java CI
 
-# ci.yml calls this workflow and owns its triggers, path filter and concurrency.
+# This filter replaces the former `changes` job. That job listed the changed files and every test
+# job waited on it through `needs`, which made each run wait for a shared runner twice: once for
+# the filter, once for the tests. GitHub evaluates `paths` before creating any job, so the same
+# decision now costs nothing. The filter applies to push only: pull_request and merge_group runs
+# must always report the aggregate check at the end of this file, and a required check whose
+# workflow the filter skipped never reports, so it would stay pending forever. A docs-only PR
+# therefore runs the full suite.
+# yml/yaml files are deliberately NOT ignored, unlike the old filter: docker/compose/*.yml drives
+# the integration tests, several modules keep yml test resources, and the workflow files themselves
+# need CI to run when they change.
 on:
-  workflow_call:
+  push:
+    branches:
+      - master
+      - 'release-*'
+      - branch-0.x
+    paths:
+      - '**'
+      # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
+      - '.github/**'
+      - '!**.bmp'
+      - '!**.gif'
+      - '!**.jpg'
+      - '!**.jpeg'
+      - '!**.md'
+      - '!**.pdf'
+      - '!**.png'
+      - '!**.svg'
+      - '!.gitignore'
+  pull_request:
+    branches:
+      - master
+      - 'release-*'
+      - branch-0.x
+  merge_group:
+    types: [checks_requested]
+
+# A group holds one running and one pending run, and a newer pending run replaces the older one
+# even when cancel-in-progress is false. Pushes are therefore keyed by SHA, so a burst of queue
+# merges to master never replaces a pending master run. merge_group refs are unique per queue
+# entry and only pull_request runs cancel in progress, so queue runs are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.sha) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # The retry/timeout knobs below are maven-resolver (aether.*) properties. Maven 3.9 resolves
@@ -935,3 +976,35 @@ jobs:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #        run:
 #          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+
+  # One stable check name per workflow for branch protection and the merge queue. A skipped job
+  # reports success to a required check, so this check fails on a skipped job just as it does on a
+  # failed or cancelled one. Each workflow has its own check rather than one for both, because the
+  # ASF GitHub Actions policy caps the jobs running at once in one workflow at 20 (15 recommended),
+  # and a single run of both workflows would exceed it. Adding or resharding a job means adding its
+  # id to `needs` below, and nothing else.
+  java-ci-result:
+    name: Java CI result
+    runs-on: ubuntu-slim
+    if: always()
+    permissions: {}
+    needs:
+      - test-spark-client-and-hadoop-common
+      - test-utilities
+      - test-common-and-other-modules
+      - test-hudi-hadoop-mr-and-hudi-java-client
+      - test-spark-java17-java-tests-part1
+      - test-spark-java17-java-tests-part2
+      - test-spark-java17-java-tests-part3
+      - test-spark-java17-scala-dml-tests
+      - test-spark-java17-scala-other-tests
+    steps:
+      - name: Summarize job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: echo "$NEEDS"
+      - name: Fail unless every job succeeded
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')
+        run: |
+          echo "::error::Every job in Java CI must succeed. The summary step above lists each result."
+          exit 1
