@@ -69,11 +69,12 @@ jobs:
             exit 1
           fi
 
-      # Seconds of node tests of the fork CI status and coverage bridges and of the ci.yml routing
-      # they check, so they run on every PR instead of path-filtering on the workflow files. Unlike
-      # the PR metadata checks they need no PR data, so they also run on merge-queue groups and
-      # pushes. The tests read the workflow files through PyYAML. A pip install into the runner's
-      # system Python can be refused (PEP 668), so the step gets its own Python.
+      # Seconds of node tests of the fork CI status and coverage bridges and of the bot.yml and
+      # java_ci_engines.yml routing they check, so they run on every PR instead of path-filtering on
+      # the workflow files. Unlike the PR metadata checks they need no PR data, so they also run on
+      # merge-queue groups and pushes. The tests read the workflow files through PyYAML. A pip
+      # install into the runner's system Python can be refused (PEP 668), so the step gets its own
+      # Python.
       - name: Set up Python for the fork CI bridge tests
         if: ${{ !cancelled() }}
         uses: actions/setup-python@v5
