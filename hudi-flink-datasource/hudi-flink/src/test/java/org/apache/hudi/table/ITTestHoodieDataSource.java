@@ -40,6 +40,9 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.NonLocalSchemeLocalFileSystem;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.buffer.BufferType;
@@ -3229,6 +3232,97 @@ public class ITTestHoodieDataSource {
     assertRowsEquals(result4, "[+I[id1, Danny, 23, 1970-01-01T00:00:01, par1]]");
   }
 
+  @ParameterizedTest
+  @MethodSource("tableTypeAndComplexKeyGenEncodingParams")
+  void testBucketPruningWithSingleRecordKeyAndMultiplePartitionFields(HoodieTableType tableType, ComplexKeyGenEncoding encoding) {
+    TableEnvironment tableEnv = batchTableEnv;
+    // a single record key with two partition fields uses the complex key generator, which by default stores
+    // the record key as `uuid:<value>` (FIELD_PREFIXED); legacy version 8 tables may store the bare value (VALUE_ONLY)
+    String valueOnlyOptions = ",\n"
+        + "  '" + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key() + "' = '" + ComplexKeyGenEncoding.VALUE_ONLY + "',\n"
+        + "  '" + FlinkOptions.WRITE_TABLE_VERSION.key() + "' = '" + HoodieTableVersion.EIGHT.versionCode() + "'";
+    String hoodieTableDDL = "create table t1(\n"
+        + "  uuid varchar(20),\n"
+        + "  name varchar(10),\n"
+        + "  age int,\n"
+        + "  ts timestamp(3),\n"
+        + "  `partition` varchar(20),\n"
+        + "  `region` varchar(20),\n"
+        + "  PRIMARY KEY(uuid) NOT ENFORCED\n"
+        + ")\n"
+        + "PARTITIONED BY (`partition`, `region`)\n"
+        + "with (\n"
+        + "  'connector' = 'hudi',\n"
+        + "  'path' = '" + tempFile.getAbsolutePath() + "',\n"
+        + "  '" + FlinkOptions.TABLE_TYPE.key() + "' = '" + tableType + "',\n"
+        + "  '" + FlinkOptions.INDEX_TYPE.key() + "' = 'BUCKET'"
+        + (encoding == ComplexKeyGenEncoding.VALUE_ONLY ? valueOnlyOptions : "")
+        + "\n)";
+    tableEnv.executeSql(hoodieTableDDL);
+
+    execInsertSql(tableEnv, "insert into t1 values\n"
+        + "('id1','Danny',23,TIMESTAMP '1970-01-01 00:00:01','par1','r1'),\n"
+        + "('id2','Stephen',33,TIMESTAMP '1970-01-01 00:00:02','par1','r2'),\n"
+        + "('id3','Julian',53,TIMESTAMP '1970-01-01 00:00:03','par2','r1'),\n"
+        + "('id4','Fabian',31,TIMESTAMP '1970-01-01 00:00:04','par2','r2'),\n"
+        + "('id5','Sophia',18,TIMESTAMP '1970-01-01 00:00:05','par3','r1'),\n"
+        + "('id6','Emma',20,TIMESTAMP '1970-01-01 00:00:06','par3','r2'),\n"
+        + "('id7','Bob',44,TIMESTAMP '1970-01-01 00:00:07','par4','r1'),\n"
+        + "('id8','Han',56,TIMESTAMP '1970-01-01 00:00:08','par4','r2')");
+    assertEquals(encoding,
+        HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath()).getTableConfig().getComplexKeyGenEncoding().get());
+
+    List<Row> allRows = CollectionUtil.iterableToList(
+        () -> tableEnv.sqlQuery("select uuid from t1").execute().collect());
+    assertEquals(8, allRows.size());
+    // an equality filter on the record key must find the rows the unfiltered scan finds
+    for (String uuid : Arrays.asList("id1", "id8")) {
+      List<Row> result = CollectionUtil.iterableToList(
+          () -> tableEnv.sqlQuery("select uuid from t1 where uuid = '" + uuid + "'").execute().collect());
+      assertRowsEquals(result, "[+I[" + uuid + "]]");
+    }
+  }
+
+  /**
+   * Spark stores `<field>:<value>` keys in a single-field complex keygen table recording FIELD_PREFIXED whatever its
+   * partition fields, while a Flink job with a single partition field and no encoding option keys records with the
+   * bare value: an equality filter on the record key from such a job still finds the rows.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testBucketPruningWithPrefixedKeysAndSinglePartitionField(HoodieTableType tableType) {
+    TableEnvironment tableEnv = batchTableEnv;
+    String path = tempFile.getAbsolutePath();
+    // the encoding option makes the Flink writer store `uuid:<value>` keys, the way Spark keys this table
+    String hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, path)
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.INDEX_TYPE, "BUCKET")
+        .option(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName())
+        .option(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), ComplexKeyGenEncoding.FIELD_PREFIXED.name())
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+    execInsertSql(tableEnv, TestSQL.INSERT_T1);
+    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED,
+        KeyGenUtils.deduceComplexKeyGenEncodingFromData(HoodieTestUtils.createMetaClient(path)).get());
+
+    tableEnv.executeSql("drop table t1");
+    hoodieTableDDL = sql("t1")
+        .option(FlinkOptions.PATH, path)
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, tableType)
+        .option(FlinkOptions.INDEX_TYPE, "BUCKET")
+        .option(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName())
+        .end();
+    tableEnv.executeSql(hoodieTableDDL);
+    for (String uuid : Arrays.asList("id1", "id8")) {
+      List<Row> result = CollectionUtil.iterableToList(
+          () -> tableEnv.sqlQuery("select uuid from t1 where uuid = '" + uuid + "'").execute().collect());
+      assertRowsEquals(result, "[+I[" + uuid + "]]");
+    }
+  }
+
   @Test
   void testBuiltinFunctionWithHMSCatalog() {
     TableEnvironment tableEnv = batchTableEnv;
@@ -4305,6 +4399,19 @@ public class ITTestHoodieDataSource {
             {HoodieCDCSupplementalLoggingMode.DATA_BEFORE_AFTER, true},
             {HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, false},
             {HoodieCDCSupplementalLoggingMode.OP_KEY_ONLY, true}};
+    return Stream.of(data).map(Arguments::of);
+  }
+
+  /**
+   * Return test params => (HoodieTableType, ComplexKeyGenEncoding).
+   */
+  private static Stream<Arguments> tableTypeAndComplexKeyGenEncodingParams() {
+    Object[][] data =
+        new Object[][] {
+            {HoodieTableType.COPY_ON_WRITE, ComplexKeyGenEncoding.FIELD_PREFIXED},
+            {HoodieTableType.COPY_ON_WRITE, ComplexKeyGenEncoding.VALUE_ONLY},
+            {HoodieTableType.MERGE_ON_READ, ComplexKeyGenEncoding.FIELD_PREFIXED},
+            {HoodieTableType.MERGE_ON_READ, ComplexKeyGenEncoding.VALUE_ONLY}};
     return Stream.of(data).map(Arguments::of);
   }
 
