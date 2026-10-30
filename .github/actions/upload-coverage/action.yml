@@ -47,6 +47,9 @@ runs:
     # for the PR instead. It parses the name: `__` separates the parts, since job ids and flags
     # both contain hyphens. Several jobs share a flag, so the job id keeps the name unique; a job
     # whose matrix has several uploading entries would also need a matrix value in the name.
+    # A re-run of a job keeps the run id, and upload-artifact refuses a second artifact of the same
+    # name in one run, so without overwrite a re-run of a failed fork job would fail here even when
+    # its tests pass. The replacement gets a new artifact id, which the bridge picks as the newest.
     - name: Upload coverage as an artifact for the coverage bridge
       if: github.repository != 'apache/hudi'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -55,3 +58,4 @@ runs:
         path: jacoco-report.xml
         retention-days: 7
         if-no-files-found: ignore
+        overwrite: true

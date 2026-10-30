@@ -19,10 +19,12 @@
 # runs the Java CI suites on the contributor's fork (see fork_ci_status.yml). A run there cannot
 # use apache/hudi's Codecov token, and Codecov would not link it to the PR anyway, so
 # .github/actions/upload-coverage stores each JaCoCo report as a run artifact named
-# coverage-<sha>__<job id>__<flag> instead. Every 15 minutes, `select` finds the newest completed
-# fork run for the head commit of each recently updated fork PR and lists its coverage artifacts,
-# `upload` uploads each one to Codecov for the PR and its head commit, and `record` marks the run
-# as done with a `Coverage (fork)` check, so later sweeps skip it.
+# coverage-<sha>__<job id>__<flag> instead. Java CI runs on the fork as two workflows, bot.yml and
+# java_ci_engines.yml, and both store reports. Every 15 minutes, `select` finds the newest completed
+# fork run of each for the head commit of each recently updated fork PR and, once both have
+# completed, lists their coverage artifacts, `upload` uploads each one to Codecov for the PR and its
+# head commit, and `record` marks the pair of runs as done with a `Coverage (fork)` check, so later
+# sweeps skip it.
 #
 # This workflow polls because workflow_run in apache/hudi does not fire for runs in a fork.
 #
@@ -69,7 +71,9 @@ jobs:
         with:
           script: |
             const CHECK = 'Coverage (fork)';
-            const WORKFLOW = 'ci.yml';
+            // Java CI is split across two workflows to stay under the ASF limit on jobs running at
+            // once per workflow, and each fork run stores the reports of its own jobs.
+            const WORKFLOWS = ['bot.yml', 'java_ci_engines.yml'];
             // The flags of the upload steps in bot.yml and java_ci_engines.yml. A fork cannot add
             // flags of its own to apache/hudi's Codecov reports.
             const FLAGS = new Set([
@@ -77,8 +81,8 @@ jobs:
               'integration-tests', 'spark-client-hadoop-common', 'spark-java-tests',
               'spark-scala-tests', 'utilities',
             ]);
-            // A full fork run uploads 12 reports, so a sweep covers at least 5 PRs. PRs beyond
-            // the cap wait for the next sweep.
+            // The two fork runs of a PR upload 12 reports together, so a sweep covers at least 5
+            // PRs. PRs beyond the cap wait for the next sweep.
             const MAX_ARTIFACTS = 60;
             const MAX_BYTES = 50 * 1024 * 1024;
             const upstream = { owner: context.repo.owner, repo: context.repo.repo };
@@ -86,10 +90,14 @@ jobs:
             const listing = { ...upstream, state: 'open', base: 'master', sort: 'updated', direction: 'desc' };
             const isForkPr = (pr) => pr.state === 'open' && pr.head.repo &&
               pr.head.repo.full_name.toLowerCase() !== repository.toLowerCase() && pr.base.ref === 'master';
-            const externalId = (pr, run) => 'hudi-fork-coverage:' + pr.number + ':' + run.id;
+            // A re-run of a job keeps the run id and bumps the run attempt. The id holds both for
+            // each workflow, so a new run or a re-run of either one is uploaded again.
+            const externalId = (pr, runs) => 'hudi-fork-coverage:' + pr.number + ':' +
+              runs.map((run) => run.id + '.' + run.run_attempt).join(':');
 
             // An absent workflow, run or artifact list is expected on a fork with Actions
-            // disabled or without ci.yml. Other API errors must not pass as missing coverage.
+            // disabled or without one of the workflows. Other API errors must not pass as missing
+            // coverage.
             async function optional(request) {
               try {
                 return await request();
@@ -99,47 +107,56 @@ jobs:
               }
             }
 
-            // Returns the run and the valid coverage artifacts of a PR, or null if there is
+            // Returns the runs and the valid coverage artifacts of a PR, or null if there is
             // nothing to upload.
             async function collect(pr) {
               const fork = { owner: pr.head.repo.owner.login, repo: pr.head.repo.name };
               const sha = pr.head.sha;
-              const runs = await optional(() => github.rest.actions.listWorkflowRuns({
-                ...fork, workflow_id: WORKFLOW, head_sha: sha, branch: pr.head.ref, per_page: 100,
-              }));
-              // As in fork_ci_status.yml, only push and manual runs test the branch head. An
-              // unfinished run has not uploaded all of its reports yet.
-              const run = (runs?.data.workflow_runs || []).filter((item) =>
-                item.status === 'completed' && item.head_sha === sha && item.head_branch === pr.head.ref &&
-                ['push', 'workflow_dispatch'].includes(item.event)
-              ).sort((a, b) => b.id - a.id)[0];
-              if (!run) return null;
+              const runs = [];
+              for (const workflow of WORKFLOWS) {
+                const data = await optional(() => github.rest.actions.listWorkflowRuns({
+                  ...fork, workflow_id: workflow, head_sha: sha, branch: pr.head.ref, per_page: 100,
+                }));
+                // As in fork_ci_status.yml, only push and manual runs test the branch head. An
+                // unfinished run has not uploaded all of its reports yet. The PR waits until both
+                // workflows have a completed run, so that its check covers all of Java CI.
+                const run = (data?.data.workflow_runs || []).filter((item) =>
+                  item.status === 'completed' && item.head_sha === sha && item.head_branch === pr.head.ref &&
+                  ['push', 'workflow_dispatch'].includes(item.event)
+                ).sort((a, b) => b.id - a.id)[0];
+                if (!run) return null;
+                runs.push({ ...run, workflow });
+              }
 
               const checks = await github.paginate(github.rest.checks.listForRef, {
                 ...upstream, ref: sha, check_name: CHECK, per_page: 100,
               });
               if (checks.some((item) =>
-                item.app?.slug === 'github-actions' && item.external_id === externalId(pr, run))) return null;
+                item.app?.slug === 'github-actions' && item.external_id === externalId(pr, runs))) return null;
 
-              const listed = await optional(() => github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
-                ...fork, run_id: run.id, per_page: 100,
-              })) || [];
               const pattern = new RegExp('^coverage-' + sha + '__([A-Za-z0-9_-]+)__([a-z0-9-]+)$');
-              // A rerun job uploads its artifact again under the same name. Keep the newest.
-              const newest = new Map();
-              for (const artifact of listed) {
-                const match = pattern.exec(artifact.name);
-                if (!match || !FLAGS.has(match[2]) || artifact.expired ||
-                    !(artifact.size_in_bytes <= MAX_BYTES)) continue;
-                if (!(newest.get(artifact.name)?.artifact_id > artifact.id)) {
-                  newest.set(artifact.name, {
-                    pr: pr.number, sha, branch: fork.owner + ':' + pr.head.ref,
-                    fork: pr.head.repo.full_name, run_id: run.id, artifact_id: artifact.id, flags: match[2],
-                  });
+              const artifacts = [];
+              for (const run of runs) {
+                const listed = await optional(() => github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                  ...fork, run_id: run.id, per_page: 100,
+                })) || [];
+                // A rerun job uploads its artifact again under the same name. Keep the newest.
+                const newest = new Map();
+                for (const artifact of listed) {
+                  const match = pattern.exec(artifact.name);
+                  if (!match || !FLAGS.has(match[2]) || artifact.expired ||
+                      !(artifact.size_in_bytes <= MAX_BYTES)) continue;
+                  if (!(newest.get(artifact.name)?.artifact_id > artifact.id)) {
+                    newest.set(artifact.name, {
+                      pr: pr.number, sha, branch: fork.owner + ':' + pr.head.ref, fork: pr.head.repo.full_name,
+                      workflow: run.workflow, run_id: run.id, artifact_id: artifact.id, flags: match[2],
+                    });
+                  }
                 }
+                artifacts.push(...newest.values());
               }
-              if (!newest.size) return null;
-              return { run, artifacts: [...newest.values()].sort((a, b) => a.artifact_id - b.artifact_id) };
+              if (!artifacts.length) return null;
+              return { runs, artifacts: artifacts.sort((a, b) => a.artifact_id - b.artifact_id) };
             }
 
             const artifacts = [];
@@ -164,9 +181,14 @@ jobs:
                 artifacts.push(...found.artifacts.slice(0, room));
                 // A PR cut by the cap is not recorded, so the next sweep uploads all of its reports.
                 if (found.artifacts.length <= room) {
-                  prs.push({ pr: pr.number, sha: pr.head.sha, run_id: found.run.id });
+                  prs.push({
+                    pr: pr.number, sha: pr.head.sha,
+                    runs: found.runs.map((run) =>
+                      ({ workflow: run.workflow, run_id: run.id, run_attempt: run.run_attempt })),
+                  });
                 }
-                core.info('#' + pr.number + ': ' + found.artifacts.length + ' reports from run ' + found.run.id);
+                core.info('#' + pr.number + ': ' + found.artifacts.length + ' reports from runs ' +
+                  found.runs.map((run) => run.id + '.' + run.run_attempt).join(' and '));
                 if (artifacts.length >= MAX_ARTIFACTS) break sweep;
               }
             }
@@ -287,27 +309,30 @@ jobs:
             const forks = new Map(JSON.parse(process.env.ARTIFACTS).map((item) => [item.pr, item.fork]));
             const errors = [];
             for (const entry of JSON.parse(process.env.PRS)) {
-              const runUrl = 'https://github.com/' + forks.get(entry.pr) + '/actions/runs/' + entry.run_id;
+              const runUrl = (run) => 'https://github.com/' + forks.get(entry.pr) + '/actions/runs/' + run.run_id;
+              const runIds = entry.runs.map((run) => run.run_id + '.' + run.run_attempt);
               try {
                 await github.rest.checks.create({
                   ...upstream,
                   name: CHECK,
                   head_sha: entry.sha,
-                  external_id: 'hudi-fork-coverage:' + entry.pr + ':' + entry.run_id,
+                  external_id: 'hudi-fork-coverage:' + entry.pr + ':' + runIds.join(':'),
                   status: 'completed',
                   conclusion: 'success',
-                  details_url: runUrl,
+                  details_url: runUrl(entry.runs[0]),
                   output: {
                     title: 'Fork coverage uploaded to Codecov',
                     summary: [
-                      'Uploaded the coverage reports of [CI run ' + entry.run_id + ' on ' + forks.get(entry.pr) +
-                        '](' + runUrl + ') for ' + entry.sha + ' to Codecov.',
-                      'This coverage is reported by the contributor\'s fork run, so it is self-reported. ' +
+                      'Uploaded the coverage reports of these fork runs on ' + forks.get(entry.pr) + ' for ' +
+                        entry.sha + ' to Codecov:\n' + entry.runs.map((run) =>
+                        '- [' + run.workflow + ' run ' + run.run_id + ', attempt ' + run.run_attempt + '](' +
+                        runUrl(run) + ')').join('\n'),
+                      'This coverage is reported by the contributor\'s fork runs, so it is self-reported. ' +
                         'The merge queue runs the authoritative CI on ASF runners.',
                     ].join('\n\n'),
                   },
                 });
-                core.info('#' + entry.pr + ': recorded run ' + entry.run_id);
+                core.info('#' + entry.pr + ': recorded runs ' + runIds.join(' and '));
               } catch (error) {
                 // An unrecorded PR is uploaded again by the next sweep.
                 errors.push('#' + entry.pr + ': ' + error.message);
