@@ -78,7 +78,6 @@ import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieMetadataException;
-import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -101,7 +100,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.stream.Collectors.toList;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ASYNC_CLEAN;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_CLEANER_COMMITS_RETAINED;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_POPULATE_META_FIELDS;
@@ -109,7 +107,6 @@ import static org.apache.hudi.common.model.LogExtensions.DATA_LOG_EXTENSION;
 import static org.apache.hudi.common.util.StringUtils.nonEmpty;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
 import static org.apache.hudi.metadata.HoodieTableMetadata.METADATA_TABLE_NAME_SUFFIX;
-import static org.apache.hudi.metadata.HoodieTableMetadataUtil.translateWriteStatToFileStats;
 
 /**
  * Metadata table write utils.
@@ -506,18 +503,17 @@ public class HoodieMetadataWriteUtils {
         tableMetadata, dataMetaClient, dataMetaClient.getActiveTimeline(),
         consolidatedPathInfos, dataWriteConfig.getViewStorageConfig(), dataWriteConfig.getCommonConfig());
 
-    // Collect column metadata for each file part of the latest merged file slice before the current instant time
-    List<HoodieColumnRangeMetadata<Comparable>> fileColumnMetadata = partitionedWriteStat.stream()
-        .flatMap(writeStat -> translateWriteStatToFileStats(writeStat, dataMetaClient, colsToIndex, partitionStatsIndexVersion).stream()).collect(toList());
     Set<String> fileGroupIdsToReplace = fileGroupIdsToReplaceMap.getOrDefault(partitionName, Collections.emptySet());
     Set<String> filesWithColumnStats = partitionedWriteStat.stream()
         .map(stat -> new StoragePath(stat.getPath()).getName()).collect(Collectors.toSet());
     // Collect column metadata of each file that does not have column stats provided by the write stat in the commit metadata
     return consolidatedFileSystemView.getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionName, maxInstantTime, instantTime)
+        // Inflight replacement commits can still expose the old groups in the view.
+        .filter(fileSlice -> !fileGroupIdsToReplace.contains(fileSlice.getFileId()))
         .flatMap(fileSlice -> Stream.concat(
             Stream.of(fileSlice.getBaseFile().map(HoodieBaseFile::getFileName).orElse(null)),
             fileSlice.getLogFiles().map(HoodieLogFile::getFileName)))
-        .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e) && !fileGroupIdsToReplace.contains(e))
+        .filter(e -> Objects.nonNull(e) && !filesWithColumnStats.contains(e))
         .collect(Collectors.toSet());
   }
 
