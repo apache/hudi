@@ -76,7 +76,8 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
       throw new HoodieRollbackException("No pending restore instants found to execute restore");
     }
     try {
-      List<HoodieInstant> instantsToRollback = getInstantsToRollback(restoreInstant.get());
+      HoodieRestorePlan restorePlan = RestoreUtils.getRestorePlan(table.getMetaClient(), restoreInstant.get());
+      List<HoodieInstant> instantsToRollback = getInstantsToRollback(restorePlan);
       ValidationUtils.checkArgument(restoreInstant.get().getState().equals(HoodieInstant.State.REQUESTED)
           || restoreInstant.get().getState().equals(HoodieInstant.State.INFLIGHT));
       Map<String, List<HoodieRollbackMetadata>> instantToMetadata = new HashMap<>();
@@ -91,16 +92,16 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
 
       return finishRestore(instantToMetadata,
           instantsToRollback,
-          restoreTimer.endTimer()
+          restoreTimer.endTimer(),
+          restorePlan.getExtraMetadata()
       );
     } catch (IOException io) {
       throw new HoodieRestoreException("unable to Restore instant " + restoreInstant.get(), io);
     }
   }
 
-  private List<HoodieInstant> getInstantsToRollback(HoodieInstant restoreInstant) throws IOException {
+  private List<HoodieInstant> getInstantsToRollback(HoodieRestorePlan restorePlan) {
     List<HoodieInstant> instantsToRollback = new ArrayList<>();
-    HoodieRestorePlan restorePlan = RestoreUtils.getRestorePlan(table.getMetaClient(), restoreInstant);
     for (HoodieInstantInfo instantInfo : restorePlan.getInstantsToRollback()) {
       // If restore crashed midway, there are chances that some commits are already rolled back,
       // but some are not. so, we can ignore those commits which are fully rolledback in previous attempt if any.
@@ -119,10 +120,11 @@ public abstract class BaseRestoreActionExecutor<T, I, K, O> extends BaseActionEx
 
   private HoodieRestoreMetadata finishRestore(Map<String, List<HoodieRollbackMetadata>> instantToMetadata,
                                               List<HoodieInstant> instantsRolledBack,
-                                              long durationInMs) throws IOException {
+                                              long durationInMs,
+                                              Map<String, String> extraMetadata) throws IOException {
 
     HoodieRestoreMetadata restoreMetadata = TimelineMetadataUtils.convertRestoreMetadata(
-        instantTime, durationInMs, instantsRolledBack, instantToMetadata);
+        instantTime, durationInMs, instantsRolledBack, instantToMetadata, extraMetadata);
     HoodieInstant restoreInflightInstant = instantGenerator.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.RESTORE_ACTION, instantTime);
     writeToMetadata(restoreMetadata, restoreInflightInstant);
     table.getActiveTimeline().saveAsComplete(

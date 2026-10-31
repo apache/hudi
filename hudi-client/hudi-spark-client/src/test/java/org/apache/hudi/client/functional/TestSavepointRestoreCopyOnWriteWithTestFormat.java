@@ -197,7 +197,7 @@ public class TestSavepointRestoreCopyOnWriteWithTestFormat extends HoodieClientT
         HoodieInstant pendingInstant = metaClient.getActiveTimeline().filterPendingExcludingCompaction()
             .lastInstant().orElseThrow(() -> new HoodieException("Pending instant does not exist"));
         HoodieSparkTable.create(client.getConfig(), context)
-            .scheduleRollback(context, WriteClientTestUtils.createNewInstantTime(), pendingInstant, false, true, false);
+            .scheduleRollback(context, WriteClientTestUtils.createNewInstantTime(), pendingInstant, false, true, false, Option.empty());
       }
       Option<String> rollbackInstant = metaClient.reloadActiveTimeline().getRollbackTimeline().lastInstant().map(HoodieInstant::requestedTime);
       assertTrue(rollbackInstant.isPresent(), "The latest instant should be a rollback");

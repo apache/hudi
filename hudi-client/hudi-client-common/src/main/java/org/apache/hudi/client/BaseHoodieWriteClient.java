@@ -1023,7 +1023,8 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     txnManager.beginStateChange(Option.empty(), Option.empty());
     try {
       final String restoreInstantTimestamp = createNewInstantTime(false);
-      return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp));
+      Option<Map<String, String>> extraMetadata = updateExtraMetadata(Option.empty());
+      return Pair.of(restoreInstantTimestamp, table.scheduleRestore(context, restoreInstantTimestamp, savepointToRestoreTimestamp, extraMetadata));
     } finally {
       txnManager.endStateChange(Option.empty());
     }
