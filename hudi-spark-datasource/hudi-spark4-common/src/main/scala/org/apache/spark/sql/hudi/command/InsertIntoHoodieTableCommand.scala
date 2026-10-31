@@ -149,11 +149,13 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
    * @param catalogTable catalog table
    * @param partitionsSpec partition spec specifying static/dynamic partition values
    * @param conf Spark's [[SQLConf]]
+   * @param allowPositionalFallback whether to retry positional matching when column names do not match
    */
   def alignQueryOutput(query: LogicalPlan,
                                catalogTable: HoodieCatalogTable,
                                partitionsSpec: Map[String, Option[String]],
-                               conf: SQLConf): LogicalPlan = {
+                               conf: SQLConf,
+                               allowPositionalFallback: Boolean = true): LogicalPlan = {
 
     val targetPartitionSchema = catalogTable.partitionSchema
     val staticPartitionValues = filterStaticPartitionValues(partitionsSpec)
@@ -168,7 +170,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     //       since such columns wouldn't be otherwise specified w/in the query itself and therefore couldn't be matched
     //       positionally for example
     val expectedQueryColumns = catalogTable.tableSchemaWithoutMetaFields.filterNot(f => staticPartitionValues.contains(f.name))
-    val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf)
+    val coercedQueryOutput = coerceQueryOutputColumns(StructType(expectedQueryColumns), cleanedQuery, catalogTable, conf, allowPositionalFallback)
     // After potential reshaping validate that the output of the query conforms to the table's schema
     validate(removeMetaFields(coercedQueryOutput.schema), partitionsSpec, catalogTable)
 
@@ -180,7 +182,8 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
   private def coerceQueryOutputColumns(expectedSchema: StructType,
                                        query: LogicalPlan,
                                        catalogTable: HoodieCatalogTable,
-                                       conf: SQLConf): LogicalPlan = {
+                                       conf: SQLConf,
+                                       allowPositionalFallback: Boolean): LogicalPlan = {
     val planUtils = sparkAdapter.getCatalystPlanUtils
     try {
       planUtils.resolveOutputColumns(
@@ -188,7 +191,7 @@ object InsertIntoHoodieTableCommand extends Logging with ProvidesHoodieConfig wi
     } catch {
       // NOTE: In case matching by name didn't match the query output, we will attempt positional matching
       // SPARK-42309 Error message changed in Spark 3.5.0 so we need to match two strings here
-      case ae: AnalysisException if (ae.getMessage().startsWith("[INCOMPATIBLE_DATA_FOR_TABLE.CANNOT_FIND_DATA] Cannot write incompatible data for the table")
+      case ae: AnalysisException if allowPositionalFallback && (ae.getMessage().startsWith("[INCOMPATIBLE_DATA_FOR_TABLE.CANNOT_FIND_DATA] Cannot write incompatible data for the table")
         || ae.getMessage().startsWith("Cannot write incompatible data to table")) =>
         planUtils.resolveOutputColumns(
           catalogTable.catalogTableName, sparkAdapter.getSchemaUtils.toAttributes(expectedSchema), query, byName = false, conf)
