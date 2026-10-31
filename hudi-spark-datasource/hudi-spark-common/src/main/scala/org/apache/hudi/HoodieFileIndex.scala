@@ -341,6 +341,7 @@ case class HoodieFileIndex(spark: SparkSession,
                                       partitionFilters: Seq[Expression]):
   (Boolean, Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])]) = {
     val isPartitionedTable = getPartitionColumns.length > 0
+    lazy val partitionStatsIndexSupport = new PartitionStatsIndexSupport(spark, schema, rawHoodieSchema, metadataConfig, metaClient)
     val prunedPartitionsTuple: (Boolean, Seq[PartitionPath]) =
       if (isPartitionedTable && partitionFilters.nonEmpty) {
         // For partitioned table and partition filters, prune the partitions by the partition filters
@@ -349,11 +350,9 @@ case class HoodieFileIndex(spark: SparkSession,
         } else {
           (true, listMatchingPartitionPaths(partitionFilters))
         }
-      } else if (isPartitionedTable && isDataSkippingEnabled) {
-        // For partitioned table and no partition filters, if data skipping is enabled,
-        // try using the PARTITION_STATS index to prune the partitions
-        val prunedPartitionPaths = new PartitionStatsIndexSupport(spark, schema, rawHoodieSchema, metadataConfig, metaClient)
-          .prunePartitions(this, dataFilters)
+      } else if (isPartitionedTable && isDataSkippingEnabled && partitionStatsIndexSupport.supportsQueryType(options)) {
+        // Both PARTITION_STATS and the expression index fallback use latest-snapshot partition statistics.
+        val prunedPartitionPaths = partitionStatsIndexSupport.prunePartitions(this, dataFilters)
         if (prunedPartitionPaths.nonEmpty) {
           try {
             (true, prunedPartitionPaths.get.map(e => convertToPartitionPath(e)).toSeq)
