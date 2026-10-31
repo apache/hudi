@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType}
+import org.apache.spark.sql.types.{DateType, Decimal, DecimalType, DoubleType, IntegerType, LongType, StringType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -54,6 +54,35 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(intAttr), matched(BitwiseOr(intAttr, Literal(1))))
     assertEquals(Some(intAttr), matched(BitwiseOr(Literal(1), intAttr)))
     assertEquals(Some(intAttr), matched(ShiftLeft(intAttr, Literal(1))))
+  }
+
+  @Test
+  def testMultiplyDivideRequirePositiveLiteralFactor(): Unit = {
+    // Negative factors reverse ordering.
+    assertEquals(None, matched(Multiply(dblAttr, Literal(-1.0d))))
+    assertEquals(None, matched(Multiply(Literal(-1), intAttr)))
+    assertEquals(None, matched(Divide(dblAttr, Literal(Decimal(-2), DecimalType(1, 0)))))
+    // Zero collapses ordering and makes division undefined.
+    assertEquals(None, matched(Multiply(intAttr, Literal(0L))))
+    assertEquals(None, matched(Divide(dblAttr, Literal(0.0d))))
+    // NaN fails the positive check; typed null literals carry a null value.
+    assertEquals(None, matched(Multiply(dblAttr, Literal(Double.NaN))))
+    assertEquals(None, matched(Multiply(intAttr, Literal(null, IntegerType))))
+    // Non-literal factors are not matched, even when reference-free or the column itself.
+    assertEquals(None, matched(Multiply(intAttr, Add(Literal(1), Literal(1)))))
+    assertEquals(None, matched(Multiply(intAttr, intAttr)))
+    // Strictly positive literals of any numeric type match in the supported operand positions.
+    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.5d))))
+    assertEquals(Some(longAttr), matched(Multiply(Literal(3L), longAttr)))
+    assertEquals(Some(dblAttr), matched(Divide(dblAttr, Literal(Decimal(2), DecimalType(1, 0)))))
+  }
+
+  @Test
+  def testAddRequiresReferenceFreeOtherOperand(): Unit = {
+    // A + A * -2 = -A reverses ordering, so an operand referencing the column must not match.
+    assertEquals(None, matched(Add(dblAttr, Multiply(dblAttr, Literal(-2.0d)))))
+    assertEquals(None, matched(Add(Multiply(dblAttr, Literal(-2.0d)), dblAttr)))
+    assertEquals(None, matched(Add(intAttr, intAttr)))
   }
 
   @Test

@@ -18,9 +18,9 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Literal, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
-import org.apache.spark.sql.types.DataType
+import org.apache.spark.sql.types.{DataType, Decimal}
 
 /**
  * Base implementation of [[HoodieCatalystExpressionUtils]] carrying the method bodies that are
@@ -81,11 +81,13 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
 
         // Math Expressions
         // Binary
-        case Add(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
-        case Add(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case Multiply(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
-        case Multiply(_, OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case Divide(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
+        // NOTE: The other operand must not reference the column, or it could reverse the
+        //       ordering (for ex, A + A * -2 = -A)
+        case Add(OrderPreservingTransformation(attrRef), other, _) if other.references.isEmpty => Some(attrRef)
+        case Add(other, OrderPreservingTransformation(attrRef), _) if other.references.isEmpty => Some(attrRef)
+        case Multiply(OrderPreservingTransformation(attrRef), factor, _) if isPositiveNumericLiteral(factor) => Some(attrRef)
+        case Multiply(factor, OrderPreservingTransformation(attrRef), _) if isPositiveNumericLiteral(factor) => Some(attrRef)
+        case Divide(OrderPreservingTransformation(attrRef), divisor, _) if isPositiveNumericLiteral(divisor) => Some(attrRef)
         case BitwiseOr(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case BitwiseOr(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
         // Unary
@@ -110,6 +112,22 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
           case None => None
         }
       }
+    }
+
+    // Negative factors reverse the ordering and zero collapses it. Non-literal factors are not
+    // matched since the optimizer folds constant factors to literals before data skipping runs
+    private def isPositiveNumericLiteral(expr: Expression): Boolean = expr match {
+      case Literal(value, _) => value match {
+        case b: Byte => b > 0
+        case s: Short => s > 0
+        case i: Int => i > 0
+        case l: Long => l > 0
+        case f: Float => f > 0
+        case d: Double => d > 0
+        case dec: Decimal => dec.toBigDecimal.signum > 0
+        case _ => false
+      }
+      case _ => false
     }
   }
 }
