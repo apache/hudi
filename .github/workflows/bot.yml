@@ -65,6 +65,55 @@ env:
   SCALA_TEST_OTHERS_FILTER: -DwildcardSuites=org.apache.hudi,org.apache.spark.hudi,org.apache.spark.sql.avro,org.apache.spark.sql.execution,org.apache.spark.sql.hive,org.apache.spark.sql.hudi.analysis,org.apache.spark.sql.hudi.blob,org.apache.spark.sql.hudi.catalog,org.apache.spark.sql.hudi.command,org.apache.spark.sql.hudi.common,org.apache.spark.sql.hudi.ddl,org.apache.spark.sql.hudi.procedure,org.apache.spark.sql.hudi.feature
 
 jobs:
+  # Spark 4.1 entries in the general test matrices below are disabled by CI-TRIM.
+  # Keep SDP's pinned 4.1.1 client/server and candidate bundle in one focused lane.
+  test-spark-connect-pipelines:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: hudi-integ-test/spark-pipelines/requirements.txt
+      - name: Test harness lifecycle
+        run: python3 -B -m unittest discover -s hudi-integ-test/spark-pipelines -p 'test_*.py' -v
+      - name: Build candidate Spark 4.1 bundle
+        run: >-
+          mvn package -T 2 -Pjava17 -Dspark4.1 -Dscala-2.13 -DskipTests=true
+          $MVN_ARGS -am -pl packaging/hudi-spark-bundle
+      - name: Install Spark pipelines and Connect
+        run: |
+          python3 -m venv "$RUNNER_TEMP/sdp-venv"
+          "$RUNNER_TEMP/sdp-venv/bin/python" -m pip install -r hudi-integ-test/spark-pipelines/requirements.txt
+      - name: Run real CLI against Spark Connect
+        run: |
+          shopt -s nullglob
+          bundles=(packaging/hudi-spark-bundle/target/hudi-spark4.1-bundle_2.13-*.jar)
+          candidates=()
+          for bundle in "${bundles[@]}"; do
+            [[ "$bundle" == *-sources.jar || "$bundle" == *-javadoc.jar ]] || candidates+=("$bundle")
+          done
+          [[ ${#candidates[@]} -eq 1 ]] || { echo "Expected one candidate bundle, found ${#candidates[@]}"; exit 1; }
+          "$RUNNER_TEMP/sdp-venv/bin/python" hudi-integ-test/spark-pipelines/harness.py \
+            --bundle "${candidates[0]}" --logs "$RUNNER_TEMP/sdp-logs"
+      - name: Upload Spark Connect and client logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spark-connect-pipelines-logs
+          path: ${{ runner.temp }}/sdp-logs
+          if-no-files-found: ignore
+
   # hudi-cli rides along with hudi-spark-client here rather than joining the catch-all
   # module lists in test-common-and-other-modules: its functional suite starts a
   # SparkSession per test class, and this job has the headroom for it while that one does
