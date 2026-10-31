@@ -2,7 +2,9 @@ name: PR and Source Validation
 
 # The one job here is the only required status check in .asf.yaml. A required check must report on
 # every PR, including docs-only ones, and a path-filtered workflow is never instantiated for PRs that
-# miss the filter, so this workflow is never path-filtered.
+# miss the filter, so this workflow is never path-filtered. It also reports on merge-queue commits:
+# there the PR metadata checks skip, because CHECK_PR_METADATA is false off pull_request, and the
+# source checks need no PR data.
 on:
   push:
     branches:
@@ -16,10 +18,14 @@ on:
       - master
       - 'release-*'
       - branch-0.x
+  merge_group:
+    types: [checks_requested]
 
+# Merge-queue refs (gh-readonly-queue/master/...) must never be cancelled, so they are excluded by
+# event rather than by relying on the ref containing the text "master".
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
+  cancel-in-progress: ${{ github.event_name != 'merge_group' && !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
 
 jobs:
   # The only required status check in .asf.yaml. It runs every short check (PR metadata, source
@@ -62,6 +68,27 @@ jobs:
             echo "::error::pr_compliance.py self-tests failed: ${failed:-see the step log}"
             exit 1
           fi
+
+      # Seconds of node tests of the fork CI status and coverage bridges and of the bot.yml and
+      # java_ci_engines.yml routing they check, so they run on every PR instead of path-filtering on
+      # the workflow files. Unlike the PR metadata checks they need no PR data, so they also run on
+      # merge-queue groups and pushes. The tests read the workflow files through PyYAML. A pip
+      # install into the runner's system Python can be refused (PEP 668), so the step gets its own
+      # Python.
+      - name: Set up Python for the fork CI bridge tests
+        if: ${{ !cancelled() }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test fork CI bridge scripts
+        if: ${{ !cancelled() }}
+        run: |
+          for attempt in 1 2 3; do
+            python3 -m pip install PyYAML==6.0.3 && break
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 5
+          done
+          node --test .github/ci/scripts/test-fork-ci-status.cjs .github/ci/scripts/test-fork-coverage-bridge.cjs
 
       - name: Check for legacy PR title format using JIRA or MINOR
         id: check-legacy-format

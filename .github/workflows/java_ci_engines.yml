@@ -3,17 +3,24 @@ name: Java CI Engines
 # This filter replaces the former `changes` job. That job listed the changed files and every test
 # job waited on it through `needs`, which made each run wait for a shared runner twice: once for
 # the filter, once for the tests. GitHub evaluates `paths` before creating any job, so the same
-# decision now costs nothing. A docs-only change creates no run of this workflow at all, which is
-# fine because no required status check lives here (see validate_source.yml).
+# decision now costs nothing. The filter applies to push only: pull_request and merge_group runs
+# must always report the aggregate check at the end of this file, and a required check whose
+# workflow the filter skipped never reports, so it would stay pending forever. A docs-only PR
+# therefore runs the full suite; a fork PR to master runs it in the merge queue.
 # yml/yaml files are deliberately NOT ignored, unlike the old filter: docker/compose/*.yml drives
 # the integration tests, several modules keep yml test resources, and the workflow files themselves
 # need CI to run when they change.
+#
+# Push covers every branch because forks run the full suite on their own runners for each branch
+# push; see "Pull requests from forks" in README.md. Upstream pushes to branches other than master,
+# release-* and branch-0.x skip every job: their PRs test them. Merge-queue branches
+# (gh-readonly-queue/...) are validated by merge_group, not push: a skipped aggregate job on a
+# queue-branch push would report success and could satisfy the gate early.
 on:
   push:
-    branches:
-      - master
-      - 'release-*'
-      - branch-0.x
+    branches-ignore:
+      - asf-site
+      - 'gh-readonly-queue/**'
     paths:
       - '**'
       # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
@@ -32,23 +39,18 @@ on:
       - master
       - 'release-*'
       - branch-0.x
-    paths:
-      - '**'
-      # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
-      - '.github/**'
-      - '!**.bmp'
-      - '!**.gif'
-      - '!**.jpg'
-      - '!**.jpeg'
-      - '!**.md'
-      - '!**.pdf'
-      - '!**.png'
-      - '!**.svg'
-      - '!.gitignore'
+  merge_group:
+    types: [checks_requested]
 
+# A group holds one running and one pending run, and a newer pending run replaces the older one
+# even when cancel-in-progress is false. Pushes to apache/hudi are therefore keyed by SHA, so a
+# burst of queue merges to master never replaces a pending master run. Pushes on a fork are keyed
+# by branch and cancel in progress, so a new push to a PR branch replaces the run of the older
+# head instead of spending fork runner time on it. merge_group refs are unique per queue entry
+# and merge_group runs never cancel in progress, so queue runs are never cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.repository == 'apache/hudi' && github.sha) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.repository != 'apache/hudi') }}
 
 env:
   # The retry/timeout knobs below are maven-resolver (aether.*) properties. Maven 3.9 resolves
@@ -61,8 +63,25 @@ env:
   FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
   FLINK_IT_FILTER2: -Dit.test=!ITTestHoodieDataSource
 
+# Two conditions route the jobs. GitHub expressions cannot be named, so the first test job spells
+# them out in full under the YAML anchor `route`, every other test job reuses it through the alias
+# `*route`, and the aggregate job at the end spells out the parts it needs.
+#
+# FORK_PR, a pull request from a fork to master:
+#   github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master'
+# Its test jobs already run on the fork's runners when the contributor pushes the branch, and
+# fork_ci_status.yml mirrors that run, together with the fork's bot.yml run, onto the PR as the
+# informational `CI (fork)` check. The merge queue then runs them on ASF runners against the
+# proposed merge with master. The event_name guard matters: on merge_group the pull_request fields
+# are empty strings, and an empty head repository differs from github.repository. Fork PRs to
+# release-* and branch-0.x keep upstream testing, since only master merges through the queue.
+#
+# UPSTREAM_OTHER_PUSH, a push to apache/hudi other than to master, release-* or branch-0.x:
+#   github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x'
+# Such branches back same-repository PRs, which test them through pull_request.
 jobs:
   test-flink-1:
+    if: &route ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master') && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') }}
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -118,19 +137,21 @@ jobs:
         run: |
           mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER1 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+      # No coverage on merge-queue runs. Codecov files an upload from a gh-readonly-queue ref under
+      # master, for a commit that may never land, and a group that succeeds would upload the same
+      # commit twice: once from the queue run, once from the master push run.
       - name: Generate merged coverage report
-        if: always() && endsWith(matrix.flinkProfile, '2.2')
+        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && endsWith(matrix.flinkProfile, '2.2')
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: flink-integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-flink-2:
+    if: *route
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -166,14 +187,12 @@ jobs:
           mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && endsWith(matrix.flinkProfile, '2.2')
+        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && endsWith(matrix.flinkProfile, '2.2')
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: flink-integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -227,6 +246,7 @@ jobs:
 #          ./packaging/bundle-validation/run_docker_java17.sh
 
   validate-bundles:
+    if: *route
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -318,6 +338,7 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   validate-bundle-spark4:
+    if: *route
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -429,6 +450,7 @@ jobs:
 #          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   integration-tests:
+    if: *route
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -506,14 +528,12 @@ jobs:
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
           mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -626,3 +646,52 @@ jobs:
 #          FLINK_PROFILE: ${{ matrix.flinkProfile }}
 #        run:
 #          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
+
+  # One stable check name per workflow for branch protection and the merge queue. A skipped job
+  # reports success to a required check, so this check fails on a skipped job just as it does on a
+  # failed or cancelled one. Each workflow has its own check rather than one for both, because the
+  # ASF GitHub Actions policy caps the jobs running at once in one workflow at 20 (15 recommended),
+  # and a single run of both workflows would exceed it. Adding or resharding a job means adding its
+  # id to `needs` below and `if: *route` to the job, and nothing else. The one exception to the
+  # skipped-job rule is FORK_PR, where every test job skips on purpose and the merge queue runs
+  # them before merge. UPSTREAM_OTHER_PUSH skips this job too, since nothing ran that it could
+  # aggregate.
+  java-ci-engines-result:
+    name: Java CI Engines result
+    runs-on: ubuntu-slim
+    if: ${{ always() && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') }}
+    permissions: {}
+    needs:
+      - test-flink-1
+      - test-flink-2
+      - validate-bundles
+      - validate-bundle-spark4
+      - integration-tests
+    env:
+      FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master' }}
+    steps:
+      - name: Summarize job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: echo "$NEEDS"
+      # The upstream run of a fork PR tests nothing, so point the contributor at the fork run.
+      - name: Link to fork CI
+        if: env.FORK_PR == 'true'
+        env:
+          FORK_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            printf 'Full test results: [Java CI Engines on %s](https://github.com/%s/actions/workflows/java_ci_engines.yml).\n\n' "$FORK_REPOSITORY" "$FORK_REPOSITORY"
+            printf 'Look for commit `%s`. Enable Actions in your fork and push your branch if no run exists.\n\n' "$PR_HEAD_SHA"
+            printf 'This upstream PR run skips the Java CI Engines test jobs. The merge queue runs them on ASF runners before merge.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Fail unless every job succeeded
+        if: >-
+          ${{ env.FORK_PR == 'true' && (contains(needs.*.result, 'success') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+          || env.FORK_PR != 'true' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped')) }}
+        env:
+          REQUIREMENT: ${{ env.FORK_PR == 'true' && 'Every job in Java CI Engines must be skipped on a fork PR to master.' || 'Every job in Java CI Engines must succeed.' }}
+        run: |
+          echo "::error::$REQUIREMENT The summary step above lists each result."
+          exit 1

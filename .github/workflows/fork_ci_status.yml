@@ -1,0 +1,268 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+# Adapted from apache/arrow-rs .github/workflows/fork_ci_status.yml.
+# Mirror fork results as the informational CI (fork) check after upstream PR CI
+# completes and through scheduled polling for late runs and reruns. The fork's
+# Java CI (bot.yml) and Java CI Engines (java_ci_engines.yml) runs for the PR
+# head combine into that one check, which reports the worse result. Read fork
+# runs and write upstream checks using reviewed default-branch code.
+# No checkout, artifacts, or code from the pull request are used here.
+# Test with Python 3.11+, PyYAML, and Node.js 24:
+#   node --test .github/ci/scripts/test-fork-ci-status.cjs
+# Tests mock GitHub APIs. End-to-end testing requires a test repository with
+# the upstream guards adapted and this workflow installed on its default branch.
+name: Fork CI status
+
+on:
+  workflow_run:
+    workflows: [Java CI, Java CI Engines]
+    types: [completed]
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  checks: write
+  pull-requests: read
+
+# Like DataFusion, group notifications separately from scheduled/manual sweeps.
+# workflow_run identifies the fork and branch rather than the PR number. Both
+# upstream workflows notify for the same branch, and either notification syncs
+# the whole combined check, so the later one may cancel the earlier.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name || 'update' }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
+
+jobs:
+  bridge:
+    if: github.repository == 'apache/hudi' && (github.event_name != 'workflow_run' || github.event.workflow_run.event == 'pull_request')
+    name: Mirror the fork run
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    steps:
+      - name: Create or update the check
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        with:
+          script: |
+            // Adapted from apache/datafusion#25591. Fork results are informational:
+            // contributors control their workflows; only upstream merge-queue CI gates merging.
+            const CHECK = 'CI (fork)';
+            // Java CI is split across two workflows to stay under the ASF limit on jobs running
+            // at once per workflow. The check combines them, and its details link the first.
+            const WORKFLOWS = [
+              { file: 'bot.yml', name: 'Java CI' },
+              { file: 'java_ci_engines.yml', name: 'Java CI Engines' },
+            ];
+            const upstream = { owner: context.repo.owner, repo: context.repo.repo };
+            const repository = upstream.owner + '/' + upstream.repo;
+            const GUIDE = 'https://github.com/apache/hudi/blob/master/.github/workflows/README.md#pull-requests-from-forks';
+            const SWEEP_SIZE = 25;
+            const listing = { ...upstream, state: 'open', base: 'master', sort: 'updated', direction: 'desc' };
+            const isForkPr = (pr) => pr.state === 'open' && pr.head.repo &&
+              pr.head.repo.full_name.toLowerCase() !== repository.toLowerCase() && pr.base.ref === 'master';
+            const externalId = (pr) => 'hudi-fork-ci:' + pr.number;
+            // The check conclusions, worst first: the combined check reports the worst of its runs.
+            // Run conclusions a check cannot take, such as stale or startup_failure, count as failure.
+            const CONCLUSIONS = [
+              'failure', 'timed_out', 'cancelled', 'action_required', 'neutral', 'skipped', 'success',
+            ];
+            const conclusionOf = (run) => CONCLUSIONS.includes(run.conclusion) ? run.conclusion : 'failure';
+            const UPDATE_NOTE =
+              'This check is informational: the contributor controls the fork workflow. ' +
+              'The upstream merge queue runs the required CI checks on the proposed merge result. ' +
+              'Active or missing runs on recently updated PRs are polled every 15 minutes; ' +
+              'a rotating sweep also discovers reruns on older PRs. Scheduled updates may be delayed.';
+
+            // An absent workflow/run is expected on a fork with Actions disabled. Other
+            // API errors must fail the bridge rather than falsely reporting missing CI.
+            async function optional(request) {
+              try {
+                return (await request()).data;
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+            }
+
+            async function syncCheck(pr, includeCompleted = true) {
+              if (!isForkPr(pr)) return;
+              const fork = { owner: pr.head.repo.owner.login, repo: pr.head.repo.name };
+              const sha = pr.head.sha;
+              const checks = await github.paginate(github.rest.checks.listForRef, {
+                ...upstream, ref: sha, check_name: CHECK, per_page: 100,
+              });
+              const check = checks.find((item) =>
+                item.app?.slug === 'github-actions' && item.external_id === externalId(pr));
+              let previous = {};
+              try { previous = JSON.parse(check?.output?.text || '{}'); } catch {}
+              // A missing run must keep being polled, even though its check is completed.
+              if (!includeCompleted && check?.status === 'completed' &&
+                  previous.runs?.every((item) => item.run_id)) return;
+
+              // Ignore PR merge-ref runs. The named workflows on push/manual
+              // events test the branch head; contributors still control their code.
+              const runs = [];
+              for (const workflow of WORKFLOWS) {
+                const data = await optional(() => github.rest.actions.listWorkflowRuns({
+                  ...fork, workflow_id: workflow.file, head_sha: sha, branch: pr.head.ref, per_page: 100,
+                }));
+                runs.push((data?.workflow_runs || []).filter((item) =>
+                  item.head_sha === sha && item.head_branch === pr.head.ref &&
+                  ['push', 'workflow_dispatch'].includes(item.event)
+                ).sort((a, b) => b.id - a.id)[0]);
+              }
+              const runList = WORKFLOWS.map((workflow, index) => {
+                const item = runs[index];
+                if (!item) return '- ' + workflow.name + ': no run';
+                return '- [' + workflow.name + '](' + item.html_url + '): ' +
+                  (item.status === 'completed' ? conclusionOf(item) : item.status);
+              }).join('\n');
+              const text = JSON.stringify({
+                head_sha: sha,
+                runs: WORKFLOWS.map((workflow, index) => ({
+                  workflow: workflow.file,
+                  run_id: runs[index]?.id ?? null,
+                  run_attempt: runs[index]?.run_attempt ?? null,
+                })),
+              });
+              let payload;
+              if (runs.every(Boolean)) {
+                // The check stays in progress until every run completes, then takes the worst result.
+                const completed = runs.every((item) => item.status === 'completed');
+                const conclusion = CONCLUSIONS.find((value) => runs.some((item) => conclusionOf(item) === value));
+                payload = {
+                  status: completed ? 'completed' : 'in_progress',
+                  ...(completed ? { conclusion } : {}),
+                  details_url: runs[0].html_url,
+                  output: {
+                    title: 'Fork CI: ' + (completed ? conclusion : 'in_progress'),
+                    summary: [
+                      'Fork CI on ' + pr.head.repo.full_name + ' for ' + sha + ':\n' + runList,
+                      'Rerun failed checks in the fork. A green fork run tests the branch head, not its merge with master.',
+                      UPDATE_NOTE,
+                    ].join('\n\n'),
+                    text,
+                  },
+                };
+              } else {
+                // One missing or disabled workflow is enough to need the contributor's action.
+                const states = [];
+                for (const workflow of WORKFLOWS) {
+                  states.push(await optional(() => github.rest.actions.getWorkflow({
+                    ...fork, workflow_id: workflow.file,
+                  })));
+                }
+                const disabled = states.some((workflow) => !workflow || workflow.state.startsWith('disabled'));
+                const missing = WORKFLOWS.filter((workflow, index) => !runs[index]).map((workflow) => workflow.name);
+                const actions = 'https://github.com/' + pr.head.repo.full_name + '/actions';
+                payload = {
+                  status: 'completed',
+                  conclusion: disabled ? 'action_required' : 'neutral',
+                  details_url: disabled ? actions : (runs.find(Boolean)?.html_url || actions),
+                  output: {
+                    title: disabled ? 'Enable CI on your fork' : 'No fork CI run for this commit',
+                    summary: [
+                      'No ' + missing.join(' or ') + ' run was found for ' + sha + ' on ' + pr.head.repo.full_name + '.',
+                      ...(runs.some(Boolean) ? [runList] : []),
+                      'Enable workflows in the Actions tab of your fork, sync/rebase onto master to include the fork CI workflows, ' +
+                      'then push your branch. A newly pushed run may take a moment to appear.',
+                      'A push that changes only docs or images is skipped by the path filters of bot.yml and java_ci_engines.yml, ' +
+                      'so no run exists for such a commit.',
+                      UPDATE_NOTE,
+                      '[Fork CI setup](' + GUIDE + ')',
+                    ].join('\n\n'),
+                    text,
+                  },
+                };
+              }
+              if (check && check.status === payload.status &&
+                  check.conclusion === (payload.conclusion || null) &&
+                  check.output?.text === payload.output.text &&
+                  check.output?.summary === payload.output.summary) return;
+              if (check) {
+                await github.rest.checks.update({ ...upstream, check_run_id: check.id, ...payload });
+              } else {
+                await github.rest.checks.create({
+                  ...upstream, name: CHECK, head_sha: sha, external_id: externalId(pr), ...payload,
+                });
+              }
+              core.info('#' + pr.number + ': ' + (payload.conclusion || payload.status));
+            }
+
+            async function notify() {
+              const run = context.payload.workflow_run;
+              if (run.event !== 'pull_request' || !run.head_repository ||
+                  run.head_repository.full_name.toLowerCase() === repository.toLowerCase()) return;
+              // GitHub can leave workflow_run.pull_requests empty for fork PRs. Resolve
+              // from the API instead, and recheck the current head to ignore stale runs.
+              const prs = await github.paginate(github.rest.pulls.list, {
+                ...listing, head: run.head_repository.owner.login + ':' + run.head_branch, per_page: 100,
+              });
+              for (const pr of prs) {
+                if (pr.head.sha === run.head_sha &&
+                    pr.head.repo?.full_name.toLowerCase() === run.head_repository.full_name.toLowerCase()) {
+                  await syncCheck(pr);
+                }
+              }
+            }
+
+            async function update() {
+              const errors = [];
+              // A failed update must not prevent unrelated PRs from being refreshed.
+              async function syncPr(pr, includeCompleted) {
+                try {
+                  await syncCheck(pr, includeCompleted);
+                } catch (error) {
+                  errors.push('#' + pr.number + ': ' + error.message);
+                }
+              }
+              const count = await github.rest.pulls.list({ ...listing, per_page: 1 });
+              const last = /[?&]page=(\d+)>;\s*rel="last"/.exec(count.headers.link || '');
+              const total = last ? Number(last[1]) : count.data.length;
+              if (!total) return;
+              const slices = Math.ceil(total / SWEEP_SIZE);
+              const slot = Math.floor(Date.now() / (15 * 60 * 1000));
+              const { data: slice } = await github.rest.pulls.list({
+                ...listing, per_page: SWEEP_SIZE, page: (slot % slices) + 1,
+              });
+              const sweepNumbers = new Set(slice.map((pr) => pr.number));
+              const seen = new Set();
+              const cutoff = Date.now() - 6 * 3600 * 1000;
+              // Poll active and missing checks on recently updated PRs, and completed
+              // checks only in the rotating slice. This bounds expensive fork API calls.
+              const pages = github.paginate.iterator(github.rest.pulls.list, { ...listing, per_page: 100 });
+              for await (const page of pages) {
+                let stale = false;
+                for (const pr of page.data) {
+                  if (new Date(pr.updated_at).getTime() < cutoff) { stale = true; break; }
+                  seen.add(pr.number);
+                  await syncPr(pr, sweepNumbers.has(pr.number));
+                }
+                if (stale) break;
+              }
+              for (const pr of slice) {
+                if (!seen.has(pr.number)) await syncPr(pr);
+              }
+              if (errors.length) core.setFailed(errors.join('\n'));
+            }
+
+            if (repository === 'apache/hudi') {
+              if (context.eventName === 'workflow_run') await notify();
+              else await update();
+            }

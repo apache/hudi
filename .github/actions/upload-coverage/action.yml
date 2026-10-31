@@ -1,0 +1,61 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+name: Upload coverage
+description: >-
+  Uploads ./jacoco-report.xml to Codecov in apache/hudi, or as a run artifact on a fork for
+  fork_coverage_bridge.yml to upload.
+
+# A composite action cannot read secrets, so the caller passes the Codecov token in.
+inputs:
+  flags:
+    description: Codecov flag of the report.
+    required: true
+  token:
+    description: Codecov token of apache/hudi. Empty on forks.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Status functions in a composite action see only the action's own steps, so these steps run
+    # even when the job has failed and the caller's step was started by always().
+    - name: Upload coverage to Codecov
+      if: github.repository == 'apache/hudi'
+      uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+      with:
+        files: ./jacoco-report.xml
+        disable_search: true
+        flags: ${{ inputs.flags }}
+        token: ${{ inputs.token }}
+    # A fork run cannot use apache/hudi's Codecov token, and Codecov does not link a run on the
+    # fork to the apache/hudi PR. fork_coverage_bridge.yml downloads this artifact and uploads it
+    # for the PR instead. It parses the name: `__` separates the parts, since job ids and flags
+    # both contain hyphens. Several jobs share a flag, so the job id keeps the name unique; a job
+    # whose matrix has several uploading entries would also need a matrix value in the name.
+    # A re-run of a job keeps the run id, and upload-artifact refuses a second artifact of the same
+    # name in one run, so without overwrite a re-run of a failed fork job would fail here even when
+    # its tests pass. The replacement gets a new artifact id, which the bridge picks as the newest.
+    - name: Upload coverage as an artifact for the coverage bridge
+      if: github.repository != 'apache/hudi'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: coverage-${{ github.sha }}__${{ github.job }}__${{ inputs.flags }}
+        path: jacoco-report.xml
+        retention-days: 7
+        if-no-files-found: ignore
+        overwrite: true
