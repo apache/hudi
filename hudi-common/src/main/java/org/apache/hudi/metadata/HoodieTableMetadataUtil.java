@@ -269,18 +269,36 @@ public class HoodieTableMetadataUtil {
       HoodieSchema recordSchema,
       StorageConfiguration<?> storageConfig,
       HoodieIndexVersion indexVersion) {
-    HashMap<String, ColumnStats> allColumnStats = new HashMap<>();
-    final Properties properties = new Properties();
-    properties.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
-        storageConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
-    // getNonNullType() rebuilds the union-member wrappers for nullable fields and depends only on the
-    // (fixed) target fields, so resolve it once per field instead of once per record per field.
-    List<Pair<String, HoodieSchema>> nonNullFieldSchemas = targetFields.stream()
-        .map(p -> Pair.of(p.getKey(), p.getValue().schema().getNonNullType()))
-        .collect(Collectors.toList());
-    // Collect stats for all columns by iterating through records while accounting
-    // corresponding stats
-    records.forEachRemaining((record) -> {
+    ColumnStatsCollector collector = new ColumnStatsCollector(targetFields, filePath, recordSchema, storageConfig, indexVersion);
+    records.forEachRemaining(collector::collect);
+    return collector.getColumnStats();
+  }
+
+  /** Collects per-file ranges without retaining the records supplied by a writer. */
+  public static class ColumnStatsCollector {
+    private final Map<String, ColumnStats> allColumnStats = new HashMap<>();
+    private final List<Pair<String, HoodieSchemaField>> targetFields;
+    private final List<Pair<String, HoodieSchema>> nonNullFieldSchemas;
+    private final String filePath;
+    private final HoodieSchema recordSchema;
+    private final HoodieIndexVersion indexVersion;
+    private final Properties properties = new Properties();
+
+    public ColumnStatsCollector(List<Pair<String, HoodieSchemaField>> targetFields, String filePath,
+                                HoodieSchema recordSchema, StorageConfiguration<?> storageConfig,
+                                HoodieIndexVersion indexVersion) {
+      this.targetFields = new ArrayList<>(targetFields);
+      this.filePath = filePath;
+      this.recordSchema = recordSchema;
+      this.indexVersion = indexVersion;
+      properties.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(),
+          storageConfig.getString(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), HoodieStorageConfig.WRITE_UTC_TIMEZONE.defaultValue().toString()));
+      this.nonNullFieldSchemas = targetFields.stream()
+          .map(p -> Pair.of(p.getKey(), p.getValue().schema().getNonNullType()))
+          .collect(Collectors.toList());
+    }
+
+    public void collect(HoodieRecord record) {
       // For each column (field) we have to index update corresponding column stats
       // with the values from this record
       nonNullFieldSchemas.forEach(fieldNameSchemaPair -> {
@@ -294,27 +312,48 @@ public class HoodieTableMetadataUtil {
 
         colStats.valueCount++;
         if (fieldValue != null) {
-          // Set the min value of the field
-          if (colStats.minValue == null
-              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema.toAvroSchema()) < 0) {
-            colStats.minValue = fieldValue;
-          }
-          // Set the max value of the field
-          if (colStats.maxValue == null || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, fieldSchema.toAvroSchema()) > 0) {
-            colStats.maxValue = fieldValue;
+          boolean updateMin = colStats.minValue == null
+              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.minValue, fieldSchema.toAvroSchema()) < 0;
+          boolean updateMax = colStats.maxValue == null
+              || ConvertingGenericData.INSTANCE.compare(fieldValue, colStats.maxValue, fieldSchema.toAvroSchema()) > 0;
+          if (updateMin || updateMax) {
+            Object bound = copyColumnStatsBound(fieldValue);
+            if (updateMin) {
+              colStats.minValue = bound;
+            }
+            if (updateMax) {
+              colStats.maxValue = bound;
+            }
           }
         } else {
           colStats.nullCount++;
         }
       });
-    });
+    }
 
-    return targetFields.stream().map(fieldNameFieldPair -> {
-      String fieldName = fieldNameFieldPair.getKey();
-      HoodieSchema fieldSchema = fieldNameFieldPair.getValue().schema();
-      ColumnStats colStats = allColumnStats.get(fieldName);
-      return colStatsToColRangeMetadata(fieldName, fieldSchema, colStats, filePath, indexVersion);
-    }).collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+    private static Object copyColumnStatsBound(Object value) {
+      // Writers may reuse rows and their backing storage after the callback returns.
+      if (value instanceof ByteBuffer) {
+        ByteBuffer source = ((ByteBuffer) value).duplicate();
+        byte[] bytes = new byte[source.remaining()];
+        source.get(bytes);
+        return ByteBuffer.wrap(bytes);
+      } else if (value instanceof CharSequence) {
+        return value.toString();
+      } else if (value instanceof Date) {
+        return ((Date) value).clone();
+      }
+      return value;
+    }
+
+    public Map<String, HoodieColumnRangeMetadata<Comparable>> getColumnStats() {
+      return targetFields.stream().map(fieldNameFieldPair -> {
+        String fieldName = fieldNameFieldPair.getKey();
+        HoodieSchema fieldSchema = fieldNameFieldPair.getValue().schema();
+        ColumnStats colStats = allColumnStats.get(fieldName);
+        return colStatsToColRangeMetadata(fieldName, fieldSchema, colStats, filePath, indexVersion);
+      }).collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+    }
   }
 
   private static Object collectColumnRangeFieldValue(HoodieRecord record, ValueMetadata valueMetadata, String fieldName, HoodieSchema fieldSchema, HoodieSchema recordSchema, Properties properties) {
@@ -1256,6 +1295,10 @@ public class HoodieTableMetadataUtil {
       if (partitionPathFileName.endsWith(HoodieFileFormat.PARQUET.getFileExtension())) {
         return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
             .getFileFormatUtils(HoodieFileFormat.PARQUET)
+            .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex, indexVersion);
+      } else if (partitionPathFileName.endsWith(HoodieFileFormat.LANCE.getFileExtension())) {
+        return HoodieIOFactory.getIOFactory(datasetMetaClient.getStorage())
+            .getFileFormatUtils(HoodieFileFormat.LANCE)
             .readColumnStatsFromMetadata(datasetMetaClient.getStorage(), fullFilePath, columnsToIndex, indexVersion);
       } else if (FSUtils.isLogFile(fileName)) {
         Option<HoodieSchema> writerSchemaOpt = tryResolveSchemaForTable(datasetMetaClient);

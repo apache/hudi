@@ -26,6 +26,7 @@ import org.apache.hudi.common.util.CollectionUtils;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Consumer;
 
 public interface HoodieFileWriter<T> extends AutoCloseable {
   boolean canWrite();
@@ -40,6 +41,16 @@ public interface HoodieFileWriter<T> extends AutoCloseable {
 
   default void addFooterMetadata(Map<String, String> footerMetadata) {
     // No-op for file writers that do not support key/value footer metadata.
+  }
+
+  /**
+   * Register a collector for successfully encoded rows, including their populated metadata fields.
+   * The collector must consume each record synchronously without retaining it.
+   *
+   * @return whether the writer supports collecting statistics while writing
+   */
+  default boolean setColumnStatsCollector(Consumer<HoodieRecord> collector) {
+    return false;
   }
 
   default void writeWithMetadata(HoodieKey key, HoodieRecord record, HoodieSchema schema) throws IOException {

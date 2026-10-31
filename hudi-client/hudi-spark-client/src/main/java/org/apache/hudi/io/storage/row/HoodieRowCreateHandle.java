@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieInternalRow;
@@ -33,9 +34,12 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.io.ColumnStatsStreamingTracker;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.ColumnStatsCollector;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -78,6 +82,7 @@ public class HoodieRowCreateHandle implements Serializable {
   private final HoodieTimer currTimer;
 
   protected final HoodieInternalRowFileWriter fileWriter;
+  private final Option<ColumnStatsCollector> columnStatsCollector;
   protected final WriteStatus writeStatus;
   private final HoodieRecordLocation newRecordLocation;
 
@@ -145,6 +150,11 @@ public class HoodieRowCreateHandle implements Serializable {
       createMarkerFile(partitionPath, fileName, instantTime, table, writeConfig);
 
       this.fileWriter = HoodieInternalRowFileWriterFactory.getInternalRowFileWriter(path, table, writeConfig, structType);
+      this.columnStatsCollector = fileWriter instanceof HoodieFileWriter
+          ? ColumnStatsStreamingTracker.createCollector((HoodieFileWriter<?>) fileWriter, writeConfig, table.getMetaClient(),
+              () -> HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, "record", "", false),
+              path.getName(), HoodieRecord.HoodieRecordType.SPARK)
+          : Option.empty();
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
@@ -275,6 +285,7 @@ public class HoodieRowCreateHandle implements Serializable {
   public WriteStatus close() throws IOException {
     fileWriter.close();
     HoodieWriteStat stat = writeStatus.getStat();
+    columnStatsCollector.ifPresent(collector -> stat.setRecordsStats(collector.getColumnStats()));
     stat.setPartitionPath(partitionPath);
     stat.setNumWrites(writeStatus.getTotalRecords());
     stat.setNumDeletes(0);

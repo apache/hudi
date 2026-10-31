@@ -41,6 +41,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * Base class for Hudi Lance file writers supporting different record types.
@@ -69,6 +70,7 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
   private int currentBatchSize = 0;
   private VectorSchemaRoot root;
   private ArrowWriter<R> arrowWriter;
+  private Consumer<R> recordWrittenCallback;
   protected final Option<HoodieBloomFilterWriteSupport<K>> bloomFilterWriteSupportOpt;
   private final Map<String, String> footerMetadata = new LinkedHashMap<>();
 
@@ -112,6 +114,10 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
    * @return Arrow schema
    */
   protected abstract Schema getArrowSchema();
+
+  protected void setRecordWrittenCallback(Consumer<R> callback) {
+    this.recordWrittenCallback = callback;
+  }
 
   /**
    * Subclass hook for emitting additional Lance file-footer key-value metadata
@@ -164,6 +170,9 @@ public abstract class HoodieBaseLanceWriter<R, K extends Comparable<K>> implemen
     }
 
     arrowWriter.write(record);
+    if (recordWrittenCallback != null) {
+      recordWrittenCallback.accept(record);
+    }
     currentBatchSize++;
     writtenRecordCount++;
 

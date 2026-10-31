@@ -20,14 +20,18 @@ package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.model.HoodieRowDataCreation;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodiePayloadProps;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieFlinkTable;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
@@ -43,10 +47,12 @@ import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 
@@ -126,6 +132,43 @@ public class TestHoodieRowDataCreateHandle extends HoodieFlinkClientTestHarness 
       assertEquals(mode.isFileNamePopulated() ? file.getName() : null,
           Objects.toString(stored.get(HoodieRecord.FILENAME_METADATA_FIELD), null));
     }
+  }
+
+  @Test
+  @DisabledIfSystemProperty(named = "lance.skip.tests", matches = "true")
+  void testLanceWriteStatusContainsColumnStats() throws Exception {
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.LANCE.name());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), tableProperties);
+    metaClient.reloadTableConfig();
+    RowType rowType = (RowType) DataTypes.ROW(DataTypes.FIELD("id", DataTypes.STRING())).notNull().getLogicalType();
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(rowType);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withEngineType(EngineType.FLINK)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withSchema(schema.toString())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true)
+            .withColumnStatsIndexForColumns("id,_hoodie_record_key,_hoodie_file_name").build())
+        .build();
+    HoodieFlinkTable<?> table = HoodieFlinkTable.create(config, context, metaClient);
+    HoodieRowDataCreateHandle handle = new HoodieRowDataCreateHandle(
+        table, config, PARTITION_PATH, FILE_ID, INSTANT_TIME, TASK_PARTITION_ID, TASK_ID, TASK_EPOCH_ID,
+        HoodieSchemaUtils.addMetadataFields(schema, false), false, false);
+    GenericRowData row = GenericRowData.of(StringData.fromString("z"));
+    handle.write("key0", PARTITION_PATH, row);
+    row.setField(0, StringData.fromString("a"));
+    handle.write("key1", PARTITION_PATH, row);
+    WriteStatus status = handle.close();
+    assertEquals(0, status.getTotalErrorRecords());
+    Map<String, HoodieColumnRangeMetadata<Comparable>> stats = status.getStat().getColumnStats().get();
+    assertEquals("a", stats.get("id").getMinValue().toString());
+    assertEquals("z", stats.get("id").getMaxValue().toString());
+    assertEquals(2, stats.get("id").getValueCount());
+    assertEquals("key0", stats.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).getMinValue().toString());
+    assertEquals("key1", stats.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).getMaxValue().toString());
+    assertEquals(new StoragePath(status.getStat().getPath()).getName(),
+        stats.get(HoodieRecord.FILENAME_METADATA_FIELD).getMinValue().toString());
   }
 
   @Test

@@ -22,10 +22,15 @@ import org.apache.hudi.client.model.HoodieRowDataCreation;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.ColumnStatsCollector;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.util.HoodieSchemaConverter;
 
@@ -51,7 +56,9 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.lance.file.LanceFileReader;
 
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -70,13 +77,24 @@ public class TestHoodieRowDataLanceWriter {
     HoodieSchema schema = HoodieSchemaUtils.addMetadataFields(HoodieSchemaConverter.convertToSchema(
         RowType.of(new LogicalType[] {new IntType(false)}, new String[] {"id"}).copy(false)), false);
     StoragePath path = new StoragePath(tempDir.resolve("metadata.lance").toUri());
+    ColumnStatsCollector collector = new ColumnStatsCollector(Arrays.asList(
+        "id", HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD).stream()
+        .map(column -> Pair.of(column, schema.getField(column).get())).collect(Collectors.toList()),
+        path.getName(), schema, HoodieTestUtils.getDefaultStorageConf(), HoodieIndexVersion.V2);
     try (HoodieRowDataLanceWriter writer = new HoodieRowDataLanceWriter(path, schema, "001",
         new LocalTaskContextSupplier(), Option.empty(), 128 * 1024 * 1024L,
         64 * 1024 * 1024L, 16 * 1024 * 1024L, true, mode, false)) {
+      assertTrue(writer.setColumnStatsCollector(collector::collect));
       RowData row = HoodieRowDataCreation.create(null, null, null, null, null,
           GenericRowData.of(1), false, false);
       writer.writeRowWithMetaData(new HoodieKey("key1", "partition"), row);
     }
+    assertEquals(1, collector.getColumnStats().get("id").getValueCount());
+    assertEquals(1, collector.getColumnStats().get("id").getMinValue());
+    assertEquals(mode.isRecordKeyPopulated() ? "key1" : null,
+        collector.getColumnStats().get(HoodieRecord.RECORD_KEY_METADATA_FIELD).getMinValue());
+    assertEquals(mode.isFileNamePopulated() ? path.getName() : null,
+        collector.getColumnStats().get(HoodieRecord.FILENAME_METADATA_FIELD).getMinValue());
     try (BufferAllocator allocator = new RootAllocator();
          LanceFileReader reader = LanceFileReader.open(path.toString(), allocator);
          ArrowReader arrowReader = reader.readAll(null, null, Integer.MAX_VALUE)) {
