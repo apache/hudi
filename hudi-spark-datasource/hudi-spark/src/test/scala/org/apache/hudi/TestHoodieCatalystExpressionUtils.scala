@@ -46,14 +46,27 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testArithmeticTransformationsPreserveOrdering(): Unit = {
-    assertEquals(Some(intAttr), matched(Add(intAttr, Literal(1))))
-    assertEquals(Some(intAttr), matched(Add(Literal(1), intAttr)))
-    assertEquals(Some(intAttr), matched(Multiply(intAttr, Literal(2))))
-    assertEquals(Some(intAttr), matched(Multiply(Literal(2), intAttr)))
+    // Float/double Add/Multiply cannot wrap, so they still translate
+    assertEquals(Some(dblAttr), matched(Add(dblAttr, Literal(1.0d))))
+    assertEquals(Some(dblAttr), matched(Add(Literal(1.0d), dblAttr)))
+    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.0d))))
+    assertEquals(Some(dblAttr), matched(Multiply(Literal(2.0d), dblAttr)))
     assertEquals(Some(intAttr), matched(Divide(intAttr, Literal(2))))
     assertEquals(Some(intAttr), matched(BitwiseOr(intAttr, Literal(1))))
     assertEquals(Some(intAttr), matched(BitwiseOr(Literal(1), intAttr)))
-    assertEquals(Some(intAttr), matched(ShiftLeft(intAttr, Literal(1))))
+  }
+
+  @Test
+  def testIntegralAddMultiplyShiftLeftDoNotMatch(): Unit = {
+    // Integral Add/Multiply wrap on overflow (#20460); ShiftLeft is integral-only and wraps
+    assertEquals(None, matched(Add(intAttr, Literal(1))))
+    assertEquals(None, matched(Add(Literal(1), intAttr)))
+    assertEquals(None, matched(Add(longAttr, Literal(1L))))
+    assertEquals(None, matched(Multiply(intAttr, Literal(2))))
+    assertEquals(None, matched(Multiply(Literal(2), intAttr)))
+    assertEquals(None, matched(Multiply(longAttr, Literal(2L))))
+    assertEquals(None, matched(ShiftLeft(intAttr, Literal(1))))
+    assertEquals(None, matched(ShiftLeft(longAttr, Literal(1))))
   }
 
   @Test
@@ -92,7 +105,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testNestedComposition(): Unit = {
-    assertEquals(Some(intAttr), matched(Add(Multiply(intAttr, Literal(2)), Literal(3))))
+    assertEquals(Some(dblAttr), matched(Add(Multiply(dblAttr, Literal(2.0d)), Literal(3.0d))))
+    // Nested integral Add/Multiply must not match either
+    assertEquals(None, matched(Add(Multiply(intAttr, Literal(2)), Literal(3))))
   }
 
   @Test
