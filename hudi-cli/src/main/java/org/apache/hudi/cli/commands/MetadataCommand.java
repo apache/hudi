@@ -151,8 +151,11 @@ public class MetadataCommand {
   }
 
   @ShellMethod(key = "metadata delete-record-index", value = "Delete the record index from Metadata Table")
-  public String deleteRecordIndex(@ShellOption(value = "--backup", help = "Backup the record index before delete", defaultValue = "true", arity = 1) final boolean backup) throws Exception {
+  public String deleteRecordIndex(
+      @ShellOption(value = "--sparkMaster", defaultValue = SparkUtil.DEFAULT_SPARK_MASTER, help = "Spark master") final String master,
+      @ShellOption(value = "--backup", help = "Backup the record index before delete", defaultValue = "true", arity = 1) final boolean backup) throws Exception {
     HoodieTableMetaClient dataMetaClient = HoodieCLI.getTableMetaClient();
+    initJavaSparkContext(Option.of(master));
     String backupPath = HoodieTableMetadataUtil.deleteMetadataTablePartition(dataMetaClient, new HoodieSparkEngineContext(jsc),
         MetadataPartitionType.RECORD_INDEX.getPartitionPath(), backup);
     if (backup) {
