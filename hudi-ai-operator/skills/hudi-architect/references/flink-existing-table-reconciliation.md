@@ -26,7 +26,9 @@ the architecture, execute evidence, mutate the table, plan a migration, or rende
 The first compatible reconciliation path supports Hudi 1.2.0 with Flink 1.20, one writer, direct
 SQL with no external discovery, and desired contract schemas 1, 2, or 3. It can validate an exact
 existing-table match. Schema evolution, table upgrades, catalog registration, multi-writer
-operation, separate-writer takeover, and cross-engine takeover remain unverified or blocked.
+operation, separate-writer takeover, and cross-engine takeover remain unverified or blocked. PR7
+can attach a Writer Contract to the same evidence envelope, but that path always remains
+non-executable and cannot become `COMPATIBLE` merely because the contract is complete.
 
 `CONFIG_VALIDATED` in this assessment means that the static comparison is complete. It always has
 `executable_eligible: false`; the PR5 path emits a report and deployment checks, never SQL.
@@ -92,6 +94,29 @@ contract. If redaction removes a load-bearing fact, leave it incomplete.
   establish the partition format.
 - `writer_inventory` and `timeline_summary` are time-sensitive operational observations. Always
   require a deployment-time recheck even when the comparison succeeds.
+
+For a PR7 Writer Contract, `writer_inventory` may also supply `active_writers` and
+`schema_evolution_owner_id`; `flink_writer_config` may supply `write_concurrency_mode`,
+`lock_provider_class`, and `lock_configuration_consistency`. These are optional observations and
+retain the same evidence scope and provenance. If sources disagree, or an observation contradicts
+the explicit Writer Contract, report `FLINK_EXISTING_EVIDENCE_CONFLICT` and/or
+`FLINK_WRITER_CONTRACT_CONFLICT`, keep reconciliation and change disposition `UNVERIFIED`, and do
+not infer migration work.
+
+Evaluate supplied concurrency observations even when the optional Writer Contract concurrency
+block is absent. Retain them as provenance-bearing `UNVERIFIED` comparisons without promoting
+them into the normalized contract. Continue the capability assessment when the contract itself is
+missing or invalid, so structural incompleteness cannot hide an unsupported bounded combination.
+Before accepting the single-writer branch, also reconcile the active-writer inventory: more than
+one active writer contradicts the desired topology. Treat that snapshot as internally inconsistent
+with `concurrent_writers: false` only when both facts share an evidence source.
+
+For a declared multi-writer topology, an active-writer snapshot may contain any subset of declared
+writer IDs; inactive declared writers are not a mismatch. An undeclared active writer remains a
+Writer Contract conflict. `concurrent_writers` is an operational observation, not proof that every
+declared writer is active, so do not require it to be `true` merely because the desired topology is
+multi-writer. General deployment checks require `confirm_single_writer` only for single-writer
+designs.
 
 Do not silently merge contradictory sources. Preserve provenance in each comparison item.
 

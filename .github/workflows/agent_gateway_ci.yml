@@ -87,12 +87,14 @@ jobs:
         run: >-
           ruff check src tests
           ../hudi-ai-operator/skills/hudi-architect/redact_sensitive_values.py
+          ../hudi-ai-operator/skills/hudi-architect/flink_writer_contract.py
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py
       - name: Type-check
         run: >-
           mypy src
+          ../hudi-ai-operator/skills/hudi-architect/flink_writer_contract.py
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py
           ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py

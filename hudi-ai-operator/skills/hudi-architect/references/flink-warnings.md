@@ -194,10 +194,11 @@ The table lifecycle must be known before choosing a path.
 **Trigger:** Another pipeline, backfill, cleanup writer, cross-engine writer, standalone compactor,
 or standalone clustering job can commit to the table.
 
-**Message:** The single-writer assumptions are invalid. This path does not claim an OCC, NBCC,
-lock-provider, index, or table-service combination is safe.
+**Message:** The single-writer assumptions are invalid. PR7 can record a Writer Contract, but it
+does not claim an OCC, NBCC, lock-provider, index, or table-service combination is safe.
 
-**Action:** `REVIEW_REQUIRED`; withhold concurrency-sensitive configuration.
+**Action:** `REVIEW_REQUIRED`; collect the Writer Contract and withhold concurrency-sensitive
+configuration and executable output.
 
 ## FLINK_WRITER_MODEL_UNRESOLVED
 
@@ -208,6 +209,49 @@ to the table.
 be treated as safe.
 
 **Action:** `REVIEW_REQUIRED`; do not infer `SINGLE_WRITER` or recommend concurrency settings.
+
+## FLINK_WRITER_CONTRACT_REQUIRED
+
+**Trigger:** The writer model is confirmed multi-writer but no version-1 Writer Contract exists.
+
+**Message:** The writer inventory and ownership facts are incomplete.
+
+**Action:** `INCOMPLETE`; collect the bounded PR7 contract without selecting concurrency settings.
+
+## FLINK_WRITER_CONTRACT_INVALID
+
+**Trigger:** A Writer Contract has an invalid type, unknown field, duplicate writer ID, invalid
+enum, undeclared owner, or another structural error.
+
+**Message:** The validator cannot normalize the writer topology without guessing.
+
+**Action:** `INCOMPLETE`; correct the explicit facts and emit no executable output.
+
+## FLINK_WRITER_OWNERSHIP_UNRESOLVED
+
+**Trigger:** Schema-evolution or supplied table-configuration ownership is explicitly `UNKNOWN`.
+
+**Message:** Concurrent schema or configuration changes have no confirmed owner.
+
+**Action:** `REVIEW_REQUIRED`; establish ownership before deployment.
+
+## FLINK_WRITER_CONTRACT_CONFLICT
+
+**Trigger:** The contract contradicts the writer model or scoped existing-table evidence, or the
+observed lock configuration is conflicting.
+
+**Message:** PR7 preserves both facts and does not select one as authoritative.
+
+**Action:** `REVIEW_REQUIRED`; return `CONFLICT`, withhold SQL, and reconcile the evidence.
+
+## FLINK_WRITER_COMBINATION_UNSUPPORTED
+
+**Trigger:** NBCC is observed for design schema 1 or 2 COW, or schema 3 MOR with `FLINK_STATE`.
+
+**Message:** Pinned Hudi 1.2.0 requires NBCC on MOR with simple bucket index (or the metadata
+table), which none of the existing executable schemas uses.
+
+**Action:** `BLOCKED`; do not switch the table type or index automatically.
 
 ## FLINK_EXTERNAL_CATALOG_REVIEW
 
