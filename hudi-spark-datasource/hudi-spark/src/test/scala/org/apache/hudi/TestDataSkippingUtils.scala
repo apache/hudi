@@ -93,7 +93,8 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     "testBasicLookupFilterExpressionsSource",
     "testAdvancedLookupFilterExpressionsSource",
     "testCompositeFilterExpressionsSource",
-    "testSupportedAndUnsupportedDataSkippingColumnsSource"
+    "testSupportedAndUnsupportedDataSkippingColumnsSource",
+    "testNonOrderPreservingTransformationsSource"
   ))
   def testLookupFilterExpressions(sourceFilterExprStr: String, input: Seq[IndexRow], expectedOutput: Seq[String]): Unit = {
     // We have to fix the timezone to make sure all date-bound utilities output
@@ -767,6 +768,54 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1"))
 
+    )
+  }
+
+  def testNonOrderPreservingTransformationsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      // Issue #19445 repro: cast(4294967297L as int) wraps around to 1 in non-ANSI mode, so
+      // re-applying the cast over min/max stats would wrongly prune both files; a narrowing
+      // cast must instead fall back to always-true, keeping every file
+      arguments(
+        "CAST(A AS INT) > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 3, A_minValue = 1, A_maxValue = 4294967297L, A_nullCount = 0)
+        ),
+        Seq("file_1", "file_2")),
+      // A widening (up) cast still translates and prunes
+      arguments(
+        "CAST(A AS DOUBLE) > 100.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // A decimal column compared with a double is cast to double, which still translates and prunes
+      arguments(
+        "CAST(A AS DECIMAL(20, 0)) > 100.5D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // A timestamp casts to smallint through its epoch seconds, so 65537s wraps around to 1 in
+      // non-ANSI mode; re-applying the cast over min/max stats would wrongly prune file_1 even
+      // though a row at 200s matches. Must fall back to always-true, keeping the file
+      arguments(
+        "CAST(C AS SMALLINT) > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 3, C_minValue = new Timestamp(1000L), C_maxValue = new Timestamp(65537000L), C_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Casting a timestamp to bigint still translates and prunes
+      arguments(
+        "CAST(C AS BIGINT) > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, C_minValue = new Timestamp(1000L), C_maxValue = new Timestamp(50000L), C_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, C_minValue = new Timestamp(101000L), C_maxValue = new Timestamp(200000L), C_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 }

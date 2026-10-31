@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType}
+import org.apache.spark.sql.types.{ByteType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -35,6 +35,8 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val dblAttr = AttributeReference("d", DoubleType)()
   private val dateAttr = AttributeReference("dt", DateType)()
   private val longAttr = AttributeReference("l", LongType)()
+  private val decAttr = AttributeReference("dec", DecimalType(10, 2))()
+  private val tsAttr = AttributeReference("ts", TimestampType)()
 
   private def matched(expr: Expression): Option[AttributeReference] =
     sparkAdapter.getCatalystExpressionUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
@@ -84,10 +86,37 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(intAttr), matched(Cast(intAttr, LongType)))
     // Casting a numeric column to string can reorder values, so it must not match.
     assertEquals(None, matched(Cast(intAttr, StringType)))
-    // TODO(#19445): a narrowing numeric cast wraps around in non-ANSI mode and does not preserve
-    // ordering, so this should be None; pinning the current (incorrect) behavior until
-    // isCastPreservingOrdering rejects it.
-    assertEquals(Some(longAttr), matched(Cast(longAttr, IntegerType)))
+    // A narrowing numeric cast wraps around in non-ANSI mode and does not preserve ordering.
+    assertEquals(None, matched(Cast(longAttr, IntegerType)))
+  }
+
+  @Test
+  def testNumericCastOrderingFollowsUpCastRules(): Unit = {
+    // Widening precedence casts preserve ordering, including lossy-but-monotonic long to float.
+    assertEquals(Some(intAttr), matched(Cast(intAttr, DoubleType)))
+    assertEquals(Some(longAttr), matched(Cast(longAttr, FloatType)))
+    // Decimal widening is an up-cast; narrowing precision overflows into NULL.
+    assertEquals(Some(decAttr), matched(Cast(decAttr, DecimalType(12, 2))))
+    assertEquals(None, matched(Cast(decAttr, DecimalType(8, 2))))
+    // Decimal to float/double rounds monotonically and is allowed explicitly.
+    assertEquals(Some(decAttr), matched(Cast(decAttr, DoubleType)))
+    assertEquals(Some(decAttr), matched(Cast(decAttr, FloatType)))
+    // Cast.canUpCast rejects double to float even though rounding is weakly monotonic; the
+    // conservative answer only costs pruning opportunity.
+    assertEquals(None, matched(Cast(dblAttr, FloatType)))
+  }
+
+  @Test
+  def testTimestampToNumericCastOrdering(): Unit = {
+    // Epoch seconds fit bigint and floating-point targets.
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, LongType)))
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, DoubleType)))
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, FloatType)))
+    // Narrower integral targets wrap around and decimals overflow into NULL.
+    assertEquals(None, matched(Cast(tsAttr, IntegerType)))
+    assertEquals(None, matched(Cast(tsAttr, ShortType)))
+    assertEquals(None, matched(Cast(tsAttr, ByteType)))
+    assertEquals(None, matched(Cast(tsAttr, DecimalType(10, 2))))
   }
 
   @Test
