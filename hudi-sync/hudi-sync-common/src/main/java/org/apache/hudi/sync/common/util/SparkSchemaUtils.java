@@ -149,9 +149,23 @@ public class SparkSchemaUtils {
       case BLOB:
       case VARIANT:
         return convertToSparkSchemaJson(fieldSchema, includeFieldDocs);
+      case UNION:
+        // A union of multiple non-null types is written to parquet as a group of optional "member<N>" fields,
+        // which spark reads as a struct of nullable members.
+        return convertToSparkSchemaJson(createUnionMembersRecord(fieldSchema), includeFieldDocs);
       default:
         throw new UnsupportedOperationException("Cannot convert " + fieldSchema.getType() + " to spark sql type");
     }
+  }
+
+  private static HoodieSchema createUnionMembersRecord(HoodieSchema unionSchema) {
+    List<HoodieSchemaField> memberFields = new ArrayList<>();
+    for (HoodieSchema memberSchema : unionSchema.getTypes()) {
+      if (!memberSchema.isSchemaNull()) {
+        memberFields.add(HoodieSchemaField.of("member" + memberFields.size(), HoodieSchema.createNullable(memberSchema)));
+      }
+    }
+    return HoodieSchema.createRecord("union", null, null, false, memberFields);
   }
 
   private static String arrayType(HoodieSchema elementType, boolean includeFieldDocs) {
