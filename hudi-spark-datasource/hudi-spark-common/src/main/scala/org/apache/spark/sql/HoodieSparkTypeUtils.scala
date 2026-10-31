@@ -36,9 +36,18 @@ object HoodieSparkTypeUtils {
   def isCastPreservingOrdering(from: DataType, to: DataType): Boolean =
     (from, to) match {
       // NOTE: In the casting rules defined by Spark, only casting from String to Numeric
-      // (and vice versa) are the only casts that might break the ordering of the elements after casting
-      case (StringType, _: NumericType) => false
-      case (_: NumericType, StringType) => false
+      // (and vice versa) are the only casts that might break the ordering of the elements after casting.
+      // These match by type, so that collated strings on Spark 4 are rejected as well
+      case (_: StringType, _: NumericType) => false
+      case (_: NumericType, _: StringType) => false
+      // NOTE: On Spark 4 StringType carries a collation, and casting to a different collation changes
+      //       the sort order (for ex, "B" < "a" in UTF8_BINARY but "a" < "B" in UTF8_LCASE). Equality
+      //       also compares the char/varchar length constraint, so those casts are conservatively
+      //       rejected too. On Spark 3 StringType is a singleton, making this arm trivially true
+      case (fromStr: StringType, toStr: StringType) => fromStr == toStr
+      // NOTE: Every type casts to a string, so collated targets are rejected whatever the source
+      //       (for ex, binary bounds are in byte order, which UTF8_LCASE does not follow)
+      case (_, toStr: StringType) => toStr == StringType
 
       case _ => true
     }

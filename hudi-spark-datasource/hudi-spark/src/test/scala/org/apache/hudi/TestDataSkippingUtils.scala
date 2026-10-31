@@ -33,8 +33,9 @@ import org.apache.spark.sql.functions.{col, date_format, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -105,6 +106,18 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     val rows: Seq[String] = applyFilterExpr(optimizedExpr, input)
 
     assertEquals(expectedOutput, rows)
+  }
+
+  @Test
+  def testCollationChangingCastDoesNotPrune(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "String collations only exist on Spark 4.x")
+    // Stats are in UTF8_BINARY order ("B" < "a"), but the filter compares in UTF8_LCASE order
+    // ("a" < "B"): re-applying the cast to the bounds gives "B" <= "a" = false and would wrongly
+    // prune file_1, which holds "a". Must fall back to always-true, keeping the file
+    testLookupFilterExpressions(
+      "CAST(B AS STRING COLLATE UTF8_LCASE) = 'a'",
+      Seq(IndexRow("file_1", valueCount = 2, B_minValue = "B", B_maxValue = "a", B_nullCount = 0)),
+      Seq("file_1"))
   }
 
   @ParameterizedTest
