@@ -187,6 +187,7 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
     }
     val mergeConfigs = if (tableVersion.lesserThan(HoodieTableVersion.NINE)) {
       Map(
+        "hoodie.table.precombine.field" -> "ts",
         "hoodie.compaction.payload.class" -> "org.apache.hudi.common.model.DefaultHoodieRecordPayload",
         "hoodie.record.merge.strategy.id" -> "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5")
     } else {
@@ -1288,6 +1289,50 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
         )
       }
     }
+  }
+
+  test("Test Create Table below version 9 records the ordering fields under the legacy key too") {
+    // readers of a table below version 9 (0.x for version 6, 1.0.x for version 8) only know the precombine key
+    Seq(6, 8).foreach { tableVersion =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  ts long
+             |) using hudi
+             | location '$tablePath'
+             | tblproperties (
+             |  type = 'mor',
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts',
+             |  hoodie.write.table.version = '$tableVersion'
+             | )
+           """.stripMargin)
+        assertOrderingFieldsKeys(tablePath, tableVersion)
+
+        // a table written by 0.x records the ordering fields only under the precombine key
+        val metaClient = createMetaClient(spark, tablePath)
+        val legacyOrderingFields = new java.util.Properties()
+        legacyOrderingFields.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key, "ts")
+        HoodieTableConfig.updateAndDeleteProps(metaClient.getStorage, metaClient.getMetaPath, legacyOrderingFields,
+          java.util.Collections.singleton(HoodieTableConfig.ORDERING_FIELDS.key))
+        // ALTER TABLE RENAME re-creates the table from its own properties
+        spark.sql(s"alter table $tableName rename to ${generateTableName}")
+        assertOrderingFieldsKeys(tablePath, tableVersion)
+      }
+    }
+  }
+
+  private def assertOrderingFieldsKeys(tablePath: String, tableVersion: Int): Unit = {
+    val tableConfig = createMetaClient(spark, tablePath).getTableConfig
+    assertResult(tableVersion)(tableConfig.getTableVersion.versionCode())
+    val properties = tableConfig.getProps.asScala.toMap
+    assertResult(Some("ts"))(properties.get(HoodieTableConfig.ORDERING_FIELDS.key))
+    assertResult(Some("ts"))(properties.get(HoodieTableConfig.PRECOMBINE_FIELD.key))
   }
 
   test("Test Merge Into a legacy single-field complex keygen table without the recorded encoding") {
