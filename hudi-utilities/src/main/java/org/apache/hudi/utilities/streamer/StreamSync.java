@@ -1247,13 +1247,18 @@ public class StreamSync implements Serializable, Closeable {
       }
     }
 
-    if (writeClient != null) {
-      // Close Write client.
-      writeClient.close();
-    }
     KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+    SparkRDDWriteClient previousWriteClient = writeClient;
     writeClient = new SparkRDDWriteClient<>(hoodieSparkContext, writeConfig, embeddedTimelineService);
-    onInitializingHoodieWriteClient.apply(writeClient);
+    // Switch the async table services before closing the previous client. Each handoff waits for any active run
+    // to finish, so no compaction or clustering is still using the previous client when it is closed.
+    try {
+      onInitializingHoodieWriteClient.apply(writeClient);
+    } finally {
+      if (previousWriteClient != null) {
+        previousWriteClient.close();
+      }
+    }
   }
 
   protected void releaseResources(String instantTime) {
