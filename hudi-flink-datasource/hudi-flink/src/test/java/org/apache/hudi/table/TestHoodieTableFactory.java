@@ -595,6 +595,18 @@ public class TestHoodieTableFactory {
     final Configuration conf3 = tableSource3.getConf();
     assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS_NAME), is(NonpartitionedAvroKeyGenerator.class.getName()));
+
+    // non-partitioned table should also respect KEYGEN_CLASS_NAME in conf
+    this.conf.set(FlinkOptions.KEYGEN_CLASS_NAME, "dummyKeyGenClass");
+    ResolvedSchema schema4 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .primaryKey("f0")
+        .build();
+    final MockContext sourceContext4 = MockContext.getInstance(this.conf, schema4, "");
+    final HoodieTableSource tableSource4 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(sourceContext4);
+    final Configuration conf4 = tableSource4.getConf();
+    assertThat(conf4.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat(conf4.get(FlinkOptions.KEYGEN_CLASS_NAME), is("dummyKeyGenClass"));
   }
 
   @Test
@@ -798,7 +810,20 @@ public class TestHoodieTableFactory {
     assertThat(conf3.get(FlinkOptions.RECORD_KEY_FIELD), is("f0,f1"));
     assertThat(conf3.get(FlinkOptions.KEYGEN_CLASS_NAME), is(NonpartitionedAvroKeyGenerator.class.getName()));
 
+    // non-partitioned table should also respect KEYGEN_CLASS_NAME in conf
+    this.conf.set(FlinkOptions.KEYGEN_CLASS_NAME, "dummyKeyGenClass");
+    ResolvedSchema schema4 = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .primaryKey("f0")
+        .build();
+    final MockContext sinkContext4a = MockContext.getInstance(this.conf, schema4, "");
+    final HoodieTableSink tableSink4a = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext4a);
+    final Configuration conf4a = tableSink4a.getConf();
+    assertThat(conf4a.get(FlinkOptions.RECORD_KEY_FIELD), is("f0"));
+    assertThat(conf4a.get(FlinkOptions.KEYGEN_CLASS_NAME), is("dummyKeyGenClass"));
+
     // definition of bucket index
+    this.conf.removeConfig(FlinkOptions.KEYGEN_CLASS_NAME);
     this.conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     final MockContext sinkContext4 = MockContext.getInstance(this.conf, schema2, "");
     final HoodieTableSink tableSink4 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(sinkContext4);
