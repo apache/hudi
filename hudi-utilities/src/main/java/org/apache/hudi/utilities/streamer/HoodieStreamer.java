@@ -757,7 +757,9 @@ public class HoodieStreamer implements Serializable {
       this.configurationHotUpdateStrategyOpt = StringUtils.isNullOrEmpty(cfg.configHotUpdateStrategyClass) ? Option.empty() :
           ConfigurationHotUpdateStrategyUtils.createConfigurationHotUpdateStrategy(cfg.configHotUpdateStrategyClass, cfg, properties.get());
 
-      if (this.storage.exists(new StoragePath(cfg.targetBasePath))) {
+      final StoragePath basePath = new StoragePath(cfg.targetBasePath);
+      final StoragePath metaPath = new StoragePath(basePath, HoodieTableMetaClient.METAFOLDER_NAME);
+      if (this.storage.exists(metaPath)) {
         try {
           HoodieTableMetaClient meta = HoodieTableMetaClient.builder()
               .setConf(this.storage.getConf().newInstance())
@@ -781,6 +783,10 @@ public class HoodieStreamer implements Serializable {
           }
         }
       } else {
+        if (!this.storage.isEmpty(basePath)) {
+          throw new HoodieException("Target base path " + cfg.targetBasePath + " is not empty and not a hoodie table. "
+              + "Please either delete the existing data or use a different path.");
+        }
         initializeTableTypeAndBaseFileFormat();
       }
 
