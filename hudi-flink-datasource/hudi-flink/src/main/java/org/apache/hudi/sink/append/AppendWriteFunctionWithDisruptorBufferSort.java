@@ -106,7 +106,7 @@ public class AppendWriteFunctionWithDisruptorBufferSort<T> extends AppendWriteFu
 
   private void initDisruptorBuffer() throws Exception {
     if (sortBuffer == null) {
-      this.sortBuffer = BufferUtils.createBuffer(rowType,
+      this.sortBuffer = BufferUtils.createSortBuffer(rowType,
           memorySegmentPool,
           keyComputer.newInstance(Thread.currentThread().getContextClassLoader()),
           recordComparator.newInstance(Thread.currentThread().getContextClassLoader()));

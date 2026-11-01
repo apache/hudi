@@ -87,15 +87,22 @@ public class FormatUtils {
       List<DataType> fieldTypes,
       int[] selectedFields,
       Configuration hadoopConf) {
-    DataType selectedDataType = DataTypes.ROW(Arrays.stream(selectedFields)
+    HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(
+        DataTypes.ROW(Arrays.stream(selectedFields)
             .mapToObj(i -> DataTypes.FIELD(fieldNames.get(i), fieldTypes.get(i)))
             .toArray(DataTypes.Field[]::new))
-        .bridgedTo(RowData.class);
-    HoodieSchema requestedSchema = HoodieSchemaConverter.convertToSchema(selectedDataType.getLogicalType());
+            .getLogicalType());
+    return getLanceRecordIterator(path, requestedSchema, hadoopConf);
+  }
+
+  public static ClosableIterator<RowData> getLanceRecordIterator(
+      String path,
+      HoodieSchema requestedSchema,
+      Configuration hadoopConf) {
     HoodieRowDataLanceReader reader = new HoodieRowDataLanceReader(
         new StoragePath(path), StreamerUtil.getLanceReadConfig(hadoopConf));
     try {
-      return reader.getRowDataIterator(selectedDataType, requestedSchema);
+      return reader.getRowDataIterator(requestedSchema);
     } catch (RuntimeException e) {
       reader.close();
       throw new HoodieException("Failed to get iterator from Lance reader: " + path, e);

@@ -81,7 +81,8 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void getRecordKeyWithSingleKey() {
-    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false);
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"field_1"}));
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
@@ -91,7 +92,8 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void getRecordKeyWithMultipleKeys() {
-    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false);
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"field_1", "field_3.nested_field"}));
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
@@ -101,7 +103,7 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void getNestedField() {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     ArrayWritable row = new ArrayWritable(Writable.class, new Writable[]{new Text("value1"), new Text("value2"), new ArrayWritable(new String[]{"value3"})});
 
@@ -110,7 +112,7 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithFieldValues() {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
         readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     Object[] fieldVals = new Writable[]{
@@ -126,7 +128,7 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithNoUpdates() {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
         readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
@@ -147,7 +149,7 @@ class TestHiveHoodieReaderContext {
 
   @Test
   void testConstructEngineRecordWithUpdates() {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     HiveHoodieReaderContext avroReaderContext = new HiveHoodieReaderContext(
         readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
 
@@ -389,7 +391,7 @@ class TestHiveHoodieReaderContext {
   }
 
   private HiveHoodieReaderContext newReaderContext() {
-    when(tableConfig.populateMetaFields()).thenReturn(true);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(true);
     HiveHoodieReaderContext readerContext =
         new HiveHoodieReaderContext(readerCreator, Collections.emptyList(), storageConfiguration, tableConfig);
     readerContext.setNeedsBootstrapMerge(false);

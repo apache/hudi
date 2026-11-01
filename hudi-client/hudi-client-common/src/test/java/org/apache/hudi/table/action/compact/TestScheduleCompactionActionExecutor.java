@@ -18,6 +18,7 @@
 
 package org.apache.hudi.table.action.compact;
 
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
@@ -39,6 +40,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 import static org.mockito.Mockito.when;
@@ -63,6 +67,53 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
         context, config, table, "001", Option.empty(), WriteOperationType.COMPACT
     ));
     Assertions.assertEquals(1, TestCompactionPlanGenerator.getCount());
+  }
+
+  @Test
+  void testMergeExtraMetadataKeepsPlanGeneratorEntries() {
+    HoodieCompactionPlan plan = planWithExtraMetadata(generatorMetadata());
+    Map<String, String> provided = new HashMap<>();
+    provided.put("caller.key", "caller.value");
+    ScheduleCompactionActionExecutor.mergeExtraMetadata(plan, Option.of(provided));
+    Map<String, String> expected = new HashMap<>(generatorMetadata());
+    expected.putAll(provided);
+    Assertions.assertEquals(expected, plan.getExtraMetadata());
+  }
+
+  @Test
+  void testMergeExtraMetadataGeneratorWinsOnCollision() {
+    HoodieCompactionPlan plan = planWithExtraMetadata(generatorMetadata());
+    ScheduleCompactionActionExecutor.mergeExtraMetadata(plan, Option.of(Collections.singletonMap("generator.mode", "other")));
+    Assertions.assertEquals(generatorMetadata(), plan.getExtraMetadata());
+  }
+
+  @Test
+  void testMergeExtraMetadataWithoutCallerEntriesLeavesPlanUntouched() {
+    HoodieCompactionPlan plan = planWithExtraMetadata(generatorMetadata());
+    ScheduleCompactionActionExecutor.mergeExtraMetadata(plan, Option.empty());
+    Assertions.assertEquals(generatorMetadata(), plan.getExtraMetadata());
+  }
+
+  @Test
+  void testMergeExtraMetadataOntoPlanWithoutEntries() {
+    HoodieCompactionPlan plan = planWithExtraMetadata(null);
+    Map<String, String> provided = Collections.singletonMap("caller.key", "caller.value");
+    ScheduleCompactionActionExecutor.mergeExtraMetadata(plan, Option.of(provided));
+    Assertions.assertEquals(provided, plan.getExtraMetadata());
+  }
+
+  private static Map<String, String> generatorMetadata() {
+    Map<String, String> metadata = new HashMap<>();
+    metadata.put("generator.mode", "planned");
+    metadata.put("generator.state", "[\"a\",\"b\"]");
+    return metadata;
+  }
+
+  private static HoodieCompactionPlan planWithExtraMetadata(Map<String, String> extraMetadata) {
+    return HoodieCompactionPlan.newBuilder()
+        .setOperations(Collections.emptyList())
+        .setExtraMetadata(extraMetadata)
+        .build();
   }
 
   public static class TestCompactionPlanGenerator<T extends HoodieRecordPayload, I, K, O> extends HoodieCompactionPlanGenerator<T, I, K, O> {

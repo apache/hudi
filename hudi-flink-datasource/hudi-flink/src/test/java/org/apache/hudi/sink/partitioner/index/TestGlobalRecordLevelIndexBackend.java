@@ -34,10 +34,13 @@ import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.clusterframework.types.ResourceID;
 import org.apache.flink.runtime.metrics.NoOpMetricRegistry;
 import org.apache.flink.runtime.metrics.groups.TaskManagerMetricGroup;
+import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -45,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.UUID;
 
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
@@ -75,6 +79,37 @@ public class TestGlobalRecordLevelIndexBackend {
     conf.set(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE.name());
     conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
     StreamerUtil.initTableIfNotExists(conf);
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {-1L, 42L})
+  void testFactoryRetainsUncommittedLocations(long checkpointId) throws Exception {
+    conf.set(FlinkOptions.INDEX_TYPE, "GLOBAL_RECORD_LEVEL_INDEX");
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_SIZE, 1L);
+    FunctionInitializationContext context = mock(FunctionInitializationContext.class);
+    when(context.isRestored()).thenReturn(checkpointId >= 0);
+    when(context.getRestoredCheckpointId()).thenReturn(checkpointId >= 0 ? OptionalLong.of(checkpointId) : OptionalLong.empty());
+
+    try (GlobalRecordLevelIndexBackend backend = (GlobalRecordLevelIndexBackend) IndexBackendFactory.create(conf, context)) {
+      HoodieRecordGlobalLocation location = new HoodieRecordGlobalLocation("par1", "001", "file1");
+      backend.update("uncommitted", location);
+      for (int i = 0; i < 1500; i++) {
+        backend.update("first_" + i, new HoodieRecordGlobalLocation("par1", "001", UUID.randomUUID().toString()));
+      }
+      backend.onCheckpoint(checkpointId + 1);
+      Correspondent correspondent = mock(Correspondent.class);
+      // The writer's first batch after restore is still awaiting its Hudi commit.
+      when(correspondent.requestInflightInstants()).thenReturn(Collections.singletonMap(checkpointId, "001"));
+      backend.onCheckpointComplete(correspondent, checkpointId + 1);
+
+      // Force cache eviction pressure while the first batch remains uncommitted.
+      for (int i = 0; i < 4000; i++) {
+        backend.update("next_" + i, new HoodieRecordGlobalLocation("par1", "002", UUID.randomUUID().toString()));
+      }
+      backend.onCheckpoint(checkpointId + 2);
+      assertEquals(location, backend.get("uncommitted"), "Uncommitted locations must survive cache cleaning");
+    }
   }
 
   @Test

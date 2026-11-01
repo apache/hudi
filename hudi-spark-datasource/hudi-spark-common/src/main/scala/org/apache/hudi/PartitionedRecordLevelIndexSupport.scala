@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.RecordLevelIndexSupport.{getPrunedStoragePaths, MAX_PARTITIONS}
+import org.apache.hudi.RecordLevelIndexSupport.MAX_PARTITIONS
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -64,8 +64,7 @@ class PartitionedRecordLevelIndexSupport(spark: SparkSession,
     } else {
       lookupRecordKeys(partitions, recordKeys) match {
         case Some(fileIdToPartitionMap) =>
-          val prunedStoragePaths = getPrunedStoragePaths(prunedPartitionsAndFileSlices, fileIndex)
-          Option.apply(filterCandidateFiles(prunedStoragePaths, fileIdToPartitionMap))
+          Option.apply(filterCandidateFiles(prunedPartitionsAndFileSlices, fileIndex, fileIdToPartitionMap))
         case None =>
           // None of the candidate partitions are indexed by the partitioned RLI (e.g. partitions
           // not yet indexed), so we cannot determine the matching files. Fall back to other indexes

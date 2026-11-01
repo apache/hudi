@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
 import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -57,17 +57,17 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
-  def testUnaryMathAndStringTransformationsPreserveOrdering(): Unit = {
+  def testUnaryMathTransformationsPreserveOrdering(): Unit = {
     assertEquals(Some(dblAttr), matched(Exp(dblAttr)))
     assertEquals(Some(dblAttr), matched(Log(dblAttr)))
-    assertEquals(Some(strAttr), matched(Upper(strAttr)))
-    assertEquals(Some(strAttr), matched(Lower(strAttr)))
   }
 
   @Test
   def testDateTransformationsPreserveOrdering(): Unit = {
     assertEquals(Some(dateAttr), matched(DateAdd(dateAttr, Literal(1))))
     assertEquals(Some(dateAttr), matched(DateSub(dateAttr, Literal(1))))
+    // DateDiff(end, start) = end - start preserves the ordering of its end date.
+    assertEquals(Some(dateAttr), matched(DateDiff(dateAttr, Literal(java.sql.Date.valueOf("2022-03-07")))))
   }
 
   @Test
@@ -97,11 +97,16 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testNonOrderPreservingExpressionsDoNotMatch(): Unit = {
+    // DateDiff(end, start) = end - start reverses the ordering of its start date.
+    assertEquals(None, matched(DateDiff(Literal(java.sql.Date.valueOf("2022-03-09")), dateAttr)))
     // A bare literal carries no attribute.
     assertEquals(None, matched(Literal(5)))
     // No attribute on either operand.
     assertEquals(None, matched(Add(Literal(1), Literal(2))))
     // Sqrt is not one of the whitelisted order-preserving transformations.
     assertEquals(None, matched(Sqrt(dblAttr)))
+    // Case folding breaks the binary ordering of strings: "Zebra" < "apple", but lower("Zebra") > "apple".
+    assertEquals(None, matched(Lower(strAttr)))
+    assertEquals(None, matched(Upper(strAttr)))
   }
 }

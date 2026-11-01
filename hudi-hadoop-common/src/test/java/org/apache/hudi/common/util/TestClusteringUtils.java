@@ -33,6 +33,8 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.InstantGenerator;
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.table.timeline.versioning.clean.CleanPlanV2MigrationHandler;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.util.collection.Pair;
@@ -40,8 +42,9 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -171,23 +174,38 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
         assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, instant.getAction()));
   }
 
-  // replacecommit.inflight doesn't have clustering plan.
-  // Verify that getClusteringPlan fetches content from corresponding requested file.
-  @Disabled("Will fail due to avro issue AVRO-3789. This is fixed in avro 1.11.3")
-  @Test
-  public void testClusteringPlanInflight() throws Exception {
+  // The inflight instant file carries no clustering plan, so getClusteringPlan has to read it from the
+  // corresponding requested file. Table version 8 and above write the instant with the clustering action;
+  // table version 6 still writes it as a replacecommit (see ClusteringPlanActionExecutor), which is the
+  // only shape that exercises the replacecommit arm of isClusteringInstant.
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testClusteringPlanInflight(boolean preTableVersion8) throws Exception {
+    if (preTableVersion8) {
+      initMetaClient(true);
+    }
+    String expectedAction = preTableVersion8 ? HoodieTimeline.REPLACE_COMMIT_ACTION : HoodieTimeline.CLUSTERING_ACTION;
+    InstantGenerator instantGenerator = metaClient.getInstantGenerator();
     String partitionPath1 = "partition1";
     List<String> fileIds1 = new ArrayList<>();
     fileIds1.add(UUID.randomUUID().toString());
     fileIds1.add(UUID.randomUUID().toString());
     String clusterTime1 = "1";
     HoodieInstant requestedInstant = createRequestedClusterInstant(partitionPath1, clusterTime1, fileIds1);
-    HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionReplaceRequestedToInflight(requestedInstant, Option.empty());
-    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), requestedInstant, INSTANT_GENERATOR));
+    assertEquals(expectedAction, requestedInstant.getAction());
+    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), requestedInstant, instantGenerator));
     HoodieClusteringPlan requestedClusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, requestedInstant).get().getRight();
-    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), inflightInstant, INSTANT_GENERATOR));
-    HoodieClusteringPlan inflightClusteringPlan = ClusteringUtils.getClusteringPlan(metaClient, inflightInstant).get().getRight();
-    assertEquals(requestedClusteringPlan, inflightClusteringPlan);
+
+    HoodieInstant inflightInstant = metaClient.getActiveTimeline().transitionClusterRequestedToInflight(requestedInstant, Option.empty());
+    assertEquals(expectedAction, inflightInstant.getAction());
+    assertTrue(metaClient.getActiveTimeline().isEmpty(inflightInstant));
+    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), inflightInstant, instantGenerator));
+    assertEquals(requestedClusteringPlan, ClusteringUtils.getClusteringPlan(metaClient, inflightInstant).get().getRight());
+
+    HoodieInstant completedInstant = metaClient.getActiveTimeline().transitionClusterInflightToComplete(false, inflightInstant, new HoodieReplaceCommitMetadata());
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, completedInstant.getAction());
+    assertTrue(ClusteringUtils.isClusteringInstant(metaClient.getActiveTimeline(), completedInstant, instantGenerator));
+    assertEquals(requestedClusteringPlan, ClusteringUtils.getClusteringPlan(metaClient, completedInstant).get().getRight());
   }
 
   @Test
@@ -441,7 +459,10 @@ public class TestClusteringUtils extends HoodieCommonTestHarness {
     HoodieClusteringPlan clusteringPlan =
         ClusteringUtils.createClusteringPlan(CLUSTERING_STRATEGY_CLASS, STRATEGY_PARAMS, fileSliceGroups, Collections.emptyMap());
 
-    HoodieInstant clusteringInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.CLUSTERING_ACTION, clusterTime);
+    // Table version 6 has no clustering action and schedules clustering as a replacecommit, see ClusteringPlanActionExecutor.
+    String action = TimelineLayoutVersion.LAYOUT_VERSION_2.equals(metaClient.getTimelineLayoutVersion())
+        ? HoodieTimeline.CLUSTERING_ACTION : HoodieTimeline.REPLACE_COMMIT_ACTION;
+    HoodieInstant clusteringInstant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.REQUESTED, action, clusterTime);
     HoodieRequestedReplaceMetadata requestedReplaceMetadata = HoodieRequestedReplaceMetadata.newBuilder()
         .setClusteringPlan(clusteringPlan).setOperationType(WriteOperationType.CLUSTER.name()).build();
     metaClient.getActiveTimeline().saveToPendingClusterCommit(clusteringInstant, requestedReplaceMetadata);

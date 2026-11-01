@@ -19,11 +19,11 @@ package org.apache.spark.sql.execution.datasources.parquet
 
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.parquet.schema.{MessageType, Type, Types}
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
-import org.apache.parquet.schema.Types
 import org.apache.spark.sql.execution.datasources.VariantMetadata
 import org.apache.spark.sql.execution.datasources.parquet.VariantParquetTestFixtures.{shreddedVariant, stringKeyMap, threeLevelList, twoLevelList, unshreddedVariant}
-import org.apache.spark.sql.types.{ArrayType, BinaryType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType, VariantType}
+import org.apache.spark.sql.types.{ArrayType, BinaryType, DataType, IntegerType, MapType, MetadataBuilder, StringType, StructField, StructType, VariantType}
 import org.junit.jupiter.api.{Assertions, Test}
 
 class TestSpark40HoodieParquetReadSupport {
@@ -197,6 +197,70 @@ class TestSpark40HoodieParquetReadSupport {
     Assertions.assertEquals("value", group.getFields.get(0).getName)
     Assertions.assertEquals("metadata", group.getFields.get(1).getName)
   }
+
+  /**
+   * With a catalyst schema the reorder follows it through structs, arrays and maps (#20157): a
+   * variant at the top level, below one or two structs, as a list element in either layout, as a
+   * map value or inside a list's struct element comes back as [value, metadata], and nothing
+   * else in the message changes.
+   */
+  @Test
+  def testReorderVariantFieldsReordersNestedVariants(): Unit = {
+    val result = Spark40HoodieParquetReadSupport.reorderVariantFields(
+      nestedVariantMessage(unshreddedVariant), Some(nestedVariantCatalyst(VariantType)))
+    Assertions.assertEquals(nestedVariantMessage(valueFirstVariant), result)
+  }
+
+  /**
+   * The same parquet shapes typed as a plain struct of two binaries in catalyst keep the file
+   * order [metadata, value] at every depth.
+   */
+  @Test
+  def testReorderVariantFieldsLeavesPlainStructsAtAnyDepth(): Unit = {
+    val schema = nestedVariantMessage(unshreddedVariant)
+    val plainStruct = new StructType().add("metadata", BinaryType).add("value", BinaryType)
+    val result = Spark40HoodieParquetReadSupport.reorderVariantFields(
+      schema, Some(nestedVariantCatalyst(plainStruct)))
+    Assertions.assertEquals(schema, result)
+  }
+
+  /**
+   * Every variant position the catalyst-anchored reorder walks, each group built by `variant`:
+   * v, s.inner, d.mid.inner, the 3-level list l3, the 2-level (parquet-avro) list l2 of
+   * struct<inner>, the map m and the 3-level list items of struct<inner>.
+   */
+  private def nestedVariantMessage(variant: String => Type): MessageType = {
+    def innerStruct(name: String): Type = Types.optionalGroup().addField(variant("inner")).named(name)
+    Types.buildMessage()
+      .addField(variant("v"))
+      .addField(innerStruct("s"))
+      .addField(Types.optionalGroup().addField(innerStruct("mid")).named("d"))
+      .addField(threeLevelList("l3", variant("element")))
+      .addField(twoLevelList("l2", "array", variant("inner")))
+      .addField(stringKeyMap("m", variant("value")))
+      .addField(threeLevelList("items", innerStruct("element")))
+      .named("test")
+  }
+
+  /** The catalyst schema of [[nestedVariantMessage]], typing each variant-shaped group as `leafType`. */
+  private def nestedVariantCatalyst(leafType: DataType): StructType = {
+    val inner = new StructType().add("inner", leafType)
+    new StructType()
+      .add("v", leafType)
+      .add("s", inner)
+      .add("d", new StructType().add("mid", inner))
+      .add("l3", ArrayType(leafType))
+      .add("l2", ArrayType(inner))
+      .add("m", MapType(StringType, leafType))
+      .add("items", ArrayType(inner))
+  }
+
+  /** [[unshreddedVariant]] in the [value, metadata] order Spark 4.0 reads by position. */
+  private def valueFirstVariant(name: String): Type =
+    Types.optionalGroup()
+      .addField(Types.required(PrimitiveTypeName.BINARY).named("value"))
+      .addField(Types.required(PrimitiveTypeName.BINARY).named("metadata"))
+      .named(name)
 
   /**
    * Spark's PushVariantIntoScan rewrite of one variant column: extraction fields named by

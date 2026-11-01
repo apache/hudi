@@ -167,7 +167,6 @@
     <dependency>
       <groupId>org.apache.httpcomponents</groupId>
       <artifactId>httpcore</artifactId>
-      <version>${aws.sdk.httpcore.version}</version>
     </dependency>
 
     <dependency>
@@ -416,12 +415,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Httpcomponents -->
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
-    </dependency>
-
     <!-- Hadoop -->
     <dependency>
       <groupId>org.apache.hadoop</groupId>
@@ -601,7 +594,7 @@
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
-      <version>${thrift.version}</version>
+      <version>${hive.libthrift.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

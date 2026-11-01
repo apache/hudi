@@ -26,10 +26,13 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.timeline.versioning.DefaultCommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.versioning.DefaultInstantFileNameGenerator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor;
+import org.apache.hudi.storage.HoodieInstantWriter;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
@@ -38,12 +41,12 @@ import org.apache.hadoop.fs.Path;
 import software.amazon.awssdk.services.glue.model.Column;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.util.Arrays;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.TIMELINEFOLDER_NAME;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_DATABASE_NAME;
 import static org.apache.hudi.config.GlueCatalogSyncClientConfig.GLUE_SYNC_TABLE_NAME;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_BATCH_SYNC_PARTITION_NUM;
@@ -58,7 +61,13 @@ public class GlueTestUtil {
   public static TypedProperties glueSyncProps;
   public static final String DB_NAME = "testdb";
   public static final String TABLE_NAME = "test1";
+  public static final String TABLE_DOC = "example table doc";
+  public static final String ID_FIELD_DOC = "the record id";
+  public static final String NAME_FIELD_DOC = "the record name";
+  public static final String INSTANT_TIME = "101";
+  public static final String COMPLETION_TIME = "102";
   private static String basePath;
+  private static String basePathWithoutCommits;
   public static FileSystem fileSystem;
   private static HiveSyncConfig hiveSyncConfig;
   private static Configuration hadoopConf;
@@ -85,6 +94,10 @@ public class GlueTestUtil {
 
   public static void clear() throws IOException {
     fileSystem.delete(new Path(basePath), true);
+    if (basePathWithoutCommits != null) {
+      fileSystem.delete(new Path(basePathWithoutCommits), true);
+      basePathWithoutCommits = null;
+    }
   }
 
   public static void teardown() throws IOException {
@@ -110,9 +123,25 @@ public class GlueTestUtil {
         .setPayloadClass(HoodieAvroPayload.class)
         .initTable(HadoopFSUtils.getStorageConf(new Configuration()), basePath);
 
-    String instantTime = "101";
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata(false);
-    createMetaFile(basePath, new DefaultInstantFileNameGenerator().makeCommitFileName(instantTime), commitMetadata);
+    // the commit carries the table schema so the storage-schema read paths have something to resolve
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, getDocumentedSchema().toString());
+    // completed instants carry their completion time in the file name, without it the timeline skips the file
+    createMetaFile(basePath,
+        new DefaultInstantFileNameGenerator().makeCommitFileName(INSTANT_TIME + "_" + COMPLETION_TIME), commitMetadata);
+  }
+
+  /**
+   * A table in its own base path with no commits at all, for the paths that face an empty timeline.
+   * Its directory is removed by {@link #clear()} along with the main table.
+   */
+  public static HoodieTableMetaClient createTableWithoutCommits() throws IOException {
+    basePathWithoutCommits = Files.createTempDirectory("glueClientNoCommitTest" + Instant.now().toEpochMilli()).toUri().toString();
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName(TABLE_NAME)
+        .setPayloadClass(HoodieAvroPayload.class)
+        .initTable(HadoopFSUtils.getStorageConf(new Configuration()), basePathWithoutCommits);
   }
 
   public static HoodieSchema getSimpleSchema() {
@@ -123,13 +152,27 @@ public class GlueTestUtil {
         ));
   }
 
+  /**
+   * Same shape as {@link #getSimpleSchema()} but with a record doc and per-field docs, so the
+   * comment/doc read paths have something to return.
+   */
+  public static HoodieSchema getDocumentedSchema() {
+    return HoodieSchema.createRecord("example_schema", null, TABLE_DOC,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT), ID_FIELD_DOC, null),
+            HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), NAME_FIELD_DOC, null)
+        ));
+  }
+
   private static void createMetaFile(String basePath, String fileName, HoodieCommitMetadata metadata)
       throws IOException {
-    byte[] bytes = metadata.toJsonString().getBytes(StandardCharsets.UTF_8);
-    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + fileName);
-    FSDataOutputStream fsout = fileSystem.create(fullPath, true);
-    fsout.write(bytes);
-    fsout.close();
+    Path fullPath = new Path(basePath + "/" + METAFOLDER_NAME + "/" + TIMELINEFOLDER_NAME + "/" + fileName);
+    Option<HoodieInstantWriter> writer = new DefaultCommitMetadataSerDe().getInstantWriter(metadata);
+    try (FSDataOutputStream fsout = fileSystem.create(fullPath, true)) {
+      if (writer.isPresent()) {
+        writer.get().writeToStream(fsout);
+      }
+    }
   }
 
   public static Column getColumn(String name, String type, String comment) {

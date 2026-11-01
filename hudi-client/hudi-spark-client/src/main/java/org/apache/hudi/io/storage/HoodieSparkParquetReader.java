@@ -44,6 +44,8 @@ import org.apache.parquet.filter2.predicate.FilterApi;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.api.ReadSupport;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -209,8 +211,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
         Option$.MODULE$.empty(), true, true,
         rebaseDateSpec,
         messageSchema);
-    ParquetReader<InternalRow> reader = ParquetReader.builder(readSupport, new Path(path.toUri()))
-        .withConf(storage.getConf().unwrapAs(Configuration.class))
+    HadoopInputFile inputFile = HadoopInputFile.fromPath(new Path(path.toUri()), storage.getConf().unwrapAs(Configuration.class));
+    ParquetReader<InternalRow> reader = ParquetUtils.withHadoopReadOptions(new InputFileReaderBuilder(readSupport, inputFile), inputFile)
         .build();
     UnsafeProjection projection = evolution.generateUnsafeProjection();
     ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
@@ -274,5 +276,25 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   @Override
   public long getTotalRecords() {
     return parquetUtils.getRowCount(storage, path);
+  }
+
+  /**
+   * Builds the reader from a {@link HadoopInputFile}, whose {@link Configuration} becomes the reader's
+   * configuration (see {@link ParquetUtils#withHadoopReadOptions}). {@code ParquetReader.builder(ReadSupport, Path)}
+   * creates a new {@link Configuration} and loads the Hadoop default resources for every file, even when
+   * {@code withConf} replaces it.
+   */
+  private static class InputFileReaderBuilder extends ParquetReader.Builder<InternalRow> {
+    private final ReadSupport<InternalRow> readSupport;
+
+    InputFileReaderBuilder(ReadSupport<InternalRow> readSupport, HadoopInputFile file) {
+      super(file);
+      this.readSupport = readSupport;
+    }
+
+    @Override
+    protected ReadSupport<InternalRow> getReadSupport() {
+      return readSupport;
+    }
   }
 }

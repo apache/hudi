@@ -31,6 +31,7 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.graph.StreamNode;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.runtime.partitioner.CustomPartitionerWrapper;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
@@ -81,6 +82,33 @@ class TestPipelinesV2 {
     assertEquals("sink_v2", sink.getTransformation().getName());
     assertTrue(sink.getTransformation().getUid()
         .matches("uid_sink_v2(?:_\\d+)?_sink_v2_test"));
+  }
+
+  @Test
+  void testSinkLetsFlinkExpandTheHudiWritePipeline() {
+    conf.set(FlinkOptions.OPERATION, "insert");
+    conf.set(FlinkOptions.TABLE_NAME, "sink_v2_test");
+    conf.set(FlinkOptions.WRITE_TASKS, 4);
+
+    DataStreamSink<RowData> sink = PipelinesV2.sink(
+        input, conf, TestConfigurations.ROW_TYPE, false, true);
+    String sinkUid = sink.getTransformation().getUid();
+
+    // HoodieSink builds the whole write pipeline in addPreWriteTopology, and Flink only calls that
+    // for a sink implementing the pre-write topology interface of the running version
+    // (WithPreWriteTopology on 1.18, SupportsPreWriteTopology since 1.19). Without it the job
+    // keeps nothing but the no-op sink writer and silently writes no data.
+    List<StreamNode> writeNodes = input.getExecutionEnvironment().getStreamGraph()
+        .getStreamNodes().stream()
+        .filter(node -> node.getOperatorName().contains("hoodie_append_write"))
+        .collect(Collectors.toList());
+
+    assertEquals(1, writeNodes.size(), "Flink did not expand the pre-write topology of the sink");
+    // the sink uid is prepended to the uid of every operator the sink expands into, which is what
+    // keeps the expanded pipeline addressable across state restores.
+    assertTrue(writeNodes.get(0).getTransformationUID().startsWith(sinkUid + ": "),
+        "Expected the write operator uid to be prefixed with the sink uid " + sinkUid
+            + " but got " + writeNodes.get(0).getTransformationUID());
   }
 
   @Test

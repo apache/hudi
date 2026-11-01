@@ -21,10 +21,12 @@ package org.apache.hudi.client;
 import org.apache.hudi.callback.HoodieClientInitCallback;
 import org.apache.hudi.callback.common.WriteStatusValidator;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.MetaFieldsMode;
@@ -44,6 +46,7 @@ import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -53,6 +56,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.HoodieSimpleIndex;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
@@ -62,15 +66,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
+import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -79,7 +86,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
-import static org.apache.hudi.testutils.Assertions.assertComplexKeyGeneratorValidationThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -109,6 +115,12 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         mock(BaseHoodieTableServiceClient.class));
   }
 
+  private static HoodieTableMetaClient metaClientWithTableConfig(HoodieTableConfig tableConfig) {
+    HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class);
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    return metaClient;
+  }
+
   @Test
   void validateAgainstTablePropertiesRejectsMetaFieldsModeMismatch() throws IOException {
     initMetaClient();
@@ -126,7 +138,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         "precondition: both legacy booleans are false, so only the enum comparison can catch this");
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
-        validatorClient(noneWriteConfig).validateAgainstTableProperties(commitTimeOnlyTable, noneWriteConfig));
+        validatorClient(noneWriteConfig).validateAgainstTableProperties(metaClientWithTableConfig(commitTimeOnlyTable), noneWriteConfig, WriteOperationType.INSERT));
     assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()),
         "error must name the mode property: " + ex.getMessage());
     assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY") && ex.getMessage().contains("NONE"),
@@ -147,7 +159,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         "precondition: on its own an unstated writer resolves to the ALL default");
 
     validatorClient(unstated)
-        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.ALL), unstated);
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.ALL)), unstated, WriteOperationType.INSERT);
 
     assertEquals(MetaFieldsMode.ALL, unstated.getMetaFieldsMode());
     assertTrue(unstated.populateMetaFields(),
@@ -171,7 +183,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
         validatorClient(unstated).validateAgainstTableProperties(
-            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), unstated));
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), unstated, WriteOperationType.INSERT));
     assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()), ex.getMessage());
     assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY"),
         "the error must name the mode the writer has to state: " + ex.getMessage());
@@ -187,7 +199,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         .build();
 
     validatorClient(restated)
-        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), restated);
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), restated, WriteOperationType.INSERT);
 
     assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, restated.getMetaFieldsMode());
     assertFalse(restated.populateMetaFields(),
@@ -212,7 +224,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
         validatorClient(stated).validateAgainstTableProperties(
-            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), stated));
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), stated, WriteOperationType.INSERT));
     assertTrue(ex.getMessage().contains(HoodieTableConfig.META_FIELDS_MODE.key()), ex.getMessage());
     assertTrue(ex.getMessage().contains("COMMIT_TIME_ONLY") && ex.getMessage().contains("NONE"),
         "error must name both modes: " + ex.getMessage());
@@ -232,7 +244,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     assertThrows(HoodieException.class, () ->
         validatorClient(stated).validateAgainstTableProperties(
-            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME), stated));
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME)), stated, WriteOperationType.INSERT));
   }
 
   @Test
@@ -247,9 +259,9 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         .withPath(basePath).withMetaFieldsMode(MetaFieldsMode.FILE_NAME_ONLY).build();
 
     assertThrows(HoodieException.class, () -> validatorClient(commitTimeOnly)
-        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.FILE_NAME_ONLY), commitTimeOnly));
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.FILE_NAME_ONLY)), commitTimeOnly, WriteOperationType.INSERT));
     assertThrows(HoodieException.class, () -> validatorClient(fileNameOnly)
-        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), fileNameOnly));
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), fileNameOnly, WriteOperationType.INSERT));
   }
 
   @Test
@@ -264,13 +276,13 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     // Rejected in this direction only because the writer stated the mode explicitly.
     assertThrows(HoodieException.class, () -> validatorClient(selective)
-        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.ALL), selective));
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.ALL)), selective, WriteOperationType.INSERT));
     // ...but never as a *widening*: the reverse direction is what isWiderThan must catch.
     HoodieWriteConfig allWriter = HoodieWriteConfig.newBuilder()
         .withPath(basePath).withMetaFieldsMode(MetaFieldsMode.ALL).build();
     HoodieException ex = assertThrows(HoodieException.class, () -> validatorClient(allWriter)
         .validateAgainstTableProperties(
-            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME), allWriter));
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME)), allWriter, WriteOperationType.INSERT));
     assertTrue(ex.getMessage().contains("would leave earlier commits without it"),
         "the message must name the widening as the reason: " + ex.getMessage());
   }
@@ -288,7 +300,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
         validatorClient(defaultWriteConfig).validateAgainstTableProperties(
-            tableConfigWithMode(MetaFieldsMode.NONE), defaultWriteConfig));
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.NONE)), defaultWriteConfig, WriteOperationType.INSERT));
     assertTrue(ex.getMessage().contains("requests ALL"), ex.getMessage());
     assertTrue(ex.getMessage().contains("NONE"), ex.getMessage());
     // The rejected validation must not have mutated the write config.
@@ -308,7 +320,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
         validatorClient(allWriter)
-            .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.NONE), allWriter));
+            .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.NONE)), allWriter, WriteOperationType.INSERT));
     assertTrue(ex.getMessage().contains("would leave earlier commits without it"),
         "the message must name the widening as the reason: " + ex.getMessage());
   }
@@ -327,7 +339,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
         validatorClient(legacyFalse)
-            .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.ALL), legacyFalse));
+            .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.ALL)), legacyFalse, WriteOperationType.INSERT));
     assertTrue(ex.getMessage().contains("hudi-cli"),
         "the message must point at the sanctioned mutation path: " + ex.getMessage());
   }
@@ -339,7 +351,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     HoodieWriteConfig defaultWriteConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
     assertEquals(MetaFieldsMode.ALL, defaultWriteConfig.getMetaFieldsMode());
     validatorClient(defaultWriteConfig)
-        .validateAgainstTableProperties(tableConfigWithMode(MetaFieldsMode.ALL), defaultWriteConfig);
+        .validateAgainstTableProperties(metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.ALL)), defaultWriteConfig, WriteOperationType.INSERT);
 
     // And a selective writer against a table recorded with the same mode.
     HoodieWriteConfig selectiveWriteConfig = HoodieWriteConfig.newBuilder()
@@ -347,7 +359,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         .withMetaFieldsMode(MetaFieldsMode.COMMIT_TIME_ONLY)
         .build();
     validatorClient(selectiveWriteConfig).validateAgainstTableProperties(
-        tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), selectiveWriteConfig);
+        metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), selectiveWriteConfig, WriteOperationType.INSERT);
   }
 
   @Test
@@ -508,19 +520,94 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     BaseHoodieTableServiceClient<String, String, String> tableServiceClient = mock(BaseHoodieTableServiceClient.class);
     TestWriteClient writeClient = new TestWriteClient(writeConfigBuilder.build(), table, Option.empty(), tableServiceClient);
 
-    if (tableVersion <= 8 && enableComplexKeyGeneratorValidation
-        && (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
+    // the encoding of a single-field complex keygen table is recorded on creation, on every table version and
+    // whatever the validation setting, so neither initTable nor startCommit has anything to object to
+    boolean singleFieldComplexKeygen = (ComplexAvroKeyGenerator.class.getCanonicalName().equals(keyGeneratorClass)
         || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGeneratorClass))
-        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1) {
-      assertComplexKeyGeneratorValidationThrows(() -> writeClient.initTable(WriteOperationType.INSERT, Option.empty()), "ingestion");
-    } else {
-      writeClient.initTable(WriteOperationType.INSERT, Option.empty());
-      String requestedTime = writeClient.startCommit("commit");
+        && KeyGenUtils.getRecordKeyFields(recordKeyFields).size() == 1;
+    assertEquals(singleFieldComplexKeygen ? Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED) : Option.empty(),
+        metaClient.getTableConfig().getComplexKeyGenEncoding());
+    writeClient.initTable(WriteOperationType.INSERT, Option.empty());
+    String requestedTime = writeClient.startCommit("commit");
 
-      HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
-      assertTrue(writeTimeline.lastInstant().isPresent());
-      assertEquals("commit", writeTimeline.lastInstant().get().getAction());
-      assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
+    HoodieTimeline writeTimeline = metaClient.getActiveTimeline().getWriteTimeline();
+    assertTrue(writeTimeline.lastInstant().isPresent());
+    assertEquals("commit", writeTimeline.lastInstant().get().getAction());
+    assertEquals(requestedTime, writeTimeline.lastInstant().get().requestedTime());
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = WriteOperationType.class, names = {"INSERT", "INSERT_PREPPED", "UPSERT", "UPSERT_PREPPED",
+      "BULK_INSERT", "BULK_INSERT_PREPPED", "INSERT_OVERWRITE", "INSERT_OVERWRITE_TABLE", "DELETE", "DELETE_PREPPED"})
+  void testValidateAgainstTablePropertiesRequiresRecordedComplexKeygenEncoding(WriteOperationType operationType) throws IOException {
+    initMetaClient();
+    HoodieTableConfig tableConfig = tableConfigWithMode(MetaFieldsMode.ALL);
+    tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id");
+    HoodieTableMetaClient tableMetaClient = metaClientWithTableConfig(tableConfig);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (BaseHoodieWriteClient<?, ?, ?, ?> writeClient = validatorClient(writeConfig)) {
+      HoodieException e = assertThrows(HoodieException.class,
+          () -> writeClient.validateAgainstTableProperties(tableMetaClient, writeConfig, operationType));
+      assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
+    }
+  }
+
+  /** A write that keys records on a tracked table without the property is refused; table services, partition deletes and rollbacks are not. */
+  @Test
+  void testInitTableRequiresRecordedComplexKeygenEncoding() throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (TestWriteClient writeClient = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      HoodieException e = assertThrows(HoodieException.class, () -> writeClient.initTable(WriteOperationType.UPSERT, Option.empty()));
+      assertTrue(e.getMessage().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()), e.getMessage());
+      writeClient.initTable(WriteOperationType.COMPACT, Option.empty());
+      writeClient.initTable(WriteOperationType.DELETE_PARTITION, Option.empty());
+      writeClient.initTable(WriteOperationType.UNKNOWN, Option.empty());
+    }
+  }
+
+  @Test
+  void testComplexKeygenEncodingRecordedBeforeIngestionOnly() throws IOException {
+    initPath();
+    Properties tableProperties = new Properties();
+    tableProperties.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
+    tableProperties.setProperty(HoodieTableConfig.RECORDKEY_FIELDS.key(), "id");
+    metaClient = HoodieTestUtils.init(getDefaultStorageConf(), basePath, getTableType(), tableProperties);
+    HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+        Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+    metaClient.reloadTableConfig();
+
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    try (TestWriteClient writeClient = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding());
+      assertTrue(metaClient.getActiveTimeline().empty(), "Encoding must be recorded before the first commit");
+
+      writeClient.startCommit(Option.of("20260101000000001"), "commit", metaClient);
+      HoodieTableConfig.delete(metaClient.getStorage(), metaClient.getMetaPath(),
+          Collections.singleton(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+      metaClient.reloadTableConfig();
+      writeClient.startCommit(Option.of("20260101000000002"), "commit", metaClient);
+      metaClient.reloadTableConfig();
+      assertFalse(metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent(),
+          "Starting another commit must not run initialization again");
+    }
+
+    try (TestWriteClient ignored = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding(),
+          "A restarted ingestion must initialize the encoding again");
     }
   }
 
@@ -693,6 +780,51 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
     }
   }
 
+  @ParameterizedTest
+  @CsvSource({"commit,false", "commit,true", "replacecommit,false", "replacecommit,true"})
+  void testFailedStartCommitStopsOnlyItsHeartbeat(String action, boolean persistBeforeFailure) throws IOException {
+    initMetaClient();
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath)
+        .withEmbeddedTimelineServerEnabled(false)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY).build())
+        .build();
+    HoodieTableMetaClient failingMetaClient = Mockito.spy(metaClient);
+    HoodieActiveTimeline timeline = Mockito.spy(metaClient.getActiveTimeline());
+    Mockito.doReturn(timeline).when(failingMetaClient).getActiveTimeline();
+    String failedInstant = "20260101000000001";
+    String nextInstant = "20260101000000002";
+    HoodieException failure = new HoodieException("Injected timeline write failure");
+    Answer<Object> failTimelineWrite = invocation -> {
+      assertTrue(HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), basePath, failedInstant));
+      if (persistBeforeFailure) {
+        invocation.callRealMethod();
+      }
+      throw failure;
+    };
+    if (HoodieTimeline.REPLACE_COMMIT_ACTION.equals(action)) {
+      Mockito.doAnswer(failTimelineWrite).when(timeline).createRequestedCommitWithReplaceMetadata(failedInstant, action);
+    } else {
+      Mockito.doAnswer(failTimelineWrite).when(timeline).createNewInstant(Mockito.any(HoodieInstant.class));
+    }
+
+    try (TestWriteClient client = new TestWriteClient(writeConfig, mock(HoodieTable.class), Option.empty(),
+        mock(BaseHoodieTableServiceClient.class), mock(TransactionManager.class), mock(TimeGenerator.class))) {
+      // A reused client can have another live instant; failure cleanup must not stop all heartbeats.
+      client.getHeartbeatClient().start(nextInstant);
+      assertSame(failure, assertThrows(HoodieException.class,
+          () -> client.startCommit(Option.of(failedInstant), action, failingMetaClient)));
+      assertFalse(HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), basePath, failedInstant));
+      assertTrue(HoodieHeartbeatClient.heartbeatExists(metaClient.getStorage(), basePath, nextInstant));
+      assertEquals(persistBeforeFailure, metaClient.reloadActiveTimeline().containsInstant(failedInstant));
+
+      assertEquals(nextInstant, client.startCommit(Option.of(nextInstant), action, metaClient));
+      assertTrue(metaClient.reloadActiveTimeline().containsInstant(nextInstant));
+      client.releaseResources(nextInstant);
+    }
+  }
+
   private static class TestWriteClient extends BaseHoodieWriteClient<String, String, String, String> {
     private final HoodieTable<String, String, String, String> table;
 
@@ -823,7 +955,7 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
 
     HoodieException ex = assertThrows(HoodieException.class, () ->
         validatorClient(writeConfig).validateAgainstTableProperties(
-            tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), writeConfig));
+            metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), writeConfig, WriteOperationType.INSERT));
     assertTrue(ex.getMessage().contains(indexTypeName),
         "the message must name the index type: " + ex.getMessage());
     assertTrue(ex.getMessage().contains(HoodieRecord.RECORD_KEY_METADATA_FIELD),
@@ -847,6 +979,6 @@ class TestBaseHoodieWriteClient extends HoodieCommonTestHarness {
         .build();
 
     validatorClient(writeConfig).validateAgainstTableProperties(
-        tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY), writeConfig);
+        metaClientWithTableConfig(tableConfigWithMode(MetaFieldsMode.COMMIT_TIME_ONLY)), writeConfig, WriteOperationType.INSERT);
   }
 }

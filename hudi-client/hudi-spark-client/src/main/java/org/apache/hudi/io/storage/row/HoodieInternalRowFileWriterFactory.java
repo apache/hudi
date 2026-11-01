@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.avro.VariantShreddingRuntime;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
@@ -36,6 +37,7 @@ import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -87,11 +89,15 @@ public class HoodieInternalRowFileWriterFactory {
     // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
     // hoodie.avro.schema), so inferable columns are detected on that same config schema and the
     // deferred creation splices a copied config; the StructType argument stays original.
-    // (getInferableVariantColumnsFromConfig only parses the schema once the flag gates pass.)
-    List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeConfig);
-    if (!inferableColumns.isEmpty()) {
-      Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
-      if (inferrer.isPresent()) {
+    // Gates are ordered by cost, because with inference on by default the flag gates inside
+    // getInferableVariantColumnsFromConfig pass on every table and the config-schema parse behind
+    // them is uncached and per file handle: the inferrer lookup is a static field, so a classpath
+    // that cannot infer (Spark 3.x, 4.0) pays nothing here; the StructType scan is a handful of type
+    // checks; only a table with a top-level variant then pays the parse.
+    Option<VariantShreddingSchemaInferrer> inferrer = VariantShreddingRuntime.lookupInferrer();
+    if (inferrer.isPresent() && hasTopLevelVariant(structType)) {
+      List<String> inferableColumns = VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeConfig);
+      if (!inferableColumns.isEmpty()) {
         return new VariantShreddingInferenceInternalRowFileWriter(
             inferableColumns,
             VariantShreddingInferenceInternalRowFileWriter.resolveOrdinals(structType, inferableColumns),
@@ -102,6 +108,16 @@ public class HoodieInternalRowFileWriterFactory {
       }
     }
     return createParquetInternalRowFileWriter(path, table, writeConfig, writeConfig, structType, bloomFilterOpt);
+  }
+
+  /** Whether any top-level column is a variant; inference applies to no other position. */
+  private static boolean hasTopLevelVariant(StructType structType) {
+    for (StructField field : structType.fields()) {
+      if (SparkAdapterSupport$.MODULE$.sparkAdapter().isVariantType(field.dataType())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static HoodieInternalRowFileWriter createParquetInternalRowFileWriter(StoragePath path,

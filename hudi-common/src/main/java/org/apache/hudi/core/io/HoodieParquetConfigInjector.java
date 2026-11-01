@@ -28,12 +28,13 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
 /**
- * A pluggable interface that all parquet-based writers (Spark/Flink) will invoke before creating write support
- * or parquet file writer objects.
+ * An interface for built-in and user-defined Parquet configuration injectors that all parquet-based writers
+ * (Spark/Flink) invoke before creating write support or parquet file writer objects.
  * <p>
- * This allows users to inject custom configurations into the Parquet writer pipeline at runtime, enabling
- * fine-grained control over Parquet file properties such as bloom filters, compression settings, encoding
- * options, and other advanced Parquet configurations.
+ * Built-in injectors provide Hudi's default writer configuration, while users can inject custom configurations
+ * at runtime for fine-grained control over properties such as bloom filters, compression settings, encoding
+ * options, and other advanced Parquet configurations. Built-in injectors are applied before the user-defined
+ * injector so that custom configuration has the highest priority.
  * <p>
  * <strong>Important:</strong> Implementations must NOT mutate the input {@code storageConf} or
  * {@code hoodieConfig} objects directly. Instead, they should create copies, apply the desired
@@ -54,7 +55,7 @@ import org.apache.hudi.storage.StoragePath;
 public interface HoodieParquetConfigInjector {
 
   /**
-   * Injects custom configurations into the Parquet writer pipeline.
+   * Injects configurations into the Parquet writer pipeline.
    * <p>
    * This method is invoked before creating the Parquet write support and writer objects, allowing
    * implementations to modify both the storage-level and Hudi-level configurations.

@@ -20,6 +20,7 @@ package org.apache.spark.sql.execution.datasources.parquet
 import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.client.utils.SparkInternalSchemaConverter
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.{InternalSchema, Type => InternalType}
 import org.apache.hudi.common.schema.internal.Types
 import org.apache.hudi.common.schema.internal.action.InternalSchemaMerger
@@ -35,20 +36,27 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.mapred.JobConf
+import org.apache.parquet.filter2.predicate.FilterPredicate
+import org.apache.parquet.hadoop.ParquetInputFormat
 import org.apache.parquet.hadoop.metadata.FileMetaData
-import org.apache.parquet.schema.{Type => ParquetType}
+import org.apache.parquet.schema.{GroupType, MessageType, Type => ParquetType}
+import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName
 import org.apache.spark.sql.HoodieSchemaUtils
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, UnsafeProjection}
+import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.MultipartIdentifierHelper
 import org.apache.spark.sql.execution.datasources.SparkSchemaTransformUtils
 import org.apache.spark.sql.execution.datasources.parquet.ParquetSchemaEvolutionUtils.pruneInternalSchema
 import org.apache.spark.sql.sources._
-import org.apache.spark.sql.types.{ArrayType, AtomicType, DataType, MapType, StructType}
+import org.apache.spark.sql.types.{ArrayType, AtomicType, BinaryType, DataType, MapType, StructType}
 
 import java.time.ZoneId
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+import scala.util.Try
 
-class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
+class ParquetSchemaEvolutionUtils(readConf: Configuration,
                                   filePath: Path,
                                   requiredSchema: StructType,
                                   partitionSchema: StructType,
@@ -56,106 +64,65 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
   // Fetch internal schema
   private lazy val querySchemaOption: util.Option[InternalSchema] = pruneInternalSchema(internalSchemaOpt, requiredSchema)
 
-  var shouldUseInternalSchema: Boolean = querySchemaOption.isPresent && tablePath != null
+  // Empty projections (count(*), select 1) read no column data, so skip schema-on-read. Their query
+  // schema is unpruned (see pruneInternalSchema), and merging it would request every column, including
+  // a variant as a plain struct that Spark 4.x's vectorized reader rejects.
+  var shouldUseInternalSchema: Boolean = requiredSchema.nonEmpty && querySchemaOption.isPresent && tablePath != null
 
   private lazy val schemaUtils: HoodieSchemaUtils = sparkAdapter.getSchemaUtils
 
-  private lazy val tablePath: String = sharedConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
+  private lazy val tablePath: String = readConf.get(SparkInternalSchemaConverter.HOODIE_TABLE_PATH)
   private lazy val fileSchema: InternalSchema = if (shouldUseInternalSchema) {
     val commitInstantTime = FSUtils.getCommitTime(filePath.getName).toLong
     //TODO: HARDCODED TIMELINE OBJECT
-    val validCommits = sharedConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
+    val validCommits = readConf.get(SparkInternalSchemaConverter.HOODIE_VALID_COMMITS_LIST)
     val layout = TimelineLayout.fromVersion(TimelineLayoutVersion.CURR_LAYOUT_VERSION)
     InternalSchemaCache.getInternalSchemaByVersionId(commitInstantTime, tablePath,
-      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(sharedConf)), if (validCommits == null) "" else validCommits, layout)
+      HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(readConf)), if (validCommits == null) "" else validCommits, layout)
   } else {
     null
   }
 
   def rebuildFilterFromParquet(filter: Filter): Filter = {
-    rebuildFilterFromParquetHelper(filter, fileSchema, querySchemaOption.orElse(null))
-  }
-
-  private def rebuildFilterFromParquetHelper(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
-    if (fileSchema == null || querySchema == null) {
-      oldFilter
-    } else {
-      oldFilter match {
-        case eq: EqualTo =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(eq.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else eq.copy(attribute = newAttribute)
-        case eqs: EqualNullSafe =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(eqs.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else eqs.copy(attribute = newAttribute)
-        case gt: GreaterThan =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(gt.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else gt.copy(attribute = newAttribute)
-        case gtr: GreaterThanOrEqual =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(gtr.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else gtr.copy(attribute = newAttribute)
-        case lt: LessThan =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(lt.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else lt.copy(attribute = newAttribute)
-        case lte: LessThanOrEqual =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(lte.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else lte.copy(attribute = newAttribute)
-        case i: In =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(i.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else i.copy(attribute = newAttribute)
-        case isn: IsNull =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(isn.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else isn.copy(attribute = newAttribute)
-        case isnn: IsNotNull =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(isnn.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else isnn.copy(attribute = newAttribute)
-        case And(left, right) =>
-          And(rebuildFilterFromParquetHelper(left, fileSchema, querySchema), rebuildFilterFromParquetHelper(right, fileSchema, querySchema))
-        case Or(left, right) =>
-          Or(rebuildFilterFromParquetHelper(left, fileSchema, querySchema), rebuildFilterFromParquetHelper(right, fileSchema, querySchema))
-        case Not(child) =>
-          Not(rebuildFilterFromParquetHelper(child, fileSchema, querySchema))
-        case ssw: StringStartsWith =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(ssw.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else ssw.copy(attribute = newAttribute)
-        case ses: StringEndsWith =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(ses.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else ses.copy(attribute = newAttribute)
-        case sc: StringContains =>
-          val newAttribute = InternalSchemaUtils.reBuildFilterName(sc.attribute, fileSchema, querySchema)
-          if (newAttribute.isEmpty) AlwaysTrue else sc.copy(attribute = newAttribute)
-        case AlwaysTrue =>
-          AlwaysTrue
-        case AlwaysFalse =>
-          AlwaysFalse
-        case _ =>
-          AlwaysTrue
-      }
-    }
+    ParquetSchemaEvolutionUtils.rebuildFilterFromParquet(filter, fileSchema, querySchemaOption.orElse(null))
   }
 
   protected var typeChangeInfos: java.util.Map[Integer, Pair[DataType, DataType]] = null
 
-  def getHadoopConfClone(footerFileMetaData: FileMetaData, enableVectorizedReader: Boolean): Configuration = {
-    // Clone new conf
-    val hadoopAttemptConf = new Configuration(sharedConf)
-    typeChangeInfos = if (shouldUseInternalSchema) {
-      // Empty projections (count(*), select 1) read no column data, so there is nothing to
-      // reconstruct - and querySchemaOption is the UNPRUNED table schema in that case (see
-      // pruneInternalSchema), so running the guard would fail queries that work fine.
-      if (requiredSchema.nonEmpty) {
-        ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
+  /**
+   * Returns the configuration to read the file with: the read configuration itself when the file needs no
+   * keys of its own, otherwise a copy with the file's requested schema or the pushed row-group filter. The
+   * read configuration is never modified, since other readers may share it, so callers must not modify the
+   * returned configuration either.
+   */
+  def getFileReadConf(footerFileMetaData: FileMetaData,
+                      enableVectorizedReader: Boolean,
+                      pushedFilter: Option[FilterPredicate]): Configuration = {
+    var fileReadConf: Configuration = readConf
+    def fileOwnConf(): Configuration = {
+      if (fileReadConf eq readConf) {
+        // A JobConf, so the task attempt context built on it does not copy it again: JobContextImpl reuses a
+        // JobConf and copies any other Configuration
+        fileReadConf = new JobConf(readConf)
       }
+      fileReadConf
+    }
+    def setRequestedSchema(schema: StructType): Unit =
+      fileOwnConf().set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, schema.json)
+    typeChangeInfos = if (shouldUseInternalSchema) {
+      // shouldUseInternalSchema implies a non-empty projection, so querySchemaOption is pruned here.
+      ParquetSchemaEvolutionUtils.validateNoShreddedVariants(requiredSchema, querySchemaOption.get(), footerFileMetaData)
       val mergedInternalSchema = new InternalSchemaMerger(fileSchema, querySchemaOption.get(), true, true).mergeSchema()
       val mergedSchema = SparkInternalSchemaConverter.constructSparkSchemaFromInternalSchema(mergedInternalSchema)
 
-      hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, mergedSchema.json)
+      setRequestedSchema(mergedSchema)
 
       SparkInternalSchemaConverter.collectTypeChangedCols(querySchemaOption.get(), mergedInternalSchema)
     } else {
-      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(hadoopAttemptConf, footerFileMetaData, requiredSchema)
+      val (implicitTypeChangeInfo, sparkRequestSchema) = HoodieParquetFileFormatHelper.buildImplicitSchemaChangeInfo(readConf, footerFileMetaData, requiredSchema)
       if (!implicitTypeChangeInfo.isEmpty) {
         shouldUseInternalSchema = true
-        hadoopAttemptConf.set(ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA, sparkRequestSchema.json)
+        setRequestedSchema(sparkRequestSchema)
       }
       implicitTypeChangeInfo
     }
@@ -167,7 +134,9 @@ class ParquetSchemaEvolutionUtils(sharedConf: Configuration,
           "To workaround this issue, set spark.sql.parquet.enableVectorizedReader=false.")
     }
 
-    hadoopAttemptConf
+    // Row-group level push-down, not individual records
+    pushedFilter.foreach(ParquetInputFormat.setFilterPredicate(fileOwnConf(), _))
+    fileReadConf
   }
 
   def generateUnsafeProjection(fullSchema: Seq[AttributeReference], timeZoneId: Option[String]): UnsafeProjection = {
@@ -214,6 +183,115 @@ object ParquetSchemaEvolutionUtils {
   }
 
   /**
+   * Maps a pushed-down query filter onto the names the file actually carries: a column renamed
+   * under schema-on-read is rewritten to its file-schema name, and one the file does not hold at
+   * all collapses to AlwaysTrue, since a filter on an absent column cannot skip any of its row
+   * groups. A name the query schema does not hold at all (see fileFilterName) collapses to
+   * AlwaysTrue as well. A table without an internal schema passes its filters through untouched.
+   */
+  def rebuildFilterFromParquet(oldFilter: Filter, fileSchema: InternalSchema, querySchema: InternalSchema): Filter = {
+    if (fileSchema == null || querySchema == null) {
+      oldFilter
+    } else {
+      oldFilter match {
+        case eq: EqualTo =>
+          val newAttribute = rebuildFilterName(eq.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else eq.copy(attribute = newAttribute)
+        case eqs: EqualNullSafe =>
+          val newAttribute = rebuildFilterName(eqs.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else eqs.copy(attribute = newAttribute)
+        case gt: GreaterThan =>
+          val newAttribute = rebuildFilterName(gt.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else gt.copy(attribute = newAttribute)
+        case gtr: GreaterThanOrEqual =>
+          val newAttribute = rebuildFilterName(gtr.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else gtr.copy(attribute = newAttribute)
+        case lt: LessThan =>
+          val newAttribute = rebuildFilterName(lt.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else lt.copy(attribute = newAttribute)
+        case lte: LessThanOrEqual =>
+          val newAttribute = rebuildFilterName(lte.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else lte.copy(attribute = newAttribute)
+        case i: In =>
+          val newAttribute = rebuildFilterName(i.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else i.copy(attribute = newAttribute)
+        case isn: IsNull =>
+          val newAttribute = rebuildFilterName(isn.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else isn.copy(attribute = newAttribute)
+        case isnn: IsNotNull =>
+          val newAttribute = rebuildFilterName(isnn.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else isnn.copy(attribute = newAttribute)
+        case And(left, right) =>
+          And(rebuildFilterFromParquet(left, fileSchema, querySchema), rebuildFilterFromParquet(right, fileSchema, querySchema))
+        case Or(left, right) =>
+          Or(rebuildFilterFromParquet(left, fileSchema, querySchema), rebuildFilterFromParquet(right, fileSchema, querySchema))
+        case Not(child) =>
+          Not(rebuildFilterFromParquet(child, fileSchema, querySchema))
+        case ssw: StringStartsWith =>
+          val newAttribute = rebuildFilterName(ssw.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else ssw.copy(attribute = newAttribute)
+        case ses: StringEndsWith =>
+          val newAttribute = rebuildFilterName(ses.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else ses.copy(attribute = newAttribute)
+        case sc: StringContains =>
+          val newAttribute = rebuildFilterName(sc.attribute, fileSchema, querySchema)
+          if (newAttribute.isEmpty) AlwaysTrue else sc.copy(attribute = newAttribute)
+        case AlwaysTrue =>
+          AlwaysTrue
+        case AlwaysFalse =>
+          AlwaysFalse
+        case _ =>
+          AlwaysTrue
+      }
+    }
+  }
+
+  /**
+   * Re-spells one filter column name onto the file schema. With nested predicate pushdown, Spark
+   * names a column by its multipart path with every part that is not a plain identifier quoted
+   * (`名字`, item.`my-name`, `a.b`), while the internal schema keys fields by their dot-joined
+   * parts. The name is parsed into parts for the lookup, and the file's name is quoted back the
+   * same way, which is how ParquetFilters keys its columns. A name that does not parse is one
+   * Spark passed through raw (nested pushdown off) and is looked up as it is.
+   */
+  private def rebuildFilterName(name: String, fileSchema: InternalSchema, querySchema: InternalSchema): String = {
+    Try(CatalystSqlParser.parseMultipartIdentifier(name)).toOption match {
+      case Some(parts) =>
+        val fullName = parts.mkString(".")
+        val fileFullName = fileFilterName(fullName, fileSchema, querySchema)
+        if (fileFullName.isEmpty) {
+          ""
+        } else if (fileFullName == fullName) {
+          name
+        } else {
+          // Any level of the path may have been renamed, so resolve each prefix by field id.
+          parts.indices.map { i =>
+            fileSchema.findField(querySchema.findIdByName(parts.take(i + 1).mkString("."))).name()
+          }.quoted
+        }
+      case None =>
+        fileFilterName(name, fileSchema, querySchema)
+    }
+  }
+
+  /**
+   * InternalSchemaUtils.reBuildFilterName, except a name the query schema does not hold comes back
+   * empty, so its filter collapses to AlwaysTrue instead of failing the read. Such a name comes from
+   * a predicate on a variant that Spark's PushVariantIntoScan rewrote: it is pushed as a nested
+   * filter on the projection struct's ordinal-named member (v.`0`), which is no column of the table.
+   * Dropping it is always safe, since Spark evaluates every pushed filter again above the scan, and
+   * it lets the read reach validateNoShreddedVariants, which rejects that request with the
+   * actionable message.
+   */
+  private def fileFilterName(fullName: String, fileSchema: InternalSchema, querySchema: InternalSchema): String = {
+    if (querySchema.findIdByName(fullName) == -1) {
+      ""
+    } else {
+      InternalSchemaUtils.reBuildFilterName(fullName, fileSchema, querySchema)
+    }
+  }
+
+  /**
    * Fails fast when schema-on-read meets a shredded variant file. The internal schema models a
    * variant as a two-field {metadata, value} record (with sentinel negative field ids, see
    * InternalSchemaConverter), so the merged request clips the file's typed_value away and the
@@ -247,7 +325,7 @@ object ParquetSchemaEvolutionUtils {
    * names both routes rather than blaming pushVariantIntoScan on a read that never set it.
    * Real support is #18285.
    *
-   * Shared by [[ParquetSchemaEvolutionUtils.getHadoopConfClone]] and the per-version legacy
+   * Shared by [[ParquetSchemaEvolutionUtils.getFileReadConf]] and the per-version legacy
    * file formats, which carry a copy of the same schema-merge block. Callers gate on a
    * non-empty projection: empty-projection queries (count(*), select 1) read no column data
    * and must keep working, and the query schema is unpruned in that case.
@@ -269,6 +347,103 @@ object ParquetSchemaEvolutionUtils {
           field.`type`(), fileParquetSchema.getType(fileParquetSchema.getFieldIndex(field.name())), field.name())
       }
     }
+  }
+
+  /**
+   * Fails the read when a column requested as the unshredded variant struct sits over a parquet
+   * group that carries typed_value. This is the shape Spark 3.x readers use for a variant column:
+   * Spark 3.x has no VariantType, so the table's own schema does not convert (see
+   * BaseSpark3Adapter) and the documented way to read such a table is to declare the column as
+   * struct&lt;value: binary, metadata: binary&gt; - the same shape Hive sync writes to the
+   * metastore. Parquet reconciles requested against file fields by name, so without this guard a
+   * shredded group's typed_value is simply not projected and the rows come back with a null
+   * `value`: the payload is dropped silently. Reconstruction is not an option on Spark 3.x, whose
+   * classpath carries no VariantShreddingProvider (the only implementation ships in spark4-common),
+   * so the read fails instead, as it already does on Spark 4.0, Flink and Hive.
+   *
+   * The anchor is two-sided: the requested side must be binary members named `metadata` and
+   * `value`, either or both and nothing else (a struct carrying any further member is a plain user
+   * struct, exempt here as it is in the sibling Hive and Spark 4.0 guards), and the file must carry
+   * typed_value at that same path. A column the query does not project is never walked, so a read
+   * that does not touch the variant keeps working, as does an unshredded file.
+   */
+  def validateNoShreddedVariantStructs(requiredSchema: StructType, fileParquetSchema: MessageType): Unit = {
+    requiredSchema.fields.foreach { field =>
+      parquetFieldIgnoreCase(fileParquetSchema, field.name)
+        .foreach(validateNoShreddedVariantStruct(field.dataType, _, field.name))
+    }
+  }
+
+  /**
+   * The file field a requested name resolves to. Case-insensitive on purpose: the Spark 3.x
+   * readers this guards force spark.sql.caseSensitive=false (SparkParquetReaderBase.read), so a
+   * column declared `V` or a member declared `Value` still lands on the file's lower-case group,
+   * and a guard that only matched exactly would let that request straight through to the
+   * null-value read.
+   */
+  private def parquetFieldIgnoreCase(group: GroupType, name: String): Option[ParquetType] =
+    group.getFields.find(_.getName.equalsIgnoreCase(name))
+
+  private def validateNoShreddedVariantStruct(dataType: DataType, parquetType: ParquetType, path: String): Unit = {
+    if (!parquetType.isPrimitive) {
+      val group = parquetType.asGroupType()
+      dataType match {
+        case struct: StructType if isUnshreddedVariantStruct(struct) =>
+          if (isShreddedVariantGroup(group)) {
+            throw new HoodieException(String.format(
+              "Column '%s' is a shredded variant (typed_value present) requested as its unshredded "
+                + "struct shape; Spark 3.x cannot reconstruct shredded variants, and reading it "
+                + "here would return a null value for every shredded row. Read the table with "
+                + "Spark 4.1+, or rewrite it unshredded (e.g. cluster with "
+                + "hoodie.parquet.variant.write.shredding.enabled=false).", path))
+          }
+        case struct: StructType =>
+          struct.fields.foreach { field =>
+            parquetFieldIgnoreCase(group, field.name)
+              .foreach(validateNoShreddedVariantStruct(field.dataType, _, concatPath(path, field.name)))
+          }
+        case array: ArrayType =>
+          parquetListElement(group).foreach(validateNoShreddedVariantStruct(array.elementType, _, concatPath(path, "element")))
+        case map: MapType =>
+          parquetMapValue(group).foreach(validateNoShreddedVariantStruct(map.valueType, _, concatPath(path, "value")))
+        case _ =>
+      }
+    }
+  }
+
+  /**
+   * Whether a file group is a shredded variant: typed_value next to a binary metadata, the two
+   * members every shredded variant group carries (value is optional under the spec). The same
+   * file-side anchor as the sibling Hive and Spark 4.0 guards, and needed for the same reason the
+   * requested side is exact: once pruning has narrowed a request to a lone `value`, only the
+   * file can tell a variant apart from a user struct that merely holds a typed_value member.
+   */
+  private def isShreddedVariantGroup(group: GroupType): Boolean = {
+    group.containsField(HoodieSchema.Variant.VARIANT_TYPED_VALUE_FIELD) &&
+      group.containsField(HoodieSchema.Variant.VARIANT_METADATA_FIELD) && {
+        val metadata = group.getType(HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+        metadata.isPrimitive && metadata.asPrimitiveType().getPrimitiveTypeName == PrimitiveTypeName.BINARY
+      }
+  }
+
+  /**
+   * Whether `struct` is the unshredded variant shape: a non-empty set of the binary members a
+   * variant group carries, in any order. A subset counts because Spark's nested schema pruning
+   * narrows the request to the leaves a query touches - `SELECT v.value` reaches this guard as a
+   * one-member struct (see TestNestedSchemaPruningOptimization for the pruning itself), and that
+   * single member is exactly the one a shredded file would return null for.
+   *
+   * Any member outside those two names exempts the struct, so a plain user struct is untouched, as
+   * is the {metadata, value, typed_value} shape whose caller already sees the shredded layout and
+   * is reading it deliberately - though pruning that shape down to `value` alone does land here,
+   * since nothing then distinguishes it from the variant request this guards.
+   */
+  private def isUnshreddedVariantStruct(struct: StructType): Boolean = {
+    // Names compared case-insensitively for the same reason parquetFieldIgnoreCase resolves them so.
+    struct.fields.nonEmpty && struct.fields.forall(field =>
+      field.dataType == BinaryType
+        && (field.name.equalsIgnoreCase(HoodieSchema.Variant.VARIANT_METADATA_FIELD)
+        || field.name.equalsIgnoreCase(HoodieSchema.Variant.VARIANT_VALUE_FIELD)))
   }
 
   /**

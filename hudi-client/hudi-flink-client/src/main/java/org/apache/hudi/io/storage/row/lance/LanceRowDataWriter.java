@@ -18,7 +18,12 @@
 
 package org.apache.hudi.io.storage.row.lance;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
@@ -34,6 +39,7 @@ import org.apache.arrow.vector.TimeStampVector;
 import org.apache.arrow.vector.TinyIntVector;
 import org.apache.arrow.vector.VarBinaryVector;
 import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.complex.FixedSizeListVector;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.complex.StructVector;
 import org.apache.flink.table.data.ArrayData;
@@ -64,10 +70,16 @@ public class LanceRowDataWriter {
 
   private final FieldWriter[] fieldWriters;
 
-  public LanceRowDataWriter(RowType rowType, List<FieldVector> vectors, boolean utcTimestamp) {
+  public LanceRowDataWriter(
+      HoodieSchema hoodieSchema, List<FieldVector> vectors, boolean utcTimestamp) {
+    HoodieSchema recordSchema = hoodieSchema.getNonNullType();
+    RowType rowType = HoodieSchemaConverter.convertToRowType(recordSchema);
+    List<HoodieSchemaField> hoodieFields = recordSchema.getFields();
     this.fieldWriters = new FieldWriter[rowType.getFieldCount()];
     for (int i = 0; i < fieldWriters.length; i++) {
-      fieldWriters[i] = createWriter(rowType.getTypeAt(i), vectors.get(i), utcTimestamp);
+      HoodieSchema fieldSchema = hoodieFields.get(i).schema().getNonNullType();
+      fieldWriters[i] = createWriter(
+          rowType.getTypeAt(i), fieldSchema, vectors.get(i), utcTimestamp, hoodieFields.get(i).name());
     }
   }
 
@@ -77,7 +89,12 @@ public class LanceRowDataWriter {
     }
   }
 
-  private static FieldWriter createWriter(LogicalType type, FieldVector vector, boolean utcTimestamp) {
+  private static FieldWriter createWriter(
+      LogicalType type,
+      HoodieSchema hoodieSchema,
+      FieldVector vector,
+      boolean utcTimestamp,
+      String fieldPath) {
     switch (type.getTypeRoot()) {
       case BOOLEAN:
         return new BooleanWriter((BitVector) vector);
@@ -113,15 +130,36 @@ public class LanceRowDataWriter {
         StructVector structVector = (StructVector) vector;
         FieldWriter[] fieldWriters = new FieldWriter[rowType.getFieldCount()];
         for (int i = 0; i < fieldWriters.length; i++) {
+          String childName = rowType.getFieldNames().get(i);
           fieldWriters[i] = createWriter(
-              rowType.getTypeAt(i), (FieldVector) structVector.getChildByOrdinal(i), utcTimestamp);
+              rowType.getTypeAt(i),
+              HoodieSchemaUtils.getFieldSchema(hoodieSchema, childName).getNonNullType(),
+              (FieldVector) structVector.getChildByOrdinal(i),
+              utcTimestamp,
+              fieldPath + "." + childName);
         }
         return new RowWriter(structVector, fieldWriters);
       case ARRAY:
         ArrayType arrayType = (ArrayType) type;
+        if (hoodieSchema != null && hoodieSchema.getType() == HoodieSchemaType.VECTOR) {
+          HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) hoodieSchema;
+          FixedSizeListVector fixedSizeListVector = (FixedSizeListVector) vector;
+          FieldWriter vectorElementWriter = createWriter(
+              arrayType.getElementType(),
+              null,
+              fixedSizeListVector.getDataVector(),
+              utcTimestamp,
+              fieldPath + "[]");
+          return new VectorWriter(
+              fixedSizeListVector, vectorElementWriter, vectorSchema.getDimension(), fieldPath);
+        }
         ListVector listVector = (ListVector) vector;
         FieldWriter elementWriter = createWriter(
-            arrayType.getElementType(), listVector.getDataVector(), utcTimestamp);
+            arrayType.getElementType(),
+            hoodieSchema.getElementType().getNonNullType(),
+            listVector.getDataVector(),
+            utcTimestamp,
+            fieldPath + "[]");
         return new ArrayWriter(listVector, elementWriter);
       default:
         throw unsupported(type);
@@ -465,6 +503,44 @@ public class LanceRowDataWriter {
         elementWriter.write(array, i, startIndex + i);
       }
       vector.endValue(rowId, array.size());
+    }
+  }
+
+  private static class VectorWriter extends FieldWriter {
+    private final FixedSizeListVector vector;
+    private final FieldWriter elementWriter;
+    private final int dimension;
+    private final String fieldPath;
+
+    private VectorWriter(
+        FixedSizeListVector vector, FieldWriter elementWriter, int dimension, String fieldPath) {
+      super(vector);
+      this.vector = vector;
+      this.elementWriter = elementWriter;
+      this.dimension = dimension;
+      this.fieldPath = fieldPath;
+    }
+
+    @Override
+    void writeNonNull(RowData row, int ordinal, int rowId) {
+      writeVector(row.getArray(ordinal), rowId);
+    }
+
+    @Override
+    void writeNonNull(ArrayData array, int ordinal, int rowId) {
+      writeVector(array.getArray(ordinal), rowId);
+    }
+
+    private void writeVector(ArrayData array, int rowId) {
+      if (array.size() != dimension) {
+        throw new IllegalArgumentException(
+            "VECTOR column '" + fieldPath + "' requires dimension " + dimension
+                + " but row contains " + array.size() + " elements");
+      }
+      int startIndex = vector.startNewValue(rowId);
+      for (int i = 0; i < dimension; i++) {
+        elementWriter.write(array, i, startIndex + i);
+      }
     }
   }
 

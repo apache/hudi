@@ -65,7 +65,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.avro.AvroSchemaUtils.getNonNullTypeFromUnion;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.getNonNullTypeFromUnion;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -677,8 +677,7 @@ class TestHoodieAvroWriteSupportShredding {
     }
 
     @Override
-    public GenericRecord rebuildVariantRecord(GenericRecord shreddedVariant, Schema shreddedSchema,
-                                              Schema unshreddedSchema) {
+    public VariantRebuilder prepareRebuild(String columnPath, GroupType parquetVariantType, Schema unshreddedSchema) {
       throw new UnsupportedOperationException(
           "the round trip reads raw parquet; the read half is TestHoodieVariantReconstruction's");
     }

@@ -21,18 +21,31 @@ package org.apache.hudi.source.stats;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestData;
 
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
+import org.apache.flink.table.data.TimestampData;
+import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -42,6 +55,9 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
  * Test cases for {@link ColumnStatsIndex}.
@@ -61,7 +77,7 @@ public class TestColumnStatsIndex {
 
     String[] queryColumns = {"uuid", "age"};
     PartitionStatsIndex indexSupport = new PartitionStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf));
-    List<RowData> indexRows = indexSupport.readColumnStatsIndexByColumns(queryColumns);
+    List<RowData> indexRows = indexSupport.readColumnStatsIndexByColumns(queryColumns, Collections.emptyList());
     List<String> results = indexRows.stream().map(Object::toString).sorted(String::compareTo).collect(Collectors.toList());
     List<String> expected = Arrays.asList(
         "+I(par1,+I(23),+I(33),0,2,age)",
@@ -99,7 +115,8 @@ public class TestColumnStatsIndex {
     // explicit query columns
     String[] queryColumns1 = {"uuid", "age"};
     FileStatsIndex indexSupport = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf));
-    List<RowData> indexRows1 = indexSupport.readColumnStatsIndexByColumns(queryColumns1);
+    // An empty partition list reads column statistics across all partitions.
+    List<RowData> indexRows1 = indexSupport.readColumnStatsIndexByColumns(queryColumns1, Collections.emptyList());
     Pair<List<RowData>, String[]> transposedIndexTable1 = indexSupport.transposeColumnStatsIndex(indexRows1, queryColumns1);
     assertThat("The schema columns should sort by natural order",
         Arrays.toString(transposedIndexTable1.getRight()), is("[age, uuid]"));
@@ -112,9 +129,154 @@ public class TestColumnStatsIndex {
         + "+I(2,44,56,0,id7,id8,0)]";
     assertThat(transposed1.toString(), is(expected));
 
+    List<RowData> scopedRows = indexSupport.readColumnStatsIndexByColumns(queryColumns1, Arrays.asList("par1", "par3"));
+    assertEquals(4, scopedRows.size());
+    assertEquals("[+I(2,18,20,0,id5,id6,0), +I(2,23,33,0,id1,id2,0)]",
+        filterOutFileNames(indexSupport.transposeColumnStatsIndex(scopedRows, queryColumns1).getLeft()).toString());
+
     // no query columns, only for tests
     assertThrows(IllegalArgumentException.class,
-        () -> indexSupport.readColumnStatsIndexByColumns(new String[0]));
+        () -> indexSupport.readColumnStatsIndexByColumns(new String[0], Collections.emptyList()));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"par1", "partition=par1", ""})
+  void testReadColumnStatsForCandidatePartitions(String partition) throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    Configuration conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.set(FlinkOptions.HIVE_STYLE_PARTITIONING, partition.startsWith("partition="));
+    if (partition.isEmpty()) {
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, "");
+      conf.set(FlinkOptions.KEYGEN_CLASS_NAME, NonpartitionedAvroKeyGenerator.class.getName());
+    }
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    String[] columns = {"uuid", "age"};
+    try (FileStatsIndex index = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf))) {
+      // Repeated candidate partitions must not duplicate statistics during transposition.
+      List<RowData> rows = index.readColumnStatsIndexByColumns(columns, Arrays.asList(partition, partition));
+      assertEquals(2, rows.size());
+      List<RowData> transposed = filterOutFileNames(index.transposeColumnStatsIndex(rows, columns).getLeft());
+      assertEquals(partition.isEmpty() ? "[+I(8,18,56,0,id1,id8,0)]" : "[+I(2,23,33,0,id1,id2,0)]", transposed.toString());
+
+      // Reject all indexed files, but retain candidates with no statistics.
+      ColumnStatsProbe probe = mock(ColumnStatsProbe.class);
+      when(probe.getReferencedCols()).thenReturn(columns);
+      List<String> files = rows.stream().map(row -> row.getString(0).toString()).distinct().collect(Collectors.toList());
+      files.add("missing-stats.parquet");
+      assertEquals(Collections.singleton("missing-stats.parquet"),
+          index.computeCandidateFiles(probe, files, Collections.singletonList(partition)));
+      assertTrue(index.readColumnStatsIndexByColumns(columns, Collections.singletonList("unknown-partition")).isEmpty());
+    }
+  }
+
+  @Test
+  void testCandidateFilesWithMissingColumnStatsAfterIndexExpansion() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    Configuration conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age");
+
+    // The old file contains a non-null name, but only age has column statistics.
+    TestData.writeData(Collections.singletonList(TestData.insertRow(
+        StringData.fromString("id1"), StringData.fromString("alice"), 25,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"))), conf);
+
+    // Write a different partition so expanding the index does not rewrite the old file.
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age,name");
+    TestData.writeData(Collections.singletonList(TestData.insertRow(
+        StringData.fromString("id2"), StringData.fromString("bob"), 30,
+        TimestampData.fromEpochMillis(2), StringData.fromString("par2"))), conf);
+
+    try (FileStatsIndex index = new FileStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf))) {
+      String[] columns = {"age", "name"};
+      List<RowData> oldStats = index.readColumnStatsIndexByColumns(columns, Collections.singletonList("par1"));
+      assertEquals(1, oldStats.size());
+      assertEquals("age", oldStats.get(0).getString(ColumnStatsSchemas.ORD_COL_NAME).toString());
+      String oldFile = oldStats.get(0).getString(ColumnStatsSchemas.ORD_FILE_NAME).toString();
+
+      List<RowData> allStats = index.readColumnStatsIndexByColumns(columns, Collections.emptyList());
+      assertEquals(3, allStats.size());
+      List<String> allFiles = allStats.stream()
+          .map(row -> row.getString(ColumnStatsSchemas.ORD_FILE_NAME).toString()).distinct().collect(Collectors.toList());
+      assertEquals(2, allFiles.size());
+
+      CallExpression ageFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL,
+          Arrays.asList(new FieldReferenceExpression("age", DataTypes.INT(), 0, 2), new ValueLiteralExpression(0)),
+          DataTypes.BOOLEAN());
+      CallExpression nameFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.EQUALS,
+          Arrays.asList(new FieldReferenceExpression("name", DataTypes.STRING(), 0, 1), new ValueLiteralExpression("alice")),
+          DataTypes.BOOLEAN());
+
+      // With only name referenced, the old file is retained by the unindexed-file fallback.
+      assertEquals(Collections.singleton(oldFile), index.computeCandidateFiles(
+          ColumnStatsProbe.newInstance(Collections.singletonList(nameFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
+
+      // Adding a matching age predicate must not turn missing name statistics into all-null data.
+      assertEquals(Collections.singleton(oldFile), index.computeCandidateFiles(
+          ColumnStatsProbe.newInstance(Arrays.asList(ageFilter, nameFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
+
+      CallExpression nonMatchingAgeFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.GREATER_THAN,
+          Arrays.asList(new FieldReferenceExpression("age", DataTypes.INT(), 0, 2), new ValueLiteralExpression(100)),
+          DataTypes.BOOLEAN());
+      assertEquals(Collections.emptySet(), index.computeCandidateFiles(
+          ColumnStatsProbe.newInstance(Collections.singletonList(nonMatchingAgeFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
+      // Missing name statistics conservatively retain the old file even when age alone excludes it.
+      // The fully indexed new file can still be pruned.
+      assertEquals(Collections.singleton(oldFile), index.computeCandidateFiles(
+          ColumnStatsProbe.newInstance(Arrays.asList(nonMatchingAgeFilter, nameFilter)), new ArrayList<>(allFiles), Collections.emptyList()));
+    }
+  }
+
+  @Test
+  void testCandidatePartitionsWithMissingColumnStatsAfterIndexExpansion() throws Exception {
+    final String path = tempFile.getAbsolutePath();
+    Configuration conf = TestConfigurations.getDefaultConf(path);
+    conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age");
+    TestData.writeData(Collections.singletonList(TestData.insertRow(
+        StringData.fromString("id1"), StringData.fromString("alice"), 25,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"))), conf);
+
+    conf.setString(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age,name");
+    TestData.writeData(Collections.singletonList(TestData.insertRow(
+        StringData.fromString("id2"), StringData.fromString("bob"), 30,
+        TimestampData.fromEpochMillis(2), StringData.fromString("par2"))), conf);
+
+    try (PartitionStatsIndex index = new PartitionStatsIndex(path, TestConfigurations.ROW_TYPE, conf, StreamerUtil.createMetaClient(conf))) {
+      List<RowData> stats = index.readColumnStatsIndexByColumns(new String[] {"age", "name"}, Collections.emptyList());
+      List<String> actualStats = stats.stream().map(Object::toString).sorted().collect(Collectors.toList());
+      // Verify the old partition is partially indexed, rather than entirely absent from the index.
+      assertEquals(Arrays.asList(
+          "+I(par1,+I(25),+I(25),0,1,age)",
+          "+I(par2,+I(30),+I(30),0,1,age)",
+          "+I(par2,+I(bob),+I(bob),0,1,name)"), actualStats);
+
+      CallExpression ageFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL,
+          Arrays.asList(new FieldReferenceExpression("age", DataTypes.INT(), 0, 2), new ValueLiteralExpression(0)),
+          DataTypes.BOOLEAN());
+      CallExpression nameFilter = CallExpression.permanent(
+          BuiltInFunctionDefinitions.EQUALS,
+          Arrays.asList(new FieldReferenceExpression("name", DataTypes.STRING(), 0, 1), new ValueLiteralExpression("alice")),
+          DataTypes.BOOLEAN());
+      // Partition pruning must retain the matching old partition before file pruning runs.
+      assertEquals(Collections.singleton("par1"), index.computeCandidatePartitions(
+          ColumnStatsProbe.newInstance(Arrays.asList(ageFilter, nameFilter)), new ArrayList<>(Arrays.asList("par1", "par2"))));
+    }
   }
 
   private static List<RowData> filterOutFileNames(List<RowData> indexRows) {

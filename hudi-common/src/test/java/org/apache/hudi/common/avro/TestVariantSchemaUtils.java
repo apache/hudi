@@ -92,8 +92,16 @@ public class TestVariantSchemaUtils {
   public void testGetInferableVariantColumnsGating() {
     HoodieSchema schema = schemaWithVariants();
 
-    // Inference disabled (default)
-    assertTrue(VariantSchemaUtils.getInferableVariantColumns(new HoodieConfig(), schema).isEmpty());
+    // Inference enabled (the default since #19690)
+    assertTrue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED.defaultValue(),
+        "#19690 pins inference on by default");
+    assertEquals(Arrays.asList("v1", "v2"),
+        VariantSchemaUtils.getInferableVariantColumns(new HoodieConfig(), schema));
+
+    // Inference disabled explicitly
+    HoodieConfig inferenceOff = new HoodieConfig();
+    inferenceOff.setValue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, "false");
+    assertTrue(VariantSchemaUtils.getInferableVariantColumns(inferenceOff, schema).isEmpty());
 
     // Write shredding disabled
     HoodieConfig shreddingOff = inferenceEnabledConfig();
@@ -156,9 +164,11 @@ public class TestVariantSchemaUtils {
     writeOnly.setValue("hoodie.write.schema", schemaString);
     assertEquals(Arrays.asList("v1", "v2"), VariantSchemaUtils.getInferableVariantColumnsFromConfig(writeOnly));
 
-    // No schema in the config, or inference disabled: nothing, and no schema parse attempted.
+    // No schema in the config, or inference disabled: nothing, and with inference disabled no
+    // schema parse is attempted at all (the unparseable schema below would throw otherwise).
     assertTrue(VariantSchemaUtils.getInferableVariantColumnsFromConfig(inferenceEnabledConfig()).isEmpty());
     HoodieConfig disabled = new HoodieConfig();
+    disabled.setValue(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_SCHEMA_INFERENCE_ENABLED, "false");
     disabled.setValue("hoodie.avro.schema", "not a schema");
     assertTrue(VariantSchemaUtils.getInferableVariantColumnsFromConfig(disabled).isEmpty());
   }
@@ -428,6 +438,62 @@ public class TestVariantSchemaUtils {
     assertEquals(HoodieSchemaType.BYTES, v.getField("value").get().schema().getNonNullType().getType());
     // The synthesized field must carry a null default like every other footer-derived optional field.
     assertEquals(HoodieSchema.NULL_VALUE, v.getField("value").get().defaultVal().get());
+  }
+
+  @Test
+  public void testToShreddedReadSchemaKeepsRequestedNullability() {
+    // A base file can hold a shredded variant REQUIRED while the table schema has it nullable (a
+    // Spark 4.1 non-null parse_json column, or a bootstrapped vanilla Spark file; #20349). The swap
+    // keeps the requested field and its null default, so the read schema must stay nullable at
+    // every shredded position; reading a REQUIRED column as nullable is a safe widening.
+    HoodieSchema typedValue = HoodieSchema.createNullable(HoodieSchemaType.LONG);
+    HoodieSchema nullableVariant = HoodieSchema.createNullable(HoodieSchema.createVariant());
+    HoodieSchema requested = HoodieSchema.createRecord("rec", null, null, Arrays.asList(
+        HoodieSchemaField.of("v", nullableVariant, null, HoodieSchema.NULL_VALUE),
+        HoodieSchemaField.of("s", HoodieSchemaTestUtils.createRecord("s_rec",
+            HoodieSchemaField.of("inner", nullableVariant, null, HoodieSchema.NULL_VALUE))),
+        HoodieSchemaTestUtils.createArrayField("items", nullableVariant),
+        HoodieSchemaTestUtils.createMapField("m", nullableVariant),
+        HoodieSchemaField.of("w", HoodieSchema.createVariant("w_variant", null, null))));
+    HoodieSchema file = HoodieSchema.createRecord("rec", null, null, Arrays.asList(
+        HoodieSchemaField.of("v", HoodieSchemaTestUtils.createPlainShreddedVariantRecord("v", typedValue)),
+        HoodieSchemaField.of("s", HoodieSchemaTestUtils.createRecord("s_rec",
+            HoodieSchemaField.of("inner", HoodieSchemaTestUtils.createPlainShreddedVariantRecord("inner_v", typedValue)))),
+        HoodieSchemaTestUtils.createArrayField("items",
+            HoodieSchemaTestUtils.createPlainShreddedVariantRecord("item_v", typedValue)),
+        HoodieSchemaTestUtils.createMapField("m",
+            HoodieSchemaTestUtils.createPlainShreddedVariantRecord("map_v", typedValue)),
+        HoodieSchemaField.of("w", HoodieSchema.createNullable(
+            HoodieSchemaTestUtils.createPlainShreddedVariantRecord("w", typedValue)), null, HoodieSchema.NULL_VALUE)));
+
+    HoodieSchema read = VariantSchemaUtils.toShreddedReadSchema(requested, file);
+    for (HoodieSchema position : Arrays.asList(
+        read.getField("v").get().schema(),
+        read.getField("s").get().schema().getField("inner").get().schema(),
+        read.getField("items").get().schema().getElementType(),
+        read.getField("m").get().schema().getValueType(),
+        // The opposite mismatch keeps the file's nullable group: reading an OPTIONAL column as
+        // REQUIRED would be a narrowing parquet refuses.
+        read.getField("w").get().schema())) {
+      assertTrue(position.isNullable(), position.toString());
+      assertTrue(position.getNonNullType().getField("typed_value").isPresent(), position.toString());
+    }
+    assertEquals(read.getAvroSchema(), new Schema.Parser().parse(read.toString()));
+  }
+
+  @Test
+  public void testAlignShreddedVariantsKeepsNullableFileColumn() {
+    // The dual direction: the file field (with its null default) is kept and the requested variant
+    // swapped in, so a non-null requested variant must come back nullable as well.
+    HoodieSchema file = HoodieSchema.createRecord("rec", null, null, Collections.singletonList(
+        HoodieSchemaField.of("v", HoodieSchema.createNullable(HoodieSchemaTestUtils.createPlainShreddedVariantRecord(
+            "v", HoodieSchema.createNullable(HoodieSchemaType.LONG))), null, HoodieSchema.NULL_VALUE)));
+    HoodieSchema requested = HoodieSchema.createRecord("rec", null, null, Collections.singletonList(
+        HoodieSchemaField.of("v", HoodieSchema.createVariant())));
+
+    HoodieSchema v = VariantSchemaUtils.alignShreddedVariants(file, requested).getField("v").get().schema();
+    assertTrue(v.isNullable());
+    assertEquals(HoodieSchemaType.VARIANT, v.getNonNullType().getType());
   }
 
   @Test

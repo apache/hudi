@@ -44,6 +44,7 @@ import org.apache.hudi.core.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.io.hfile.HFileReader;
+import org.apache.hudi.io.hfile.HFileWriterImpl;
 import org.apache.hudi.io.hfile.UTF8StringKey;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.io.util.FileIOUtils;
@@ -62,8 +63,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedConstruction;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -98,12 +101,19 @@ import static org.apache.hudi.io.hfile.TestHFileReader.BOOTSTRAP_INDEX_HFILE_SUF
 import static org.apache.hudi.io.hfile.TestHFileReader.COMPLEX_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.SIMPLE_SCHEMA_HFILE_SUFFIX;
 import static org.apache.hudi.io.hfile.TestHFileReader.readHFileFromResources;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -201,6 +211,30 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
           reader.getSchema());
     } catch (Exception e) {
       throw new RuntimeException(e);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testConstructorClosesWriterWhenFileInfoFails(boolean closeFails) throws Exception {
+    HoodieSchema schema = getSchemaFromResource(TestHoodieOrcReaderWriter.class, "/exampleSchemaWithMetaFields.avsc");
+    RuntimeException failure = new IllegalStateException("file info failed");
+    IOException closeFailure = new IOException("close failed");
+    try (MockedConstruction<HFileWriterImpl> construction = mockConstruction(HFileWriterImpl.class, (writer, context) -> {
+      doThrow(failure).when(writer).appendFileInfo(eq(SCHEMA_KEY), any(byte[].class));
+      OutputStream outputStream = (OutputStream) context.arguments().get(1);
+      doAnswer(invocation -> {
+        outputStream.close();
+        if (closeFails) {
+          throw closeFailure;
+        }
+        return null;
+      }).when(writer).close();
+    })) {
+      assertSame(failure, assertThrows(IllegalStateException.class, () -> createWriter(schema, false)));
+      assertEquals(1, construction.constructed().size());
+      verify(construction.constructed().get(0)).close();
+      assertArrayEquals(closeFails ? new Throwable[] {closeFailure} : new Throwable[0], failure.getSuppressed());
     }
   }
 

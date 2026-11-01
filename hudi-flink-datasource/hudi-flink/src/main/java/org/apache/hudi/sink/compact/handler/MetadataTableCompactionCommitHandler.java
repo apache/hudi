@@ -58,8 +58,23 @@ import java.util.List;
  */
 public class MetadataTableCompactionCommitHandler extends DataTableCompactionCommitHandler {
 
+  /** Data client retained for cleanup when no data-table handler owns it. */
+  private final HoodieFlinkWriteClient dataWriteClient;
+
   public MetadataTableCompactionCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient) {
+    this(conf, writeClient, null);
+  }
+
+  MetadataTableCompactionCommitHandler(Configuration conf, HoodieFlinkWriteClient writeClient, HoodieFlinkWriteClient dataWriteClient) {
     super(conf, writeClient);
+    this.dataWriteClient = dataWriteClient;
+  }
+
+  @Override
+  public void close() {
+    try (HoodieFlinkWriteClient ignored = dataWriteClient) {
+      super.close();
+    }
   }
 
   @Override

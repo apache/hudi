@@ -13,24 +13,33 @@
  */
 package io.trino.plugin.hudi;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import io.airlift.units.Duration;
+import io.trino.plugin.hive.HiveColumnHandle;
+import io.trino.plugin.hive.HiveTransactionHandle;
 import io.trino.plugin.hive.util.AsyncQueue;
 import io.trino.plugin.hive.util.ThrottledAsyncQueue;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorSplit;
+import io.trino.spi.connector.ConnectorSplitSource;
+import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.DynamicFilterSnapshot;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.TupleDomain;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+import static io.trino.testing.TestingConnectorSession.SESSION;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -66,6 +75,29 @@ public class TestHudiSplitSource
 
         assertThat(batch).isCompletedWithValueMatching(List::isEmpty);
         assertThat(splitSource.isFinished()).isTrue();
+    }
+
+    @Test
+    public void testNonePredicateYieldsEmptySplitSource()
+    {
+        // A none() predicate must short-circuit before the metastore is consulted: the split manager would
+        // otherwise hand it to computePartitionKeyFilter, which rejects a none() domain
+        HudiSplitManager splitManager = new HudiSplitManager(
+                (identity, transaction) -> {
+                    throw new AssertionError("metastore must not be consulted for a none() predicate");
+                },
+                executor,
+                scheduler);
+
+        for (HudiTableHandle tableHandle : List.of(
+                createTableHandle(TupleDomain.none(), TupleDomain.all()),
+                createTableHandle(TupleDomain.all(), TupleDomain.none()))) {
+            ConnectorSplitSource splitSource = splitManager.getSplits(
+                    new HiveTransactionHandle(false), SESSION, tableHandle, ImmutableSet.of(), Constraint.alwaysTrue());
+
+            assertThat(splitSource.isFinished()).isTrue();
+            assertThat(splitSource.getNextBatch(10, new DynamicFilterSnapshot(TupleDomain.all(), false)).join()).isEmpty();
+        }
     }
 
     @Test
@@ -117,5 +149,23 @@ public class TestHudiSplitSource
             Thread.sleep(10);
         }
         assertThat(queue.isFinished()).isTrue();
+    }
+
+    private static HudiTableHandle createTableHandle(
+            TupleDomain<HiveColumnHandle> partitionPredicates,
+            TupleDomain<HiveColumnHandle> regularPredicates)
+    {
+        return new HudiTableHandle(
+                TABLE.getSchemaName(),
+                TABLE.getTableName(),
+                "/test/path",
+                HoodieTableType.COPY_ON_WRITE,
+                ImmutableList.of(),
+                ImmutableList.of(),
+                partitionPredicates,
+                regularPredicates,
+                OptionalLong.empty(),
+                "",
+                "101");
     }
 }

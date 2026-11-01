@@ -29,9 +29,7 @@ import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.avro.model.HoodieSavepointMetadata;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
-import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieLogFile;
-import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.IOType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -58,12 +56,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 /**
  * Utils for creating dummy Hudi files in testing.
@@ -95,10 +90,6 @@ public class FileCreateUtils extends FileCreateUtilsBase {
   private static <T> void createMetaFile(HoodieTableMetaClient metaClient, String instantTime, String suffix, Option<T> metadata) throws IOException {
     createMetaFileInTimelinePath(metaClient, instantTime, InProcessTimeGenerator::createNewInstantTime, suffix,
         metadata.flatMap(m -> metaClient.getCommitMetadataSerDe().getInstantWriter(m)));
-  }
-
-  public static String markerFileName(String fileName, IOType ioType) {
-    return String.format("%s%s.%s", fileName, HoodieTableMetaClient.MARKER_EXTN, ioType.name());
   }
 
   public static String dataFileMarkerFileName(String instantTime, String fileId, IOType ioType, String fileExtension, String writeToken) {
@@ -394,11 +385,6 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     return baseFilePath.toString();
   }
 
-  public static Path getBaseFilePath(String basePath, String partitionPath, String instantTime, String fileId) {
-    Path parentPath = Paths.get(basePath, partitionPath);
-    return parentPath.resolve(baseFileName(instantTime, fileId));
-  }
-
   public static String createLogFile(HoodieTableMetaClient metaClient, String partitionPath, String instantTime, String fileId, int version)
       throws Exception {
     return createLogFile(metaClient, partitionPath, instantTime, fileId, version, 0);
@@ -520,16 +506,6 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     removeMetaFileInTimelinePath(metaClient.getTimelinePath().toUri().getPath(), instantTime, HoodieTimeline.ROLLBACK_EXTENSION);
   }
 
-  public static Path renameFileToTemp(Path sourcePath, String instantTime) throws IOException {
-    Path dummyFilePath = sourcePath.getParent().resolve(instantTime + ".temp");
-    Files.move(sourcePath, dummyFilePath);
-    return dummyFilePath;
-  }
-
-  public static void renameTempToMetaFile(Path tempFilePath, Path destPath) throws IOException {
-    Files.move(tempFilePath, destPath);
-  }
-
   public static long getTotalMarkerFileCount(HoodieTableMetaClient metaClient, String partitionPath, String instantTime, IOType ioType) throws IOException {
     Path parentPath = Paths.get(metaClient.getTempFolderPath(), instantTime, partitionPath);
     if (Files.notExists(parentPath)) {
@@ -537,25 +513,6 @@ public class FileCreateUtils extends FileCreateUtilsBase {
     }
     return Files.list(parentPath).filter(p -> p.getFileName().toString()
         .endsWith(String.format("%s.%s", HoodieTableMetaClient.MARKER_EXTN, ioType))).count();
-  }
-
-  public static List<Path> getPartitionPaths(Path basePath) throws IOException {
-    if (Files.notExists(basePath)) {
-      return Collections.emptyList();
-    }
-    return Files.list(basePath).filter(entry -> !entry.getFileName().toString().equals(HoodieTableMetaClient.METAFOLDER_NAME)
-            && !isBaseOrLogFilename(entry.getFileName().toString())
-            && !entry.getFileName().toString().startsWith(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))
-        .collect(Collectors.toList());
-  }
-
-  public static boolean isBaseOrLogFilename(String filename) {
-    for (HoodieFileFormat format : HoodieFileFormat.values()) {
-      if (filename.contains(format.getFileExtension())) {
-        return true;
-      }
-    }
-    return false;
   }
 
   /**

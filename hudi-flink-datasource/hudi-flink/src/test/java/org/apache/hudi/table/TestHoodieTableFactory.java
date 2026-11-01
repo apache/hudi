@@ -25,6 +25,7 @@ import org.apache.hudi.common.model.EventTimeAvroPayload;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.OptionsResolver;
@@ -54,22 +55,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Properties;
 
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_DATE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_OUTPUT_TIMEZONE_FORMAT;
 import static org.apache.hudi.common.config.TimestampKeyGeneratorConfig.TIMESTAMP_TYPE_FIELD;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link HoodieTableFactory}.
@@ -352,6 +359,79 @@ public class TestHoodieTableFactory {
     this.conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
     final MockContext sourceContext5 = MockContext.getInstance(this.conf, schema, "f2");
     assertDoesNotThrow(() -> new HoodieTableFactory().createDynamicTableSink(sourceContext5));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"partition", "f2", ""})
+  void testComplexKeygenEncodingDoesNotLoadTableConfig(String partitionField) throws Exception {
+    String tablePath = new File(tempFile.getAbsolutePath(), "ckg").getAbsolutePath();
+    Configuration tableConf = new Configuration();
+    tableConf.set(FlinkOptions.PATH, tablePath);
+    tableConf.set(FlinkOptions.TABLE_NAME, "t_ckg");
+    tableConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    tableConf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition");
+    tableConf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    StreamerUtil.initTableIfNotExists(tableConf);
+    // The table's encoding must not be loaded into the job configuration.
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(tableConf);
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "VALUE_ONLY");
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
+
+    Configuration writeConf = new Configuration();
+    writeConf.set(FlinkOptions.PATH, tablePath);
+    writeConf.set(FlinkOptions.TABLE_NAME, "t_ckg");
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("partition", DataTypes.VARCHAR(10))
+        .build();
+    final MockContext context1 = MockContext.getInstance(writeConf, schema, partitionField);
+    HoodieTableSource source1 = (HoodieTableSource) new HoodieTableFactory().createDynamicTableSource(context1);
+    HoodieTableSink sink1 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(context1);
+    assertThat(source1.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is(nullValue()));
+    assertThat(sink1.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is(nullValue()));
+
+    // An explicitly configured encoding is preserved regardless of the table's recorded encoding.
+    writeConf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "FIELD_PREFIXED");
+    final MockContext context2 = MockContext.getInstance(writeConf, schema, partitionField);
+    HoodieTableSink sink2 = (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(context2);
+    assertThat(sink2.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("FIELD_PREFIXED"));
+  }
+
+  @Test
+  void testComplexKeygenEncodingForTableCreatedByTheJob() {
+    String tablePath = new File(tempFile.getAbsolutePath(), "ckg_new").getAbsolutePath();
+    ResolvedSchema schema = SchemaBuilder.instance()
+        .field("f0", DataTypes.INT().notNull())
+        .field("f1", DataTypes.VARCHAR(20))
+        .field("f2", DataTypes.TIMESTAMP(3))
+        .field("partition", DataTypes.VARCHAR(10))
+        .build();
+    // A complex generator class alone does not imply multiple key or partition fields.
+    Configuration complexConf = new Configuration();
+    complexConf.set(FlinkOptions.PATH, tablePath);
+    complexConf.set(FlinkOptions.TABLE_NAME, "t_ckg_new");
+    complexConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    complexConf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+    HoodieTableSink complexSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(complexConf, schema, "partition"));
+    assertThat(complexSink.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is(nullValue()));
+
+    // A single record key with multiple partition fields defaults to FIELD_PREFIXED.
+    complexSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(complexConf, schema, Arrays.asList("partition", "f1")));
+    assertThat(complexSink.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is("FIELD_PREFIXED"));
+
+    // simple key generator: nothing to record
+    Configuration simpleConf = new Configuration();
+    simpleConf.set(FlinkOptions.PATH, tablePath);
+    simpleConf.set(FlinkOptions.TABLE_NAME, "t_ckg_new");
+    simpleConf.set(FlinkOptions.RECORD_KEY_FIELD, "f0");
+    HoodieTableSink simpleSink = (HoodieTableSink) new HoodieTableFactory()
+        .createDynamicTableSink(MockContext.getInstance(simpleConf, schema, "partition"));
+    assertThat(simpleSink.getConf().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null), is(nullValue()));
   }
 
   @Test
@@ -847,6 +927,65 @@ public class TestHoodieTableFactory {
         (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(globalRLIConf));
     Configuration globalRLIWithBootstrapResolvedConf = globalRLIWithBootstrapSink.getConf();
     assertThat(globalRLIWithBootstrapResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(true));
+  }
+
+  @Test
+  void testRecordLevelIndexBootstrapEnabledDefaultsToFalseWhenUnset() {
+    // HoodieTableFactory no longer forces INDEX_BOOTSTRAP_ENABLED for RECORD_LEVEL_INDEX; when the
+    // user never sets it, the option's own default (false) should simply pass through untouched.
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+
+    HoodieTableSink noBootstrapSink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf));
+    assertThat(noBootstrapSink.getConf().get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(false));
+  }
+
+  @Test
+  void testFactoryBuiltSinkKeepsTimeBoundedRLIBootstrapEnabled() {
+    // The user is responsible for turning INDEX_BOOTSTRAP_ENABLED on for time-bounded RLI
+    // bootstrap; HoodieTableFactory must pass that choice through unchanged rather than
+    // overriding it, so the bootstrap pipeline stays reachable.
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    rliConf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
+    rliConf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+    rliConf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    HoodieTableSink rliSink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf));
+    Configuration rliResolvedConf = rliSink.getConf();
+
+    assertThat(rliResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(true));
+    assertTrue(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(rliResolvedConf));
+  }
+
+  @Test
+  void testFactoryDoesNotForceDisableExplicitBootstrapEnabledForRecordLevelIndex() {
+    // Documents the behavior change from this revision: previously the factory always reset
+    // INDEX_BOOTSTRAP_ENABLED to false for RECORD_LEVEL_INDEX. Now a user-set true survives even
+    // when the rocksdb time-bounded config isn't present, though isTimeBoundedRLIBootstrapEnabled
+    // still requires the full rocksdb + bootstrap-days configuration to select the time-bounded
+    // bootstrap operator.
+    Configuration rliConf = new Configuration(this.conf);
+    rliConf.set(FlinkOptions.OPERATION, "upsert");
+    rliConf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    rliConf.set(FlinkOptions.METADATA_ENABLED, true);
+    rliConf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    rliConf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+
+    HoodieTableSink rliSink =
+        (HoodieTableSink) new HoodieTableFactory().createDynamicTableSink(MockContext.getInstance(rliConf));
+    Configuration rliResolvedConf = rliSink.getConf();
+
+    assertThat(rliResolvedConf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED), is(true));
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(rliResolvedConf));
   }
 
   @Test

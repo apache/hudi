@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.cdc.HoodieCDCUtils;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.cdc.HoodieCDCLogWriter;
@@ -62,8 +63,8 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMerge
    */
   public HoodieMergeHandleWithChangeLog(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                         Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                                        HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+                                        HoodieBaseFile baseFile, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, keyToNewRecords, partitionPath, fileId, baseFile, taskContextSupplier, keyGeneratorOpt);
     this.cdcLogger = createCDCLogWriter(instantTime, config, hoodieTable, partitionPath, taskContextSupplier);
   }
 
@@ -112,7 +113,13 @@ public class HoodieMergeHandleWithChangeLog<T, I, K, O> extends HoodieWriteMerge
 
   @Override
   public List<WriteStatus> close() {
-    List<WriteStatus> writeStatuses = super.close();
+    List<WriteStatus> writeStatuses;
+    try {
+      writeStatuses = super.close();
+    } catch (RuntimeException e) {
+      CloseableUtils.closeSuppressing(cdcLogger, e);
+      throw e;
+    }
     // if there are cdc data written, set the CDC-related information.
 
     if (cdcLogger == null || recordsWritten == 0L || (recordsWritten == insertRecordsWritten)) {

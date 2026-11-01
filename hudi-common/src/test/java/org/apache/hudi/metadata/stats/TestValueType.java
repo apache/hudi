@@ -273,6 +273,12 @@ public class TestValueType {
   public void testFromSchemaUnwrapsUnion() {
     HoodieSchema nullableInt = HoodieSchema.createNullable(HoodieSchemaType.INT);
     assertEquals(ValueType.INT, ValueType.fromSchema(nullableInt));
+    // A union with two or more non-null branches has no single value type and used to recurse forever (#19825)
+    HoodieSchema multiBranchUnion = HoodieSchema.createUnion(
+        HoodieSchema.create(HoodieSchemaType.NULL),
+        HoodieSchema.create(HoodieSchemaType.STRING),
+        HoodieSchema.create(HoodieSchemaType.INT));
+    assertThrows(IllegalArgumentException.class, () -> ValueType.fromSchema(multiBranchUnion));
   }
 
   @Test

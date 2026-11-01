@@ -61,7 +61,7 @@ public class GroupedInsertPartitioner<T extends HoodieKey> implements Partitione
     int groupNumber = numPartitions / groupLength;
     int remaining = numPartitions - groupNumber * groupLength;
     ValidationUtils.checkArgument(groupNumber != 0,
-        String.format("write.insert.partitioner.parallelism.per.partition are greater than numPartitions %d.", numPartitions));
+        () -> String.format("write.insert.partitioner.parallelism.per.partition are greater than numPartitions %d.", numPartitions));
 
     int groupIndex = (partitionPath.hashCode() & Integer.MAX_VALUE) % groupNumber;
     int step;

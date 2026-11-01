@@ -31,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -218,5 +220,87 @@ public class TestEmbeddedTimelineService extends HoodieCommonTestHarness {
     service2.stopForBasePath(writeConfig2.getBasePath());
     verify(mockService2, times(1)).unregisterBasePath(writeConfig2.getBasePath());
     verify(mockService2, times(1)).close();
+  }
+
+  /**
+   * A timeline service whose close() throws must still leave this instance releasable.
+   *
+   * <p>The discriminating input is a TimelineService that throws from close(): the rows returned
+   * and the number of services created are identical either way, so only the state left behind
+   * after a failed close separates the two behaviours. Before the guard, the throw propagated out
+   * of stopForBasePath and left `server` non-null, so the instance could never be closed.
+   */
+  @Test
+  public void stopForBasePathReleasesServerWhenCloseThrows() throws Exception {
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.resolve("table_close_throws").toString())
+        .withEmbeddedTimelineServerEnabled(true)
+        .build();
+    EmbeddedTimelineService.TimelineServiceCreator mockCreator =
+        Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
+    TimelineService mockService = Mockito.mock(TimelineService.class);
+    when(mockCreator.create(any(), any(), any())).thenReturn(mockService);
+    when(mockService.startService()).thenReturn(456);
+    doThrow(new RuntimeException("jetty refused to stop")).when(mockService).close();
+
+    EmbeddedTimelineService service = EmbeddedTimelineService.getOrStartEmbeddedTimelineService(
+        engineContext, null, writeConfig, mockCreator);
+
+    // The failing close must not escape.
+    assertDoesNotThrow(() -> service.stopForBasePath(writeConfig.getBasePath()));
+    verify(mockService, times(1)).close();
+
+    // And the reference must have been released, so a second stop does not re-enter the close
+    // branch. Without the guard `server` is still set here and close() would be called again.
+    assertDoesNotThrow(() -> service.stopForBasePath(writeConfig.getBasePath()));
+    verify(mockService, times(1)).close();
+  }
+
+  /**
+   * One server that fails to close must not abandon the others in the registry.
+   *
+   * <p>Discriminating input: two registered services where the close of one throws. Before the
+   * guard the forEach aborted on the first throw, so the second server was never closed and
+   * RUNNING_SERVICES was never cleared.
+   */
+  @Test
+  public void shutdownAllContinuesPastAFailingServer() throws Exception {
+    HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
+    HoodieWriteConfig throwingConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.resolve("table_throwing").toString())
+        .withEmbeddedTimelineServerEnabled(true)
+        .withEmbeddedTimelineServerReuseEnabled(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).build())
+        .build();
+    EmbeddedTimelineService.TimelineServiceCreator throwingCreator =
+        Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
+    TimelineService throwingService = Mockito.mock(TimelineService.class);
+    when(throwingCreator.create(any(), any(), any())).thenReturn(throwingService);
+    when(throwingService.startService()).thenReturn(654);
+    doThrow(new RuntimeException("jetty refused to stop")).when(throwingService).close();
+    EmbeddedTimelineService.getOrStartEmbeddedTimelineService(
+        engineContext, null, throwingConfig, throwingCreator);
+
+    // A different identifier, so this lands as a separate entry in RUNNING_SERVICES.
+    HoodieWriteConfig healthyConfig = HoodieWriteConfig.newBuilder()
+        .withPath(tempDir.resolve("table_healthy").toString())
+        .withEmbeddedTimelineServerEnabled(true)
+        .withEmbeddedTimelineServerReuseEnabled(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+    EmbeddedTimelineService.TimelineServiceCreator healthyCreator =
+        Mockito.mock(EmbeddedTimelineService.TimelineServiceCreator.class);
+    TimelineService healthyService = Mockito.mock(TimelineService.class);
+    when(healthyCreator.create(any(), any(), any())).thenReturn(healthyService);
+    when(healthyService.startService()).thenReturn(655);
+    EmbeddedTimelineService.getOrStartEmbeddedTimelineService(
+        engineContext, null, healthyConfig, healthyCreator);
+
+    assertDoesNotThrow(EmbeddedTimelineService::shutdownAllTimelineServers);
+
+    // Both were attempted regardless of iteration order.
+    verify(throwingService, times(1)).close();
+    verify(healthyService, times(1)).close();
   }
 }

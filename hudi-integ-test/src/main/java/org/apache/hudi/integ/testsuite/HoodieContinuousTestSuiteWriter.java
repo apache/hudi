@@ -41,7 +41,7 @@ import java.util.Properties;
  * Test suite Writer that assists in testing async table operations with Deltastreamer continuous mode.
  *
  * Sample command
- * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.12:3.5.5 \
+ * ./bin/spark-submit --packages org.apache.spark:spark-avro_2.12:3.5.9 \
  *  --conf spark.task.cpus=1 --conf spark.executor.cores=1 \
  * --conf spark.task.maxFailures=100 \
  * --conf spark.memory.fraction=0.4 \

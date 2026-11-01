@@ -21,6 +21,7 @@ package org.apache.hudi.sink.bulk;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.buffer.MemorySegmentPoolFactory;
 import org.apache.hudi.sink.common.AbstractWriteFunction;
@@ -38,6 +39,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.IOUtils;
 
 import java.io.IOException;
 import java.util.List;
@@ -119,10 +121,8 @@ public class BulkInsertWriteFunction<I>
   }
 
   @Override
-  public void close() {
-    if (this.writeClient != null) {
-      this.writeClient.close();
-    }
+  public void close() throws Exception {
+    IOUtils.closeAll(this.writerHelper, this.writeClient);
   }
 
   @Override
@@ -169,6 +169,6 @@ public class BulkInsertWriteFunction<I>
    * Returns the instant to write.
    */
   private String instantToWrite() {
-    return this.correspondent.requestInstantTime(-1L);
+    return this.correspondent.requestInstantTime(-1L, this.config.get(FlinkOptions.WRITE_COMMIT_ACK_TIMEOUT));
   }
 }

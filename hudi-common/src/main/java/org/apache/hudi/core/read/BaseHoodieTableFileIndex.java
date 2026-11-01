@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.common.util.collection.Pair;
@@ -79,6 +80,7 @@ import static org.apache.hudi.common.config.HoodieCommonConfig.HOODIE_FILE_INDEX
 import static org.apache.hudi.common.config.HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.DEFAULT_METADATA_ENABLE_FOR_READERS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE;
+import static org.apache.hudi.common.table.read.IncrementalQueryAnalyzer.START_COMMIT_EARLIEST;
 import static org.apache.hudi.common.table.timeline.TimelineUtils.validateTimestampAsOf;
 
 /**
@@ -97,7 +99,6 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   @Getter(AccessLevel.PROTECTED)
   private final String[] partitionColumns;
 
-  @Getter
   protected final HoodieMetadataConfig metadataConfig;
   private final TypedProperties configProperties;
   @Getter
@@ -403,7 +404,10 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
     List<String> matchedPartitionPaths;
     try {
       if (isPartitionedTable()) {
-        if (queryType == HoodieTableQueryType.INCREMENTAL && incrementalQueryStartTime.isPresent() && !isBeforeTimelineStarts()) {
+        if (queryType == HoodieTableQueryType.INCREMENTAL
+            && incrementalQueryStartTime.isPresent()
+            && !START_COMMIT_EARLIEST.equalsIgnoreCase(incrementalQueryStartTime.get())
+            && !isBeforeTimelineStarts()) {
           HoodieTimeline timelineToQuery = findInstantsInRange();
           matchedPartitionPaths = TimelineUtils.getWrittenPartitions(timelineToQuery);
         } else {
@@ -430,11 +434,23 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
   }
 
   private boolean isBeforeTimelineStarts() {
-    if (isCompletionTimeBasedQuery) {
-      return metaClient.getActiveTimeline().isBeforeTimelineStartsByCompletionTime(incrementalQueryStartTime.get());
-    } else {
-      return metaClient.getActiveTimeline().isBeforeTimelineStarts(incrementalQueryStartTime.get());
+    return isBeforeTimelineStarts(metaClient.getActiveTimeline(), isCompletionTimeBasedQuery, incrementalQueryStartTime.get());
+  }
+
+  @VisibleForTesting
+  static boolean isBeforeTimelineStarts(HoodieTimeline activeTimeline, boolean isCompletionTimeBasedQuery, String startTime) {
+    // Check against the same timeline findInstantsInRange() reads: the incremental listing takes the
+    // written partitions from the write timeline, so it is only complete when that timeline covers the
+    // start. Older non-write instants (e.g. a rollback the archiver has not reached) must not count.
+    // Savepoints are kept so that savepointed commits left behind by archival are skipped as the start.
+    HoodieTimeline writeTimeline = activeTimeline.getTimelineOfActions(HoodieTimeline.WRITE_AND_SAVEPOINT_ACTIONS);
+    if (writeTimeline.filterCompletedInstants().getFirstNonSavepointCommit().isEmpty()) {
+      // no completed write instant on the active timeline: the written partitions are unknown, list them all
+      return true;
     }
+    return isCompletionTimeBasedQuery
+        ? writeTimeline.isBeforeTimelineStartsByCompletionTime(startTime)
+        : writeTimeline.isBeforeTimelineStarts(startTime);
   }
 
   private HoodieTimeline findInstantsInRange() {

@@ -82,6 +82,13 @@ public interface HoodieTimeline extends HoodieInstantReader, Serializable {
       COMMIT_ACTION, DELTA_COMMIT_ACTION, CLEAN_ACTION,
       COMPACTION_ACTION, LOG_COMPACTION_ACTION, REPLACE_COMMIT_ACTION, CLUSTERING_ACTION);
 
+  /**
+   * Write actions plus savepoint, used to find the first active write instant that is not savepointed.
+   */
+  Set<String> WRITE_AND_SAVEPOINT_ACTIONS = CollectionUtils.createSet(
+      COMMIT_ACTION, DELTA_COMMIT_ACTION, COMPACTION_ACTION, LOG_COMPACTION_ACTION,
+      REPLACE_COMMIT_ACTION, CLUSTERING_ACTION, SAVEPOINT_ACTION);
+
   String COMMIT_EXTENSION = "." + COMMIT_ACTION;
   String DELTA_COMMIT_EXTENSION = "." + DELTA_COMMIT_ACTION;
   String CLEAN_EXTENSION = "." + CLEAN_ACTION;

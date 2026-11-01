@@ -30,6 +30,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.io.FileGroupReaderBasedMergeHandle;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.function.VoidFunction2;
@@ -154,6 +155,39 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
       assertEquals(0, nonNull,
           "no row may carry " + column + " for mode " + mode + "; " + nonNull + " of " + total
               + " were populated");
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = MetaFieldsMode.class, names = "NONE", mode = EnumSource.Mode.EXCLUDE)
+  void concatPreservesRecordsWithTheSparkRecordType(MetaFieldsMode mode) {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL());
+    options.put("hoodie.write.record.merge.custom.implementation.classes", "org.apache.hudi.DefaultSparkRecordMerger");
+    options.put(HoodieWriteConfig.MERGE_ALLOW_DUPLICATE_ON_INSERTS_ENABLE.key(), "true");
+    options.put("hoodie.parquet.small.file.limit", "10485760");
+
+    writeSampleAndGetTableConfig(options, basePath());
+    // Route a duplicate insert into the existing small file, exercising HoodieConcatHandle.
+    writeRows(Collections.singletonList(RowFactory.create("k1", "p1", "v3")),
+        simpleSchema(), options, basePath(), SaveMode.Append);
+
+    Dataset<Row> latest = spark().read().format("hudi").load(basePath())
+        .withColumn("actual_file", functions.input_file_name());
+    assertEquals(1, latest.select("actual_file").distinct().count(), "the inserts must share one file group");
+    assertEquals(Arrays.asList("v1", "v2", "v3"), latest.select("column3").collectAsList().stream()
+        .map(row -> row.getString(0)).sorted().collect(Collectors.toList()),
+        "concat must preserve both existing records and the duplicate insert");
+    assertMetaColumn(latest, 3, HoodieRecord.COMMIT_TIME_METADATA_FIELD, mode.isCommitTimePopulated(), mode);
+    assertMetaColumn(latest, 3, HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, mode == MetaFieldsMode.ALL, mode);
+    assertMetaColumn(latest, 3, HoodieRecord.RECORD_KEY_METADATA_FIELD, mode.isRecordKeyPopulated(), mode);
+    assertMetaColumn(latest, 3, HoodieRecord.PARTITION_PATH_METADATA_FIELD, mode == MetaFieldsMode.ALL, mode);
+    assertMetaColumn(latest, 3, HoodieRecord.FILENAME_METADATA_FIELD, mode.isFileNamePopulated(), mode);
+    if (mode.isFileNamePopulated()) {
+      for (Row row : latest.collectAsList()) {
+        assertTrue(row.<String>getAs("actual_file").endsWith("/" + row.getAs(HoodieRecord.FILENAME_METADATA_FIELD)));
+      }
     }
   }
 
@@ -675,6 +709,40 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
   // in memory. So HoodieWriteMergeHandle's preserve-metadata branch is reachable here, and it is
   // the one write path that stamps a meta column outside the mode-aware writers.
   // ---------------------------------------------------------------------------------------------
+
+  @ParameterizedTest
+  @EnumSource(value = MetaFieldsMode.class, names = "ALL", mode = EnumSource.Mode.EXCLUDE)
+  void upsertWithSingleRecordKeyAndMultiplePartitionFields(MetaFieldsMode mode) {
+    Map<String, String> options = baseOptions();
+    options.put(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    options.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "column2,column4");
+    options.put(DataSourceWriteOptions.OPERATION().key(), DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL());
+    options.put("hoodie.write.record.merge.custom.implementation.classes", "org.apache.hudi.DefaultSparkRecordMerger");
+    options.put(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), FileGroupReaderBasedMergeHandle.class.getName());
+    options.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "false");
+    StructType schema = simpleSchema().add("column4", DataTypes.StringType, true);
+
+    writeRows(Arrays.asList(
+            RowFactory.create("k1", "p1", "v1", "a"),
+            RowFactory.create("k2", "p1", "v2", "a"),
+            RowFactory.create("k3", "p1", "v3", "b")),
+        schema, options, basePath(), SaveMode.Overwrite);
+    writeRows(Collections.singletonList(RowFactory.create("k1", "p1", "v4", "a")),
+        schema, options, basePath(), SaveMode.Append);
+
+    Dataset<Row> latest = spark().read().format("hudi").load(basePath());
+    assertEquals(Arrays.asList(
+            RowFactory.create("k1", "p1", "v4", "a"),
+            RowFactory.create("k2", "p1", "v2", "a"),
+            RowFactory.create("k3", "p1", "v3", "b")),
+        latest.select("column1", "column2", "column3", "column4").orderBy("column1").collectAsList(),
+        "upsert must replace the existing key exactly once and preserve untouched records in both partitions");
+    if (mode == MetaFieldsMode.NONE) {
+      assertFalse(Arrays.asList(latest.columns()).contains(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+    } else {
+      assertMetaColumn(latest, 3, HoodieRecord.RECORD_KEY_METADATA_FIELD, false, mode);
+    }
+  }
 
   /**
    * An upsert rewrites the whole file group: the updated record goes through the normal write path,

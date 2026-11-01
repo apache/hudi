@@ -70,8 +70,8 @@ To build the Docker demo images with `docker` directly, rather than through the 
 `build_local_docker_images.sh` above, run the script from under `<HUDI_REPO_DIR>/docker`:
 
 ```shell
-# With no flags, builds Hadoop 2.8.4 / Spark 3.5.3 / Hive 2.3.10, matching
-# docker-compose_hadoop284_hive2310_spark353_{amd64,arm64}.yml
+# With no flags, builds Hadoop 2.8.4 / Spark 3.5.9 / Hive 2.3.10, matching
+# docker-compose_hadoop284_hive2310_spark359_{amd64,arm64}.yml
 ./build_docker_images.sh
 ```
 
@@ -81,15 +81,15 @@ combinations under `docker/compose`.
 
 ```shell
 # Matches setup_demo.sh and
-# docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml
-./build_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3
+# docker-compose_hadoop334_hive313_spark359_{amd64,arm64}.yml
+./build_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.9 --hive-version 3.1.3
 
 # Another supported combination is
 # docker-compose_hadoop340_hive313_spark401_{amd64,arm64}.yml
 ./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3
 ```
 
-`setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml`. If you build a
+`setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark359_{amd64,arm64}.yml`. If you build a
 different image set for the demo flow, update `COMPOSE_FILE_NAME` in `setup_demo.sh` to point to the matching compose
 file before running the script. Run `./setup_demo.sh dev` to use your locally built images; a plain run pulls the
 Docker Hub images over them.
@@ -207,8 +207,10 @@ changes are needed for the current amd64 plus arm64 image set in this repository
 ## Trino E2E image - `/trino`
 
 The Trino E2E stack does not use the `hoodie/hadoop` image tree. `docker/trino/` builds
-`apachehudi/hudi-trino-e2e` directly on top of the official `trinodb/trino` image at the
-root pom's `trino.e2e.version`, baking in a locally-assembled native `trino-hudi` plugin
+`apachehudi/hudi-trino-e2e` on top of a Trino server image built from the pinned
+`trinodb/trino` commit (`trino.sha`, via `docker/trino/build_trino_server_image.sh`; this is
+what CI does) or, for quick local runs, the released `trinodb/trino:<trino.e2e.version>`,
+baking in a locally-assembled native `trino-hudi` plugin
 directory and the E2E catalog config (`connector.name=hudi`, metastore at
 `thrift://hivemetastore:9083`).
 

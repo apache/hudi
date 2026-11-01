@@ -98,7 +98,8 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   }
 
   /**
-   * Update the write client to be used for clustering.
+   * Switches the client used by later clustering runs. Does not wait for a clustering that is running: it can run
+   * for a long time, and the writer calling this must not be blocked until it completes.
    */
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.clusteringClient.updateWriteClient(writeClient);

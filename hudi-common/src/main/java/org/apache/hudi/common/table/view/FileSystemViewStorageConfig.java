@@ -171,7 +171,7 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
       .key("hoodie.filesystem.view.remote.response.charset")
       .defaultValue(StandardCharsets.ISO_8859_1.name())
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("Charset used for decoding HTTP responses from the timeline server. "
           + "Set to 'UTF-8' if partition paths or file paths contain non-ASCII characters (e.g. Unicode). "
           + "Default is ISO-8859-1 for backwards compatibility.");
@@ -239,33 +239,33 @@ public class FileSystemViewStorageConfig extends HoodieConfig {
 
   public long getMaxMemoryForPendingCompaction() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return new Double(totalMemory * getDouble(SPILLABLE_COMPACTION_MEM_FRACTION))
+    return Double.valueOf(totalMemory * getDouble(SPILLABLE_COMPACTION_MEM_FRACTION))
         .longValue();
   }
 
   public long getMaxMemoryForPendingLogCompaction() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return new Double(totalMemory * getDouble(SPILLABLE_LOG_COMPACTION_MEM_FRACTION))
+    return Double.valueOf(totalMemory * getDouble(SPILLABLE_LOG_COMPACTION_MEM_FRACTION))
         .longValue();
   }
 
   public long getMaxMemoryForBootstrapBaseFile() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
     long reservedForExternalDataFile =
-        new Double(totalMemory * getDouble(BOOTSTRAP_BASE_FILE_MEM_FRACTION))
+        Double.valueOf(totalMemory * getDouble(BOOTSTRAP_BASE_FILE_MEM_FRACTION))
             .longValue();
     return reservedForExternalDataFile;
   }
 
   public long getMaxMemoryForReplacedFileGroups() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return new Double(totalMemory * getDouble(SPILLABLE_REPLACED_MEM_FRACTION))
+    return Double.valueOf(totalMemory * getDouble(SPILLABLE_REPLACED_MEM_FRACTION))
         .longValue();
   }
 
   public long getMaxMemoryForPendingClusteringFileGroups() {
     long totalMemory = getLong(SPILLABLE_MEMORY);
-    return new Double(totalMemory * getDouble(SPILLABLE_CLUSTERING_MEM_FRACTION))
+    return Double.valueOf(totalMemory * getDouble(SPILLABLE_CLUSTERING_MEM_FRACTION))
         .longValue();
   }
 

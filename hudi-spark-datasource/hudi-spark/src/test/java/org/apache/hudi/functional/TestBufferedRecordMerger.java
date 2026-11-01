@@ -119,7 +119,8 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     storageConfig = mock(StorageConfiguration.class);
     when(tableConfig.getPayloadClass()).thenReturn(
         "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
-    when(tableConfig.populateMetaFields()).thenReturn(false);
+    when(tableConfig.isRecordKeyPopulated()).thenReturn(false);
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[]{"id"}));
     // Create reader context.
     props = new TypedProperties();

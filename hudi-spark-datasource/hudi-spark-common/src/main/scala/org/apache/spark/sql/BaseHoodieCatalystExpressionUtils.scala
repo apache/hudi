@@ -18,7 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Lower, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
 import org.apache.spark.sql.types.DataType
 
@@ -64,16 +64,17 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
         case DateFormatClass(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case DateAdd(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case DateSub(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
+        // NOTE: DateDiff(end, start) is end - start, so it reverses the ordering of its start date,
+        //       which hence must not be matched
         case DateDiff(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case DateDiff(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
         case FromUnixTime(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
         case FromUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
         case ToUnixTimestamp(OrderPreservingTransformation(attrRef), _, _, _) => Some(attrRef)
         case ToUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
 
         // String Expressions
-        case Lower(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case Upper(OrderPreservingTransformation(attrRef)) => Some(attrRef)
+        // NOTE: Lower/Upper are not matched: case folding does not preserve the binary ordering
+        //       of strings (for ex, "Zebra" < "apple", but lower("Zebra") = "zebra" > "apple")
         // Left API change: Improve RuntimeReplaceable
         // https://issues.apache.org/jira/browse/SPARK-38240
         case org.apache.spark.sql.catalyst.expressions.Left(OrderPreservingTransformation(attrRef), _) => Some(attrRef)

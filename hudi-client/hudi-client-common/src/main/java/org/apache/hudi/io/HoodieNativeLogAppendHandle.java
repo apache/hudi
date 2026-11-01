@@ -30,6 +30,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Lazy;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
 import org.apache.hudi.exception.HoodieException;
@@ -61,6 +62,11 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
 public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<T, I, K, O> {
 
   private HoodieNativeLogFormatWriter writer;
+
+  @VisibleForTesting
+  HoodieNativeLogFormatWriter getWriter() {
+    return writer;
+  }
 
   public HoodieNativeLogAppendHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                      String partitionPath, String fileId, Iterator<HoodieRecord<T>> recordItr,
@@ -123,13 +129,10 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     }
     HoodieRecord populatedRecord = hoodieRecord.prependMetaFields(
         schema, writeSchemaWithMetaFields, populateMetadataFields(hoodieRecord), recordProperties);
-    String keyField = config.populateMetaFields()
-        ? HoodieRecord.RECORD_KEY_METADATA_FIELD
-        : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     if (!canWriteDataFile()) {
       flushAppend();
     }
-    writer.appendRecord(populatedRecord, writeSchemaWithMetaFields, keyField);
+    writer.appendRecord(populatedRecord, writeSchemaWithMetaFields);
     if (isUpdateRecord || isLogCompaction) {
       updatedRecordsWritten++;
     } else {
@@ -143,13 +146,10 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
     hoodieRecord.unseal();
     hoodieRecord.clearNewLocation();
     hoodieRecord.seal();
-    String keyField = schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).isPresent()
-        ? HoodieRecord.RECORD_KEY_METADATA_FIELD
-        : hoodieTable.getMetaClient().getTableConfig().getRecordKeyFieldProp();
     if (!canWriteDeleteFile()) {
       flushAppend();
     }
-    writer.appendDeleteRecord(hoodieRecord, schema, keyField);
+    writer.appendDeleteRecord(hoodieRecord, schema);
     recordsDeleted++;
   }
 
@@ -162,15 +162,18 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
         writer.flushAppend(getUpdatedHeader(header));
         processAppendResults(writer.getLastAppendResults());
       }
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new HoodieAppendException("Failed while flushing records to native log for fileId " + fileId, e);
     }
   }
 
   @Override
   protected void closeLogWriter() {
-    if (writer != null) {
-      writer.close();
+    try {
+      if (writer != null) {
+        writer.close();
+      }
+    } finally {
       writer = null;
     }
   }

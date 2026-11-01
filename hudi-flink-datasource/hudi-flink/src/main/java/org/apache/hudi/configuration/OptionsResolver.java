@@ -26,6 +26,7 @@ import org.apache.hudi.common.config.HoodieCommonConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -42,6 +43,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -80,6 +82,9 @@ public class OptionsResolver {
 
   // Value to override the default minimum file group count for global record level index.
   public static String GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_DEFAULT = "8";
+
+  // Value of FlinkOptions#INDEX_RLI_BACKEND_TYPE that selects the local RocksDB-based partitioned index cache.
+  private static final String ROCKSDB_INDEX_RLI_BACKEND_TYPE = "rocksdb";
 
   /**
    * Returns whether the current runtime mode is adaptive batch execution.
@@ -260,6 +265,16 @@ public class OptionsResolver {
   public static boolean isGlobalRecordLevelIndex(Configuration conf) {
     HoodieIndex.IndexType indexType = OptionsResolver.getIndexType(conf);
     return indexType == HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
+  }
+
+  /**
+   * Returns whether the table uses partitioned record level index served by the local RocksDB-based
+   * partitioned index cache, i.e. {@link FlinkOptions#INDEX_RLI_BACKEND_TYPE} is configured as {@code rocksdb}.
+   */
+  public static boolean isTimeBoundedRLIBootstrapEnabled(Configuration conf) {
+    return conf.get(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)
+            && ROCKSDB_INDEX_RLI_BACKEND_TYPE.equalsIgnoreCase(conf.get(FlinkOptions.INDEX_RLI_BACKEND_TYPE))
+            && conf.get(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS) > 0;
   }
 
   /**
@@ -552,10 +567,14 @@ public class OptionsResolver {
    * Returns whether to populate meta fields or not
    */
   public static boolean isPopulateMetaFields(Configuration conf) {
-    return Boolean.parseBoolean(
-        conf.getString(
-            HoodieTableConfig.POPULATE_META_FIELDS.key(),
-            HoodieTableConfig.POPULATE_META_FIELDS.defaultValue().toString()));
+    return getMetaFieldsMode(conf).toLegacyPopulateMetaFields();
+  }
+
+  /**
+   * Resolves meta-field population, including the legacy boolean fallback.
+   */
+  public static MetaFieldsMode getMetaFieldsMode(Configuration conf) {
+    return MetaFieldsMode.resolve(conf.toMap());
   }
 
   /**
@@ -713,6 +732,15 @@ public class OptionsResolver {
   public static boolean useComplexKeygenNewEncoding(Configuration conf) {
     return Boolean.parseBoolean(conf.getString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
         HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.defaultValue().toString()));
+  }
+
+  /**
+   * Returns the record key encoding of a single-field complex key generator table, when the table option
+   * {@code hoodie.table.complex.keygenerator.encoding} was set up on the job configuration.
+   */
+  public static Option<ComplexKeyGenEncoding> getComplexKeygenEncoding(Configuration conf) {
+    String encoding = conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null);
+    return StringUtils.isNullOrEmpty(encoding) ? Option.empty() : Option.of(ComplexKeyGenEncoding.fromString(encoding));
   }
 
   // -------------------------------------------------------------------------

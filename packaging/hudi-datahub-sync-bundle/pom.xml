@@ -106,6 +106,15 @@
                     <exclude>**/*.proto</exclude>
                   </excludes>
                 </filter>
+                <filter>
+                  <artifact>io.acryl:datahub-client-java8</artifact>
+                  <includes>
+                    <include>**</include>
+                  </includes>
+                  <excludes>
+                    <exclude>org/apache/avro/**</exclude>
+                  </excludes>
+                </filter>
               </filters>
               <finalName>${project.artifactId}-${project.version}</finalName>
             </configuration>

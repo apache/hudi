@@ -123,8 +123,15 @@ public class EmbeddedTimelineService {
   public static void shutdownAllTimelineServers() {
     RUNNING_SERVICES.entrySet().forEach(entry -> {
       log.info("Closing Timeline server");
-      entry.getValue().server.close();
-      METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+      try {
+        entry.getValue().server.close();
+      } catch (Exception e) {
+        // Keep sweeping: an unguarded throw here would abandon every server after this one and
+        // skip the clear() below, leaving the registry pointing at servers nobody can reach.
+        log.warn("Timeline server did not close cleanly during shutdown; continuing", e);
+      } finally {
+        METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+      }
       log.info("Closed Timeline server");
     });
     RUNNING_SERVICES.clear();
@@ -243,10 +250,17 @@ public class EmbeddedTimelineService {
     // continue rest of shutdown outside of the synchronized block to avoid excess blocking
     if (basePaths.isEmpty() && null != server) {
       log.info("Closing Timeline server");
-      this.server.close();
-      METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
-      this.server = null;
-      this.viewManager = null;
+      try {
+        this.server.close();
+      } catch (Exception e) {
+        // Release the references anyway: holding on to a server that failed to close leaves this
+        // instance permanently unclosable, since every later call re-enters this same branch.
+        log.warn("Timeline server did not close cleanly; releasing the reference anyway", e);
+      } finally {
+        METRICS_REGISTRY.set(NUM_EMBEDDED_TIMELINE_SERVERS, NUM_SERVERS_RUNNING.decrementAndGet());
+        this.server = null;
+        this.viewManager = null;
+      }
       log.info("Closed Timeline server");
     }
   }

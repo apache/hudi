@@ -261,7 +261,7 @@ This RFC adds a feature flag and three new configs to control the behavior of ea
    for `TIMELINE_SERVER_BASED` markers. The class name of the early conflict detection strategy to use. This should be a
    subclass of `org.apache.hudi.common.conflict.detection.EarlyConflictDetectionStrategy`.
 3. `hoodie.write.concurrency.early.conflict.check.commit` default: `false`. Set true if users are sensitive to conflict
-   detection. When set to ture, Hudi is able to check commit conflict during early conflict detection.
+   detection. When set to true, Hudi is able to check commit conflict during early conflict detection.
 4. `hoodie.write.concurrency.async.conflict.detector.initial_delay_ms` default: `0L`. Used for timeline-server-based
    markers with `AsyncTimelineServerBasedDetectionStrategy`. The time in milliseconds to delay the first execution of
    async marker-based conflict detection.

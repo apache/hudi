@@ -48,7 +48,9 @@ public class UpgradeOrDowngradeCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String toVersionName = getHoodieTableVersionName(toVersion, true);
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.UPGRADE, master, sparkMemory, HoodieCLI.basePath, toVersionName);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.UPGRADE, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "toVersionName", toVersionName);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();
@@ -71,7 +73,9 @@ public class UpgradeOrDowngradeCommand {
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
     String toVersionName = getHoodieTableVersionName(toVersion, false);
-    SparkMain.addAppArgs(sparkLauncher, SparkCommand.DOWNGRADE, master, sparkMemory, HoodieCLI.basePath, toVersionName);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkCommand.DOWNGRADE, master, sparkMemory,
+        "basePath", HoodieCLI.basePath,
+        "toVersionName", toVersionName);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

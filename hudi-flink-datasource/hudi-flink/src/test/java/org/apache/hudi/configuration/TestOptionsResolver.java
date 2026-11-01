@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -35,6 +36,7 @@ import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.utils.TestConfigurations;
@@ -59,6 +61,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Test for {@link OptionsResolver}
  */
 public class TestOptionsResolver {
+
+  @Test
+  void testMetaFieldsModeLegacyFallback() {
+    Configuration conf = new Configuration();
+    assertEquals(MetaFieldsMode.ALL, OptionsResolver.getMetaFieldsMode(conf));
+    conf.setString(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    assertEquals(MetaFieldsMode.NONE, OptionsResolver.getMetaFieldsMode(conf));
+    conf.setString(HoodieTableConfig.META_FIELDS_MODE.key(), "commit_time_only");
+    assertEquals(MetaFieldsMode.COMMIT_TIME_ONLY, OptionsResolver.getMetaFieldsMode(conf));
+    assertFalse(OptionsResolver.isPopulateMetaFields(conf));
+  }
 
   @Test
   void testTableStorageLayoutDefaultsByOperation() {
@@ -373,6 +386,11 @@ public class TestOptionsResolver {
     assertTrue(OptionsResolver.allowCommitOnEmptyBatch(conf));
     conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "true");
     assertTrue(OptionsResolver.useComplexKeygenNewEncoding(conf));
+    assertFalse(OptionsResolver.getComplexKeygenEncoding(conf).isPresent());
+    conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "value_only");
+    assertEquals(ComplexKeyGenEncoding.VALUE_ONLY, OptionsResolver.getComplexKeygenEncoding(conf).get());
+    conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "FIELD_PREFIXED");
+    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED, OptionsResolver.getComplexKeygenEncoding(conf).get());
   }
 
   @Test
@@ -405,6 +423,37 @@ public class TestOptionsResolver {
     conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
     assertInstanceOf(BucketIndexConcurrentFileWritesConflictResolutionStrategy.class,
         OptionsResolver.getConflictResolutionStrategy(conf));
+  }
+
+  @Test
+  void testPartitionedRLIWithRocksDBBackend() {
+    // isTimeBoundedRLIBootstrapEnabled requires all three of: INDEX_BOOTSTRAP_ENABLED explicitly
+    // turned on by the user (HoodieTableFactory no longer forces this for RECORD_LEVEL_INDEX),
+    // a rocksdb-backed RLI cache, and a positive bootstrap-days window.
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+
+    // Wrong backend type.
+    conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "mdt");
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+
+    // Backend type matches, case-insensitively.
+    conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
+    assertTrue(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+    conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "RocksDB");
+    assertTrue(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+
+    // Bootstrap days must be positive.
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 0);
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+
+    // INDEX_BOOTSTRAP_ENABLED must be explicitly turned on, even with the rest configured.
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    assertFalse(OptionsResolver.isTimeBoundedRLIBootstrapEnabled(conf));
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
   }
 
   @Test

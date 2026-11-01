@@ -22,6 +22,7 @@ import org.apache.hudi.client.model.HoodieFlinkInternalRow;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.configuration.FlinkOptions;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.sink.event.Correspondent;
 import org.apache.hudi.sink.partitioner.index.DummyPartitionedIndexBackend;
 import org.apache.hudi.sink.partitioner.index.PartitionedIndexBackend;
@@ -49,6 +50,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -104,6 +106,24 @@ class TestDynamicBucketAssignFunction {
     assertEquals("I", record.getInstantTime());
     assertEquals("I", record.getOperationType());
     verify(indexBackend).update("partition", "key", "new-file");
+  }
+
+  @Test
+  void testProcessIndexRecordBootstrapsIndexBackendWithoutBucketAssignment() throws Exception {
+    DynamicBucketAssignFunction function = new DynamicBucketAssignFunction(new Configuration());
+    PartitionedIndexBackend indexBackend = mock(PartitionedIndexBackend.class);
+    BucketAssigner bucketAssigner = mock(BucketAssigner.class);
+    setField(function, "indexBackend", indexBackend);
+    setField(function, "bucketAssigner", bucketAssigner);
+    HoodieFlinkInternalRow indexRecord = new HoodieFlinkInternalRow("key", "partition", "existing-file", "20260101000000");
+    List<HoodieFlinkInternalRow> output = new ArrayList<>();
+
+    function.processElement(indexRecord, null, collector(output));
+
+    assertEquals(0, output.size(), "Index records carry no row data and must not be emitted downstream");
+    verify(indexBackend).bootstrap("partition", "key", "existing-file");
+    verify(bucketAssigner, never()).addInsert("partition");
+    verify(bucketAssigner, never()).addUpdate("partition", "existing-file");
   }
 
   @Test
@@ -164,6 +184,94 @@ class TestDynamicBucketAssignFunction {
     assertInstanceOf(BucketAssigner.class, getField(function, "bucketAssigner"));
     assertInstanceOf(DummyPartitionedIndexBackend.class, getField(function, "indexBackend"));
     function.close();
+  }
+
+  @Test
+  void testBootstrappedIndexRecordIsReusedByLaterUpdate() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    StreamerUtil.initTableIfNotExists(conf);
+    ViewStorageProperties.createProperties(
+        conf.get(FlinkOptions.PATH),
+        FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
+            .build(),
+        conf);
+    DynamicBucketAssignFunction function = new DynamicBucketAssignFunction(conf);
+    function.setRuntimeContext(new MockStreamingRuntimeContext(false, 1, 0));
+    function.open(new Configuration());
+    function.initializeState(mock(FunctionInitializationContext.class));
+
+    try {
+      // Simulates the preloaded index record emitted upstream by RLIBootstrapOperator /
+      // TimeBoundedRLIBootstrapOperator for a record whose file group mapping is already known.
+      HoodieFlinkInternalRow indexRecord =
+          new HoodieFlinkInternalRow("key", "partition", "bootstrapped-file", "20260101000000");
+      List<HoodieFlinkInternalRow> indexOutput = new ArrayList<>();
+      function.processElement(indexRecord, null, collector(indexOutput));
+      assertEquals(0, indexOutput.size(), "Index record must not be forwarded to the writer");
+
+      // A later update for the same key should be routed to the bootstrapped file group instead of
+      // being assigned a brand-new bucket.
+      HoodieFlinkInternalRow updateRecord = record("key", "partition", "U");
+      List<HoodieFlinkInternalRow> updateOutput = new ArrayList<>();
+      function.processElement(updateRecord, null, collector(updateOutput));
+
+      assertEquals(1, updateOutput.size());
+      assertEquals("bootstrapped-file", updateRecord.getFileId());
+      assertEquals("U", updateRecord.getInstantTime());
+    } finally {
+      function.close();
+    }
+  }
+
+  @Test
+  void testBootstrappedIndexRecordsDoNotAffectUnrelatedKeysInSamePartition() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    StreamerUtil.initTableIfNotExists(conf);
+    ViewStorageProperties.createProperties(
+        conf.get(FlinkOptions.PATH),
+        FileSystemViewStorageConfig.newBuilder()
+            .withStorageType(FileSystemViewStorageType.SPILLABLE_DISK)
+            .build(),
+        conf);
+    DynamicBucketAssignFunction function = new DynamicBucketAssignFunction(conf);
+    function.setRuntimeContext(new MockStreamingRuntimeContext(false, 1, 0));
+    function.open(new Configuration());
+    function.initializeState(mock(FunctionInitializationContext.class));
+
+    try {
+      // Preload two keys in the same partition, as a bootstrap operator would emit for all records it
+      // owns in that partition.
+      function.processElement(
+          new HoodieFlinkInternalRow("key1", "partition", "bootstrapped-file-1", "20260101000000"),
+          null, collector(new ArrayList<>()));
+      function.processElement(
+          new HoodieFlinkInternalRow("key2", "partition", "bootstrapped-file-2", "20260101000000"),
+          null, collector(new ArrayList<>()));
+
+      HoodieFlinkInternalRow update1 = record("key1", "partition", "U");
+      function.processElement(update1, null, collector(new ArrayList<>()));
+      assertEquals("bootstrapped-file-1", update1.getFileId());
+
+      HoodieFlinkInternalRow update2 = record("key2", "partition", "U");
+      function.processElement(update2, null, collector(new ArrayList<>()));
+      assertEquals("bootstrapped-file-2", update2.getFileId());
+
+      // A brand-new key in the same partition that was never preloaded must still go through bucket
+      // assignment as an insert rather than reusing a bootstrapped file group.
+      HoodieFlinkInternalRow newRecord = record("key3", "partition", "I");
+      List<HoodieFlinkInternalRow> newOutput = new ArrayList<>();
+      function.processElement(newRecord, null, collector(newOutput));
+
+      assertEquals(1, newOutput.size());
+      assertEquals("I", newRecord.getInstantTime());
+      assertNotEquals("bootstrapped-file-1", newRecord.getFileId());
+      assertNotEquals("bootstrapped-file-2", newRecord.getFileId());
+    } finally {
+      function.close();
+    }
   }
 
   private static HoodieFlinkInternalRow record(String recordKey, String partitionPath, String operationType) {

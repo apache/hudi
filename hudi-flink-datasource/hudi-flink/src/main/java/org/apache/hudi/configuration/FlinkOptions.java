@@ -374,7 +374,7 @@ public class FlinkOptions extends HoodieConfig {
   public static final ConfigOption<Integer> INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS = ConfigOptions
       .key("index.rli.cache.rocksdb.bootstrap.days")
       .intType()
-      .defaultValue(7)
+      .defaultValue(-1)
       .withDescription("Number of days of Partitioned Record Index to load during bootstrap. Only partitions "
           + "within this window are pre-loaded; older partitions are loaded on demand when updates are observed.");
 
@@ -1534,6 +1534,17 @@ public class FlinkOptions extends HoodieConfig {
               + "'lookup.join.cache.type' is set to 'rocksdb'. "
               + "Each task manager will create a unique subdirectory under this path. "
               + "The directory is cleaned up when the lookup function is closed.");
+
+  @AdvancedConfig
+  public static final ConfigOption<String> HADOOP_CONF_DIR = ConfigOptions
+      .key("hadoop_conf.dir")
+      .stringType()
+      .noDefaultValue()
+      .withDescription("Local Hadoop configuration directory for cross-cluster reads and writes. "
+          + "It must contain at least one readable core-site.xml, hdfs-site.xml, yarn-site.xml or mapred-site.xml "
+          + "and be available at the same path on the client, JobManager and TaskManagers. "
+          + "Invalid explicit directories fail fast; when unset, environment discovery is used. "
+          + "Hadoop properties from FLINK_CONF_DIR override site files, and table-level hadoop.* options override both.");
 
   // -------------------------------------------------------------------------
   //  Utilities

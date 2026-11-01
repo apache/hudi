@@ -62,6 +62,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.RAW_TRIPS_TEST_NA
 /**
  * @deprecated Deprecated. Use {@link SparkClientFunctionalTestHarness} instead.
  */
+@Deprecated
 public class FunctionalTestHarness implements SparkProvider, DFSProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
   protected static transient SparkSession spark;

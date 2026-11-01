@@ -25,7 +25,9 @@ import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -42,11 +44,14 @@ import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -306,6 +311,35 @@ public class TestIndexingCatchupTask {
     verify(transactionManager).endStateChange(Option.of(rollback));
   }
 
+  /**
+   * A replace commit that registers files written outside Hudi carries the replaced file groups only in its
+   * {@link HoodieReplaceCommitMetadata}, so both catch-up tasks must read it as such for the indexes to drop them.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testUpdateIndexForWriteActionReadsReplaceCommitMetadata(boolean writeStatBased) throws IOException {
+    HoodieInstant replaceCommit = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.REPLACE_COMMIT_ACTION, "002");
+    HoodieInstant commit = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.COMMIT_ACTION, "003");
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    HoodieReplaceCommitMetadata replaceCommitMetadata = new HoodieReplaceCommitMetadata();
+    replaceCommitMetadata.addReplaceFileId("p1", "file_1.parquet");
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    when(metaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.readReplaceCommitMetadata(replaceCommit)).thenReturn(replaceCommitMetadata);
+    when(activeTimeline.readCommitMetadata(commit)).thenReturn(commitMetadata);
+
+    AbstractIndexingCatchupTask task = writeStatBased
+        ? new WriteStatBasedIndexingCatchupTask(metadataWriter, Arrays.asList(replaceCommit, commit), new HashSet<>(), metaClient, metadataMetaClient,
+            "001", transactionManager, engineContext, table, heartbeatClient)
+        : new RecordBasedIndexingCatchupTask(metadataWriter, Arrays.asList(replaceCommit, commit), new HashSet<>(), metaClient, metadataMetaClient,
+            "001", transactionManager, engineContext, table, heartbeatClient);
+    task.updateIndexForWriteAction(replaceCommit);
+    task.updateIndexForWriteAction(commit);
+
+    verify(metadataWriter).update(replaceCommitMetadata, "002");
+    verify(metadataWriter).update(commitMetadata, "003");
+  }
+
   @Test
   public void testRunRejectsUnexpectedCompletedActionAndReleasesTransaction() {
     HoodieInstant instant = INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.COMPLETED, HoodieTimeline.SAVEPOINT_ACTION, "002");
@@ -328,7 +362,7 @@ public class TestIndexingCatchupTask {
 
   private RunningIndexingCatchupTask runningTask(HoodieInstant... instants) {
     return new RunningIndexingCatchupTask(
-        metadataWriter, java.util.Arrays.asList(instants), new HashSet<>(), metaClient, metadataMetaClient,
+        metadataWriter, Arrays.asList(instants), new HashSet<>(), metaClient, metadataMetaClient,
         transactionManager, "001", engineContext, table, heartbeatClient);
   }
 

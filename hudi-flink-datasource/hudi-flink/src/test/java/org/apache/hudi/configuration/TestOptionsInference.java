@@ -19,7 +19,9 @@
 package org.apache.hudi.configuration;
 
 import org.apache.hudi.common.model.WriteConcurrencyMode;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.util.ClientIds;
 
 import org.apache.flink.FlinkVersion;
@@ -45,6 +47,25 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestOptionsInference {
   @TempDir
   File tempFile;
+
+  @Test
+  void testSetupComplexKeygenEncodingWithoutTablePath() {
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "id");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "region");
+    conf.set(FlinkOptions.KEYGEN_CLASS_NAME, ComplexAvroKeyGenerator.class.getName());
+
+    OptionsInference.setupComplexKeygenEncoding(conf);
+    assertFalse(conf.containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
+
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "region,day");
+    OptionsInference.setupComplexKeygenEncoding(conf);
+    assertEquals("FIELD_PREFIXED", conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
+
+    conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "VALUE_ONLY");
+    OptionsInference.setupComplexKeygenEncoding(conf);
+    assertEquals("VALUE_ONLY", conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
+  }
 
   @Test
   void testSetupSourceAndSinkTasks() {
