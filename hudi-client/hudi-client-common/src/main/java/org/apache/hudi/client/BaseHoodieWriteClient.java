@@ -68,6 +68,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.CleanerUtils;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Functions;
@@ -222,11 +223,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   protected final void releaseAfterFailedInit(HoodieIndex<?, ?> createdIndex, Throwable initFailure) {
     if (createdIndex != null) {
-      try {
-        createdIndex.close();
-      } catch (Exception e) {
-        initFailure.addSuppressed(e);
-      }
+      CloseableUtils.closeSuppressing(createdIndex::close, initFailure);
     }
     releaseAfterFailedInit(initFailure);
   }

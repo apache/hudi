@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -87,11 +88,7 @@ public class SparkRDDWriteClient<T> extends
       checkSpeculativeExecution();
     } catch (RuntimeException | Error e) {
       if (this.tableServiceClient != null) {
-        try {
-          this.tableServiceClient.close();
-        } catch (Exception closeFailure) {
-          e.addSuppressed(closeFailure);
-        }
+        CloseableUtils.closeSuppressing(this.tableServiceClient, e);
       }
       releaseAfterFailedInit(getIndex(), e);
       throw e;

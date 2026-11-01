@@ -38,6 +38,7 @@ import org.apache.hudi.common.table.timeline.TimeGenerator;
 import org.apache.hudi.common.table.timeline.TimeGenerators;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView.BaseFileOnlyView;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -159,21 +160,9 @@ public abstract class BaseHoodieClient implements Serializable, AutoCloseable {
    * released whatever they added on top.
    */
   protected final void releaseAfterFailedInit(Throwable initFailure) {
-    try {
-      stopEmbeddedServerView(true);
-    } catch (Exception e) {
-      initFailure.addSuppressed(e);
-    }
-    try {
-      this.heartbeatClient.close();
-    } catch (Exception e) {
-      initFailure.addSuppressed(e);
-    }
-    try {
-      this.txnManager.close();
-    } catch (Exception e) {
-      initFailure.addSuppressed(e);
-    }
+    CloseableUtils.closeSuppressing(() -> stopEmbeddedServerView(true), initFailure);
+    CloseableUtils.closeSuppressing(this.heartbeatClient, initFailure);
+    CloseableUtils.closeSuppressing(this.txnManager, initFailure);
   }
 
   /**
