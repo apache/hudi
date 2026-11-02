@@ -36,9 +36,6 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
-import org.apache.parquet.filter2.predicate.FilterApi;
-import org.apache.parquet.filter2.predicate.FilterPredicate;
-import org.apache.parquet.io.api.Binary;
 
 import javax.annotation.Nullable;
 
@@ -157,16 +154,13 @@ public class ArchivedTimelineLoaderV2 implements ArchivedTimelineLoader {
     //TODO boundary to revisit in later pr to use HoodieSchema directly
     // Clean payload windows use inclusive bounds. Push those bounds into Parquet so overlapping
     // compacted files do not materialize every archived record again for every small window.
-    FilterPredicate predicate = null;
-    if (filter instanceof HoodieArchivedTimeline.ClosedClosedTimeRangeFilter) {
-      HoodieArchivedTimeline.ClosedClosedTimeRangeFilter range = (HoodieArchivedTimeline.ClosedClosedTimeRangeFilter) filter;
-      predicate = FilterApi.and(
-          FilterApi.gtEq(FilterApi.binaryColumn(INSTANT_TIME_ARCHIVED_META_FIELD), Binary.fromString(range.getStartTs())),
-          FilterApi.ltEq(FilterApi.binaryColumn(INSTANT_TIME_ARCHIVED_META_FIELD), Binary.fromString(range.getEndTs())));
-    }
     HoodieSchema writerSchema = HoodieSchema.fromAvroSchema(HoodieLSMTimelineInstant.getClassSchema());
     HoodieSchema projectedSchema = HoodieSchema.fromAvroSchema(readSchema);
-    return predicate == null ? reader.getIndexedRecordIterator(writerSchema, projectedSchema)
-        : reader.getIndexedRecordIterator(writerSchema, projectedSchema, predicate);
+    if (filter instanceof HoodieArchivedTimeline.ClosedClosedTimeRangeFilter) {
+      HoodieArchivedTimeline.ClosedClosedTimeRangeFilter range = (HoodieArchivedTimeline.ClosedClosedTimeRangeFilter) filter;
+      return reader.getIndexedRecordIteratorInRange(writerSchema, projectedSchema,
+          INSTANT_TIME_ARCHIVED_META_FIELD, range.getStartTs(), range.getEndTs());
+    }
+    return reader.getIndexedRecordIterator(writerSchema, projectedSchema);
   }
 }

@@ -47,9 +47,11 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.avro.HoodieAvroParquetReaderBuilder;
+import org.apache.parquet.filter2.predicate.FilterApi;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.io.api.Binary;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -182,8 +184,11 @@ public class HoodieAvroParquetReader extends HoodieAvroFileReader {
   }
 
   @Override
-  public ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema,
-                                                                 FilterPredicate predicate) throws IOException {
+  public ClosableIterator<IndexedRecord> getIndexedRecordIteratorInRange(HoodieSchema readerSchema, HoodieSchema requestedSchema,
+                                                                        String column, String lowerBound, String upperBound) throws IOException {
+    FilterPredicate predicate = FilterApi.and(
+        FilterApi.gtEq(FilterApi.binaryColumn(column), Binary.fromString(lowerBound)),
+        FilterApi.ltEq(FilterApi.binaryColumn(column), Binary.fromString(upperBound)));
     return getIndexedRecordIteratorInternal(requestedSchema, Collections.emptyMap(), predicate);
   }
 
