@@ -26,6 +26,26 @@ class SupersetEngineSpecTest(unittest.TestCase):
         from superset.app import create_app
         cls.app = create_app()
 
+    def test_schema_round_trip(self):
+        from unittest.mock import MagicMock
+        from sqlalchemy.engine.url import make_url
+        from hudi_spark_connect.dialect import SparkConnectDialect
+        from hudi_spark_connect.engine_spec import SparkConnectEngineSpec as spec
+
+        for schema in ("a/b", "a`b", "a b", "a/b` c", "a%2Fb"):
+            with self.subTest(schema=schema):
+                uri, connect_args = spec.adjust_engine_params(
+                    make_url("sparkconnect://localhost:15002/default?tls=false"), {}, schema=schema)
+                uri = make_url(str(uri))
+                self.assertEqual(spec.get_schema_from_engine_params(uri, connect_args), schema)
+                dialect = SparkConnectDialect()
+                args, options = dialect.create_connect_args(uri)
+                self.assertEqual(options["_schema"], schema)
+                dialect.dbapi = MagicMock()
+                dialect.connect(*args, **options)
+                cursor = dialect.dbapi.connect.return_value.cursor.return_value.__enter__.return_value
+                cursor.execute.assert_called_once_with("USE `" + schema.replace("`", "``") + "`")
+
     def test_temporal_filter_values_compile(self):
         import sqlalchemy as sa
         from superset.models.helpers import ExploreMixin

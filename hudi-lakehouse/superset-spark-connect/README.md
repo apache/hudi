@@ -51,7 +51,14 @@ Use that image for Superset web and worker processes. Configure a Superset secre
 and metadata database using the normal Superset deployment instructions. The image
 is a local integration example, not a hardened production deployment. It replaces
 the base image's PyArrow 16.1.0 with 18.1.0; compatibility with unrelated Superset
-features and connectors has not been established.
+features and connectors has not been established. The adapter package accepts
+`pyarrow>=16.1,<19`, so installing it into an existing Superset environment does
+not require upgrading PyArrow 16.1.0. The Dockerfile pins 18.1.0 explicitly for
+the reproducible example.
+PyArrow 16.1.0 was also checked with ADBC manager 1.12.0 and Foundry Spark ADBC
+0.2.1: dialect and engine spec tests, Spark/Hudi live tests, and Superset SQL Lab
+CRUD/MERGE and chart-data tests passed. This does not establish compatibility
+with every PyArrow version in the range or unrelated Superset connectors.
 
 Restart Superset after installation. Configure the database with a URI such as:
 
@@ -64,8 +71,10 @@ sparkconnect://localhost:15002/default?api=connect&auth_type=none&tls=false
 port-forward in the chart README. This URI is only for a trusted local network.
 The adapter currently rejects credentials in the URL; authenticated endpoints and
 catalog selection have not been validated. Its URI path selects the Spark schema.
-The default driver name is `spark`; use the URI query parameter `driver` to
-supply a driver manifest name or library path. Do not put credentials in query
+The adapter always loads the `spark` driver installed by the Superset operator.
+The URI query parameter `driver` is rejected, including `driver=spark`; database
+connections cannot select another native library. Install drivers only in trusted,
+operator-controlled locations. Do not put credentials in query
 parameters, which can appear in logs.
 
 Use `superset test-db -c '{}'` with the URI to check dialect compatibility. In SQL Lab,
@@ -90,7 +99,9 @@ HUDI_SUPERSET_CONNECT_TEST_URI='sparkconnect://localhost:15002/default?tls=false
   python -m unittest discover -s hudi-lakehouse/superset-spark-connect -p 'test_live.py' -v
 ```
 
-The Superset engine spec tests require Superset 6.1.0. After building the example
+CI runs only the offline dialect tests, with PyArrow 16.1.0 and 18.1.0.
+The Superset engine spec tests are manual
+and require Superset 6.1.0. After building the example
 image above, run them against the checkout with:
 
 ```bash

@@ -16,7 +16,7 @@
 FROM apache/superset:6.1.0
 USER root
 COPY . /tmp/hudi-spark-connect-superset
-RUN uv pip install --python /app/.venv/bin/python /tmp/hudi-spark-connect-superset 'dbc==0.3.1' \
+RUN uv pip install --python /app/.venv/bin/python /tmp/hudi-spark-connect-superset 'dbc==0.3.1' 'pyarrow==18.1.0' \
     && /app/.venv/bin/dbc install --level system 'spark=0.2.1' \
     && mkdir -p /app/superset_home/.config \
     && chown -R superset:superset /app/superset_home/.config \

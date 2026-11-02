@@ -367,7 +367,8 @@ python -m unittest discover -s hudi-lakehouse/superset-spark-connect -p 'test_ze
 
 Use only a disposable endpoint and notebook server. The Connect URI is stored in
 the notebook source, so the test requires `auth_type=none` and rejects credentials
-and secret-bearing options. The test creates a unique notebook and table and removes them; if execution is interrupted or the outcome
+and secret-bearing options. The test creates a unique notebook and table and
+removes them; if execution is interrupted or the outcome
 is ambiguous, wait for the notebook to stop before manually cleaning up the
 printed table name. API-created paragraphs must include a table-results config;
 without it this Zeppelin version returned a table result via API but its browser

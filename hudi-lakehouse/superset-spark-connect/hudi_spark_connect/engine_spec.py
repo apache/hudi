@@ -22,6 +22,7 @@ from superset.db_engine_specs.spark import time_grain_expressions
 from superset.sql.parse import SQLGLOT_DIALECTS
 
 # Superset maps SQL parser dialects by engine name.
+# This internal registry is tested with Superset 6.1.0; revalidate on upgrades.
 SQLGLOT_DIALECTS["sparkconnect"] = SQLGLOT_DIALECTS["spark"]
 
 

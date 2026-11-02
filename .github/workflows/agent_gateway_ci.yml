@@ -44,8 +44,11 @@ permissions:
 
 jobs:
   superset-spark-connect-tests:
-    name: Superset Spark Connect dialect tests
+    name: Superset Spark Connect dialect tests (PyArrow ${{ matrix.pyarrow }})
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        pyarrow: ['16.1.0', '18.1.0']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,7 +57,7 @@ jobs:
           cache: pip
           cache-dependency-path: hudi-lakehouse/superset-spark-connect/pyproject.toml
       - name: Install adapter
-        run: pip install ./hudi-lakehouse/superset-spark-connect
+        run: pip install ./hudi-lakehouse/superset-spark-connect 'pyarrow==${{ matrix.pyarrow }}'
       - name: Run offline dialect tests
         run: python -m unittest discover -s hudi-lakehouse/superset-spark-connect -p 'test_dialect.py' -v
 
