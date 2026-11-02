@@ -40,7 +40,7 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
-import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, DeleteColumn, RemoveProperty, SetProperty, UpdateColumnComment, UpdateColumnType}
+import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, DeleteColumn, RemoveProperty, SetProperty, UpdateColumnComment, UpdateColumnNullability, UpdateColumnType}
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils, ProvidesHoodieConfig}
@@ -234,12 +234,28 @@ class HoodieCatalog extends DelegatingCatalogExtension
         // Hudi owns its metadata columns; deleting them must not change the stored schema.
         val schemaChanges = otherChanges.filterNot {
           case delete: DeleteColumn =>
-            delete.fieldNames().length == 1 && HoodieRecord.HOODIE_META_COLUMNS.contains(delete.fieldNames()(0))
+            delete.fieldNames().length == 1 && HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(delete.fieldNames()(0))
+          // Hudi exposes nullable fields and does not enforce NOT NULL constraints. SDP
+          // re-sends nullability on refresh; retain the stored schema in either direction.
+          case change: UpdateColumnNullability =>
+            table.schema.findNestedField(change.fieldNames(), includeCollections = true,
+              spark.sessionState.conf.resolver).isDefined
           case _ => false
         }
         // Reject unsupported changes before applying any supported change in the same request.
         schemaChanges.foreach {
-          case _: AddColumn | _: UpdateColumnType | _: UpdateColumnComment =>
+          case change: UpdateColumnType =>
+            val colName = UnresolvedAttribute(change.fieldNames()).name
+            val field = table.schema.findNestedField(change.fieldNames(), includeCollections = true,
+              spark.sessionState.conf.resolver).map(_._2).getOrElse {
+              throw new HoodieAnalysisException(s"Couldn't find column $colName in:\n${table.schema.treeString}")
+            }
+            if (field.dataType != change.newDataType()) {
+              throw new HoodieAnalysisException(
+                "ALTER TABLE CHANGE COLUMN is not supported for changing column " +
+                  s"'${field.name}' with type '${field.dataType}' to '$colName' with type '${change.newDataType()}'")
+            }
+          case _: AddColumn | _: UpdateColumnComment =>
           case change =>
             throw new UnsupportedOperationException(s"not supported table change: ${change.getClass.getName}")
         }
