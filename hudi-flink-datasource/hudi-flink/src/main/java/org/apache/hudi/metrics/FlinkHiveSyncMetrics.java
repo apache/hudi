@@ -26,6 +26,10 @@ import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.metrics.ThreadSafeSimpleCounter;
+import org.apache.flink.runtime.metrics.scope.ScopeFormat;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Metrics for the Hive sync that {@link org.apache.hudi.sink.StreamWriteOperatorCoordinator} runs
@@ -37,9 +41,23 @@ import org.apache.flink.metrics.ThreadSafeSimpleCounter;
  *
  * <p>The breakdown of each sync, from the init duration to the schema evolved count, is only
  * registered when {@code hoodie.datasource.hive_sync.detailed_metrics.enabled} is set.
+ *
+ * <p>Obtain an instance with {@link #register}. Flink keeps one coordinator metric group per operator
+ * for the life of the job, but creates a new coordinator whenever it rebuilds the execution graph,
+ * as the adaptive scheduler does on every restart and rescale. That group ignores a metric registered
+ * under a name it already holds, so metrics owned by each coordinator would stay frozen at the first
+ * coordinator's values. Every coordinator of the same operator in the same job therefore shares one
+ * instance.
  */
 public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   private static final int HISTOGRAM_WINDOW_SIZE = 100;
+
+  /**
+   * The instance shared by the coordinators of each operator, keyed by job and operator ID. Entries
+   * are never removed: a coordinator closing does not tell whether another will replace it, and one
+   * small instance per Hudi write operator per job is all this holds.
+   */
+  private static final Map<String, FlinkHiveSyncMetrics> SHARED_METRICS = new ConcurrentHashMap<>();
 
   static final String HIVE_SYNC_SUCCESS_COUNT = "hiveSyncSuccessCount";
   static final String HIVE_SYNC_FAILURE_COUNT = "hiveSyncFailureCount";
@@ -114,7 +132,7 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
    * @param detailedMetricsEnabled whether to register and update the breakdown of each sync, which the sync records
    *     only when its detailed metrics are enabled
    */
-  public FlinkHiveSyncMetrics(MetricGroup metricGroup, boolean detailedMetricsEnabled) {
+  FlinkHiveSyncMetrics(MetricGroup metricGroup, boolean detailedMetricsEnabled) {
     super(metricGroup);
     this.detailedMetricsEnabled = detailedMetricsEnabled;
     // Detailed histograms are only accessed when detailed metrics are enabled.
@@ -124,19 +142,46 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
     this.remainingDurationMs = detailedMetricsEnabled ? newHistogram() : null;
   }
 
+  /**
+   * Returns the metrics of the coordinator that owns {@code metricGroup}, registered on it.
+   *
+   * <p>A coordinator that replaces an earlier one of the same operator and job gets the earlier
+   * one's instance, so its syncs update the metrics the group already reports, and the counts carry
+   * on across the restart. The instance is still registered on {@code metricGroup}, which covers a
+   * group that is not the one it was first registered on, such as the group of a JobMaster
+   * recreated for the same job.
+   *
+   * <p>A group that does not identify its job and operator, as in tests, gets an instance of its own.
+   */
+  public static FlinkHiveSyncMetrics register(MetricGroup metricGroup, boolean detailedMetricsEnabled) {
+    Map<String, String> variables = metricGroup.getAllVariables();
+    String jobId = variables.get(ScopeFormat.SCOPE_JOB_ID);
+    String operatorId = variables.get(ScopeFormat.SCOPE_OPERATOR_ID);
+    FlinkHiveSyncMetrics metrics = jobId == null || operatorId == null
+        ? new FlinkHiveSyncMetrics(metricGroup, detailedMetricsEnabled)
+        : SHARED_METRICS.computeIfAbsent(jobId + "/" + operatorId,
+            key -> new FlinkHiveSyncMetrics(metricGroup, detailedMetricsEnabled));
+    metrics.registerMetrics(metricGroup);
+    return metrics;
+  }
+
   @Override
   public void registerMetrics() {
-    metricGroup.counter(HIVE_SYNC_SUCCESS_COUNT, syncSuccessCount);
-    metricGroup.counter(HIVE_SYNC_FAILURE_COUNT, syncFailureCount);
-    metricGroup.histogram(HIVE_SYNC_DURATION_MS, syncDurationMs);
-    metricGroup.gauge(HIVE_SYNC_LAST_SUCCESS_TIME_MS, () -> lastSyncSuccessTimeMs);
+    registerMetrics(metricGroup);
+  }
+
+  private void registerMetrics(MetricGroup group) {
+    group.counter(HIVE_SYNC_SUCCESS_COUNT, syncSuccessCount);
+    group.counter(HIVE_SYNC_FAILURE_COUNT, syncFailureCount);
+    group.histogram(HIVE_SYNC_DURATION_MS, syncDurationMs);
+    group.gauge(HIVE_SYNC_LAST_SUCCESS_TIME_MS, () -> lastSyncSuccessTimeMs);
     if (detailedMetricsEnabled) {
-      metricGroup.histogram(HIVE_SYNC_INIT_DURATION_MS, initDurationMs);
-      metricGroup.histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS, schemaReadDurationMs);
-      metricGroup.histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS, partitionScanDurationMs);
-      metricGroup.histogram(HIVE_SYNC_REMAINING_DURATION_MS, remainingDurationMs);
-      metricGroup.counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT, partitionsAddedCount);
-      metricGroup.counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT, schemaEvolvedCount);
+      group.histogram(HIVE_SYNC_INIT_DURATION_MS, initDurationMs);
+      group.histogram(HIVE_SYNC_SCHEMA_READ_DURATION_MS, schemaReadDurationMs);
+      group.histogram(HIVE_SYNC_PARTITION_SCAN_DURATION_MS, partitionScanDurationMs);
+      group.histogram(HIVE_SYNC_REMAINING_DURATION_MS, remainingDurationMs);
+      group.counter(HIVE_SYNC_PARTITIONS_ADDED_COUNT, partitionsAddedCount);
+      group.counter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT, schemaEvolvedCount);
     }
   }
 
