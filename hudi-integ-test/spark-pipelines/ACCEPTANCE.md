@@ -40,8 +40,29 @@ Finally, a null-key flow must fail while the same Connect server remains availab
 for a new remote query. Every client and CLI invocation is bounded by the harness.
 Logs remain under `target/phase1-acceptance-logs` after temporary data is removed.
 
-This scenario uses one writer per target and disables metadata indexing to isolate
-MVP behavior. It does not claim coverage of materialized views, full refresh,
+Use `--table-type cow` (default) or `--table-type mor` to run the same assertions
+against either table type. MOR enables async compaction with a one-delta-commit
+threshold and requires a completed compaction commit on the upsert table before
+the unchanged restart. Each invocation uses an isolated server and filesystem.
+
+Use `--metadata enabled` to exercise the default metadata-enabled configuration.
+The default `--metadata disabled` isolates the sink assertions from the known
+metadata-writer lifecycle caveat tracked by #20491; a passing disabled run does
+not establish default-configuration coverage. Run both explicitly, for example:
+
+```sh
+# Append these options to the command above for separate runs:
+--table-type mor --metadata disabled
+--table-type cow --metadata enabled
+--table-type mor --metadata enabled
+```
+
+Validated with Spark 4.1.1 / Scala 2.13 / JDK 17 and the candidate bundle built
+from master `b0d16f94b3b`: all four COW/MOR and metadata disabled/enabled
+combinations passed. Both MOR runs completed upsert compaction, and all four
+restart timelines remained unchanged. These bounded runs do not resolve #20491.
+
+This scenario uses one writer per target. It does not claim coverage of materialized views, full refresh,
 metadata-writer lifetime, fan-in, chaining, or commit/checkpoint failure injection.
 The generated source, SQL and pipeline specification are retained in the logs as
 runnable examples within the harness's isolated filesystem layout.

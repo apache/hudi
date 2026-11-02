@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""Run RFC-112 Phase 1 acceptance using the #20402 Spark CLI/Connect harness."""
+"""Run RFC-112 Phase 1 acceptance using the #20453 Spark CLI/Connect harness."""
 
 import argparse
 import json
@@ -38,12 +38,12 @@ def input_events():
 # Only immutable identity belongs in the table properties. The operation is captured per flow.
 FLOWS = '''SET spark.hoodie.datasource.write.operation=insert;
 CREATE STREAMING TABLE insert_events USING hudi
-TBLPROPERTIES ('type'='cow', 'primaryKey'='id', 'preCombineField'='ts')
+TBLPROPERTIES ('type'='{table_type}', 'primaryKey'='id', 'preCombineField'='ts')
 AS SELECT id, ts, value FROM STREAM input_events;
 
 SET spark.hoodie.datasource.write.operation=upsert;
 CREATE STREAMING TABLE upsert_events USING hudi
-TBLPROPERTIES ('type'='cow', 'primaryKey'='id', 'preCombineField'='ts')
+TBLPROPERTIES ('type'='{table_type}', 'primaryKey'='id', 'preCombineField'='ts')
 AS SELECT id, ts, value FROM STREAM input_events;
 '''
 
@@ -74,11 +74,12 @@ def verify(mode, remote, root):
         spark.stop()
 
 
-def scenario(harness):
+def scenario(harness, table_type, metadata):
+    flows = FLOWS.format(table_type=table_type)
     input_dir = harness.root / "input"
     input_dir.mkdir()
     (harness.root / "source.py").write_text(SOURCE)
-    (harness.root / "flows.sql").write_text(FLOWS)
+    (harness.root / "flows.sql").write_text(flows)
     spec = {
         "name": "hudi_flow_settings",
         "storage": (harness.root / "checkpoints").as_uri(),
@@ -89,7 +90,9 @@ def scenario(harness):
             "hudi.test.input": input_dir.as_uri(),
             "spark.sql.shuffle.partitions": "2",
             "spark.sql.pipelines.maxFlowRetryAttempts": "0",
-            "spark.hoodie.metadata.enable": "false",
+            "spark.hoodie.metadata.enable": str(metadata).lower(),
+            "spark.hoodie.datasource.compaction.async.enable": str(table_type == "mor").lower(),
+            "spark.hoodie.compact.inline.max.delta.commits": "1",
         },
     }
     spec_path = harness.root / "spark-pipeline.yml"
@@ -111,6 +114,10 @@ def scenario(harness):
         return result
 
     before = commits()
+    if table_type == "mor":
+        # The upsert update creates a log file and must actually exercise async compaction.
+        assert any(name.endswith(".commit") for name in before["upsert_events"]), before
+
     # Restart with no new input must leave both outputs and the completed timeline unchanged.
     harness.run_pipeline(spec_path, name="pipeline-restart")
     harness.client(Path(__file__).resolve(), "restart")
@@ -121,7 +128,7 @@ def scenario(harness):
     failure_input = harness.root / "failure-input"
     failure_input.mkdir()
     (failure_input / "bad.json").write_text('{"id": null, "ts": 1, "value": "bad"}\n')
-    (harness.root / "flows.sql").write_text(FLOWS.split("SET spark.hoodie.datasource.write.operation=upsert;")[1]
+    (harness.root / "flows.sql").write_text(flows.split("SET spark.hoodie.datasource.write.operation=upsert;")[1]
                                            .replace("upsert_events", "failure_events"))
     spec["name"] = "hudi_failure_isolation"
     spec["storage"] = (harness.root / "failure-checkpoints").as_uri()
@@ -149,9 +156,11 @@ def main():
     parser.add_argument("--harness-dir", type=Path, default=Path(__file__).resolve().parent)
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--logs", type=Path, default=Path("target/phase1-acceptance-logs"))
+    parser.add_argument("--table-type", choices=("cow", "mor"), default="cow")
+    parser.add_argument("--metadata", choices=("enabled", "disabled"), default="disabled")
     args = parser.parse_args()
     if not (args.harness_dir / "harness.py").is_file():
-        parser.error("The #20402 harness is required; pass its spark-pipelines directory with --harness-dir")
+        parser.error("The #20453 harness is required; pass its spark-pipelines directory with --harness-dir")
     sys.path.insert(0, str(args.harness_dir.resolve()))
     from harness import ConnectHarness
 
@@ -164,7 +173,7 @@ def main():
 
     signal.signal(signal.SIGTERM, interrupted)
     with ConnectHarness(args.bundle, logs) as harness:
-        scenario(harness)
+        scenario(harness, args.table_type, args.metadata == "enabled")
 
 
 if __name__ == "__main__":
