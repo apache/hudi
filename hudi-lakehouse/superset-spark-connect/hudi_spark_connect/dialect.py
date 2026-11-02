@@ -77,7 +77,8 @@ class SparkConnectDialect(default.DefaultDialect):
         if url.username or url.password:
             raise ValueError("Credentials in SQLAlchemy URL are not supported")
         options = dict(url.query)
-        driver = options.pop("driver", "spark")
+        if "driver" in options:
+            raise ValueError("The driver URI parameter is not supported; install the 'spark' driver on the server")
         options.setdefault("api", "connect")
         options.setdefault("auth_type", "none")
         if options["api"] != "connect":
@@ -85,7 +86,7 @@ class SparkConnectDialect(default.DefaultDialect):
         host = f"[{url.host}]" if ":" in url.host else url.host
         authority = f"{host}:{url.port or 15002}"
         uri = f"spark://{authority}?{urlencode(options)}"
-        return [], {"driver": driver, "db_kwargs": {"uri": uri}, "autocommit": True,
+        return [], {"driver": "spark", "db_kwargs": {"uri": uri}, "autocommit": True,
                     "_schema": unquote(url.database) if url.database else None}
 
     def connect(self, *args, **kwargs):

@@ -15,6 +15,7 @@
 # limitations under the License.
 import unittest
 from unittest.mock import MagicMock
+from urllib.parse import urlencode
 
 from sqlalchemy.engine.url import make_url
 from sqlalchemy import types
@@ -28,7 +29,7 @@ class DialectTest(unittest.TestCase):
 
     def test_connect_url_and_schema(self):
         args, options = self.dialect.create_connect_args(make_url(
-            "sparkconnect://localhost:15002/a%60b?tls=false&driver=spark"))
+            "sparkconnect://localhost:15002/a%60b?tls=false"))
         self.assertEqual(args, [])
         self.assertEqual(options["db_kwargs"]["uri"],
                          "spark://localhost:15002?tls=false&api=connect&auth_type=none")
@@ -38,6 +39,12 @@ class DialectTest(unittest.TestCase):
         conn.cursor.return_value.__enter__.return_value.execute.assert_called_once_with("USE `a``b`")
         self.dialect.dbapi.connect.assert_called_once_with(
             driver="spark", db_kwargs={"uri": "spark://localhost:15002?tls=false&api=connect&auth_type=none"}, autocommit=True)
+
+    def test_driver_uri_override_rejected(self):
+        for driver in ("spark", "other_manifest", "/tmp/x.so", "../x", r"C:\x.dll"):
+            with self.subTest(driver=driver), self.assertRaisesRegex(ValueError, "driver URI parameter"):
+                self.dialect.create_connect_args(make_url(
+                    "sparkconnect://localhost:15002/default?" + urlencode({"driver": driver})))
 
     def test_credentials_and_protocol_rejected(self):
         for url in ("sparkconnect://u:p@host", "sparkconnect://host?api=thrift"):
