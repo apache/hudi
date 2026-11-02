@@ -562,6 +562,10 @@ client-request-to-job-to-commit identifier or complete trace correlation.
 
 ### Client-disconnect experiment
 
+For cancellation, disconnect and lost-response experiments, `--wait` bounds
+readback only; process cleanup can take four additional seconds. Expiry is
+inconclusive and retains test data; it does not prove the server query stopped.
+
 On a disposable endpoint, the following creates a unique database and terminates
 its own ADBC client during an INSERT. It does not retry the write:
 
@@ -570,6 +574,9 @@ python hudi-lakehouse/local-dev/example/connect_disconnect.py \
   --uri 'spark://localhost:15002?api=connect&auth_type=none&tls=false' \
   --rows 2000 --delay 1 --wait 90
 ```
+
+If the disconnect client receives a success response before or during interruption,
+the result is inconclusive. Later readback proves data is visible, not when it committed.
 
 If the complete expected write is observed after refreshing the table, the script
 cleans up its own table and database. Otherwise it reports an inconclusive outcome

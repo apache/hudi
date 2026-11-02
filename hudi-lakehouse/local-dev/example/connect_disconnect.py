@@ -19,18 +19,61 @@ An indeterminate result leaves its unique test database for manual cleanup.
 This is not a retry, transaction, cancellation, or concurrency guarantee.
 """
 import argparse
+import queue
 import re
-import select
 import subprocess
 import sys
+import threading
 import time
 import uuid
 
 from adbc_driver_manager import dbapi
+from connect_fault_utils import readback, stop_process
 
 
 def connect(uri, driver):
     return dbapi.connect(driver=driver, db_kwargs={'uri': uri}, autocommit=True)
+
+
+def interrupt_before_response(child, delay):
+    """Only count the experiment when no successful response was observed."""
+    messages = queue.Queue()
+
+    def consume():
+        try:
+            for line in child.stdout:
+                messages.put(line.strip())
+        finally:
+            messages.put(None)
+
+    reader = threading.Thread(target=consume, daemon=True)
+    reader.start()
+    ready = False
+    try:
+        try:
+            if messages.get(timeout=60) != 'READY':
+                return False
+            ready = True
+            # Consume output continuously, including TextIOWrapper buffering.
+            messages.get(timeout=delay)
+            return False  # RESPONSE, EOF, or unexpected output before interruption.
+        except queue.Empty:
+            # A missing READY is not evidence that the write was submitted.
+            if child.poll() is not None or not ready:
+                return False
+        stop_process(child)
+        reader.join(timeout=5)
+        if reader.is_alive():
+            return False
+        while not messages.empty():
+            if messages.get_nowait() == 'RESPONSE':
+                return False
+        return True
+    finally:
+        stop_process(child)
+        reader.join(timeout=5)
+        if not reader.is_alive():
+            child.stdout.close()
 
 
 def main():
@@ -58,6 +101,7 @@ def main():
     table = database + '.orders'
     print(f'Test database: {database}', flush=True)
     created = False
+    child = None
     with connect(args.uri, args.driver) as conn, conn.cursor() as cursor:
         cursor.execute(f'CREATE DATABASE {database}')
         created = True
@@ -67,44 +111,33 @@ def main():
             child = subprocess.Popen([sys.executable, __file__, '--uri', args.uri, '--driver', args.driver,
                                       '--rows', str(args.rows), '--child-table', table],
                                      stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-            # If the child exits before READY, do not treat the write as submitted.
-            if not select.select([child.stdout], [], [], 60)[0]:
-                child.terminate()
-                child.wait(timeout=30)
-                print('FAIL: client did not become ready; inspect test database before cleanup', file=sys.stderr)
-                return 1
-            if child.stdout.readline().strip() != 'READY':
-                child.wait(timeout=10)
-                print('FAIL: client did not reach the write; inspect test database before cleanup', file=sys.stderr)
-                return 1
-            time.sleep(args.delay)
-            if child.poll() is not None:
-                print('INCONCLUSIVE: client exited before disconnect; inspect test database before cleanup')
+            if not interrupt_before_response(child, args.delay):
+                print('INCONCLUSIVE: client was not interrupted before its response; preserve test data')
                 return 2
-            child.terminate()
-            child.wait(timeout=30)
-            print(f'Client disconnected after {args.delay}s; waiting up to {args.wait}s for a completed write', flush=True)
+            print(f'Client interrupted without an observed response; waiting up to {args.wait}s for readback', flush=True)
             deadline = time.monotonic() + args.wait
             while time.monotonic() < deadline:
                 try:
-                    cursor.execute(f'REFRESH TABLE {table}')
-                    cursor.execute(f'SELECT COUNT(*), SUM(id) FROM {table}')
-                    count, total = cursor.fetchall()[0]
+                    count, total = readback(args.uri, args.driver, table, deadline)
+                except TimeoutError:
+                    print('INCONCLUSIVE: readback deadline expired; preserve test data', flush=True)
+                    return 2
                 except Exception as exc:
                     print(f'Readback not yet available: {type(exc).__name__}', flush=True)
-                    time.sleep(2)
+                    time.sleep(min(2, max(0, deadline - time.monotonic())))
                     continue
                 if count == args.rows and total == args.rows * (args.rows - 1) // 2:
-                    print(f'OBSERVED: all {count} rows committed after client disconnect')
+                    print(f'OBSERVED: all {count} rows visible after client disconnect; commit timing is unknown')
                     cursor.execute(f'DROP TABLE IF EXISTS {table} PURGE')
                     cursor.execute(f'DROP DATABASE IF EXISTS {database}')
                     created = False
                     print('PASS: owned test data cleaned')
                     return 0
-                time.sleep(2)
+                time.sleep(min(2, max(0, deadline - time.monotonic())))
             print('INCONCLUSIVE: full write was not observed; outcome may still change')
             return 2
         finally:
+            stop_process(child)
             if created:
                 print(f'Leave {database} untouched until the server write has stopped; then remove its table and database.',
                       file=sys.stderr, flush=True)
