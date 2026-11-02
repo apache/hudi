@@ -158,13 +158,6 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     // cannot determine the consumed record count for added, reset, or missing partitions.
     OffsetComparisonResult offsetComparison = KafkaCheckpointUtils.compareOffsets(
         checkpointFormat, previousCheckpoint, currentCheckpoint);
-    if (!offsetComparison.isExact()) {
-      log.warn("Skipping streaming offset validation because the checkpoint comparison is inconclusive. "
-              + "Known offset difference: {}, added partitions: {}, reset partitions: {}, missing partitions: {}.",
-          offsetComparison.getKnownOffsetDifference(), offsetComparison.getAddedPartitions(),
-          offsetComparison.getResetPartitions(), offsetComparison.getMissingPartitions());
-      return;
-    }
     long offsetDifference = offsetComparison.getKnownOffsetDifference();
 
     // Get actual new record count from write stats.
@@ -178,6 +171,25 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
     // Track write errors so callers can distinguish write-failure deviation (write errors > 0)
     // from silent data loss (write errors == 0) when the validator fires.
     long writeErrors = context.getTotalWriteErrors();
+
+    if (!offsetComparison.isExact()) {
+      // The known difference remains a lower bound on the expected record count. Unknown
+      // partitions can only increase that expectation, so a write count below this bound is
+      // still a provable shortfall and should honor the configured tolerance and failure policy.
+      if (recordsWritten < offsetDifference) {
+        validateKnownOffsetLowerBound(offsetDifference, recordsWritten, writeErrors,
+            currentCheckpoint, previousCheckpoint);
+      }
+
+      log.warn("Skipping full streaming offset validation because the checkpoint comparison is inconclusive. "
+              + "Known offset difference: {}, records written: {}, previous checkpoint has offsets: {}, "
+              + "current checkpoint has offsets: {}, added partitions: {}, reset partitions: {}, "
+              + "missing partitions: {}.",
+          offsetDifference, recordsWritten, offsetComparison.hasPreviousCheckpointOffsets(),
+          offsetComparison.hasCurrentCheckpointOffsets(), offsetComparison.getAddedPartitions(),
+          offsetComparison.getResetPartitions(), offsetComparison.getMissingPartitions());
+      return;
+    }
 
     // For empty commits (e.g., no new data from source), both offsetDiff and recordsWritten
     // can be zero. This is a valid scenario — skip validation to avoid false positives.
@@ -219,14 +231,53 @@ public abstract class StreamingOffsetValidator extends BasePreCommitValidator {
               : "This may indicate data loss or filtering. ",
           previousCheckpoint, currentCheckpoint);
 
-      if (failurePolicy == ValidationFailurePolicy.WARN_LOG) {
-        log.warn("{} (failure policy is WARN_LOG, commit will proceed)", errorMsg);
-      } else {
-        throw new HoodieValidationException(errorMsg);
-      }
+      handleValidationFailure(errorMsg);
     } else {
       log.info("Offset validation passed. Offset diff: {}, Records: {}, Write errors: {}, Deviation: {}% (within {}%)",
           offsetDiff, recordsWritten, writeErrors, String.format("%.2f", deviation), tolerancePercentage);
+    }
+  }
+
+  /**
+   * Validate that the record count does not fall below the known offset lower bound beyond tolerance.
+   *
+   * <p>This check is used when the full checkpoint comparison is inconclusive. It deliberately
+   * performs no validation when the record count is at or above the known difference, since the
+   * contribution from incomparable partitions is unknown.</p>
+   *
+   * @param knownOffsetDiff Known offset difference from comparable partitions
+   * @param recordsWritten Actual records written (inserts + updates)
+   * @param writeErrors Records that failed to write (tracked in write status errors)
+   * @param currentCheckpoint Current checkpoint string (for error messages)
+   * @param previousCheckpoint Previous checkpoint string (for error messages)
+   * @throws HoodieValidationException if the lower-bound deficit exceeds tolerance and policy is FAIL
+   */
+  protected void validateKnownOffsetLowerBound(long knownOffsetDiff, long recordsWritten, long writeErrors,
+                                               String currentCheckpoint, String previousCheckpoint)
+      throws HoodieValidationException {
+    double deviation = calculateDeviation(knownOffsetDiff, recordsWritten);
+
+    if (deviation > tolerancePercentage) {
+      String errorMsg = String.format(
+          "Streaming offset lower-bound validation failed. "
+              + "Known offset difference: %d, Records written: %d, Write errors: %d, "
+              + "Deficit: %.2f%%, Tolerance: %.2f%%. "
+              + "%s"
+              + "Previous checkpoint: %s, Current checkpoint: %s",
+          knownOffsetDiff, recordsWritten, writeErrors, deviation, tolerancePercentage,
+          writeErrors > 0
+              ? "Non-zero write errors suggest records failed to write rather than silent data loss. "
+              : "This proves a shortfall even without offsets for all partitions. ",
+          previousCheckpoint, currentCheckpoint);
+      handleValidationFailure(errorMsg);
+    }
+  }
+
+  private void handleValidationFailure(String errorMsg) {
+    if (failurePolicy == ValidationFailurePolicy.WARN_LOG) {
+      log.warn("{} (failure policy is WARN_LOG, commit will proceed)", errorMsg);
+    } else {
+      throw new HoodieValidationException(errorMsg);
     }
   }
 

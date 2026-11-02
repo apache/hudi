@@ -63,21 +63,27 @@ public class KafkaCheckpointUtils {
    * Result of comparing offsets from two checkpoints.
    *
    * <p>The known offset difference only includes partitions whose offsets can be compared
-   * exactly. A comparison is incomplete when partitions were added or removed, or when an
-   * offset reset is detected, since the checkpoints do not contain the start offset used for
-   * those partitions.</p>
+   * exactly. A comparison is incomplete when either checkpoint has no partition offsets,
+   * partitions were added or removed, or an offset reset is detected, since the checkpoints
+   * do not contain enough information to calculate the full offset difference.</p>
    */
   public static final class OffsetComparisonResult {
     private final long knownOffsetDifference;
+    private final boolean previousCheckpointHasOffsets;
+    private final boolean currentCheckpointHasOffsets;
     private final Set<Integer> addedPartitions;
     private final Set<Integer> resetPartitions;
     private final Set<Integer> missingPartitions;
 
     private OffsetComparisonResult(long knownOffsetDifference,
+                                   boolean previousCheckpointHasOffsets,
+                                   boolean currentCheckpointHasOffsets,
                                    Set<Integer> addedPartitions,
                                    Set<Integer> resetPartitions,
                                    Set<Integer> missingPartitions) {
       this.knownOffsetDifference = knownOffsetDifference;
+      this.previousCheckpointHasOffsets = previousCheckpointHasOffsets;
+      this.currentCheckpointHasOffsets = currentCheckpointHasOffsets;
       this.addedPartitions = Collections.unmodifiableSet(new TreeSet<>(addedPartitions));
       this.resetPartitions = Collections.unmodifiableSet(new TreeSet<>(resetPartitions));
       this.missingPartitions = Collections.unmodifiableSet(new TreeSet<>(missingPartitions));
@@ -85,6 +91,14 @@ public class KafkaCheckpointUtils {
 
     public long getKnownOffsetDifference() {
       return knownOffsetDifference;
+    }
+
+    public boolean hasPreviousCheckpointOffsets() {
+      return previousCheckpointHasOffsets;
+    }
+
+    public boolean hasCurrentCheckpointOffsets() {
+      return currentCheckpointHasOffsets;
     }
 
     public Set<Integer> getAddedPartitions() {
@@ -100,10 +114,12 @@ public class KafkaCheckpointUtils {
     }
 
     /**
-     * Returns whether the offset difference covers all partitions in both checkpoints.
+     * Returns whether both checkpoints contain partition offsets and the offset difference
+     * covers every partition in both checkpoints.
      */
     public boolean isExact() {
-      return addedPartitions.isEmpty() && resetPartitions.isEmpty() && missingPartitions.isEmpty();
+      return previousCheckpointHasOffsets && currentCheckpointHasOffsets
+          && addedPartitions.isEmpty() && resetPartitions.isEmpty() && missingPartitions.isEmpty();
     }
   }
 
@@ -160,39 +176,6 @@ public class KafkaCheckpointUtils {
   }
 
   /**
-   * Calculate the known offset difference between two checkpoints.
-   *
-   * Algorithm:
-   * 1. For each partition in current checkpoint:
-   *    - If partition exists in previous: diff = current - previous
-   *    - If partition is new: skip (start offset unknown, would overcount)
-   *    - If diff is negative (reset): skip (start offset unknown, would overcount)
-   * 2. Sum all comparable partition diffs
-   *
-   * <p>If partitions are added or removed, or an offset reset is detected, the returned value
-   * is only a partial difference. Callers that require an exact difference should use
-   * {@link #compareOffsets(CheckpointFormat, String, String)} and check
-   * {@link OffsetComparisonResult#isExact()}.</p>
-   *
-   * @param format Checkpoint format
-   * @param previousCheckpoint Previous checkpoint string
-   * @param currentCheckpoint Current checkpoint string
-   * @return Known offset difference across comparable partitions
-   */
-  public static long calculateOffsetDifference(CheckpointFormat format,
-                                                String previousCheckpoint,
-                                                String currentCheckpoint) {
-    OffsetComparisonResult result = compareOffsets(format, previousCheckpoint, currentCheckpoint);
-    if (!result.isExact()) {
-      log.warn("Offset difference is incomplete. Known offset difference: {}, added partitions: {}, "
-              + "reset partitions: {}, missing partitions: {}.",
-          result.getKnownOffsetDifference(), result.getAddedPartitions(),
-          result.getResetPartitions(), result.getMissingPartitions());
-    }
-    return result.getKnownOffsetDifference();
-  }
-
-  /**
    * Compare two checkpoints while preserving whether the resulting offset difference is exact.
    *
    * <p>Offsets for partitions present in both checkpoints are included when they move forward or
@@ -238,7 +221,8 @@ public class KafkaCheckpointUtils {
       }
     }
 
-    return new OffsetComparisonResult(totalDiff, addedPartitions, resetPartitions, missingPartitions);
+    return new OffsetComparisonResult(totalDiff, !previousOffsets.isEmpty(), !currentOffsets.isEmpty(),
+        addedPartitions, resetPartitions, missingPartitions);
   }
 
   /**
