@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.model.HoodieRecord
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
@@ -105,6 +106,41 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       assertFalse(catalog.tableExists(renamed))
       // HoodieCatalog.dropTable passes purge = false, so the external location survives the drop.
       assertTrue(existsPath(tablePath))
+    }
+  }
+
+  test("alterTable preserves metadata columns during repeated schema reconciliation") {
+    withTempDir { tmp =>
+      val catalog = hoodieCatalog
+      val tableName = generateTableName
+      val ident = Identifier.of(Array("default"), tableName)
+      catalog.createTable(ident, StructType(Seq(StructField("id", IntegerType))),
+        Array.empty[Transform], Map("provider" -> "hudi", "primaryKey" -> "id",
+          "location" -> s"${tmp.getCanonicalPath}/$tableName").asJava)
+      val schemaBefore = catalog.loadTable(ident).schema()
+      val deletes = HoodieRecord.HOODIE_META_COLUMNS.asScala.toSeq.map { name =>
+        TableChange.deleteColumn(Array(name), false)
+      }
+      (1 to 3).foreach { _ =>
+        catalog.alterTable(ident, (deletes :+ TableChange.setProperty("primaryKey", "id")): _*)
+        assertEquals(schemaBefore, catalog.loadTable(ident).schema())
+      }
+
+      val unsupported = Seq(
+        TableChange.deleteColumn(Array("id"), false),
+        TableChange.deleteColumn(Array("_hoodie_custom"), false),
+        TableChange.deleteColumn(Array("nested", "_hoodie_record_key"), false),
+        TableChange.renameColumn(Array("id"), "renamed"),
+        TableChange.updateColumnNullability(Array("id"), false),
+        TableChange.updateColumnPosition(Array("id"), TableChange.ColumnPosition.first()))
+      unsupported.foreach { change =>
+        val error = intercept[UnsupportedOperationException] {
+          catalog.alterTable(ident, TableChange.addColumn(Array("added"), StringType), change)
+        }
+        assertTrue(error.getMessage.contains(change.getClass.getName), error.getMessage)
+        assertEquals(schemaBefore, catalog.loadTable(ident).schema())
+      }
+      catalog.dropTable(ident)
     }
   }
 

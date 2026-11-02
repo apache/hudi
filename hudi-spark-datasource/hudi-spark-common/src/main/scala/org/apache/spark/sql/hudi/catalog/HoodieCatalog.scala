@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.catalog
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
@@ -39,7 +40,7 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
-import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, RemoveProperty, SetProperty, UpdateColumnComment, UpdateColumnType}
+import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, DeleteColumn, RemoveProperty, SetProperty, UpdateColumnComment, UpdateColumnType}
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils, ProvidesHoodieConfig}
@@ -229,7 +230,20 @@ class HoodieCatalog extends DelegatingCatalogExtension
           case _ => false
         }
         val catalogPropertyChanges = if (propertyChanges.isEmpty) Seq.empty else catalogPropertyChangesToApply(table, propertyChanges)
-        otherChanges.groupBy(c => c.getClass).foreach {
+        // SDP reconciles its business schema against the catalog's schema on each refresh.
+        // Hudi owns its metadata columns; deleting them must not change the stored schema.
+        val schemaChanges = otherChanges.filterNot {
+          case delete: DeleteColumn =>
+            delete.fieldNames().length == 1 && HoodieRecord.HOODIE_META_COLUMNS.contains(delete.fieldNames()(0))
+          case _ => false
+        }
+        // Reject unsupported changes before applying any supported change in the same request.
+        schemaChanges.foreach {
+          case _: AddColumn | _: UpdateColumnType | _: UpdateColumnComment =>
+          case change =>
+            throw new UnsupportedOperationException(s"not supported table change: ${change.getClass.getName}")
+        }
+        schemaChanges.groupBy(c => c.getClass).foreach {
           case (t, newColumns) if t == classOf[AddColumn] =>
             AlterHoodieTableAddColumnsCommand(
               tableIdent,
