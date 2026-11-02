@@ -18,7 +18,12 @@ limitations under the License.
 hudi-agent-gateway {{ .Chart.Version }} deployed.
 
   provider : {{ .Values.gateway.provider }} ({{ .Values.gateway.model }})
+  backend  : {{ .Values.sqlBackend }}
+{{- if eq .Values.sqlBackend "trino" }}
   trino    : {{ .Values.trino.host }}:{{ .Values.trino.port }} (catalog {{ .Values.trino.catalog }})
+{{- else }}
+  catalog  : {{ .Values.sparkConnect.catalog }} / {{ .Values.sparkConnect.schema }}
+{{- end }}
   mcp      : {{ if .Values.mcpEnabled }}enabled at /mcp{{ else }}disabled{{ end }}
 
 Try it:
@@ -42,5 +47,5 @@ loopback, restart it reachable from the cluster:
 {{- end }}
 
 Readiness (kubectl -n {{ .Release.Namespace }} get pods) stays NotReady until
-both Trino and the LLM endpoint are reachable -- `curl localhost:8000/ready`
+both {{ .Values.sqlBackend }} and the LLM endpoint are reachable -- `curl localhost:8000/ready`
 shows per-dependency status.

@@ -21,8 +21,6 @@ import org.apache.hudi.HoodieCLIUtils
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
-import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieIndex
@@ -63,7 +61,6 @@ class UpgradeOrDowngradeProcedure extends BaseProcedure with ProcedureBuilder wi
       .setBasePath(config.getBasePath)
       .setLoadActiveTimelineOnLoad(false)
       .setConsistencyGuardConfig(config.getConsistencyGuardConfig)
-      .setLayoutVersion(Option.of(new TimelineLayoutVersion(config.getTimelineLayoutVersion)))
       .setFileSystemRetryConfig(config.getFileSystemRetryConfig)
       .build
 

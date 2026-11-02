@@ -39,6 +39,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
+import org.apache.flink.util.IOUtils;
 
 import java.io.IOException;
 import java.util.List;
@@ -120,10 +121,8 @@ public class BulkInsertWriteFunction<I>
   }
 
   @Override
-  public void close() {
-    if (this.writeClient != null) {
-      this.writeClient.close();
-    }
+  public void close() throws Exception {
+    IOUtils.closeAll(this.writerHelper, this.writeClient);
   }
 
   @Override

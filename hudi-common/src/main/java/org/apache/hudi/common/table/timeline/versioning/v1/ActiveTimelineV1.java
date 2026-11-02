@@ -47,7 +47,6 @@ import org.apache.hudi.storage.HoodieInstantWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
-import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -62,8 +61,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.TimelineUtils.getHoodieInstantWriterOption;
 
-// no-arg constructor is for serialization and de-serialization only; @Deprecated marks it as such
-@NoArgsConstructor(onConstructor_ = @Deprecated)
 @Slf4j
 public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTimeline {
 
@@ -100,6 +97,15 @@ public class ActiveTimelineV1 extends BaseTimelineV1 implements HoodieActiveTime
 
   public ActiveTimelineV1(HoodieTableMetaClient metaClient, boolean applyLayoutFilter) {
     this(metaClient, Collections.unmodifiableSet(VALID_EXTENSIONS_IN_ACTIVE_TIMELINE), applyLayoutFilter);
+  }
+
+  /**
+   * For serialization and de-serialization only.
+   *
+   * @deprecated
+   */
+  @Deprecated
+  public ActiveTimelineV1() {
   }
 
   /**

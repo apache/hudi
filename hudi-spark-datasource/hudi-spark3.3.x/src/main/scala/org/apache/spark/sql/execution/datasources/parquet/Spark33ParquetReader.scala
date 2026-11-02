@@ -164,13 +164,7 @@ class Spark33ParquetReader(enableVectorizedReader: Boolean,
 
     val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
     val hadoopAttemptContext =
-      new TaskAttemptContextImpl(schemaEvolutionUtils.getHadoopConfClone(footerFileMetaData, enableVectorizedReader), attemptId)
-
-    // Try to push down filters when filter push-down is enabled.
-    // Notice: This push-down is RowGroups level, not individual records.
-    if (pushed.isDefined) {
-      ParquetInputFormat.setFilterPredicate(hadoopAttemptContext.getConfiguration, pushed.get)
-    }
+      new TaskAttemptContextImpl(schemaEvolutionUtils.getFileReadConf(footerFileMetaData, enableVectorizedReader, pushed), attemptId)
     val taskContext = Option(TaskContext.get())
     if (enableVectorizedReader) {
       val vectorizedReader = schemaEvolutionUtils.buildVectorizedReader(

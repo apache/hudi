@@ -108,6 +108,10 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
     return false;
   }
 
+  /**
+   * Switches the client used by later compaction runs. Does not wait for a compaction that is running: it can run
+   * for a long time, and the writer calling this must not be blocked until it completes.
+   */
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.compactor.updateWriteClient(writeClient);
   }

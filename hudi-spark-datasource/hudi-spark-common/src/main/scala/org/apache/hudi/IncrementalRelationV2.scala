@@ -30,10 +30,7 @@ import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
-import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.util.IncrementalRelationUtil
 
 import org.apache.avro.Schema
@@ -242,18 +239,12 @@ class IncrementalRelationV2(val sqlContext: SQLContext,
           if (fallbackToFullTableScan) {
             val timer = HoodieTimer.start
 
-            val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
-            val storageConf = HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration)
-            val localBasePathStr = basePath.toString
-            val firstNotFoundPath = sqlContext.sparkContext.parallelize(allFilesToCheck.toSeq, allFilesToCheck.size)
-              .map(path => {
-                val storage = HoodieStorageUtils.getStorage(localBasePathStr, storageConf)
-                storage.exists(new StoragePath(path))
-              }).collect().find(v => !v)
+            val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(
+              sqlContext, metaClient, filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths)
             val timeTaken = timer.endTimer()
             log.info("Checking if paths exists took " + timeTaken + "ms")
 
-            if (firstNotFoundPath.isDefined) {
+            if (missingFileFound) {
               doFullTableScan = true
               log.info("Falling back to full table scan as some files cannot be found.")
             }

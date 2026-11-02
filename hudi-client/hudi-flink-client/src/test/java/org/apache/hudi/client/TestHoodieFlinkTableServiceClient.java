@@ -64,6 +64,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -112,7 +114,11 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
       writerFactory.when(() -> FlinkHoodieBackedTableMetadataWriter.create(any(), any(), any(), any()))
           .thenReturn(metadataWriter);
 
+      context.getStorageConf().set("dfs.nameservices", "remote-cluster");
       tableServiceClient.initMetadataTable();
+      writerFactory.verify(() -> FlinkHoodieBackedTableMetadataWriter.create(
+          argThat(conf -> "remote-cluster".equals(conf.getString("dfs.nameservices").orElse(null))),
+          same(writeConfig), same(context), any()));
     } finally {
       tableServiceClient.close();
     }

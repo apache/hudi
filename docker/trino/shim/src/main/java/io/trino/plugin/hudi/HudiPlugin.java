@@ -23,10 +23,9 @@ import io.trino.spi.connector.ConnectorFactory;
 
 /**
  * Thin shim plugin mirroring the upstream trinodb/trino plugin/trino-hudi module
- * (RFC-105). Same FQCN as the copy inside the hudi-trino jar - the duplication is
- * intentional: trino-maven-plugin's service descriptor generator only scans this
- * module's own classes, and both class bodies are identical, so classloader
- * ordering does not matter.
+ * (RFC-105). The hudi-trino jar ships only the connector, so this class is the
+ * plugin's sole entry point, and trino-maven-plugin generates the
+ * META-INF/services/io.trino.spi.Plugin descriptor from it.
  */
 public class HudiPlugin
         implements Plugin

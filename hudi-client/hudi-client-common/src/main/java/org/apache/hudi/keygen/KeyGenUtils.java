@@ -645,12 +645,17 @@ public class KeyGenUtils {
    *
    * @return {@link ComplexKeyGenEncoding#FIELD_PREFIXED} for a table that was never written to, the encoding
    * read from the first readable base or log file among the most recent commits otherwise, or empty when none
-   * of the commits inspected yields a record key
+   * of the commits inspected yields a record key, or when the timeline was moved by an unfinished upgrade
    */
   public static Option<ComplexKeyGenEncoding> deduceComplexKeyGenEncodingFromData(HoodieTableMetaClient metaClient) {
     String expectedPrefix = metaClient.getTableConfig().getRecordKeyFields().get()[0] + DEFAULT_COLUMN_VALUE_SEPARATOR;
     HoodieTimeline completedTimeline = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
     if (completedTimeline.empty()) {
+      if (hasTimelineOfUnfinishedLayoutUpgrade(metaClient)) {
+        // The 7 to 8 hop moves the instants into the version 2 timeline before hoodie.properties is rewritten, so a
+        // retry after a failed upgrade reads an empty version 1 timeline although the table holds data.
+        return Option.empty();
+      }
       // Nothing was ever written, so there is no stored key whose encoding could differ from the canonical one.
       return Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED);
     }
@@ -687,6 +692,23 @@ public class KeyGenUtils {
     tableConfig.getComplexKeyGenEncoding().ifPresent(encoding ->
         keyGenProps.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name()));
     return keyGenProps;
+  }
+
+  /**
+   * Whether a table below version 8 already has the version 2 timeline directory, which only the 7 to 8 hop of an
+   * upgrade that did not finish creates.
+   */
+  private static boolean hasTimelineOfUnfinishedLayoutUpgrade(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (tableConfig.getTableVersion().greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
+      return false;
+    }
+    StoragePath timelinePath = new StoragePath(metaClient.getMetaPath(), tableConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_PATH));
+    try {
+      return metaClient.getStorage().exists(timelinePath);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to check for the timeline directory " + timelinePath, e);
+    }
   }
 
   private static List<HoodieWriteStat> getWriteStats(HoodieInstant instant, HoodieTimeline timeline) {

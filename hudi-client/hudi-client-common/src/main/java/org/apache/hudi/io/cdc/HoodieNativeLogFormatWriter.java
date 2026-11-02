@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.log.LogReaderUtils;
 import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
@@ -163,7 +164,9 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     ensureDataFileWriter(recordSchema);
     dataFileWriter.write(record.getRecordKey(),
         record, recordSchema, recordProperties);
-    dataRecordPositions.add(record.getCurrentPosition());
+    if (baseFileInstantTimeOfPositions.isPresent()) {
+      dataRecordPositions.add(record.getCurrentPosition());
+    }
   }
 
   public void appendDeleteRecord(HoodieRecord record, HoodieSchema recordSchema) throws IOException {
@@ -173,8 +176,9 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     Object deleteEngineRecord = recordContext.constructEngineRecord(
         deleteLogSchema, createDeleteLogFieldValues(recordKey, orderingValue));
     deleteFileWriter.writeRow(recordKey, deleteEngineRecord);
-    long recordPosition = baseFileInstantTimeOfPositions.isPresent() ? record.getCurrentPosition() : -1L;
-    deleteRecordPositions.add(recordPosition);
+    if (baseFileInstantTimeOfPositions.isPresent()) {
+      deleteRecordPositions.add(record.getCurrentPosition());
+    }
   }
 
   private Comparable getDeleteOrderingValue(HoodieRecord record, HoodieSchema recordSchema) {
@@ -189,11 +193,14 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     fieldValues[0] = recordContext.convertValueToEngineType(recordKey);
     if (!OrderingValues.isCommitTimeOrderingValue(orderingValue)) {
       if (orderingFieldNames.size() == 1) {
-        fieldValues[1] = orderingValue;
+        fieldValues[1] = recordContext.convertValueToEngineType(orderingValue);
       } else {
         List<Comparable> orderingValues = OrderingValues.getValues((ArrayComparable) orderingValue);
         for (int i = 0; i < orderingValues.size(); i++) {
-          fieldValues[i + 1] = orderingValues.get(i);
+          // A null ordering field comes as the default ordering value and is written as NULL.
+          Comparable value = orderingValues.get(i);
+          fieldValues[i + 1] = OrderingValues.isCommitTimeOrderingValue(value)
+              ? null : recordContext.convertValueToEngineType(value);
         }
       }
     }
@@ -277,6 +284,20 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
   }
 
   private void closeFileWriters() throws IOException {
+    try {
+      closeDataFileWriter();
+    } catch (Throwable e) {
+      // A failure closing the data writer or reading its metadata must not skip closing the delete writer.
+      CloseableUtils.closeSuppressing(this::closeDeleteFileWriter, e);
+      throw e;
+    } finally {
+      dataFileWriter = null;
+      dataRecordPositions.clear();
+    }
+    closeDeleteFileWriter();
+  }
+
+  private void closeDataFileWriter() throws IOException {
     if (dataFileWriter != null) {
       dataFileWriter.close();
       if (writeConfig.isMetadataColumnStatsIndexEnabled()) {
@@ -290,14 +311,18 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
       } else {
         lastDataFileFormatMetadata = Option.empty();
       }
-      dataFileWriter = null;
     }
-    if (deleteFileWriter != null) {
-      deleteFileWriter.close();
+  }
+
+  private void closeDeleteFileWriter() throws IOException {
+    try {
+      if (deleteFileWriter != null) {
+        deleteFileWriter.close();
+      }
+    } finally {
       deleteFileWriter = null;
+      deleteRecordPositions.clear();
     }
-    dataRecordPositions.clear();
-    deleteRecordPositions.clear();
   }
 
   private HoodieLogFile createNativeLogFile(int version, String logExtension) throws IOException {

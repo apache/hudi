@@ -122,15 +122,15 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
     // Utf8
     minMaxValues.add(Pair.of(new Utf8(getUTF8Bytes("abcdec")), new Utf8(getUTF8Bytes("zyxwvu"))));
     // Int
-    minMaxValues.add(Pair.of(new Integer(-1000), new Integer(999999)));
+    minMaxValues.add(Pair.of(Integer.valueOf(-1000), Integer.valueOf(999999)));
     // Long
-    minMaxValues.add(Pair.of(new Long(-100000L), Long.MAX_VALUE));
+    minMaxValues.add(Pair.of(Long.valueOf(-100000L), Long.MAX_VALUE));
     // boolean
     minMaxValues.add(Pair.of(false, true));
     // double
-    minMaxValues.add(Pair.of(new Double(0.123), new Double(10.123)));
+    minMaxValues.add(Pair.of(Double.valueOf(0.123), Double.valueOf(10.123)));
     // float
-    minMaxValues.add(Pair.of(new Float(0.0123), new Float(200.123)));
+    minMaxValues.add(Pair.of(Float.valueOf(0.0123f), Float.valueOf(200.123f)));
     // Date
     minMaxValues.add(Pair.of(new Date(1000 * 60 * 60 * 10), new Date(1000 * 60 * 60 * 60)));
     // LocalDate
@@ -332,15 +332,15 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
         ValueMetadata.V1EmptyMetadata.get());
 
     // Float vals
-    HoodieColumnRangeMetadata aFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, new Float(1), new Float(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
+    HoodieColumnRangeMetadata aFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, Float.valueOf(1), Float.valueOf(1000.0f), nullCount, valueCount, totalSize, totalUncompressedSize,
         ValueMetadata.V1EmptyMetadata.get());
-    HoodieColumnRangeMetadata bFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, new Float(-1.0), new Float(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
+    HoodieColumnRangeMetadata bFloatVal = HoodieColumnRangeMetadata.create(fileName, colName, Float.valueOf(-1.0f), Float.valueOf(10000.0f), nullCount, valueCount, totalSize, totalUncompressedSize,
         ValueMetadata.V1EmptyMetadata.get());
 
     // Double vals
-    HoodieColumnRangeMetadata aDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, new Double(0.1), new Double(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
+    HoodieColumnRangeMetadata aDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, Double.valueOf(0.1), Double.valueOf(1000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
         ValueMetadata.V1EmptyMetadata.get());
-    HoodieColumnRangeMetadata bDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, new Double(-1.0), new Double(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
+    HoodieColumnRangeMetadata bDoubleVal = HoodieColumnRangeMetadata.create(fileName, colName, Double.valueOf(-1.0), Double.valueOf(10000.0), nullCount, valueCount, totalSize, totalUncompressedSize,
         ValueMetadata.V1EmptyMetadata.get());
 
     // String vals
@@ -402,43 +402,43 @@ public class TestColStatsRecordWithMetadataRecord extends HoodieSparkClientTestH
 
     // Float and Float
     actualColumnRange = mergeAndAssert(aFloatVal, bFloatVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, HoodieSchemaType.FLOAT);
-    assertEquals(new Float(-1), actualColumnRange.getMinValue());
-    assertEquals(new Float(10000), actualColumnRange.getMaxValue());
+    assertEquals(Float.valueOf(-1), actualColumnRange.getMinValue());
+    assertEquals(Float.valueOf(10000), actualColumnRange.getMaxValue());
 
     // Merging Float and Integer
     actualColumnRange = mergeAndAssert(aFloatVal, bIntegerVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, HoodieSchemaType.FLOAT);
-    assertEquals(new Float(-1), actualColumnRange.getMinValue());
-    assertEquals(new Float(10000), actualColumnRange.getMaxValue());
+    assertEquals(Float.valueOf(-1), actualColumnRange.getMinValue());
+    assertEquals(Float.valueOf(10000), actualColumnRange.getMaxValue());
 
     // Merging Float and Long.
     actualColumnRange = mergeAndAssert(aFloatVal, bLongVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, HoodieSchemaType.FLOAT);
-    assertEquals(new Float(-1), actualColumnRange.getMinValue());
-    assertEquals(new Float(10000), actualColumnRange.getMaxValue());
+    assertEquals(Float.valueOf(-1), actualColumnRange.getMinValue());
+    assertEquals(Float.valueOf(10000), actualColumnRange.getMaxValue());
 
     // Merging Float and String
     actualColumnRange = mergeAndAssert(aFloatVal, bStringVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, HoodieSchemaType.FLOAT);
-    assertEquals(new Float(-1), actualColumnRange.getMinValue());
-    assertEquals(new Float(10000), actualColumnRange.getMaxValue());
+    assertEquals(Float.valueOf(-1), actualColumnRange.getMinValue());
+    assertEquals(Float.valueOf(10000), actualColumnRange.getMaxValue());
 
     // Double and Double
     actualColumnRange = mergeAndAssert(aDoubleVal, bDoubleVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, HoodieSchemaType.DOUBLE);
-    assertEquals(new Double(-1), actualColumnRange.getMinValue());
-    assertEquals(new Double(10000), actualColumnRange.getMaxValue());
+    assertEquals(Double.valueOf(-1), actualColumnRange.getMinValue());
+    assertEquals(Double.valueOf(10000), actualColumnRange.getMaxValue());
 
     // Merging Double and Integer
     actualColumnRange = mergeAndAssert(aDoubleVal, bIntegerVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, HoodieSchemaType.DOUBLE);
-    assertEquals(new Double(-1), actualColumnRange.getMinValue());
-    assertEquals(new Double(10000), actualColumnRange.getMaxValue());
+    assertEquals(Double.valueOf(-1), actualColumnRange.getMinValue());
+    assertEquals(Double.valueOf(10000), actualColumnRange.getMaxValue());
 
     // Merging Double and Long.
     actualColumnRange = mergeAndAssert(aDoubleVal, bLongVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, HoodieSchemaType.DOUBLE);
-    assertEquals(new Double(-1), actualColumnRange.getMinValue());
-    assertEquals(new Double(10000), actualColumnRange.getMaxValue());
+    assertEquals(Double.valueOf(-1), actualColumnRange.getMinValue());
+    assertEquals(Double.valueOf(10000), actualColumnRange.getMaxValue());
 
     // Merging Double and String
     actualColumnRange = mergeAndAssert(aDoubleVal, bStringVal, relativePartitionPath, colName, nullCount, totalSize, totalUncompressedSize, HoodieSchemaType.DOUBLE);
-    assertEquals(0, actualColumnRange.getMinValue().compareTo(new Double(-1)));
-    assertEquals(0, actualColumnRange.getMaxValue().compareTo(new Double(10000)));
+    assertEquals(0, actualColumnRange.getMinValue().compareTo(Double.valueOf(-1)));
+    assertEquals(0, actualColumnRange.getMaxValue().compareTo(Double.valueOf(10000)));
   }
 
   private HoodieColumnRangeMetadata mergeAndAssert(HoodieColumnRangeMetadata<Comparable> aVal, HoodieColumnRangeMetadata<Comparable> bVal, String relativePartitionPath, String colName, long nullCount,

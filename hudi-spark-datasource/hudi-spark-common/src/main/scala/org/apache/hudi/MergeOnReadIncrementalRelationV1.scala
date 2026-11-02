@@ -130,8 +130,10 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
         val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
-        fileIndex.listMatchingPartitionPaths(HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
-          .map(p => p.getPath).filter(p => modifiedPartitions.contains(p))
+        // Evaluate the partition predicates against the modified partitions only, rather than listing
+        // every partition of the table.
+        fileIndex.filterPartitionPaths(modifiedPartitions.asScala.toSeq,
+          HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
           .flatMap { relativePartitionPath =>
             fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
           }
@@ -154,6 +156,11 @@ case class MergeOnReadIncrementalRelationV1(override val sqlContext: SQLContext,
     } else {
       incrementalSpanRecordFilters
     }
+  }
+
+  override def getIncrementalFilesSize: Long = {
+    // A full table scan lists the whole table, so the affected files would underestimate its size.
+    if (fullTableScan) Long.MaxValue else affectedFilesInCommits.asScala.map(_.getLength).sum
   }
 
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
@@ -198,8 +205,18 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
   //   3. there are files in metadata be deleted
   protected lazy val fullTableScan: Boolean = {
     val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key, "false").toBoolean
-    fallbackToFullTableScan && (startInstantArchived || endInstantArchived
-      || affectedFilesInCommits.asScala.exists(fileStatus => !metaClient.getStorage.exists(fileStatus.getPath)))
+    if (!fallbackToFullTableScan) {
+      false
+    } else if (startInstantArchived || endInstantArchived) {
+      true
+    } else {
+      val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(
+        sqlContext, metaClient, affectedFilesInCommits.asScala.map(_.getPath.toString))
+      if (missingFileFound) {
+        logInfo("Falling back to full table scan as some files cannot be found.")
+      }
+      missingFileFound
+    }
   }
 
   protected lazy val includedCommits: immutable.Seq[HoodieInstant] = {

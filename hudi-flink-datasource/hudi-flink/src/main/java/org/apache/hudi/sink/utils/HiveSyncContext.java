@@ -20,6 +20,7 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.configuration.FlinkOptions;
@@ -42,6 +43,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_IGNORE_EXCEPTIONS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_PASS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SKIP_RO_SUFFIX_FOR_READ_OPTIMIZED_TABLE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SUPPORT_TIMESTAMP_TYPE;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_DETAILED_METRICS_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
@@ -75,6 +77,14 @@ public class HiveSyncContext {
   private HiveSyncContext(Properties props, HiveConf hiveConf) {
     this.props = props;
     this.hiveConf = hiveConf;
+  }
+
+  /**
+   * Whether the sync tools of this context record detailed metrics. Read from the same properties as
+   * the sync tools, which accept the option with or without the {@code properties.} prefix.
+   */
+  public boolean isDetailedMetricsEnabled() {
+    return ConfigUtils.getBooleanWithAltKeys(props, HIVE_SYNC_DETAILED_METRICS_ENABLED);
   }
 
   public HiveSyncTool hiveSyncTool() {

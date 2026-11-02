@@ -732,7 +732,7 @@ public class HoodieTestTable implements AutoCloseable {
       StoragePath partitionPathObj = FSUtils.getAbsolutePartitionPath(new StoragePath(basePath), partitionPath);
       HoodiePartitionMetadata partitionMetadata = new HoodiePartitionMetadata(storage,
           currentInstantTime, new StoragePath(basePath), partitionPathObj, Option.empty());
-      partitionMetadata.trySave();
+      partitionMetadata.trySave(partitionPath);
     }
     return this;
   }

@@ -162,7 +162,7 @@ public class HoodieNativeLogAppendHandle<T, I, K, O> extends HoodieAppendHandle<
         writer.flushAppend(getUpdatedHeader(header));
         processAppendResults(writer.getLastAppendResults());
       }
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new HoodieAppendException("Failed while flushing records to native log for fileId " + fileId, e);
     }
   }

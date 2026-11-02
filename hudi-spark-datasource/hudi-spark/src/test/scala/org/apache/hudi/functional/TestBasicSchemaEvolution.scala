@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSch
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.common.config.{HoodieCommonConfig, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
-import org.apache.hudi.common.table.{HoodieTableConfig, TableSchemaResolver}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, TableSchemaResolver}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.SchemaCompatibilityException
@@ -36,7 +36,7 @@ import org.apache.spark.sql.types.{DoubleType, IntegerType, LongType, StringType
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.util.function.Consumer
 
@@ -381,11 +381,13 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     // TODO add test w/ overlapping updates
   }
 
-  private def schemaOnReadOpts(tableType: HoodieTableType): Map[String, String] = commonOpts ++ Map(
+  private def schemaOnReadOpts(tableType: HoodieTableType, tableVersion: HoodieTableVersion): Map[String, String] = commonOpts ++ Map(
     DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name,
     HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key -> "true",
     // HoodieSparkSqlWriter turns inline compaction on for batch MOR writes; keep commit 2 in a log file
-    HoodieCompactionConfig.INLINE_COMPACT.key -> "false")
+    HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+    HoodieWriteConfig.WRITE_TABLE_VERSION.key -> tableVersion.versionCode().toString,
+    HoodieWriteConfig.AUTO_UPGRADE_VERSION.key -> "false")
 
   /**
    * Add-column evolution under schema-on-read, read through the file-group reader. Commit 2 only
@@ -395,13 +397,14 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
    * an old-schema base file, and a pushed-down filter over `bonus` must be dropped for a file that
    * lacks the column (InternalSchemaUtils.reBuildFilterName's "added column" branch). The incremental
    * read after the evolution must return exactly the commit-2 records with their `bonus` values.
+   * Tables before version 8 check MOR log blocks against the committed instants as well.
    */
   @ParameterizedTest
-  @EnumSource(classOf[HoodieTableType])
-  def testSchemaOnReadAddColumnSnapshotAndIncrementalRead(tableType: HoodieTableType): Unit = {
+  @CsvSource(Array("COPY_ON_WRITE,SIX", "COPY_ON_WRITE,TEN", "MERGE_ON_READ,SIX", "MERGE_ON_READ,TEN"))
+  def testSchemaOnReadAddColumnSnapshotAndIncrementalRead(tableType: HoodieTableType, tableVersion: HoodieTableVersion): Unit = {
     val _spark = spark
     import _spark.implicits._
-    val opts = schemaOnReadOpts(tableType)
+    val opts = schemaOnReadOpts(tableType, tableVersion)
 
     // commit 1: ages 10..17, even ids in p1, odd ids in p2
     val v1 = (0 until 8).map(i => (s"id$i", s"n$i", 10 + i, 1L, if (i % 2 == 0) "p1" else "p2"))
@@ -411,7 +414,12 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
       .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
       .mode(SaveMode.Overwrite)
       .save(basePath)
-    val firstCompletion = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    // Incremental reads of tables before version 8 range over requested times, later ones over completion times
+    val incrementalStart = if (tableVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      DataSourceTestUtils.latestCommitRequestTime(storage, basePath)
+    } else {
+      DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+    }
 
     // commit 2, p1 only: update id2 and insert id8, both carrying the new nullable `bonus` column
     val v2 = Seq[(String, String, Int, Long, String, scala.Option[Double])](
@@ -449,7 +457,7 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
     val incremental = spark.read.format("hudi")
       .option(HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.key, "true")
       .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
-      .option(DataSourceReadOptions.START_COMMIT.key, firstCompletion)
+      .option(DataSourceReadOptions.START_COMMIT.key, incrementalStart)
       .load(basePath)
     val incRows = incremental.select("_row_key", "bonus").collect().map(r => r.getString(0) -> r.getDouble(1)).toMap
     assertEquals(Map("id2" -> 100.0d, "id8" -> 300.0d), incRows)
@@ -460,17 +468,17 @@ class TestBasicSchemaEvolution extends HoodieSparkClientTestBase with ScalaAsser
    * spans a base-only int file (p2) and an int base file merged with a long log file (p1). The
    * top-level `age` promotion is atomic and is read with the vectorized parquet reader on. When the
    * same promotion is applied inside the `nested` struct the changed top-level column is no longer
-   * atomic: ParquetSchemaEvolutionUtils.getHadoopConfClone must reject it fast on the base slice
+   * atomic: ParquetSchemaEvolutionUtils.getFileReadConf must reject it fast on the base slice
    * instead of returning corrupt columns, and the workaround it advertises (disabling the vectorized
    * reader) must actually widen `nested.a` across both shapes. COW is covered by
    * TestLegacyParquetReadPath#testCowSnapshotReadWithNestedTypeChange.
    */
   @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testSchemaOnReadTypePromotionOnMorBaseAndLogMerge(promoteNested: Boolean): Unit = {
+  @CsvSource(Array("false,SIX", "false,TEN", "true,SIX", "true,TEN"))
+  def testSchemaOnReadTypePromotionOnMorBaseAndLogMerge(promoteNested: Boolean, tableVersion: HoodieTableVersion): Unit = {
     val _spark = spark
     import _spark.implicits._
-    val opts = schemaOnReadOpts(HoodieTableType.MERGE_ON_READ)
+    val opts = schemaOnReadOpts(HoodieTableType.MERGE_ON_READ, tableVersion)
     val widenedBase = 10000000000L
     // id4's `nested.a` only leaves the int range in the promoting arm
     val expectedNestedA4 = if (promoteNested) widenedBase + 4 else 4L
