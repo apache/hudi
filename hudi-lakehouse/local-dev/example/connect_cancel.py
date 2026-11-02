@@ -20,6 +20,8 @@ import threading
 import time
 import uuid
 
+from connect_fault_utils import readback
+
 
 def connect(port, driver):
     from adbc_driver_manager import dbapi
@@ -80,21 +82,24 @@ def main():
             deadline = time.monotonic() + args.wait
             while time.monotonic() < deadline:
                 try:
-                    read.execute(f'REFRESH TABLE {table}')
-                    read.execute(f'SELECT COUNT(*), SUM(id) FROM {table}')
-                    count, total = read.fetchall()[0]
+                    count, total = readback(
+                        f'spark://127.0.0.1:{args.port}?api=connect&auth_type=none&tls=false',
+                        args.driver, table, deadline)
+                except TimeoutError:
+                    print('INCONCLUSIVE: readback deadline expired; preserve test data', flush=True)
+                    return 2
                 except Exception as exc:
                     print(f'Readback not yet available: {type(exc).__name__}', flush=True)
-                    time.sleep(2)
+                    time.sleep(min(2, max(0, deadline - time.monotonic())))
                     continue
                 if count == args.rows and total == args.rows * (args.rows - 1) // 2:
-                    print(f'OBSERVED: all {count} rows committed after cancellation', flush=True)
+                    print(f'OBSERVED: all {count} rows visible after the cancellation attempt; commit timing is unknown', flush=True)
                     read.execute(f'DROP TABLE IF EXISTS {table} PURGE')
                     read.execute(f'DROP DATABASE IF EXISTS {database}')
                     created = False
                     print('PASS: owned test data cleaned', flush=True)
                     return 0
-                time.sleep(2)
+                time.sleep(min(2, max(0, deadline - time.monotonic())))
             print('INCONCLUSIVE: complete commit was not observed; outcome may still change', flush=True)
             return 2
         finally:

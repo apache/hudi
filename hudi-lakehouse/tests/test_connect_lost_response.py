@@ -16,8 +16,11 @@
 import importlib.util
 from pathlib import Path
 import socket
+import sys
 import threading
 import unittest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'local-dev/example'))
 
 spec = importlib.util.spec_from_file_location('lost_response', Path(__file__).resolve().parents[1] / 'local-dev/example/connect_lost_response.py')
 module = importlib.util.module_from_spec(spec)

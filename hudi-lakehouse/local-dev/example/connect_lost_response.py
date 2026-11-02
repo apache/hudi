@@ -27,6 +27,8 @@ import threading
 import time
 import uuid
 
+from connect_fault_utils import readback, stop_process
+
 
 def connect(port, driver):
     from adbc_driver_manager import dbapi
@@ -139,16 +141,18 @@ def main():
                     print('INCONCLUSIVE: client exited before commit was observed')
                     return 2
                 try:
-                    cursor.execute(f'REFRESH TABLE {table}')
-                    cursor.execute(f'SELECT COUNT(*), SUM(id) FROM {table}')
-                    count, total = cursor.fetchall()[0]
+                    count, total = readback(
+                        f'spark://127.0.0.1:{args.port}?api=connect&auth_type=none&tls=false',
+                        args.driver, table, deadline)
+                except TimeoutError:
+                    print('INCONCLUSIVE: readback deadline expired; preserve test data', flush=True)
+                    return 2
                 except Exception as exc:
                     print(f'Readback not yet available: {type(exc).__name__}', flush=True)
-                    time.sleep(2)
+                    time.sleep(min(2, max(0, deadline - time.monotonic())))
                     continue
                 if count == args.rows and total == args.rows * (args.rows - 1) // 2:
-                    process.terminate()
-                    process.wait(timeout=30)
+                    stop_process(process)
                     print(f'OBSERVED: {count} rows committed while responses were discarded; client was terminated')
                     if args.retry:
                         cursor.execute(f'INSERT INTO {table} SELECT CAST(id AS INT) AS id, CAST(id AS BIGINT) AS ts FROM range({args.rows})')
@@ -164,13 +168,11 @@ def main():
                     created = False
                     print('PASS: owned test data cleaned')
                     return 0
-                time.sleep(2)
+                time.sleep(min(2, max(0, deadline - time.monotonic())))
             print('INCONCLUSIVE: commit was not observed; outcome may still change')
             return 2
     finally:
-        if process is not None and process.poll() is None:
-            process.terminate()
-            process.wait(timeout=30)
+        stop_process(process)
         proxy.close()
         if created:
             print(f'Leave {database} untouched until the server write has stopped; then remove its table and database.', file=sys.stderr)
