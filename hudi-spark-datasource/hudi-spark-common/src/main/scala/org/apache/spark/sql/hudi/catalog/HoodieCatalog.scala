@@ -391,6 +391,13 @@ class HoodieCatalog extends DelegatingCatalogExtension
                         operation: TableCreationMode): Table = {
 
     val (partitionColumns, maybeBucketSpec) = HoodieCatalog.convertTransforms(partitions)
+    if (schema.nonEmpty) {
+      partitionColumns.foreach { column =>
+        if (!schema.fieldNames.exists(spark.sessionState.conf.resolver(_, column))) {
+          throw new HoodieAnalysisException(s"Partition column '$column' not found in table schema: ${schema.treeString}")
+        }
+      }
+    }
     val newSchema = schema
     val newPartitionColumns = partitionColumns
     val newBucketSpec = maybeBucketSpec
