@@ -187,6 +187,45 @@ class TestDeleteTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Delete Table Without Meta Fields") {
+    withRecordType()(withTempDir { tmp =>
+      Seq(
+        ("cow", "hoodie.populate.meta.fields = 'false'"),
+        ("mor", "hoodie.populate.meta.fields = 'false'"),
+        ("cow", "hoodie.meta.fields.mode = 'COMMIT_TIME_AND_FILE_NAME'")
+      ).foreach { case (tableType, metaFieldsProp) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts',
+             |  $metaFieldsProp
+             | )
+             | partitioned by (dt)
+             |""".stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000, '2021-01-05'), (2, 'a2', 20.0, 1000, '2021-01-05')")
+
+        // The table does not store the record key meta field, so the delete cannot be a prepped write
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "true") {
+          spark.sql(s"delete from $tableName where id = 1")
+          checkAnswer(s"select id, name, price, ts, dt from $tableName")(
+            Seq(2, "a2", 20.0, 1000, "2021-01-05")
+          )
+        }
+      }
+    })
+  }
+
   test("Test Delete Table On Non-PK Condition") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>

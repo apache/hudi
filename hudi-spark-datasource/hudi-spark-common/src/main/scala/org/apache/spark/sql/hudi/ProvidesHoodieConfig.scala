@@ -572,6 +572,17 @@ object ProvidesHoodieConfig {
         HoodieCommonConfig.SCHEMA_EVOLUTION_ENABLE.defaultValue.toString)
     ).toBoolean
 
+  /**
+   * Whether a Spark SQL UPDATE or DELETE on the table is written as a prepped write, which takes each
+   * record's key, partition path and file group from the meta columns read along with it. A table that
+   * does not populate those meta columns has nothing to read there, so it goes through the regular write
+   * path, which derives the keys with the key generator and locates the records through the index.
+   */
+  def shouldUsePreppedSqlWrites(sparkSession: SparkSession, hoodieCatalogTable: HoodieCatalogTable): Boolean =
+    sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(),
+      SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true" &&
+      hoodieCatalogTable.tableConfig.getMetaFieldsMode.isRecordKeyPopulated
+
   private def filterNullValues(opts: Map[String, String]): Map[String, String] =
     opts.filter { case (_, v) => v != null }
 
