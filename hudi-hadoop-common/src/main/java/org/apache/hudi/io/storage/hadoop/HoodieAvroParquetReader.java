@@ -53,8 +53,8 @@ import org.apache.parquet.filter2.predicate.FilterApi;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
-import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
