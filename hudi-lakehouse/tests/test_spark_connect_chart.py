@@ -54,6 +54,7 @@ class ConnectChartTest(unittest.TestCase):
         self.assertIn("spark.connect.grpc.arrow.maxBatchSize 1m", config)
         self.assertIn("spark.hadoop.hive.metastore.uris thrift://hive-metastore.", config)
         self.assertIn("spark.sql.warehouse.dir s3a://warehouse/connect", config)
+        self.assertIn("spark.sql.runSQLOnFiles false", config)
         self.assertIn("org.apache.spark.sql.hudi.catalog.HoodieCatalog", config)
         self.assertIn("HoodieSparkSessionExtension", config)
         self.assertEqual(docs["Deployment"]["spec"]["replicas"], 1)

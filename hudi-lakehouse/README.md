@@ -83,7 +83,7 @@ catalog, and query engines are independent. This directory keeps the
    |---|---|---|
    | `hudi-trino` | Trino (server 472) with the Hudi connector built from this repository | your Hive Metastore or AWS Glue; your S3/GCS |
    | `hudi-spark-connect` | optional Spark Connect 4.1.3 with Hudi 1.2.0; one shared local-mode driver | your Hive Metastore and S3-compatible storage |
-   | `hudi-agent-gateway` | the [Hudi AI gateway](../hudi-agent-gateway): agent chat API (sessions + SSE), MCP server, and chat UI over guarded lakehouse tools | your `hudi-trino`; your LLM (see below) |
+   | `hudi-agent-gateway` | the [Hudi AI gateway](../hudi-agent-gateway): agent chat API (sessions + SSE), MCP server, and chat UI over guarded lakehouse tools | your Trino or Spark Connect endpoint; your LLM (see below) |
    | `vllm` | optional: vLLM serving one open-weight model (default `Qwen/Qwen3-8B`, ungated) behind an OpenAI-compatible API; GPU required | — (the gateway points at it) |
 
    **LLM out-of-box experience**: the gateway defaults to **Ollama**
@@ -170,7 +170,12 @@ TLS; use it on a trusted network. See the [chart installation guide](charts/hudi
 for storage, credentials, and resource settings, and the [ADBC client guide](charts/hudi-spark-connect/README.md#connect-and-validate-with-adbc)
 for connection setup and CRUD/restart validation.
 
-## BI clients on Spark Connect
+## Gateway and BI clients on Spark Connect
+
+The gateway selects the official PySpark Connect client with
+`sqlBackend: spark-connect`; its `list_tables`, `describe_table`, and
+`query_lakehouse` tools remain read-only. See the
+[gateway setup](charts/hudi-spark-connect/README.md#agent-gateway) for the Helm overlay.
 
 See the [BI client notes](charts/hudi-spark-connect/README.md#spark-connect-client-tutorials)
 for Superset and Zeppelin connection requirements and ADBC limitations.
