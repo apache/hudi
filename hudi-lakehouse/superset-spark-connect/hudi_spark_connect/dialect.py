@@ -90,8 +90,10 @@ class SparkConnectDialect(default.DefaultDialect):
                     "_schema": unquote(url.database) if url.database else None}
 
     def connect(self, *args, **kwargs):
+        if kwargs.pop("driver", "spark") != "spark":
+            raise ValueError("Only the 'spark' ADBC driver is supported")
         schema = kwargs.pop("_schema", None)
-        connection = self.dbapi.connect(*args, **kwargs)
+        connection = self.dbapi.connect(*args, driver="spark", **kwargs)
         if schema:
             try:
                 with connection.cursor() as cursor:

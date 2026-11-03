@@ -14,11 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from urllib.parse import urlencode
 
 from sqlalchemy.engine.url import make_url
-from sqlalchemy import types
+from sqlalchemy import create_engine, types
+from sqlalchemy.dialects import registry
 from sqlalchemy import column, select
 from hudi_spark_connect.dialect import SparkConnectDialect, spark_type
 
@@ -45,6 +46,23 @@ class DialectTest(unittest.TestCase):
             with self.subTest(driver=driver), self.assertRaisesRegex(ValueError, "driver URI parameter"):
                 self.dialect.create_connect_args(make_url(
                     "sparkconnect://localhost:15002/default?" + urlencode({"driver": driver})))
+
+    def test_engine_connect_args_cannot_override_driver(self):
+        from adbc_driver_manager import dbapi
+        registry.register("sparkconnect", "hudi_spark_connect.dialect", "SparkConnectDialect")
+        for options in ({"driver": "/tmp/evil.so"}, {"driver": "other"}):
+            with self.subTest(options=options), patch.object(dbapi, "connect") as connect:
+                engine = create_engine("sparkconnect://localhost/default", connect_args=options, module=dbapi)
+                with self.assertRaises(ValueError):
+                    engine.raw_connection()
+                connect.assert_not_called()
+                engine.dispose()
+        with patch.object(dbapi, "connect", side_effect=RuntimeError("connection attempted")) as connect:
+            engine = create_engine("sparkconnect://localhost/default", module=dbapi)
+            with self.assertRaisesRegex(RuntimeError, "connection attempted"):
+                engine.raw_connection()
+            self.assertEqual(connect.call_args.kwargs["driver"], "spark")
+            engine.dispose()
 
     def test_credentials_and_protocol_rejected(self):
         for url in ("sparkconnect://u:p@host", "sparkconnect://host?api=thrift"):

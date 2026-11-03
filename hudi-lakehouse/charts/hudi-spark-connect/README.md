@@ -321,7 +321,7 @@ The [experimental Superset adapter](../../superset-spark-connect/README.md)
 provides a SQLAlchemy dialect and Superset engine spec for Foundry ADBC. Follow
 its installation instructions and application-level checks. Those checks are
 separate from the endpoint acceptance tests above.
-Upstreaming can be evaluated separately after the integration stabilizes.
+Upstreaming the adapter can be evaluated separately after the integration stabilizes.
 
 For Zeppelin 0.12, install the ADBC packages and Foundry driver into the Python
 environment used by the `%python` interpreter. Its official 0.12.0 image uses
