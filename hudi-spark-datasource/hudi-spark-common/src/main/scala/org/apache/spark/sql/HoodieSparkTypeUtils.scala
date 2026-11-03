@@ -56,6 +56,10 @@ object HoodieSparkTypeUtils {
       //       monotonic (for ex, min -5 and max 5 both cast to true while 0 casts to false)
       case (BooleanType, BooleanType) => true
       case (_, BooleanType) => false
+      // NOTE: A collated string does not sort by its bytes, so casting it to any non-string type
+      //       (for ex, binary, which compares bytes) can re-order values. String targets are
+      //       handled above, so this only rejects collated sources
+      case (fromStr: StringType, _) => fromStr == StringType
       // NOTE: Cast.canUpCast rejects decimal to float/double as lossy, but rounding is monotonic
       //       and every decimal fits within float range. Spark's type coercion inserts this cast
       //       when a decimal column is compared with a float/double (for ex, `price > 99.5D`)

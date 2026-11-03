@@ -153,6 +153,11 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // Any other source cast to a collated string is rejected too, binary bounds being in byte order.
     assertEquals(None, matched(Cast(binAttr, lcase)))
     assertEquals(None, matched(Cast(dateAttr, lcase)))
+    // A collated string cast to any non-string type is rejected, for ex binary compares bytes.
+    assertEquals(None, matched(Cast(collatedAttr, BinaryType)))
+    assertEquals(None, matched(Cast(collatedAttr, DateType)))
+    // The default string still casts to binary, which keeps its byte order.
+    assertEquals(Some(strAttr), matched(Cast(strAttr, BinaryType)))
     // A collation-preserving cast keeps the ordering.
     assertEquals(Some(collatedAttr), matched(Cast(collatedAttr, lcase)))
   }
