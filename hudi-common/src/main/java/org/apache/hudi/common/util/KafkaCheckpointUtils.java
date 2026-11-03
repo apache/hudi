@@ -84,9 +84,9 @@ public class KafkaCheckpointUtils {
       this.knownOffsetDifference = knownOffsetDifference;
       this.previousCheckpointHasOffsets = previousCheckpointHasOffsets;
       this.currentCheckpointHasOffsets = currentCheckpointHasOffsets;
-      this.addedPartitions = Collections.unmodifiableSet(new TreeSet<>(addedPartitions));
-      this.resetPartitions = Collections.unmodifiableSet(new TreeSet<>(resetPartitions));
-      this.missingPartitions = Collections.unmodifiableSet(new TreeSet<>(missingPartitions));
+      this.addedPartitions = Collections.unmodifiableSet(addedPartitions);
+      this.resetPartitions = Collections.unmodifiableSet(resetPartitions);
+      this.missingPartitions = Collections.unmodifiableSet(missingPartitions);
     }
 
     public long getKnownOffsetDifference() {
@@ -196,8 +196,12 @@ public class KafkaCheckpointUtils {
     long totalDiff = 0;
     Set<Integer> addedPartitions = new TreeSet<>();
     Set<Integer> resetPartitions = new TreeSet<>();
-    Set<Integer> missingPartitions = new TreeSet<>(previousOffsets.keySet());
-    missingPartitions.removeAll(currentOffsets.keySet());
+    Set<Integer> missingPartitions = new TreeSet<>();
+    for (Integer partition : previousOffsets.keySet()) {
+      if (!currentOffsets.containsKey(partition)) {
+        missingPartitions.add(partition);
+      }
+    }
 
     for (Map.Entry<Integer, Long> entry : currentOffsets.entrySet()) {
       int partition = entry.getKey();
