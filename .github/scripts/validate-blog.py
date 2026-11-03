@@ -25,7 +25,7 @@ ALLOWED_TAGS = {
     'streaming', 'querying', 'comparison', 'hudi streamer', 'apache flink',
     'dml', 'concurrency control', 'cdc',
     'bi', 'uber', 'tutorial', 'release', 'cow', 'apache kafka', 'minio',
-    'clustering', 'acid', 'walmart', 'python', 'mor', 'hudi timeline',
+    'clustering', 'acid', 'walmart', 'python', 'rust', 'mor', 'hudi timeline',
     'debezium', 'data skipping', 'daft', 'ai',
     'table format', 'starrocks', 'halodoc', 'gdpr', 'schema', 'scd',
     'observability', 'metadata', 'meetup', 'key generation', 'docker',
