@@ -58,6 +58,44 @@ def mock_readback(cursor):
 
 
 class FaultFailureTest(unittest.TestCase):
+    def test_cancel_reports_completed_rollback_without_cleaning_table(self):
+        module = load('connect_cancel')
+        observer, writer = MagicMock(), MagicMock()
+        writer.execute.side_effect = RuntimeError('cancelled')
+        thread = MagicMock()
+        thread.is_alive.return_value = True
+        thread.join.side_effect = lambda timeout: setattr(thread.is_alive, 'return_value', False)
+
+        def make_thread(target, daemon):
+            thread.start.side_effect = target
+            return thread
+
+        with patch.object(module, 'connect', side_effect=[connection_with_cursor(observer), connection_with_cursor(writer)]), \
+             patch.object(module, 'readback', return_value=(0, None)), \
+             patch.object(module, 'read_timeline', return_value=(
+                 [('101', 'rollback', 'COMPLETED')], [('101', '100', 0, 0, 0)])), \
+             patch.object(module.threading, 'Thread', side_effect=make_thread), \
+             patch.object(module.time, 'sleep'), \
+             patch.object(sys, 'argv', ['test', '--port', '15002']), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(module.main(), 0)
+        self.assertIn('write instant 100 rolled back', output.getvalue())
+        self.assertIn('Server-side work may still be running', output.getvalue())
+        self.assertFalse(any(call.args[0].startswith('DROP ') for call in observer.execute.call_args_list))
+
+    def test_pending_or_committed_timeline_is_not_rollback_success(self):
+        module = load('connect_cancel')
+        rollback = [('101', '100', 0, 0, 0)]
+        for timeline, records in (
+            ([('101', 'rollback', 'COMPLETED'), ('100', 'commit', 'INFLIGHT')], rollback),
+            ([('101', 'rollback', 'COMPLETED'), ('100', 'commit', 'COMPLETED')], rollback),
+            ([('101', 'rollback', 'COMPLETED')], []),
+            ([('102', 'rollback', 'COMPLETED')], rollback),
+            ([], rollback),
+        ):
+            with self.subTest(timeline=timeline, records=records):
+                self.assertIsNone(module.rolled_back_write(timeline, records))
+
     def test_lost_response_retry_failure_stops_without_repeating_write(self):
         module = load('connect_lost_response')
         cursor = MagicMock()
@@ -180,6 +218,31 @@ class FaultFailureTest(unittest.TestCase):
 
 
 class ReconnectTest(unittest.TestCase):
+    def test_custom_driver_used_for_connections_and_writer(self):
+        module = load('connect_restart_fault')
+        with patch.object(module.dbapi, 'connect') as connect:
+            module.connect(15039, '/tmp/custom driver.so')
+        self.assertEqual(connect.call_args.kwargs['driver'], '/tmp/custom driver.so')
+
+        with tempfile.TemporaryDirectory() as directory:
+            Path(directory, 'adbc_driver_manager.py').write_text('''
+class Connection:
+    def __enter__(self): return self
+    def __exit__(self, *args): pass
+    def cursor(self): return self
+    def execute(self, sql): print(sql)
+class dbapi:
+    @staticmethod
+    def connect(**kwargs):
+        print(kwargs['driver'])
+        return Connection()
+''')
+            result = subprocess.run(
+                module.writer_command('spark://localhost', 'test.orders', '/tmp/custom driver.so'),
+                env={**os.environ, 'PYTHONPATH': directory}, text=True, capture_output=True, check=True)
+        self.assertIn('/tmp/custom driver.so\n', result.stdout)
+        self.assertIn('INSERT INTO test.orders', result.stdout)
+
     def test_failed_query_closes_cursor_then_connection(self):
         module = load('connect_restart_fault')
         conn = MagicMock()

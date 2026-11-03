@@ -16,7 +16,13 @@
 """Read-only, opt-in SQL/catalog/table-data readiness for Spark Connect."""
 import argparse
 import re
+import signal
 import sys
+
+# A default SIGALRM terminates even when the probe is blocked in native code.
+if __name__ == "__main__":
+    signal.signal(signal.SIGALRM, signal.SIG_DFL)
+    signal.alarm(25)
 
 from pyspark.sql import SparkSession
 
