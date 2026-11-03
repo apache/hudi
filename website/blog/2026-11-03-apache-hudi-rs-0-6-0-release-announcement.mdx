@@ -1,0 +1,151 @@
+---
+title: "Apache Hudi-rs 0.6.0: Native Writes from Rust and Python"
+excerpt: "hudi-rs 0.6.0 adds native write support: create, append, upsert, update, delete and overwrite Hudi tables from Rust and Python with no JVM, with sub-second upserts and deletes backed by the record-level index. Keep a RAG knowledge base or a training set current from one Python process, read from Python up to 6 times faster, and upgrade to DataFusion 55 and Arrow 59."
+authors: [ethan-guo]
+category: community
+image: /assets/images/blog/2026-11-03-apache-hudi-rs-0-6-0-release-announcement/1-cover.png
+tags:
+- release
+- python
+- rust
+- lakehouse
+- write
+- upsert
+- record level index
+---
+
+The Apache Hudi community is excited to announce the release of [hudi-rs 0.6.0](https://github.com/apache/hudi-rs/releases/tag/release-0.6.0), the native Rust implementation of [Apache Hudi](/) with [Python](https://pypi.org/project/hudi/0.6.0/) and [C++](https://github.com/apache/hudi-rs/tree/release-0.6.0/cpp) bindings. Until now, hudi-rs has been a reader: a fast, JVM-free way to query Hudi tables from Rust, Python, [DataFusion](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#apache-datafusion), [Daft](https://docs.daft.ai/en/stable/connectors/hudi/) and [Ray](https://docs.ray.io/en/latest/data/api/doc/ray.data.read_hudi.html). The hudi-rs 0.6.0 release adds native write support: with [`pip install hudi`](https://pypi.org/project/hudi/0.6.0/) or [`cargo add hudi`](https://crates.io/crates/hudi/0.6.0), a Python or Rust program creates Hudi tables and appends, upserts, updates, deletes and overwrites rows in them without a Spark cluster or JVM, and every table written this way is a regular Hudi table that [Spark](/docs/quick-start-guide) and every other query engine supporting Hudi can read.
+
+Many of today's pipelines that update tables run in a plain Python process or in a non-JVM engine. A retrieval pipeline embeds documents and has to keep its knowledge base current as sources are added, edited and removed. A model team curates a fine-tuning set between training runs, correcting and rejecting examples, and has to reproduce the exact version each model was trained on. A service or an agent corrects records in a dataset as it finds errors. Each of them changes a small slice of a large table at a time and needs the result to be a table that keeps its history and that every engine in the lakehouse can query. hudi-rs 0.6.0 opens the door to fast writes from exactly these places: the upserts and deletes are super fast, under a second on a single node as tables grow into the millions of rows, because Hudi's [record-level index](/docs/indexes#record-index) locates the rows to change without scanning the full table, and the [benchmark results](#upsert-and-delete-benchmarks) show how this compares with other lakehouse table libraries for Python.
+
+The release carries [close to 80 commits](https://github.com/apache/hudi-rs/releases/tag/release-0.6.0) from 11 contributors, and alongside the write path the release makes reads from Python noticeably faster, upgrades the query engine integration to DataFusion 55 and Arrow 59, and enhances read compatibility and bindings. Let's dive into the highlights.
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-11-03-apache-hudi-rs-0-6-0-release-announcement/1-cover.png" alt="hudi-rs 0.6.0: write Hudi tables natively from Python and Rust, query them with Spark, Flink, Trino, Presto, DataFusion, Daft, Ray and DuckDB" width="1000"/>
+</div>
+
+## Write Hudi Tables Without a JVM
+
+You can now build and maintain a Hudi table from a notebook, a script, a service or an agent, without depending on Spark or a JVM-based engine. hudi-rs 0.6.0 adds [native, single-node write support](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#writing-tables) covering create, append, upsert, update, delete, overwrite and dynamic partition overwrite operations, on both [Copy-on-Write and Merge-on-Read](/docs/table_types) tables. [Upserts](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#upsert) can be partial, touching only the columns you pass, [deletes](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#update-and-delete) take a predicate or a list of keys, and tables keyed on several fields or on an integer ID field work too. Every write is an atomic commit on the [Hudi timeline](/docs/timeline), following the [Hudi Technical Specification](/learn/tech-specs). A write that crashes midway is rolled back automatically, and the [metadata table](/docs/metadata), with its file listings, column and partition stats and [record-level index](/docs/indexes#record-index), is kept up to date on every commit. The new [Python and Rust quick start](/docs/python-rust-quick-start-guide) walks through the write operations end to end.
+
+Spark, Flink, Trino, Presto and the other [query engines supporting Hudi](/docs/querying_data) can all read tables written by hudi-rs, with the metadata table and indexes in place. hudi-rs 0.6.0 serializes writers within a process, so hand a table between engines instead of writing to the same table from two engines at once. A table can start on a MacBook and move to a cluster when the table outgrows one machine: Spark takes the table over and runs ingestion, [compaction](/docs/compaction), [clustering](/docs/clustering) and [cleaning](/docs/cleaning) on it, and hudi-rs can still read the table and occasionally write small batches to it.
+
+The [example below](/docs/python-rust-quick-start-guide#write-a-table-in-python) is the sequence of writes behind a retrieval or training pipeline: a table of document chunks with their [embeddings](/docs/use_cases#ai-native-data-lakehouse), keyed by `chunk_id`. The example ingests three documents, re-embeds the one that changed, drops the one that was removed, and then reads back only what changed since the initial load. The write methods live on `HudiTable` and take Arrow data in the form you already have: a [PyArrow](https://arrow.apache.org/docs/python/) table, record batch or reader, or any object that implements the [Arrow PyCapsule interface](https://arrow.apache.org/docs/format/CDataInterface/PyCapsuleInterface.html), such as a [Polars](https://pola.rs/) or [pandas](https://pandas.pydata.org/) 2.2+ DataFrame, with no extra dependency.
+
+```python
+import numpy as np
+import pyarrow as pa
+from hudi import HudiQueryType, HudiReadOptions, HudiTable
+
+def chunks(doc_ids, version):
+    rows = [(f"{d}#{i}", d, f"chunk {i} of {d}, version {version}")
+            for d in doc_ids for i in range(4)]
+    rng = np.random.default_rng(version)
+    embeddings = rng.random((len(rows), 384), dtype=np.float32)
+    return pa.table({
+        "chunk_id":   [r[0] for r in rows],
+        "doc_id":     [r[1] for r in rows],
+        "text":       [r[2] for r in rows],
+        "embedding":  pa.array(embeddings.tolist(), pa.list_(pa.float32())),
+        "updated_at": pa.array([version] * len(rows), pa.int64()),
+    })
+
+table = HudiTable.create(
+    "/tmp/contract_chunks",
+    record_key="chunk_id",         # the record-level index key
+    table_type="mor",              # upserts and deletes append to log files
+    ordering_fields="updated_at",  # later version wins on a repeated key
+)
+base = table.append(chunks(["doc1", "doc2", "doc3"], version=1))
+
+# doc2 changed: re-embed its chunks and upsert them. The index finds the
+# file groups holding these keys; nothing else in the table is read.
+result = table.upsert(chunks(["doc2"], version=2))
+print(result.num_updates, result.num_inserts)  # 4 0
+
+# doc3 was removed: delete its chunks.
+table.delete("doc_id = 'doc3'")
+
+# Re-index or retrain on what changed since the initial load,
+# not the whole table.
+changed = table.read(
+    HudiReadOptions()
+    .with_query_type(HudiQueryType.Incremental)
+    .with_start_timestamp(base.completion_time)
+)
+print(pa.Table.from_batches(changed).num_rows)  # 4, doc2's chunks
+```
+
+Every write returns the commit's completion time, which is the bound an [incremental read](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#incremental-query) takes, so a pipeline writes and then processes only the rows that changed. For a knowledge base that means re-embedding and re-indexing only the chunks that changed. For a training set the next run sees only the corrected and newly added examples, and a [time-travel read](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#time-travel-query) brings back the exact version a model was trained on. A snapshot read returns Arrow data, so [DuckDB](https://duckdb.org/) and [Polars](https://pola.rs/) query the result directly, and [DataFusion](https://datafusion.apache.org/) reads the table through the hudi-rs table provider, as the quick start [shows](/docs/python-rust-quick-start-guide#query-with-duckdb-polars-and-datafusion).
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-11-03-apache-hudi-rs-0-6-0-release-announcement/2-write-path.png" alt="Documents and training examples change; one Python process appends, upserts and deletes them in a Hudi table, where the record-level index locates the file groups and each write is one commit on a Copy-on-Write or Merge-on-Read table; downstream, incremental reads re-index only what changed, time travel reproduces a training run, snapshot reads return Arrow data for DuckDB, Polars and DataFusion, and Spark, Flink, Trino and Presto read the same table" width="1000"/>
+</div>
+
+On a [Merge-on-Read](/docs/table_types#merge-on-read-table) table, upserts, updates and deletes append to log files instead of rewriting base files, which keeps write amplification low, and 0.6.0 adds [compaction](/docs/python-rust-quick-start-guide#compact-a-merge-on-read-table) to merge the log files into right-sized base files and reduce read cost. Compaction runs on demand, inline after a configurable number of delta commits, or asynchronously on a background task, and the metadata table compacts automatically. An upsert or delete locates its records through the record-level index, reading only the index entries for the keys in the batch instead of joining the input against the whole table, so the cost of a small batch stays small as the table grows. The quick start [explains the mechanism](/docs/python-rust-quick-start-guide#why-upserts-and-deletes-are-fast-the-record-level-index).
+
+### Upsert and Delete Benchmarks
+
+We curate and benchmark five distinct and representative workloads involving upserts and deletes on hudi-rs, with a [reproducible benchmark](/docs/python-rust-quick-start-guide#use-cases-and-numbers). Each workload is a bulk load followed by five upsert commits and five delete commits:
+
+| Scenario | Models | Table | Each commit |
+|---|---|---|---|
+| `rag-chunks` | Re-syncing a [RAG](https://en.wikipedia.org/wiki/Retrieval-augmented_generation) knowledge base as its sources change | 1M synthetic chunks with 384-float embeddings from 100,000 documents, keyed by `chunk_id` | re-ingest 1,000 changed documents (10,000 chunks), delete 100 removed documents |
+| `training-set` | Curating a fine-tuning set between training runs | 1M synthetic examples keyed by `example_id` | upsert 10,000 corrected examples, delete 1,000 rejected ones, then an [incremental read](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#incremental-query) of the changes and a [time-travel read](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#time-travel-query) of the first version |
+| `uuid` | Random updates to a dimension table, with changed keys spread across every file | 10M synthetic rows with random UUID keys | upsert 10,000 existing keys plus 1,000 new, delete 1,000 |
+| `nyc-taxi` | Correcting a public dataset in place | [NYC TLC yellow taxi trips](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page), January 2022, 2.5M rows | upsert 1% of trips with corrected fares, delete 0.1% |
+| `tpcds-web-returns` | A standard warehouse fact table | [TPC-DS](https://www.tpc.org/tpcds/) `web_returns` at scale factor 10, 0.7M rows, composite key | upsert 1% matched plus 10% new rows, delete 5% |
+
+The same workloads, run through [delta-rs](https://github.com/delta-io/delta-rs) and [PyIceberg](https://github.com/apache/iceberg-python) with each library's own Python API and default settings, give the numbers context: hudi-rs upserts are 1.2 to 12 times faster than the faster of the two, and deletes are 4.8 to 24 times faster, except on `tpcds-web-returns`, where hudi-rs and delta-rs are comparable.
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-11-03-apache-hudi-rs-0-6-0-release-announcement/3-write-latency.png" alt="Seconds per upsert and delete commit on five workloads: hudi-rs 0.6.0 Merge-on-Read with the record-level index against delta-rs and PyIceberg, with hudi-rs 1.2 to 12 times faster on upserts and 4.8 to 24 times faster on deletes, except tpcds-web-returns, where hudi-rs and delta-rs are comparable" width="1000"/>
+</div>
+
+The upserts are fast because of the low write amplification and record-level index. A commit on a Merge-on-Read table appends only the changed records to log files, and the record-level index points each key at its file group, so an upsert commit in hudi-rs writes 4 to 200 times fewer bytes than the same commit in the other two libraries. Neither delta-rs nor PyIceberg writes deletion vectors in their latest releases ([delta-rs 1.6.6](https://github.com/delta-io/delta-rs/releases/tag/python-v1.6.6), [PyIceberg 0.12.0](https://github.com/apache/iceberg-python/releases/tag/pyiceberg-0.12.0)), and neither keeps a record-level index, so every update or delete rewrites each data file it touches. Loading the 10M-row table in Hudi takes 5.7 s, about 2.4 s of which builds the metadata table and its record-level index, an investment that pays off in the latency of every later upsert and delete. For details on the setup, each library's calls and how to reproduce the numbers, refer to the quick start's [use cases and numbers](/docs/python-rust-quick-start-guide#use-cases-and-numbers) section.
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-11-03-apache-hudi-rs-0-6-0-release-announcement/4-write-bytes.png" alt="MiB written per upsert and delete commit: hudi-rs writes 4 to 200 times fewer bytes per upsert commit than delta-rs and PyIceberg" width="1000"/>
+</div>
+
+## Faster Reads from Python
+
+Reads from Python are faster with no code changes. A full-table read now decodes file slices on all available cores instead of on the calling Python thread, which makes full-table reads through the Python package 3.8 to 6 times faster on local Copy-on-Write tables of 1M to 10M rows, for example 2.11 s down to 0.35 s for 10M rows, each read timed in a fresh process on a 14-core MacBook Pro.
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-11-03-apache-hudi-rs-0-6-0-release-announcement/5-python-reads.png" alt="Full-table read time through Python for hudi 0.5.0 and 0.6.0 on Copy-on-Write tables of 1M, 5M and 10M rows: 0.22 s to 0.05 s, 1.11 s to 0.29 s and 2.11 s to 0.35 s, 3.8 to 6 times faster" width="800"/>
+</div>
+
+Filtered reads get faster as well. [Read filters](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md#read-configs) are evaluated inside the Parquet reader, so a query that keeps a few rows decodes only those rows' remaining columns. A point lookup by record key, whether `key = 'x'` or `key IN (...)`, uses the record-level index to open only the files that hold those keys, and `IN` and `NOT IN` filters on other columns skip files using column stats, so a point lookup for one record on a 10M-row table returns in 0.08 s, against 2.00 s in 0.5.0, where the same filter scanned the table.
+
+<div style={{ textAlign: 'center' }}>
+  <img src="/assets/images/blog/2026-11-03-apache-hudi-rs-0-6-0-release-announcement/6-python-lookups.png" alt="Seconds per single-key point lookup through Python on Copy-on-Write tables of 1M, 5M and 10M rows: hudi 0.6.0 uses the record-level index and is 9 to 24 times faster than hudi 0.5.0, which scans the table" width="1000"/>
+</div>
+
+## DataFusion 55 and Arrow 59
+
+This release upgrades to [DataFusion](https://datafusion.apache.org/) 55, [Arrow and Parquet](https://github.com/apache/arrow-rs) 59 and [pyo3](https://pyo3.rs/) 0.29, so hudi-rs fits into projects on newer Arrow and DataFusion versions.
+
+| | [DataFusion](https://crates.io/crates/datafusion) | [Arrow](https://crates.io/crates/arrow) and [Parquet](https://crates.io/crates/parquet) | [pyo3](https://crates.io/crates/pyo3) | [RocksDB](https://crates.io/crates/rocksdb) (for disk spilling) |
+|---|---|---|---|---|
+| hudi-rs 0.5.0 | 54.1 | 58 | 0.28 | 0.22, bundling RocksDB 8.10 |
+| hudi-rs 0.6.0 | 55.2 | 59.2 | 0.29 | 0.24, bundling RocksDB 10.4 |
+
+## Reader and Binding Enhancements
+
+Read compatibility with tables written by Hudi on Spark and Flink is broader, with support for more types and formats: Avro local-timestamp types, Avro enum columns, the older version 2 Avro data log blocks that writers before table version 6 left behind, and Merge-on-Read log records whose timestamp precision differs from the table schema, which are now reconciled on read the same way the Java reader does. A read of a Spark-written table that failed on one of these in 0.5.0 works in 0.6.0. Any partition of the [metadata table](/docs/metadata), from the record-level index and column stats to bloom filters, partition stats and secondary indexes, can be read as Arrow from Rust or Python.
+
+For engines using hudi-rs, the [`hudi-ffi`](https://github.com/apache/hudi-rs/tree/release-0.6.0/crates/ffi) crate exposes a plain C ABI over the Arrow C Data Interface for JVM and C++ callers. The [C++ binding](https://github.com/apache/hudi-rs/tree/release-0.6.0/cpp) reports internal panics as ordinary errors, so one failed read no longer takes a long-running host process down, and Python applications can catch `HudiCoreError` like any other exception. The Rust API reference is on [docs.rs](https://docs.rs/hudi/0.6.0), including the [DataFusion feature](https://docs.rs/hudi-datafusion/0.6.0), and the [Python package](https://pypi.org/project/hudi/0.6.0/) comes with improved API documentation.
+
+## Thank You
+
+A huge thank you to everyone who contributed, reviewed and tested this release, and a warm welcome to the first-time contributors: [@alitrack](https://github.com/alitrack), [@GayathriSrividya](https://github.com/GayathriSrividya), [@morningstarxcdcode](https://github.com/morningstarxcdcode), [@oglego](https://github.com/oglego), [@vinayus](https://github.com/vinayus), [@voonhous](https://github.com/voonhous), [@wirybeaver](https://github.com/wirybeaver) and [@vinothchandar](https://github.com/vinothchandar).
+
+## Get Started
+
+```bash
+pip install hudi==0.6.0
+cargo add hudi@0.6.0
+```
+
+Start with the [Python and Rust quick start](/docs/python-rust-quick-start-guide), which covers [writing](/docs/python-rust-quick-start-guide#write-a-table-in-python), [compaction](/docs/python-rust-quick-start-guide#compact-a-merge-on-read-table), [reads](/docs/python-rust-quick-start-guide#read-a-table), [querying with DuckDB, Polars and DataFusion](/docs/python-rust-quick-start-guide#query-with-duckdb-polars-and-datafusion), and [cloud storage](/docs/python-rust-quick-start-guide#work-with-cloud-storage). The [README](https://github.com/apache/hudi-rs/blob/release-0.6.0/README.md) is the full API reference by example, [docs.rs](https://docs.rs/hudi/0.6.0) the Rust API reference, and the [release notes](https://github.com/apache/hudi-rs/releases/tag/release-0.6.0) list every change, with the [changelog](https://github.com/apache/hudi-rs/blob/main/CHANGELOG.md) kept in the repository. Join the Apache Hudi community on [Slack](/slack/), [GitHub](https://github.com/apache/hudi-rs), [LinkedIn](https://www.linkedin.com/company/apache-hudi), [X](https://x.com/apachehudi), and the [dev@hudi.apache.org mailing list](mailto:dev@hudi.apache.org). Issues, feedback and new contributions are always welcome.
