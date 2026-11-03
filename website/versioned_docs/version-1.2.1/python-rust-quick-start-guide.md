@@ -7,10 +7,12 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 [hudi-rs](https://github.com/apache/hudi-rs) is the native Rust implementation of Apache Hudi with Python bindings.
-It creates Hudi tables and runs upserts, updates, and deletes on them from a single process, with no JVM and no
-Spark. Every write maintains the table's metadata table and record-level index, so updating or deleting a handful
-of rows in a large table costs a few index lookups and the rewrite of the file groups that hold those rows, not a
-scan of the table.
+With `pip install hudi`, a single Python process creates Hudi tables and upserts, updates and deletes rows in them,
+with no JVM and no Spark, and the same tables are read by Spark, Trino, DuckDB, Polars, DataFusion and every other
+engine supporting Hudi. Upserts, updates and deletes stay under a second on a single node as tables grow into the
+millions of rows. Every write maintains the table's metadata table and record-level index, so updating or deleting
+a handful of rows in a large table costs a few index lookups and the rewrite of the file groups that hold those
+rows, not a scan of the table.
 
 This page gets you from `pip install` to a table you can upsert into, delete from, and read incrementally, then
 shows how to query it from Python, Rust, DuckDB, Polars, and DataFusion.
@@ -250,8 +252,11 @@ across the table, so each Copy-on-Write commit rewrites nearly all of it: per up
   <img src="/assets/images/docs/python-rust-quick-start/write-bytes.png" alt="MiB written per upsert and delete commit on the same five workloads" width="1000"/>
 </div>
 
-Loading the 10M-row table in Hudi takes 5.7 s, about 2.4 s of which builds the metadata table and its record-level
-index, an investment that pays off in the latency of every later upsert and delete.
+The trade-off shows up in the bulk load. Loading the 10M-row `uuid` table takes 5.7 s in Hudi against 2.8 s for
+delta-rs and 1.3 s for PyIceberg, because about 2.4 s of it builds the metadata table and its record-level index up
+front, an investment that pays off in the latency of every later upsert and delete. The initial load is likewise
+slower on `nyc-taxi` and `tpcds-web-returns`, and on par or faster on the two 1M-row workloads, `rag-chunks` and
+`training-set`.
 {/* BENCHMARK_TABLE_END */}
 
 **Reproduce it.** [This guide](https://gist.github.com/yihua/66ad80224f8e50020025dc76d138dd0a) pins the hudi-rs
