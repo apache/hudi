@@ -35,6 +35,10 @@ import org.apache.hadoop.hive.metastore.TSetIpAddressProcessor;
 import org.apache.hadoop.hive.metastore.TUGIBasedProcessor;
 import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.thrift.TUGIContainingTransport;
+import org.apache.hive.service.Service;
+import org.apache.hive.service.cli.CLIService;
+import org.apache.hive.service.cli.thrift.RetryableThriftBinaryCLIService;
+import org.apache.hive.service.cli.thrift.ThriftCLIService;
 import org.apache.hive.service.server.HiveServer2;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -50,6 +54,7 @@ import org.apache.thrift.transport.layered.TFramedTransport;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.nio.file.Files;
@@ -58,15 +63,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Slf4j
 public class HiveTestService {
   private static final int CONNECTION_TIMEOUT_MS = 30000;
+  private static final int MAX_START_ATTEMPTS = 5;
   private static final String BIND_HOST = "127.0.0.1";
-  // Chosen once per JVM rather than fixed at 9999 so that surefire forks running this module concurrently
-  // each get their own HiveServer2 port; within one JVM every HiveTestService instance still shares the port, as before.
-  private static final int HS2_THRIFT_PORT = NetworkTestUtils.nextFreePort();
-  public static final String HS2_JDBC_URL = String.format("jdbc:hive2://%s:%s/", BIND_HOST, HS2_THRIFT_PORT);
 
   private final Configuration hadoopConf;
   private final String workDir;
@@ -91,19 +95,34 @@ public class HiveTestService {
     File file = new File(localHiveLocation);
     FileIOUtils.deleteDirectory(file);
 
-    hiveConf = configureHive(hadoopConf, localHiveLocation);
+    for (int attempt = 1; attempt <= MAX_START_ATTEMPTS; attempt++) {
+      try {
+        int hs2ThriftPort = NetworkTestUtils.nextFreePort();
+        int metastoreServerPort = NetworkTestUtils.nextFreePort();
+        hiveConf = configureHive(hadoopConf, localHiveLocation, hs2ThriftPort, metastoreServerPort);
 
-    executorService = Executors.newSingleThreadExecutor();
-    tServer = startMetaStore(hiveConf);
+        executorService = Executors.newSingleThreadExecutor();
+        tServer = startMetaStore(hiveConf);
+        hiveServer = startHiveServer(hiveConf);
 
-    hiveServer = startHiveServer(hiveConf);
+        if (!waitForServerUp(hiveConf)) {
+          throw new IOException("Waiting for startup of standalone server");
+        }
 
-    if (!waitForServerUp(hiveConf)) {
-      throw new IOException("Waiting for startup of standalone server");
+        log.info("Hive Minicluster service started.");
+        return hiveServer;
+      } catch (IOException | RuntimeException e) {
+        boolean bindFailure = hasBindException(e);
+        stop();
+
+        if (!bindFailure || attempt == MAX_START_ATTEMPTS) {
+          throw e;
+        }
+
+        log.warn("Hive Minicluster failed to bind on attempt {}. Retrying with new ports.", attempt, e);
+      }
     }
-
-    log.info("Hive Minicluster service started.");
-    return hiveServer;
+    throw new IllegalStateException("Hive Minicluster failed to start");
   }
 
   public void stop() {
@@ -128,6 +147,7 @@ public class HiveTestService {
     log.info("Hive Minicluster service shut down.");
     tServer = null;
     hiveServer = null;
+    executorService = null;
   }
 
   public int getHiveServerPort() {
@@ -136,10 +156,11 @@ public class HiveTestService {
 
   public String getJdbcHive2Url() {
     return String.format("jdbc:hive2://%s:%s/",
-        hiveConf.getVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST), hiveConf.getIntVar(ConfVars.HIVE_SERVER2_THRIFT_PORT));
+        BIND_HOST, hiveConf.getIntVar(ConfVars.HIVE_SERVER2_THRIFT_PORT));
   }
 
-  public HiveConf configureHive(Configuration hadoopConf, String localHiveLocation) throws IOException {
+  public HiveConf configureHive(Configuration hadoopConf, String localHiveLocation,
+                                int hs2ThriftPort, int metastoreServerPort) throws IOException {
     hadoopConf.set("hive.metastore.local", "false");
     hadoopConf.set("datanucleus.schema.autoCreateTables", "true");
     hadoopConf.set("datanucleus.autoCreateSchema", "true");
@@ -147,10 +168,8 @@ public class HiveTestService {
     HiveConf conf = new HiveConf(hadoopConf, HiveConf.class);
     conf.setBoolVar(ConfVars.HIVE_IN_TEST, true);
     conf.setBoolVar(ConfVars.METASTORE_SCHEMA_VERIFICATION, false);
-    final int hs2ThriftPort = hadoopConf.getInt(ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, HS2_THRIFT_PORT);
     conf.setIntVar(ConfVars.HIVE_SERVER2_THRIFT_PORT, hs2ThriftPort);
     conf.setVar(ConfVars.HIVE_SERVER2_THRIFT_BIND_HOST, BIND_HOST);
-    final int metastoreServerPort = hadoopConf.getInt(ConfVars.METASTORE_SERVER_PORT.varname, NetworkTestUtils.nextFreePort());
     conf.setIntVar(ConfVars.METASTORE_SERVER_PORT, metastoreServerPort);
     conf.setVar(ConfVars.METASTOREURIS, "thrift://" + BIND_HOST + ":" + metastoreServerPort);
     File localHiveDir = new File(localHiveLocation);
@@ -218,11 +237,74 @@ public class HiveTestService {
     return baseLocation + StoragePath.SEPARATOR + "hive";
   }
 
-  private HiveServer2 startHiveServer(HiveConf serverConf) {
-    HiveServer2 hiveServer = new HiveServer2();
+  private static boolean hasBindException(Throwable throwable) {
+    Throwable cause = throwable;
+    while (cause != null) {
+      if (cause instanceof BindException) {
+        return true;
+      }
+      if (cause == cause.getCause()) {
+        break;
+      }
+      cause = cause.getCause();
+    }
+    return false;
+  }
+
+  private HiveServer2 startHiveServer(HiveConf serverConf) throws IOException {
+    RetryableHiveServer2 retryableHiveServer = new RetryableHiveServer2();
+    hiveServer = retryableHiveServer;
     hiveServer.init(serverConf);
     hiveServer.start();
+    Throwable startupFailure;
+    try {
+      startupFailure = retryableHiveServer.awaitStartup(CONNECTION_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new IOException(e);
+    } catch (TimeoutException e) {
+      throw new IOException(e);
+    }
+    if (startupFailure instanceof RuntimeException) {
+      throw (RuntimeException) startupFailure;
+    }
+    if (startupFailure instanceof Error) {
+      throw (Error) startupFailure;
+    }
+    if (startupFailure != null) {
+      throw new IOException(startupFailure);
+    }
     return hiveServer;
+  }
+
+  private static final class RetryableHiveServer2 extends HiveServer2 {
+
+    private RetryableThriftBinaryCLIService thriftCLIService;
+
+    @Override
+    public synchronized void init(HiveConf hiveConf) {
+      super.init(hiveConf);
+      CLIService cliService = null;
+      ThriftCLIService originalThriftCLIService = null;
+      for (Service service : getServices()) {
+        if (service instanceof CLIService) {
+          cliService = (CLIService) service;
+        } else if (service instanceof ThriftCLIService) {
+          originalThriftCLIService = (ThriftCLIService) service;
+        }
+      }
+      if (cliService == null || originalThriftCLIService == null) {
+        throw new IllegalStateException("HiveServer2 services were not initialized");
+      }
+      removeService(originalThriftCLIService);
+      thriftCLIService = new RetryableThriftBinaryCLIService(cliService, this::stop);
+      thriftCLIService.init(hiveConf);
+      addService(thriftCLIService);
+    }
+
+    private Throwable awaitStartup(long timeout, TimeUnit timeUnit) throws InterruptedException, TimeoutException {
+      return thriftCLIService.awaitStartup(timeout, timeUnit);
+    }
   }
 
   // XXX: From org.apache.hadoop.hive.metastore.HiveMetaStore,
