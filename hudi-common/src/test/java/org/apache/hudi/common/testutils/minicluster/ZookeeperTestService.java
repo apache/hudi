@@ -34,6 +34,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -60,9 +61,6 @@ public class ZookeeperTestService {
 
   private static final int TICK_TIME = 2000;
   private static final int CONNECTION_TIMEOUT = 30000;
-  // Chosen once per JVM rather than fixed at 2828 so that surefire forks running this module concurrently
-  // each get their own Zookeeper port; within one JVM every ZookeeperTestService instance still shares the port, as before.
-  private static final int CLIENT_PORT = NetworkTestUtils.nextFreePort();
 
   /**
    * Configuration settings.
@@ -70,7 +68,7 @@ public class ZookeeperTestService {
   @Getter
   private Configuration hadoopConf;
   private String workDir;
-  private Integer clientPort = CLIENT_PORT;
+  private Integer clientPort;
   private String bindIP = "127.0.0.1";
   private Boolean clean = false;
   private int tickTime = 0;
@@ -102,12 +100,25 @@ public class ZookeeperTestService {
       tickTimeToUse = TICK_TIME;
     }
     this.zooKeeperServer = new ZooKeeperServer(dir, dir, tickTimeToUse);
-    standaloneServerFactory = new NIOServerCnxnFactory();
 
-    // NOTE: Changed from the original, where InetSocketAddress was
-    // originally created to bind to the wildcard IP, we now configure it.
-    log.info("Zookeeper force binding to: {}", this.bindIP);
-    standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
+    int loop = 0;
+    while (true) {
+      try {
+        clientPort = NetworkTestUtils.nextFreePort();
+        standaloneServerFactory = new NIOServerCnxnFactory();
+
+        // NOTE: Changed from the original, where InetSocketAddress was
+        // originally created to bind to the wildcard IP, we now configure it.
+        log.info("Zookeeper force binding to: {}", this.bindIP);
+        standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
+        break;
+      } catch (BindException ex) {
+        ++loop;
+        if (loop >= 5) {
+          throw ex;
+        }
+      }
+    }
 
     // Start up this ZK server
     standaloneServerFactory.startup(zooKeeperServer);
@@ -242,9 +253,9 @@ public class ZookeeperTestService {
   }
 
   /**
-   * The per-JVM Zookeeper client port every instance of this service binds to.
+   * Returns the client port this service instance is bound to.
    */
-  public static int clientPort() {
-    return CLIENT_PORT;
+  public int clientPort() {
+    return clientPort;
   }
 }

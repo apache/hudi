@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.versioning.v2.ActiveTimelineV2;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.integ.testsuite.configuration.DeltaConfig.Config;
@@ -197,10 +198,13 @@ public class HoodieTestSuiteJob {
 
   public void runTestSuite() {
     WriterContext writerContext = null;
+    ZookeeperServiceProvider zookeeperServiceProvider = null;
     try {
       WorkflowDag workflowDag = createWorkflowDag();
       log.info("Workflow Dag => {}", DagUtils.convertDagToYaml(workflowDag));
       long startTime = System.currentTimeMillis();
+      zookeeperServiceProvider = createZookeeperServiceProviderIfNeeded();
+      startZookeeperIfNeeded(zookeeperServiceProvider);
       writerContext = new WriterContext(jsc, props, cfg, keyGenerator, sparkSession);
       writerContext.initContext(jsc);
       startOtherServicesIfNeeded(writerContext);
@@ -224,11 +228,51 @@ public class HoodieTestSuiteJob {
       log.error("Failed to run Test Suite ", e);
       throw new HoodieException("Failed to run Test Suite ", e);
     } finally {
-      if (writerContext != null) {
-        writerContext.shutdownResources();
+      try {
+        if (writerContext != null) {
+          writerContext.shutdownResources();
+        }
+      } finally {
+        stopZookeeperQuietly(zookeeperServiceProvider);
+        if (stopJsc) {
+          stopQuietly();
+        }
       }
-      if (stopJsc) {
-        stopQuietly();
+    }
+  }
+
+  private ZookeeperServiceProvider createZookeeperServiceProviderIfNeeded() {
+    if (!cfg.startZookeeper) {
+      return null;
+    }
+
+    return new ZookeeperServiceProvider(
+        Config.newBuilder().withHiveLocal(true).build(), jsc.hadoopConfiguration());
+  }
+
+  private void startZookeeperIfNeeded(ZookeeperServiceProvider zookeeperServiceProvider) throws Exception {
+    if (zookeeperServiceProvider == null) {
+      return;
+    }
+
+    zookeeperServiceProvider.startLocalZookeeperIfNeeded();
+    setRuntimeConfig(HoodieLockConfig.ZK_CONNECT_URL.key(), zookeeperServiceProvider.getConnectString());
+    setRuntimeConfig(HoodieLockConfig.ZK_PORT.key(), String.valueOf(zookeeperServiceProvider.getClientPort()));
+  }
+
+  private void setRuntimeConfig(String key, String value) {
+    props.setProperty(key, value);
+    String configPrefix = key + "=";
+    cfg.configs.removeIf(config -> config.startsWith(configPrefix));
+    cfg.configs.add(configPrefix + value);
+  }
+
+  private void stopZookeeperQuietly(ZookeeperServiceProvider zookeeperServiceProvider) {
+    if (zookeeperServiceProvider != null) {
+      try {
+        zookeeperServiceProvider.stopLocalZookeeperIfNeeded();
+      } catch (Exception e) {
+        log.error("Unable to stop local Zookeeper service", e);
       }
     }
   }
@@ -248,12 +292,6 @@ public class HoodieTestSuiteJob {
           Config.newBuilder().withHiveLocal(true).build());
       hiveServiceProvider.startLocalHiveServiceIfNeeded(writerContext.getHoodieTestSuiteWriter().getConfiguration());
       hiveServiceProvider.syncToLocalHiveIfNeeded(writerContext.getHoodieTestSuiteWriter());
-    }
-
-    if (cfg.startZookeeper) {
-      ZookeeperServiceProvider zookeeperServiceProvider = new ZookeeperServiceProvider(Config.newBuilder().withHiveLocal(true).build(),
-          writerContext.getHoodieTestSuiteWriter().getConfiguration());
-      zookeeperServiceProvider.startLocalZookeeperIfNeeded();
     }
   }
 
