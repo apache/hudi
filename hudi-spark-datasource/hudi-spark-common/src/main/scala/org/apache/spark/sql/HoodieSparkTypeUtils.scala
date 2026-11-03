@@ -18,7 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.sql.catalyst.expressions.Cast
-import org.apache.spark.sql.types.{DataType, DecimalType, DoubleType, FloatType, LongType, NumericType, StringType, TimestampType}
+import org.apache.spark.sql.types.{BooleanType, DataType, DecimalType, DoubleType, FloatType, LongType, NumericType, StringType, TimestampType}
 
 // TODO unify w/ DataTypeUtils
 object HoodieSparkTypeUtils {
@@ -40,6 +40,13 @@ object HoodieSparkTypeUtils {
       //       lexicographically)
       case (StringType, _: NumericType) => false
       case (_: NumericType, StringType) => false
+      // NOTE: Timestamps format in the session time zone, so local time repeats across a DST
+      //       fall-back (for ex, 01:30 EDT is followed by 01:10 EST) and the strings re-order
+      case (TimestampType, StringType) => false
+      // NOTE: Casting to boolean maps every non-zero (or "true"-like) value to true, so it is not
+      //       monotonic (for ex, min -5 and max 5 both cast to true while 0 casts to false)
+      case (BooleanType, BooleanType) => true
+      case (_, BooleanType) => false
       // NOTE: Cast.canUpCast rejects decimal to float/double as lossy, but rounding is monotonic
       //       and every decimal fits within float range. Spark's type coercion inserts this cast
       //       when a decimal column is compared with a float/double (for ex, `price > 99.5D`)

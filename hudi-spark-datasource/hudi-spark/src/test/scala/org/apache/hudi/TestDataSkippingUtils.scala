@@ -33,8 +33,8 @@ import org.apache.spark.sql.functions.{col, date_format, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -121,6 +121,26 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     val rows: Seq[String] = applyFilterExpr(resolvedFilterExpr, input)
 
     assertEquals(expectedOutput, rows)
+  }
+
+  @Test
+  def testTimestampToStringCastAcrossDstFallBack(): Unit = {
+    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "America/New_York")
+    try {
+      // 05:30Z formats as 01:30 EDT but the later 06:10Z formats as 01:10 EST, so the string max
+      // is smaller than the min. Re-applying the cast over min/max stats would wrongly prune
+      // file_1 even though its 01:30 row matches; must fall back to always-true, keeping the file
+      val input = Seq(
+        IndexRow("file_1", valueCount = 2,
+          C_minValue = new Timestamp(1793511000000L), // 2026-11-01 05:30Z
+          C_maxValue = new Timestamp(1793513400000L), // 2026-11-01 06:10Z
+          C_nullCount = 0))
+      val resolvedFilterExpr = resolveExpr(spark, "CAST(C AS STRING) > '2026-11-01 01:20:00'", sourceTableSchema)
+
+      assertEquals(Seq("file_1"), applyFilterExpr(resolvedFilterExpr, input))
+    } finally {
+      spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+    }
   }
 
   @ParameterizedTest
@@ -783,6 +803,15 @@ object TestDataSkippingUtils {
           IndexRow("file_2", valueCount = 3, A_minValue = 1, A_maxValue = 4294967297L, A_nullCount = 0)
         ),
         Seq("file_1", "file_2")),
+      // Casting to boolean is A != 0, so min -5 and max 5 both cast to true; re-applying the cast
+      // over min/max stats would wrongly prune file_1 even though its 0 row matches. Must fall
+      // back to always-true, keeping the file
+      arguments(
+        "CAST(A AS BOOLEAN) = false",
+        Seq(
+          IndexRow("file_1", valueCount = 3, A_minValue = -5, A_maxValue = 5, A_nullCount = 0)
+        ),
+        Seq("file_1")),
       // A widening (up) cast still translates and prunes
       arguments(
         "CAST(A AS DOUBLE) > 100.0D",

@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.types.{ByteType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
+import org.apache.spark.sql.types.{BooleanType, ByteType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -37,6 +37,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val longAttr = AttributeReference("l", LongType)()
   private val decAttr = AttributeReference("dec", DecimalType(10, 2))()
   private val tsAttr = AttributeReference("ts", TimestampType)()
+  private val boolAttr = AttributeReference("b", BooleanType)()
 
   private def matched(expr: Expression): Option[AttributeReference] =
     sparkAdapter.getCatalystExpressionUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
@@ -117,6 +118,20 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(None, matched(Cast(tsAttr, ShortType)))
     assertEquals(None, matched(Cast(tsAttr, ByteType)))
     assertEquals(None, matched(Cast(tsAttr, DecimalType(10, 2))))
+  }
+
+  @Test
+  def testTimestampToStringAndCastsToBooleanDoNotPreserveOrdering(): Unit = {
+    // Timestamps format in the session time zone, which repeats local time across a DST fall-back.
+    assertEquals(None, matched(Cast(tsAttr, StringType)))
+    // Casting to boolean collapses every non-zero or "true"-like value to true.
+    assertEquals(None, matched(Cast(intAttr, BooleanType)))
+    assertEquals(None, matched(Cast(dblAttr, BooleanType)))
+    assertEquals(None, matched(Cast(strAttr, BooleanType)))
+    assertEquals(None, matched(Cast(tsAttr, BooleanType)))
+    // Identity boolean cast and boolean to numeric (false < true, 0 < 1) keep the ordering.
+    assertEquals(Some(boolAttr), matched(Cast(boolAttr, BooleanType)))
+    assertEquals(Some(boolAttr), matched(Cast(boolAttr, IntegerType)))
   }
 
   @Test
