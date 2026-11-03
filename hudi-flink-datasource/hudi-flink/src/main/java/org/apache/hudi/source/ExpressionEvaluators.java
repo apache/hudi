@@ -74,9 +74,7 @@ public class ExpressionEvaluators {
     boolean normalized = childExprs.get(0) instanceof FieldReferenceExpression;
 
     if (BuiltInFunctionDefinitions.NOT.equals(funDef)) {
-      Not evaluator = Not.getInstance();
-      Evaluator childEvaluator = fromExpression((CallExpression) childExprs.get(0));
-      return evaluator.bindEvaluator(childEvaluator);
+      return Not.getInstance();
     }
 
     if (BuiltInFunctionDefinitions.AND.equals(funDef)) {
@@ -457,7 +455,7 @@ public class ExpressionEvaluators {
   // component predicate
 
   /**
-   * To evaluate NOT expr.
+   * Conservatively retain candidates for NOT expressions.
    */
   public static class Not implements Evaluator {
     private static final long serialVersionUID = 1L;
@@ -466,16 +464,10 @@ public class ExpressionEvaluators {
       return new Not();
     }
 
-    private Evaluator evaluator;
-
     @Override
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
-      return !this.evaluator.eval(columnStatsMap);
-    }
-
-    public Evaluator bindEvaluator(Evaluator evaluator) {
-      this.evaluator = evaluator;
-      return this;
+      // The child may match some rows without matching all rows, so its result cannot be negated.
+      return true;
     }
   }
 
