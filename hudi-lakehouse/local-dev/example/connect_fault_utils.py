@@ -43,6 +43,15 @@ def readback(uri, driver, table, deadline):
     A separate process owns the native ADBC handles. Killing it does not prove
     that its read-only Spark query stopped; never use this helper for writes.
     """
+    return _observe(uri, driver, table, deadline, 'rows')
+
+
+def read_timeline(uri, driver, table, deadline):
+    """Read the test table's active timeline within the same deadline."""
+    return _observe(uri, driver, table, deadline, 'timeline')
+
+
+def _observe(uri, driver, table, deadline, operation):
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise TimeoutError('readback deadline expired')
@@ -57,7 +66,7 @@ def readback(uri, driver, table, deadline):
             raise TimeoutError('readback deadline expired')
         try:
             output, error = process.communicate(
-                json.dumps({'uri': uri, 'driver': driver, 'table': table}),
+                json.dumps({'uri': uri, 'driver': driver, 'table': table, 'operation': operation}),
                 timeout=remaining,
             )
         except subprocess.TimeoutExpired as exc:
@@ -85,8 +94,16 @@ def main():
     with dbapi.connect(driver=args['driver'], db_kwargs={'uri': args['uri']}, autocommit=True) as conn:
         with conn.cursor() as cursor:
             cursor.execute(f'REFRESH TABLE {table}')
-            cursor.execute(f'SELECT COUNT(*), SUM(id) FROM {table}')
-            result = cursor.fetchall()[0]
+            if args['operation'] == 'rows':
+                cursor.execute(f'SELECT COUNT(*), SUM(id) FROM {table}')
+                result = cursor.fetchall()[0]
+            elif args['operation'] == 'timeline':
+                cursor.execute(f"SELECT timestamp, action, state FROM hudi_query_timeline('{table}', 'false')")
+                timeline = cursor.fetchall()
+                cursor.execute(f"CALL show_rollbacks(table => '{table}')")
+                result = (timeline, cursor.fetchall())
+            else:
+                raise ValueError('invalid observation operation')
     print(json.dumps(result), flush=True)
 
 

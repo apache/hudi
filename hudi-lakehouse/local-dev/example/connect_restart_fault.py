@@ -41,6 +41,16 @@ def connect_ready(connect, port):
         return connection, cursor
 
 
+def connect(port, driver):
+    uri = f"spark://127.0.0.1:{port}?api=connect&auth_type=none&tls=false"
+    return dbapi.connect(driver=driver, db_kwargs={"uri": uri}, autocommit=True)
+
+
+def writer_command(uri, table, driver):
+    source = """from adbc_driver_manager import dbapi\nimport sys\nwith dbapi.connect(driver=sys.argv[3],db_kwargs={"uri":sys.argv[1]},autocommit=True) as c,c.cursor() as q:\n q.execute(f"INSERT INTO {sys.argv[2]} SELECT CAST(id AS INT) AS id, CAST(id AS BIGINT) AS ts FROM range(100000)")\n"""
+    return [sys.executable, "-c", source, uri, table, driver]
+
+
 def main():
     p = argparse.ArgumentParser(
         description="Interrupt a disposable Connect deployment at a Hudi commit stage."
@@ -63,6 +73,7 @@ def main():
     )
     p.add_argument("--namespace", default="hudi-lakehouse")
     p.add_argument("--deployment", default="hudi-spark-connect")
+    p.add_argument("--driver", default="spark")
     a = p.parse_args()
     if not (
         1 <= a.port <= 65535
@@ -80,11 +91,6 @@ def main():
     def uri(port):
         return f"spark://127.0.0.1:{port}?api=connect&auth_type=none&tls=false"
 
-    def connect(port):
-        return dbapi.connect(
-            driver="spark", db_kwargs={"uri": uri(port)}, autocommit=True
-        )
-
     def kubectl(*a):
         return subprocess.run(
             ["kubectl", "-n", ns, *a],
@@ -94,7 +100,7 @@ def main():
             timeout=360,
         ).stdout
 
-    with connect(a.port) as c, c.cursor() as q:
+    with connect(a.port, a.driver) as c, c.cursor() as q:
         q.execute("CREATE DATABASE " + db)
         q.execute(
             f"CREATE TABLE {table} (id INT, ts BIGINT) USING hudi TBLPROPERTIES(type='cow',primaryKey='id',preCombineField='ts')"
@@ -131,9 +137,8 @@ def main():
 
     threading.Thread(target=readlogs, daemon=True).start()
     time.sleep(2)
-    source = """from adbc_driver_manager import dbapi\nimport sys\nwith dbapi.connect(driver="spark",db_kwargs={"uri":sys.argv[1]},autocommit=True) as c,c.cursor() as q:\n q.execute(f"INSERT INTO {sys.argv[2]} SELECT CAST(id AS INT) AS id, CAST(id AS BIGINT) AS ts FROM range(100000)")\n"""
     writer = subprocess.Popen(
-        [sys.executable, "-c", source, uri(a.port), table],
+        writer_command(uri(a.port), table, a.driver),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -194,7 +199,7 @@ def main():
                 if fwd.poll() is not None:
                     raise RuntimeError("reconnect port-forward exited; preserve " + db)
                 try:
-                    c, q = connect_ready(connect, a.reconnect_port)
+                    c, q = connect_ready(lambda port: connect(port, a.driver), a.reconnect_port)
                     break
                 except Exception:
                     time.sleep(2)

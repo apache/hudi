@@ -231,7 +231,10 @@ kubectl -n hudi-lakehouse port-forward svc/hudi-spark-connect 15002:15002
 
 ADBC requires `api=connect`; its default is Thrift. In-cluster clients can use
 `hudi-spark-connect.hudi-lakehouse.svc:15002` without port-forwarding.
-The ADBC driver is installed on the client, not the server.
+The ADBC driver is installed on the client, not the server. Foundry Spark 0.2.1
+was tested with `dbc` in Linux containers and with an existing macOS ARM64 driver
+installation. Fresh macOS installation has not been verified; use a Linux client
+if `dbc` cannot find a package for your platform.
 
 For the CRUD and restart test, prepare a Python 3.11 environment:
 
@@ -458,8 +461,12 @@ python hudi-lakehouse/local-dev/example/connect_cancel.py --port 15002 --rows 20
 ```
 
 The observer refreshes the table while looking for the complete expected commit;
-if it cannot determine the outcome, the script leaves the unique table and
-database for inspection after server-side work stops.
+if the client reports an error and no rows are visible, it also checks the Hudi
+timeline. A completed rollback identifying the sole write instant, with no write
+instant remaining and no rows visible, is reported as an observation. It does not
+prove server-side work has stopped; the test resources are retained.
+An empty or pending timeline remains inconclusive. Wait for server-side work to
+stop before manually cleaning up retained resources.
 
 To test driver interruption at Hudi timeline stages, start a localhost
 port-forward on 15039 to a **disposable, idle** deployment, then run one stage
@@ -508,6 +515,11 @@ continues to use TCP so the driver can initialize before the SQL probe runs.
 Readiness checks SQL execution, catalog discovery and an actual table-data query
 in sequence. A missing or empty probe table makes the pod unready; provision it
 before enabling the option. Checks run every 30 seconds with a 30-second timeout.
+The table read needs a Spark task slot: a long query that occupies all slots can
+make this single-replica service unready and reject new clients. The probe process
+terminates after 25 seconds, but its Spark job may continue. Repeated timed-out
+probes can accumulate server-side queries. Leave SQL readiness disabled if this
+risk is unacceptable; the default TCP probe does not run a Spark query.
 In the local kind executor test, the probe passed against a pre-populated Hudi
 probe table; changing the configured column to a nonexistent name made the pod
 unready. Caching and catalog configuration can affect which backing services a
@@ -563,8 +575,9 @@ client-request-to-job-to-commit identifier or complete trace correlation.
 ### Client-disconnect experiment
 
 For cancellation, disconnect and lost-response experiments, `--wait` bounds
-readback only; process cleanup can take four additional seconds. Expiry is
-inconclusive and retains test data; it does not prove the server query stopped.
+readback and timeline observation only; process cleanup can take four additional
+seconds. Expiry is inconclusive and retains test data; it does not prove the
+server query stopped.
 
 On a disposable endpoint, the following creates a unique database and terminates
 its own ADBC client during an INSERT. It does not retry the write:
@@ -617,12 +630,14 @@ python hudi-lakehouse/local-dev/example/connect_load.py \
 ```
 
 In a local Spark 4.1.3/Hudi 1.2.0 test with a 2 GiB driver heap,
-`spark.connect.grpc.arrow.maxBatchSize=1m`, Foundry 0.2.1 and Python 3.11 on
-macOS, one million rows each containing an int64 ID and 64-byte ASCII payload
+`spark.connect.grpc.arrow.maxBatchSize=1m`, Foundry 0.2.1 and Python 3.11,
+one million rows each containing an int64 ID and 64-byte ASCII payload
 passed count and checksum validation using `fetchmany(10000)`. Client peak RSS
-was about 170 MiB; a sampled Spark container value was 2.15 GiB, not a peak.
+was about 170 MiB (the original client OS and driver installation were not
+recorded); a sampled Spark container value was 2.15 GiB, not a peak.
 The standalone container had a 10.2 GiB memory limit; this run does not establish
-behaviour under the chart's 3 GiB pod limit. A single 5,000,000-byte string row
+behaviour under the chart's default 4 GiB or local-dev 3 GiB pod limit. A single
+5,000,000-byte string row
 failed with Foundry's 4,194,304-byte gRPC receive limit despite the 1 MiB Arrow
 batch setting. These are observations, not total-result or memory guarantees.
 
@@ -632,28 +647,15 @@ structs and Hudi commit/key metadata columns. A direct SQL array result does not
 establish that Hudi/Parquet can write arrays with NULL elements. In a separate
 local CoW table test, an array containing NULL failed during Hudi write; the
 server log reported Parquet Avro's old-list-structure null-element restriction.
-Setting `spark.hadoop.parquet.avro.write-old-list-structure=false` in the SQL
-session did not resolve the failure. Supplying the same property at driver startup
-allowed a local CoW INSERT containing `[1, NULL, 3]` to succeed and read back
-correctly. In Helm, add the following under `spark.extraConf` before restarting
-the endpoint; test the resulting Parquet representation with your readers:
-
-```yaml
-spark:
-  extraConf:
-    spark.hadoop.parquet.avro.write-old-list-structure: "false"
-```
-
-The opt-in check below creates and removes a unique database and table. It
-requires a disposable endpoint with that startup configuration and a localhost
-port-forward:
+This is a known Hudi write limitation tracked in [#20505](https://github.com/apache/hudi/issues/20505).
+The opt-in reproducer creates a unique database and table on a disposable endpoint:
 
 ```bash
 python hudi-lakehouse/local-dev/example/connect_nullable_array.py --port 15002
 ```
 
-The write and readback also passed against the Helm deployment with MinIO and HMS.
-This is a Parquet write configuration finding, not a Connect transport failure.
+The default configuration is expected to fail; wait for server-side work to stop
+before cleaning up the printed test resources.
 With a UTC Spark session, Mac clients launched with `TZ=UTC` and
 `TZ=America/Los_Angeles` both returned the timestamp with UTC zone information
 and the timestamp_ntz without a zone, preserving microseconds. Other server and

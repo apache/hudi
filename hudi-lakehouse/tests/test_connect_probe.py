@@ -17,8 +17,12 @@ import argparse
 import contextlib
 import importlib.util
 import io
+import os
 import pathlib
+import signal
+import subprocess
 import sys
+import tempfile
 import types
 import unittest
 from unittest.mock import MagicMock, patch
@@ -57,6 +61,19 @@ class ProbeTest(unittest.TestCase):
     def test_identifier_validation(self):
         with self.assertRaises(argparse.ArgumentTypeError):
             self.probe.identifier('orders;DROP TABLE')
+
+    def test_deadline_terminates_blocked_probe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package = pathlib.Path(directory) / 'pyspark'
+            package.mkdir()
+            (package / '__init__.py').write_text('')
+            (package / 'sql.py').write_text('import time; time.sleep(60)')
+            code = ("import runpy, signal; original = signal.alarm; "
+                    "signal.alarm = lambda _: original(1); "
+                    f"runpy.run_path({str(SCRIPT)!r}, run_name='__main__')")
+            result = subprocess.run([sys.executable, '-c', code],
+                                    env={**os.environ, 'PYTHONPATH': directory}, timeout=5)
+            self.assertEqual(result.returncode, -signal.SIGALRM)
 
 
 if __name__ == '__main__':

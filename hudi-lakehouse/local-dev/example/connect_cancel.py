@@ -20,13 +20,24 @@ import threading
 import time
 import uuid
 
-from connect_fault_utils import readback
+from connect_fault_utils import readback, read_timeline
 
 
 def connect(port, driver):
     from adbc_driver_manager import dbapi
     uri = f'spark://127.0.0.1:{port}?api=connect&auth_type=none&tls=false'
     return dbapi.connect(driver=driver, db_kwargs={'uri': uri}, autocommit=True)
+
+
+def rolled_back_write(timeline, rollbacks):
+    """Identify the sole rolled-back write in the isolated one-write table."""
+    if any(str(action).lower() in ('commit', 'deltacommit', 'replacecommit')
+           for _, action, _ in timeline):
+        return None
+    completed = {str(timestamp) for timestamp, action, state in timeline
+                 if str(action).lower() == 'rollback' and str(state).upper() == 'COMPLETED'}
+    targets = {str(row[1]) for row in rollbacks if str(row[0]) in completed and row[1]}
+    return next(iter(targets)) if len(targets) == 1 else None
 
 
 def main():
@@ -80,11 +91,10 @@ def main():
                 os._exit(2)
             print(f'Client write result: {outcome}', flush=True)
             deadline = time.monotonic() + args.wait
+            uri = f'spark://127.0.0.1:{args.port}?api=connect&auth_type=none&tls=false'
             while time.monotonic() < deadline:
                 try:
-                    count, total = readback(
-                        f'spark://127.0.0.1:{args.port}?api=connect&auth_type=none&tls=false',
-                        args.driver, table, deadline)
+                    count, total = readback(uri, args.driver, table, deadline)
                 except TimeoutError:
                     print('INCONCLUSIVE: readback deadline expired; preserve test data', flush=True)
                     return 2
@@ -99,6 +109,22 @@ def main():
                     created = False
                     print('PASS: owned test data cleaned', flush=True)
                     return 0
+                if count == 0 and outcome and outcome[0] != 'success':
+                    try:
+                        timeline, rollbacks = read_timeline(uri, args.driver, table, deadline)
+                    except TimeoutError:
+                        print('INCONCLUSIVE: timeline deadline expired; preserve test data', flush=True)
+                        return 2
+                    except Exception as exc:
+                        print(f'Timeline not yet available: {type(exc).__name__}', flush=True)
+                    else:
+                        instant = rolled_back_write(timeline, rollbacks)
+                        if instant:
+                            print(f'OBSERVED: write instant {instant} rolled back; 0 rows visible. '
+                                  'Server-side work may still be running; preserve test data', flush=True)
+                            return 0
+                        print(f'OBSERVED: no visible rows; timeline={timeline} '
+                              '(write outcome remains inconclusive)', flush=True)
                 time.sleep(min(2, max(0, deadline - time.monotonic())))
             print('INCONCLUSIVE: complete commit was not observed; outcome may still change', flush=True)
             return 2
