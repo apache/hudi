@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.functions.{col, date_format, lower, upper}
+import org.apache.spark.sql.functions.{col, date_format, lit, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
@@ -95,7 +95,8 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     "testAdvancedLookupFilterExpressionsSource",
     "testCompositeFilterExpressionsSource",
     "testSupportedAndUnsupportedDataSkippingColumnsSource",
-    "testNonOrderPreservingTransformationsSource"
+    "testNonOrderPreservingTransformationsSource",
+    "testNegativeFactorSource"
   ))
   def testLookupFilterExpressions(sourceFilterExprStr: String, input: Seq[IndexRow], expectedOutput: Seq[String]): Unit = {
     // We have to fix the timezone to make sure all date-bound utilities output
@@ -335,7 +336,18 @@ object TestDataSkippingUtils {
             C_maxValue = new Timestamp(1648785048000L), // 04/01/2022
             C_nullCount = 0)
         ),
-        Seq("file_2"))
+        Seq("file_2")),
+      arguments(
+        // An infinite factor turns the zero min into NaN (0 * Infinity), which sorts above every
+        // number, so the translated bound A_minValue * Infinity <= Infinity is false and would
+        // wrongly prune file_1, although A = 1 gives Infinity <= Infinity. Built with lit() since
+        // SQL has no infinite double literal. Must fall back to always-true, keeping the file
+        sparkAdapter.getExpressionFromColumn(
+          col("A").cast(DoubleType) * lit(Double.PositiveInfinity) <= lit(Double.PositiveInfinity)),
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0)
+        ),
+        Seq("file_1"))
     )
   }
 
@@ -573,6 +585,51 @@ object TestDataSkippingUtils {
           IndexRow("file_4", valueCount = 1, B_minValue = "aaa", B_maxValue = "xyz", B_nullCount = 0) // might contain B = 'abc'
         ),
         Seq("file_1", "file_2", "file_3", "file_4"))
+    )
+  }
+
+  def testNegativeFactorSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      // Multiplying by a negative constant reverses ordering: the translated bound
+      // A_minValue * -1.0 < 5.0 is 10 < 5 and would wrongly prune file_1, although A = 0 gives
+      // 0 < 5. Must fall back to always-true, keeping the file
+      arguments(
+        "CAST(A AS DOUBLE) * -1.0D < 5.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = -10, A_maxValue = 0, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Dividing by a negative constant reverses ordering the same way
+      arguments(
+        "CAST(A AS DOUBLE) / -2.0D < 5.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = -20, A_maxValue = 0, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Adding a term that references the column can carry a negative factor past the Multiply
+      // check: A + A * -2 = -A, so the translated bound A_minValue + A_minValue * -2 < -5 is
+      // 0 < -5 and would wrongly prune file_1, although A = 10 gives -10 < -5
+      arguments(
+        "A + A * -2 < -5",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 10, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Multiplying and dividing by a positive constant still translate and prune
+      arguments(
+        "CAST(A AS DOUBLE) * 2.0D < 5.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 3, A_maxValue = 4, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        "CAST(A AS DOUBLE) / 2.0D > 50.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 
