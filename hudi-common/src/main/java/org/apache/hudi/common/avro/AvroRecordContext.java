@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieException;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
@@ -71,6 +72,19 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   public static Object getFieldValueFromIndexedRecord(
       IndexedRecord record,
       String fieldName) {
+    return getFieldValueFromIndexedRecord(record, fieldName, false);
+  }
+
+  /**
+   * Gets the value of a (nested) field from the record.
+   *
+   * @param normalizeLogicalTypes whether to normalize the value of a field with an Avro logical type through
+   *                              {@link HoodieAvroUtils#convertValueForAvroLogicalTypes}
+   */
+  private static Object getFieldValueFromIndexedRecord(
+      IndexedRecord record,
+      String fieldName,
+      boolean normalizeLogicalTypes) {
     // Interning returns the canonical wrapper for this schema, whose lazily built field list and
     // field map survive across calls, so the per-record cost is a cache hit instead of an
     // O(schema width) wrapper rebuild.
@@ -94,7 +108,15 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
       HoodieSchemaField field = fieldOpt.get();
       Object value = currentRecord.get(field.pos());
       if (i == path.length - 1) {
-        return value;
+        if (value == null || !normalizeLogicalTypes) {
+          return value;
+        }
+        // Runs once per merged record: unwrap the nullable union without allocating, and skip
+        // fields without a logical type, the common case for ordering fields.
+        Schema leafSchema = HoodieAvroUtils.unwrapNullable(field.schema().toAvroSchema());
+        return leafSchema.getLogicalType() == null
+            ? value
+            : HoodieAvroUtils.convertValueForAvroLogicalTypes(leafSchema, value, false);
       }
       currentSchema = field.schema();
       currentRecord = value instanceof IndexedRecord ? (IndexedRecord) value : null;
@@ -105,6 +127,22 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public Object getValue(IndexedRecord record, HoodieSchema schema, String fieldName) {
     return getFieldValueFromIndexedRecord(record, fieldName);
+  }
+
+  /**
+   * Returns the ordering field value in the form {@link HoodieAvroIndexedRecord#getOrderingValue} produces for the
+   * same field, i.e., with Avro logical types normalized through
+   * {@link HoodieAvroUtils#convertValueForAvroLogicalTypes}: {@code date} as {@link java.time.LocalDate},
+   * {@code timestamp-*} as epoch {@link Long}, {@code decimal} as {@link java.math.BigDecimal}.
+   *
+   * <p>Without the normalization, the raw value of a record read from a base or log file, e.g., an {@link Integer}
+   * for a {@code date} field or an {@link java.time.Instant} for a {@code timestamp-micros} field when the Avro
+   * reader materializes logical types, is not comparable with the ordering value of an incoming record
+   * from the write path, which fails the merge with a {@link ClassCastException}.
+   */
+  @Override
+  protected Object getOrderingFieldValue(IndexedRecord record, HoodieSchema schema, String fieldName) {
+    return getFieldValueFromIndexedRecord(record, fieldName, true);
   }
 
   @Override

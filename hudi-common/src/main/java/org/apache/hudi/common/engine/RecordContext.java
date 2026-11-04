@@ -359,10 +359,28 @@ public abstract class RecordContext<T> implements Serializable {
     }
 
     return OrderingValues.create(orderingFieldNames, field -> {
-      Object value = getValue(record, schema, field);
+      Object value = getOrderingFieldValue(record, schema, field);
       // API getDefaultOrderingValue is only used inside Comparables constructor
       return value != null ? ensureComparability(value) : OrderingValues.getDefault();
     });
+  }
+
+  /**
+   * Gets the value of an ordering field from an engine record, before {@link #ensureComparability} is applied.
+   *
+   * <p>The value has to be in the same form as the ordering value that {@link HoodieRecord#getOrderingValue}
+   * returns for the same field, because the file group reader compares the ordering values of engine records,
+   * e.g., read from base files and log files, against the ordering values of incoming {@link HoodieRecord}s.
+   * By default, it is the field value as returned by {@link #getValue}.
+   *
+   * @param record    The record in engine-specific type.
+   * @param schema    The HoodieSchema of the record.
+   * @param fieldName The name of the ordering field.
+   *
+   * @return The ordering field value, or null if the field is absent or null.
+   */
+  protected Object getOrderingFieldValue(T record, HoodieSchema schema, String fieldName) {
+    return getValue(record, schema, fieldName);
   }
 
   /**
@@ -407,7 +425,7 @@ public abstract class RecordContext<T> implements Serializable {
     }
 
     return OrderingValues.create(orderingFieldNames, field -> {
-      Object value = getValue(record, schema, field);
+      Object value = getOrderingFieldValue(record, schema, field);
       // API getDefaultOrderingValue is only used inside Comparables constructor
       return value != null ? ensureComparability(value) : OrderingValues.getDefault();
     });
