@@ -19,7 +19,7 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1, HoodieSchemaConversionUtils, HoodieSparkUtils, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1, HoodieSchemaConversionUtils, HoodieSparkUtils, IncrementalRelationV1, MergeOnReadIncrementalRelationV1, SparkAdapterSupport}
 import org.apache.hudi.DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT
 import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
@@ -58,6 +58,11 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   private lazy val enableFileGroupReader = SparkConfigUtils
     .getStringWithAltKeys(parameters, HoodieReaderConfig.FILE_GROUP_READER_ENABLED).toBoolean
 
+
+  // Capture flow-scoped SQLConf once; explicit reader options take precedence.
+  private val failOnDataLoss = DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, parameters)
+    .get(DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.key())
+    .map(_.toBoolean).getOrElse(DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.defaultValue())
 
   private lazy val tableType = metaClient.getTableType
 
@@ -137,6 +142,11 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
     var startOffset = start.map(HoodieSourceOffset(_))
       .getOrElse(initialOffsets)
     var endOffset = HoodieSourceOffset(end)
+
+    if (!isCDCQuery && failOnDataLoss) {
+      HoodieStreamingSourceSafety.validate(metaClient, startOffset.offsetCommitTime,
+        endOffset.offsetCommitTime, completionTime = hollowCommitHandlingMode == USE_TRANSITION_TIME, resumed = start.isDefined)
+    }
 
     // We update the offsets here since until this point the latest offsets have been
     // calculated no matter if it is in the expected version.
