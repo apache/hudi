@@ -17,10 +17,9 @@
 
 package org.apache.spark.sql
 
-import org.apache.spark.sql.HoodieSparkTypeUtils.isCastPreservingOrdering
-import org.apache.spark.sql.catalyst.expressions.{Add, Attribute, AttributeReference, AttributeSet, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, Literal, Log, Log10, Log1p, Log2, Multiply, PredicateHelper, ShiftLeft, ShiftRight, ToUnixTimestamp, ToUTCTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeSet, Cast, Expression, PredicateHelper}
 import org.apache.spark.sql.execution.datasources.DataSourceStrategy
-import org.apache.spark.sql.types.{DataType, Decimal}
+import org.apache.spark.sql.types.DataType
 
 /**
  * Base implementation of [[HoodieCatalystExpressionUtils]] carrying the method bodies that are
@@ -39,13 +38,6 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
     super[PredicateHelper].extractPredicatesWithinOutputSet(condition, outputSet)
   }
 
-  override def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference] = {
-    expr match {
-      case OrderPreservingTransformation(attrRef) => Some(attrRef)
-      case _ => None
-    }
-  }
-
   def canUpCast(fromType: DataType, toType: DataType): Boolean =
     Cast.canUpCast(fromType, toType)
 
@@ -53,86 +45,10 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
    * Matches order-preserving date/time parsing expressions whose case-class shapes differ across
    * Spark versions (currently [[org.apache.spark.sql.catalyst.expressions.ParseToDate]] and
    * [[org.apache.spark.sql.catalyst.expressions.ParseToTimestamp]]), returning the source child
-   * expression that the order-preserving transformation matching should recurse into
+   * expression that data skipping's `DateTimeFormatRule` recurses into
    */
   protected def unapplyOrderPreservingDateParsing(expr: Expression): Option[Expression]
 
   override def unapplyDateParsingChild(expr: Expression): Option[Expression] =
     unapplyOrderPreservingDateParsing(expr)
-
-  private object OrderPreservingTransformation {
-    def unapply(expr: Expression): Option[AttributeReference] = {
-      expr match {
-        // Date/Time Expressions
-        case DateFormatClass(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
-        case DateAdd(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case DateSub(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        // NOTE: DateDiff(end, start) is end - start, so it reverses the ordering of its start date,
-        //       which hence must not be matched
-        case DateDiff(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case FromUnixTime(OrderPreservingTransformation(attrRef), _, _) => Some(attrRef)
-        case FromUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case ToUnixTimestamp(OrderPreservingTransformation(attrRef), _, _, _) => Some(attrRef)
-        case ToUTCTimestamp(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-
-        // String Expressions
-        // NOTE: Lower/Upper are not matched: case folding does not preserve the binary ordering
-        //       of strings (for ex, "Zebra" < "apple", but lower("Zebra") = "zebra" > "apple")
-        // Left API change: Improve RuntimeReplaceable
-        // https://issues.apache.org/jira/browse/SPARK-38240
-        case org.apache.spark.sql.catalyst.expressions.Left(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-
-        // Math Expressions
-        // Binary
-        // NOTE: The other operand must be a constant. Referencing the column could reverse the
-        //       ordering (for ex, A + A * -2 = -A), and a non-deterministic operand is re-evaluated
-        //       against the min/max bounds (for ex, A + rand())
-        case Add(OrderPreservingTransformation(attrRef), other, _) if other.foldable => Some(attrRef)
-        case Add(other, OrderPreservingTransformation(attrRef), _) if other.foldable => Some(attrRef)
-        case Multiply(OrderPreservingTransformation(attrRef), factor, _) if isPositiveNumericLiteral(factor) => Some(attrRef)
-        case Multiply(factor, OrderPreservingTransformation(attrRef), _) if isPositiveNumericLiteral(factor) => Some(attrRef)
-        case Divide(OrderPreservingTransformation(attrRef), divisor, _) if isPositiveNumericLiteral(divisor) => Some(attrRef)
-        case BitwiseOr(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case BitwiseOr(_, OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        // Unary
-        case Exp(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case Expm1(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case Log(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case Log10(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case Log1p(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case Log2(OrderPreservingTransformation(attrRef)) => Some(attrRef)
-        case ShiftLeft(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-        case ShiftRight(OrderPreservingTransformation(attrRef), _) => Some(attrRef)
-
-        // Other
-        case cast @ Cast(OrderPreservingTransformation(attrRef), _, _, _)
-          if isCastPreservingOrdering(cast.child.dataType, cast.dataType) => Some(attrRef)
-
-        // Identity transformation
-        case attrRef: AttributeReference => Some(attrRef)
-        // Date/time parsing expressions whose shapes are Spark-version-specific
-        case _ => unapplyOrderPreservingDateParsing(expr) match {
-          case Some(child) => unapply(child)
-          case None => None
-        }
-      }
-    }
-
-    // Negative factors reverse the ordering and zero collapses it. Infinite factors can yield NaN
-    // (0 * Infinity, Infinity / Infinity), which sorts above every number. Non-literal factors are
-    // not matched since the optimizer folds constant factors to literals before data skipping runs
-    private def isPositiveNumericLiteral(expr: Expression): Boolean = expr match {
-      case Literal(value, _) => value match {
-        case b: Byte => b > 0
-        case s: Short => s > 0
-        case i: Int => i > 0
-        case l: Long => l > 0
-        case f: Float => f > 0 && !f.isInfinite
-        case d: Double => d > 0 && !d.isInfinite
-        case dec: Decimal => dec.toBigDecimal.signum > 0
-        case _ => false
-      }
-      case _ => false
-    }
-  }
 }

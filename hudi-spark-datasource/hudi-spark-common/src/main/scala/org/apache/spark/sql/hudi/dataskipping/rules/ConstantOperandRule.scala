@@ -71,7 +71,6 @@ object ConstantOperandRule extends RangeRule {
 
   private def when(guard: Boolean)(step: => Step): Option[Step] = if (guard) Some(step) else None
 
-  // Copy of BaseHoodieCatalystExpressionUtils' private helper (kept there for OrderPreservingTransformation).
   // Negative factors reverse the ordering and zero collapses it. Infinite factors can yield NaN
   // (0 * Infinity, Infinity / Infinity), which sorts above every number. Non-literal factors are
   // not matched since the optimizer folds constant factors to literals before data skipping runs

@@ -86,7 +86,7 @@ case class Step(term: Expression,
 /**
  * A family of functions sharing one guard. Not sealed: families live one per file under `rules`.
  *
- * `steps` returns every step whose guard holds, in today's matcher order; usually zero or one, two
+ * `steps` returns every step whose guard holds, in operand order; usually zero or one, two
  * for operators accepted on either side (for ex, `a | 1` and `1 | a`). The first whose child derives
  * a range wins, as in a Scala match falling through to its next case.
  */

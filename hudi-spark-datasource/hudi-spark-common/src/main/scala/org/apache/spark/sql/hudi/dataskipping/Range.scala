@@ -74,11 +74,10 @@ object Range {
       RangeRules.of(term).view.flatMap(step => viaRules(step.child, source).map(step.apply)).headOption)
 
   /**
-   * Behavior parity with today's `swapAttributeRefInExpr`, which re-binds EVERY reference to the
-   * column, including ones in operands off the rule chain (for ex, the days operand of
-   * `date_add(d, dayofmonth(d))`). A [[Step]] only rebuilds its chain slot, so the leftover
-   * references are re-bound to the same bound here. Such terms are not order-preserving in general;
-   * kept as is so the output stays identical.
+   * Re-binds EVERY reference to the column, including ones in operands off the rule chain (for ex,
+   * the days operand of `date_add(d, dayofmonth(d))`), matching the pre-stage translator. A [[Step]]
+   * only rebuilds its chain slot, so the leftover references are re-bound to the same bound here.
+   * Such terms are not order-preserving in general; kept as is so the output stays identical.
    */
   private def rebindOffChainReferences(term: Expression, source: RangeSource, r: Range): Range = {
     if (term.references.size != 1) {

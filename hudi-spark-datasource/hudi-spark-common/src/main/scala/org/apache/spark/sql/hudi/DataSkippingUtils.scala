@@ -18,15 +18,12 @@
 package org.apache.spark.sql.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
-import org.apache.hudi.SparkAdapterSupport
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.common.util.ValidationUtils.checkState
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, HoodieCatalystExpressionUtils}
+import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, EqualTo, Expression, ExtractValue, GetStructField, GreaterThan, GreaterThanOrEqual, IsNotNull, IsNull, LessThanOrEqual, Literal, Not, Or, SubqueryExpression}
-import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.sql.catalyst.expressions.{Alias, And, Attribute, AttributeReference, EqualNullSafe, Expression, ExtractValue, GetStructField, IsNotNull, IsNull, Literal, Not, Or, SubqueryExpression}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Compiler}
@@ -34,8 +31,6 @@ import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Compiler}
 import java.util.concurrent.atomic.AtomicBoolean
 
 object DataSkippingUtils extends Logging {
-
-  val LITERAL_TRUE_EXPR = TrueLiteral
 
   /**
    * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index table
@@ -147,41 +142,6 @@ object ColumnStatsExpressionUtils {
   @inline def genColNumNullsExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getNullCountColumnNameFor(colName)))
   @inline def genColValueCountExpr: Expression = sparkAdapter.getExpressionFromColumn(col(getValueCountColumnNameFor))
 
-  @inline def genColumnIsNullExpression(colName: String): Expression = {
-    val numNullsExpr = genColNumNullsExpr(colName)
-    // NOTE: Column Stats Index isn't guaranteed to hold stats for every column of every file: for ex,
-    //       a column added by schema evolution is missing from the stats of the files written before it,
-    //       and columns of types not supported by the index hold no stats at all. In that case the
-    //       null-count is null, meaning we can't tell whether the file holds null values, and therefore
-    //       such file could NOT be pruned
-    Or(IsNull(numNullsExpr), GreaterThan(numNullsExpr, Literal(0)))
-  }
-
-  @inline def genColumnValuesEqualToExpression(colName: String,
-                                               value: Expression,
-                                               targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
-    val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
-    val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
-    // Only case when column C contains value V is when min(C) <= V <= max(c)
-    And(LessThanOrEqual(minValueExpr, value), GreaterThanOrEqual(maxValueExpr, value))
-  }
-
-  def genColumnOnlyValuesEqualToExpression(colName: String,
-                                           value: Expression,
-                                           targetExprBuilder: Function[Expression, Expression] = Predef.identity): Expression = {
-    val minValueExpr = targetExprBuilder.apply(genColMinValueExpr(colName))
-    val maxValueExpr = targetExprBuilder.apply(genColMaxValueExpr(colName))
-    // Only case when column C contains _only_ value V is when min(C) = V AND max(c) = V
-    And(EqualTo(minValueExpr, value), EqualTo(maxValueExpr, value))
-  }
-
-  def swapAttributeRefInExpr(sourceExpr: Expression, from: AttributeReference, to: Expression): Expression = {
-    checkState(sourceExpr.references.size == 1)
-    sourceExpr.transformDown {
-      case attrRef: AttributeReference if attrRef.sameRef(from) => to
-    }
-  }
-
   /**
    * This check is used to validate that the expression that target column is compared against
    * <pre>
@@ -194,38 +154,4 @@ object ColumnStatsExpressionUtils {
    */
   def isValueExpression(expr: Expression): Boolean =
     expr.references.isEmpty && !SubqueryExpression.hasSubquery(expr)
-
-  /**
-   * This utility pattern-matches an expression iff
-   *
-   * <ol>
-   *   <li>It references *exactly* 1 attribute (column)</li>
-   *   <li>It does NOT contain sub-queries</li>
-   *   <li>It contains only whitelisted transformations that preserve ordering of the source column [1]</li>
-   * </ol>
-   *
-   * [1] This is required to make sure that we can correspondingly map Column Stats Index values as well. Applying
-   * transformations that do not preserve the ordering might lead to incorrect results being returned by Data
-   * Skipping flow.
-   *
-   * Returns only [[AttributeReference]] contained as a sub-expression
-   */
-  object AllowedTransformationExpression extends SparkAdapterSupport {
-    val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.getCatalystExpressionUtils
-
-    def unapply(expr: Expression): Option[AttributeReference] = {
-      // First step, we check that expression
-      //    - Does NOT contain sub-queries
-      //    - Does contain exactly 1 attribute
-      if (SubqueryExpression.hasSubquery(expr) || expr.references.size != 1) {
-        None
-      } else {
-        // Second step, we validate that holding expression is an actually permitted
-        // transformation
-        // NOTE: That transformation composition is permitted
-        exprUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
-      }
-    }
-  }
 }
-

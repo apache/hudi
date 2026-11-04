@@ -106,7 +106,7 @@ object Leaf {
   }
 
   /**
-   * Precondition of today's `AllowedTransformationExpression`: no subquery and exactly one column.
+   * A term has no subquery and references exactly one column.
    * Whether the term is an order-preserving function of that column is decided in stage 3.
    */
   private def isTerm(e: Expression): Boolean =
