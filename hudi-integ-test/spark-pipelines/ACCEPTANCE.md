@@ -66,3 +66,8 @@ This scenario uses one writer per target. It does not claim coverage of material
 metadata-writer lifetime, fan-in, chaining, or commit/checkpoint failure injection.
 The generated source, SQL and pipeline specification are retained in the logs as
 runnable examples within the harness's isolated filesystem layout.
+
+## Source reset and expired-history safeguards
+
+See [guarded streaming-table chaining](SOURCE_SAFETY.md) for the opt-in reader
+configuration, recovery contract, and `source_safety_acceptance.py` scenario.

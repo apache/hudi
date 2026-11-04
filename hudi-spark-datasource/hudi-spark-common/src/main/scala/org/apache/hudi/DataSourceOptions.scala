@@ -130,6 +130,19 @@ object DataSourceReadOptions {
       + "completion_time <= END_COMMIT are fetched out. "
       + "Point in time type queries make more sense with begin and end completion times specified.")
 
+  val STREAMING_READ_FAIL_ON_DATA_LOSS: ConfigProperty[Boolean] = ConfigProperty
+    .key("hoodie.datasource.read.streaming.fail.on.data.loss")
+    .defaultValue(false)
+    .sinceVersion("1.3.0")
+    .withDocumentation("Fail latest-state streaming reads with a rebuild-required error when a saved offset "
+      + "is no longer in the active timeline, required history has been cleaned, or a logical overwrite "
+      + "occurs after the offset. Enable for downstream Hudi tables that cannot tolerate resets or replay. "
+      + "Clustering is allowed. This conservative check requires retaining the checkpoint instant in the "
+      + "active timeline; archived offsets require rebuilding the downstream table and checkpoint. "
+      + "Set spark.hoodie.datasource.read.streaming.fail.on.data.loss in the flow SQLConf for SDP graph-internal "
+      + "reads; explicit reader options override this setting when Spark forwards them. The default false "
+      + "preserves existing source behavior. This does not provide hard-delete CDC.")
+
   val STREAMING_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.streaming.table.version")
     .noDefaultValue()
