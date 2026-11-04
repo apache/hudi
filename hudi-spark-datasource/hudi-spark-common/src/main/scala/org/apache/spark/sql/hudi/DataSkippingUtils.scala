@@ -17,14 +17,10 @@
 
 package org.apache.spark.sql.hudi
 
-import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, ExtractValue, GetStructField, SubqueryExpression}
-import org.apache.spark.sql.functions.col
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, ExtractValue, GetStructField}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Compiler}
 
@@ -76,25 +72,4 @@ object DataSkippingUtils extends Logging {
         throw new HoodieAnalysisException(s"convert reference to name failed,  Found unsupported expression ${other}")
     }
   }
-}
-
-object ColumnStatsExpressionUtils {
-
-  @inline def genColMinValueExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getMinColumnNameFor(colName)))
-  @inline def genColMaxValueExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getMaxColumnNameFor(colName)))
-  @inline def genColNumNullsExpr(colName: String): Expression = sparkAdapter.getExpressionFromColumn(col(getNullCountColumnNameFor(colName)))
-  @inline def genColValueCountExpr: Expression = sparkAdapter.getExpressionFromColumn(col(getValueCountColumnNameFor))
-
-  /**
-   * This check is used to validate that the expression that target column is compared against
-   * <pre>
-   *    a) Has no references to other attributes (for ex, columns)
-   *    b) Does not contain sub-queries
-   * </pre>
-   *
-   * This in turn allows us to be certain that Spark will be able to evaluate such expression
-   * against Column Stats Index as well
-   */
-  def isValueExpression(expr: Expression): Boolean =
-    expr.references.isEmpty && !SubqueryExpression.hasSubquery(expr)
 }

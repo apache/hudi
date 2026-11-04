@@ -17,8 +17,11 @@
 
 package org.apache.spark.sql.hudi.dataskipping
 
+import org.apache.hudi.ColumnStatsIndexSupport.{getMaxColumnNameFor, getMinColumnNameFor, getNullCountColumnNameFor, getValueCountColumnNameFor}
+import org.apache.hudi.SparkAdapterSupport.sparkAdapter
+
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression}
-import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.{genColMaxValueExpr, genColMinValueExpr, genColNumNullsExpr, genColValueCountExpr}
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.getTargetIndexedColumnName
 
 /**
@@ -51,13 +54,16 @@ case class ColumnStatsSource(indexedCols: Seq[String]) extends RangeSource {
     case column: AttributeReference =>
       getTargetIndexedColumnName(column, indexedCols).map { colName =>
         Range(
-          lo = genColMinValueExpr(colName),
-          hi = genColMaxValueExpr(colName),
-          nulls = Some(genColNumNullsExpr(colName)),
-          rows = Some(genColValueCountExpr))
+          lo = statsColumn(getMinColumnNameFor(colName)),
+          hi = statsColumn(getMaxColumnNameFor(colName)),
+          nulls = Some(statsColumn(getNullCountColumnNameFor(colName))),
+          rows = Some(statsColumn(getValueCountColumnNameFor)))
       }
     case _ => None
   }
+
+  /** A column of the transposed column stats table, for ex `qty_minValue`. */
+  private def statsColumn(name: String): Expression = sparkAdapter.getExpressionFromColumn(col(name))
 }
 
 object Range {

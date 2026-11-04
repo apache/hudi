@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hudi.dataskipping
 
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, LessThanOrEqual, Literal, Not, StartsWith, SubqueryExpression}
-import org.apache.spark.sql.hudi.ColumnStatsExpressionUtils.isValueExpression
 import org.apache.spark.unsafe.types.UTF8String
 
 /**
@@ -111,6 +110,13 @@ object Leaf {
    */
   private def isTerm(e: Expression): Boolean =
     !SubqueryExpression.hasSubquery(e) && e.references.size == 1
+
+  /**
+   * A value references no column and holds no subquery, so Spark can evaluate it against the stats
+   * table as well.
+   */
+  private def isValueExpression(e: Expression): Boolean =
+    e.references.isEmpty && !SubqueryExpression.hasSubquery(e)
 
   private def toLiteral(value: Any): Literal = value match {
     case str: UTF8String => Literal(str.toString)
