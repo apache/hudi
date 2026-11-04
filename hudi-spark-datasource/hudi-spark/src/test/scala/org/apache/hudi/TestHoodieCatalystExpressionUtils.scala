@@ -185,6 +185,28 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
+  def testTimeOfDayPatternsRequireFixedOffsetSessionZone(): Unit = {
+    val newYork = Some("America/New_York")
+    // A time-of-day or offset field reorders values across a DST fall-back of the session zone.
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), newYork)))
+    assertEquals(None, matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd HH:mm:ss"), newYork)))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd XXX"), newYork)))
+    // A date-only pattern renders the local date, which never runs backwards in New York; neither quoted text nor
+    // a non-ASCII character is a field.
+    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd"), newYork)))
+    assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd 'at' 'H'"), newYork)))
+    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy\u5e74MM\u6708dd\u65e5"), newYork)))
+    // Any pattern keeps the ordering in a session zone whose offset never changes.
+    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("UTC"))))
+    assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd HH:mm:ss"), Some("+08:00"))))
+    // A non-literal or null pattern, an unknown zone or an unresolved session zone is not matched.
+    assertEquals(None, matched(DateFormatClass(tsAttr, strAttr, newYork)))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal(null, StringType), newYork)))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("Not/AZone"))))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), None)))
+  }
+
+  @Test
   def testUpCastPreservesOrderingButNumericToStringDoesNot(): Unit = {
     // Widening a numeric column preserves ordering, so the source attribute is recovered.
     assertEquals(Some(intAttr), matched(Cast(intAttr, LongType)))

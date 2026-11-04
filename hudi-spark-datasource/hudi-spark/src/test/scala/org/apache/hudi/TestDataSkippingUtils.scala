@@ -122,6 +122,36 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
       Seq("file_1"))
   }
 
+  @Test
+  def testTimeOfDayPatternsAcrossDstFallBack(): Unit = {
+    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "America/New_York")
+    try {
+      // 05:30Z renders as 01:30 EDT but the later 06:10Z as 01:10 EST, so a pattern with the time of day puts
+      // the max below the min. Re-applying it over min/max stats would wrongly prune file_1 even though its
+      // 05:30Z row matches; must fall back to always-true, keeping the file
+      val fallBack = IndexRow("file_1", valueCount = 2,
+        A_minValue = 1793511000L, A_maxValue = 1793513400L, A_nullCount = 0, // epoch seconds of C's bounds
+        C_minValue = new Timestamp(1793511000000L), // 2026-11-01 05:30Z
+        C_maxValue = new Timestamp(1793513400000L), // 2026-11-01 06:10Z
+        C_nullCount = 0)
+      assertEquals(Seq("file_1"), applyFilterExpr(
+        resolveExpr(spark, "date_format(C, 'yyyy-MM-dd HH:mm') > '2026-11-01 01:20'", sourceTableSchema), Seq(fallBack)))
+      assertEquals(Seq("file_1"), applyFilterExpr(
+        resolveExpr(spark, "from_unixtime(A, 'yyyy-MM-dd HH:mm') > '2026-11-01 01:20'", sourceTableSchema), Seq(fallBack)))
+
+      // A date-only pattern renders the local date, which never runs backwards in New York, so it still
+      // translates and prunes
+      val earlierDay = IndexRow("file_2", valueCount = 2,
+        C_minValue = new Timestamp(1793361600000L), // 2026-10-30 12:00Z
+        C_maxValue = new Timestamp(1793365200000L), // 2026-10-30 13:00Z
+        C_nullCount = 0)
+      assertEquals(Seq("file_1"), applyFilterExpr(
+        resolveExpr(spark, "date_format(C, 'yyyy-MM-dd') = '2026-11-01'", sourceTableSchema), Seq(fallBack, earlierDay)))
+    } finally {
+      spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+    }
+  }
+
   @ParameterizedTest
   @MethodSource(Array(
     "testMiscLookupFilterExpressionsSource"
