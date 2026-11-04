@@ -40,15 +40,4 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
 
   def canUpCast(fromType: DataType, toType: DataType): Boolean =
     Cast.canUpCast(fromType, toType)
-
-  /**
-   * Matches order-preserving date/time parsing expressions whose case-class shapes differ across
-   * Spark versions (currently [[org.apache.spark.sql.catalyst.expressions.ParseToDate]] and
-   * [[org.apache.spark.sql.catalyst.expressions.ParseToTimestamp]]), returning the source child
-   * expression that data skipping's `DateTimeFormatRule` recurses into
-   */
-  protected def unapplyOrderPreservingDateParsing(expr: Expression): Option[Expression]
-
-  override def unapplyDateParsingChild(expr: Expression): Option[Expression] =
-    unapplyOrderPreservingDateParsing(expr)
 }

@@ -120,9 +120,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testDateParsingTransformationsPreserveOrdering(): Unit = {
-    // ParseToDate's case-class shape differs across Spark versions, so DateTimeFormatRule dispatches
-    // it through the per-version unapplyOrderPreservingDateParsing hook. The 1-arg auxiliary
-    // constructor is stable on all profiles, letting this pin that hook everywhere.
+    // ParseToDate's case-class arity differs across Spark versions, so DateTimeFormatRule matches it
+    // by type and steps into `left`. The 1-arg auxiliary constructor is stable on all profiles,
+    // letting this pin that match everywhere.
     assertEquals(Some(strAttr), matched(new ParseToDate(strAttr)))
   }
 

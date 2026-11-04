@@ -17,33 +17,26 @@
 
 package org.apache.spark.sql.hudi.dataskipping.rules
 
-import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-
-import org.apache.spark.sql.HoodieCatalystExpressionUtils
-import org.apache.spark.sql.catalyst.expressions.{DateFormatClass, Expression, FromUnixTime, ToUnixTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{DateFormatClass, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, ToUnixTimestamp}
 import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step}
 
 /**
- * Date/time formatting and parsing: `DateFormatClass`, `FromUnixTime`, `ToUnixTimestamp`, plus the
- * Spark-version-specific parsing shapes (`ParseToDate`, `ParseToTimestamp`) through
- * `HoodieCatalystExpressionUtils.unapplyDateParsingChild`.
+ * Date/time formatting and parsing: `DateFormatClass`, `FromUnixTime`, `ToUnixTimestamp`,
+ * `ParseToDate` and `ParseToTimestamp`. The two parsing expressions have different constructor
+ * arities across Spark versions, so they are matched by type and step into `left` (the parsed
+ * input, the first constructor field on every supported version) rather than by extractor.
  *
  * Shared guard: none; ANY format is accepted today, though most (for ex, 'dd-MM-yyyy') do not
  * preserve ordering (#19481). Parsing is `partial`: unparseable input yields NULL.
  */
 object DateTimeFormatRule extends RangeRule {
 
-  private lazy val exprUtils: HoodieCatalystExpressionUtils = sparkAdapter.getCatalystExpressionUtils
-
   override def steps(term: Expression): Seq[Step] = term match {
     case DateFormatClass(timestamp, _, _) => Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
     case FromUnixTime(seconds, _, _) => Seq(Step(term, seconds, Increasing, fileGuard = None, partial = false))
     case ToUnixTimestamp(time, _, _, _) => Seq(Step(term, time, Increasing, fileGuard = None, partial = true))
-
-    // Date/time parsing expressions whose shapes are Spark-version-specific
-    case _ => exprUtils.unapplyDateParsingChild(term) match {
-      case Some(child) => Seq(Step(term, child, Increasing, fileGuard = None, partial = true))
-      case None => Nil
-    }
+    case p: ParseToDate => Seq(Step(term, p.left, Increasing, fileGuard = None, partial = true))
+    case p: ParseToTimestamp => Seq(Step(term, p.left, Increasing, fileGuard = None, partial = true))
+    case _ => Nil
   }
 }
