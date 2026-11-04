@@ -37,16 +37,29 @@ object HoodieSparkTypeUtils {
   def isCastPreservingOrdering(from: DataType, to: DataType): Boolean =
     (from, to) match {
       // NOTE: Casting between String and Numeric types re-orders elements (for ex, "10" < "9"
-      //       lexicographically)
-      case (StringType, _: NumericType) => false
-      case (_: NumericType, StringType) => false
+      //       lexicographically). These match by type, so that collated strings on Spark 4 are
+      //       rejected as well
+      case (_: StringType, _: NumericType) => false
+      case (_: NumericType, _: StringType) => false
       // NOTE: Timestamps format in the session time zone, so local time repeats across a DST
       //       fall-back (for ex, 01:30 EDT is followed by 01:10 EST) and the strings re-order
-      case (TimestampType, StringType) => false
+      case (TimestampType, _: StringType) => false
+      // NOTE: On Spark 4 StringType carries a collation, and casting to a different collation changes
+      //       the sort order (for ex, "B" < "a" in UTF8_BINARY but "a" < "B" in UTF8_LCASE). Equality
+      //       also compares the char/varchar length constraint, so those casts are conservatively
+      //       rejected too. On Spark 3 StringType is a singleton, making this arm trivially true
+      case (fromStr: StringType, toStr: StringType) => fromStr == toStr
+      // NOTE: Every type casts to a string, so collated targets are rejected whatever the source
+      //       (for ex, binary bounds are in byte order, which UTF8_LCASE does not follow)
+      case (_, toStr: StringType) => toStr == StringType
       // NOTE: Casting to boolean maps every non-zero (or "true"-like) value to true, so it is not
       //       monotonic (for ex, min -5 and max 5 both cast to true while 0 casts to false)
       case (BooleanType, BooleanType) => true
       case (_, BooleanType) => false
+      // NOTE: A collated string does not sort by its bytes, so casting it to any non-string type
+      //       (for ex, binary, which compares bytes) can re-order values. String targets are
+      //       handled above, so this only rejects collated sources
+      case (fromStr: StringType, _) => fromStr == StringType
       // NOTE: Cast.canUpCast rejects decimal to float/double as lossy, but rounding is monotonic
       //       and every decimal fits within float range. Spark's type coercion inserts this cast
       //       when a decimal column is compared with a float/double (for ex, `price > 99.5D`)
