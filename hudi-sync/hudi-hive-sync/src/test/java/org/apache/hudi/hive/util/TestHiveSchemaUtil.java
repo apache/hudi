@@ -184,7 +184,7 @@ public class TestHiveSchemaUtil {
     expected.put("`time_millis_field`", "int");
     expected.put("`time_micros_field`", "bigint");
     expected.put("`decimal_field`", "DECIMAL(10 , 2)");
-    expected.put("`uuid_field`", "binary");
+    expected.put("`uuid_field`", "string");
     expected.put("`vector_field`", "binary");
     expected.put("`blob_field`",
         "STRUCT< `type` : string, `data` : binary, `reference` : STRUCT< `external_path` : string, `offset` : bigint, `length` : bigint, `managed` : boolean>>");
