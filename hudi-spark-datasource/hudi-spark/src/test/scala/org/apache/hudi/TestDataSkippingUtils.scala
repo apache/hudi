@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.functions.{col, date_format, lower, upper}
+import org.apache.spark.sql.functions.{col, date_format, lit, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
 import org.apache.spark.sql.types._
@@ -336,7 +336,18 @@ object TestDataSkippingUtils {
             C_maxValue = new Timestamp(1648785048000L), // 04/01/2022
             C_nullCount = 0)
         ),
-        Seq("file_2"))
+        Seq("file_2")),
+      arguments(
+        // An infinite factor turns the zero min into NaN (0 * Infinity), which sorts above every
+        // number, so the translated bound A_minValue * Infinity <= Infinity is false and would
+        // wrongly prune file_1, although A = 1 gives Infinity <= Infinity. Built with lit() since
+        // SQL has no infinite double literal. Must fall back to always-true, keeping the file
+        sparkAdapter.getExpressionFromColumn(
+          col("A").cast(DoubleType) * lit(Double.PositiveInfinity) <= lit(Double.PositiveInfinity)),
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0)
+        ),
+        Seq("file_1"))
     )
   }
 

@@ -81,10 +81,11 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
 
         // Math Expressions
         // Binary
-        // NOTE: The other operand must not reference the column, or it could reverse the
-        //       ordering (for ex, A + A * -2 = -A)
-        case Add(OrderPreservingTransformation(attrRef), other, _) if other.references.isEmpty => Some(attrRef)
-        case Add(other, OrderPreservingTransformation(attrRef), _) if other.references.isEmpty => Some(attrRef)
+        // NOTE: The other operand must be a constant. Referencing the column could reverse the
+        //       ordering (for ex, A + A * -2 = -A), and a non-deterministic operand is re-evaluated
+        //       against the min/max bounds (for ex, A + rand())
+        case Add(OrderPreservingTransformation(attrRef), other, _) if other.foldable => Some(attrRef)
+        case Add(other, OrderPreservingTransformation(attrRef), _) if other.foldable => Some(attrRef)
         case Multiply(OrderPreservingTransformation(attrRef), factor, _) if isPositiveNumericLiteral(factor) => Some(attrRef)
         case Multiply(factor, OrderPreservingTransformation(attrRef), _) if isPositiveNumericLiteral(factor) => Some(attrRef)
         case Divide(OrderPreservingTransformation(attrRef), divisor, _) if isPositiveNumericLiteral(divisor) => Some(attrRef)
@@ -114,16 +115,17 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
       }
     }
 
-    // Negative factors reverse the ordering and zero collapses it. Non-literal factors are not
-    // matched since the optimizer folds constant factors to literals before data skipping runs
+    // Negative factors reverse the ordering and zero collapses it. Infinite factors can yield NaN
+    // (0 * Infinity, Infinity / Infinity), which sorts above every number. Non-literal factors are
+    // not matched since the optimizer folds constant factors to literals before data skipping runs
     private def isPositiveNumericLiteral(expr: Expression): Boolean = expr match {
       case Literal(value, _) => value match {
         case b: Byte => b > 0
         case s: Short => s > 0
         case i: Int => i > 0
         case l: Long => l > 0
-        case f: Float => f > 0
-        case d: Double => d > 0
+        case f: Float => f > 0 && !f.isInfinite
+        case d: Double => d > 0 && !d.isInfinite
         case dec: Decimal => dec.toBigDecimal.signum > 0
         case _ => false
       }
