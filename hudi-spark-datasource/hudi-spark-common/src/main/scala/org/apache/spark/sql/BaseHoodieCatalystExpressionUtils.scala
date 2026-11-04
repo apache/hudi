@@ -57,6 +57,9 @@ abstract class BaseHoodieCatalystExpressionUtils extends HoodieCatalystExpressio
    */
   protected def unapplyOrderPreservingDateParsing(expr: Expression): Option[Expression]
 
+  override def unapplyDateParsingChild(expr: Expression): Option[Expression] =
+    unapplyOrderPreservingDateParsing(expr)
+
   private object OrderPreservingTransformation {
     def unapply(expr: Expression): Option[AttributeReference] = {
       expr match {

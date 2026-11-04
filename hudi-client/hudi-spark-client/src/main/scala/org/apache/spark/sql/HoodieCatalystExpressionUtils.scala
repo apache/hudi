@@ -67,6 +67,12 @@ trait HoodieCatalystExpressionUtils {
   def tryMatchAttributeOrderingPreservingTransformation(expr: Expression): Option[AttributeReference]
 
   /**
+   * Matches order-preserving date/time parsing expressions whose shapes differ across Spark versions
+   * (ParseToDate, ParseToTimestamp), returning the parsed child expression
+   */
+  def unapplyDateParsingChild(expr: Expression): Option[Expression]
+
+  /**
    * Verifies whether [[fromType]] can be up-casted to [[toType]]
    */
   def canUpCast(fromType: DataType, toType: DataType): Boolean
