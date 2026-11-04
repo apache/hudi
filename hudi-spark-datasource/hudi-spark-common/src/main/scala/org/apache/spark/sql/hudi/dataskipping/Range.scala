@@ -45,9 +45,9 @@ sealed trait RangeSource {
 /**
  * Column stats index: a column maps to its min / max / null-count / value-count columns.
  *
- * NOTE: An expression index stores f(col) bounds, yet today it is read through this same source, so
- *       the term's f is re-applied to the stored bounds. An `ExpressionIndexSource` would read the
- *       stored bounds as is for the indexed f(col) term
+ * NOTE: Expression indexes go through this source too, but only with the bare column:
+ *       `ExpressionIndexSupport` strips the indexed f(col) down to col before translating, so the
+ *       stored f(col) bounds are compared as is
  */
 case class ColumnStatsSource(indexedCols: Seq[String]) extends RangeSource {
   override def rangeOf(term: Expression): Option[Range] = term match {
