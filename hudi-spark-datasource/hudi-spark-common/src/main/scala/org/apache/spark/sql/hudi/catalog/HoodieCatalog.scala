@@ -49,6 +49,7 @@ import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
+import org.slf4j.LoggerFactory
 
 import java.net.URI
 import java.util
@@ -238,8 +239,14 @@ class HoodieCatalog extends DelegatingCatalogExtension
           // Hudi exposes nullable fields and does not enforce NOT NULL constraints. SDP
           // re-sends nullability on refresh; retain the stored schema in either direction.
           case change: UpdateColumnNullability =>
-            table.schema.findNestedField(change.fieldNames(), includeCollections = true,
+            val exists = table.schema.findNestedField(change.fieldNames(), includeCollections = true,
               spark.sessionState.conf.resolver).isDefined
+            if (exists) {
+              LoggerFactory.getLogger(classOf[HoodieCatalog]).warn(
+                s"Ignoring nullability change for ${ident.toString}.${change.fieldNames().mkString(".")}: " +
+                  "Hudi preserves the stored schema and does not enforce NOT NULL constraints.")
+            }
+            exists
           case _ => false
         }
         // Reject unsupported changes before applying any supported change in the same request.
