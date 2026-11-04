@@ -18,6 +18,7 @@
 """Check keyed Hudi SDP flows across ordering, deletion, reinsertion and restart."""
 import argparse
 import json
+import signal
 from pathlib import Path
 import sys
 import tempfile
@@ -27,11 +28,20 @@ PROPERTIES = "'type'='cow', 'primaryKey'='id', 'preCombineField'='ts', 'hoodie.r
 TABLES = ("keyed_new", "keyed_existing")
 
 
+def require(condition, message):
+    if not condition:
+        raise AssertionError(message)
+
+
+def interrupted(signum, _frame):
+    raise KeyboardInterrupt(f"Received signal {signum}")
+
+
 def client(mode, remote, root):
     from pyspark.sql import SparkSession
     spark = SparkSession.builder.remote(remote).getOrCreate()
     try:
-        assert spark.conf.get("spark.hudi.test.run.id") == root.name
+        require(spark.conf.get("spark.hudi.test.run.id") == root.name, "Connected to the wrong test server")
         if mode == "prepare":
             spark.sql(f"CREATE TABLE sdp_test.keyed_existing (id INT, ts BIGINT, part STRING, value STRING, "
                       f"_hoodie_is_deleted BOOLEAN) USING hudi PARTITIONED BY (part) TBLPROPERTIES ({PROPERTIES})").collect()
@@ -40,7 +50,7 @@ def client(mode, remote, root):
             for table in TABLES:
                 actual = [list(row) for row in spark.table(f"sdp_test.{table}")
                           .select("id", "ts", "part", "value").orderBy("id").collect()]
-                assert actual == expected, (table, actual, expected)
+                require(actual == expected, (table, actual, expected))
                 print(f"PASS {mode} {table}: {actual}")
     finally:
         spark.stop()
@@ -50,7 +60,7 @@ def scenario(h):
     source = h.root / "input"
     source.mkdir()
     (h.root / "source.py").write_text(SOURCE)
-    flows = "SET spark.hoodie.datasource.write.operation=upsert;\n" + "\n".join(
+    flows = "\n".join(
         f"CREATE STREAMING TABLE {table} USING hudi PARTITIONED BY (part) TBLPROPERTIES ({PROPERTIES}) "
         "AS SELECT id, ts, part, value, _hoodie_is_deleted FROM STREAM input_events;" for table in TABLES)
     (h.root / "flows.sql").write_text(flows)
@@ -66,10 +76,11 @@ def scenario(h):
         (h.logs / name).write_text((h.root / name).read_text())
     h.client(Path(__file__).resolve(), "prepare")
     stages = (
-        ([(1, 1, "a", "old", False), (1, 2, "a", "new", False), (2, 1, "b", "keep", False)],
+        ([(1, 2, "a", "new", False), (1, 1, "a", "old", False), (2, 1, "b", "keep", False)],
          [[1, 2, "a", "new"], [2, 1, "b", "keep"]]),
         ([(1, 3, "a", "updated", False)], [[1, 3, "a", "updated"], [2, 1, "b", "keep"]]),
         ([(1, 2, "a", "late", False)], [[1, 3, "a", "updated"], [2, 1, "b", "keep"]]),
+        ([(1, 2, "a", "late-delete", True)], [[1, 3, "a", "updated"], [2, 1, "b", "keep"]]),
         ([(1, 4, "a", "deleted", True)], [[2, 1, "b", "keep"]]),
         ([(1, 5, "a", "reinserted", False)], [[1, 5, "a", "reinserted"], [2, 1, "b", "keep"]]))
     for i, (rows, expected) in enumerate(stages, 1):
@@ -81,11 +92,11 @@ def scenario(h):
     h.run_pipeline(path, "restart")
     h.client(Path(__file__).resolve(), "verify-restart")
     invalid = (
-        ("missing_key", PROPERTIES.replace("'primaryKey'='id'", "'primaryKey'='missing_key'"), "part", SOURCE, "missing_key"),
-        ("missing_order", PROPERTIES.replace("'preCombineField'='ts'", "'preCombineField'='missing_order'"), "part", SOURCE, "missing_order"),
-        ("missing_partition", PROPERTIES, "missing_partition", SOURCE, "missing_partition"),
-        ("invalid_marker", PROPERTIES, "part", SOURCE.replace("_hoodie_is_deleted BOOLEAN", "_hoodie_is_deleted STRING"), "_hoodie_is_deleted"),
-        ("changed_identity", PROPERTIES.replace("'primaryKey'='id'", "'primaryKey'='value'"), "part", SOURCE, "recordkey"))
+        ("missing_key", PROPERTIES.replace("'primaryKey'='id'", "'primaryKey'='missing_key'"), "part", SOURCE, "Can't find primaryKey"),
+        ("missing_order", PROPERTIES.replace("'preCombineField'='ts'", "'preCombineField'='missing_order'"), "part", SOURCE, "Can't find ordering fields"),
+        ("missing_partition", PROPERTIES, "missing_partition", SOURCE, "Partition column 'missing_partition'"),
+        ("invalid_marker", PROPERTIES, "part", SOURCE.replace("_hoodie_is_deleted BOOLEAN", "_hoodie_is_deleted STRING"), "has to be BOOLEAN"),
+        ("changed_identity", PROPERTIES.replace("'primaryKey'='id'", "'primaryKey'='value'"), "part", SOURCE, "Can't set primaryKey to 'value' on Hudi table"))
     for name, props, partition, definition, error_text in invalid:
         target = "keyed_existing" if name == "changed_identity" else f"bad_{name}"
         (h.root / "source.py").write_text(definition)
@@ -100,13 +111,13 @@ def scenario(h):
             h.run_pipeline(path, f"reject-{name}")
         except RuntimeError:
             log = (h.logs / f"reject-{name}.log").read_text()
-            assert error_text.lower() in log.lower(), (name, log[-5000:])
-            assert h.server.poll() is None, name
+            require(error_text.lower() in log.lower(), (name, log[-5000:]))
+            require(h.server.poll() is None, name)
         else:
             raise AssertionError(f"Invalid configuration unexpectedly succeeded: {name}")
         if name != "changed_identity":
             timeline = h.root / "warehouse" / "sdp_test.db" / target / ".hoodie" / "timeline"
-            assert not [p for p in timeline.glob("*") if p.suffix in (".commit", ".deltacommit", ".replacecommit")], name
+            require(not [p for p in timeline.glob("*") if p.suffix in (".commit", ".deltacommit", ".replacecommit")], name)
         h.client(Path(__file__).resolve(), f"verify-after-{name}")
     print("PASS: keyed deduplication, updates, late values, delete, reinsertion, restart and invalid configurations")
 
@@ -125,6 +136,7 @@ def main():
     args.logs.mkdir(parents=True, exist_ok=True)
     logs = Path(tempfile.mkdtemp(prefix="run-", dir=args.logs.resolve()))
     print(f"Keyed logs: {logs}", flush=True)
+    signal.signal(signal.SIGTERM, interrupted)
     with ConnectHarness(args.bundle, logs) as harness:
         scenario(harness)
 

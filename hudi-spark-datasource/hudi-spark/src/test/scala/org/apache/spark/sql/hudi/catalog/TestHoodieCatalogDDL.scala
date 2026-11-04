@@ -125,6 +125,30 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("createTable normalizes partition field spelling using the resolver") {
+    withSQLConf("spark.sql.caseSensitive" -> "false") {
+      withTempDir { tmp =>
+        val name = generateTableName
+        val ident = Identifier.of(Array("default"), name)
+        val path = s"${tmp.getCanonicalPath}/$name"
+        hoodieCatalog.createTable(ident,
+          StructType(Seq(StructField("id", IntegerType), StructField("part", StringType))),
+          Array[Transform](Expressions.identity("PART")),
+          Map("provider" -> "hudi", "primaryKey" -> "id", "location" -> path).asJava)
+        try {
+          spark.sql(s"INSERT INTO $name VALUES (1, 'a')")
+          checkAnswer(s"SELECT id, part FROM $name")(Seq(1, "a"))
+          val props = new java.util.Properties()
+          val stream = new java.io.FileInputStream(s"$path/.hoodie/hoodie.properties")
+          try props.load(stream) finally stream.close()
+          assertEquals("part", props.getProperty("hoodie.table.partition.fields"))
+        } finally {
+          hoodieCatalog.dropTable(ident)
+        }
+      }
+    }
+  }
+
   Seq(false, true).foreach { operationMetadata =>
     test(s"alterTable preserves metadata columns during repeated schema reconciliation, operation=$operationMetadata") {
       withSQLConf("hoodie.schema.on.read.enable" -> "true") {

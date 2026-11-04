@@ -399,7 +399,11 @@ class HoodieCatalog extends DelegatingCatalogExtension
       }
     }
     val newSchema = schema
-    val newPartitionColumns = partitionColumns
+    val newPartitionColumns = if (schema.nonEmpty) {
+      partitionColumns.map(column => schema.fieldNames.find(spark.sessionState.conf.resolver(_, column)).get)
+    } else {
+      partitionColumns
+    }
     val newBucketSpec = maybeBucketSpec
 
     val storage = DataSource.buildStorageFormatFromOptions(writeOptions.--(needFilterProps))

@@ -32,7 +32,8 @@ The generated SQL defines partitioned COW tables with `primaryKey=id`,
 A boolean `_hoodie_is_deleted` carries deletes. The scenario checks a newly
 created target and a pre-existing catalog table, then restarts each through the
 same SDP-managed checkpoint. It verifies exact contents after intra-batch
-precombine, a newer update, a late lower-order update, deletion, reinsertion and
+precombine (higher ordering value arrives first), a newer update, a late lower-order
+update, a late delete that must preserve the newer row, deletion, reinsertion and
 an unchanged restart. Partition `b` retains its unrelated key throughout.
 
 Negative scenarios reject nonexistent key, ordering and partition fields,
@@ -44,3 +45,10 @@ Generated Python/SQL and logs remain under `target/keyed-acceptance-logs`.
 Metadata indexing is disabled. This is delete input carried by a flow, not CDC
 propagation of upstream deletes. It does not cover full refresh, table chaining,
 fan-in or failure between commit and checkpoint (separate recovery coverage).
+
+MOR log-merge coverage remains deferred under #20408; this matrix covers COW only.
+The flows rely on the default streaming upsert operation, without a session override.
+The catalog regression uses `PARTITIONED BY (PART)` against schema field `part`
+to verify case-insensitive normalization. The SDP scenario uses exact spelling
+because Spark separately rejects a declared/stored partition spelling mismatch. Land after the #20453 harness dependency.
+Checks remain active under `python -O`; SIGTERM unwinds harness cleanup.
