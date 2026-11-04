@@ -221,12 +221,14 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // Boolean to bigint keeps false < true as 0 < 1, and an identity cast is always allowed.
     assertEquals(Some(boolAttr), matched(Cast(boolAttr, LongType)))
     assertEquals(Some(intAttr), matched(Cast(intAttr, IntegerType)))
-    // String to date is kept so expression indexes on to_date keep pruning; tracked in #19481.
-    assertEquals(Some(strAttr), matched(Cast(strAttr, DateType)))
+    // Unpadded strings sort differently from what they parse to ("2022-1-5" > "2022-01-10").
+    assertEquals(None, matched(Cast(strAttr, DateType)))
+    assertEquals(None, matched(Cast(strAttr, TimestampType)))
     if (HoodieSparkUtils.gteqSpark3_4) {
       // Converting between timestamp and timestamp_ntz shifts local times in the DST spring-forward gap.
       assertEquals(None, matched(Cast(tsAttr, ntzAttr.dataType)))
       assertEquals(None, matched(Cast(ntzAttr, TimestampType)))
+      assertEquals(None, matched(Cast(strAttr, ntzAttr.dataType)))
       // Dates map to the start of the day and back without a time zone shift.
       assertEquals(Some(dateAttr), matched(Cast(dateAttr, ntzAttr.dataType)))
       assertEquals(Some(ntzAttr), matched(Cast(ntzAttr, DateType)))

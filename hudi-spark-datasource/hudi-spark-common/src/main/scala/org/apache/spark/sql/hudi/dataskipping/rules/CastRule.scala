@@ -46,6 +46,9 @@ object CastRule extends RangeRule {
    *  - narrowing numeric casts, which overflow and wrap around in non-ANSI mode (for ex, bigint to int)
    *  - timestamp to/from timestamp_ntz, which shifts across DST (for ex, a local time in the
    *    spring-forward gap shifts forward, so 02:30 maps after 03:00)
+   *  - string to date/timestamp, since unpadded strings sort differently from what they parse to (for
+   *    ex, "2022-1-5" > "2022-01-10" as strings, but parses to an earlier date). Expression indexes on
+   *    to_date/to_timestamp do not need it: `ExpressionIndexSupport` strips the function first
    */
   private[dataskipping] def preservesOrder(from: DataType, to: DataType): Boolean =
     (from, to) match {
@@ -78,10 +81,6 @@ object CastRule extends RangeRule {
       // NOTE: Truncating to the (local) date is non-decreasing, also across a DST fall-back since
       //       the date does not repeat
       case (TimestampType | TimestampNTZType, DateType) => true
-      // NOTE: Not order-preserving in general (for ex, "2022-1-5" > "2022-01-10" as strings, but parses
-      //       to an earlier date), but kept so that expression indexes on to_date/to_timestamp, which the
-      //       optimizer rewrites into this cast, keep pruning. TODO #19481
-      case (StringType, DateType | TimestampType | TimestampNTZType) => true
 
       // Binary and strings
       // NOTE: The default (UTF8_BINARY) string compares by its bytes, same as binary. Matching the
