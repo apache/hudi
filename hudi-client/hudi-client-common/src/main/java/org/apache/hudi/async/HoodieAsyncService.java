@@ -18,6 +18,7 @@
 
 package org.apache.hudi.async;
 
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 
 import lombok.Getter;
@@ -26,6 +27,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.Serializable;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -41,14 +43,16 @@ import java.util.function.Function;
 public abstract class HoodieAsyncService implements Serializable {
   private static final long POLLING_SECONDS = 10;
 
-  // Flag indicating whether an error is incurred in the service
-  protected boolean hasError;
+  // Flag indicating whether an error is incurred in the service; volatile as callers poll it from other threads
+  protected volatile boolean hasError;
+  // Failure the service stopped with, if any
+  private volatile Throwable failure;
   // Flag to track if the service is started.
   @Getter
   private boolean started;
-  // Flag indicating shutdown is externally requested
+  // Flag indicating shutdown is externally requested; volatile as the service thread polls it
   @Getter
-  private boolean shutdownRequested;
+  private volatile boolean shutdownRequested;
   // Flag indicating the service is shutdown
   @Getter
   private volatile boolean shutdown;
@@ -77,6 +81,13 @@ public abstract class HoodieAsyncService implements Serializable {
 
   public boolean hasError() {
     return hasError;
+  }
+
+  /**
+   * Returns the failure the service stopped with, if it stopped with one.
+   */
+  public Option<Throwable> getFailure() {
+    return Option.ofNullable(failure);
   }
 
   /**
@@ -157,6 +168,10 @@ public abstract class HoodieAsyncService implements Serializable {
       return;
     }
     future.whenComplete((resp, error) -> {
+      if (null != error) {
+        Throwable throwable = (Throwable) error;
+        failure = throwable instanceof CompletionException && throwable.getCause() != null ? throwable.getCause() : throwable;
+      }
       if (null != callback) {
         callback.apply(null != error);
       }
