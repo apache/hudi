@@ -18,8 +18,6 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieStreamingSink}
-import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.client.embedded.EmbeddedTimelineService
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
@@ -29,7 +27,7 @@ import org.apache.spark.sql.sources.StreamSinkProvider
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQueryException, Trigger}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.CsvSource
 
 import java.net.{InetSocketAddress, Socket}
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
@@ -56,16 +54,10 @@ class RecoveryTestSink(context: SQLContext, options: Map[String, String], partit
   @volatile var serverPort = -1
   @volatile var resourcesCleared = false
 
-  private def field(name: String): Option[AnyRef] = {
-    val f = classOf[HoodieStreamingSink].getDeclaredField(name)
-    f.setAccessible(true)
-    f.get(this).asInstanceOf[Option[AnyRef]]
-  }
-
   override def addBatch(batchId: Long, data: DataFrame): Unit = {
     super.addBatch(batchId, data)
-    val client = field("writeClient").get.asInstanceOf[SparkRDDWriteClient[_]]
-    val service = field("embeddedTimelineService").get.asInstanceOf[EmbeddedTimelineService]
+    val client = currentWriteClient.get
+    val service = currentTimelineService.get
     serverPort = service.getRemoteFileSystemViewConfig(client.getConfig).getRemoteViewServerPort
     if (options.getOrElse("test.fail.after.commit", "false").toBoolean) {
       throw new IllegalStateException("injected failure after Hudi commit before Spark checkpoint")
@@ -74,15 +66,17 @@ class RecoveryTestSink(context: SQLContext, options: Map[String, String], partit
 
   override protected def reset(force: Boolean): Unit = {
     super.reset(force)
-    resourcesCleared = field("writeClient").isEmpty && field("embeddedTimelineService").isEmpty
+    resourcesCleared = currentWriteClient.isEmpty && currentTimelineService.isEmpty
     released.countDown()
   }
 }
 
 class TestStreamingSinkRecovery extends HoodieSparkClientTestBase {
+  // This covers Spark checkpoint replay, not failures inside the sink retry loop (tracked by #20406).
   @ParameterizedTest
-  @ValueSource(strings = Array("available-now", "stop", "failure"))
-  def testTerminalCleanupAndCommittedBatchReplay(termination: String): Unit = {
+  @CsvSource(Array("available-now,COPY_ON_WRITE", "stop,COPY_ON_WRITE", "failure,COPY_ON_WRITE",
+    "available-now,MERGE_ON_READ", "stop,MERGE_ON_READ", "failure,MERGE_ON_READ"))
+  def testTerminalCleanupAndCommittedBatchReplay(termination: String, tableType: String): Unit = {
     val spark = sqlContext.sparkSession
     val source = s"$basePath/source"
     val target = s"$basePath/target"
@@ -91,6 +85,7 @@ class TestStreamingSinkRecovery extends HoodieSparkClientTestBase {
     input.coalesce(1).write.json(source)
     val options = Map(
       "hoodie.table.name" -> "recovery",
+      "hoodie.datasource.write.table.type" -> tableType,
       "hoodie.datasource.write.recordkey.field" -> "id",
       "hoodie.datasource.write.precombine.field" -> "ts",
       "hoodie.datasource.write.partitionpath.field" -> "",
@@ -102,8 +97,16 @@ class TestStreamingSinkRecovery extends HoodieSparkClientTestBase {
       DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> "1",
       "checkpointLocation" -> checkpoint,
       "test.fail.after.commit" -> (termination == "failure").toString)
-    val unrelated = spark.readStream.schema(input.schema).json(source).writeStream
-      .format("memory").queryName("unrelated_recovery_query").start()
+    val unrelatedTarget = s"$basePath/unrelated"
+    val unrelatedSource = s"$basePath/unrelated-source"
+    input.coalesce(1).write.json(unrelatedSource)
+    val unrelated = spark.readStream.schema(input.schema).json(unrelatedSource).writeStream
+      .format(classOf[RecoveryTestSource].getName)
+      .options(options ++ Map("hoodie.table.name" -> "unrelated", "checkpointLocation" -> s"$basePath/unrelated-checkpoint",
+        "test.fail.after.commit" -> "false"))
+      .start(unrelatedTarget)
+    unrelated.processAllAvailable()
+    val unrelatedSink = RecoveryTestSource.sinks.get(unrelatedTarget)
     val query = spark.readStream.schema(input.schema).json(source).writeStream
       .format(classOf[RecoveryTestSource].getName).options(options)
       .trigger(if (termination == "stop") Trigger.ProcessingTime(100) else Trigger.AvailableNow())
@@ -129,9 +132,20 @@ class TestStreamingSinkRecovery extends HoodieSparkClientTestBase {
       } finally {
         socket.close()
       }
+      val nextInput = spark.sql("select 2 as id, 20L as ts, 'second' as value")
+      nextInput.coalesce(1).write.mode("append").json(unrelatedSource)
       unrelated.processAllAvailable()
       assertTrue(unrelated.isActive)
-      assertEquals(1L, spark.table("unrelated_recovery_query").count())
+      assertEquals(1L, unrelatedSink.released.getCount, "Another query released this sink")
+      assertFalse(unrelatedSink.resourcesCleared)
+      val unrelatedSocket = new Socket()
+      try {
+        unrelatedSocket.connect(new InetSocketAddress("127.0.0.1", unrelatedSink.serverPort), 1000)
+      } finally {
+        unrelatedSocket.close()
+      }
+      assertEquals(input.union(nextInput).orderBy("id").collect().toSeq,
+        spark.read.format("hudi").load(unrelatedTarget).select("id", "ts", "value").orderBy("id").collect().toSeq)
 
       def commits: Seq[String] = HoodieTestUtils.createMetaClient(storage, target).getActiveTimeline
         .getCommitsTimeline.filterCompletedInstants().getInstants.asScala.map(_.requestedTime()).toSeq
@@ -151,6 +165,7 @@ class TestStreamingSinkRecovery extends HoodieSparkClientTestBase {
       query.stop()
       unrelated.stop()
       RecoveryTestSource.sinks.remove(target)
+      RecoveryTestSource.sinks.remove(unrelatedTarget)
     }
   }
 }
