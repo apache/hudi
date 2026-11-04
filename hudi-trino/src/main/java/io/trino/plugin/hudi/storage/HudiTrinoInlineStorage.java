@@ -223,7 +223,8 @@ public class HudiTrinoInlineStorage
     {
     }
 
-    private static StoragePath getFilePathFromInlinePath(StoragePath inlinePath)
+    /** The path of the file that holds the content an {@code inlinefs://} path points into. */
+    public static StoragePath getFilePathFromInlinePath(StoragePath inlinePath)
     {
         assertInlineFSPath(inlinePath);
         String outerFileScheme = inlinePath.getParent().getName();
