@@ -17,22 +17,39 @@
 
 package org.apache.spark.sql.hudi.dataskipping.rules
 
-import org.apache.spark.sql.catalyst.expressions.{Expression, FromUTCTimestamp, ToUTCTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{Expression, FromUTCTimestamp, Literal, ToUTCTimestamp}
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step}
+
+import scala.util.Try
 
 /**
  * Time zone shifts: `FromUTCTimestamp`, `ToUTCTimestamp`.
  *
- * Shared guard: none; any time zone operand is accepted today.
+ * Shared guard: [[isFixedOffsetTimeZone]], a literal time zone whose offset never changes.
  *
- * NOTE: The offset jumps at DST transitions, so the shift is not monotonic across a fall-back (#20449)
+ * NOTE: Both shift by the zone's offset at that time, so they only keep the ordering for a zone whose offset never
+ *       changes, DST or historical. Local time runs backwards when the offset drops (for ex, 05:30Z is 01:30 EDT but
+ *       the later 06:10Z is 01:10 EST), and a local time in the gap of a rising offset shifts past later ones (for ex,
+ *       02:30 maps to 07:30Z but the later 03:00 to 07:00Z)
  */
 object TimeZoneShiftRule extends RangeRule {
 
   override def steps(term: Expression): Seq[Step] = term match {
-    case FromUTCTimestamp(timestamp, _) => Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
-    case ToUTCTimestamp(timestamp, _) => Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
+    case FromUTCTimestamp(timestamp, timeZone) if isFixedOffsetTimeZone(timeZone) =>
+      Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
+    case ToUTCTimestamp(timestamp, timeZone) if isFixedOffsetTimeZone(timeZone) =>
+      Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
 
     case _ => Nil
+  }
+
+  // Only a literal zone is matched, since the optimizer folds a constant zone to a literal before data
+  // skipping runs. It is resolved the way Spark evaluates it, so for ex the short ID EST is a fixed
+  // -05:00 while PST is America/Los_Angeles; an unknown zone is not matched
+  private def isFixedOffsetTimeZone(expr: Expression): Boolean = expr match {
+    case Literal(timeZone, _) if timeZone != null =>
+      Try(DateTimeUtils.getZoneId(timeZone.toString).getRules.isFixedOffset).getOrElse(false)
+    case _ => false
   }
 }
