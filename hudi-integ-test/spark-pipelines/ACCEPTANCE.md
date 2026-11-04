@@ -66,3 +66,40 @@ This scenario uses one writer per target. It does not claim coverage of material
 metadata-writer lifetime, fan-in, chaining, or commit/checkpoint failure injection.
 The generated source, SQL and pipeline specification are retained in the logs as
 runnable examples within the harness's isolated filesystem layout.
+
+## Incremental Hudi table chaining
+
+`chaining_acceptance.py` adds a second Hudi streaming table that reads the
+upstream keyed table through SQL `FROM STREAM upsert_events`. Run it using
+the same `--harness-dir`, `--bundle`, `--table-type` and `--metadata` options
+as the Phase 1 scenario:
+
+```sh
+python hudi-integ-test/spark-pipelines/chaining_acceptance.py \
+  --harness-dir /path/to/harness-checkout/hudi-integ-test/spark-pipelines \
+  --bundle /path/to/candidate-hudi-spark4.1-bundle.jar
+```
+
+The first input contains duplicate keys that the upstream upsert deduplicates.
+The downstream uses insert deliberately: it must contain one old record after
+the first run and exactly the old and new versions after the second run.
+Replaying an earlier increment would produce extra rows and fail the assertion.
+A quiescent restart verifies exact rows and identical completed commit filenames
+for both tables. MOR first drains the completed async compaction instant: if
+compaction finished after AvailableNow captured its end offset, this catch-up
+can create an empty downstream commit. The test checks that it does not replay
+business records, records that timeline change separately, and then asserts
+that the next restart creates no commits. Explicit business-column projection prevents
+upstream Hudi metadata fields from becoming downstream input columns.
+
+This tests the default earliest starting offset and checkpoint-based resume.
+The source emits latest-state incremental records, not every intermediate
+change or hard-delete events. Its AvailableNow fallback has no bounded
+admission control; size the input backlog to fit one micro-batch.
+
+This scenario covers only the incremental portion of #20407. It does not
+establish safety across expired history, physical table recreation, or logical
+truncate/overwrite, nor reader-option conflict handling. Stop downstream
+consumers before resetting upstream tables; rebuild affected downstream tables
+and checkpoints in dependency order. Automated reset detection and coordinated
+rebuild acceptance remain required before declaring #20407 complete.
