@@ -21,6 +21,8 @@ package org.apache.hudi.metrics;
 import org.apache.hudi.hive.HoodieHiveSyncStats;
 
 import com.codahale.metrics.SlidingWindowReservoir;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.flink.dropwizard.metrics.DropwizardHistogramWrapper;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Histogram;
@@ -29,7 +31,6 @@ import org.apache.flink.metrics.ThreadSafeSimpleCounter;
 import org.apache.flink.runtime.metrics.scope.ScopeFormat;
 
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Metrics for the Hive sync that {@link org.apache.hudi.sink.StreamWriteOperatorCoordinator} runs
@@ -53,11 +54,14 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
   private static final int HISTOGRAM_WINDOW_SIZE = 100;
 
   /**
-   * The instance shared by the coordinators of each operator, keyed by job and operator ID. Entries
-   * are never removed: a coordinator closing does not tell whether another will replace it, and one
-   * small instance per Hudi write operator per job is all this holds.
+   * The instance shared by the coordinators of each operator, keyed by job and operator ID.
+   *
+   * <p>Values are weak: between coordinators, the only strong reference to an instance is the
+   * {@link #HIVE_SYNC_LAST_SUCCESS_TIME_MS} gauge registered on the operator's group, so an instance
+   * lives as long as that group reports it and its entry goes once the job's group is closed. That
+   * gauge must keep referencing the instance, and the cache must not be bounded by size.
    */
-  private static final Map<String, FlinkHiveSyncMetrics> SHARED_METRICS = new ConcurrentHashMap<>();
+  private static final Cache<String, FlinkHiveSyncMetrics> SHARED_METRICS = Caffeine.newBuilder().weakValues().build();
 
   static final String HIVE_SYNC_SUCCESS_COUNT = "hiveSyncSuccessCount";
   static final String HIVE_SYNC_FAILURE_COUNT = "hiveSyncFailureCount";
@@ -159,7 +163,7 @@ public class FlinkHiveSyncMetrics extends HoodieFlinkMetrics {
     String operatorId = variables.get(ScopeFormat.SCOPE_OPERATOR_ID);
     FlinkHiveSyncMetrics metrics = jobId == null || operatorId == null
         ? new FlinkHiveSyncMetrics(metricGroup, detailedMetricsEnabled)
-        : SHARED_METRICS.computeIfAbsent(jobId + "/" + operatorId,
+        : SHARED_METRICS.get(jobId + "/" + operatorId,
             key -> new FlinkHiveSyncMetrics(metricGroup, detailedMetricsEnabled));
     metrics.registerMetrics(metricGroup);
     return metrics;
