@@ -26,13 +26,28 @@ import org.apache.spark.sql.hudi.dataskipping.rules.{CastRule, ConstantOperandRu
  * A [[Step]] says: `term` is a function of `child` with this [[Direction]], so the range of `term`
  * is the range of `child` pushed through it. Invariant: a rule only emits a step when its guard
  * holds for this `term`; a term no rule knows has no range (and the file is kept).
+ *
+ * Emitting a Step is a correctness claim: `term` is order-preserving in `child`.
+ * <ul>
+ *   <li>[[Increasing]]: a <= b implies f(a) <= f(b)</li>
+ *   <li>[[Decreasing]]: a <= b implies f(a) >= f(b)</li>
+ * </ul>
+ * The claim must hold for every value the file's range can hold (or wherever the step's
+ * `fileGuard` is true). If it is false, data skipping drops files that have matching rows. When
+ * unsure, return Nil: that only costs pruning, never correctness.
  */
 sealed trait Direction
 
-/** f(lo) is the low bound and f(hi) the high bound. Every step today is increasing. */
+/**
+ * Order-preserving (non-decreasing): a <= b implies f(a) <= f(b), so f(lo) is the low bound and
+ * f(hi) the high bound. Every step today is increasing.
+ */
 case object Increasing extends Direction
 
-/** f(hi) is the low bound and f(lo) the high bound. Unused today; negative factors would use it. */
+/**
+ * Order-reversing (non-increasing): a <= b implies f(a) >= f(b), so f(hi) is the low bound and
+ * f(lo) the high bound. Unused today; negative factors would use it.
+ */
 case object Decreasing extends Direction
 
 /**
