@@ -219,6 +219,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     }
   }
 
+  private[hudi] def currentWriteClient: Option[SparkRDDWriteClient[_]] = writeClient
+
+  private[hudi] def currentTimelineService: Option[EmbeddedTimelineService] = embeddedTimelineService
+
   override def toString: String = s"HoodieStreamingSink[${options("path")}]"
 
   @annotation.tailrec
