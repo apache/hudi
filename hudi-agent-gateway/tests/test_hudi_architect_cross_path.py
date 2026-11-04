@@ -68,6 +68,14 @@ def _scenario_ids() -> list[str]:
     return [scenario["case_id"] for scenario in _scenarios()]
 
 
+def _design_scenario_ids() -> list[str]:
+    return [
+        scenario["case_id"]
+        for scenario in _scenarios()
+        if scenario["validator"] == "design"
+    ]
+
+
 def _write_input(tmp_path: Path, case_id: str, value: dict[str, Any]) -> Path:
     input_path = tmp_path / f"{case_id.lower()}.json"
     input_path.write_text(json.dumps(value), encoding="utf-8")
@@ -198,26 +206,37 @@ def _scenario_input(case_id: str) -> tuple[str, dict[str, Any]]:
     raise AssertionError(f"Unknown PR8 scenario input: {source}")
 
 
-def _run_scenario(
-    tmp_path: Path, case_id: str
-) -> tuple[subprocess.CompletedProcess[str], dict[str, Any], dict[str, Any]]:
+def _run_scenario_process(
+    tmp_path: Path, case_id: str, *, emit_sql: bool = False
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
     validator_name, input_value = _scenario_input(case_id)
     validator = (
         DESIGN_VALIDATOR
         if validator_name == "design"
         else EXISTING_TABLE_VALIDATOR
     )
+    command = [
+        sys.executable,
+        str(validator),
+        "--input",
+        str(_write_input(tmp_path, case_id, input_value)),
+    ]
+    if emit_sql:
+        assert validator_name == "design"
+        command.append("--emit-sql")
     result = subprocess.run(
-        [
-            sys.executable,
-            str(validator),
-            "--input",
-            str(_write_input(tmp_path, case_id, input_value)),
-        ],
+        command,
         text=True,
         capture_output=True,
         check=False,
     )
+    return result, input_value
+
+
+def _run_scenario(
+    tmp_path: Path, case_id: str
+) -> tuple[subprocess.CompletedProcess[str], dict[str, Any], dict[str, Any]]:
+    result, input_value = _run_scenario_process(tmp_path, case_id)
     return result, json.loads(result.stdout), input_value
 
 
@@ -285,6 +304,24 @@ def test_pr8_cross_path_matrix_preserves_status_and_executable_boundaries(
     else:
         assert "artifacts" not in assessment
         assert assessment.get("catalog_setup_sql", "") == ""
+
+
+@pytest.mark.parametrize("case_id", _design_scenario_ids())
+def test_pr8_design_emit_sql_preserves_executable_boundary(
+    tmp_path: Path, case_id: str
+) -> None:
+    expected = _scenario(case_id)
+    json_result, assessment, _ = _run_scenario(tmp_path, case_id)
+    sql_result, _ = _run_scenario_process(tmp_path, case_id, emit_sql=True)
+
+    assert json_result.returncode == expected["expected_returncode"]
+    assert sql_result.returncode == expected["expected_returncode"]
+    if expected["executable_eligible"]:
+        assert sql_result.stdout == f"{assessment['artifacts']['combined_sql']}\n"
+        assert sql_result.stderr == ""
+    else:
+        assert sql_result.stdout == ""
+        assert json.loads(sql_result.stderr) == assessment
 
 
 def test_pr8_new_table_compositions_keep_existing_execution_semantics(
