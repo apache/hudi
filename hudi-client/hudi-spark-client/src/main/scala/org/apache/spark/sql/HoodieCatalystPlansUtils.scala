@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Join, LogicalPlan}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, Join, LogicalPlan, UnresolvedWith}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.internal.SQLConf
 
@@ -179,4 +179,16 @@ trait HoodieCatalystPlansUtils {
    * [[org.apache.spark.sql.execution.streaming.runtime]] package
    */
   def extractJsonFromSerializedOffset(offset: Any): Option[String]
+
+  /**
+   * Applies `f` to the plan of each CTE definition of an [[UnresolvedWith]]. The CTE definitions are
+   * not children of [[UnresolvedWith]], so plan transforms do not reach them.
+   *
+   * Before Spark 4.1:
+   *   cteRelations: Seq[(String, SubqueryAlias)]
+   *
+   * Since Spark 4.1:
+   *   cteRelations: Seq[(String, SubqueryAlias, Option[Int])]
+   */
+  def transformCteDefinitions(withClause: UnresolvedWith, f: LogicalPlan => LogicalPlan): LogicalPlan
 }
