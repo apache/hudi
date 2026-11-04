@@ -130,3 +130,8 @@ exercising the enabled default. Both tables passed metadata initialization/write
 exact-row, two-partition, and unchanged-restart checks. MOR completed upstream
 compaction; in this run its catch-up needed no additional downstream commit.
 The bundle package build skipped unit-test execution.
+
+## Source reset and expired-history safeguards
+
+See [guarded streaming-table chaining](SOURCE_SAFETY.md) for the opt-in reader
+configuration, recovery contract, and `source_safety_acceptance.py` scenario.

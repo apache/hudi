@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2, HoodieSchemaConversionUtils, HoodieSparkUtils, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
+import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions, HoodieCopyOnWriteCDCHadoopFsRelationFactory, HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV2, HoodieMergeOnReadCDCHadoopFsRelationFactory, HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV2, HoodieSchemaConversionUtils, HoodieSparkUtils, IncrementalRelationV2, MergeOnReadIncrementalRelationV2, SparkAdapterSupport}
 import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
@@ -50,6 +50,11 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
                            offsetRangeLimit: HoodieOffsetRangeLimit,
                            writeTableVersion: HoodieTableVersion)
   extends Source with Logging with Serializable with SparkAdapterSupport {
+
+  // Capture flow-scoped SQLConf once; explicit reader options take precedence.
+  private val failOnDataLoss = DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, parameters)
+    .get(DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.key())
+    .map(_.toBoolean).getOrElse(DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.defaultValue())
 
   private lazy val tableType = metaClient.getTableType
 
@@ -112,6 +117,11 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
     var startOffset = start.map(HoodieSourceOffset(_))
       .getOrElse(initialOffsets)
     var endOffset = HoodieSourceOffset(end)
+
+    if (!isCDCQuery && failOnDataLoss) {
+      HoodieStreamingSourceSafety.validate(metaClient, startOffset.offsetCommitTime,
+        endOffset.offsetCommitTime, completionTime = true, resumed = start.isDefined)
+    }
 
     // We update the offsets here since until this point the latest offsets have been
     // calculated no matter if it is in the expected version.
