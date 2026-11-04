@@ -15,20 +15,30 @@
 # specific language governing permissions and limitations
 # under the License.
 
-"""Refresh Hudi materialized views three times through the real SDP CLI."""
+"""Refresh Hudi materialized views four times through the real SDP CLI."""
 import argparse
 import json
+import signal
 from pathlib import Path
 import sys
 import tempfile
 
-SOURCE = 'from pyspark import pipelines as dp\nfrom pyspark.sql import SparkSession\nspark = SparkSession.active()\n\n@dp.materialized_view(name="json_mv", format="hudi", table_properties={"type": "cow", "primaryKey": "id"})\ndef json_mv():\n    return spark.read.schema("id INT, value STRING").json(spark.conf.get("hudi.test.input"))\n\n@dp.materialized_view(name="hudi_mv", format="hudi", table_properties={"type": "cow", "primaryKey": "id"})\ndef hudi_mv():\n    return spark.read.format("hudi").load(spark.conf.get("hudi.test.source")).select("id", "value")\n'
+SOURCE = 'from pyspark import pipelines as dp\nfrom pyspark.sql import SparkSession\nspark = SparkSession.active()\n\n@dp.materialized_view(name="json_mv", format="hudi", partition_cols=["value"], table_properties={"type": "cow", "primaryKey": "id"})\ndef json_mv():\n    return spark.read.schema("id INT, value STRING").json(spark.conf.get("hudi.test.input"))\n\n@dp.materialized_view(name="hudi_mv", format="hudi", table_properties={"type": "cow", "primaryKey": "id"})\ndef hudi_mv():\n    return spark.read.format("hudi").load(spark.conf.get("hudi.test.source")).select("id", "value")\n'
+
+def require(condition, message):
+    if not condition:
+        raise AssertionError(message)
+
+
+def interrupted(signum, _frame):
+    raise KeyboardInterrupt(f"Received signal {signum}")
+
 
 def client(mode, remote, root):
     from pyspark.sql import SparkSession
     spark = SparkSession.builder.remote(remote).getOrCreate()
     try:
-        assert spark.conf.get("spark.hudi.test.run.id") == root.name
+        require(spark.conf.get("spark.hudi.test.run.id") == root.name, "Connected to the wrong test server")
         expected = json.loads((root / "expected.json").read_text())
         frame = spark.createDataFrame([tuple(row) for row in expected], "id INT, value STRING")
         if mode.startswith("prepare"):
@@ -42,7 +52,7 @@ def client(mode, remote, root):
             for name in ("json_mv", "hudi_mv"):
                 actual = [list(row) for row in spark.table(f"sdp_test.{name}")
                           .select("id", "value").orderBy("id").collect()]
-                assert actual == expected, (name, actual, expected)
+                require(actual == expected, (name, actual, expected))
                 print(f"PASS {mode} {name}: {actual}")
     finally:
         spark.stop()
@@ -66,14 +76,14 @@ def scenario(h):
     (h.logs / path.name).write_text(path.read_text())
     # Remove and change rows as well as adding them: stale append output must fail.
     for i, expected in enumerate(([[1, "one"], [2, "two"]],
-                                   [[2, "updated"], [3, "three"]], [[4, "four"]]), 1):
+                                   [[2, "updated"], [3, "three"]], [[4, "four"]], []), 1):
         (h.root / "expected.json").write_text(json.dumps(expected))
         (source / "rows.json").write_text("".join(json.dumps(dict(zip(("id", "value"), row))) + "\n"
                                                    for row in expected))
         h.client(Path(__file__).resolve(), f"prepare-{i}")
         h.run_pipeline(path, f"refresh-{i}")
         h.client(Path(__file__).resolve(), f"verify-{i}")
-    print("PASS: three exact MV refreshes over JSON and Hudi sources")
+    print("PASS: four exact MV refreshes over JSON and Hudi sources")
 
 
 def main():
@@ -90,6 +100,7 @@ def main():
     args.logs.mkdir(parents=True, exist_ok=True)
     logs = Path(tempfile.mkdtemp(prefix="run-", dir=args.logs.resolve()))
     print(f"MV logs: {logs}", flush=True)
+    signal.signal(signal.SIGTERM, interrupted)
     with ConnectHarness(args.bundle, logs) as harness:
         scenario(harness)
 

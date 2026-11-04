@@ -28,11 +28,16 @@ python hudi-integ-test/spark-pipelines/materialized_views.py \
 ```
 
 Two Hudi materialized views read a JSON source and a Hudi source respectively.
-Three real CLI runs replace the source contents with `(1, one), (2, two)`,
-then `(2, updated), (3, three)`, then `(4, four)`. After every refresh, each
+Four real CLI runs replace the source contents with `(1, one), (2, two)`,
+then `(2, updated), (3, three)`, then `(4, four)`, then zero rows.
+The JSON-backed target is partitioned by `value`. After every refresh, each
 view must exactly match its defining query's expected rows. Removing old rows
 ensures that accidental append behavior fails. Repeated catalog reconciliation
 exercises metadata-column deletes and unchanged properties.
+
+Keyless aggregate materialized views remain deferred under #20405.
+Land this scenario after the #20453 harness dependency. Checks remain active under
+`python -O`, and SIGTERM unwinds the harness for server and temporary-directory cleanup.
 
 This is Phase 2 coverage on today's purge-style truncate. History retention,
 atomic refresh and timeline-preserving truncate are intentionally outside this
