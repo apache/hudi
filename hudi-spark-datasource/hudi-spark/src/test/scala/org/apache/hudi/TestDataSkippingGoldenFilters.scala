@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi.dataskipping
+package org.apache.hudi
 
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.junit.jupiter.api.Assertions.fail

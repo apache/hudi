@@ -15,12 +15,15 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi.dataskipping
+package org.apache.hudi
 
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, If, In, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, UnaryMinus}
+import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, If, In, InSet, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, UnaryMinus}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.types.{DoubleType, IntegerType}
+import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, Increasing, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, Verdict}
+import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
+import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -74,6 +77,17 @@ class TestDataSkippingStages {
   }
 
   @Test
+  def testLeafKeepsInSetValuesAsIs(): Unit = {
+    // Literal.apply throws on struct values, so parsing must not turn them into literals
+    val struct = AttributeReference("st", StructType(Seq(StructField("f", IntegerType))))()
+    val values: Set[Any] = Set(InternalRow(1), InternalRow(2))
+    assertEquals(Some(Leaf(struct, Op.InSet(values), Nil)), Leaf.parse(InSet(struct, values)))
+    // An unindexed column has no range, so the leaf compiles to TRUE without building them (the
+    // resolution check is off, so that the leaf is reached)
+    assertEquals(TrueLiteral, StatsFilterCompiler.compile(InSet(struct, values), source, strictResolution = false))
+  }
+
+  @Test
   def testLeafNullSafeEqualityToNullIsIsNull(): Unit = {
     assertEquals(Some(Leaf(x, Op.IsNull, Nil)), Leaf.parse(EqualNullSafe(x, Literal(null, DoubleType))))
     assertEquals(None, Leaf.parse(EqualNullSafe(x, ten)))
@@ -106,6 +120,17 @@ class TestDataSkippingStages {
     assertEquals(Not(And(StartsWith(lo, prefix), StartsWith(hi, prefix))), verdict(Op.NotStartsWith, prefix))
     assertEquals(Or(IsNull(nulls), GreaterThan(nulls, Literal(0))), verdict(Op.IsNull))
     assertEquals(Or(Or(IsNull(nulls), IsNull(rows)), LessThan(nulls, rows)), verdict(Op.IsNotNull))
+  }
+
+  @Test
+  def testInSetVerdictBuildsLiterals(): Unit = {
+    val (lo, hi) = (markers.lo, markers.hi)
+    assertEquals(And(LessThanOrEqual(lo, ten), GreaterThanOrEqual(hi, ten)),
+      Verdict(Leaf(x, Op.InSet(Set(10.0d)), Nil), markers))
+    // Strings are held as UTF8String, which Literal.apply does not accept
+    val prefix = Literal("ab")
+    assertEquals(And(LessThanOrEqual(lo, prefix), GreaterThanOrEqual(hi, prefix)),
+      Verdict(Leaf(x, Op.InSet(Set(UTF8String.fromString("ab"))), Nil), markers))
   }
 
   @Test
@@ -171,6 +196,15 @@ class TestDataSkippingStages {
     }
   }
 
+  /** `abs(child)` with a file guard, for ex one that only holds when the max is not too large. */
+  private object GuardedAbsRule extends RangeRule {
+    override def steps(term: Expression): Seq[Step] = term match {
+      case abs: Abs =>
+        Seq(Step(term, abs.child, Increasing, fileGuard = Some(r => LessThan(r.hi, ten)), partial = false))
+      case _ => Nil
+    }
+  }
+
   private val stubRules = Seq(NegateRule, AddLeftRule)
 
   @Test
@@ -197,6 +231,13 @@ class TestDataSkippingStages {
     // Re-binding would pair x's min with the low bound -max(x), which bounds nothing
     assertEquals(None, TermRange.derive(Add(UnaryMinus(x), Abs(x)), source, stubRules))
     assertEquals(None, TermRange.derive(UnaryMinus(Add(x, Abs(x))), source, stubRules))
+  }
+
+  @Test
+  def testDeriveGivesNoRangeForGuardedChain(): Unit = {
+    // Outside the guard the bounds are NULL, and a NULL verdict still prunes the file (#19474)
+    assertEquals(None, TermRange.derive(Abs(x), source, Seq(GuardedAbsRule)))
+    assertEquals(None, TermRange.derive(Add(Abs(x), ten), source, Seq(GuardedAbsRule, AddLeftRule)))
   }
 
   @Test

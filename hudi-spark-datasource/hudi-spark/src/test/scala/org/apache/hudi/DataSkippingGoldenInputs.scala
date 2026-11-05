@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hudi.dataskipping
+package org.apache.hudi
 
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, BinaryOperator, BitwiseOr, Cast, Coalesce, Concat, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, Substring, TimeZoneAwareExpression, ToUnixTimestamp, ToUTCTimestamp, Upper}
-import org.apache.spark.sql.types.{BooleanType, DataType, DateType, Decimal, DecimalType, DoubleType, IntegerType, LongType, ShortType, StringType, TimestampType}
+import org.apache.spark.sql.catalyst.util.ArrayData
+import org.apache.spark.sql.types.{ArrayType, BooleanType, DataType, DateType, Decimal, DecimalType, DoubleType, IntegerType, LongType, ShortType, StringType, StructField, StructType, TimestampType}
 
 import java.time.LocalDate
 
@@ -48,6 +50,19 @@ object DataSkippingGoldenInputs {
   private val dec = AttributeReference("dec", DecimalType(10, 2))()
 
   private val columns: Seq[Expression] = Seq(a, b, l, d, ts, s, x, dec)
+
+  // Never indexed: column stats only cover primitive columns
+  private val struct = AttributeReference("st", StructType(Seq(StructField("f", IntegerType))))()
+  private val array = AttributeReference("arr", ArrayType(IntegerType))()
+
+  /**
+   * IN over struct and array columns, which have no range: they compile to TRUE, without turning the
+   * [[InSet]] values into literals ([[Literal#apply]] throws on struct and array values).
+   */
+  private val nestedLeaves: Seq[Expression] = Seq(struct, array).flatMap { column =>
+    val v = Literal.default(column.dataType)
+    Seq(InSet(column, Set(v.value)), In(column, Seq(v)), EqualTo(column, v))
+  }
 
   private val day = Literal(LocalDate.of(2024, 1, 1))
 
@@ -112,7 +127,8 @@ object DataSkippingGoldenInputs {
   }
 
   /**
-   * Every input, in golden file order: the leaves, then a seeded sample of AND / OR / NOT trees.
+   * Every input, in golden file order: the leaves, a seeded sample of AND / OR / NOT trees, then the
+   * struct and array leaves.
    */
   def inputs: Seq[Expression] = {
     val allLeaves = terms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
@@ -129,7 +145,7 @@ object DataSkippingGoldenInputs {
           case _ => Not(tree(depth - 1))
         }
       }
-    allLeaves ++ (1 to 60).map(_ => tree(3))
+    allLeaves ++ (1 to 60).map(_ => tree(3)) ++ nestedLeaves
   }
 
   /**
@@ -156,13 +172,19 @@ object DataSkippingGoldenInputs {
     case attr: UnresolvedAttribute => attr.name
     case Literal(null, dt) => s"null:${dt.catalogString}"
     case Literal(value, StringType) => s"'$value'"
+    case Literal(value: ArrayData, ArrayType(elementType, _)) =>
+      value.toSeq[Any](elementType).map(e => render(Literal(e, elementType))).mkString("array(", ", ", ")")
+    case Literal(value: InternalRow, structType: StructType) =>
+      value.toSeq(structType).zip(structType.fields)
+        .map { case (e, field) => render(Literal(e, field.dataType)) }.mkString("struct(", ", ", ")")
     case Literal(value, dt) => s"$value:${dt.catalogString}"
     case Cast(child, dt, _, _) => s"cast(${render(child)} as ${dt.catalogString})"
     case Not(child) => s"NOT ${render(child)}"
     case IsNull(child) => s"${render(child)} IS NULL"
     case IsNotNull(child) => s"${render(child)} IS NOT NULL"
     case In(value, list) => s"${render(value)} IN (${list.map(render).mkString(", ")})"
-    case InSet(value, set) => s"${render(value)} INSET (${set.map(String.valueOf).toSeq.sorted.mkString(", ")})"
+    case InSet(value, set) =>
+      s"${render(value)} INSET (${set.toSeq.map(v => render(Literal(v, value.dataType))).sorted.mkString(", ")})"
     case op: BinaryOperator => s"(${render(op.left)} ${op.sqlOperator} ${render(op.right)})"
     case other => s"${other.prettyName}(${other.children.map(render).mkString(", ")})"
   }

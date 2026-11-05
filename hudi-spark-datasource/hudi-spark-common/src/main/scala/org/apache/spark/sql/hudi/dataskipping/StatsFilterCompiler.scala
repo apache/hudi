@@ -72,6 +72,7 @@ object StatsFilterCompiler {
       .getOrElse(TrueLiteral)
 
   // A verdict over a missing (NULL) stat must keep the file. Identity today; #19474 turns it into
-  // `Coalesce(Seq(e, TrueLiteral))`, here and only here
+  // `Coalesce(Seq(e, TrueLiteral))`, here and only here, and lifts the guarded-chain check in
+  // `TermRange.derive`
   private def keepOnNull(e: Expression): Expression = e
 }

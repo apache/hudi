@@ -60,7 +60,8 @@ case object Decreasing extends Direction
  * @param child     the operand whose range is pushed through, for ex `x`
  * @param direction whether `term` grows or shrinks with `child`
  * @param fileGuard per-file condition under which the mapping holds (for ex, no overflow); outside it
- *                  the bounds become NULL, i.e. unknown. `None` for every step today
+ *                  the bounds become NULL, i.e. unknown. `None` for every step today; until #19474
+ *                  keeps files on NULL verdicts, [[TermRange.derive]] gives guarded chains no range
  * @param partial   whether `term` can be NULL for a non-NULL `child` (for ex, `log` of a negative), in
  *                  which case null / value counts of the child no longer describe `term`. No behavioral
  *                  effect yet: IS NULL / IS NOT NULL only take bare columns

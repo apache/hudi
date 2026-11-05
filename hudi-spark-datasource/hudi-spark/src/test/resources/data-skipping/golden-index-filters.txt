@@ -29,7 +29,7 @@ cs	startswith(a, 'ab')	true:boolean
 ei	startswith(a, 'ab')	((a_minValue <= 'ab') AND (a_maxValue >= 'ab'))
 cs	NOT startswith(a, 'ab')	true:boolean
 ei	NOT startswith(a, 'ab')	NOT (startswith(a_minValue, 'ab') AND startswith(a_maxValue, 'ab'))
-cs	a INSET (0)	((a_minValue <= 0:int) AND (a_maxValue >= 0:int))
+cs	a INSET (0:int)	((a_minValue <= 0:int) AND (a_maxValue >= 0:int))
 cs	a IS NULL	(a_nullCount IS NULL OR (a_nullCount > 0:int))
 cs	a IS NOT NULL	((a_nullCount IS NULL OR valueCount IS NULL) OR (a_nullCount < valueCount))
 cs	NOT a IS NULL	true:boolean
@@ -47,7 +47,7 @@ cs	startswith(b, 'ab')	true:boolean
 ei	startswith(b, 'ab')	true:boolean
 cs	NOT startswith(b, 'ab')	true:boolean
 ei	NOT startswith(b, 'ab')	true:boolean
-cs	b INSET (0)	true:boolean
+cs	b INSET (0:int)	true:boolean
 cs	b IS NULL	true:boolean
 cs	b IS NOT NULL	true:boolean
 cs	NOT b IS NULL	true:boolean
@@ -65,7 +65,7 @@ cs	startswith(l, 'ab')	true:boolean
 ei	startswith(l, 'ab')	((l_minValue <= 'ab') AND (l_maxValue >= 'ab'))
 cs	NOT startswith(l, 'ab')	true:boolean
 ei	NOT startswith(l, 'ab')	NOT (startswith(l_minValue, 'ab') AND startswith(l_maxValue, 'ab'))
-cs	l INSET (0)	((l_minValue <= 0:bigint) AND (l_maxValue >= 0:bigint))
+cs	l INSET (0:bigint)	((l_minValue <= 0:bigint) AND (l_maxValue >= 0:bigint))
 cs	l IS NULL	(l_nullCount IS NULL OR (l_nullCount > 0:int))
 cs	l IS NOT NULL	((l_nullCount IS NULL OR valueCount IS NULL) OR (l_nullCount < valueCount))
 cs	NOT l IS NULL	true:boolean
@@ -85,7 +85,7 @@ cs	startswith(d, 'ab')	true:boolean
 ei	startswith(d, 'ab')	((d_minValue <= 'ab') AND (d_maxValue >= 'ab'))
 cs	NOT startswith(d, 'ab')	true:boolean
 ei	NOT startswith(d, 'ab')	NOT (startswith(d_minValue, 'ab') AND startswith(d_maxValue, 'ab'))
-cs	d INSET (0)	((d_minValue <= 0:int) AND (d_maxValue >= 0:int))
+cs	d INSET (0:date)	((d_minValue <= 0:int) AND (d_maxValue >= 0:int))
 cs	d IS NULL	(d_nullCount IS NULL OR (d_nullCount > 0:int))
 cs	d IS NOT NULL	((d_nullCount IS NULL OR valueCount IS NULL) OR (d_nullCount < valueCount))
 cs	NOT d IS NULL	true:boolean
@@ -105,7 +105,7 @@ cs	startswith(ts, 'ab')	true:boolean
 ei	startswith(ts, 'ab')	((ts_minValue <= 'ab') AND (ts_maxValue >= 'ab'))
 cs	NOT startswith(ts, 'ab')	true:boolean
 ei	NOT startswith(ts, 'ab')	NOT (startswith(ts_minValue, 'ab') AND startswith(ts_maxValue, 'ab'))
-cs	ts INSET (0)	((ts_minValue <= 0:bigint) AND (ts_maxValue >= 0:bigint))
+cs	ts INSET (0:timestamp)	((ts_minValue <= 0:bigint) AND (ts_maxValue >= 0:bigint))
 cs	ts IS NULL	(ts_nullCount IS NULL OR (ts_nullCount > 0:int))
 cs	ts IS NOT NULL	((ts_nullCount IS NULL OR valueCount IS NULL) OR (ts_nullCount < valueCount))
 cs	NOT ts IS NULL	true:boolean
@@ -123,7 +123,7 @@ cs	s IN ('', null:string)	(((s_minValue <= '') AND (s_maxValue >= '')) OR ((s_mi
 cs	NOT s IN ('')	NOT ((s_minValue = '') AND (s_maxValue = ''))
 cs	startswith(s, 'ab')	((s_minValue <= 'ab') AND (s_maxValue >= 'ab'))
 cs	NOT startswith(s, 'ab')	NOT (startswith(s_minValue, 'ab') AND startswith(s_maxValue, 'ab'))
-cs	s INSET ()	((s_minValue <= '') AND (s_maxValue >= ''))
+cs	s INSET ('')	((s_minValue <= '') AND (s_maxValue >= ''))
 cs	s IS NULL	(s_nullCount IS NULL OR (s_nullCount > 0:int))
 cs	s IS NOT NULL	((s_nullCount IS NULL OR valueCount IS NULL) OR (s_nullCount < valueCount))
 cs	NOT s IS NULL	true:boolean
@@ -143,7 +143,7 @@ cs	startswith(x, 'ab')	true:boolean
 ei	startswith(x, 'ab')	((x_minValue <= 'ab') AND (x_maxValue >= 'ab'))
 cs	NOT startswith(x, 'ab')	true:boolean
 ei	NOT startswith(x, 'ab')	NOT (startswith(x_minValue, 'ab') AND startswith(x_maxValue, 'ab'))
-cs	x INSET (0.0)	((x_minValue <= 0.0:double) AND (x_maxValue >= 0.0:double))
+cs	x INSET (0.0:double)	((x_minValue <= 0.0:double) AND (x_maxValue >= 0.0:double))
 cs	x IS NULL	(x_nullCount IS NULL OR (x_nullCount > 0:int))
 cs	x IS NOT NULL	((x_nullCount IS NULL OR valueCount IS NULL) OR (x_nullCount < valueCount))
 cs	NOT x IS NULL	true:boolean
@@ -163,7 +163,7 @@ cs	startswith(dec, 'ab')	true:boolean
 ei	startswith(dec, 'ab')	((dec_minValue <= 'ab') AND (dec_maxValue >= 'ab'))
 cs	NOT startswith(dec, 'ab')	true:boolean
 ei	NOT startswith(dec, 'ab')	NOT (startswith(dec_minValue, 'ab') AND startswith(dec_maxValue, 'ab'))
-cs	dec INSET (0.00)	((dec_minValue <= 0.00:decimal(10,2)) AND (dec_maxValue >= 0.00:decimal(10,2)))
+cs	dec INSET (0.00:decimal(10,2))	((dec_minValue <= 0.00:decimal(10,2)) AND (dec_maxValue >= 0.00:decimal(10,2)))
 cs	dec IS NULL	(dec_nullCount IS NULL OR (dec_nullCount > 0:int))
 cs	dec IS NOT NULL	((dec_nullCount IS NULL OR valueCount IS NULL) OR (dec_nullCount < valueCount))
 cs	NOT dec IS NULL	true:boolean
@@ -1139,7 +1139,7 @@ cs	((date_add(d, a) = 0:date) OR startswith(ln(EXP(x)), 'ab'))	true:boolean
 ei	((date_add(d, a) = 0:date) OR startswith(ln(EXP(x)), 'ab'))	true:boolean
 cs	NOT (NOT ((date_format(ts, 'yyyy-MM-dd') IN ('', null:string) OR (0:date < date_sub(d, dayofmonth(d)))) AND startswith((dec * 1.5:decimal(2,1)), 'ab')) OR NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab'))	true:boolean
 ei	NOT (NOT ((date_format(ts, 'yyyy-MM-dd') IN ('', null:string) OR (0:date < date_sub(d, dayofmonth(d)))) AND startswith((dec * 1.5:decimal(2,1)), 'ab')) OR NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab'))	true:boolean
-cs	l INSET (0)	((l_minValue <= 0:bigint) AND (l_maxValue >= 0:bigint))
+cs	l INSET (0:bigint)	((l_minValue <= 0:bigint) AND (l_maxValue >= 0:bigint))
 cs	(l = b)	true:boolean
 ei	(l = b)	true:boolean
 cs	(cast(a as smallint) = 0:smallint)	true:boolean
@@ -1154,3 +1154,9 @@ cs	NOT ((NOT (d = 0:date) OR NOT to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint
 ei	NOT ((NOT (d = 0:date) OR NOT to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint)) AND (NOT startswith(date_format(ts, cast(ts as string)), 'ab') OR NOT (startswith((a + a), 'ab') OR ((a * a) = cast(0:int as int)))))	true:boolean
 cs	startswith((2:int * a), 'ab')	true:boolean
 ei	startswith((2:int * a), 'ab')	(((2:int * a_minValue) <= 'ab') AND ((2:int * a_maxValue) >= 'ab'))
+cs	st INSET (struct(0:int))	true:boolean
+cs	st IN (struct(0:int))	true:boolean
+cs	(st = struct(0:int))	true:boolean
+cs	arr INSET (array())	true:boolean
+cs	arr IN (array())	true:boolean
+cs	(arr = array())	true:boolean

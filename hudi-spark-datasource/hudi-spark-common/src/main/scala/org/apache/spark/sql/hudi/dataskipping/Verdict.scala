@@ -19,6 +19,7 @@ package org.apache.spark.sql.hudi.dataskipping
 
 import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.unsafe.types.UTF8String
 
 /**
  * Stage 4 (Verdict): given the term's range in a file, could any row of the file pass `term OP value`?
@@ -39,6 +40,7 @@ object Verdict {
     case Op.GtEq => GreaterThanOrEqual(r.hi, single(leaf))
 
     case Op.In => leaf.values.map(v => mayContain(r, v)).reduce(Or)
+    case Op.InSet(values) => values.toSeq.map(toLiteral).map(v => mayContain(r, v)).reduce(Or)
     case Op.NotIn => Not(leaf.values.map(v => onlyContains(r, v)).reduce(Or))
 
     // Bug #20430: checks `lo <= p AND hi >= p`, which drops a file whose min extends `p` (min 'abcd' > 'abc')
@@ -67,4 +69,10 @@ object Verdict {
     And(EqualTo(r.lo, v), EqualTo(r.hi, v))
 
   private def single(leaf: Leaf): Expression = leaf.values.head
+
+  // NOTE: [[Literal#apply]] does not accept [[UTF8String]], so strings are converted first
+  private def toLiteral(value: Any): Literal = value match {
+    case str: UTF8String => Literal(str.toString)
+    case _ => Literal(value)
+  }
 }

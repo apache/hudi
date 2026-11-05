@@ -74,13 +74,18 @@ object TermRange {
   /**
    * Same as [[derive]], over the given rule table; tests pass their own rules here.
    *
-   * A chain with a [[Decreasing]] step whose bounds still reference the column off the chain
-   * derives no range (the file is kept): [[rebindOffChainReferences]] pairs the column's min
-   * with the low bound, but past a [[Decreasing]] step the low bound is built from the max.
+   * Two kinds of chain derive no range (the file is kept):
+   *  - A chain with a [[Decreasing]] step whose bounds still reference the column off the chain:
+   *    [[rebindOffChainReferences]] pairs the column's min with the low bound, but past a
+   *    [[Decreasing]] step the low bound is built from the max.
+   *  - A chain with a `fileGuard` step: outside the guard its bounds are NULL, and a NULL verdict
+   *    prunes the file until `StatsFilterCompiler.keepOnNull` keeps it (#19474).
    */
-  private[dataskipping] def derive(term: Expression, source: RangeSource, rules: Seq[RangeRule]): Option[TermRange] =
+  def derive(term: Expression, source: RangeSource, rules: Seq[RangeRule]): Option[TermRange] =
     viaRules(term, source, rules).flatMap { chain =>
-      if (chain.hasDecreasingStep && hasOffChainReferences(term, chain.range)) {
+      if (chain.hasGuardedStep) {
+        None
+      } else if (chain.hasDecreasingStep && hasOffChainReferences(term, chain.range)) {
         None
       } else {
         Some(rebindOffChainReferences(term, source, chain.range))
@@ -88,19 +93,23 @@ object TermRange {
     }
 
   /**
-   * A derived range, and whether any step of the chain that derived it is [[Decreasing]].
+   * A derived range, and whether any step of the chain that derived it is [[Decreasing]] or has a
+   * `fileGuard`.
    */
-  private case class Chain(range: TermRange, hasDecreasingStep: Boolean)
+  private case class Chain(range: TermRange, hasDecreasingStep: Boolean, hasGuardedStep: Boolean)
 
   /**
    * The source first; otherwise the first rule step whose child derives a range. Several steps
    * only arise for operators accepted on either side (for ex, `BitwiseOr`), tried in today's order.
    */
   private def viaRules(term: Expression, source: RangeSource, rules: Seq[RangeRule]): Option[Chain] =
-    source.rangeOf(term).map(r => Chain(r, hasDecreasingStep = false)).orElse(
+    source.rangeOf(term).map(r => Chain(r, hasDecreasingStep = false, hasGuardedStep = false)).orElse(
       rules.flatMap(_.steps(term)).view.flatMap { step =>
         viaRules(step.child, source, rules).map { chain =>
-          Chain(step.apply(chain.range), chain.hasDecreasingStep || step.direction == Decreasing)
+          Chain(
+            step.apply(chain.range),
+            hasDecreasingStep = chain.hasDecreasingStep || step.direction == Decreasing,
+            hasGuardedStep = chain.hasGuardedStep || step.fileGuard.isDefined)
         }
       }.headOption)
 

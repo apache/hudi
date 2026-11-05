@@ -39,6 +39,11 @@ object Op {
   case object Gt extends Op
   case object GtEq extends Op
   case object In extends Op
+  /**
+   * IN over the static values of an [[org.apache.spark.sql.catalyst.expressions.InSet]], kept as is:
+   * they only become literals in [[Verdict]], once the term has a range
+   */
+  case class InSet(values: Set[Any]) extends Op
   case object NotIn extends Op
   case object StartsWith extends Op
   case object NotStartsWith extends Op
@@ -66,9 +71,10 @@ object Leaf {
     case IsNotNull(column: AttributeReference) => Some(Leaf(column, Op.IsNotNull, Nil))
 
     case In(term, list) if isTerm(term) && list.forall(isValueExpression) => Some(Leaf(term, Op.In, list))
-    // NOTE: [[InSet]] is the optimized [[In]] over static values. [[Literal#apply]] does not accept
-    //       [[UTF8String]], so strings are converted first
-    case InSet(term, hset) if isTerm(term) => Some(Leaf(term, Op.In, hset.toSeq.map(toLiteral)))
+    // NOTE: [[InSet]] is the optimized [[In]] over static values. They are not turned into literals
+    //       here: [[Literal#apply]] throws on some (for ex, struct and array values), and a term with
+    //       no range (for ex, an unindexed column) must compile to TRUE rather than fail
+    case InSet(term, hset) if isTerm(term) => Some(Leaf(term, Op.InSet(hset), Nil))
     // NOTE: NotIn checks `foldable` rather than `isValueExpression`, as today
     case Not(In(term, list)) if isTerm(term) && list.forall(_.foldable) => Some(Leaf(term, Op.NotIn, list))
 
@@ -117,9 +123,4 @@ object Leaf {
    */
   private def isValueExpression(e: Expression): Boolean =
     e.references.isEmpty && !SubqueryExpression.hasSubquery(e)
-
-  private def toLiteral(value: Any): Literal = value match {
-    case str: UTF8String => Literal(str.toString)
-    case _ => Literal(value)
-  }
 }
