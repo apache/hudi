@@ -1,0 +1,1162 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Golden index filters of TestDataSkippingGoldenFilters, one per line:
+#   <mode> TAB <data table filter> TAB <index filter>
+# mode: cs = column stats (strict resolution), ei = expression index (unresolved inputs only).
+# Inputs and rendering: DataSkippingGoldenInputs. First generated from the translator before
+# the four-stage split (8e5608ec).
+cs	(a = 0:int)	((a_minValue <= 0:int) AND (a_maxValue >= 0:int))
+cs	(0:int < a)	(a_maxValue > 0:int)
+cs	(a >= 0:int)	(a_maxValue >= 0:int)
+cs	NOT (a = 0:int)	NOT ((a_minValue = 0:int) AND (a_maxValue = 0:int))
+cs	(a = cast(0:int as int))	((a_minValue <= cast(0:int as int)) AND (a_maxValue >= cast(0:int as int)))
+cs	a IN (0:int, null:int)	(((a_minValue <= 0:int) AND (a_maxValue >= 0:int)) OR ((a_minValue <= null:int) AND (a_maxValue >= null:int)))
+cs	NOT a IN (0:int)	NOT ((a_minValue = 0:int) AND (a_maxValue = 0:int))
+cs	startswith(a, 'ab')	true:boolean
+ei	startswith(a, 'ab')	((a_minValue <= 'ab') AND (a_maxValue >= 'ab'))
+cs	NOT startswith(a, 'ab')	true:boolean
+ei	NOT startswith(a, 'ab')	NOT (startswith(a_minValue, 'ab') AND startswith(a_maxValue, 'ab'))
+cs	a INSET (0:int)	((a_minValue <= 0:int) AND (a_maxValue >= 0:int))
+cs	a IS NULL	(a_nullCount IS NULL OR (a_nullCount > 0:int))
+cs	a IS NOT NULL	((a_nullCount IS NULL OR valueCount IS NULL) OR (a_nullCount < valueCount))
+cs	NOT a IS NULL	true:boolean
+cs	(a <=> null:int)	(a_nullCount IS NULL OR (a_nullCount > 0:int))
+cs	(a = b)	true:boolean
+cs	a IN (0:int, b)	true:boolean
+cs	(b = 0:int)	true:boolean
+cs	(0:int < b)	true:boolean
+cs	(b >= 0:int)	true:boolean
+cs	NOT (b = 0:int)	true:boolean
+cs	(b = cast(0:int as int))	true:boolean
+cs	b IN (0:int, null:int)	true:boolean
+cs	NOT b IN (0:int)	true:boolean
+cs	startswith(b, 'ab')	true:boolean
+ei	startswith(b, 'ab')	true:boolean
+cs	NOT startswith(b, 'ab')	true:boolean
+ei	NOT startswith(b, 'ab')	true:boolean
+cs	b INSET (0:int)	true:boolean
+cs	b IS NULL	true:boolean
+cs	b IS NOT NULL	true:boolean
+cs	NOT b IS NULL	true:boolean
+cs	(b <=> null:int)	true:boolean
+cs	(b = b)	true:boolean
+cs	b IN (0:int, b)	true:boolean
+cs	(l = 0:bigint)	((l_minValue <= 0:bigint) AND (l_maxValue >= 0:bigint))
+cs	(0:bigint < l)	(l_maxValue > 0:bigint)
+cs	(l >= 0:bigint)	(l_maxValue >= 0:bigint)
+cs	NOT (l = 0:bigint)	NOT ((l_minValue = 0:bigint) AND (l_maxValue = 0:bigint))
+cs	(l = cast(0:bigint as bigint))	((l_minValue <= cast(0:bigint as bigint)) AND (l_maxValue >= cast(0:bigint as bigint)))
+cs	l IN (0:bigint, null:bigint)	(((l_minValue <= 0:bigint) AND (l_maxValue >= 0:bigint)) OR ((l_minValue <= null:bigint) AND (l_maxValue >= null:bigint)))
+cs	NOT l IN (0:bigint)	NOT ((l_minValue = 0:bigint) AND (l_maxValue = 0:bigint))
+cs	startswith(l, 'ab')	true:boolean
+ei	startswith(l, 'ab')	((l_minValue <= 'ab') AND (l_maxValue >= 'ab'))
+cs	NOT startswith(l, 'ab')	true:boolean
+ei	NOT startswith(l, 'ab')	NOT (startswith(l_minValue, 'ab') AND startswith(l_maxValue, 'ab'))
+cs	l INSET (0:bigint)	((l_minValue <= 0:bigint) AND (l_maxValue >= 0:bigint))
+cs	l IS NULL	(l_nullCount IS NULL OR (l_nullCount > 0:int))
+cs	l IS NOT NULL	((l_nullCount IS NULL OR valueCount IS NULL) OR (l_nullCount < valueCount))
+cs	NOT l IS NULL	true:boolean
+cs	(l <=> null:bigint)	(l_nullCount IS NULL OR (l_nullCount > 0:int))
+cs	(l = b)	true:boolean
+ei	(l = b)	true:boolean
+cs	l IN (0:bigint, b)	true:boolean
+ei	l IN (0:bigint, b)	true:boolean
+cs	(d = 0:date)	((d_minValue <= 0:date) AND (d_maxValue >= 0:date))
+cs	(0:date < d)	(d_maxValue > 0:date)
+cs	(d >= 0:date)	(d_maxValue >= 0:date)
+cs	NOT (d = 0:date)	NOT ((d_minValue = 0:date) AND (d_maxValue = 0:date))
+cs	(d = cast(0:date as date))	((d_minValue <= cast(0:date as date)) AND (d_maxValue >= cast(0:date as date)))
+cs	d IN (0:date, null:date)	(((d_minValue <= 0:date) AND (d_maxValue >= 0:date)) OR ((d_minValue <= null:date) AND (d_maxValue >= null:date)))
+cs	NOT d IN (0:date)	NOT ((d_minValue = 0:date) AND (d_maxValue = 0:date))
+cs	startswith(d, 'ab')	true:boolean
+ei	startswith(d, 'ab')	((d_minValue <= 'ab') AND (d_maxValue >= 'ab'))
+cs	NOT startswith(d, 'ab')	true:boolean
+ei	NOT startswith(d, 'ab')	NOT (startswith(d_minValue, 'ab') AND startswith(d_maxValue, 'ab'))
+cs	d INSET (0:date)	((d_minValue <= 0:int) AND (d_maxValue >= 0:int))
+cs	d IS NULL	(d_nullCount IS NULL OR (d_nullCount > 0:int))
+cs	d IS NOT NULL	((d_nullCount IS NULL OR valueCount IS NULL) OR (d_nullCount < valueCount))
+cs	NOT d IS NULL	true:boolean
+cs	(d <=> null:date)	(d_nullCount IS NULL OR (d_nullCount > 0:int))
+cs	(d = b)	true:boolean
+ei	(d = b)	true:boolean
+cs	d IN (0:date, b)	true:boolean
+ei	d IN (0:date, b)	true:boolean
+cs	(ts = 0:timestamp)	((ts_minValue <= 0:timestamp) AND (ts_maxValue >= 0:timestamp))
+cs	(0:timestamp < ts)	(ts_maxValue > 0:timestamp)
+cs	(ts >= 0:timestamp)	(ts_maxValue >= 0:timestamp)
+cs	NOT (ts = 0:timestamp)	NOT ((ts_minValue = 0:timestamp) AND (ts_maxValue = 0:timestamp))
+cs	(ts = cast(0:timestamp as timestamp))	((ts_minValue <= cast(0:timestamp as timestamp)) AND (ts_maxValue >= cast(0:timestamp as timestamp)))
+cs	ts IN (0:timestamp, null:timestamp)	(((ts_minValue <= 0:timestamp) AND (ts_maxValue >= 0:timestamp)) OR ((ts_minValue <= null:timestamp) AND (ts_maxValue >= null:timestamp)))
+cs	NOT ts IN (0:timestamp)	NOT ((ts_minValue = 0:timestamp) AND (ts_maxValue = 0:timestamp))
+cs	startswith(ts, 'ab')	true:boolean
+ei	startswith(ts, 'ab')	((ts_minValue <= 'ab') AND (ts_maxValue >= 'ab'))
+cs	NOT startswith(ts, 'ab')	true:boolean
+ei	NOT startswith(ts, 'ab')	NOT (startswith(ts_minValue, 'ab') AND startswith(ts_maxValue, 'ab'))
+cs	ts INSET (0:timestamp)	((ts_minValue <= 0:bigint) AND (ts_maxValue >= 0:bigint))
+cs	ts IS NULL	(ts_nullCount IS NULL OR (ts_nullCount > 0:int))
+cs	ts IS NOT NULL	((ts_nullCount IS NULL OR valueCount IS NULL) OR (ts_nullCount < valueCount))
+cs	NOT ts IS NULL	true:boolean
+cs	(ts <=> null:timestamp)	(ts_nullCount IS NULL OR (ts_nullCount > 0:int))
+cs	(ts = b)	true:boolean
+ei	(ts = b)	true:boolean
+cs	ts IN (0:timestamp, b)	true:boolean
+ei	ts IN (0:timestamp, b)	true:boolean
+cs	(s = '')	((s_minValue <= '') AND (s_maxValue >= ''))
+cs	('' < s)	(s_maxValue > '')
+cs	(s >= '')	(s_maxValue >= '')
+cs	NOT (s = '')	NOT ((s_minValue = '') AND (s_maxValue = ''))
+cs	(s = cast('' as string))	((s_minValue <= cast('' as string)) AND (s_maxValue >= cast('' as string)))
+cs	s IN ('', null:string)	(((s_minValue <= '') AND (s_maxValue >= '')) OR ((s_minValue <= null:string) AND (s_maxValue >= null:string)))
+cs	NOT s IN ('')	NOT ((s_minValue = '') AND (s_maxValue = ''))
+cs	startswith(s, 'ab')	((s_minValue <= 'ab') AND (s_maxValue >= 'ab'))
+cs	NOT startswith(s, 'ab')	NOT (startswith(s_minValue, 'ab') AND startswith(s_maxValue, 'ab'))
+cs	s INSET ('')	((s_minValue <= '') AND (s_maxValue >= ''))
+cs	s IS NULL	(s_nullCount IS NULL OR (s_nullCount > 0:int))
+cs	s IS NOT NULL	((s_nullCount IS NULL OR valueCount IS NULL) OR (s_nullCount < valueCount))
+cs	NOT s IS NULL	true:boolean
+cs	(s <=> null:string)	(s_nullCount IS NULL OR (s_nullCount > 0:int))
+cs	(s = b)	true:boolean
+ei	(s = b)	true:boolean
+cs	s IN ('', b)	true:boolean
+ei	s IN ('', b)	true:boolean
+cs	(x = 0.0:double)	((x_minValue <= 0.0:double) AND (x_maxValue >= 0.0:double))
+cs	(0.0:double < x)	(x_maxValue > 0.0:double)
+cs	(x >= 0.0:double)	(x_maxValue >= 0.0:double)
+cs	NOT (x = 0.0:double)	NOT ((x_minValue = 0.0:double) AND (x_maxValue = 0.0:double))
+cs	(x = cast(0.0:double as double))	((x_minValue <= cast(0.0:double as double)) AND (x_maxValue >= cast(0.0:double as double)))
+cs	x IN (0.0:double, null:double)	(((x_minValue <= 0.0:double) AND (x_maxValue >= 0.0:double)) OR ((x_minValue <= null:double) AND (x_maxValue >= null:double)))
+cs	NOT x IN (0.0:double)	NOT ((x_minValue = 0.0:double) AND (x_maxValue = 0.0:double))
+cs	startswith(x, 'ab')	true:boolean
+ei	startswith(x, 'ab')	((x_minValue <= 'ab') AND (x_maxValue >= 'ab'))
+cs	NOT startswith(x, 'ab')	true:boolean
+ei	NOT startswith(x, 'ab')	NOT (startswith(x_minValue, 'ab') AND startswith(x_maxValue, 'ab'))
+cs	x INSET (0.0:double)	((x_minValue <= 0.0:double) AND (x_maxValue >= 0.0:double))
+cs	x IS NULL	(x_nullCount IS NULL OR (x_nullCount > 0:int))
+cs	x IS NOT NULL	((x_nullCount IS NULL OR valueCount IS NULL) OR (x_nullCount < valueCount))
+cs	NOT x IS NULL	true:boolean
+cs	(x <=> null:double)	(x_nullCount IS NULL OR (x_nullCount > 0:int))
+cs	(x = b)	true:boolean
+ei	(x = b)	true:boolean
+cs	x IN (0.0:double, b)	true:boolean
+ei	x IN (0.0:double, b)	true:boolean
+cs	(dec = 0.00:decimal(10,2))	((dec_minValue <= 0.00:decimal(10,2)) AND (dec_maxValue >= 0.00:decimal(10,2)))
+cs	(0.00:decimal(10,2) < dec)	(dec_maxValue > 0.00:decimal(10,2))
+cs	(dec >= 0.00:decimal(10,2))	(dec_maxValue >= 0.00:decimal(10,2))
+cs	NOT (dec = 0.00:decimal(10,2))	NOT ((dec_minValue = 0.00:decimal(10,2)) AND (dec_maxValue = 0.00:decimal(10,2)))
+cs	(dec = cast(0.00:decimal(10,2) as decimal(10,2)))	((dec_minValue <= cast(0.00:decimal(10,2) as decimal(10,2))) AND (dec_maxValue >= cast(0.00:decimal(10,2) as decimal(10,2))))
+cs	dec IN (0.00:decimal(10,2), null:decimal(10,2))	(((dec_minValue <= 0.00:decimal(10,2)) AND (dec_maxValue >= 0.00:decimal(10,2))) OR ((dec_minValue <= null:decimal(10,2)) AND (dec_maxValue >= null:decimal(10,2))))
+cs	NOT dec IN (0.00:decimal(10,2))	NOT ((dec_minValue = 0.00:decimal(10,2)) AND (dec_maxValue = 0.00:decimal(10,2)))
+cs	startswith(dec, 'ab')	true:boolean
+ei	startswith(dec, 'ab')	((dec_minValue <= 'ab') AND (dec_maxValue >= 'ab'))
+cs	NOT startswith(dec, 'ab')	true:boolean
+ei	NOT startswith(dec, 'ab')	NOT (startswith(dec_minValue, 'ab') AND startswith(dec_maxValue, 'ab'))
+cs	dec INSET (0.00:decimal(10,2))	((dec_minValue <= 0.00:decimal(10,2)) AND (dec_maxValue >= 0.00:decimal(10,2)))
+cs	dec IS NULL	(dec_nullCount IS NULL OR (dec_nullCount > 0:int))
+cs	dec IS NOT NULL	((dec_nullCount IS NULL OR valueCount IS NULL) OR (dec_nullCount < valueCount))
+cs	NOT dec IS NULL	true:boolean
+cs	(dec <=> null:decimal(10,2))	(dec_nullCount IS NULL OR (dec_nullCount > 0:int))
+cs	(dec = b)	true:boolean
+ei	(dec = b)	true:boolean
+cs	dec IN (0.00:decimal(10,2), b)	true:boolean
+ei	dec IN (0.00:decimal(10,2), b)	true:boolean
+cs	((a + 1:int) = 0:int)	(((a_minValue + 1:int) <= 0:int) AND ((a_maxValue + 1:int) >= 0:int))
+cs	(0:int < (a + 1:int))	((a_maxValue + 1:int) > 0:int)
+cs	((a + 1:int) >= 0:int)	((a_maxValue + 1:int) >= 0:int)
+cs	NOT ((a + 1:int) = 0:int)	NOT (((a_minValue + 1:int) = 0:int) AND ((a_maxValue + 1:int) = 0:int))
+cs	((a + 1:int) = cast(0:int as int))	(((a_minValue + 1:int) <= cast(0:int as int)) AND ((a_maxValue + 1:int) >= cast(0:int as int)))
+cs	(a + 1:int) IN (0:int, null:int)	((((a_minValue + 1:int) <= 0:int) AND ((a_maxValue + 1:int) >= 0:int)) OR (((a_minValue + 1:int) <= null:int) AND ((a_maxValue + 1:int) >= null:int)))
+cs	NOT (a + 1:int) IN (0:int)	NOT (((a_minValue + 1:int) = 0:int) AND ((a_maxValue + 1:int) = 0:int))
+cs	startswith((a + 1:int), 'ab')	true:boolean
+ei	startswith((a + 1:int), 'ab')	(((a_minValue + 1:int) <= 'ab') AND ((a_maxValue + 1:int) >= 'ab'))
+cs	NOT startswith((a + 1:int), 'ab')	true:boolean
+ei	NOT startswith((a + 1:int), 'ab')	NOT (startswith((a_minValue + 1:int), 'ab') AND startswith((a_maxValue + 1:int), 'ab'))
+cs	((1:int + a) = 0:int)	(((1:int + a_minValue) <= 0:int) AND ((1:int + a_maxValue) >= 0:int))
+cs	(0:int < (1:int + a))	((1:int + a_maxValue) > 0:int)
+cs	((1:int + a) >= 0:int)	((1:int + a_maxValue) >= 0:int)
+cs	NOT ((1:int + a) = 0:int)	NOT (((1:int + a_minValue) = 0:int) AND ((1:int + a_maxValue) = 0:int))
+cs	((1:int + a) = cast(0:int as int))	(((1:int + a_minValue) <= cast(0:int as int)) AND ((1:int + a_maxValue) >= cast(0:int as int)))
+cs	(1:int + a) IN (0:int, null:int)	((((1:int + a_minValue) <= 0:int) AND ((1:int + a_maxValue) >= 0:int)) OR (((1:int + a_minValue) <= null:int) AND ((1:int + a_maxValue) >= null:int)))
+cs	NOT (1:int + a) IN (0:int)	NOT (((1:int + a_minValue) = 0:int) AND ((1:int + a_maxValue) = 0:int))
+cs	startswith((1:int + a), 'ab')	true:boolean
+ei	startswith((1:int + a), 'ab')	(((1:int + a_minValue) <= 'ab') AND ((1:int + a_maxValue) >= 'ab'))
+cs	NOT startswith((1:int + a), 'ab')	true:boolean
+ei	NOT startswith((1:int + a), 'ab')	NOT (startswith((1:int + a_minValue), 'ab') AND startswith((1:int + a_maxValue), 'ab'))
+cs	((a + b) = 0:int)	true:boolean
+cs	(0:int < (a + b))	true:boolean
+cs	((a + b) >= 0:int)	true:boolean
+cs	NOT ((a + b) = 0:int)	true:boolean
+cs	((a + b) = cast(0:int as int))	true:boolean
+cs	(a + b) IN (0:int, null:int)	true:boolean
+cs	NOT (a + b) IN (0:int)	true:boolean
+cs	startswith((a + b), 'ab')	true:boolean
+ei	startswith((a + b), 'ab')	true:boolean
+cs	NOT startswith((a + b), 'ab')	true:boolean
+ei	NOT startswith((a + b), 'ab')	true:boolean
+cs	((a + a) = 0:int)	true:boolean
+cs	(0:int < (a + a))	true:boolean
+cs	((a + a) >= 0:int)	true:boolean
+cs	NOT ((a + a) = 0:int)	true:boolean
+cs	((a + a) = cast(0:int as int))	true:boolean
+cs	(a + a) IN (0:int, null:int)	true:boolean
+cs	NOT (a + a) IN (0:int)	true:boolean
+cs	startswith((a + a), 'ab')	true:boolean
+ei	startswith((a + a), 'ab')	true:boolean
+cs	NOT startswith((a + a), 'ab')	true:boolean
+ei	NOT startswith((a + a), 'ab')	true:boolean
+cs	((b + 1:int) = 0:int)	true:boolean
+cs	(0:int < (b + 1:int))	true:boolean
+cs	((b + 1:int) >= 0:int)	true:boolean
+cs	NOT ((b + 1:int) = 0:int)	true:boolean
+cs	((b + 1:int) = cast(0:int as int))	true:boolean
+cs	(b + 1:int) IN (0:int, null:int)	true:boolean
+cs	NOT (b + 1:int) IN (0:int)	true:boolean
+cs	startswith((b + 1:int), 'ab')	true:boolean
+ei	startswith((b + 1:int), 'ab')	true:boolean
+cs	NOT startswith((b + 1:int), 'ab')	true:boolean
+ei	NOT startswith((b + 1:int), 'ab')	true:boolean
+cs	((a + 'x') = 0:int)	true:boolean
+ei	((a + 'x') = 0:int)	(((a_minValue + 'x') <= 0:int) AND ((a_maxValue + 'x') >= 0:int))
+cs	(0:int < (a + 'x'))	true:boolean
+ei	(0:int < (a + 'x'))	((a_maxValue + 'x') > 0:int)
+cs	((a + 'x') >= 0:int)	true:boolean
+ei	((a + 'x') >= 0:int)	((a_maxValue + 'x') >= 0:int)
+cs	NOT ((a + 'x') = 0:int)	true:boolean
+ei	NOT ((a + 'x') = 0:int)	NOT (((a_minValue + 'x') = 0:int) AND ((a_maxValue + 'x') = 0:int))
+cs	((a + 'x') = cast(0:int as int))	true:boolean
+ei	((a + 'x') = cast(0:int as int))	(((a_minValue + 'x') <= cast(0:int as int)) AND ((a_maxValue + 'x') >= cast(0:int as int)))
+cs	(a + 'x') IN (0:int, null:int)	true:boolean
+ei	(a + 'x') IN (0:int, null:int)	((((a_minValue + 'x') <= 0:int) AND ((a_maxValue + 'x') >= 0:int)) OR (((a_minValue + 'x') <= null:int) AND ((a_maxValue + 'x') >= null:int)))
+cs	NOT (a + 'x') IN (0:int)	true:boolean
+ei	NOT (a + 'x') IN (0:int)	NOT (((a_minValue + 'x') = 0:int) AND ((a_maxValue + 'x') = 0:int))
+cs	startswith((a + 'x'), 'ab')	true:boolean
+ei	startswith((a + 'x'), 'ab')	(((a_minValue + 'x') <= 'ab') AND ((a_maxValue + 'x') >= 'ab'))
+cs	NOT startswith((a + 'x'), 'ab')	true:boolean
+ei	NOT startswith((a + 'x'), 'ab')	NOT (startswith((a_minValue + 'x'), 'ab') AND startswith((a_maxValue + 'x'), 'ab'))
+cs	((a * 2:int) = 0:int)	(((a_minValue * 2:int) <= 0:int) AND ((a_maxValue * 2:int) >= 0:int))
+cs	(0:int < (a * 2:int))	((a_maxValue * 2:int) > 0:int)
+cs	((a * 2:int) >= 0:int)	((a_maxValue * 2:int) >= 0:int)
+cs	NOT ((a * 2:int) = 0:int)	NOT (((a_minValue * 2:int) = 0:int) AND ((a_maxValue * 2:int) = 0:int))
+cs	((a * 2:int) = cast(0:int as int))	(((a_minValue * 2:int) <= cast(0:int as int)) AND ((a_maxValue * 2:int) >= cast(0:int as int)))
+cs	(a * 2:int) IN (0:int, null:int)	((((a_minValue * 2:int) <= 0:int) AND ((a_maxValue * 2:int) >= 0:int)) OR (((a_minValue * 2:int) <= null:int) AND ((a_maxValue * 2:int) >= null:int)))
+cs	NOT (a * 2:int) IN (0:int)	NOT (((a_minValue * 2:int) = 0:int) AND ((a_maxValue * 2:int) = 0:int))
+cs	startswith((a * 2:int), 'ab')	true:boolean
+ei	startswith((a * 2:int), 'ab')	(((a_minValue * 2:int) <= 'ab') AND ((a_maxValue * 2:int) >= 'ab'))
+cs	NOT startswith((a * 2:int), 'ab')	true:boolean
+ei	NOT startswith((a * 2:int), 'ab')	NOT (startswith((a_minValue * 2:int), 'ab') AND startswith((a_maxValue * 2:int), 'ab'))
+cs	((2:int * a) = 0:int)	(((2:int * a_minValue) <= 0:int) AND ((2:int * a_maxValue) >= 0:int))
+cs	(0:int < (2:int * a))	((2:int * a_maxValue) > 0:int)
+cs	((2:int * a) >= 0:int)	((2:int * a_maxValue) >= 0:int)
+cs	NOT ((2:int * a) = 0:int)	NOT (((2:int * a_minValue) = 0:int) AND ((2:int * a_maxValue) = 0:int))
+cs	((2:int * a) = cast(0:int as int))	(((2:int * a_minValue) <= cast(0:int as int)) AND ((2:int * a_maxValue) >= cast(0:int as int)))
+cs	(2:int * a) IN (0:int, null:int)	((((2:int * a_minValue) <= 0:int) AND ((2:int * a_maxValue) >= 0:int)) OR (((2:int * a_minValue) <= null:int) AND ((2:int * a_maxValue) >= null:int)))
+cs	NOT (2:int * a) IN (0:int)	NOT (((2:int * a_minValue) = 0:int) AND ((2:int * a_maxValue) = 0:int))
+cs	startswith((2:int * a), 'ab')	true:boolean
+ei	startswith((2:int * a), 'ab')	(((2:int * a_minValue) <= 'ab') AND ((2:int * a_maxValue) >= 'ab'))
+cs	NOT startswith((2:int * a), 'ab')	true:boolean
+ei	NOT startswith((2:int * a), 'ab')	NOT (startswith((2:int * a_minValue), 'ab') AND startswith((2:int * a_maxValue), 'ab'))
+cs	((a * -2:int) = 0:int)	true:boolean
+cs	(0:int < (a * -2:int))	true:boolean
+cs	((a * -2:int) >= 0:int)	true:boolean
+cs	NOT ((a * -2:int) = 0:int)	true:boolean
+cs	((a * -2:int) = cast(0:int as int))	true:boolean
+cs	(a * -2:int) IN (0:int, null:int)	true:boolean
+cs	NOT (a * -2:int) IN (0:int)	true:boolean
+cs	startswith((a * -2:int), 'ab')	true:boolean
+ei	startswith((a * -2:int), 'ab')	true:boolean
+cs	NOT startswith((a * -2:int), 'ab')	true:boolean
+ei	NOT startswith((a * -2:int), 'ab')	true:boolean
+cs	((0:int * a) = 0:int)	true:boolean
+cs	(0:int < (0:int * a))	true:boolean
+cs	((0:int * a) >= 0:int)	true:boolean
+cs	NOT ((0:int * a) = 0:int)	true:boolean
+cs	((0:int * a) = cast(0:int as int))	true:boolean
+cs	(0:int * a) IN (0:int, null:int)	true:boolean
+cs	NOT (0:int * a) IN (0:int)	true:boolean
+cs	startswith((0:int * a), 'ab')	true:boolean
+ei	startswith((0:int * a), 'ab')	true:boolean
+cs	NOT startswith((0:int * a), 'ab')	true:boolean
+ei	NOT startswith((0:int * a), 'ab')	true:boolean
+cs	((a * a) = 0:int)	true:boolean
+cs	(0:int < (a * a))	true:boolean
+cs	((a * a) >= 0:int)	true:boolean
+cs	NOT ((a * a) = 0:int)	true:boolean
+cs	((a * a) = cast(0:int as int))	true:boolean
+cs	(a * a) IN (0:int, null:int)	true:boolean
+cs	NOT (a * a) IN (0:int)	true:boolean
+cs	startswith((a * a), 'ab')	true:boolean
+ei	startswith((a * a), 'ab')	true:boolean
+cs	NOT startswith((a * a), 'ab')	true:boolean
+ei	NOT startswith((a * a), 'ab')	true:boolean
+cs	((x * Infinity:double) = 0.0:double)	true:boolean
+cs	(0.0:double < (x * Infinity:double))	true:boolean
+cs	((x * Infinity:double) >= 0.0:double)	true:boolean
+cs	NOT ((x * Infinity:double) = 0.0:double)	true:boolean
+cs	((x * Infinity:double) = cast(0.0:double as double))	true:boolean
+cs	(x * Infinity:double) IN (0.0:double, null:double)	true:boolean
+cs	NOT (x * Infinity:double) IN (0.0:double)	true:boolean
+cs	startswith((x * Infinity:double), 'ab')	true:boolean
+ei	startswith((x * Infinity:double), 'ab')	true:boolean
+cs	NOT startswith((x * Infinity:double), 'ab')	true:boolean
+ei	NOT startswith((x * Infinity:double), 'ab')	true:boolean
+cs	((dec * 1.5:decimal(2,1)) = 0.000:decimal(13,3))	(((dec_minValue * 1.5:decimal(2,1)) <= 0.000:decimal(13,3)) AND ((dec_maxValue * 1.5:decimal(2,1)) >= 0.000:decimal(13,3)))
+cs	(0.000:decimal(13,3) < (dec * 1.5:decimal(2,1)))	((dec_maxValue * 1.5:decimal(2,1)) > 0.000:decimal(13,3))
+cs	((dec * 1.5:decimal(2,1)) >= 0.000:decimal(13,3))	((dec_maxValue * 1.5:decimal(2,1)) >= 0.000:decimal(13,3))
+cs	NOT ((dec * 1.5:decimal(2,1)) = 0.000:decimal(13,3))	NOT (((dec_minValue * 1.5:decimal(2,1)) = 0.000:decimal(13,3)) AND ((dec_maxValue * 1.5:decimal(2,1)) = 0.000:decimal(13,3)))
+cs	((dec * 1.5:decimal(2,1)) = cast(0.000:decimal(13,3) as decimal(13,3)))	(((dec_minValue * 1.5:decimal(2,1)) <= cast(0.000:decimal(13,3) as decimal(13,3))) AND ((dec_maxValue * 1.5:decimal(2,1)) >= cast(0.000:decimal(13,3) as decimal(13,3))))
+cs	(dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3), null:decimal(13,3))	((((dec_minValue * 1.5:decimal(2,1)) <= 0.000:decimal(13,3)) AND ((dec_maxValue * 1.5:decimal(2,1)) >= 0.000:decimal(13,3))) OR (((dec_minValue * 1.5:decimal(2,1)) <= null:decimal(13,3)) AND ((dec_maxValue * 1.5:decimal(2,1)) >= null:decimal(13,3))))
+cs	NOT (dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3))	NOT (((dec_minValue * 1.5:decimal(2,1)) = 0.000:decimal(13,3)) AND ((dec_maxValue * 1.5:decimal(2,1)) = 0.000:decimal(13,3)))
+cs	startswith((dec * 1.5:decimal(2,1)), 'ab')	true:boolean
+ei	startswith((dec * 1.5:decimal(2,1)), 'ab')	(((dec_minValue * 1.5:decimal(2,1)) <= 'ab') AND ((dec_maxValue * 1.5:decimal(2,1)) >= 'ab'))
+cs	NOT startswith((dec * 1.5:decimal(2,1)), 'ab')	true:boolean
+ei	NOT startswith((dec * 1.5:decimal(2,1)), 'ab')	NOT (startswith((dec_minValue * 1.5:decimal(2,1)), 'ab') AND startswith((dec_maxValue * 1.5:decimal(2,1)), 'ab'))
+cs	((x / 2.0:double) = 0.0:double)	(((x_minValue / 2.0:double) <= 0.0:double) AND ((x_maxValue / 2.0:double) >= 0.0:double))
+cs	(0.0:double < (x / 2.0:double))	((x_maxValue / 2.0:double) > 0.0:double)
+cs	((x / 2.0:double) >= 0.0:double)	((x_maxValue / 2.0:double) >= 0.0:double)
+cs	NOT ((x / 2.0:double) = 0.0:double)	NOT (((x_minValue / 2.0:double) = 0.0:double) AND ((x_maxValue / 2.0:double) = 0.0:double))
+cs	((x / 2.0:double) = cast(0.0:double as double))	(((x_minValue / 2.0:double) <= cast(0.0:double as double)) AND ((x_maxValue / 2.0:double) >= cast(0.0:double as double)))
+cs	(x / 2.0:double) IN (0.0:double, null:double)	((((x_minValue / 2.0:double) <= 0.0:double) AND ((x_maxValue / 2.0:double) >= 0.0:double)) OR (((x_minValue / 2.0:double) <= null:double) AND ((x_maxValue / 2.0:double) >= null:double)))
+cs	NOT (x / 2.0:double) IN (0.0:double)	NOT (((x_minValue / 2.0:double) = 0.0:double) AND ((x_maxValue / 2.0:double) = 0.0:double))
+cs	startswith((x / 2.0:double), 'ab')	true:boolean
+ei	startswith((x / 2.0:double), 'ab')	(((x_minValue / 2.0:double) <= 'ab') AND ((x_maxValue / 2.0:double) >= 'ab'))
+cs	NOT startswith((x / 2.0:double), 'ab')	true:boolean
+ei	NOT startswith((x / 2.0:double), 'ab')	NOT (startswith((x_minValue / 2.0:double), 'ab') AND startswith((x_maxValue / 2.0:double), 'ab'))
+cs	((2.0:double / x) = 0.0:double)	true:boolean
+cs	(0.0:double < (2.0:double / x))	true:boolean
+cs	((2.0:double / x) >= 0.0:double)	true:boolean
+cs	NOT ((2.0:double / x) = 0.0:double)	true:boolean
+cs	((2.0:double / x) = cast(0.0:double as double))	true:boolean
+cs	(2.0:double / x) IN (0.0:double, null:double)	true:boolean
+cs	NOT (2.0:double / x) IN (0.0:double)	true:boolean
+cs	startswith((2.0:double / x), 'ab')	true:boolean
+ei	startswith((2.0:double / x), 'ab')	true:boolean
+cs	NOT startswith((2.0:double / x), 'ab')	true:boolean
+ei	NOT startswith((2.0:double / x), 'ab')	true:boolean
+cs	((x / -2.0:double) = 0.0:double)	true:boolean
+cs	(0.0:double < (x / -2.0:double))	true:boolean
+cs	((x / -2.0:double) >= 0.0:double)	true:boolean
+cs	NOT ((x / -2.0:double) = 0.0:double)	true:boolean
+cs	((x / -2.0:double) = cast(0.0:double as double))	true:boolean
+cs	(x / -2.0:double) IN (0.0:double, null:double)	true:boolean
+cs	NOT (x / -2.0:double) IN (0.0:double)	true:boolean
+cs	startswith((x / -2.0:double), 'ab')	true:boolean
+ei	startswith((x / -2.0:double), 'ab')	true:boolean
+cs	NOT startswith((x / -2.0:double), 'ab')	true:boolean
+ei	NOT startswith((x / -2.0:double), 'ab')	true:boolean
+cs	((x / x) = 0.0:double)	true:boolean
+cs	(0.0:double < (x / x))	true:boolean
+cs	((x / x) >= 0.0:double)	true:boolean
+cs	NOT ((x / x) = 0.0:double)	true:boolean
+cs	((x / x) = cast(0.0:double as double))	true:boolean
+cs	(x / x) IN (0.0:double, null:double)	true:boolean
+cs	NOT (x / x) IN (0.0:double)	true:boolean
+cs	startswith((x / x), 'ab')	true:boolean
+ei	startswith((x / x), 'ab')	true:boolean
+cs	NOT startswith((x / x), 'ab')	true:boolean
+ei	NOT startswith((x / x), 'ab')	true:boolean
+cs	((a | 1:int) = 0:int)	(((a_minValue | 1:int) <= 0:int) AND ((a_maxValue | 1:int) >= 0:int))
+cs	(0:int < (a | 1:int))	((a_maxValue | 1:int) > 0:int)
+cs	((a | 1:int) >= 0:int)	((a_maxValue | 1:int) >= 0:int)
+cs	NOT ((a | 1:int) = 0:int)	NOT (((a_minValue | 1:int) = 0:int) AND ((a_maxValue | 1:int) = 0:int))
+cs	((a | 1:int) = cast(0:int as int))	(((a_minValue | 1:int) <= cast(0:int as int)) AND ((a_maxValue | 1:int) >= cast(0:int as int)))
+cs	(a | 1:int) IN (0:int, null:int)	((((a_minValue | 1:int) <= 0:int) AND ((a_maxValue | 1:int) >= 0:int)) OR (((a_minValue | 1:int) <= null:int) AND ((a_maxValue | 1:int) >= null:int)))
+cs	NOT (a | 1:int) IN (0:int)	NOT (((a_minValue | 1:int) = 0:int) AND ((a_maxValue | 1:int) = 0:int))
+cs	startswith((a | 1:int), 'ab')	true:boolean
+ei	startswith((a | 1:int), 'ab')	(((a_minValue | 1:int) <= 'ab') AND ((a_maxValue | 1:int) >= 'ab'))
+cs	NOT startswith((a | 1:int), 'ab')	true:boolean
+ei	NOT startswith((a | 1:int), 'ab')	NOT (startswith((a_minValue | 1:int), 'ab') AND startswith((a_maxValue | 1:int), 'ab'))
+cs	((1:int | a) = 0:int)	(((1:int | a_minValue) <= 0:int) AND ((1:int | a_maxValue) >= 0:int))
+cs	(0:int < (1:int | a))	((1:int | a_maxValue) > 0:int)
+cs	((1:int | a) >= 0:int)	((1:int | a_maxValue) >= 0:int)
+cs	NOT ((1:int | a) = 0:int)	NOT (((1:int | a_minValue) = 0:int) AND ((1:int | a_maxValue) = 0:int))
+cs	((1:int | a) = cast(0:int as int))	(((1:int | a_minValue) <= cast(0:int as int)) AND ((1:int | a_maxValue) >= cast(0:int as int)))
+cs	(1:int | a) IN (0:int, null:int)	((((1:int | a_minValue) <= 0:int) AND ((1:int | a_maxValue) >= 0:int)) OR (((1:int | a_minValue) <= null:int) AND ((1:int | a_maxValue) >= null:int)))
+cs	NOT (1:int | a) IN (0:int)	NOT (((1:int | a_minValue) = 0:int) AND ((1:int | a_maxValue) = 0:int))
+cs	startswith((1:int | a), 'ab')	true:boolean
+ei	startswith((1:int | a), 'ab')	(((1:int | a_minValue) <= 'ab') AND ((1:int | a_maxValue) >= 'ab'))
+cs	NOT startswith((1:int | a), 'ab')	true:boolean
+ei	NOT startswith((1:int | a), 'ab')	NOT (startswith((1:int | a_minValue), 'ab') AND startswith((1:int | a_maxValue), 'ab'))
+cs	((abs(a) | a) = 0:int)	(((abs(a_minValue) | a_minValue) <= 0:int) AND ((abs(a_maxValue) | a_maxValue) >= 0:int))
+cs	(0:int < (abs(a) | a))	((abs(a_maxValue) | a_maxValue) > 0:int)
+cs	((abs(a) | a) >= 0:int)	((abs(a_maxValue) | a_maxValue) >= 0:int)
+cs	NOT ((abs(a) | a) = 0:int)	NOT (((abs(a_minValue) | a_minValue) = 0:int) AND ((abs(a_maxValue) | a_maxValue) = 0:int))
+cs	((abs(a) | a) = cast(0:int as int))	(((abs(a_minValue) | a_minValue) <= cast(0:int as int)) AND ((abs(a_maxValue) | a_maxValue) >= cast(0:int as int)))
+cs	(abs(a) | a) IN (0:int, null:int)	((((abs(a_minValue) | a_minValue) <= 0:int) AND ((abs(a_maxValue) | a_maxValue) >= 0:int)) OR (((abs(a_minValue) | a_minValue) <= null:int) AND ((abs(a_maxValue) | a_maxValue) >= null:int)))
+cs	NOT (abs(a) | a) IN (0:int)	NOT (((abs(a_minValue) | a_minValue) = 0:int) AND ((abs(a_maxValue) | a_maxValue) = 0:int))
+cs	startswith((abs(a) | a), 'ab')	true:boolean
+ei	startswith((abs(a) | a), 'ab')	(((abs(a_minValue) | a_minValue) <= 'ab') AND ((abs(a_maxValue) | a_maxValue) >= 'ab'))
+cs	NOT startswith((abs(a) | a), 'ab')	true:boolean
+ei	NOT startswith((abs(a) | a), 'ab')	NOT (startswith((abs(a_minValue) | a_minValue), 'ab') AND startswith((abs(a_maxValue) | a_maxValue), 'ab'))
+cs	((a | a) = 0:int)	(((a_minValue | a_minValue) <= 0:int) AND ((a_maxValue | a_maxValue) >= 0:int))
+cs	(0:int < (a | a))	((a_maxValue | a_maxValue) > 0:int)
+cs	((a | a) >= 0:int)	((a_maxValue | a_maxValue) >= 0:int)
+cs	NOT ((a | a) = 0:int)	NOT (((a_minValue | a_minValue) = 0:int) AND ((a_maxValue | a_maxValue) = 0:int))
+cs	((a | a) = cast(0:int as int))	(((a_minValue | a_minValue) <= cast(0:int as int)) AND ((a_maxValue | a_maxValue) >= cast(0:int as int)))
+cs	(a | a) IN (0:int, null:int)	((((a_minValue | a_minValue) <= 0:int) AND ((a_maxValue | a_maxValue) >= 0:int)) OR (((a_minValue | a_minValue) <= null:int) AND ((a_maxValue | a_maxValue) >= null:int)))
+cs	NOT (a | a) IN (0:int)	NOT (((a_minValue | a_minValue) = 0:int) AND ((a_maxValue | a_maxValue) = 0:int))
+cs	startswith((a | a), 'ab')	true:boolean
+ei	startswith((a | a), 'ab')	(((a_minValue | a_minValue) <= 'ab') AND ((a_maxValue | a_maxValue) >= 'ab'))
+cs	NOT startswith((a | a), 'ab')	true:boolean
+ei	NOT startswith((a | a), 'ab')	NOT (startswith((a_minValue | a_minValue), 'ab') AND startswith((a_maxValue | a_maxValue), 'ab'))
+cs	(shiftleft(a, 1:int) = 0:int)	((shiftleft(a_minValue, 1:int) <= 0:int) AND (shiftleft(a_maxValue, 1:int) >= 0:int))
+cs	(0:int < shiftleft(a, 1:int))	(shiftleft(a_maxValue, 1:int) > 0:int)
+cs	(shiftleft(a, 1:int) >= 0:int)	(shiftleft(a_maxValue, 1:int) >= 0:int)
+cs	NOT (shiftleft(a, 1:int) = 0:int)	NOT ((shiftleft(a_minValue, 1:int) = 0:int) AND (shiftleft(a_maxValue, 1:int) = 0:int))
+cs	(shiftleft(a, 1:int) = cast(0:int as int))	((shiftleft(a_minValue, 1:int) <= cast(0:int as int)) AND (shiftleft(a_maxValue, 1:int) >= cast(0:int as int)))
+cs	shiftleft(a, 1:int) IN (0:int, null:int)	(((shiftleft(a_minValue, 1:int) <= 0:int) AND (shiftleft(a_maxValue, 1:int) >= 0:int)) OR ((shiftleft(a_minValue, 1:int) <= null:int) AND (shiftleft(a_maxValue, 1:int) >= null:int)))
+cs	NOT shiftleft(a, 1:int) IN (0:int)	NOT ((shiftleft(a_minValue, 1:int) = 0:int) AND (shiftleft(a_maxValue, 1:int) = 0:int))
+cs	startswith(shiftleft(a, 1:int), 'ab')	true:boolean
+ei	startswith(shiftleft(a, 1:int), 'ab')	((shiftleft(a_minValue, 1:int) <= 'ab') AND (shiftleft(a_maxValue, 1:int) >= 'ab'))
+cs	NOT startswith(shiftleft(a, 1:int), 'ab')	true:boolean
+ei	NOT startswith(shiftleft(a, 1:int), 'ab')	NOT (startswith(shiftleft(a_minValue, 1:int), 'ab') AND startswith(shiftleft(a_maxValue, 1:int), 'ab'))
+cs	(shiftright(a, 2:int) = 0:int)	((shiftright(a_minValue, 2:int) <= 0:int) AND (shiftright(a_maxValue, 2:int) >= 0:int))
+cs	(0:int < shiftright(a, 2:int))	(shiftright(a_maxValue, 2:int) > 0:int)
+cs	(shiftright(a, 2:int) >= 0:int)	(shiftright(a_maxValue, 2:int) >= 0:int)
+cs	NOT (shiftright(a, 2:int) = 0:int)	NOT ((shiftright(a_minValue, 2:int) = 0:int) AND (shiftright(a_maxValue, 2:int) = 0:int))
+cs	(shiftright(a, 2:int) = cast(0:int as int))	((shiftright(a_minValue, 2:int) <= cast(0:int as int)) AND (shiftright(a_maxValue, 2:int) >= cast(0:int as int)))
+cs	shiftright(a, 2:int) IN (0:int, null:int)	(((shiftright(a_minValue, 2:int) <= 0:int) AND (shiftright(a_maxValue, 2:int) >= 0:int)) OR ((shiftright(a_minValue, 2:int) <= null:int) AND (shiftright(a_maxValue, 2:int) >= null:int)))
+cs	NOT shiftright(a, 2:int) IN (0:int)	NOT ((shiftright(a_minValue, 2:int) = 0:int) AND (shiftright(a_maxValue, 2:int) = 0:int))
+cs	startswith(shiftright(a, 2:int), 'ab')	true:boolean
+ei	startswith(shiftright(a, 2:int), 'ab')	((shiftright(a_minValue, 2:int) <= 'ab') AND (shiftright(a_maxValue, 2:int) >= 'ab'))
+cs	NOT startswith(shiftright(a, 2:int), 'ab')	true:boolean
+ei	NOT startswith(shiftright(a, 2:int), 'ab')	NOT (startswith(shiftright(a_minValue, 2:int), 'ab') AND startswith(shiftright(a_maxValue, 2:int), 'ab'))
+cs	(shiftleft(a, a) = 0:int)	((shiftleft(a_minValue, a_minValue) <= 0:int) AND (shiftleft(a_maxValue, a_maxValue) >= 0:int))
+cs	(0:int < shiftleft(a, a))	(shiftleft(a_maxValue, a_maxValue) > 0:int)
+cs	(shiftleft(a, a) >= 0:int)	(shiftleft(a_maxValue, a_maxValue) >= 0:int)
+cs	NOT (shiftleft(a, a) = 0:int)	NOT ((shiftleft(a_minValue, a_minValue) = 0:int) AND (shiftleft(a_maxValue, a_maxValue) = 0:int))
+cs	(shiftleft(a, a) = cast(0:int as int))	((shiftleft(a_minValue, a_minValue) <= cast(0:int as int)) AND (shiftleft(a_maxValue, a_maxValue) >= cast(0:int as int)))
+cs	shiftleft(a, a) IN (0:int, null:int)	(((shiftleft(a_minValue, a_minValue) <= 0:int) AND (shiftleft(a_maxValue, a_maxValue) >= 0:int)) OR ((shiftleft(a_minValue, a_minValue) <= null:int) AND (shiftleft(a_maxValue, a_maxValue) >= null:int)))
+cs	NOT shiftleft(a, a) IN (0:int)	NOT ((shiftleft(a_minValue, a_minValue) = 0:int) AND (shiftleft(a_maxValue, a_maxValue) = 0:int))
+cs	startswith(shiftleft(a, a), 'ab')	true:boolean
+ei	startswith(shiftleft(a, a), 'ab')	((shiftleft(a_minValue, a_minValue) <= 'ab') AND (shiftleft(a_maxValue, a_maxValue) >= 'ab'))
+cs	NOT startswith(shiftleft(a, a), 'ab')	true:boolean
+ei	NOT startswith(shiftleft(a, a), 'ab')	NOT (startswith(shiftleft(a_minValue, a_minValue), 'ab') AND startswith(shiftleft(a_maxValue, a_maxValue), 'ab'))
+cs	(shiftright(8:int, a) = 0:int)	true:boolean
+cs	(0:int < shiftright(8:int, a))	true:boolean
+cs	(shiftright(8:int, a) >= 0:int)	true:boolean
+cs	NOT (shiftright(8:int, a) = 0:int)	true:boolean
+cs	(shiftright(8:int, a) = cast(0:int as int))	true:boolean
+cs	shiftright(8:int, a) IN (0:int, null:int)	true:boolean
+cs	NOT shiftright(8:int, a) IN (0:int)	true:boolean
+cs	startswith(shiftright(8:int, a), 'ab')	true:boolean
+ei	startswith(shiftright(8:int, a), 'ab')	true:boolean
+cs	NOT startswith(shiftright(8:int, a), 'ab')	true:boolean
+ei	NOT startswith(shiftright(8:int, a), 'ab')	true:boolean
+cs	(EXP(x) = 0.0:double)	((EXP(x_minValue) <= 0.0:double) AND (EXP(x_maxValue) >= 0.0:double))
+cs	(0.0:double < EXP(x))	(EXP(x_maxValue) > 0.0:double)
+cs	(EXP(x) >= 0.0:double)	(EXP(x_maxValue) >= 0.0:double)
+cs	NOT (EXP(x) = 0.0:double)	NOT ((EXP(x_minValue) = 0.0:double) AND (EXP(x_maxValue) = 0.0:double))
+cs	(EXP(x) = cast(0.0:double as double))	((EXP(x_minValue) <= cast(0.0:double as double)) AND (EXP(x_maxValue) >= cast(0.0:double as double)))
+cs	EXP(x) IN (0.0:double, null:double)	(((EXP(x_minValue) <= 0.0:double) AND (EXP(x_maxValue) >= 0.0:double)) OR ((EXP(x_minValue) <= null:double) AND (EXP(x_maxValue) >= null:double)))
+cs	NOT EXP(x) IN (0.0:double)	NOT ((EXP(x_minValue) = 0.0:double) AND (EXP(x_maxValue) = 0.0:double))
+cs	startswith(EXP(x), 'ab')	true:boolean
+ei	startswith(EXP(x), 'ab')	((EXP(x_minValue) <= 'ab') AND (EXP(x_maxValue) >= 'ab'))
+cs	NOT startswith(EXP(x), 'ab')	true:boolean
+ei	NOT startswith(EXP(x), 'ab')	NOT (startswith(EXP(x_minValue), 'ab') AND startswith(EXP(x_maxValue), 'ab'))
+cs	(EXPM1(x) = 0.0:double)	((EXPM1(x_minValue) <= 0.0:double) AND (EXPM1(x_maxValue) >= 0.0:double))
+cs	(0.0:double < EXPM1(x))	(EXPM1(x_maxValue) > 0.0:double)
+cs	(EXPM1(x) >= 0.0:double)	(EXPM1(x_maxValue) >= 0.0:double)
+cs	NOT (EXPM1(x) = 0.0:double)	NOT ((EXPM1(x_minValue) = 0.0:double) AND (EXPM1(x_maxValue) = 0.0:double))
+cs	(EXPM1(x) = cast(0.0:double as double))	((EXPM1(x_minValue) <= cast(0.0:double as double)) AND (EXPM1(x_maxValue) >= cast(0.0:double as double)))
+cs	EXPM1(x) IN (0.0:double, null:double)	(((EXPM1(x_minValue) <= 0.0:double) AND (EXPM1(x_maxValue) >= 0.0:double)) OR ((EXPM1(x_minValue) <= null:double) AND (EXPM1(x_maxValue) >= null:double)))
+cs	NOT EXPM1(x) IN (0.0:double)	NOT ((EXPM1(x_minValue) = 0.0:double) AND (EXPM1(x_maxValue) = 0.0:double))
+cs	startswith(EXPM1(x), 'ab')	true:boolean
+ei	startswith(EXPM1(x), 'ab')	((EXPM1(x_minValue) <= 'ab') AND (EXPM1(x_maxValue) >= 'ab'))
+cs	NOT startswith(EXPM1(x), 'ab')	true:boolean
+ei	NOT startswith(EXPM1(x), 'ab')	NOT (startswith(EXPM1(x_minValue), 'ab') AND startswith(EXPM1(x_maxValue), 'ab'))
+cs	(ln(x) = 0.0:double)	((ln(x_minValue) <= 0.0:double) AND (ln(x_maxValue) >= 0.0:double))
+cs	(0.0:double < ln(x))	(ln(x_maxValue) > 0.0:double)
+cs	(ln(x) >= 0.0:double)	(ln(x_maxValue) >= 0.0:double)
+cs	NOT (ln(x) = 0.0:double)	NOT ((ln(x_minValue) = 0.0:double) AND (ln(x_maxValue) = 0.0:double))
+cs	(ln(x) = cast(0.0:double as double))	((ln(x_minValue) <= cast(0.0:double as double)) AND (ln(x_maxValue) >= cast(0.0:double as double)))
+cs	ln(x) IN (0.0:double, null:double)	(((ln(x_minValue) <= 0.0:double) AND (ln(x_maxValue) >= 0.0:double)) OR ((ln(x_minValue) <= null:double) AND (ln(x_maxValue) >= null:double)))
+cs	NOT ln(x) IN (0.0:double)	NOT ((ln(x_minValue) = 0.0:double) AND (ln(x_maxValue) = 0.0:double))
+cs	startswith(ln(x), 'ab')	true:boolean
+ei	startswith(ln(x), 'ab')	((ln(x_minValue) <= 'ab') AND (ln(x_maxValue) >= 'ab'))
+cs	NOT startswith(ln(x), 'ab')	true:boolean
+ei	NOT startswith(ln(x), 'ab')	NOT (startswith(ln(x_minValue), 'ab') AND startswith(ln(x_maxValue), 'ab'))
+cs	(LOG10(x) = 0.0:double)	((LOG10(x_minValue) <= 0.0:double) AND (LOG10(x_maxValue) >= 0.0:double))
+cs	(0.0:double < LOG10(x))	(LOG10(x_maxValue) > 0.0:double)
+cs	(LOG10(x) >= 0.0:double)	(LOG10(x_maxValue) >= 0.0:double)
+cs	NOT (LOG10(x) = 0.0:double)	NOT ((LOG10(x_minValue) = 0.0:double) AND (LOG10(x_maxValue) = 0.0:double))
+cs	(LOG10(x) = cast(0.0:double as double))	((LOG10(x_minValue) <= cast(0.0:double as double)) AND (LOG10(x_maxValue) >= cast(0.0:double as double)))
+cs	LOG10(x) IN (0.0:double, null:double)	(((LOG10(x_minValue) <= 0.0:double) AND (LOG10(x_maxValue) >= 0.0:double)) OR ((LOG10(x_minValue) <= null:double) AND (LOG10(x_maxValue) >= null:double)))
+cs	NOT LOG10(x) IN (0.0:double)	NOT ((LOG10(x_minValue) = 0.0:double) AND (LOG10(x_maxValue) = 0.0:double))
+cs	startswith(LOG10(x), 'ab')	true:boolean
+ei	startswith(LOG10(x), 'ab')	((LOG10(x_minValue) <= 'ab') AND (LOG10(x_maxValue) >= 'ab'))
+cs	NOT startswith(LOG10(x), 'ab')	true:boolean
+ei	NOT startswith(LOG10(x), 'ab')	NOT (startswith(LOG10(x_minValue), 'ab') AND startswith(LOG10(x_maxValue), 'ab'))
+cs	(LOG1P(x) = 0.0:double)	((LOG1P(x_minValue) <= 0.0:double) AND (LOG1P(x_maxValue) >= 0.0:double))
+cs	(0.0:double < LOG1P(x))	(LOG1P(x_maxValue) > 0.0:double)
+cs	(LOG1P(x) >= 0.0:double)	(LOG1P(x_maxValue) >= 0.0:double)
+cs	NOT (LOG1P(x) = 0.0:double)	NOT ((LOG1P(x_minValue) = 0.0:double) AND (LOG1P(x_maxValue) = 0.0:double))
+cs	(LOG1P(x) = cast(0.0:double as double))	((LOG1P(x_minValue) <= cast(0.0:double as double)) AND (LOG1P(x_maxValue) >= cast(0.0:double as double)))
+cs	LOG1P(x) IN (0.0:double, null:double)	(((LOG1P(x_minValue) <= 0.0:double) AND (LOG1P(x_maxValue) >= 0.0:double)) OR ((LOG1P(x_minValue) <= null:double) AND (LOG1P(x_maxValue) >= null:double)))
+cs	NOT LOG1P(x) IN (0.0:double)	NOT ((LOG1P(x_minValue) = 0.0:double) AND (LOG1P(x_maxValue) = 0.0:double))
+cs	startswith(LOG1P(x), 'ab')	true:boolean
+ei	startswith(LOG1P(x), 'ab')	((LOG1P(x_minValue) <= 'ab') AND (LOG1P(x_maxValue) >= 'ab'))
+cs	NOT startswith(LOG1P(x), 'ab')	true:boolean
+ei	NOT startswith(LOG1P(x), 'ab')	NOT (startswith(LOG1P(x_minValue), 'ab') AND startswith(LOG1P(x_maxValue), 'ab'))
+cs	(LOG2(x) = 0.0:double)	((LOG2(x_minValue) <= 0.0:double) AND (LOG2(x_maxValue) >= 0.0:double))
+cs	(0.0:double < LOG2(x))	(LOG2(x_maxValue) > 0.0:double)
+cs	(LOG2(x) >= 0.0:double)	(LOG2(x_maxValue) >= 0.0:double)
+cs	NOT (LOG2(x) = 0.0:double)	NOT ((LOG2(x_minValue) = 0.0:double) AND (LOG2(x_maxValue) = 0.0:double))
+cs	(LOG2(x) = cast(0.0:double as double))	((LOG2(x_minValue) <= cast(0.0:double as double)) AND (LOG2(x_maxValue) >= cast(0.0:double as double)))
+cs	LOG2(x) IN (0.0:double, null:double)	(((LOG2(x_minValue) <= 0.0:double) AND (LOG2(x_maxValue) >= 0.0:double)) OR ((LOG2(x_minValue) <= null:double) AND (LOG2(x_maxValue) >= null:double)))
+cs	NOT LOG2(x) IN (0.0:double)	NOT ((LOG2(x_minValue) = 0.0:double) AND (LOG2(x_maxValue) = 0.0:double))
+cs	startswith(LOG2(x), 'ab')	true:boolean
+ei	startswith(LOG2(x), 'ab')	((LOG2(x_minValue) <= 'ab') AND (LOG2(x_maxValue) >= 'ab'))
+cs	NOT startswith(LOG2(x), 'ab')	true:boolean
+ei	NOT startswith(LOG2(x), 'ab')	NOT (startswith(LOG2(x_minValue), 'ab') AND startswith(LOG2(x_maxValue), 'ab'))
+cs	(ln(EXP(x)) = 0.0:double)	((ln(EXP(x_minValue)) <= 0.0:double) AND (ln(EXP(x_maxValue)) >= 0.0:double))
+cs	(0.0:double < ln(EXP(x)))	(ln(EXP(x_maxValue)) > 0.0:double)
+cs	(ln(EXP(x)) >= 0.0:double)	(ln(EXP(x_maxValue)) >= 0.0:double)
+cs	NOT (ln(EXP(x)) = 0.0:double)	NOT ((ln(EXP(x_minValue)) = 0.0:double) AND (ln(EXP(x_maxValue)) = 0.0:double))
+cs	(ln(EXP(x)) = cast(0.0:double as double))	((ln(EXP(x_minValue)) <= cast(0.0:double as double)) AND (ln(EXP(x_maxValue)) >= cast(0.0:double as double)))
+cs	ln(EXP(x)) IN (0.0:double, null:double)	(((ln(EXP(x_minValue)) <= 0.0:double) AND (ln(EXP(x_maxValue)) >= 0.0:double)) OR ((ln(EXP(x_minValue)) <= null:double) AND (ln(EXP(x_maxValue)) >= null:double)))
+cs	NOT ln(EXP(x)) IN (0.0:double)	NOT ((ln(EXP(x_minValue)) = 0.0:double) AND (ln(EXP(x_maxValue)) = 0.0:double))
+cs	startswith(ln(EXP(x)), 'ab')	true:boolean
+ei	startswith(ln(EXP(x)), 'ab')	((ln(EXP(x_minValue)) <= 'ab') AND (ln(EXP(x_maxValue)) >= 'ab'))
+cs	NOT startswith(ln(EXP(x)), 'ab')	true:boolean
+ei	NOT startswith(ln(EXP(x)), 'ab')	NOT (startswith(ln(EXP(x_minValue)), 'ab') AND startswith(ln(EXP(x_maxValue)), 'ab'))
+cs	(EXP(cast(a as double)) = 0.0:double)	((EXP(cast(a_minValue as double)) <= 0.0:double) AND (EXP(cast(a_maxValue as double)) >= 0.0:double))
+cs	(0.0:double < EXP(cast(a as double)))	(EXP(cast(a_maxValue as double)) > 0.0:double)
+cs	(EXP(cast(a as double)) >= 0.0:double)	(EXP(cast(a_maxValue as double)) >= 0.0:double)
+cs	NOT (EXP(cast(a as double)) = 0.0:double)	NOT ((EXP(cast(a_minValue as double)) = 0.0:double) AND (EXP(cast(a_maxValue as double)) = 0.0:double))
+cs	(EXP(cast(a as double)) = cast(0.0:double as double))	((EXP(cast(a_minValue as double)) <= cast(0.0:double as double)) AND (EXP(cast(a_maxValue as double)) >= cast(0.0:double as double)))
+cs	EXP(cast(a as double)) IN (0.0:double, null:double)	(((EXP(cast(a_minValue as double)) <= 0.0:double) AND (EXP(cast(a_maxValue as double)) >= 0.0:double)) OR ((EXP(cast(a_minValue as double)) <= null:double) AND (EXP(cast(a_maxValue as double)) >= null:double)))
+cs	NOT EXP(cast(a as double)) IN (0.0:double)	NOT ((EXP(cast(a_minValue as double)) = 0.0:double) AND (EXP(cast(a_maxValue as double)) = 0.0:double))
+cs	startswith(EXP(cast(a as double)), 'ab')	true:boolean
+ei	startswith(EXP(cast(a as double)), 'ab')	((EXP(cast(a_minValue as double)) <= 'ab') AND (EXP(cast(a_maxValue as double)) >= 'ab'))
+cs	NOT startswith(EXP(cast(a as double)), 'ab')	true:boolean
+ei	NOT startswith(EXP(cast(a as double)), 'ab')	NOT (startswith(EXP(cast(a_minValue as double)), 'ab') AND startswith(EXP(cast(a_maxValue as double)), 'ab'))
+cs	(cast(a as bigint) = 0:bigint)	((cast(a_minValue as bigint) <= 0:bigint) AND (cast(a_maxValue as bigint) >= 0:bigint))
+cs	(0:bigint < cast(a as bigint))	(cast(a_maxValue as bigint) > 0:bigint)
+cs	(cast(a as bigint) >= 0:bigint)	(cast(a_maxValue as bigint) >= 0:bigint)
+cs	NOT (cast(a as bigint) = 0:bigint)	NOT ((cast(a_minValue as bigint) = 0:bigint) AND (cast(a_maxValue as bigint) = 0:bigint))
+cs	(cast(a as bigint) = cast(0:bigint as bigint))	((cast(a_minValue as bigint) <= cast(0:bigint as bigint)) AND (cast(a_maxValue as bigint) >= cast(0:bigint as bigint)))
+cs	cast(a as bigint) IN (0:bigint, null:bigint)	(((cast(a_minValue as bigint) <= 0:bigint) AND (cast(a_maxValue as bigint) >= 0:bigint)) OR ((cast(a_minValue as bigint) <= null:bigint) AND (cast(a_maxValue as bigint) >= null:bigint)))
+cs	NOT cast(a as bigint) IN (0:bigint)	NOT ((cast(a_minValue as bigint) = 0:bigint) AND (cast(a_maxValue as bigint) = 0:bigint))
+cs	startswith(cast(a as bigint), 'ab')	true:boolean
+ei	startswith(cast(a as bigint), 'ab')	((cast(a_minValue as bigint) <= 'ab') AND (cast(a_maxValue as bigint) >= 'ab'))
+cs	NOT startswith(cast(a as bigint), 'ab')	true:boolean
+ei	NOT startswith(cast(a as bigint), 'ab')	NOT (startswith(cast(a_minValue as bigint), 'ab') AND startswith(cast(a_maxValue as bigint), 'ab'))
+cs	(cast(a as smallint) = 0:smallint)	true:boolean
+cs	(0:smallint < cast(a as smallint))	true:boolean
+cs	(cast(a as smallint) >= 0:smallint)	true:boolean
+cs	NOT (cast(a as smallint) = 0:smallint)	true:boolean
+cs	(cast(a as smallint) = cast(0:smallint as smallint))	true:boolean
+cs	cast(a as smallint) IN (0:smallint, null:smallint)	true:boolean
+cs	NOT cast(a as smallint) IN (0:smallint)	true:boolean
+cs	startswith(cast(a as smallint), 'ab')	true:boolean
+ei	startswith(cast(a as smallint), 'ab')	true:boolean
+cs	NOT startswith(cast(a as smallint), 'ab')	true:boolean
+ei	NOT startswith(cast(a as smallint), 'ab')	true:boolean
+cs	(cast(s as int) = 0:int)	true:boolean
+cs	(0:int < cast(s as int))	true:boolean
+cs	(cast(s as int) >= 0:int)	true:boolean
+cs	NOT (cast(s as int) = 0:int)	true:boolean
+cs	(cast(s as int) = cast(0:int as int))	true:boolean
+cs	cast(s as int) IN (0:int, null:int)	true:boolean
+cs	NOT cast(s as int) IN (0:int)	true:boolean
+cs	startswith(cast(s as int), 'ab')	true:boolean
+ei	startswith(cast(s as int), 'ab')	true:boolean
+cs	NOT startswith(cast(s as int), 'ab')	true:boolean
+ei	NOT startswith(cast(s as int), 'ab')	true:boolean
+cs	(cast(ts as string) = '')	true:boolean
+cs	('' < cast(ts as string))	true:boolean
+cs	(cast(ts as string) >= '')	true:boolean
+cs	NOT (cast(ts as string) = '')	true:boolean
+cs	(cast(ts as string) = cast('' as string))	true:boolean
+cs	cast(ts as string) IN ('', null:string)	true:boolean
+cs	NOT cast(ts as string) IN ('')	true:boolean
+cs	startswith(cast(ts as string), 'ab')	true:boolean
+cs	NOT startswith(cast(ts as string), 'ab')	true:boolean
+cs	(cast(a as string) = '')	true:boolean
+cs	('' < cast(a as string))	true:boolean
+cs	(cast(a as string) >= '')	true:boolean
+cs	NOT (cast(a as string) = '')	true:boolean
+cs	(cast(a as string) = cast('' as string))	true:boolean
+cs	cast(a as string) IN ('', null:string)	true:boolean
+cs	NOT cast(a as string) IN ('')	true:boolean
+cs	startswith(cast(a as string), 'ab')	true:boolean
+cs	NOT startswith(cast(a as string), 'ab')	true:boolean
+cs	(cast((a + 1:int) as bigint) = 0:bigint)	((cast((a_minValue + 1:int) as bigint) <= 0:bigint) AND (cast((a_maxValue + 1:int) as bigint) >= 0:bigint))
+cs	(0:bigint < cast((a + 1:int) as bigint))	(cast((a_maxValue + 1:int) as bigint) > 0:bigint)
+cs	(cast((a + 1:int) as bigint) >= 0:bigint)	(cast((a_maxValue + 1:int) as bigint) >= 0:bigint)
+cs	NOT (cast((a + 1:int) as bigint) = 0:bigint)	NOT ((cast((a_minValue + 1:int) as bigint) = 0:bigint) AND (cast((a_maxValue + 1:int) as bigint) = 0:bigint))
+cs	(cast((a + 1:int) as bigint) = cast(0:bigint as bigint))	((cast((a_minValue + 1:int) as bigint) <= cast(0:bigint as bigint)) AND (cast((a_maxValue + 1:int) as bigint) >= cast(0:bigint as bigint)))
+cs	cast((a + 1:int) as bigint) IN (0:bigint, null:bigint)	(((cast((a_minValue + 1:int) as bigint) <= 0:bigint) AND (cast((a_maxValue + 1:int) as bigint) >= 0:bigint)) OR ((cast((a_minValue + 1:int) as bigint) <= null:bigint) AND (cast((a_maxValue + 1:int) as bigint) >= null:bigint)))
+cs	NOT cast((a + 1:int) as bigint) IN (0:bigint)	NOT ((cast((a_minValue + 1:int) as bigint) = 0:bigint) AND (cast((a_maxValue + 1:int) as bigint) = 0:bigint))
+cs	startswith(cast((a + 1:int) as bigint), 'ab')	true:boolean
+ei	startswith(cast((a + 1:int) as bigint), 'ab')	((cast((a_minValue + 1:int) as bigint) <= 'ab') AND (cast((a_maxValue + 1:int) as bigint) >= 'ab'))
+cs	NOT startswith(cast((a + 1:int) as bigint), 'ab')	true:boolean
+ei	NOT startswith(cast((a + 1:int) as bigint), 'ab')	NOT (startswith(cast((a_minValue + 1:int) as bigint), 'ab') AND startswith(cast((a_maxValue + 1:int) as bigint), 'ab'))
+cs	(cast(cast(a as bigint) as double) = 0.0:double)	((cast(cast(a_minValue as bigint) as double) <= 0.0:double) AND (cast(cast(a_maxValue as bigint) as double) >= 0.0:double))
+cs	(0.0:double < cast(cast(a as bigint) as double))	(cast(cast(a_maxValue as bigint) as double) > 0.0:double)
+cs	(cast(cast(a as bigint) as double) >= 0.0:double)	(cast(cast(a_maxValue as bigint) as double) >= 0.0:double)
+cs	NOT (cast(cast(a as bigint) as double) = 0.0:double)	NOT ((cast(cast(a_minValue as bigint) as double) = 0.0:double) AND (cast(cast(a_maxValue as bigint) as double) = 0.0:double))
+cs	(cast(cast(a as bigint) as double) = cast(0.0:double as double))	((cast(cast(a_minValue as bigint) as double) <= cast(0.0:double as double)) AND (cast(cast(a_maxValue as bigint) as double) >= cast(0.0:double as double)))
+cs	cast(cast(a as bigint) as double) IN (0.0:double, null:double)	(((cast(cast(a_minValue as bigint) as double) <= 0.0:double) AND (cast(cast(a_maxValue as bigint) as double) >= 0.0:double)) OR ((cast(cast(a_minValue as bigint) as double) <= null:double) AND (cast(cast(a_maxValue as bigint) as double) >= null:double)))
+cs	NOT cast(cast(a as bigint) as double) IN (0.0:double)	NOT ((cast(cast(a_minValue as bigint) as double) = 0.0:double) AND (cast(cast(a_maxValue as bigint) as double) = 0.0:double))
+cs	startswith(cast(cast(a as bigint) as double), 'ab')	true:boolean
+ei	startswith(cast(cast(a as bigint) as double), 'ab')	((cast(cast(a_minValue as bigint) as double) <= 'ab') AND (cast(cast(a_maxValue as bigint) as double) >= 'ab'))
+cs	NOT startswith(cast(cast(a as bigint) as double), 'ab')	true:boolean
+ei	NOT startswith(cast(cast(a as bigint) as double), 'ab')	NOT (startswith(cast(cast(a_minValue as bigint) as double), 'ab') AND startswith(cast(cast(a_maxValue as bigint) as double), 'ab'))
+cs	(cast(dec as double) = 0.0:double)	((cast(dec_minValue as double) <= 0.0:double) AND (cast(dec_maxValue as double) >= 0.0:double))
+cs	(0.0:double < cast(dec as double))	(cast(dec_maxValue as double) > 0.0:double)
+cs	(cast(dec as double) >= 0.0:double)	(cast(dec_maxValue as double) >= 0.0:double)
+cs	NOT (cast(dec as double) = 0.0:double)	NOT ((cast(dec_minValue as double) = 0.0:double) AND (cast(dec_maxValue as double) = 0.0:double))
+cs	(cast(dec as double) = cast(0.0:double as double))	((cast(dec_minValue as double) <= cast(0.0:double as double)) AND (cast(dec_maxValue as double) >= cast(0.0:double as double)))
+cs	cast(dec as double) IN (0.0:double, null:double)	(((cast(dec_minValue as double) <= 0.0:double) AND (cast(dec_maxValue as double) >= 0.0:double)) OR ((cast(dec_minValue as double) <= null:double) AND (cast(dec_maxValue as double) >= null:double)))
+cs	NOT cast(dec as double) IN (0.0:double)	NOT ((cast(dec_minValue as double) = 0.0:double) AND (cast(dec_maxValue as double) = 0.0:double))
+cs	startswith(cast(dec as double), 'ab')	true:boolean
+ei	startswith(cast(dec as double), 'ab')	((cast(dec_minValue as double) <= 'ab') AND (cast(dec_maxValue as double) >= 'ab'))
+cs	NOT startswith(cast(dec as double), 'ab')	true:boolean
+ei	NOT startswith(cast(dec as double), 'ab')	NOT (startswith(cast(dec_minValue as double), 'ab') AND startswith(cast(dec_maxValue as double), 'ab'))
+cs	(cast(s as date) = 0:date)	((cast(s_minValue as date) <= 0:date) AND (cast(s_maxValue as date) >= 0:date))
+cs	(0:date < cast(s as date))	(cast(s_maxValue as date) > 0:date)
+cs	(cast(s as date) >= 0:date)	(cast(s_maxValue as date) >= 0:date)
+cs	NOT (cast(s as date) = 0:date)	NOT ((cast(s_minValue as date) = 0:date) AND (cast(s_maxValue as date) = 0:date))
+cs	(cast(s as date) = cast(0:date as date))	((cast(s_minValue as date) <= cast(0:date as date)) AND (cast(s_maxValue as date) >= cast(0:date as date)))
+cs	cast(s as date) IN (0:date, null:date)	(((cast(s_minValue as date) <= 0:date) AND (cast(s_maxValue as date) >= 0:date)) OR ((cast(s_minValue as date) <= null:date) AND (cast(s_maxValue as date) >= null:date)))
+cs	NOT cast(s as date) IN (0:date)	NOT ((cast(s_minValue as date) = 0:date) AND (cast(s_maxValue as date) = 0:date))
+cs	startswith(cast(s as date), 'ab')	true:boolean
+ei	startswith(cast(s as date), 'ab')	((cast(s_minValue as date) <= 'ab') AND (cast(s_maxValue as date) >= 'ab'))
+cs	NOT startswith(cast(s as date), 'ab')	true:boolean
+ei	NOT startswith(cast(s as date), 'ab')	NOT (startswith(cast(s_minValue as date), 'ab') AND startswith(cast(s_maxValue as date), 'ab'))
+cs	(cast(d as timestamp) = 0:timestamp)	((cast(d_minValue as timestamp) <= 0:timestamp) AND (cast(d_maxValue as timestamp) >= 0:timestamp))
+cs	(0:timestamp < cast(d as timestamp))	(cast(d_maxValue as timestamp) > 0:timestamp)
+cs	(cast(d as timestamp) >= 0:timestamp)	(cast(d_maxValue as timestamp) >= 0:timestamp)
+cs	NOT (cast(d as timestamp) = 0:timestamp)	NOT ((cast(d_minValue as timestamp) = 0:timestamp) AND (cast(d_maxValue as timestamp) = 0:timestamp))
+cs	(cast(d as timestamp) = cast(0:timestamp as timestamp))	((cast(d_minValue as timestamp) <= cast(0:timestamp as timestamp)) AND (cast(d_maxValue as timestamp) >= cast(0:timestamp as timestamp)))
+cs	cast(d as timestamp) IN (0:timestamp, null:timestamp)	(((cast(d_minValue as timestamp) <= 0:timestamp) AND (cast(d_maxValue as timestamp) >= 0:timestamp)) OR ((cast(d_minValue as timestamp) <= null:timestamp) AND (cast(d_maxValue as timestamp) >= null:timestamp)))
+cs	NOT cast(d as timestamp) IN (0:timestamp)	NOT ((cast(d_minValue as timestamp) = 0:timestamp) AND (cast(d_maxValue as timestamp) = 0:timestamp))
+cs	startswith(cast(d as timestamp), 'ab')	true:boolean
+ei	startswith(cast(d as timestamp), 'ab')	((cast(d_minValue as timestamp) <= 'ab') AND (cast(d_maxValue as timestamp) >= 'ab'))
+cs	NOT startswith(cast(d as timestamp), 'ab')	true:boolean
+ei	NOT startswith(cast(d as timestamp), 'ab')	NOT (startswith(cast(d_minValue as timestamp), 'ab') AND startswith(cast(d_maxValue as timestamp), 'ab'))
+cs	(cast(a as boolean) = false:boolean)	true:boolean
+cs	(false:boolean < cast(a as boolean))	true:boolean
+cs	(cast(a as boolean) >= false:boolean)	true:boolean
+cs	NOT (cast(a as boolean) = false:boolean)	true:boolean
+cs	(cast(a as boolean) = cast(false:boolean as boolean))	true:boolean
+cs	cast(a as boolean) IN (false:boolean, null:boolean)	true:boolean
+cs	NOT cast(a as boolean) IN (false:boolean)	true:boolean
+cs	startswith(cast(a as boolean), 'ab')	true:boolean
+ei	startswith(cast(a as boolean), 'ab')	true:boolean
+cs	NOT startswith(cast(a as boolean), 'ab')	true:boolean
+ei	NOT startswith(cast(a as boolean), 'ab')	true:boolean
+cs	(cast(ts as bigint) = 0:bigint)	((cast(ts_minValue as bigint) <= 0:bigint) AND (cast(ts_maxValue as bigint) >= 0:bigint))
+cs	(0:bigint < cast(ts as bigint))	(cast(ts_maxValue as bigint) > 0:bigint)
+cs	(cast(ts as bigint) >= 0:bigint)	(cast(ts_maxValue as bigint) >= 0:bigint)
+cs	NOT (cast(ts as bigint) = 0:bigint)	NOT ((cast(ts_minValue as bigint) = 0:bigint) AND (cast(ts_maxValue as bigint) = 0:bigint))
+cs	(cast(ts as bigint) = cast(0:bigint as bigint))	((cast(ts_minValue as bigint) <= cast(0:bigint as bigint)) AND (cast(ts_maxValue as bigint) >= cast(0:bigint as bigint)))
+cs	cast(ts as bigint) IN (0:bigint, null:bigint)	(((cast(ts_minValue as bigint) <= 0:bigint) AND (cast(ts_maxValue as bigint) >= 0:bigint)) OR ((cast(ts_minValue as bigint) <= null:bigint) AND (cast(ts_maxValue as bigint) >= null:bigint)))
+cs	NOT cast(ts as bigint) IN (0:bigint)	NOT ((cast(ts_minValue as bigint) = 0:bigint) AND (cast(ts_maxValue as bigint) = 0:bigint))
+cs	startswith(cast(ts as bigint), 'ab')	true:boolean
+ei	startswith(cast(ts as bigint), 'ab')	((cast(ts_minValue as bigint) <= 'ab') AND (cast(ts_maxValue as bigint) >= 'ab'))
+cs	NOT startswith(cast(ts as bigint), 'ab')	true:boolean
+ei	NOT startswith(cast(ts as bigint), 'ab')	NOT (startswith(cast(ts_minValue as bigint), 'ab') AND startswith(cast(ts_maxValue as bigint), 'ab'))
+cs	(cast(ts as int) = 0:int)	true:boolean
+cs	(0:int < cast(ts as int))	true:boolean
+cs	(cast(ts as int) >= 0:int)	true:boolean
+cs	NOT (cast(ts as int) = 0:int)	true:boolean
+cs	(cast(ts as int) = cast(0:int as int))	true:boolean
+cs	cast(ts as int) IN (0:int, null:int)	true:boolean
+cs	NOT cast(ts as int) IN (0:int)	true:boolean
+cs	startswith(cast(ts as int), 'ab')	true:boolean
+ei	startswith(cast(ts as int), 'ab')	true:boolean
+cs	NOT startswith(cast(ts as int), 'ab')	true:boolean
+ei	NOT startswith(cast(ts as int), 'ab')	true:boolean
+cs	(cast((a + 'x') as bigint) = 0:bigint)	true:boolean
+ei	(cast((a + 'x') as bigint) = 0:bigint)	((cast((a_minValue + 'x') as bigint) <= 0:bigint) AND (cast((a_maxValue + 'x') as bigint) >= 0:bigint))
+cs	(0:bigint < cast((a + 'x') as bigint))	true:boolean
+ei	(0:bigint < cast((a + 'x') as bigint))	(cast((a_maxValue + 'x') as bigint) > 0:bigint)
+cs	(cast((a + 'x') as bigint) >= 0:bigint)	true:boolean
+ei	(cast((a + 'x') as bigint) >= 0:bigint)	(cast((a_maxValue + 'x') as bigint) >= 0:bigint)
+cs	NOT (cast((a + 'x') as bigint) = 0:bigint)	true:boolean
+ei	NOT (cast((a + 'x') as bigint) = 0:bigint)	NOT ((cast((a_minValue + 'x') as bigint) = 0:bigint) AND (cast((a_maxValue + 'x') as bigint) = 0:bigint))
+cs	(cast((a + 'x') as bigint) = cast(0:bigint as bigint))	true:boolean
+ei	(cast((a + 'x') as bigint) = cast(0:bigint as bigint))	((cast((a_minValue + 'x') as bigint) <= cast(0:bigint as bigint)) AND (cast((a_maxValue + 'x') as bigint) >= cast(0:bigint as bigint)))
+cs	cast((a + 'x') as bigint) IN (0:bigint, null:bigint)	true:boolean
+ei	cast((a + 'x') as bigint) IN (0:bigint, null:bigint)	(((cast((a_minValue + 'x') as bigint) <= 0:bigint) AND (cast((a_maxValue + 'x') as bigint) >= 0:bigint)) OR ((cast((a_minValue + 'x') as bigint) <= null:bigint) AND (cast((a_maxValue + 'x') as bigint) >= null:bigint)))
+cs	NOT cast((a + 'x') as bigint) IN (0:bigint)	true:boolean
+ei	NOT cast((a + 'x') as bigint) IN (0:bigint)	NOT ((cast((a_minValue + 'x') as bigint) = 0:bigint) AND (cast((a_maxValue + 'x') as bigint) = 0:bigint))
+cs	startswith(cast((a + 'x') as bigint), 'ab')	true:boolean
+ei	startswith(cast((a + 'x') as bigint), 'ab')	((cast((a_minValue + 'x') as bigint) <= 'ab') AND (cast((a_maxValue + 'x') as bigint) >= 'ab'))
+cs	NOT startswith(cast((a + 'x') as bigint), 'ab')	true:boolean
+ei	NOT startswith(cast((a + 'x') as bigint), 'ab')	NOT (startswith(cast((a_minValue + 'x') as bigint), 'ab') AND startswith(cast((a_maxValue + 'x') as bigint), 'ab'))
+cs	(cast(f(a) as bigint) = 0:bigint)	true:boolean
+ei	(cast(f(a) as bigint) = 0:bigint)	true:boolean
+cs	(0:bigint < cast(f(a) as bigint))	true:boolean
+ei	(0:bigint < cast(f(a) as bigint))	true:boolean
+cs	(cast(f(a) as bigint) >= 0:bigint)	true:boolean
+ei	(cast(f(a) as bigint) >= 0:bigint)	true:boolean
+cs	NOT (cast(f(a) as bigint) = 0:bigint)	true:boolean
+ei	NOT (cast(f(a) as bigint) = 0:bigint)	true:boolean
+cs	(cast(f(a) as bigint) = cast(0:bigint as bigint))	true:boolean
+ei	(cast(f(a) as bigint) = cast(0:bigint as bigint))	true:boolean
+cs	cast(f(a) as bigint) IN (0:bigint, null:bigint)	true:boolean
+ei	cast(f(a) as bigint) IN (0:bigint, null:bigint)	true:boolean
+cs	NOT cast(f(a) as bigint) IN (0:bigint)	true:boolean
+ei	NOT cast(f(a) as bigint) IN (0:bigint)	true:boolean
+cs	startswith(cast(f(a) as bigint), 'ab')	true:boolean
+ei	startswith(cast(f(a) as bigint), 'ab')	true:boolean
+cs	NOT startswith(cast(f(a) as bigint), 'ab')	true:boolean
+ei	NOT startswith(cast(f(a) as bigint), 'ab')	true:boolean
+cs	(date_add(d, 1:int) = 0:date)	((date_add(d_minValue, 1:int) <= 0:date) AND (date_add(d_maxValue, 1:int) >= 0:date))
+cs	(0:date < date_add(d, 1:int))	(date_add(d_maxValue, 1:int) > 0:date)
+cs	(date_add(d, 1:int) >= 0:date)	(date_add(d_maxValue, 1:int) >= 0:date)
+cs	NOT (date_add(d, 1:int) = 0:date)	NOT ((date_add(d_minValue, 1:int) = 0:date) AND (date_add(d_maxValue, 1:int) = 0:date))
+cs	(date_add(d, 1:int) = cast(0:date as date))	((date_add(d_minValue, 1:int) <= cast(0:date as date)) AND (date_add(d_maxValue, 1:int) >= cast(0:date as date)))
+cs	date_add(d, 1:int) IN (0:date, null:date)	(((date_add(d_minValue, 1:int) <= 0:date) AND (date_add(d_maxValue, 1:int) >= 0:date)) OR ((date_add(d_minValue, 1:int) <= null:date) AND (date_add(d_maxValue, 1:int) >= null:date)))
+cs	NOT date_add(d, 1:int) IN (0:date)	NOT ((date_add(d_minValue, 1:int) = 0:date) AND (date_add(d_maxValue, 1:int) = 0:date))
+cs	startswith(date_add(d, 1:int), 'ab')	true:boolean
+ei	startswith(date_add(d, 1:int), 'ab')	((date_add(d_minValue, 1:int) <= 'ab') AND (date_add(d_maxValue, 1:int) >= 'ab'))
+cs	NOT startswith(date_add(d, 1:int), 'ab')	true:boolean
+ei	NOT startswith(date_add(d, 1:int), 'ab')	NOT (startswith(date_add(d_minValue, 1:int), 'ab') AND startswith(date_add(d_maxValue, 1:int), 'ab'))
+cs	(date_add(d, dayofmonth(d)) = 0:date)	((date_add(d_minValue, dayofmonth(d_minValue)) <= 0:date) AND (date_add(d_maxValue, dayofmonth(d_maxValue)) >= 0:date))
+cs	(0:date < date_add(d, dayofmonth(d)))	(date_add(d_maxValue, dayofmonth(d_maxValue)) > 0:date)
+cs	(date_add(d, dayofmonth(d)) >= 0:date)	(date_add(d_maxValue, dayofmonth(d_maxValue)) >= 0:date)
+cs	NOT (date_add(d, dayofmonth(d)) = 0:date)	NOT ((date_add(d_minValue, dayofmonth(d_minValue)) = 0:date) AND (date_add(d_maxValue, dayofmonth(d_maxValue)) = 0:date))
+cs	(date_add(d, dayofmonth(d)) = cast(0:date as date))	((date_add(d_minValue, dayofmonth(d_minValue)) <= cast(0:date as date)) AND (date_add(d_maxValue, dayofmonth(d_maxValue)) >= cast(0:date as date)))
+cs	date_add(d, dayofmonth(d)) IN (0:date, null:date)	(((date_add(d_minValue, dayofmonth(d_minValue)) <= 0:date) AND (date_add(d_maxValue, dayofmonth(d_maxValue)) >= 0:date)) OR ((date_add(d_minValue, dayofmonth(d_minValue)) <= null:date) AND (date_add(d_maxValue, dayofmonth(d_maxValue)) >= null:date)))
+cs	NOT date_add(d, dayofmonth(d)) IN (0:date)	NOT ((date_add(d_minValue, dayofmonth(d_minValue)) = 0:date) AND (date_add(d_maxValue, dayofmonth(d_maxValue)) = 0:date))
+cs	startswith(date_add(d, dayofmonth(d)), 'ab')	true:boolean
+ei	startswith(date_add(d, dayofmonth(d)), 'ab')	((date_add(d_minValue, dayofmonth(d_minValue)) <= 'ab') AND (date_add(d_maxValue, dayofmonth(d_maxValue)) >= 'ab'))
+cs	NOT startswith(date_add(d, dayofmonth(d)), 'ab')	true:boolean
+ei	NOT startswith(date_add(d, dayofmonth(d)), 'ab')	NOT (startswith(date_add(d_minValue, dayofmonth(d_minValue)), 'ab') AND startswith(date_add(d_maxValue, dayofmonth(d_maxValue)), 'ab'))
+cs	(date_add(d, a) = 0:date)	true:boolean
+cs	(0:date < date_add(d, a))	true:boolean
+cs	(date_add(d, a) >= 0:date)	true:boolean
+cs	NOT (date_add(d, a) = 0:date)	true:boolean
+cs	(date_add(d, a) = cast(0:date as date))	true:boolean
+cs	date_add(d, a) IN (0:date, null:date)	true:boolean
+cs	NOT date_add(d, a) IN (0:date)	true:boolean
+cs	startswith(date_add(d, a), 'ab')	true:boolean
+ei	startswith(date_add(d, a), 'ab')	true:boolean
+cs	NOT startswith(date_add(d, a), 'ab')	true:boolean
+ei	NOT startswith(date_add(d, a), 'ab')	true:boolean
+cs	(date_sub(d, 3:int) = 0:date)	((date_sub(d_minValue, 3:int) <= 0:date) AND (date_sub(d_maxValue, 3:int) >= 0:date))
+cs	(0:date < date_sub(d, 3:int))	(date_sub(d_maxValue, 3:int) > 0:date)
+cs	(date_sub(d, 3:int) >= 0:date)	(date_sub(d_maxValue, 3:int) >= 0:date)
+cs	NOT (date_sub(d, 3:int) = 0:date)	NOT ((date_sub(d_minValue, 3:int) = 0:date) AND (date_sub(d_maxValue, 3:int) = 0:date))
+cs	(date_sub(d, 3:int) = cast(0:date as date))	((date_sub(d_minValue, 3:int) <= cast(0:date as date)) AND (date_sub(d_maxValue, 3:int) >= cast(0:date as date)))
+cs	date_sub(d, 3:int) IN (0:date, null:date)	(((date_sub(d_minValue, 3:int) <= 0:date) AND (date_sub(d_maxValue, 3:int) >= 0:date)) OR ((date_sub(d_minValue, 3:int) <= null:date) AND (date_sub(d_maxValue, 3:int) >= null:date)))
+cs	NOT date_sub(d, 3:int) IN (0:date)	NOT ((date_sub(d_minValue, 3:int) = 0:date) AND (date_sub(d_maxValue, 3:int) = 0:date))
+cs	startswith(date_sub(d, 3:int), 'ab')	true:boolean
+ei	startswith(date_sub(d, 3:int), 'ab')	((date_sub(d_minValue, 3:int) <= 'ab') AND (date_sub(d_maxValue, 3:int) >= 'ab'))
+cs	NOT startswith(date_sub(d, 3:int), 'ab')	true:boolean
+ei	NOT startswith(date_sub(d, 3:int), 'ab')	NOT (startswith(date_sub(d_minValue, 3:int), 'ab') AND startswith(date_sub(d_maxValue, 3:int), 'ab'))
+cs	(date_sub(d, dayofmonth(d)) = 0:date)	((date_sub(d_minValue, dayofmonth(d_minValue)) <= 0:date) AND (date_sub(d_maxValue, dayofmonth(d_maxValue)) >= 0:date))
+cs	(0:date < date_sub(d, dayofmonth(d)))	(date_sub(d_maxValue, dayofmonth(d_maxValue)) > 0:date)
+cs	(date_sub(d, dayofmonth(d)) >= 0:date)	(date_sub(d_maxValue, dayofmonth(d_maxValue)) >= 0:date)
+cs	NOT (date_sub(d, dayofmonth(d)) = 0:date)	NOT ((date_sub(d_minValue, dayofmonth(d_minValue)) = 0:date) AND (date_sub(d_maxValue, dayofmonth(d_maxValue)) = 0:date))
+cs	(date_sub(d, dayofmonth(d)) = cast(0:date as date))	((date_sub(d_minValue, dayofmonth(d_minValue)) <= cast(0:date as date)) AND (date_sub(d_maxValue, dayofmonth(d_maxValue)) >= cast(0:date as date)))
+cs	date_sub(d, dayofmonth(d)) IN (0:date, null:date)	(((date_sub(d_minValue, dayofmonth(d_minValue)) <= 0:date) AND (date_sub(d_maxValue, dayofmonth(d_maxValue)) >= 0:date)) OR ((date_sub(d_minValue, dayofmonth(d_minValue)) <= null:date) AND (date_sub(d_maxValue, dayofmonth(d_maxValue)) >= null:date)))
+cs	NOT date_sub(d, dayofmonth(d)) IN (0:date)	NOT ((date_sub(d_minValue, dayofmonth(d_minValue)) = 0:date) AND (date_sub(d_maxValue, dayofmonth(d_maxValue)) = 0:date))
+cs	startswith(date_sub(d, dayofmonth(d)), 'ab')	true:boolean
+ei	startswith(date_sub(d, dayofmonth(d)), 'ab')	((date_sub(d_minValue, dayofmonth(d_minValue)) <= 'ab') AND (date_sub(d_maxValue, dayofmonth(d_maxValue)) >= 'ab'))
+cs	NOT startswith(date_sub(d, dayofmonth(d)), 'ab')	true:boolean
+ei	NOT startswith(date_sub(d, dayofmonth(d)), 'ab')	NOT (startswith(date_sub(d_minValue, dayofmonth(d_minValue)), 'ab') AND startswith(date_sub(d_maxValue, dayofmonth(d_maxValue)), 'ab'))
+cs	(datediff(d, 19723:date) = 0:int)	((datediff(d_minValue, 19723:date) <= 0:int) AND (datediff(d_maxValue, 19723:date) >= 0:int))
+cs	(0:int < datediff(d, 19723:date))	(datediff(d_maxValue, 19723:date) > 0:int)
+cs	(datediff(d, 19723:date) >= 0:int)	(datediff(d_maxValue, 19723:date) >= 0:int)
+cs	NOT (datediff(d, 19723:date) = 0:int)	NOT ((datediff(d_minValue, 19723:date) = 0:int) AND (datediff(d_maxValue, 19723:date) = 0:int))
+cs	(datediff(d, 19723:date) = cast(0:int as int))	((datediff(d_minValue, 19723:date) <= cast(0:int as int)) AND (datediff(d_maxValue, 19723:date) >= cast(0:int as int)))
+cs	datediff(d, 19723:date) IN (0:int, null:int)	(((datediff(d_minValue, 19723:date) <= 0:int) AND (datediff(d_maxValue, 19723:date) >= 0:int)) OR ((datediff(d_minValue, 19723:date) <= null:int) AND (datediff(d_maxValue, 19723:date) >= null:int)))
+cs	NOT datediff(d, 19723:date) IN (0:int)	NOT ((datediff(d_minValue, 19723:date) = 0:int) AND (datediff(d_maxValue, 19723:date) = 0:int))
+cs	startswith(datediff(d, 19723:date), 'ab')	true:boolean
+ei	startswith(datediff(d, 19723:date), 'ab')	((datediff(d_minValue, 19723:date) <= 'ab') AND (datediff(d_maxValue, 19723:date) >= 'ab'))
+cs	NOT startswith(datediff(d, 19723:date), 'ab')	true:boolean
+ei	NOT startswith(datediff(d, 19723:date), 'ab')	NOT (startswith(datediff(d_minValue, 19723:date), 'ab') AND startswith(datediff(d_maxValue, 19723:date), 'ab'))
+cs	(datediff(19723:date, d) = 0:int)	true:boolean
+cs	(0:int < datediff(19723:date, d))	true:boolean
+cs	(datediff(19723:date, d) >= 0:int)	true:boolean
+cs	NOT (datediff(19723:date, d) = 0:int)	true:boolean
+cs	(datediff(19723:date, d) = cast(0:int as int))	true:boolean
+cs	datediff(19723:date, d) IN (0:int, null:int)	true:boolean
+cs	NOT datediff(19723:date, d) IN (0:int)	true:boolean
+cs	startswith(datediff(19723:date, d), 'ab')	true:boolean
+ei	startswith(datediff(19723:date, d), 'ab')	true:boolean
+cs	NOT startswith(datediff(19723:date, d), 'ab')	true:boolean
+ei	NOT startswith(datediff(19723:date, d), 'ab')	true:boolean
+cs	(datediff(d, d) = 0:int)	((datediff(d_minValue, d_minValue) <= 0:int) AND (datediff(d_maxValue, d_maxValue) >= 0:int))
+cs	(0:int < datediff(d, d))	(datediff(d_maxValue, d_maxValue) > 0:int)
+cs	(datediff(d, d) >= 0:int)	(datediff(d_maxValue, d_maxValue) >= 0:int)
+cs	NOT (datediff(d, d) = 0:int)	NOT ((datediff(d_minValue, d_minValue) = 0:int) AND (datediff(d_maxValue, d_maxValue) = 0:int))
+cs	(datediff(d, d) = cast(0:int as int))	((datediff(d_minValue, d_minValue) <= cast(0:int as int)) AND (datediff(d_maxValue, d_maxValue) >= cast(0:int as int)))
+cs	datediff(d, d) IN (0:int, null:int)	(((datediff(d_minValue, d_minValue) <= 0:int) AND (datediff(d_maxValue, d_maxValue) >= 0:int)) OR ((datediff(d_minValue, d_minValue) <= null:int) AND (datediff(d_maxValue, d_maxValue) >= null:int)))
+cs	NOT datediff(d, d) IN (0:int)	NOT ((datediff(d_minValue, d_minValue) = 0:int) AND (datediff(d_maxValue, d_maxValue) = 0:int))
+cs	startswith(datediff(d, d), 'ab')	true:boolean
+ei	startswith(datediff(d, d), 'ab')	((datediff(d_minValue, d_minValue) <= 'ab') AND (datediff(d_maxValue, d_maxValue) >= 'ab'))
+cs	NOT startswith(datediff(d, d), 'ab')	true:boolean
+ei	NOT startswith(datediff(d, d), 'ab')	NOT (startswith(datediff(d_minValue, d_minValue), 'ab') AND startswith(datediff(d_maxValue, d_maxValue), 'ab'))
+cs	(date_add(cast(ts as date), 1:int) = 0:date)	((date_add(cast(ts_minValue as date), 1:int) <= 0:date) AND (date_add(cast(ts_maxValue as date), 1:int) >= 0:date))
+cs	(0:date < date_add(cast(ts as date), 1:int))	(date_add(cast(ts_maxValue as date), 1:int) > 0:date)
+cs	(date_add(cast(ts as date), 1:int) >= 0:date)	(date_add(cast(ts_maxValue as date), 1:int) >= 0:date)
+cs	NOT (date_add(cast(ts as date), 1:int) = 0:date)	NOT ((date_add(cast(ts_minValue as date), 1:int) = 0:date) AND (date_add(cast(ts_maxValue as date), 1:int) = 0:date))
+cs	(date_add(cast(ts as date), 1:int) = cast(0:date as date))	((date_add(cast(ts_minValue as date), 1:int) <= cast(0:date as date)) AND (date_add(cast(ts_maxValue as date), 1:int) >= cast(0:date as date)))
+cs	date_add(cast(ts as date), 1:int) IN (0:date, null:date)	(((date_add(cast(ts_minValue as date), 1:int) <= 0:date) AND (date_add(cast(ts_maxValue as date), 1:int) >= 0:date)) OR ((date_add(cast(ts_minValue as date), 1:int) <= null:date) AND (date_add(cast(ts_maxValue as date), 1:int) >= null:date)))
+cs	NOT date_add(cast(ts as date), 1:int) IN (0:date)	NOT ((date_add(cast(ts_minValue as date), 1:int) = 0:date) AND (date_add(cast(ts_maxValue as date), 1:int) = 0:date))
+cs	startswith(date_add(cast(ts as date), 1:int), 'ab')	true:boolean
+ei	startswith(date_add(cast(ts as date), 1:int), 'ab')	((date_add(cast(ts_minValue as date), 1:int) <= 'ab') AND (date_add(cast(ts_maxValue as date), 1:int) >= 'ab'))
+cs	NOT startswith(date_add(cast(ts as date), 1:int), 'ab')	true:boolean
+ei	NOT startswith(date_add(cast(ts as date), 1:int), 'ab')	NOT (startswith(date_add(cast(ts_minValue as date), 1:int), 'ab') AND startswith(date_add(cast(ts_maxValue as date), 1:int), 'ab'))
+cs	(date_format(ts, 'yyyy-MM-dd') = '')	((date_format(ts_minValue, 'yyyy-MM-dd') <= '') AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= ''))
+cs	('' < date_format(ts, 'yyyy-MM-dd'))	(date_format(ts_maxValue, 'yyyy-MM-dd') > '')
+cs	(date_format(ts, 'yyyy-MM-dd') >= '')	(date_format(ts_maxValue, 'yyyy-MM-dd') >= '')
+cs	NOT (date_format(ts, 'yyyy-MM-dd') = '')	NOT ((date_format(ts_minValue, 'yyyy-MM-dd') = '') AND (date_format(ts_maxValue, 'yyyy-MM-dd') = ''))
+cs	(date_format(ts, 'yyyy-MM-dd') = cast('' as string))	((date_format(ts_minValue, 'yyyy-MM-dd') <= cast('' as string)) AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= cast('' as string)))
+cs	date_format(ts, 'yyyy-MM-dd') IN ('', null:string)	(((date_format(ts_minValue, 'yyyy-MM-dd') <= '') AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= '')) OR ((date_format(ts_minValue, 'yyyy-MM-dd') <= null:string) AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= null:string)))
+cs	NOT date_format(ts, 'yyyy-MM-dd') IN ('')	NOT ((date_format(ts_minValue, 'yyyy-MM-dd') = '') AND (date_format(ts_maxValue, 'yyyy-MM-dd') = ''))
+cs	startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	((date_format(ts_minValue, 'yyyy-MM-dd') <= 'ab') AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= 'ab'))
+cs	NOT startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	NOT (startswith(date_format(ts_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(date_format(ts_maxValue, 'yyyy-MM-dd'), 'ab'))
+cs	(date_format(ts, cast(ts as string)) = '')	((date_format(ts_minValue, cast(ts_minValue as string)) <= '') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= ''))
+cs	('' < date_format(ts, cast(ts as string)))	(date_format(ts_maxValue, cast(ts_maxValue as string)) > '')
+cs	(date_format(ts, cast(ts as string)) >= '')	(date_format(ts_maxValue, cast(ts_maxValue as string)) >= '')
+cs	NOT (date_format(ts, cast(ts as string)) = '')	NOT ((date_format(ts_minValue, cast(ts_minValue as string)) = '') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) = ''))
+cs	(date_format(ts, cast(ts as string)) = cast('' as string))	((date_format(ts_minValue, cast(ts_minValue as string)) <= cast('' as string)) AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= cast('' as string)))
+cs	date_format(ts, cast(ts as string)) IN ('', null:string)	(((date_format(ts_minValue, cast(ts_minValue as string)) <= '') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= '')) OR ((date_format(ts_minValue, cast(ts_minValue as string)) <= null:string) AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= null:string)))
+cs	NOT date_format(ts, cast(ts as string)) IN ('')	NOT ((date_format(ts_minValue, cast(ts_minValue as string)) = '') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) = ''))
+cs	startswith(date_format(ts, cast(ts as string)), 'ab')	((date_format(ts_minValue, cast(ts_minValue as string)) <= 'ab') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= 'ab'))
+cs	NOT startswith(date_format(ts, cast(ts as string)), 'ab')	NOT (startswith(date_format(ts_minValue, cast(ts_minValue as string)), 'ab') AND startswith(date_format(ts_maxValue, cast(ts_maxValue as string)), 'ab'))
+cs	(from_unixtime(l, 'yyyy-MM-dd') = '')	((from_unixtime(l_minValue, 'yyyy-MM-dd') <= '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= ''))
+cs	('' < from_unixtime(l, 'yyyy-MM-dd'))	(from_unixtime(l_maxValue, 'yyyy-MM-dd') > '')
+cs	(from_unixtime(l, 'yyyy-MM-dd') >= '')	(from_unixtime(l_maxValue, 'yyyy-MM-dd') >= '')
+cs	NOT (from_unixtime(l, 'yyyy-MM-dd') = '')	NOT ((from_unixtime(l_minValue, 'yyyy-MM-dd') = '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = ''))
+cs	(from_unixtime(l, 'yyyy-MM-dd') = cast('' as string))	((from_unixtime(l_minValue, 'yyyy-MM-dd') <= cast('' as string)) AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= cast('' as string)))
+cs	from_unixtime(l, 'yyyy-MM-dd') IN ('', null:string)	(((from_unixtime(l_minValue, 'yyyy-MM-dd') <= '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= '')) OR ((from_unixtime(l_minValue, 'yyyy-MM-dd') <= null:string) AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= null:string)))
+cs	NOT from_unixtime(l, 'yyyy-MM-dd') IN ('')	NOT ((from_unixtime(l_minValue, 'yyyy-MM-dd') = '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = ''))
+cs	startswith(from_unixtime(l, 'yyyy-MM-dd'), 'ab')	((from_unixtime(l_minValue, 'yyyy-MM-dd') <= 'ab') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= 'ab'))
+cs	NOT startswith(from_unixtime(l, 'yyyy-MM-dd'), 'ab')	NOT (startswith(from_unixtime(l_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(from_unixtime(l_maxValue, 'yyyy-MM-dd'), 'ab'))
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= 0:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:bigint))
+cs	(0:bigint < to_unix_timestamp(s, 'yyyy-MM-dd'))	(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') > 0:bigint)
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') >= 0:bigint)	(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:bigint)
+cs	NOT (to_unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	NOT ((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') = 0:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') = 0:bigint))
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') = cast(0:bigint as bigint))	((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= cast(0:bigint as bigint)) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= cast(0:bigint as bigint)))
+cs	to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint, null:bigint)	(((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= 0:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:bigint)) OR ((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= null:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= null:bigint)))
+cs	NOT to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint)	NOT ((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') = 0:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') = 0:bigint))
+cs	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= 'ab') AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= 'ab'))
+cs	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	NOT (startswith(to_unix_timestamp(s_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd'), 'ab'))
+cs	(to_unix_timestamp(ts, 'yyyy-MM-dd') = 0:bigint)	((to_unix_timestamp(ts_minValue, 'yyyy-MM-dd') <= 0:bigint) AND (to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') >= 0:bigint))
+cs	(0:bigint < to_unix_timestamp(ts, 'yyyy-MM-dd'))	(to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') > 0:bigint)
+cs	(to_unix_timestamp(ts, 'yyyy-MM-dd') >= 0:bigint)	(to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') >= 0:bigint)
+cs	NOT (to_unix_timestamp(ts, 'yyyy-MM-dd') = 0:bigint)	NOT ((to_unix_timestamp(ts_minValue, 'yyyy-MM-dd') = 0:bigint) AND (to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') = 0:bigint))
+cs	(to_unix_timestamp(ts, 'yyyy-MM-dd') = cast(0:bigint as bigint))	((to_unix_timestamp(ts_minValue, 'yyyy-MM-dd') <= cast(0:bigint as bigint)) AND (to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') >= cast(0:bigint as bigint)))
+cs	to_unix_timestamp(ts, 'yyyy-MM-dd') IN (0:bigint, null:bigint)	(((to_unix_timestamp(ts_minValue, 'yyyy-MM-dd') <= 0:bigint) AND (to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') >= 0:bigint)) OR ((to_unix_timestamp(ts_minValue, 'yyyy-MM-dd') <= null:bigint) AND (to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') >= null:bigint)))
+cs	NOT to_unix_timestamp(ts, 'yyyy-MM-dd') IN (0:bigint)	NOT ((to_unix_timestamp(ts_minValue, 'yyyy-MM-dd') = 0:bigint) AND (to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') = 0:bigint))
+cs	startswith(to_unix_timestamp(ts, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	startswith(to_unix_timestamp(ts, 'yyyy-MM-dd'), 'ab')	((to_unix_timestamp(ts_minValue, 'yyyy-MM-dd') <= 'ab') AND (to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') >= 'ab'))
+cs	NOT startswith(to_unix_timestamp(ts, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	NOT startswith(to_unix_timestamp(ts, 'yyyy-MM-dd'), 'ab')	NOT (startswith(to_unix_timestamp(ts_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd'), 'ab'))
+cs	(from_utc_timestamp(ts, 'UTC') = 0:timestamp)	((from_utc_timestamp(ts_minValue, 'UTC') <= 0:timestamp) AND (from_utc_timestamp(ts_maxValue, 'UTC') >= 0:timestamp))
+cs	(0:timestamp < from_utc_timestamp(ts, 'UTC'))	(from_utc_timestamp(ts_maxValue, 'UTC') > 0:timestamp)
+cs	(from_utc_timestamp(ts, 'UTC') >= 0:timestamp)	(from_utc_timestamp(ts_maxValue, 'UTC') >= 0:timestamp)
+cs	NOT (from_utc_timestamp(ts, 'UTC') = 0:timestamp)	NOT ((from_utc_timestamp(ts_minValue, 'UTC') = 0:timestamp) AND (from_utc_timestamp(ts_maxValue, 'UTC') = 0:timestamp))
+cs	(from_utc_timestamp(ts, 'UTC') = cast(0:timestamp as timestamp))	((from_utc_timestamp(ts_minValue, 'UTC') <= cast(0:timestamp as timestamp)) AND (from_utc_timestamp(ts_maxValue, 'UTC') >= cast(0:timestamp as timestamp)))
+cs	from_utc_timestamp(ts, 'UTC') IN (0:timestamp, null:timestamp)	(((from_utc_timestamp(ts_minValue, 'UTC') <= 0:timestamp) AND (from_utc_timestamp(ts_maxValue, 'UTC') >= 0:timestamp)) OR ((from_utc_timestamp(ts_minValue, 'UTC') <= null:timestamp) AND (from_utc_timestamp(ts_maxValue, 'UTC') >= null:timestamp)))
+cs	NOT from_utc_timestamp(ts, 'UTC') IN (0:timestamp)	NOT ((from_utc_timestamp(ts_minValue, 'UTC') = 0:timestamp) AND (from_utc_timestamp(ts_maxValue, 'UTC') = 0:timestamp))
+cs	startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	true:boolean
+ei	startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	((from_utc_timestamp(ts_minValue, 'UTC') <= 'ab') AND (from_utc_timestamp(ts_maxValue, 'UTC') >= 'ab'))
+cs	NOT startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	true:boolean
+ei	NOT startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	NOT (startswith(from_utc_timestamp(ts_minValue, 'UTC'), 'ab') AND startswith(from_utc_timestamp(ts_maxValue, 'UTC'), 'ab'))
+cs	(to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	((to_utc_timestamp(ts_minValue, 'America/New_York') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp))
+cs	(0:timestamp < to_utc_timestamp(ts, 'America/New_York'))	(to_utc_timestamp(ts_maxValue, 'America/New_York') > 0:timestamp)
+cs	(to_utc_timestamp(ts, 'America/New_York') >= 0:timestamp)	(to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp)
+cs	NOT (to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, 'America/New_York') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') = 0:timestamp))
+cs	(to_utc_timestamp(ts, 'America/New_York') = cast(0:timestamp as timestamp))	((to_utc_timestamp(ts_minValue, 'America/New_York') <= cast(0:timestamp as timestamp)) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= cast(0:timestamp as timestamp)))
+cs	to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp, null:timestamp)	(((to_utc_timestamp(ts_minValue, 'America/New_York') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp)) OR ((to_utc_timestamp(ts_minValue, 'America/New_York') <= null:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= null:timestamp)))
+cs	NOT to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, 'America/New_York') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') = 0:timestamp))
+cs	startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
+ei	startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	((to_utc_timestamp(ts_minValue, 'America/New_York') <= 'ab') AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 'ab'))
+cs	NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
+ei	NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	NOT (startswith(to_utc_timestamp(ts_minValue, 'America/New_York'), 'ab') AND startswith(to_utc_timestamp(ts_maxValue, 'America/New_York'), 'ab'))
+cs	(left(s, 2:int) = '')	((left(s_minValue, 2:int) <= '') AND (left(s_maxValue, 2:int) >= ''))
+cs	('' < left(s, 2:int))	(left(s_maxValue, 2:int) > '')
+cs	(left(s, 2:int) >= '')	(left(s_maxValue, 2:int) >= '')
+cs	NOT (left(s, 2:int) = '')	NOT ((left(s_minValue, 2:int) = '') AND (left(s_maxValue, 2:int) = ''))
+cs	(left(s, 2:int) = cast('' as string))	((left(s_minValue, 2:int) <= cast('' as string)) AND (left(s_maxValue, 2:int) >= cast('' as string)))
+cs	left(s, 2:int) IN ('', null:string)	(((left(s_minValue, 2:int) <= '') AND (left(s_maxValue, 2:int) >= '')) OR ((left(s_minValue, 2:int) <= null:string) AND (left(s_maxValue, 2:int) >= null:string)))
+cs	NOT left(s, 2:int) IN ('')	NOT ((left(s_minValue, 2:int) = '') AND (left(s_maxValue, 2:int) = ''))
+cs	startswith(left(s, 2:int), 'ab')	((left(s_minValue, 2:int) <= 'ab') AND (left(s_maxValue, 2:int) >= 'ab'))
+cs	NOT startswith(left(s, 2:int), 'ab')	NOT (startswith(left(s_minValue, 2:int), 'ab') AND startswith(left(s_maxValue, 2:int), 'ab'))
+cs	(substring(s, 1:int, 2:int) = '')	true:boolean
+cs	('' < substring(s, 1:int, 2:int))	true:boolean
+cs	(substring(s, 1:int, 2:int) >= '')	true:boolean
+cs	NOT (substring(s, 1:int, 2:int) = '')	true:boolean
+cs	(substring(s, 1:int, 2:int) = cast('' as string))	true:boolean
+cs	substring(s, 1:int, 2:int) IN ('', null:string)	true:boolean
+cs	NOT substring(s, 1:int, 2:int) IN ('')	true:boolean
+cs	startswith(substring(s, 1:int, 2:int), 'ab')	true:boolean
+cs	NOT startswith(substring(s, 1:int, 2:int), 'ab')	true:boolean
+cs	(upper(s) = '')	true:boolean
+cs	('' < upper(s))	true:boolean
+cs	(upper(s) >= '')	true:boolean
+cs	NOT (upper(s) = '')	true:boolean
+cs	(upper(s) = cast('' as string))	true:boolean
+cs	upper(s) IN ('', null:string)	true:boolean
+cs	NOT upper(s) IN ('')	true:boolean
+cs	startswith(upper(s), 'ab')	true:boolean
+cs	NOT startswith(upper(s), 'ab')	true:boolean
+cs	(lower(s) = '')	true:boolean
+cs	('' < lower(s))	true:boolean
+cs	(lower(s) >= '')	true:boolean
+cs	NOT (lower(s) = '')	true:boolean
+cs	(lower(s) = cast('' as string))	true:boolean
+cs	lower(s) IN ('', null:string)	true:boolean
+cs	NOT lower(s) IN ('')	true:boolean
+cs	startswith(lower(s), 'ab')	true:boolean
+cs	NOT startswith(lower(s), 'ab')	true:boolean
+cs	(abs(a) = 0:int)	true:boolean
+cs	(0:int < abs(a))	true:boolean
+cs	(abs(a) >= 0:int)	true:boolean
+cs	NOT (abs(a) = 0:int)	true:boolean
+cs	(abs(a) = cast(0:int as int))	true:boolean
+cs	abs(a) IN (0:int, null:int)	true:boolean
+cs	NOT abs(a) IN (0:int)	true:boolean
+cs	startswith(abs(a), 'ab')	true:boolean
+ei	startswith(abs(a), 'ab')	true:boolean
+cs	NOT startswith(abs(a), 'ab')	true:boolean
+ei	NOT startswith(abs(a), 'ab')	true:boolean
+cs	(to_date(s) = 0:date)	((to_date(s_minValue) <= 0:date) AND (to_date(s_maxValue) >= 0:date))
+cs	(0:date < to_date(s))	(to_date(s_maxValue) > 0:date)
+cs	(to_date(s) >= 0:date)	(to_date(s_maxValue) >= 0:date)
+cs	NOT (to_date(s) = 0:date)	NOT ((to_date(s_minValue) = 0:date) AND (to_date(s_maxValue) = 0:date))
+cs	(to_date(s) = cast(0:date as date))	((to_date(s_minValue) <= cast(0:date as date)) AND (to_date(s_maxValue) >= cast(0:date as date)))
+cs	to_date(s) IN (0:date, null:date)	(((to_date(s_minValue) <= 0:date) AND (to_date(s_maxValue) >= 0:date)) OR ((to_date(s_minValue) <= null:date) AND (to_date(s_maxValue) >= null:date)))
+cs	NOT to_date(s) IN (0:date)	NOT ((to_date(s_minValue) = 0:date) AND (to_date(s_maxValue) = 0:date))
+cs	startswith(to_date(s), 'ab')	true:boolean
+ei	startswith(to_date(s), 'ab')	((to_date(s_minValue) <= 'ab') AND (to_date(s_maxValue) >= 'ab'))
+cs	NOT startswith(to_date(s), 'ab')	true:boolean
+ei	NOT startswith(to_date(s), 'ab')	NOT (startswith(to_date(s_minValue), 'ab') AND startswith(to_date(s_maxValue), 'ab'))
+cs	(to_date(s, 'yyyy-MM-dd') = 0:date)	((to_date(s_minValue, 'yyyy-MM-dd') <= 0:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') >= 0:date))
+cs	(0:date < to_date(s, 'yyyy-MM-dd'))	(to_date(s_maxValue, 'yyyy-MM-dd') > 0:date)
+cs	(to_date(s, 'yyyy-MM-dd') >= 0:date)	(to_date(s_maxValue, 'yyyy-MM-dd') >= 0:date)
+cs	NOT (to_date(s, 'yyyy-MM-dd') = 0:date)	NOT ((to_date(s_minValue, 'yyyy-MM-dd') = 0:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') = 0:date))
+cs	(to_date(s, 'yyyy-MM-dd') = cast(0:date as date))	((to_date(s_minValue, 'yyyy-MM-dd') <= cast(0:date as date)) AND (to_date(s_maxValue, 'yyyy-MM-dd') >= cast(0:date as date)))
+cs	to_date(s, 'yyyy-MM-dd') IN (0:date, null:date)	(((to_date(s_minValue, 'yyyy-MM-dd') <= 0:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') >= 0:date)) OR ((to_date(s_minValue, 'yyyy-MM-dd') <= null:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') >= null:date)))
+cs	NOT to_date(s, 'yyyy-MM-dd') IN (0:date)	NOT ((to_date(s_minValue, 'yyyy-MM-dd') = 0:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') = 0:date))
+cs	startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	((to_date(s_minValue, 'yyyy-MM-dd') <= 'ab') AND (to_date(s_maxValue, 'yyyy-MM-dd') >= 'ab'))
+cs	NOT startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	NOT startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	NOT (startswith(to_date(s_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(to_date(s_maxValue, 'yyyy-MM-dd'), 'ab'))
+cs	(to_timestamp(s, 'yyyy-MM-dd') = 0:timestamp)	((to_timestamp(s_minValue, 'yyyy-MM-dd') <= 0:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:timestamp))
+cs	(0:timestamp < to_timestamp(s, 'yyyy-MM-dd'))	(to_timestamp(s_maxValue, 'yyyy-MM-dd') > 0:timestamp)
+cs	(to_timestamp(s, 'yyyy-MM-dd') >= 0:timestamp)	(to_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:timestamp)
+cs	NOT (to_timestamp(s, 'yyyy-MM-dd') = 0:timestamp)	NOT ((to_timestamp(s_minValue, 'yyyy-MM-dd') = 0:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') = 0:timestamp))
+cs	(to_timestamp(s, 'yyyy-MM-dd') = cast(0:timestamp as timestamp))	((to_timestamp(s_minValue, 'yyyy-MM-dd') <= cast(0:timestamp as timestamp)) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= cast(0:timestamp as timestamp)))
+cs	to_timestamp(s, 'yyyy-MM-dd') IN (0:timestamp, null:timestamp)	(((to_timestamp(s_minValue, 'yyyy-MM-dd') <= 0:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:timestamp)) OR ((to_timestamp(s_minValue, 'yyyy-MM-dd') <= null:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= null:timestamp)))
+cs	NOT to_timestamp(s, 'yyyy-MM-dd') IN (0:timestamp)	NOT ((to_timestamp(s_minValue, 'yyyy-MM-dd') = 0:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') = 0:timestamp))
+cs	startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	((to_timestamp(s_minValue, 'yyyy-MM-dd') <= 'ab') AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= 'ab'))
+cs	NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	NOT (startswith(to_timestamp(s_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(to_timestamp(s_maxValue, 'yyyy-MM-dd'), 'ab'))
+cs	(to_date(cast(ts as string)) = 0:date)	true:boolean
+cs	(0:date < to_date(cast(ts as string)))	true:boolean
+cs	(to_date(cast(ts as string)) >= 0:date)	true:boolean
+cs	NOT (to_date(cast(ts as string)) = 0:date)	true:boolean
+cs	(to_date(cast(ts as string)) = cast(0:date as date))	true:boolean
+cs	to_date(cast(ts as string)) IN (0:date, null:date)	true:boolean
+cs	NOT to_date(cast(ts as string)) IN (0:date)	true:boolean
+cs	startswith(to_date(cast(ts as string)), 'ab')	true:boolean
+ei	startswith(to_date(cast(ts as string)), 'ab')	true:boolean
+cs	NOT startswith(to_date(cast(ts as string)), 'ab')	true:boolean
+ei	NOT startswith(to_date(cast(ts as string)), 'ab')	true:boolean
+cs	(cast(to_date(s) as timestamp) = 0:timestamp)	((cast(to_date(s_minValue) as timestamp) <= 0:timestamp) AND (cast(to_date(s_maxValue) as timestamp) >= 0:timestamp))
+cs	(0:timestamp < cast(to_date(s) as timestamp))	(cast(to_date(s_maxValue) as timestamp) > 0:timestamp)
+cs	(cast(to_date(s) as timestamp) >= 0:timestamp)	(cast(to_date(s_maxValue) as timestamp) >= 0:timestamp)
+cs	NOT (cast(to_date(s) as timestamp) = 0:timestamp)	NOT ((cast(to_date(s_minValue) as timestamp) = 0:timestamp) AND (cast(to_date(s_maxValue) as timestamp) = 0:timestamp))
+cs	(cast(to_date(s) as timestamp) = cast(0:timestamp as timestamp))	((cast(to_date(s_minValue) as timestamp) <= cast(0:timestamp as timestamp)) AND (cast(to_date(s_maxValue) as timestamp) >= cast(0:timestamp as timestamp)))
+cs	cast(to_date(s) as timestamp) IN (0:timestamp, null:timestamp)	(((cast(to_date(s_minValue) as timestamp) <= 0:timestamp) AND (cast(to_date(s_maxValue) as timestamp) >= 0:timestamp)) OR ((cast(to_date(s_minValue) as timestamp) <= null:timestamp) AND (cast(to_date(s_maxValue) as timestamp) >= null:timestamp)))
+cs	NOT cast(to_date(s) as timestamp) IN (0:timestamp)	NOT ((cast(to_date(s_minValue) as timestamp) = 0:timestamp) AND (cast(to_date(s_maxValue) as timestamp) = 0:timestamp))
+cs	startswith(cast(to_date(s) as timestamp), 'ab')	true:boolean
+ei	startswith(cast(to_date(s) as timestamp), 'ab')	((cast(to_date(s_minValue) as timestamp) <= 'ab') AND (cast(to_date(s_maxValue) as timestamp) >= 'ab'))
+cs	NOT startswith(cast(to_date(s) as timestamp), 'ab')	true:boolean
+ei	NOT startswith(cast(to_date(s) as timestamp), 'ab')	NOT (startswith(cast(to_date(s_minValue) as timestamp), 'ab') AND startswith(cast(to_date(s_maxValue) as timestamp), 'ab'))
+cs	((cast(a as bigint) + 1:bigint) = 0:bigint)	(((cast(a_minValue as bigint) + 1:bigint) <= 0:bigint) AND ((cast(a_maxValue as bigint) + 1:bigint) >= 0:bigint))
+cs	(0:bigint < (cast(a as bigint) + 1:bigint))	((cast(a_maxValue as bigint) + 1:bigint) > 0:bigint)
+cs	((cast(a as bigint) + 1:bigint) >= 0:bigint)	((cast(a_maxValue as bigint) + 1:bigint) >= 0:bigint)
+cs	NOT ((cast(a as bigint) + 1:bigint) = 0:bigint)	NOT (((cast(a_minValue as bigint) + 1:bigint) = 0:bigint) AND ((cast(a_maxValue as bigint) + 1:bigint) = 0:bigint))
+cs	((cast(a as bigint) + 1:bigint) = cast(0:bigint as bigint))	(((cast(a_minValue as bigint) + 1:bigint) <= cast(0:bigint as bigint)) AND ((cast(a_maxValue as bigint) + 1:bigint) >= cast(0:bigint as bigint)))
+cs	(cast(a as bigint) + 1:bigint) IN (0:bigint, null:bigint)	((((cast(a_minValue as bigint) + 1:bigint) <= 0:bigint) AND ((cast(a_maxValue as bigint) + 1:bigint) >= 0:bigint)) OR (((cast(a_minValue as bigint) + 1:bigint) <= null:bigint) AND ((cast(a_maxValue as bigint) + 1:bigint) >= null:bigint)))
+cs	NOT (cast(a as bigint) + 1:bigint) IN (0:bigint)	NOT (((cast(a_minValue as bigint) + 1:bigint) = 0:bigint) AND ((cast(a_maxValue as bigint) + 1:bigint) = 0:bigint))
+cs	startswith((cast(a as bigint) + 1:bigint), 'ab')	true:boolean
+ei	startswith((cast(a as bigint) + 1:bigint), 'ab')	(((cast(a_minValue as bigint) + 1:bigint) <= 'ab') AND ((cast(a_maxValue as bigint) + 1:bigint) >= 'ab'))
+cs	NOT startswith((cast(a as bigint) + 1:bigint), 'ab')	true:boolean
+ei	NOT startswith((cast(a as bigint) + 1:bigint), 'ab')	NOT (startswith((cast(a_minValue as bigint) + 1:bigint), 'ab') AND startswith((cast(a_maxValue as bigint) + 1:bigint), 'ab'))
+cs	((datediff(d, 19723:date) + 1:int) = 0:int)	(((datediff(d_minValue, 19723:date) + 1:int) <= 0:int) AND ((datediff(d_maxValue, 19723:date) + 1:int) >= 0:int))
+cs	(0:int < (datediff(d, 19723:date) + 1:int))	((datediff(d_maxValue, 19723:date) + 1:int) > 0:int)
+cs	((datediff(d, 19723:date) + 1:int) >= 0:int)	((datediff(d_maxValue, 19723:date) + 1:int) >= 0:int)
+cs	NOT ((datediff(d, 19723:date) + 1:int) = 0:int)	NOT (((datediff(d_minValue, 19723:date) + 1:int) = 0:int) AND ((datediff(d_maxValue, 19723:date) + 1:int) = 0:int))
+cs	((datediff(d, 19723:date) + 1:int) = cast(0:int as int))	(((datediff(d_minValue, 19723:date) + 1:int) <= cast(0:int as int)) AND ((datediff(d_maxValue, 19723:date) + 1:int) >= cast(0:int as int)))
+cs	(datediff(d, 19723:date) + 1:int) IN (0:int, null:int)	((((datediff(d_minValue, 19723:date) + 1:int) <= 0:int) AND ((datediff(d_maxValue, 19723:date) + 1:int) >= 0:int)) OR (((datediff(d_minValue, 19723:date) + 1:int) <= null:int) AND ((datediff(d_maxValue, 19723:date) + 1:int) >= null:int)))
+cs	NOT (datediff(d, 19723:date) + 1:int) IN (0:int)	NOT (((datediff(d_minValue, 19723:date) + 1:int) = 0:int) AND ((datediff(d_maxValue, 19723:date) + 1:int) = 0:int))
+cs	startswith((datediff(d, 19723:date) + 1:int), 'ab')	true:boolean
+ei	startswith((datediff(d, 19723:date) + 1:int), 'ab')	(((datediff(d_minValue, 19723:date) + 1:int) <= 'ab') AND ((datediff(d_maxValue, 19723:date) + 1:int) >= 'ab'))
+cs	NOT startswith((datediff(d, 19723:date) + 1:int), 'ab')	true:boolean
+ei	NOT startswith((datediff(d, 19723:date) + 1:int), 'ab')	NOT (startswith((datediff(d_minValue, 19723:date) + 1:int), 'ab') AND startswith((datediff(d_maxValue, 19723:date) + 1:int), 'ab'))
+cs	(concat(s, s) = '')	true:boolean
+cs	('' < concat(s, s))	true:boolean
+cs	(concat(s, s) >= '')	true:boolean
+cs	NOT (concat(s, s) = '')	true:boolean
+cs	(concat(s, s) = cast('' as string))	true:boolean
+cs	concat(s, s) IN ('', null:string)	true:boolean
+cs	NOT concat(s, s) IN ('')	true:boolean
+cs	startswith(concat(s, s), 'ab')	true:boolean
+cs	NOT startswith(concat(s, s), 'ab')	true:boolean
+cs	(coalesce(a, 1:int) = 0:int)	true:boolean
+cs	(0:int < coalesce(a, 1:int))	true:boolean
+cs	(coalesce(a, 1:int) >= 0:int)	true:boolean
+cs	NOT (coalesce(a, 1:int) = 0:int)	true:boolean
+cs	(coalesce(a, 1:int) = cast(0:int as int))	true:boolean
+cs	coalesce(a, 1:int) IN (0:int, null:int)	true:boolean
+cs	NOT coalesce(a, 1:int) IN (0:int)	true:boolean
+cs	startswith(coalesce(a, 1:int), 'ab')	true:boolean
+ei	startswith(coalesce(a, 1:int), 'ab')	true:boolean
+cs	NOT startswith(coalesce(a, 1:int), 'ab')	true:boolean
+ei	NOT startswith(coalesce(a, 1:int), 'ab')	true:boolean
+cs	(a = 0:int)	true:boolean
+ei	(a = 0:int)	true:boolean
+cs	(0:int < a)	true:boolean
+ei	(0:int < a)	true:boolean
+cs	(a >= 0:int)	true:boolean
+ei	(a >= 0:int)	true:boolean
+cs	NOT (a = 0:int)	true:boolean
+ei	NOT (a = 0:int)	true:boolean
+cs	(a = cast(0:int as int))	true:boolean
+ei	(a = cast(0:int as int))	true:boolean
+cs	a IN (0:int, null:int)	true:boolean
+ei	a IN (0:int, null:int)	true:boolean
+cs	NOT a IN (0:int)	true:boolean
+ei	NOT a IN (0:int)	true:boolean
+cs	startswith(a, 'ab')	true:boolean
+ei	startswith(a, 'ab')	true:boolean
+cs	NOT startswith(a, 'ab')	true:boolean
+ei	NOT startswith(a, 'ab')	true:boolean
+cs	((a + 1:int) = 0:int)	true:boolean
+ei	((a + 1:int) = 0:int)	true:boolean
+cs	(0:int < (a + 1:int))	true:boolean
+ei	(0:int < (a + 1:int))	true:boolean
+cs	((a + 1:int) >= 0:int)	true:boolean
+ei	((a + 1:int) >= 0:int)	true:boolean
+cs	NOT ((a + 1:int) = 0:int)	true:boolean
+ei	NOT ((a + 1:int) = 0:int)	true:boolean
+cs	((a + 1:int) = cast(0:int as int))	true:boolean
+ei	((a + 1:int) = cast(0:int as int))	true:boolean
+cs	(a + 1:int) IN (0:int, null:int)	true:boolean
+ei	(a + 1:int) IN (0:int, null:int)	true:boolean
+cs	NOT (a + 1:int) IN (0:int)	true:boolean
+ei	NOT (a + 1:int) IN (0:int)	true:boolean
+cs	startswith((a + 1:int), 'ab')	true:boolean
+ei	startswith((a + 1:int), 'ab')	true:boolean
+cs	NOT startswith((a + 1:int), 'ab')	true:boolean
+ei	NOT startswith((a + 1:int), 'ab')	true:boolean
+cs	NOT (NOT a IN (0:int) OR (EXP(x) = cast(0.0:double as double)))	true:boolean
+ei	NOT (NOT a IN (0:int) OR (EXP(x) = cast(0.0:double as double)))	NOT ((EXP(x_minValue) = cast(0.0:double as double)) AND (EXP(x_maxValue) = cast(0.0:double as double)))
+cs	NOT (NOT (NOT ((0:int < cast(s as int)) AND NOT (date_format(ts, 'yyyy-MM-dd') = '')) OR NOT ((to_date(cast(ts as string)) = 0:date) AND (datediff(19723:date, d) = cast(0:int as int)))) OR NOT NOT (ts IS NULL OR startswith(EXPM1(x), 'ab')))	true:boolean
+ei	NOT (NOT (NOT ((0:int < cast(s as int)) AND NOT (date_format(ts, 'yyyy-MM-dd') = '')) OR NOT ((to_date(cast(ts as string)) = 0:date) AND (datediff(19723:date, d) = cast(0:int as int)))) OR NOT NOT (ts IS NULL OR startswith(EXPM1(x), 'ab')))	true:boolean
+cs	(NOT ((NOT (cast(f(a) as bigint) = 0:bigint) OR startswith(shiftleft(a, 1:int), 'ab')) OR (NOT ((a * 2:int) = 0:int) AND (to_date(s) >= 0:date))) OR shiftright(8:int, a) IN (0:int, null:int))	true:boolean
+ei	(NOT ((NOT (cast(f(a) as bigint) = 0:bigint) OR startswith(shiftleft(a, 1:int), 'ab')) OR (NOT ((a * 2:int) = 0:int) AND (to_date(s) >= 0:date))) OR shiftright(8:int, a) IN (0:int, null:int))	true:boolean
+cs	NOT (NOT ((to_utc_timestamp(ts, 'America/New_York') = 0:timestamp) AND (date_add(d, a) = cast(0:date as date))) AND ((lower(s) >= '') AND dec IS NOT NULL))	true:boolean
+cs	(((NOT startswith(date_add(d, dayofmonth(d)), 'ab') AND d IS NOT NULL) OR from_utc_timestamp(ts, 'UTC') IN (0:timestamp, null:timestamp)) AND NOT ((0:int * a) IN (0:int, null:int) OR (0:int < (1:int + a))))	true:boolean
+ei	(((NOT startswith(date_add(d, dayofmonth(d)), 'ab') AND d IS NOT NULL) OR from_utc_timestamp(ts, 'UTC') IN (0:timestamp, null:timestamp)) AND NOT ((0:int * a) IN (0:int, null:int) OR (0:int < (1:int + a))))	((NOT (startswith(date_add(d_minValue, dayofmonth(d_minValue)), 'ab') AND startswith(date_add(d_maxValue, dayofmonth(d_maxValue)), 'ab')) AND ((d_nullCount IS NULL OR valueCount IS NULL) OR (d_nullCount < valueCount))) OR (((from_utc_timestamp(ts_minValue, 'UTC') <= 0:timestamp) AND (from_utc_timestamp(ts_maxValue, 'UTC') >= 0:timestamp)) OR ((from_utc_timestamp(ts_minValue, 'UTC') <= null:timestamp) AND (from_utc_timestamp(ts_maxValue, 'UTC') >= null:timestamp))))
+cs	NOT (date_add(d, dayofmonth(d)) >= 0:date)	true:boolean
+cs	(NOT NOT (NOT (a | a) IN (0:int) OR (x / -2.0:double) IN (0.0:double, null:double)) OR NOT (startswith((a + a), 'ab') OR NOT (NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab') AND NOT (cast((a + 'x') as bigint) = 0:bigint))))	true:boolean
+ei	(NOT NOT (NOT (a | a) IN (0:int) OR (x / -2.0:double) IN (0.0:double, null:double)) OR NOT (startswith((a + a), 'ab') OR NOT (NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab') AND NOT (cast((a + 'x') as bigint) = 0:bigint))))	true:boolean
+cs	((a * 2:int) >= 0:int)	((a_maxValue * 2:int) >= 0:int)
+cs	NOT NOT (shiftleft(a, 1:int) = 0:int)	true:boolean
+cs	(0:timestamp < from_utc_timestamp(ts, 'UTC'))	(from_utc_timestamp(ts_maxValue, 'UTC') > 0:timestamp)
+cs	NOT (from_unixtime(l, 'yyyy-MM-dd') IN ('', null:string) OR NOT ((dec = cast(0.00:decimal(10,2) as decimal(10,2))) OR startswith(to_date(s, 'yyyy-MM-dd'), 'ab')))	true:boolean
+ei	NOT (from_unixtime(l, 'yyyy-MM-dd') IN ('', null:string) OR NOT ((dec = cast(0.00:decimal(10,2) as decimal(10,2))) OR startswith(to_date(s, 'yyyy-MM-dd'), 'ab')))	NOT (((from_unixtime(l_minValue, 'yyyy-MM-dd') = '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = '')) OR ((from_unixtime(l_minValue, 'yyyy-MM-dd') = null:string) AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = null:string)))
+cs	((date_format(ts, cast(ts as string)) = cast('' as string)) OR NOT (NOT NOT startswith(coalesce(a, 1:int), 'ab') AND ((a = b) OR NOT date_add(d, 1:int) IN (0:date))))	true:boolean
+ei	((date_format(ts, cast(ts as string)) = cast('' as string)) OR NOT (NOT NOT startswith(coalesce(a, 1:int), 'ab') AND ((a = b) OR NOT date_add(d, 1:int) IN (0:date))))	true:boolean
+cs	((0:int < cast(ts as int)) OR (cast(ts as bigint) >= 0:bigint))	true:boolean
+cs	NOT (('' < date_format(ts, 'yyyy-MM-dd')) AND NOT (LOG2(x) = 0.0:double))	true:boolean
+cs	NOT (NOT (NOT ((date_add(d, 1:int) = 0:date) AND NOT startswith(LOG1P(x), 'ab')) OR NOT (NOT (abs(a) | a) IN (0:int) AND cast(dec as double) IN (0.0:double, null:double))) AND (NOT NOT startswith(lower(s), 'ab') OR (LOG1P(x) = 0.0:double)))	true:boolean
+ei	NOT (NOT (NOT ((date_add(d, 1:int) = 0:date) AND NOT startswith(LOG1P(x), 'ab')) OR NOT (NOT (abs(a) | a) IN (0:int) AND cast(dec as double) IN (0.0:double, null:double))) AND (NOT NOT startswith(lower(s), 'ab') OR (LOG1P(x) = 0.0:double)))	true:boolean
+cs	(((((x / -2.0:double) >= 0.0:double) AND NOT to_unix_timestamp(ts, 'yyyy-MM-dd') IN (0:bigint)) AND (NOT left(s, 2:int) IN ('') OR (to_timestamp(s, 'yyyy-MM-dd') >= 0:timestamp))) OR (((EXP(x) = 0.0:double) AND NOT x IN (0.0:double)) OR NOT NOT startswith(shiftleft(a, 1:int), 'ab')))	true:boolean
+ei	(((((x / -2.0:double) >= 0.0:double) AND NOT to_unix_timestamp(ts, 'yyyy-MM-dd') IN (0:bigint)) AND (NOT left(s, 2:int) IN ('') OR (to_timestamp(s, 'yyyy-MM-dd') >= 0:timestamp))) OR (((EXP(x) = 0.0:double) AND NOT x IN (0.0:double)) OR NOT NOT startswith(shiftleft(a, 1:int), 'ab')))	true:boolean
+cs	NOT ((0:int < shiftleft(a, 1:int)) OR (false:boolean < cast(a as boolean)))	true:boolean
+cs	(dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3), null:decimal(13,3))	((((dec_minValue * 1.5:decimal(2,1)) <= 0.000:decimal(13,3)) AND ((dec_maxValue * 1.5:decimal(2,1)) >= 0.000:decimal(13,3))) OR (((dec_minValue * 1.5:decimal(2,1)) <= null:decimal(13,3)) AND ((dec_maxValue * 1.5:decimal(2,1)) >= null:decimal(13,3))))
+cs	((NOT (0:int < shiftright(8:int, a)) AND (cast(a as string) = cast('' as string))) OR NOT to_unix_timestamp(ts, 'yyyy-MM-dd') IN (0:bigint))	true:boolean
+cs	NOT (NOT ((cast(to_date(s) as timestamp) >= 0:timestamp) OR NOT (((0:int * a) = 0:int) OR ((a * a) = cast(0:int as int)))) OR NOT s IS NULL)	true:boolean
+cs	((a + 1:int) = cast(0:int as int))	(((a_minValue + 1:int) <= cast(0:int as int)) AND ((a_maxValue + 1:int) >= cast(0:int as int)))
+cs	NOT (startswith((a + 1:int), 'ab') AND ((0.000:decimal(13,3) < (dec * 1.5:decimal(2,1))) AND NOT (NOT (a * -2:int) IN (0:int) OR (datediff(d, d) >= 0:int))))	true:boolean
+ei	NOT (startswith((a + 1:int), 'ab') AND ((0.000:decimal(13,3) < (dec * 1.5:decimal(2,1))) AND NOT (NOT (a * -2:int) IN (0:int) OR (datediff(d, d) >= 0:int))))	true:boolean
+cs	(NOT (((from_unixtime(l, 'yyyy-MM-dd') = cast('' as string)) OR NOT (x = 0.0:double)) OR NOT (a + a) IN (0:int)) OR NOT (NOT (NOT startswith(to_date(s), 'ab') AND ((a + 'x') = cast(0:int as int))) OR NOT (NOT startswith((a + b), 'ab') AND dec IS NOT NULL)))	true:boolean
+ei	(NOT (((from_unixtime(l, 'yyyy-MM-dd') = cast('' as string)) OR NOT (x = 0.0:double)) OR NOT (a + a) IN (0:int)) OR NOT (NOT (NOT startswith(to_date(s), 'ab') AND ((a + 'x') = cast(0:int as int))) OR NOT (NOT startswith((a + b), 'ab') AND dec IS NOT NULL)))	true:boolean
+cs	((((cast(a as bigint) + 1:bigint) = cast(0:bigint as bigint)) AND (NOT startswith(cast(dec as double), 'ab') AND NOT from_unixtime(l, 'yyyy-MM-dd') IN (''))) AND (NOT (date_add(d, 1:int) = 0:date) OR ((0:int * a) = cast(0:int as int))))	true:boolean
+ei	((((cast(a as bigint) + 1:bigint) = cast(0:bigint as bigint)) AND (NOT startswith(cast(dec as double), 'ab') AND NOT from_unixtime(l, 'yyyy-MM-dd') IN (''))) AND (NOT (date_add(d, 1:int) = 0:date) OR ((0:int * a) = cast(0:int as int))))	((((cast(a_minValue as bigint) + 1:bigint) <= cast(0:bigint as bigint)) AND ((cast(a_maxValue as bigint) + 1:bigint) >= cast(0:bigint as bigint))) AND (NOT (startswith(cast(dec_minValue as double), 'ab') AND startswith(cast(dec_maxValue as double), 'ab')) AND NOT ((from_unixtime(l_minValue, 'yyyy-MM-dd') = '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = ''))))
+cs	((lower(s) = cast('' as string)) AND NOT ((x / -2.0:double) = cast(0.0:double as double)))	true:boolean
+cs	NOT (to_date(cast(ts as string)) = 0:date)	true:boolean
+cs	NOT (NOT (NOT shiftright(8:int, a) IN (0:int) AND ((cast(a as smallint) >= 0:smallint) AND (0:timestamp < from_utc_timestamp(ts, 'UTC')))) AND NOT (a = 0:int))	true:boolean
+ei	NOT (NOT (NOT shiftright(8:int, a) IN (0:int) AND ((cast(a as smallint) >= 0:smallint) AND (0:timestamp < from_utc_timestamp(ts, 'UTC')))) AND NOT (a = 0:int))	true:boolean
+cs	shiftleft(a, 1:int) IN (0:int, null:int)	(((shiftleft(a_minValue, 1:int) <= 0:int) AND (shiftleft(a_maxValue, 1:int) >= 0:int)) OR ((shiftleft(a_minValue, 1:int) <= null:int) AND (shiftleft(a_maxValue, 1:int) >= null:int)))
+cs	NOT (cast(a as bigint) = 0:bigint)	NOT ((cast(a_minValue as bigint) = 0:bigint) AND (cast(a_maxValue as bigint) = 0:bigint))
+cs	(NOT (substring(s, 1:int, 2:int) IN ('', null:string) OR (0:bigint < cast(a as bigint))) OR NOT (NOT (datediff(19723:date, d) IN (0:int, null:int) AND startswith(l, 'ab')) AND NOT ((a + b) IN (0:int, null:int) OR NOT (x / -2.0:double) IN (0.0:double))))	true:boolean
+ei	(NOT (substring(s, 1:int, 2:int) IN ('', null:string) OR (0:bigint < cast(a as bigint))) OR NOT (NOT (datediff(19723:date, d) IN (0:int, null:int) AND startswith(l, 'ab')) AND NOT ((a + b) IN (0:int, null:int) OR NOT (x / -2.0:double) IN (0.0:double))))	true:boolean
+cs	('' < substring(s, 1:int, 2:int))	true:boolean
+cs	(datediff(d, d) >= 0:int)	(datediff(d_maxValue, d_maxValue) >= 0:int)
+cs	NOT (NOT (NOT (((a * -2:int) = 0:int) OR NOT date_sub(d, dayofmonth(d)) IN (0:date)) AND NOT NOT (left(s, 2:int) = '')) OR (NOT (startswith((a * 2:int), 'ab') AND NOT ((a + a) = 0:int)) AND NOT (NOT (cast(s as int) = 0:int) OR (0:int < (a | a)))))	true:boolean
+ei	NOT (NOT (NOT (((a * -2:int) = 0:int) OR NOT date_sub(d, dayofmonth(d)) IN (0:date)) AND NOT NOT (left(s, 2:int) = '')) OR (NOT (startswith((a * 2:int), 'ab') AND NOT ((a + a) = 0:int)) AND NOT (NOT (cast(s as int) = 0:int) OR (0:int < (a | a)))))	true:boolean
+cs	((abs(a) | a) IN (0:int, null:int) OR ((NOT (shiftleft(a, 1:int) = 0:int) OR NOT startswith((a | 1:int), 'ab')) OR (NOT startswith((a + b), 'ab') OR NOT startswith(to_date(s), 'ab'))))	true:boolean
+ei	((abs(a) | a) IN (0:int, null:int) OR ((NOT (shiftleft(a, 1:int) = 0:int) OR NOT startswith((a | 1:int), 'ab')) OR (NOT startswith((a + b), 'ab') OR NOT startswith(to_date(s), 'ab'))))	true:boolean
+cs	upper(s) IN ('', null:string)	true:boolean
+cs	a IS NOT NULL	((a_nullCount IS NULL OR valueCount IS NULL) OR (a_nullCount < valueCount))
+cs	NOT (((a + 1:int) = 0:int) AND NOT ((a + 1:int) IN (0:int, null:int) OR ((cast(a as bigint) + 1:bigint) >= 0:bigint)))	true:boolean
+ei	NOT (((a + 1:int) = 0:int) AND NOT ((a + 1:int) IN (0:int, null:int) OR ((cast(a as bigint) + 1:bigint) >= 0:bigint)))	true:boolean
+cs	(NOT (NOT (cast(ts as bigint) IN (0:bigint, null:bigint) OR ((x / x) = 0.0:double)) AND (NOT ts IS NULL OR (datediff(d, 19723:date) = 0:int))) OR (cast(ts as string) = ''))	true:boolean
+cs	((0:int < shiftleft(a, 1:int)) AND (2:int * a) IN (0:int, null:int))	((shiftleft(a_maxValue, 1:int) > 0:int) AND ((((2:int * a_minValue) <= 0:int) AND ((2:int * a_maxValue) >= 0:int)) OR (((2:int * a_minValue) <= null:int) AND ((2:int * a_maxValue) >= null:int))))
+cs	NOT (NOT ((cast(ts as bigint) = cast(0:bigint as bigint)) AND (0:int < datediff(d, d))) AND NOT (NOT substring(s, 1:int, 2:int) IN ('') AND (0:timestamp < to_timestamp(s, 'yyyy-MM-dd'))))	true:boolean
+cs	((0.0:double < ln(EXP(x))) AND NOT ((ln(EXP(x)) IN (0.0:double, null:double) AND ((a + a) >= 0:int)) OR NOT (NOT cast((a + 1:int) as bigint) IN (0:bigint) AND NOT startswith(shiftleft(a, 1:int), 'ab'))))	true:boolean
+ei	((0.0:double < ln(EXP(x))) AND NOT ((ln(EXP(x)) IN (0.0:double, null:double) AND ((a + a) >= 0:int)) OR NOT (NOT cast((a + 1:int) as bigint) IN (0:bigint) AND NOT startswith(shiftleft(a, 1:int), 'ab'))))	(ln(EXP(x_maxValue)) > 0.0:double)
+cs	NOT (NOT (NOT ((0.00:decimal(10,2) < dec) OR NOT startswith(LOG2(x), 'ab')) OR (ts IN (0:timestamp, b) AND NOT startswith(substring(s, 1:int, 2:int), 'ab'))) AND NOT cast(a as smallint) IN (0:smallint))	true:boolean
+ei	NOT (NOT (NOT ((0.00:decimal(10,2) < dec) OR NOT startswith(LOG2(x), 'ab')) OR (ts IN (0:timestamp, b) AND NOT startswith(substring(s, 1:int, 2:int), 'ab'))) AND NOT cast(a as smallint) IN (0:smallint))	true:boolean
+cs	(shiftright(8:int, a) = cast(0:int as int))	true:boolean
+cs	NOT (NOT NOT startswith(date_format(ts, 'yyyy-MM-dd'), 'ab') OR ('' < cast(a as string)))	true:boolean
+cs	NOT (NOT startswith(datediff(19723:date, d), 'ab') AND startswith(datediff(d, d), 'ab'))	true:boolean
+ei	NOT (NOT startswith(datediff(19723:date, d), 'ab') AND startswith(datediff(d, d), 'ab'))	true:boolean
+cs	(((a * 2:int) IN (0:int, null:int) OR NOT NOT d IS NULL) OR ((a * a) = cast(0:int as int)))	true:boolean
+cs	(0.0:double < x)	(x_maxValue > 0.0:double)
+cs	coalesce(a, 1:int) IN (0:int, null:int)	true:boolean
+cs	((date_add(d, a) = 0:date) OR startswith(ln(EXP(x)), 'ab'))	true:boolean
+ei	((date_add(d, a) = 0:date) OR startswith(ln(EXP(x)), 'ab'))	true:boolean
+cs	NOT (NOT ((date_format(ts, 'yyyy-MM-dd') IN ('', null:string) OR (0:date < date_sub(d, dayofmonth(d)))) AND startswith((dec * 1.5:decimal(2,1)), 'ab')) OR NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab'))	true:boolean
+ei	NOT (NOT ((date_format(ts, 'yyyy-MM-dd') IN ('', null:string) OR (0:date < date_sub(d, dayofmonth(d)))) AND startswith((dec * 1.5:decimal(2,1)), 'ab')) OR NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab'))	true:boolean
+cs	l INSET (0:bigint)	((l_minValue <= 0:bigint) AND (l_maxValue >= 0:bigint))
+cs	(l = b)	true:boolean
+ei	(l = b)	true:boolean
+cs	(cast(a as smallint) = 0:smallint)	true:boolean
+cs	NOT ((NOT NOT startswith(left(s, 2:int), 'ab') OR NOT startswith(cast(a as bigint), 'ab')) AND NOT ((NOT startswith((dec * 1.5:decimal(2,1)), 'ab') AND ((x / x) >= 0.0:double)) AND NOT startswith(cast(d as timestamp), 'ab')))	true:boolean
+ei	NOT ((NOT NOT startswith(left(s, 2:int), 'ab') OR NOT startswith(cast(a as bigint), 'ab')) AND NOT ((NOT startswith((dec * 1.5:decimal(2,1)), 'ab') AND ((x / x) >= 0.0:double)) AND NOT startswith(cast(d as timestamp), 'ab')))	true:boolean
+cs	(cast(dec as double) = cast(0.0:double as double))	((cast(dec_minValue as double) <= cast(0.0:double as double)) AND (cast(dec_maxValue as double) >= cast(0.0:double as double)))
+cs	(NOT NOT (startswith(cast(a as smallint), 'ab') OR NOT (cast(cast(a as bigint) as double) = 0.0:double)) AND (0:int < datediff(d, d)))	true:boolean
+ei	(NOT NOT (startswith(cast(a as smallint), 'ab') OR NOT (cast(cast(a as bigint) as double) = 0.0:double)) AND (0:int < datediff(d, d)))	(datediff(d_maxValue, d_maxValue) > 0:int)
+cs	(datediff(d, d) >= 0:int)	(datediff(d_maxValue, d_maxValue) >= 0:int)
+cs	(((date_add(cast(ts as date), 1:int) >= 0:date) AND (to_unix_timestamp(s, 'yyyy-MM-dd') = cast(0:bigint as bigint))) OR NOT NOT ((a + b) = cast(0:int as int)))	true:boolean
+cs	NOT ((NOT (d = 0:date) OR NOT to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint)) AND (NOT startswith(date_format(ts, cast(ts as string)), 'ab') OR NOT (startswith((a + a), 'ab') OR ((a * a) = cast(0:int as int)))))	true:boolean
+ei	NOT ((NOT (d = 0:date) OR NOT to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint)) AND (NOT startswith(date_format(ts, cast(ts as string)), 'ab') OR NOT (startswith((a + a), 'ab') OR ((a * a) = cast(0:int as int)))))	true:boolean
+cs	startswith((2:int * a), 'ab')	true:boolean
+ei	startswith((2:int * a), 'ab')	(((2:int * a_minValue) <= 'ab') AND ((2:int * a_maxValue) >= 'ab'))
+cs	st INSET (struct(0:int))	true:boolean
+cs	st IN (struct(0:int))	true:boolean
+cs	(st = struct(0:int))	true:boolean
+cs	arr INSET (array())	true:boolean
+cs	arr IN (array())	true:boolean
+cs	(arr = array())	true:boolean

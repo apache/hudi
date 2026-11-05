@@ -18,14 +18,15 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, Rand, ShiftLeft, Sqrt, Upper}
+import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Branch coverage for the order-preserving transformation matcher in
- * [[org.apache.spark.sql.BaseHoodieCatalystExpressionUtils]]. This is what lets data skipping map a
+ * Branch coverage for the order-preserving rule table in
+ * [[org.apache.spark.sql.hudi.dataskipping.RangeRules]]. This is what lets data skipping map a
  * transformed column reference back to its source attribute, so each case is pinned to the exact
  * source [[AttributeReference]] it must recover, and non-order-preserving shapes must not match.
  */
@@ -41,8 +42,13 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val boolAttr = AttributeReference("b", BooleanType)()
   private val binAttr = AttributeReference("bin", BinaryType)()
 
+  /**
+   * The column `expr` is ranged through, found by the production range walk ([[TermRange.derive]])
+   * with one of its columns indexed at a time.
+   */
   private def matched(expr: Expression): Option[AttributeReference] =
-    sparkAdapter.getCatalystExpressionUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
+    expr.collect { case attrRef: AttributeReference => attrRef }.distinct
+      .find(attrRef => TermRange.derive(expr, ColumnStatsSource(Seq(attrRef.name))).isDefined)
 
   @Test
   def testIdentityAttributeMatches(): Unit = {
@@ -113,9 +119,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testDateParsingTransformationsPreserveOrdering(): Unit = {
-    // ParseToDate's case-class shape differs across Spark versions, so the matcher dispatches it
-    // through the per-version unapplyOrderPreservingDateParsing hook. The 1-arg auxiliary
-    // constructor is stable on all profiles, letting this pin that hook everywhere.
+    // ParseToDate's case-class arity differs across Spark versions, so DateTimeFormatRule matches it
+    // by type and steps into `left`. The 1-arg auxiliary constructor is stable on all profiles,
+    // letting this pin that match everywhere.
     assertEquals(Some(strAttr), matched(new ParseToDate(strAttr)))
   }
 

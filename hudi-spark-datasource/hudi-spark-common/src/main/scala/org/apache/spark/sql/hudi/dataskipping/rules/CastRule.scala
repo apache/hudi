@@ -15,26 +15,31 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql
+package org.apache.spark.sql.hudi.dataskipping.rules
 
-import org.apache.spark.sql.catalyst.expressions.Cast
+import org.apache.spark.sql.catalyst.expressions.{Cast, Expression}
+import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step}
 import org.apache.spark.sql.types.{BooleanType, DataType, DecimalType, DoubleType, FloatType, LongType, NumericType, StringType, TimestampType}
 
-// TODO unify w/ DataTypeUtils
-object HoodieSparkTypeUtils {
+import scala.util.Try
 
-  /**
-   * Returns whether this DecimalType is wider than `other`. If yes, it means `other`
-   * can be casted into `this` safely without losing any precision or range.
-   */
-  def isWiderThan(one: DecimalType, another: DecimalType) =
-    one.isWiderThan(another)
+/**
+ * `Cast`.
+ *
+ * Shared guard: [[preservesOrder]] of the child type to the target type (rejects, for ex, string to
+ * numeric, timestamp to string, narrowing numeric casts, and collation changes). The (from, to)
+ * allowlist lives here, at the top of this object.
+ *
+ * NOTE: The trailing arm still accepts every pair not listed; making the allowlist deny-by-default
+ *       (trailing `case _ => false`) is pending in #20513
+ */
+object CastRule extends RangeRule {
 
   /**
    * Checks whether casting expression of [[from]] [[DataType]] to [[to]] [[DataType]] will
    * preserve ordering of the elements
    */
-  def isCastPreservingOrdering(from: DataType, to: DataType): Boolean =
+  private[dataskipping] def preservesOrder(from: DataType, to: DataType): Boolean =
     (from, to) match {
       // NOTE: Casting between String and Numeric types re-orders elements (for ex, "10" < "9"
       //       lexicographically). These match by type, so that collated strings on Spark 4 are
@@ -77,4 +82,20 @@ object HoodieSparkTypeUtils {
 
       case _ => true
     }
+
+  override def steps(term: Expression): Seq[Step] = term match {
+    // NOTE: Some casts (for ex, string to date in non-ANSI mode) return NULL on malformed input;
+    //       `partial` is left false for now, as it has no behavioral effect yet
+    case cast @ Cast(child, _, _, _) if hasDataType(child) && preservesOrder(child.dataType, cast.dataType) =>
+      Seq(Step(term, child, Increasing, fileGuard = None, partial = false))
+
+    case _ => Nil
+  }
+
+  /**
+   * Expression indexes skip the resolution check, so the child can be unresolved. Some unresolved
+   * nodes (for ex, an unknown function) throw on `dataType`; others are typed (for ex, `to_date`
+   * before the analyzer sets its time zone) and are ranged like resolved ones, as before the split.
+   */
+  private def hasDataType(e: Expression): Boolean = Try(e.dataType).isSuccess
 }

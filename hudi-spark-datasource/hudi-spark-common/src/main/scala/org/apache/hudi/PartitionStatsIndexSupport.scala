@@ -37,9 +37,9 @@ import org.apache.hudi.util.{JFunction}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions.{And, DateAdd, DateFormatClass, DateSub, Expression, FromUnixTime, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, DateAdd, DateFormatClass, DateSub, EqualNullSafe, Expression, FromUnixTime, IsNotNull, IsNull, Literal, Not, Or, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnaryExpression, UnixTimestamp}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.hudi.DataSkippingUtils.{containsNullOrValueCountBasedFilters, translateIntoColumnStatsIndexFilterExpr}
+import org.apache.spark.sql.hudi.DataSkippingUtils.{getTargetIndexedColumnName, translateIntoColumnStatsIndexFilterExpr}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.storage.StorageLevel
@@ -161,7 +161,7 @@ class PartitionStatsIndexSupport(spark: SparkSession,
 
   private def filterExpressionsExcludingNullAndValue(queryFilters: Seq[Expression], indexedCols: Seq[String]): Seq[Expression] = {
     // Filter queries which do not contain null/value-count filters
-    queryFilters.filter(query => !containsNullOrValueCountBasedFilters(query, indexedCols))
+    queryFilters.filter(query => !PartitionStatsIndexSupport.readsNullOrValueCounts(query, indexedCols))
   }
 
   private def filterNonSqlExpressions(queryFilters: Seq[Expression]): Seq[Expression] = {
@@ -191,4 +191,20 @@ class PartitionStatsIndexSupport(spark: SparkSession,
 
 object PartitionStatsIndexSupport {
   val INDEX_NAME = "PARTITION_STATS"
+
+  /**
+   * Whether `filter` reads null or value counts (IS NULL, IS NOT NULL, <=> NULL) of an indexed
+   * column. Partition stats pruning skips such filters (#12744). NOT does not change the answer,
+   * so it is looked through.
+   */
+  private[hudi] def readsNullOrValueCounts(filter: Expression, indexedCols: Seq[String]): Boolean = filter match {
+    case e if !e.resolved => false
+    case And(l, r) => readsNullOrValueCounts(l, indexedCols) || readsNullOrValueCounts(r, indexedCols)
+    case Or(l, r) => readsNullOrValueCounts(l, indexedCols) || readsNullOrValueCounts(r, indexedCols)
+    case Not(child) => readsNullOrValueCounts(child, indexedCols)
+    case IsNull(a: AttributeReference) => getTargetIndexedColumnName(a, indexedCols).isDefined
+    case IsNotNull(a: AttributeReference) => getTargetIndexedColumnName(a, indexedCols).isDefined
+    case EqualNullSafe(a: AttributeReference, Literal(null, _)) => getTargetIndexedColumnName(a, indexedCols).isDefined
+    case _ => false
+  }
 }
