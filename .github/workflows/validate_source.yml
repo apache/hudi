@@ -2,7 +2,9 @@ name: PR and Source Validation
 
 # The one job here is the only required status check in .asf.yaml. A required check must report on
 # every PR, including docs-only ones, and a path-filtered workflow is never instantiated for PRs that
-# miss the filter, so this workflow is never path-filtered.
+# miss the filter, so this workflow is never path-filtered. It also reports on merge-queue commits:
+# there the PR metadata checks skip, because CHECK_PR_METADATA is false off pull_request, and the
+# source checks need no PR data.
 on:
   push:
     branches:
@@ -16,10 +18,14 @@ on:
       - master
       - 'release-*'
       - branch-0.x
+  merge_group:
+    types: [checks_requested]
 
+# Merge-queue refs (gh-readonly-queue/master/...) must never be cancelled, so they are excluded by
+# event rather than by relying on the ref containing the text "master".
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
+  cancel-in-progress: ${{ github.event_name != 'merge_group' && !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
 
 jobs:
   # The only required status check in .asf.yaml. It runs every short check (PR metadata, source
