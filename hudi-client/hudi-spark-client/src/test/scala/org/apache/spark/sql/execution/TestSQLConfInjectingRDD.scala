@@ -24,9 +24,10 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.internal.SQLConf
 import org.junit.jupiter.api.{AfterAll, BeforeAll, Test, TestInstance}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotSame, assertSame, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotSame, assertTrue}
 
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream}
+import java.util.{Collections, IdentityHashMap}
 import java.util.concurrent.{Callable, CountDownLatch, Executors, TimeUnit}
 
 /**
@@ -59,12 +60,11 @@ class TestSQLConfInjectingRDD {
   }
 
   @Test
-  def groupsCapturingEqualConfsShareOneConfigMap(): Unit = {
+  def aTaskDeserializesOneConfigMapForAllGroups(): Unit = {
+    // What a task binary does: all groups' RDDs written to, and read back from, a single stream.
     val conf = spark.sessionState.conf
-    val groups = perGroupRdds(conf)
-    val first = sqlConfigsOf(groups.head)
-    groups.foreach(rdd => assertSame(first, sqlConfigsOf(rdd), "equal configs must share one map instance"))
-    assertEquals(conf.getAllConfs, first)
+    val maps = configMapsDeserialized(perGroupRdds(conf), conf.getAllConfs)
+    assertEquals(1, maps, s"one config map per task, not one per group (got $maps)")
   }
 
   @Test
@@ -97,27 +97,20 @@ class TestSQLConfInjectingRDD {
   }
 
   @Test
-  def oneTaskStreamDeserializesTheSharedConfigMapOnce(): Unit = {
-    // What a task binary does: all groups' RDDs written to, and read back from, a single stream.
-    val deserialized = roundTrip(perGroupRdds(spark.sessionState.conf))
-    val distinctMaps = deserialized.map(rdd => System.identityHashCode(sqlConfigsOf(rdd))).distinct
-    assertEquals(1, distinctMaps.size, s"one config map per task, not one per group (got ${distinctMaps.size})")
-  }
-
-  @Test
   def changedConfGetsItsOwnMapNeverAStaleOne(): Unit = {
     val base = spark.sessionState.conf
-    val shared = sqlConfigsOf(injectSQLConf(spark.sparkContext.parallelize(Seq(1), 1), base))
+    val shared = SQLConfInjectingRDD.sharedConfigs(base)
 
     val changed = base.clone()
     changed.setConfString(SQLConf.SHUFFLE_PARTITIONS.key, "7")
-    val changedConfigs = sqlConfigsOf(injectSQLConf(spark.sparkContext.parallelize(Seq(1), 1), changed))
-    assertNotSame(shared, changedConfigs)
-    assertEquals("7", changedConfigs(SQLConf.SHUFFLE_PARTITIONS.key))
+    assertNotSame(shared, SQLConfInjectingRDD.sharedConfigs(changed))
+    // An RDD capturing the changed conf ships the changed configs, not the earlier ones.
+    val changedRdd = injectSQLConf(spark.sparkContext.parallelize(Seq(1), 1), changed)
+    assertEquals(1, configMapsDeserialized(changedRdd, changed.getAllConfs))
+    assertEquals(0, configMapsDeserialized(changedRdd, base.getAllConfs))
 
     // Back to the original configs: the captured content must match them exactly.
-    val again = sqlConfigsOf(injectSQLConf(spark.sparkContext.parallelize(Seq(1), 1), base))
-    assertEquals(base.getAllConfs, again)
+    assertEquals(base.getAllConfs, SQLConfInjectingRDD.sharedConfigs(base))
   }
 
   @Test
@@ -138,17 +131,29 @@ class TestSQLConfInjectingRDD {
   private def perGroupRdds(conf: SQLConf): Seq[RDD[Int]] =
     (0 until Groups).map(g => injectSQLConf(spark.sparkContext.parallelize(Seq(g), 1).map(identity), conf))
 
-  private def sqlConfigsOf(rdd: RDD[_]): Map[String, String] = {
-    val field = classOf[SQLConfInjectingRDD[_]].getDeclaredField("sqlConfigs")
-    field.setAccessible(true)
-    field.get(rdd).asInstanceOf[Map[String, String]]
-  }
-
-  private def roundTrip[T](value: T): T = {
+  /**
+   * Serializes `value` into one stream, as a task binary is, reads it back, and returns how many distinct maps equal
+   * to `configs` the reader built. Counted on the read side: a Scala map is written through a serialization proxy
+   * (`writeReplace`), and only `resolveObject` sees the map itself.
+   */
+  private def configMapsDeserialized(value: AnyRef, configs: Map[String, String]): Int = {
     val bytes = new ByteArrayOutputStream()
     val out = new ObjectOutputStream(bytes)
     out.writeObject(value)
     out.close()
-    new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray)).readObject().asInstanceOf[T]
+    val maps = Collections.newSetFromMap(new IdentityHashMap[AnyRef, java.lang.Boolean]())
+    val in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray)) {
+      enableResolveObject(true)
+
+      override protected def resolveObject(obj: AnyRef): AnyRef = {
+        obj match {
+          case map: scala.collection.Map[_, _] if map == configs => maps.add(map)
+          case _ =>
+        }
+        obj
+      }
+    }
+    in.readObject()
+    maps.size
   }
 }

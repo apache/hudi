@@ -42,16 +42,16 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.rdd.RDD;
-import org.apache.spark.sql.execution.SQLConfInjectingRDD;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Field;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
@@ -89,7 +89,7 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
   private static final int PARTITIONS = 3;
   private static final int INSERT_BATCHES = (LARGE_PLAN_GROUPS + PARTITIONS - 1) / PARTITIONS;
   private static final int RECORDS_PER_BATCH = 30;
-  private static final String SQL_CONF_MAPS = "SQLConfInjectingRDD.sqlConfigs maps";
+  private static final String SQL_CONF_MAPS = "SQL config maps";
 
   /** Payloads that do not depend on the group, so their count must not depend on the number of groups. */
   private static final Map<String, Predicate<Object>> SHARED_PAYLOADS = new LinkedHashMap<>();
@@ -140,8 +140,12 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
     String report = report(small, large);
     LOG.info("Clustering task binary payloads:\n{}", report);
 
+    int extraGroups = large.groups - small.groups;
     for (String payload : small.counts.keySet()) {
-      assertEquals(small.counts.get(payload), large.counts.get(payload),
+      // Spark's SQLExecutionRDD (Dataset.queryExecution.toRdd) captures its own copy of the SQL configs, once per
+      // group, as long as each group's RDD goes through a DataFrame; Hudi's SQLConfInjectingRDD map must be shared.
+      int expectedGrowth = payload.equals(SQL_CONF_MAPS) ? extraGroups : 0;
+      assertEquals(small.counts.get(payload) + expectedGrowth, large.counts.get(payload),
           payload + " is shipped per clustering group; every task deserializes all of them.\n" + report);
     }
   }
@@ -158,12 +162,44 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
     // The DAGScheduler resolves partitions and dependencies before serializing the task binary, which fills
     // the lineage fields that get shipped.
     resolveLineage(writeStage, Collections.newSetFromMap(new IdentityHashMap<>()));
-    CountingStream out = new CountingStream();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    Map<String, Integer> counts;
     try (PayloadCountingObjectOutputStream oos = new PayloadCountingObjectOutputStream(out)) {
       oos.writeObject(writeStage);
       oos.flush();
-      return new TaskBinary(plan.getInputGroups().size(), out.bytes, oos.counts());
+      counts = oos.counts();
     }
+    counts.put(SQL_CONF_MAPS, sqlConfMapsDeserialized(out.toByteArray()));
+    return new TaskBinary(plan.getInputGroups().size(), out.size(), counts);
+  }
+
+  /**
+   * How many distinct SQL config maps a task deserializing {@code taskBinary} builds. One SQLConfInjectingRDD per group
+   * is inherent; the configs map it carries need not be. Spark's SQLExecutionRDD adds one map per group of its own.
+   * Counted on the read side: a Scala map is written through a serialization proxy ({@code writeReplace}), and only
+   * {@code resolveObject} sees the map itself.
+   */
+  private int sqlConfMapsDeserialized(byte[] taskBinary) throws IOException {
+    Object sqlConfigs = context.getSqlContext().sparkSession().sessionState().conf().getAllConfs();
+    Set<Object> maps = Collections.newSetFromMap(new IdentityHashMap<>());
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(taskBinary)) {
+      {
+        enableResolveObject(true);
+      }
+
+      @Override
+      protected Object resolveObject(Object obj) {
+        if (obj instanceof scala.collection.Map && obj.equals(sqlConfigs)) {
+          maps.add(obj);
+        }
+        return obj;
+      }
+    }) {
+      in.readObject();
+    } catch (ClassNotFoundException e) {
+      throw new IllegalStateException(e);
+    }
+    return maps.size();
   }
 
   private static void resolveLineage(RDD<?> rdd, Set<RDD<?>> visited) {
@@ -204,7 +240,6 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
   /** Counts each distinct object once, as Java serialization writes it once per stream. */
   private static final class PayloadCountingObjectOutputStream extends ObjectOutputStream {
     private final Map<String, Integer> counts = new LinkedHashMap<>();
-    private final Set<Object> sqlConfMaps = Collections.newSetFromMap(new IdentityHashMap<>());
 
     PayloadCountingObjectOutputStream(OutputStream out) throws IOException {
       super(out);
@@ -219,43 +254,11 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
           counts.merge(payload, 1, Integer::sum);
         }
       });
-      // One SQLConfInjectingRDD per group is inherent; the configs map it carries need not be.
-      if (obj instanceof SQLConfInjectingRDD) {
-        sqlConfMaps.add(sqlConfigsOf(obj));
-      }
       return obj;
     }
 
     Map<String, Integer> counts() {
-      Map<String, Integer> all = new LinkedHashMap<>(counts);
-      all.put(SQL_CONF_MAPS, sqlConfMaps.size());
-      return all;
-    }
-
-    private static Object sqlConfigsOf(Object rdd) {
-      Field field = Arrays.stream(SQLConfInjectingRDD.class.getDeclaredFields())
-          .filter(f -> f.getName().endsWith("sqlConfigs")).findFirst()
-          .orElseThrow(() -> new IllegalStateException("SQLConfInjectingRDD has no sqlConfigs field"));
-      try {
-        field.setAccessible(true);
-        return field.get(rdd);
-      } catch (IllegalAccessException e) {
-        throw new IllegalStateException(e);
-      }
-    }
-  }
-
-  private static final class CountingStream extends OutputStream {
-    long bytes;
-
-    @Override
-    public void write(int b) {
-      bytes++;
-    }
-
-    @Override
-    public void write(byte[] b, int off, int len) {
-      bytes += len;
+      return new LinkedHashMap<>(counts);
     }
   }
 }
