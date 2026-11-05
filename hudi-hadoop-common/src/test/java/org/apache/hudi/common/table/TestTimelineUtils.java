@@ -665,6 +665,32 @@ class TestTimelineUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testValidateTimestampAsOfAllowsSavepointedInstantBeforeCleanRetention() throws Exception {
+    HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
+    for (int i = 1; i <= 4; i++) {
+      String ts = i + "";
+      HoodieInstant instant = new HoodieInstant(INFLIGHT, COMMIT_ACTION, ts, InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
+      activeTimeline.createNewInstant(instant);
+      activeTimeline.saveAsComplete(instant, getCommitMetadata(basePath, ts, ts, 2, Collections.emptyMap()));
+    }
+    HoodieInstant savepointInstant = INSTANT_GENERATOR.createNewInstant(INFLIGHT, SAVEPOINT_ACTION, "2");
+    activeTimeline.createNewInstant(savepointInstant);
+    activeTimeline.saveAsComplete(savepointInstant,
+        Option.of(TimelineMetadataUtils.convertSavepointMetadata("user", "comment", Collections.emptyMap())));
+    // the clean retains commits from "3" onwards
+    HoodieInstant cleanInstant = INSTANT_GENERATOR.createNewInstant(INFLIGHT, CLEAN_ACTION, "5");
+    activeTimeline.createNewInstant(cleanInstant);
+    activeTimeline.saveAsComplete(cleanInstant, getCleanMetadata("0", "3", false));
+    metaClient.reloadActiveTimeline();
+
+    assertDoesNotThrow(() -> TimelineUtils.validateTimestampAsOf(metaClient, "3"));
+    assertDoesNotThrow(() -> TimelineUtils.validateTimestampAsOf(metaClient, "2"));
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        () -> TimelineUtils.validateTimestampAsOf(metaClient, "1"));
+    assertTrue(exception.getMessage().contains("Cleaner cleaned up the timestamp of interest"));
+  }
+
+  @Test
   void testGetLastCommitMetadataWithSchemaIgnoresOperationType() throws Exception {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
 

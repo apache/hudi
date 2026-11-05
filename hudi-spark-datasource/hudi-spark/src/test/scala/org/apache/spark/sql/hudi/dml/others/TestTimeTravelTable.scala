@@ -461,4 +461,59 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
         subqueryError)
     }
   }
+
+  test("Test time travel to a savepointed commit after clean") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = s"${tmp.getCanonicalPath}/$tableName"
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  v string
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id'
+           | )
+           | location '$basePath'
+       """.stripMargin)
+      spark.sql(s"insert into $tableName values(1, 'a')")
+      spark.sql(s"update $tableName set v = 'b' where id = 1")
+      spark.sql(s"update $tableName set v = 'c' where id = 1")
+      spark.sql(s"update $tableName set v = 'd' where id = 1")
+      val Seq(c1, c2, c3, c4) = spark.sql(s"call show_commits(table => '$tableName')")
+        .collect().map(_.getAs[String]("commit_time")).sorted.toSeq
+
+      spark.sql(s"call create_savepoint(table => '$tableName', commit_time => '$c2')")
+      checkAnswer(s"select id, v from $tableName TIMESTAMP AS OF '$c2'")(Seq(1, "b"))
+
+      spark.sql(s"call run_clean(table => '$tableName', clean_policy => 'KEEP_LATEST_COMMITS', retain_commits => 1)")
+      // The savepoint keeps c2's base file through the clean
+      val baseInstants = spark.sql(s"call show_fsview_all(table => '$tableName')")
+        .collect().map(_.getAs[String]("base_instant")).sorted.toSeq
+      assertResult(Seq(c2, c3, c4))(baseInstants)
+
+      spark.sql(s"refresh table $tableName")
+      checkAnswer(s"select id, v from $tableName TIMESTAMP AS OF '$c2'")(Seq(1, "b"))
+      checkAnswer(spark.read.format("hudi").option("as.of.instant", c2).load(basePath)
+        .select("id", "v").collect())(Seq(1, "b"))
+      // c1 is not savepointed and its file was cleaned up
+      val cleanedUpError = "Cleaner cleaned up the timestamp of interest"
+      checkExceptionContain(() => spark.sql(s"select id, v from $tableName TIMESTAMP AS OF '$c1'").collect())(
+        cleanedUpError)
+
+      // Once the savepoint is deleted, the next clean may remove c2's file, so time travel to c2 is refused again
+      spark.sql(s"call delete_savepoint(table => '$tableName', instant_time => '$c2')")
+      spark.sql(s"refresh table $tableName")
+      checkExceptionContain(() => spark.sql(s"select id, v from $tableName TIMESTAMP AS OF '$c2'").collect())(
+        cleanedUpError)
+      spark.sql(s"update $tableName set v = 'e' where id = 1")
+      spark.sql(s"call run_clean(table => '$tableName', clean_policy => 'KEEP_LATEST_COMMITS', retain_commits => 1)")
+      assert(!spark.sql(s"call show_fsview_all(table => '$tableName')")
+        .collect().map(_.getAs[String]("base_instant")).contains(c2))
+      spark.sql(s"refresh table $tableName")
+      checkExceptionContain(() => spark.sql(s"select id, v from $tableName TIMESTAMP AS OF '$c2'").collect())(
+        cleanedUpError)
+    }
+  }
 }

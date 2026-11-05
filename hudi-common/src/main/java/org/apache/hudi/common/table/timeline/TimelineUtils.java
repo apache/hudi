@@ -401,7 +401,8 @@ public class TimelineUtils {
   }
 
   /**
-   * Validate user-specified timestamp of time travel query against incomplete commit's timestamp.
+   * Validate user-specified timestamp of time travel query against incomplete commit's timestamp
+   * and the cleaner's retention. A savepointed timestamp passes the retention check.
    *
    * @throws HoodieException when time travel query's timestamp >= incomplete commit's timestamp
    */
@@ -418,6 +419,11 @@ public class TimelineUtils {
             "Time travel's timestamp '%s' must be earlier than the first incomplete commit timestamp '%s'.",
             timestampAsOf, incompleteCommitTime));
       }
+    }
+
+    // A savepoint retains every file of its snapshot, so the cleaner cannot have cleaned up a savepointed instant.
+    if (metaClient.getActiveTimeline().getSavePointTimeline().filterCompletedInstants().containsInstant(timestampAsOf)) {
+      return;
     }
 
     // also timestamp as of cannot query cleaned up data.
