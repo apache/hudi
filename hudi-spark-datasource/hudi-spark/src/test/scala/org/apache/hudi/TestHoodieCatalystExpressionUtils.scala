@@ -17,15 +17,16 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateSub, Divide, Exp, Expression, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DateType, DoubleType, IntegerType, LongType, StringType}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, Rand, ShiftLeft, Sqrt, Upper}
+import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
+import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
 /**
- * Branch coverage for the order-preserving transformation matcher in
- * [[org.apache.spark.sql.BaseHoodieCatalystExpressionUtils]]. This is what lets data skipping map a
+ * Branch coverage for the order-preserving rule table in
+ * [[org.apache.spark.sql.hudi.dataskipping.RangeRules]]. This is what lets data skipping map a
  * transformed column reference back to its source attribute, so each case is pinned to the exact
  * source [[AttributeReference]] it must recover, and non-order-preserving shapes must not match.
  */
@@ -36,9 +37,18 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val dblAttr = AttributeReference("d", DoubleType)()
   private val dateAttr = AttributeReference("dt", DateType)()
   private val longAttr = AttributeReference("l", LongType)()
+  private val decAttr = AttributeReference("dec", DecimalType(10, 2))()
+  private val tsAttr = AttributeReference("ts", TimestampType)()
+  private val boolAttr = AttributeReference("b", BooleanType)()
+  private val binAttr = AttributeReference("bin", BinaryType)()
 
+  /**
+   * The column `expr` is ranged through, found by the production range walk ([[TermRange.derive]])
+   * with one of its columns indexed at a time.
+   */
   private def matched(expr: Expression): Option[AttributeReference] =
-    sparkAdapter.getCatalystExpressionUtils.tryMatchAttributeOrderingPreservingTransformation(expr)
+    expr.collect { case attrRef: AttributeReference => attrRef }.distinct
+      .find(attrRef => TermRange.derive(expr, ColumnStatsSource(Seq(attrRef.name))).isDefined)
 
   @Test
   def testIdentityAttributeMatches(): Unit = {
@@ -58,57 +68,61 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
-  def testUnaryMathAndStringTransformationsPreserveOrdering(): Unit = {
+  def testMultiplyDivideRequirePositiveLiteralFactor(): Unit = {
+    // Negative factors reverse ordering.
+    assertEquals(None, matched(Multiply(dblAttr, Literal(-1.0d))))
+    assertEquals(None, matched(Multiply(Literal(-1), intAttr)))
+    assertEquals(None, matched(Divide(dblAttr, Literal(Decimal(-2), DecimalType(1, 0)))))
+    // Zero collapses ordering and makes division undefined.
+    assertEquals(None, matched(Multiply(intAttr, Literal(0L))))
+    assertEquals(None, matched(Divide(dblAttr, Literal(0.0d))))
+    // NaN fails the positive check; typed null literals carry a null value.
+    assertEquals(None, matched(Multiply(dblAttr, Literal(Double.NaN))))
+    // Infinite factors can yield NaN (0 * Infinity, Infinity / Infinity).
+    assertEquals(None, matched(Multiply(dblAttr, Literal(Double.PositiveInfinity))))
+    assertEquals(None, matched(Multiply(Literal(Float.PositiveInfinity), dblAttr)))
+    assertEquals(None, matched(Divide(dblAttr, Literal(Double.PositiveInfinity))))
+    assertEquals(None, matched(Multiply(intAttr, Literal(null, IntegerType))))
+    // Non-literal factors are not matched, even when reference-free or the column itself.
+    assertEquals(None, matched(Multiply(intAttr, Add(Literal(1), Literal(1)))))
+    assertEquals(None, matched(Multiply(intAttr, intAttr)))
+    // Strictly positive literals of any numeric type match in the supported operand positions.
+    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.5d))))
+    assertEquals(Some(longAttr), matched(Multiply(Literal(3L), longAttr)))
+    assertEquals(Some(dblAttr), matched(Divide(dblAttr, Literal(Decimal(2), DecimalType(1, 0)))))
+  }
+
+  @Test
+  def testAddRequiresConstantOtherOperand(): Unit = {
+    // A + A * -2 = -A reverses ordering, so an operand referencing the column must not match.
+    assertEquals(None, matched(Add(dblAttr, Multiply(dblAttr, Literal(-2.0d)))))
+    assertEquals(None, matched(Add(Multiply(dblAttr, Literal(-2.0d)), dblAttr)))
+    assertEquals(None, matched(Add(intAttr, intAttr)))
+    // Data skipping re-evaluates the operand against the min/max bounds, so it must be a constant.
+    assertEquals(None, matched(Add(dblAttr, Rand(Literal(0L)))))
+    assertEquals(None, matched(Add(Rand(Literal(0L)), dblAttr)))
+  }
+
+  @Test
+  def testUnaryMathTransformationsPreserveOrdering(): Unit = {
     assertEquals(Some(dblAttr), matched(Exp(dblAttr)))
     assertEquals(Some(dblAttr), matched(Log(dblAttr)))
-    assertEquals(Some(strAttr), matched(Upper(strAttr)))
-    assertEquals(Some(strAttr), matched(Lower(strAttr)))
   }
 
   @Test
   def testDateTransformationsPreserveOrdering(): Unit = {
     assertEquals(Some(dateAttr), matched(DateAdd(dateAttr, Literal(1))))
     assertEquals(Some(dateAttr), matched(DateSub(dateAttr, Literal(1))))
+    // DateDiff(end, start) = end - start preserves the ordering of its end date.
+    assertEquals(Some(dateAttr), matched(DateDiff(dateAttr, Literal(java.sql.Date.valueOf("2022-03-07")))))
   }
 
   @Test
-  def testDateParsingReplacementShapesPreserveOrdering(): Unit = {
-    // ParseToDate/ParseToTimestamp are RuntimeReplaceable (SPARK-38240): on the real read path
-    // the optimizer's ReplaceExpressions rewrites them before data skipping sees the filter, so
-    // the matcher must recover the source attribute from the replacement shapes. They are
-    // built here via replacement() because GetTimestamp's constructor arity differs across
-    // Spark versions while the 2-arg ParseTo* auxiliary constructors are stable everywhere.
-    // The matcher gates on the format literal (fixed-width, year-first) and on failOnError, so
-    // the shapes are built under an explicitly pinned ANSI setting (ANSI is the default on
-    // Spark 4 and would otherwise flip failOnError at construction time).
-    val nonAnsiConf = new SQLConf
-    nonAnsiConf.setConf(SQLConf.ANSI_ENABLED, false)
-    SQLConf.withExistingConf(nonAnsiConf) {
-      val toTimestampReplacement = new ParseToTimestamp(strAttr, Literal("yyyy-MM-dd")).replacement
-      assertTrue(toTimestampReplacement.isInstanceOf[GetTimestamp])
-      assertEquals(Some(strAttr), matched(toTimestampReplacement))
-
-      // to_date's replacement wraps GetTimestamp in a cast to date; the matcher must recurse
-      // through both
-      val toDateReplacement = new ParseToDate(strAttr, Literal("yyyy-MM-dd")).replacement
-      assertTrue(toDateReplacement.collectFirst { case gt: GetTimestamp => gt }.isDefined)
-      assertEquals(Some(strAttr), matched(toDateReplacement))
-
-      // Non-order-preserving formats must be rejected: lexicographic ordering of 'MM/dd/yyyy'
-      // strings does not follow chronological ordering, so pruning on re-parsed min/max stats
-      // would return wrong results
-      assertEquals(None, matched(new ParseToTimestamp(strAttr, Literal("MM/dd/yyyy")).replacement))
-      assertEquals(None, matched(new ParseToDate(strAttr, Literal("MM/dd/yyyy")).replacement))
-    }
-
-    // Under ANSI the parse throws on unparseable input, so probing min/max stats with it could
-    // fail queries whose files should simply not be pruned; even an order-preserving format
-    // must not match then
-    val ansiConf = new SQLConf
-    ansiConf.setConf(SQLConf.ANSI_ENABLED, true)
-    SQLConf.withExistingConf(ansiConf) {
-      assertEquals(None, matched(new ParseToTimestamp(strAttr, Literal("yyyy-MM-dd")).replacement))
-    }
+  def testDateParsingTransformationsPreserveOrdering(): Unit = {
+    // ParseToDate's case-class arity differs across Spark versions, so DateTimeFormatRule matches it
+    // by type and steps into `left`. The 1-arg auxiliary constructor is stable on all profiles,
+    // letting this pin that match everywhere.
+    assertEquals(Some(strAttr), matched(new ParseToDate(strAttr)))
   }
 
   @Test
@@ -117,10 +131,77 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(intAttr), matched(Cast(intAttr, LongType)))
     // Casting a numeric column to string can reorder values, so it must not match.
     assertEquals(None, matched(Cast(intAttr, StringType)))
-    // TODO(#19445): a narrowing numeric cast wraps around in non-ANSI mode and does not preserve
-    // ordering, so this should be None; pinning the current (incorrect) behavior until
-    // isCastPreservingOrdering rejects it.
-    assertEquals(Some(longAttr), matched(Cast(longAttr, IntegerType)))
+    // A narrowing numeric cast wraps around in non-ANSI mode and does not preserve ordering.
+    assertEquals(None, matched(Cast(longAttr, IntegerType)))
+  }
+
+  @Test
+  def testNumericCastOrderingFollowsUpCastRules(): Unit = {
+    // Widening precedence casts preserve ordering, including lossy-but-monotonic long to float.
+    assertEquals(Some(intAttr), matched(Cast(intAttr, DoubleType)))
+    assertEquals(Some(longAttr), matched(Cast(longAttr, FloatType)))
+    // Decimal widening is an up-cast; narrowing precision overflows into NULL.
+    assertEquals(Some(decAttr), matched(Cast(decAttr, DecimalType(12, 2))))
+    assertEquals(None, matched(Cast(decAttr, DecimalType(8, 2))))
+    // Decimal to float/double rounds monotonically and is allowed explicitly.
+    assertEquals(Some(decAttr), matched(Cast(decAttr, DoubleType)))
+    assertEquals(Some(decAttr), matched(Cast(decAttr, FloatType)))
+    // Cast.canUpCast rejects double to float even though rounding is weakly monotonic; the
+    // conservative answer only costs pruning opportunity.
+    assertEquals(None, matched(Cast(dblAttr, FloatType)))
+  }
+
+  @Test
+  def testTimestampToNumericCastOrdering(): Unit = {
+    // Epoch seconds fit bigint and floating-point targets.
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, LongType)))
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, DoubleType)))
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, FloatType)))
+    // Narrower integral targets wrap around and decimals overflow into NULL.
+    assertEquals(None, matched(Cast(tsAttr, IntegerType)))
+    assertEquals(None, matched(Cast(tsAttr, ShortType)))
+    assertEquals(None, matched(Cast(tsAttr, ByteType)))
+    assertEquals(None, matched(Cast(tsAttr, DecimalType(10, 2))))
+  }
+
+  @Test
+  def testTimestampToStringAndCastsToBooleanDoNotPreserveOrdering(): Unit = {
+    // Timestamps format in the session time zone, which repeats local time across a DST fall-back.
+    assertEquals(None, matched(Cast(tsAttr, StringType)))
+    // Casting to boolean collapses every non-zero or "true"-like value to true.
+    assertEquals(None, matched(Cast(intAttr, BooleanType)))
+    assertEquals(None, matched(Cast(dblAttr, BooleanType)))
+    assertEquals(None, matched(Cast(strAttr, BooleanType)))
+    assertEquals(None, matched(Cast(tsAttr, BooleanType)))
+    // Identity boolean cast and boolean to numeric (false < true, 0 < 1) keep the ordering.
+    assertEquals(Some(boolAttr), matched(Cast(boolAttr, BooleanType)))
+    assertEquals(Some(boolAttr), matched(Cast(boolAttr, IntegerType)))
+  }
+
+  @Test
+  def testCollationChangingStringCastsDoNotPreserveOrdering(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "String collations only exist on Spark 4.x")
+    // StringType("UTF8_LCASE") is a Spark 4 API, so it is obtained reflectively to keep this
+    // file compiling against the Spark 3 profiles.
+    val lcase = StringType.getClass.getMethod("apply", classOf[String])
+      .invoke(StringType, "UTF8_LCASE").asInstanceOf[DataType]
+    val collatedAttr = AttributeReference("cs", lcase)()
+    // Changing collation changes the sort order, in either direction.
+    assertEquals(None, matched(Cast(collatedAttr, StringType)))
+    assertEquals(None, matched(Cast(strAttr, lcase)))
+    // Collated strings and numbers re-order each other like default strings do.
+    assertEquals(None, matched(Cast(collatedAttr, IntegerType)))
+    assertEquals(None, matched(Cast(intAttr, lcase)))
+    // Any other source cast to a collated string is rejected too, binary bounds being in byte order.
+    assertEquals(None, matched(Cast(binAttr, lcase)))
+    assertEquals(None, matched(Cast(dateAttr, lcase)))
+    // A collated string cast to any non-string type is rejected, for ex binary compares bytes.
+    assertEquals(None, matched(Cast(collatedAttr, BinaryType)))
+    assertEquals(None, matched(Cast(collatedAttr, DateType)))
+    // The default string still casts to binary, which keeps its byte order.
+    assertEquals(Some(strAttr), matched(Cast(strAttr, BinaryType)))
+    // A collation-preserving cast keeps the ordering.
+    assertEquals(Some(collatedAttr), matched(Cast(collatedAttr, lcase)))
   }
 
   @Test
@@ -130,11 +211,16 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testNonOrderPreservingExpressionsDoNotMatch(): Unit = {
+    // DateDiff(end, start) = end - start reverses the ordering of its start date.
+    assertEquals(None, matched(DateDiff(Literal(java.sql.Date.valueOf("2022-03-09")), dateAttr)))
     // A bare literal carries no attribute.
     assertEquals(None, matched(Literal(5)))
     // No attribute on either operand.
     assertEquals(None, matched(Add(Literal(1), Literal(2))))
     // Sqrt is not one of the whitelisted order-preserving transformations.
     assertEquals(None, matched(Sqrt(dblAttr)))
+    // Case folding breaks the binary ordering of strings: "Zebra" < "apple", but lower("Zebra") > "apple".
+    assertEquals(None, matched(Lower(strAttr)))
+    assertEquals(None, matched(Upper(strAttr)))
   }
 }

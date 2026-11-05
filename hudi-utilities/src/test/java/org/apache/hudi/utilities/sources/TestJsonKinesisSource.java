@@ -21,9 +21,11 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.utilities.config.KinesisSourceConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionMetrics;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 import org.apache.hudi.utilities.sources.helpers.KinesisOffsetGen;
+import org.apache.hudi.utilities.sources.helpers.KinesisReadConfig;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -444,6 +446,44 @@ class TestJsonKinesisSource extends SparkClientFunctionalTestHarness {
     assertTrue(checkpoint.contains("shardId-000000000001:seq200"));
     assertFalse(checkpoint.contains("shardId-000000000001:seq200@"),
         "Unread shard should not have arrival time in checkpoint");
+  }
+
+  // --- buildReadConfig tests ---
+
+  @Test
+  void testBuildReadConfigCarriesCredentialProps() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(KINESIS_STREAM_NAME.key(), STREAM_NAME);
+    props.setProperty(KINESIS_REGION.key(), "us-east-1");
+    props.setProperty(KINESIS_STARTING_POSITION.key(), "TRIM_HORIZON");
+    props.setProperty(KinesisSourceConfig.KINESIS_ENDPOINT_URL.key(), "http://localhost:4566");
+    props.setProperty(KinesisSourceConfig.KINESIS_ACCESS_KEY.key(), "access-1");
+    props.setProperty(KinesisSourceConfig.KINESIS_SECRET_KEY.key(), "secret-1");
+    props.setProperty(KinesisSourceConfig.KINESIS_ROLE_ARN.key(), "arn:aws:iam::123456789012:role/reader");
+    props.setProperty(KinesisSourceConfig.KINESIS_ROLE_EXTERNAL_ID.key(), "ext-1");
+    props.setProperty(KinesisSourceConfig.KINESIS_ROLE_SESSION_NAME.key(), "session-1");
+    TestableJsonKinesisSource withCreds = new TestableJsonKinesisSource(
+        props, jsc(), spark(), null, mock(HoodieIngestionMetrics.class));
+
+    KinesisReadConfig readConfig = withCreds.buildReadConfig(new KinesisOffsetGen.KinesisShardRange[0], 1000L);
+
+    assertEquals(STREAM_NAME, readConfig.getStreamName());
+    assertEquals("us-east-1", readConfig.getRegion());
+    assertEquals("http://localhost:4566", readConfig.getEndpointUrl());
+    assertEquals("access-1", readConfig.getAccessKey());
+    assertEquals("secret-1", readConfig.getSecretKey());
+    assertEquals("arn:aws:iam::123456789012:role/reader", readConfig.getRoleArn());
+    assertEquals("ext-1", readConfig.getRoleExternalId());
+    assertEquals("session-1", readConfig.getRoleSessionName());
+
+    // Defaults: no credentials configured means nulls, and the session name falls back to the config default.
+    KinesisReadConfig defaults = source.buildReadConfig(new KinesisOffsetGen.KinesisShardRange[0], 1000L);
+    assertNull(defaults.getEndpointUrl());
+    assertNull(defaults.getAccessKey());
+    assertNull(defaults.getSecretKey());
+    assertNull(defaults.getRoleArn());
+    assertNull(defaults.getRoleExternalId());
+    assertEquals(KinesisSourceConfig.KINESIS_ROLE_SESSION_NAME.defaultValue(), defaults.getRoleSessionName());
   }
 
   private JavaRDD<String> emptyRdd() {

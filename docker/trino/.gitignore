@@ -1,0 +1,3 @@
+# Transient staging dir populated by build_image.sh (leading slash: must not
+# swallow the shim's io/trino/plugin/ source package under shim/).
+/plugin/

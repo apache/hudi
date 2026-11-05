@@ -332,6 +332,31 @@
     </dependency>
 
     <!-- Hive -->
+    <!-- Direct pin: the Hive 2.3.10 client jars are compiled against libthrift 0.14.1
+         (HiveAuthUtils.getSocketTransport uses TConfiguration), but dependency mediation
+         otherwise picks 0.12.0 from spark-hive, which lacks that class and turns every
+         hive-jdbc connect into a NoClassDefFoundError. See #19680. -->
+    <dependency>
+      <groupId>org.apache.thrift</groupId>
+      <artifactId>libthrift</artifactId>
+      <version>${hive.libthrift.version}</version>
+      <exclusions>
+        <!-- Servlet-side extras of libthrift; excluded so the only classpath change
+             against the mediated 0.12.0 is the libthrift version itself. -->
+        <exclusion>
+          <groupId>org.apache.tomcat.embed</groupId>
+          <artifactId>tomcat-embed-core</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.tomcat</groupId>
+          <artifactId>tomcat-annotations-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>javax.annotation</groupId>
+          <artifactId>javax.annotation-api</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
     <dependency>
       <groupId>${hive.groupid}</groupId>
       <artifactId>hive-exec</artifactId>

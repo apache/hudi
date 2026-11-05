@@ -22,6 +22,7 @@ import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.RunLengthEncodedBlock;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -45,11 +46,18 @@ import static io.trino.spi.type.TypeUtils.writeNativeValue;
  */
 public class PrefilledColumnValues
 {
+    // Absent-marker for the memo, so a not-yet-resolved column is distinguishable from one resolved to null
+    private static final Object UNRESOLVED = new Object();
+
     private final Map<String, HivePartitionKey> partitionKeysByName;
     private final String partitionName;
     private final String filePath;
     private final long fileSize;
     private final long fileModifiedTime;
+    // Resolved native value per column name, populated lazily. One instance belongs to one split and a
+    // split is read by a single driver thread, so a plain HashMap is enough; it also has to hold nulls,
+    // which a ConcurrentHashMap could not.
+    private final Map<String, Object> resolvedValues = new HashMap<>();
 
     public static PrefilledColumnValues create(HudiSplit hudiSplit)
     {
@@ -108,6 +116,25 @@ public class PrefilledColumnValues
     }
 
     private Object nativeValueOf(HiveColumnHandle columnHandle)
+    {
+        // Every input to computeNativeValue() is a constant of the split, but appendTo is called once per
+        // prefilled column per record, and computing re-parses the partition string each time
+        // ($file_modified_time even formats a timestamp and parses it straight back). Memoize per column so
+        // each one is resolved once per split. Keyed on the name rather than the handle because
+        // HiveColumnHandle.hashCode hashes seven fields through a varargs array, whereas a String caches
+        // its hash. A sentinel rather than a null check, because null is a legitimate resolved value -- both
+        // for the hive-null convention and for the lenient fallback below -- and getOrDefault keeps the hit
+        // path, the one taken per record, to a single hash lookup.
+        String name = columnHandle.getName();
+        Object value = resolvedValues.getOrDefault(name, UNRESOLVED);
+        if (value == UNRESOLVED) {
+            value = computeNativeValue(columnHandle);
+            resolvedValues.put(name, value);
+        }
+        return value;
+    }
+
+    private Object computeNativeValue(HiveColumnHandle columnHandle)
     {
         if (!isPrefilled(columnHandle)) {
             // Lenient null fill, e.g. for a hidden column Trino defines but Hudi does not populate.

@@ -17,13 +17,16 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.units.DataSize;
 import io.airlift.units.Duration;
+import io.airlift.units.MinDataSize;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static io.airlift.configuration.testing.ConfigAssertions.assertDeprecatedEquivalence;
 import static io.airlift.configuration.testing.ConfigAssertions.assertFullMapping;
 import static io.airlift.configuration.testing.ConfigAssertions.assertRecordedDefaults;
 import static io.airlift.configuration.testing.ConfigAssertions.recordDefaults;
+import static io.airlift.testing.ValidationAssertions.assertFailsValidation;
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
 
 public class TestHudiConfig
@@ -130,5 +133,26 @@ public class TestHudiConfig
                 .setResolveColumnNameCasingEnabled(true);
 
         assertFullMapping(properties, expected);
+    }
+
+    @Test
+    public void testLegacyMaxSplitSize()
+    {
+        // Trino's built-in Hudi connector names this property hudi.max-split-size
+        assertDeprecatedEquivalence(
+                HudiConfig.class,
+                ImmutableMap.of("hudi.target-split-size", "32MB"),
+                ImmutableMap.of("hudi.max-split-size", "32MB"));
+    }
+
+    @Test
+    public void testTargetSplitSizeValidation()
+    {
+        // A zero target split size would make split generation loop forever, so reject it at config time
+        assertFailsValidation(
+                new HudiConfig().setTargetSplitSize(DataSize.ofBytes(0)),
+                "targetSplitSize",
+                "must be greater than or equal to 1B",
+                MinDataSize.class);
     }
 }

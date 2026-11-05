@@ -21,6 +21,7 @@ package org.apache.hudi.io.storage.hadoop;
 
 import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.avro.VariantShreddingProvider;
+import org.apache.hudi.common.avro.VariantShreddingRuntime;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -34,9 +35,15 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.parquet.avro.AvroSchemaConverter;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.Type;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Reconstructs unshredded variants when reading an already-shredded base file on the Avro
@@ -45,7 +52,7 @@ import java.util.List;
  * <p>parquet-avro does not understand variant shredding, so a shredded variant column comes back as
  * a raw {@code {metadata, value, typed_value}} record. This reads such columns at their shredded
  * (typed_value-bearing) schema, then rebuilds the standard unshredded {@code {metadata, value}}
- * variant via {@link VariantShreddingProvider#rebuildVariantRecord} before records reach the
+ * variant via {@link VariantShreddingProvider#prepareRebuild} before records reach the
  * merger/writer. The Spark/InternalRow read path reconstructs natively and does not use this.
  *
  * <p>See https://github.com/apache/hudi/issues/18931.
@@ -53,23 +60,11 @@ import java.util.List;
 final class HoodieVariantReconstruction {
 
   private final HoodieSchema intermediateSchema;
-  private final Schema outputAvroSchema;
-  private final VariantShreddingProvider provider;
-  // Indexed by field position in the (requested == output) record. For target fields, the file's
-  // shredded sub-schema and the unshredded target sub-schema for rebuild; null for non-targets.
-  private final boolean[] isTarget;
-  private final Schema[] shreddedSubSchemas;
-  private final Schema[] unshreddedSubSchemas;
+  private final Rebuilder rootRebuilder;
 
-  private HoodieVariantReconstruction(HoodieSchema intermediateSchema, Schema outputAvroSchema,
-                                VariantShreddingProvider provider, boolean[] isTarget,
-                                Schema[] shreddedSubSchemas, Schema[] unshreddedSubSchemas) {
+  private HoodieVariantReconstruction(HoodieSchema intermediateSchema, Rebuilder rootRebuilder) {
     this.intermediateSchema = intermediateSchema;
-    this.outputAvroSchema = outputAvroSchema;
-    this.provider = provider;
-    this.isTarget = isTarget;
-    this.shreddedSubSchemas = shreddedSubSchemas;
-    this.unshreddedSubSchemas = unshreddedSubSchemas;
+    this.rootRebuilder = rootRebuilder;
   }
 
   /**
@@ -85,32 +80,28 @@ final class HoodieVariantReconstruction {
    * none is needed (the file has no shredded variant columns). Throws when the file has shredded
    * variant columns to reconstruct but reading shredded variants is disabled, or no provider is
    * available: either way, reading at the unshredded schema would silently drop the typed_value payload.
+   * Also throws when a shredded variant column uses a typed_value encoding that cannot be read, so the
+   * failure happens when the file is opened rather than on the first affected record.
+   *
+   * @param fileSchema        the file schema, converted from {@code fileParquetSchema}
+   * @param fileParquetSchema the file's parquet schema, which carries the typed_value encodings the
+   *                          Avro conversion loses
+   * @param requestedSchema   the schema the records are requested at
+   * @param storage           the storage the file is read with
    */
-  static HoodieVariantReconstruction create(HoodieSchema fileSchema, HoodieSchema requestedSchema, HoodieStorage storage) {
+  static HoodieVariantReconstruction create(HoodieSchema fileSchema, MessageType fileParquetSchema,
+                                            HoodieSchema requestedSchema, HoodieStorage storage) {
     if (requestedSchema.getType() != HoodieSchemaType.RECORD || fileSchema.getType() != HoodieSchemaType.RECORD) {
       return null;
     }
 
-    List<HoodieSchemaField> requestedFields = requestedSchema.getFields();
-    List<HoodieSchemaField> intermediateFields = new ArrayList<>();
-    boolean[] isTarget = new boolean[requestedFields.size()];
-    boolean anyTarget = false;
-    for (int i = 0; i < requestedFields.size(); i++) {
-      HoodieSchemaField requestedField = requestedFields.get(i);
-      Option<HoodieSchemaField> fileField = fileSchema.getField(requestedField.name());
-      if (fileField.isPresent() && isShreddedVariant(fileField.get().schema())) {
-        isTarget[i] = true;
-        anyTarget = true;
-        // Read this column in its on-disk shredded shape.
-        intermediateFields.add(requestedField.withSchema(fileField.get().schema()));
-      } else {
-        // Copy non-target fields too (withSchema makes a fresh Avro Field): reusing the requested
-        // field's Avro Field, already bound to the requested record, would fail Schema.setFields with
-        // "Field already used" when building the intermediate record below.
-        intermediateFields.add(requestedField.withSchema(requestedField.schema()));
-      }
-    }
-    if (!anyTarget) {
+    // Records leave this reader unshredded; output field order matches the requested/intermediate order.
+    HoodieSchema outputSchema = VariantSchemaUtils.stripVariantShredding(requestedSchema);
+    // The list layout rule must match the one the file schema was converted with (see
+    // HoodieAvroParquetReader.tryOverrideDefaultConfigs).
+    Planner planner = new Planner(storage.getConf().getBoolean(AvroSchemaConverter.ADD_LIST_ELEMENT_RECORDS, true));
+    Rebuilder rootRebuilder = planner.plan(outputSchema, fileSchema, fileParquetSchema, null);
+    if (rootRebuilder == null) {
       // No shredded variant columns in the file: nothing to reconstruct, regardless of the flag.
       return null;
     }
@@ -133,26 +124,12 @@ final class HoodieVariantReconstruction {
           + HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key()
           + " or add a provider implementation (e.g. the Spark variant module) to the classpath.");
     }
-
-    HoodieSchema intermediateSchema = HoodieSchema.createRecord(
-        requestedSchema.getAvroSchema().getName(),
-        requestedSchema.getAvroSchema().getNamespace(),
-        requestedSchema.getAvroSchema().getDoc(),
-        intermediateFields);
-    // Records leave this reader unshredded; output field order matches the requested/intermediate order.
-    HoodieSchema outputSchema = VariantSchemaUtils.stripVariantShredding(requestedSchema);
-
-    Schema[] shreddedSubSchemas = new Schema[requestedFields.size()];
-    Schema[] unshreddedSubSchemas = new Schema[requestedFields.size()];
-    for (int i = 0; i < requestedFields.size(); i++) {
-      if (isTarget[i]) {
-        shreddedSubSchemas[i] = fileSchema.getField(requestedFields.get(i).name()).get().schema().getNonNullType().getAvroSchema();
-        unshreddedSubSchemas[i] = outputSchema.getFields().get(i).schema().getNonNullType().getAvroSchema();
-      }
+    for (VariantColumnRebuilder variantColumn : planner.variantColumns) {
+      variantColumn.prepare(provider);
     }
 
-    return new HoodieVariantReconstruction(intermediateSchema, outputSchema.toAvroSchema(), provider,
-        isTarget, shreddedSubSchemas, unshreddedSubSchemas);
+    return new HoodieVariantReconstruction(
+        VariantSchemaUtils.toShreddedReadSchema(requestedSchema, fileSchema), rootRebuilder);
   }
 
   /**
@@ -160,30 +137,219 @@ final class HoodieVariantReconstruction {
    * a record conforming to the unshredded output schema.
    */
   IndexedRecord reconstruct(IndexedRecord in) {
-    GenericRecord out = new GenericData.Record(outputAvroSchema);
-    for (int i = 0; i < isTarget.length; i++) {
-      Object value = in.get(i);
-      if (isTarget[i] && value instanceof GenericRecord) {
-        out.put(i, provider.rebuildVariantRecord((GenericRecord) value, shreddedSubSchemas[i], unshreddedSubSchemas[i]));
-      } else {
-        // Non-variant column, or a null variant column: pass through unchanged.
-        out.put(i, value);
-      }
-    }
-    return out;
+    return (IndexedRecord) rootRebuilder.rebuild(in);
   }
 
-  private static boolean isShreddedVariant(HoodieSchema schema) {
-    HoodieSchema unwrapped = schema.getNonNullType();
-    return unwrapped.getType() == HoodieSchemaType.VARIANT
-        && ((HoodieSchema.Variant) unwrapped).isShredded();
+  /** Plans the rebuild of a file, collecting its shredded variant columns for preparation. */
+  private static final class Planner {
+    // Mirrors the file schema conversion's ADD_LIST_ELEMENT_RECORDS, which decides the list element.
+    private final boolean assumeRepeatedIsListElement;
+    private final List<VariantColumnRebuilder> variantColumns = new ArrayList<>();
+
+    private Planner(boolean assumeRepeatedIsListElement) {
+      this.assumeRepeatedIsListElement = assumeRepeatedIsListElement;
+    }
+
+    /**
+     * Plans the rebuild for one schema position, or returns {@code null} when nothing below it is a
+     * shredded variant and the value can be passed through untouched. The walk is driven by the
+     * output (requested) side because that is the shape the record read from parquet has; the file
+     * side, and the parquet type it was converted from, are matched into it by field name. Detection
+     * is anchored by the requested side because the file schema usually comes from converting the
+     * parquet footer MessageType, which loses the variant logical type; see
+     * VariantSchemaUtils.isShreddedVariantTarget (#19567). Records, array elements and map values are
+     * all descended into, matching what the writers can emit; see
+     * {@code VariantSchemaUtils.swapShreddedVariantFields} for what actually produces a nested
+     * shredded file today (both the row and the AVRO write path shred variant record members at any
+     * depth off the forced-shredding property; a variant that is directly an array element or a map
+     * value shreds on neither path unless the write schema itself declares typed_value there).
+     */
+    private Rebuilder plan(HoodieSchema outputSchema, HoodieSchema fileSchema, Type parquetType, String path) {
+      if (VariantSchemaUtils.isShreddedVariantTarget(fileSchema, outputSchema)) {
+        if (parquetType == null || parquetType.isPrimitive()) {
+          throw new IllegalStateException("Shredded variant column '" + path
+              + "' has no matching parquet group in the file schema: " + parquetType);
+        }
+        VariantColumnRebuilder variantColumn = new VariantColumnRebuilder(
+            path, parquetType.asGroupType(), outputSchema.getNonNullType().getAvroSchema());
+        variantColumns.add(variantColumn);
+        return variantColumn;
+      }
+      HoodieSchema output = outputSchema.getNonNullType();
+      HoodieSchema file = fileSchema.getNonNullType();
+      if (output.getType() != file.getType() || parquetType == null || parquetType.isPrimitive()) {
+        return null;
+      }
+      GroupType group = parquetType.asGroupType();
+      switch (output.getType()) {
+        case RECORD: {
+          List<HoodieSchemaField> outputFields = output.getFields();
+          Rebuilder[] fieldRebuilders = new Rebuilder[outputFields.size()];
+          boolean anyTarget = false;
+          for (int i = 0; i < outputFields.size(); i++) {
+            HoodieSchemaField outputField = outputFields.get(i);
+            Option<HoodieSchemaField> fileField = file.getField(outputField.name());
+            fieldRebuilders[i] = fileField.isPresent()
+                ? plan(outputField.schema(), fileField.get().schema(), childType(group, outputField.name()),
+                    path == null ? outputField.name() : path + "." + outputField.name())
+                : null;
+            anyTarget |= fieldRebuilders[i] != null;
+          }
+          return anyTarget ? new RecordRebuilder(output.getAvroSchema(), fieldRebuilders) : null;
+        }
+        case ARRAY: {
+          Rebuilder elementRebuilder = plan(output.getElementType(), file.getElementType(),
+              listElementType(group), path + ".element");
+          return elementRebuilder == null ? null : new ArrayRebuilder(output.getAvroSchema(), elementRebuilder);
+        }
+        case MAP: {
+          Rebuilder valueRebuilder = plan(output.getValueType(), file.getValueType(),
+              mapValueType(group), path + ".value");
+          return valueRebuilder == null ? null : new MapRebuilder(valueRebuilder);
+        }
+        default:
+          return null;
+      }
+    }
+
+    /**
+     * The element type of a parquet LIST group, by the same rules the file schema's Avro conversion
+     * applied (AvroSchemaConverter.isElementType): the repeated field itself in the legacy 2-level
+     * layouts, otherwise the single field of the repeated group (3-level layout). Applies only to
+     * lists around a variant column; Spark4VariantShreddingProvider.listElementType reads the
+     * typed_value list inside one under Spark's rules, so the two are not meant to agree.
+     */
+    private Type listElementType(GroupType list) {
+      if (list.getFieldCount() != 1) {
+        return null;
+      }
+      Type repeated = list.getType(0);
+      boolean repeatedIsElement = repeated.isPrimitive()
+          || repeated.asGroupType().getFieldCount() > 1
+          || repeated.asGroupType().getType(0).isRepetition(Type.Repetition.REPEATED)
+          || repeated.getName().equals("array")
+          || repeated.getName().equals(list.getName() + "_tuple")
+          || assumeRepeatedIsListElement;
+      return repeatedIsElement ? repeated : repeated.asGroupType().getType(0);
+    }
+
+    /** The value type of a parquet MAP group: the second field of its repeated key_value group. */
+    private static Type mapValueType(GroupType map) {
+      if (map.getFieldCount() != 1 || map.getType(0).isPrimitive()) {
+        return null;
+      }
+      GroupType keyValue = map.getType(0).asGroupType();
+      return keyValue.getFieldCount() == 2 ? keyValue.getType(1) : null;
+    }
+
+    private static Type childType(GroupType group, String name) {
+      return group.containsField(name) ? group.getType(name) : null;
+    }
+  }
+
+  /** Rebuilds one value read at the file's shape into its unshredded output shape. */
+  private interface Rebuilder {
+    Object rebuild(Object value);
+  }
+
+  private static final class VariantColumnRebuilder implements Rebuilder {
+    private final String path;
+    private final GroupType parquetType;
+    private final Schema unshreddedSchema;
+    // Set by prepare() once the provider is loaded, before any record is rebuilt.
+    private VariantShreddingProvider.VariantRebuilder rebuilder;
+
+    private VariantColumnRebuilder(String path, GroupType parquetType, Schema unshreddedSchema) {
+      this.path = path;
+      this.parquetType = parquetType;
+      this.unshreddedSchema = unshreddedSchema;
+    }
+
+    private void prepare(VariantShreddingProvider provider) {
+      rebuilder = provider.prepareRebuild(path, parquetType, unshreddedSchema);
+    }
+
+    @Override
+    public Object rebuild(Object value) {
+      // A null variant passes through unchanged.
+      return value instanceof GenericRecord ? rebuilder.rebuild((GenericRecord) value) : value;
+    }
+  }
+
+  private static final class RecordRebuilder implements Rebuilder {
+    private final Schema outputSchema;
+    // Indexed by field position in the (output == intermediate) record; null for non-targets.
+    private final Rebuilder[] fieldRebuilders;
+
+    private RecordRebuilder(Schema outputSchema, Rebuilder[] fieldRebuilders) {
+      this.outputSchema = outputSchema;
+      this.fieldRebuilders = fieldRebuilders;
+    }
+
+    @Override
+    public Object rebuild(Object value) {
+      if (!(value instanceof IndexedRecord)) {
+        return value;
+      }
+      IndexedRecord in = (IndexedRecord) value;
+      GenericRecord out = new GenericData.Record(outputSchema);
+      for (int i = 0; i < fieldRebuilders.length; i++) {
+        Object fieldValue = in.get(i);
+        out.put(i, fieldRebuilders[i] == null ? fieldValue : fieldRebuilders[i].rebuild(fieldValue));
+      }
+      return out;
+    }
+  }
+
+  private static final class ArrayRebuilder implements Rebuilder {
+    private final Schema outputSchema;
+    private final Rebuilder elementRebuilder;
+
+    private ArrayRebuilder(Schema outputSchema, Rebuilder elementRebuilder) {
+      this.outputSchema = outputSchema;
+      this.elementRebuilder = elementRebuilder;
+    }
+
+    @Override
+    public Object rebuild(Object value) {
+      if (!(value instanceof List)) {
+        return value;
+      }
+      List<?> in = (List<?>) value;
+      GenericData.Array<Object> out = new GenericData.Array<>(in.size(), outputSchema);
+      for (Object element : in) {
+        out.add(elementRebuilder.rebuild(element));
+      }
+      return out;
+    }
+  }
+
+  private static final class MapRebuilder implements Rebuilder {
+    private final Rebuilder valueRebuilder;
+
+    private MapRebuilder(Rebuilder valueRebuilder) {
+      this.valueRebuilder = valueRebuilder;
+    }
+
+    @Override
+    public Object rebuild(Object value) {
+      if (!(value instanceof Map)) {
+        return value;
+      }
+      Map<?, ?> in = (Map<?, ?>) value;
+      Map<Object, Object> out = new LinkedHashMap<>(in.size());
+      for (Map.Entry<?, ?> entry : in.entrySet()) {
+        out.put(entry.getKey(), valueRebuilder.rebuild(entry.getValue()));
+      }
+      return out;
+    }
   }
 
   private static VariantShreddingProvider loadProvider(HoodieStorage storage) {
     String providerClass = storage.getConf()
         .getString(HoodieStorageConfig.PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key()).orElse(null);
     if (providerClass == null || providerClass.isEmpty()) {
-      providerClass = VariantShreddingProvider.detectProviderClassOnClasspath();
+      providerClass = VariantShreddingRuntime.getProviderClass().orElse(null);
     }
     return providerClass == null ? null : (VariantShreddingProvider) ReflectionUtils.loadClass(providerClass);
   }

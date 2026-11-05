@@ -18,30 +18,38 @@
 
 package org.apache.hudi.io.storage.row;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.storage.row.lance.HoodieFlinkLanceArrowUtils;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.memory.RootAllocator;
 import org.apache.arrow.vector.TimeStampMicroVector;
 import org.apache.arrow.vector.types.TimeUnit;
 import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.FieldType;
+import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.types.logical.ArrayType;
+import org.apache.flink.table.types.logical.DoubleType;
+import org.apache.flink.table.types.logical.FloatType;
 import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LocalZonedTimestampType;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
+import org.apache.flink.table.types.logical.TinyIntType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -56,9 +64,10 @@ public class TestHoodieFlinkLanceArrowUtils {
     RowType rowType = RowType.of(
         new LogicalType[] {new TimestampType(6), new LocalZonedTimestampType(6)},
         new String[] {"timestamp", "local_timestamp"});
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(rowType, "record");
 
     RowType roundTripped = HoodieFlinkLanceArrowUtils.toRowType(
-        HoodieFlinkLanceArrowUtils.toArrowSchema(rowType));
+        HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema));
 
     assertInstanceOf(TimestampType.class, roundTripped.getTypeAt(0));
     assertInstanceOf(LocalZonedTimestampType.class, roundTripped.getTypeAt(1));
@@ -86,20 +95,67 @@ public class TestHoodieFlinkLanceArrowUtils {
   @Test
   public void testNestedSchemaRoundTrip() {
     RowType rowType = nestedRowType();
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(rowType, "record");
 
     RowType roundTripped = HoodieFlinkLanceArrowUtils.toRowType(
-        HoodieFlinkLanceArrowUtils.toArrowSchema(rowType));
+        HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema));
 
     assertEquals(rowType, roundTripped);
   }
 
   @Test
   public void testRejectsMapTypeWhenWritingSchema() {
-    HoodieNotSupportedException exception = assertThrows(HoodieNotSupportedException.class,
-        () -> HoodieFlinkLanceArrowUtils.toArrowSchema(RowType.of(
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(
+        RowType.of(
             new LogicalType[] {new MapType(new VarCharType(), new IntType())},
-            new String[] {"attributes"})));
+            new String[] {"attributes"}),
+        "record");
+    HoodieNotSupportedException exception = assertThrows(HoodieNotSupportedException.class,
+        () -> HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema));
     assertTrue(exception.getMessage().contains("Flink Lance base-file support currently supports primitive, ROW, and ARRAY columns;"));
+  }
+
+  @Test
+  public void testVectorColumnsUseFixedSizeListAndOrdinaryArraysRemainLists() {
+    RowType rowType = RowType.of(
+        new LogicalType[] {
+            new ArrayType(new FloatType()),
+            new ArrayType(new FloatType(false)),
+            new ArrayType(new DoubleType(false))},
+        new String[] {"values", "embedding", "scores"});
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(
+        rowType, "vector_record", "embedding:2,scores:3");
+
+    Schema arrowSchema = HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema);
+
+    assertInstanceOf(ArrowType.List.class, arrowSchema.findField("values").getType());
+    assertFixedSizeList(arrowSchema.findField("embedding"), 2);
+    assertFixedSizeList(arrowSchema.findField("scores"), 3);
+  }
+
+  @Test
+  public void testRejectsInt8VectorForLance() {
+    RowType rowType = RowType.of(
+        new LogicalType[] {new ArrayType(new TinyIntType(false))},
+        new String[] {"embedding"});
+    HoodieSchema hoodieSchema = HoodieSchemaConverter.convertToSchema(
+        rowType, "vector_record", "embedding:2");
+
+    HoodieNotSupportedException exception = assertThrows(
+        HoodieNotSupportedException.class,
+        () -> HoodieFlinkLanceArrowUtils.toArrowSchema(hoodieSchema));
+
+    assertTrue(exception.getMessage().contains("FLOAT/DOUBLE VECTOR columns only"));
+    assertTrue(exception.getMessage().contains("embedding"));
+  }
+
+  private static void assertFixedSizeList(Field field, int dimension) {
+    ArrowType.FixedSizeList fixedSizeList =
+        assertInstanceOf(ArrowType.FixedSizeList.class, field.getType());
+    assertEquals(dimension, fixedSizeList.getListSize());
+    assertEquals("element", field.getChildren().get(0).getName());
+    assertFalse(field.getChildren().get(0).isNullable());
+    assertTrue(field.getMetadata().isEmpty());
   }
 
   private static RowType nestedRowType() {

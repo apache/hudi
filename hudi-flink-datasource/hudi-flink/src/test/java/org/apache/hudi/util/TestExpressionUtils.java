@@ -109,13 +109,13 @@ class TestExpressionUtils {
     List<DataType> dataTypes = ROW_DATA_TYPE_FIELD_NON_NULL.getChildren();
     // tests for non-null literals
     List<Object> dataList = new ArrayList<>(fields.size());
-    dataList.add(new Byte("1")); // f_tinyint
-    dataList.add(new Short("2")); // f_smallint
-    dataList.add(new Integer("3")); // f_int
-    dataList.add(new Long("4")); // f_long
-    dataList.add(new Float(5.0)); // f_float
-    dataList.add(new Double(6.0)); // f_double
-    dataList.add(new Boolean(true)); // f_boolean
+    dataList.add(Byte.valueOf("1")); // f_tinyint
+    dataList.add(Short.valueOf("2")); // f_smallint
+    dataList.add(Integer.valueOf("3")); // f_int
+    dataList.add(Long.valueOf("4")); // f_long
+    dataList.add(Float.valueOf(5.0f)); // f_float
+    dataList.add(Double.valueOf(6.0)); // f_double
+    dataList.add(Boolean.valueOf(true)); // f_boolean
     dataList.add(new BigDecimal(3.0)); // f_decimal
     dataList.add(getUTF8Bytes("hudi")); // f_bytes
     dataList.add("hudi ok"); // f_string

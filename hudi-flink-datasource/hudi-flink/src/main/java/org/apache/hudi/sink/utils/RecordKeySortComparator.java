@@ -18,6 +18,7 @@
 
 package org.apache.hudi.sink.utils;
 
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.sink.bulk.RowDataKeyGen;
 
 import org.apache.flink.table.data.RowData;
@@ -26,9 +27,9 @@ import org.apache.flink.table.runtime.generated.RecordComparator;
 /**
  * Compares rows by compact keys that preserve encoded Hudi record-key ordering.
  *
- * <p>LSM sorted runs must use the same ordering as the common LSM reader, which compares the
- * encoded record-key strings. Comparing the typed primary-key fields directly is not equivalent;
- * for example, integer keys {@code 2} and {@code 10} have the opposite order after encoding.
+ * <p>LSM sorted runs must use the same unsigned UTF-8 byte ordering as the common LSM reader.
+ * Comparing the typed primary-key fields directly is not equivalent; for example, integer keys
+ * {@code 2} and {@code 10} have the opposite order after encoding.
  */
 public class RecordKeySortComparator implements RecordComparator {
   private final RowDataKeyGen keyGen;
@@ -39,6 +40,8 @@ public class RecordKeySortComparator implements RecordComparator {
 
   @Override
   public int compare(RowData record1, RowData record2) {
-    return keyGen.getRecordKeyForComparison(record1).compareTo(keyGen.getRecordKeyForComparison(record2));
+    return StringUtils.compareUtf8Bytes(
+        keyGen.getRecordKeyForComparison(record1),
+        keyGen.getRecordKeyForComparison(record2));
   }
 }

@@ -18,7 +18,7 @@
 
 package org.apache.spark.sql
 
-import org.apache.hudi.SparkAdapterSupport
+import org.apache.hudi.{HoodieUTF8String, SparkAdapterSupport}
 import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig
 import org.apache.hudi.common.util.{Functions, RemotePartitionHelper}
@@ -32,6 +32,14 @@ import org.apache.spark.sql.catalyst.InternalRow
 
 object BucketPartitionUtils extends SparkAdapterSupport {
   def createDataFrame(df: DataFrame, indexKeyFields: String, numBucketsFunction: NumBucketsFunction, partitioner: Partitioner): DataFrame = {
+    createDataFrame(df, indexKeyFields, numBucketsFunction, partitioner, sortByRecordKey = false)
+  }
+
+  def createDataFrame(df: DataFrame,
+                      indexKeyFields: String,
+                      numBucketsFunction: NumBucketsFunction,
+                      partitioner: Partitioner,
+                      sortByRecordKey: Boolean): DataFrame = {
     // parse the comma-separated config once outside the per-row closure; the list is a
     // serializable java.util.List, safe to capture
     val indexKeyFieldList = KeyGenUtils.getIndexKeyFields(indexKeyFields)
@@ -49,10 +57,34 @@ object BucketPartitionUtils extends SparkAdapterSupport {
 
     val getPartitionKey = getPartitionKeyExtractor()
     // use internalRow to avoid extra convert.
-    val reRdd = df.queryExecution.toRdd
-      .keyBy(row => getPartitionKey(row))
-      .repartitionAndSortWithinPartitions(partitioner)
-      .values
+    val internalRows = df.queryExecution.toRdd
+    val reRdd = if (sortByRecordKey) {
+      val utf8StringFactory = sparkAdapter.getUTF8StringFactory
+      // Use (bucket route, record key) as the shuffle key. Tuple ordering groups rows by
+      // (partition path, bucket id) first, then orders each bucket by the full record key.
+      // Scala derives the record-key ordering from HoodieUTF8String's Comparable implementation,
+      // which uses binary UTF-8 ordering for both Spark 3 and Spark 4.
+      val keyedRows = internalRows.keyBy(row => {
+        val recordKey = utf8StringFactory.wrapUTF8String(
+          row.getUTF8String(HoodieRecord.RECORD_KEY_META_FIELD_ORD))
+        (getPartitionKey(row), recordKey)
+      })
+      // The record key participates only in sorting; bucket routing remains unchanged.
+      val bucketRoutePartitioner = new Partitioner {
+        override def numPartitions: Int = partitioner.numPartitions
+
+        override def getPartition(key: Any): Int = {
+          val bucketRoute = key.asInstanceOf[((String, Int), HoodieUTF8String)]._1
+          partitioner.getPartition(bucketRoute)
+        }
+      }
+      keyedRows.repartitionAndSortWithinPartitions(bucketRoutePartitioner).values
+    } else {
+      internalRows
+        .keyBy(row => getPartitionKey(row))
+        .repartitionAndSortWithinPartitions(partitioner)
+        .values
+    }
     sparkAdapter.internalCreateDataFrame(df.sparkSession, reRdd, df.schema)
   }
 

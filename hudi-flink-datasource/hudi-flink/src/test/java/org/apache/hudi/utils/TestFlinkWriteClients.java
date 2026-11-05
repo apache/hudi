@@ -27,6 +27,7 @@ import org.apache.hudi.client.model.PartialUpdateFlinkRecordMerger;
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
@@ -78,6 +79,16 @@ public class TestFlinkWriteClients {
   @BeforeEach
   public void before() throws Exception {
     this.conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+  }
+
+  @Test
+  void testParquetCompressionCodecDefaultAndOverride() {
+    HoodieWriteConfig writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertEquals("zstd", writeConfig.getParquetCompressionCodec());
+
+    conf.setString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key(), "gzip");
+    writeConfig = FlinkWriteClients.getHoodieClientConfig(conf, false, false);
+    assertEquals("gzip", writeConfig.getParquetCompressionCodec());
   }
 
   @Test

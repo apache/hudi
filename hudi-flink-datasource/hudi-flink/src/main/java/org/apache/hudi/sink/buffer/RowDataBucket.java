@@ -18,32 +18,34 @@
 
 package org.apache.hudi.sink.buffer;
 
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.table.action.commit.BucketInfo;
 
 import lombok.Getter;
 import org.apache.flink.runtime.operators.sort.QuickSort;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.binary.BinaryRowData;
-import org.apache.flink.table.runtime.operators.sort.BinaryInMemorySortBuffer;
 import org.apache.flink.util.MutableObjectIterator;
 
 import java.io.IOException;
 
 /**
- * RowData buffer for a specific data bucket, and the buffer is based on {@code BinaryInMemorySortBuffer}
- * from Flink, which is backed by a managed {@code MemorySegmentPool} to minimize GC costs.
+ * RowData buffer for a specific data bucket, backed by a managed {@code MemorySegmentPool}
+ * to minimize GC costs.
  */
 public class RowDataBucket {
-  private final BinaryInMemorySortBuffer dataBuffer;
+  private final StableSortBuffer dataBuffer;
   @Getter
   private final BucketInfo bucketInfo;
   private final BufferSizeDetector detector;
   @Getter
   private final String bucketId;
+  @Getter
+  private boolean diverged;
 
   public RowDataBucket(
       String bucketId,
-      BinaryInMemorySortBuffer dataBuffer,
+      StableSortBuffer dataBuffer,
       BucketInfo bucketInfo,
       Double batchSize) {
     this.bucketId = bucketId;
@@ -56,14 +58,26 @@ public class RowDataBucket {
     return dataBuffer.getIterator();
   }
 
+  /**
+   * Sorts by record key, retaining arrival order for equal keys.
+   */
   public void sort() throws IOException {
-    new QuickSort().sort(dataBuffer);
+    if (dataBuffer.size() > 1) {
+      new QuickSort().sort(dataBuffer);
+    }
   }
 
   public boolean writeRow(RowData rowData) throws IOException {
+    ValidationUtils.checkState(
+        !diverged,
+        () -> "RowData bucket " + bucketId + " diverged after a failed write and cannot be reused");
     boolean success = dataBuffer.write(rowData);
     if (success) {
       detector.detect(rowData);
+    } else {
+      // The buffer may have partially appended variable-length data before
+      // returning false. Its internal pointers can no longer be trusted for another write.
+      diverged = true;
     }
     return success;
   }

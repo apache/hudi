@@ -50,6 +50,29 @@ The modules are organized in a layered architecture to maximize code reuse acros
 | 4.1.x | `hudi-spark4.1.x` | 2.13 | 17+ | `-Dspark4.1` |
 | 4.2.x | `hudi-spark4.2.x` | 2.13 | 17+ | `-Dspark4.2` |
 
+## Parquet Compression Compatibility
+
+Hudi defaults `hoodie.parquet.compression.codec` to ZSTD on Spark 3.5 and newer and to GZIP on
+Spark 3.3 and 3.4. The non-vectorized Hudi file-group reader in Spark 3.3 and 3.4 uses parquet-java
+1.12.x, which is affected by [PARQUET-2160](https://issues.apache.org/jira/browse/PARQUET-2160)
+and can leak off-heap memory while reading ZSTD files. Upgrade to Spark 3.5 or newer before using
+ZSTD. The GZIP write default on older Spark versions does not eliminate the risk of reading ZSTD
+files produced by another engine. Explicitly setting `hoodie.parquet.compression.codec` overrides
+the version-specific default.
+
+## Streaming session configuration compatibility
+
+Starting with 1.3.0, Hudi Structured Streaming writes honor the active session's `spark.hoodie.*`
+settings (including `--conf spark.hoodie.*` passed at submit time), just like DataFrame batch writes.
+Previously the streaming sink ignored them. When upgrading an existing `writeStream` application,
+audit ambient `spark.hoodie.*` settings, or pass explicit writer options to keep the previous behavior,
+e.g. `.option("hoodie.datasource.write.operation", "upsert")`.
+
+Precedence: explicit writer/storage options, then session `spark.hoodie.*` settings, then Hudi defaults.
+Settings are captured once when the sink is created; later `SET` statements do not change a running
+query. Bare `hoodie.*` session settings are not forwarded. Table identity settings must still agree with
+the existing table. See the Streaming Writes guide on the Hudi website for details.
+
 ## Key Features
 
 - **DataSource V1 Support**: Full integration with Spark's DataSource API

@@ -23,6 +23,7 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.transaction.BucketIndexConcurrentFileWritesConflictResolutionStrategy;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.FSUtils;
@@ -41,9 +42,11 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -52,8 +55,11 @@ import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieWriteConflictException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.SparkBucketIndexPartitioner;
@@ -603,11 +609,72 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
     client2.close();
   }
 
+  /**
+   * Every bucket keeps one file id in all partitions under non-blocking concurrency control, so the record index and
+   * the secondary index must key the write stats of a commit by file group, not by file id.
+   */
+  @Test
+  public void testRecordAndSecondaryIndexWithTheSameBucketInDifferentPartitions() throws Exception {
+    HoodieWriteConfig config = createHoodieWriteConfigBuilder(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            // the indexes are updated from the commit metadata
+            .withStreamingWriteEnabled(false)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withSecondaryIndexEnabled(true)
+            .withSecondaryIndexForColumn("name")
+            .build())
+        .build();
+    metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, config.getProps());
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      // bulk insert writes a base file for the bucket in each partition, under the same file id. The partitions are
+      // written in separate commits, because the bucket bulk insert partitioner keys its tasks by file id prefix.
+      List<WriteStatus> writeStatuses = new ArrayList<>(writeData(client, WriteClientTestUtils.createNewInstantTime(),
+          Collections.singletonList("id1,Danny,23,1,par1"), true, WriteOperationType.BULK_INSERT, true));
+      writeStatuses.addAll(writeData(client, WriteClientTestUtils.createNewInstantTime(),
+          Collections.singletonList("id2,Stephen,33,1,par2"), true, WriteOperationType.BULK_INSERT, true));
+      assertEquals(1, writeStatuses.stream().map(WriteStatus::getFileId).distinct().count());
+      assertRecordAndSecondaryIndex(config, "Danny", "Stephen");
+
+      // one upsert writes a log file for the bucket in both partitions, under the same file id
+      writeStatuses = writeData(client, WriteClientTestUtils.createNewInstantTime(),
+          Arrays.asList("id1,Julian,23,2,par1", "id2,Fabian,33,2,par2"), true, WriteOperationType.UPSERT, true);
+      assertEquals(2, writeStatuses.size());
+      assertEquals(1, writeStatuses.stream().map(WriteStatus::getFileId).distinct().count());
+      assertRecordAndSecondaryIndex(config, "Julian", "Fabian");
+    }
+  }
+
+  /** Asserts that id1 in par1 and id2 in par2 are in the record index, and only under the given names in the secondary index. */
+  private void assertRecordAndSecondaryIndex(HoodieWriteConfig config, String nameOfId1, String nameOfId2) {
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieBackedTableMetadata tableMetadata = new HoodieBackedTableMetadata(
+        context(), metaClient.getStorage(), config.getMetadataConfig(), config.getBasePath(), true);
+    Map<String, String> recordKeyToPartition = tableMetadata.readRecordIndexLocationsWithKeys(
+            HoodieJavaRDD.of(jsc().parallelize(Arrays.asList("id1", "id2"), 1))).collectAsList().stream()
+        .collect(Collectors.toMap(Pair::getKey, pair -> pair.getValue().getPartitionPath()));
+    assertEquals(CollectionUtils.createImmutableMap(Pair.of("id1", "par1"), Pair.of("id2", "par2")), recordKeyToPartition);
+
+    String secondaryIndexPartition = metaClient.getIndexMetadata().get().getIndexDefinitions().keySet().stream()
+        .filter(indexName -> indexName.startsWith(HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX))
+        .findFirst().get();
+    Map<String, String> secondaryKeyToRecordKey = tableMetadata.readSecondaryIndexDataTableRecordKeysWithKeys(
+            HoodieJavaRDD.of(jsc().parallelize(Arrays.asList("Danny", "Stephen", "Julian", "Fabian"), 1)), secondaryIndexPartition)
+        .collectAsList().stream()
+        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
+    assertEquals(CollectionUtils.createImmutableMap(Pair.of(nameOfId1, "id1"), Pair.of(nameOfId2, "id2")), secondaryKeyToRecordKey);
+  }
+
   private HoodieWriteConfig createHoodieWriteConfig() {
     return createHoodieWriteConfig(false);
   }
 
   private HoodieWriteConfig createHoodieWriteConfig(boolean fullUpdate) {
+    return createHoodieWriteConfigBuilder(fullUpdate).build();
+  }
+
+  private HoodieWriteConfig.Builder createHoodieWriteConfigBuilder(boolean fullUpdate) {
     String payloadClassName = PartialUpdateAvroPayload.class.getName();
     if (fullUpdate) {
       payloadClassName = OverwriteWithLatestAvroPayload.class.getName();
@@ -647,8 +714,7 @@ public class TestSparkNonBlockingConcurrencyControl extends SparkClientFunctiona
         .withLockConfig(HoodieLockConfig.newBuilder()
             .withLockProvider(InProcessLockProvider.class)
             .withConflictResolutionStrategy(new BucketIndexConcurrentFileWritesConflictResolutionStrategy())
-            .build())
-        .build();
+            .build());
   }
 
   private void checkWrittenData(

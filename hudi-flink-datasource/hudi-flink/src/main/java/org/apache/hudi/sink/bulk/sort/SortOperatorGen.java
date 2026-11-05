@@ -52,11 +52,53 @@ public class SortOperatorGen {
       if (index < 0) {
         throw new IllegalArgumentException("Can not find sort field '" + field + "' in row type " + rowType);
       }
+      LogicalType fieldType = rowType.getTypeAt(index);
+      if (!isSortable(fieldType)) {
+        throw new IllegalArgumentException("Sort field '" + field + "' of type " + fieldType.asSummaryString()
+            + " is not supported: the sorter can only order boolean, numeric, character, binary, decimal, "
+            + "date, time, timestamp and interval fields. Remove it from the sort fields.");
+      }
       return index;
     }).toArray();
     this.fieldGetters = Arrays.stream(sortIndices)
         .mapToObj(index -> RowData.createFieldGetter(rowType.getTypeAt(index), index))
         .toArray(RowData.FieldGetter[]::new);
+  }
+
+  /**
+   * Whether the generated comparator can order values of this type: exactly the roots that have a
+   * typed branch in {@link #compareExpression}. Every other root (ROW, ARRAY, MAP, MULTISET, RAW and,
+   * on Flink 2.1+, VARIANT) falls to the generated fallback, whose compareValues accepts only byte[]
+   * and Comparable; the runtime values of those types (BinaryRowData, BinaryArrayData, BinaryMapData)
+   * are neither, so a sort on them fails per record inside the sorter. Hudi's BLOB (a ROW) and VECTOR
+   * (an ARRAY of floats) columns are on that side too. The constructor rejects such fields by name
+   * instead.
+   */
+  public static boolean isSortable(LogicalType logicalType) {
+    switch (logicalType.getTypeRoot()) {
+      case BOOLEAN:
+      case TINYINT:
+      case SMALLINT:
+      case INTEGER:
+      case DATE:
+      case TIME_WITHOUT_TIME_ZONE:
+      case INTERVAL_YEAR_MONTH:
+      case BIGINT:
+      case INTERVAL_DAY_TIME:
+      case FLOAT:
+      case DOUBLE:
+      case CHAR:
+      case VARCHAR:
+      case BINARY:
+      case VARBINARY:
+      case DECIMAL:
+      case TIMESTAMP_WITHOUT_TIME_ZONE:
+      case TIMESTAMP_WITH_LOCAL_TIME_ZONE:
+      case TIMESTAMP_WITH_TIME_ZONE:
+        return true;
+      default:
+        return false;
+    }
   }
 
   public OneInputStreamOperator<RowData, RowData> createSortOperator(Configuration conf) {
@@ -195,6 +237,7 @@ public class SortOperatorGen {
       case TIMESTAMP_WITH_TIME_ZONE:
         return timestampCompareExpression(sortIndex, ((ZonedTimestampType) logicalType).getPrecision());
       default:
+        // Unreachable for a field the constructor accepted: isSortable lists exactly the roots above.
         return "compareFallback(row1, row2, " + referenceIndex + ")";
     }
   }

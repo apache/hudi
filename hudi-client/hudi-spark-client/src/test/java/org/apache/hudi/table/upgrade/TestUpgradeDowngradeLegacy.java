@@ -269,6 +269,7 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     // init config, table and client.
     Map<String, String> params = new HashMap<>();
     addNewTableParamsToProps(params);
+    params.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "timestamp");
     if (tableType == HoodieTableType.MERGE_ON_READ) {
       params.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
       metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
@@ -280,6 +281,8 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
 
     // downgrade table props
     downgradeTableConfigsFromTwoToOne(cfg);
+    // a table written before 0.8.0 records no ordering field at all
+    assertTrue(metaClient.getTableConfig().getOrderingFields().isEmpty());
 
     // perform upgrade
     new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
@@ -293,6 +296,78 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
 
     // verify table props
     assertTableProps(cfg);
+    // the ordering field the writer merges on is now recorded for readers that only see the table config
+    assertEquals(Collections.singletonList("timestamp"), metaClient.getTableConfig().getOrderingFields());
+  }
+
+  /**
+   * The migration case: a table with committed data, whose ordering field resolves against the
+   * table's own schema rather than the schema the writer brings along.
+   */
+  @Disabled("HUDI-9700")
+  @Test
+  void testUpgradeOneToTwoRecordsOrderingFieldFromTableSchema() throws IOException {
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    params.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "timestamp");
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(false).withProps(params).build();
+    doInsert(getHoodieWriteClient(cfg));
+
+    downgradeTableConfigsFromTwoToOne(cfg);
+    assertTrue(metaClient.getTableConfig().getOrderingFields().isEmpty());
+
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.TWO, null);
+
+    metaClient = reloadMetaClientAtVersionTwo(cfg);
+    assertEquals(Collections.singletonList("timestamp"), metaClient.getTableConfig().getOrderingFields());
+  }
+
+  /**
+   * A table that already recorded an ordering field keeps the one it has, rather than having the
+   * writer's config written over it.
+   */
+  @Disabled("HUDI-9700")
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableType.class)
+  void testUpgradeOneToTwoKeepsRecordedOrderingField(HoodieTableType tableType) throws IOException {
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    params.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "_row_key");
+    initTableOfType(tableType, params);
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(false).withProps(params).build();
+    doInsert(getHoodieWriteClient(cfg));
+
+    downgradeTableConfigsFromTwoToOne(cfg, "timestamp");
+    assertEquals(Collections.singletonList("timestamp"), metaClient.getTableConfig().getOrderingFields());
+
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.TWO, null);
+
+    metaClient = reloadMetaClientAtVersionTwo(cfg);
+    assertEquals(Collections.singletonList("timestamp"), metaClient.getTableConfig().getOrderingFields());
+  }
+
+  /**
+   * An ordering field the schema cannot resolve is left unrecorded, so the table config never ends
+   * up with one no reader can resolve.
+   */
+  @Disabled("HUDI-9700")
+  @Test
+  void testUpgradeOneToTwoSkipsOrderingFieldMissingFromSchema() throws IOException {
+    Map<String, String> params = new HashMap<>();
+    addNewTableParamsToProps(params);
+    params.put(HoodieWriteConfig.PRECOMBINE_FIELD_NAME.key(), "not_a_column");
+    HoodieWriteConfig cfg = getConfigBuilder().withRollbackUsingMarkers(false).withProps(params).build();
+    doInsert(getHoodieWriteClient(cfg));
+
+    downgradeTableConfigsFromTwoToOne(cfg);
+
+    new UpgradeDowngrade(metaClient, cfg, context, SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.TWO, null);
+
+    metaClient = reloadMetaClientAtVersionTwo(cfg);
+    assertTrue(metaClient.getTableConfig().getOrderingFields().isEmpty());
   }
 
   @Disabled("HUDI-9700")
@@ -501,13 +576,36 @@ public class TestUpgradeDowngradeLegacy extends HoodieClientTestBase {
     client.insert(writeRecords, commit1).collect();
   }
 
+  private HoodieTableMetaClient reloadMetaClientAtVersionTwo(HoodieWriteConfig cfg) throws IOException {
+    HoodieTableMetaClient reloaded = HoodieTableMetaClient.builder()
+        .setConf(context.getStorageConf().newInstance()).setBasePath(cfg.getBasePath())
+        .setLayoutVersion(Option.of(new TimelineLayoutVersion(cfg.getTimelineLayoutVersion()))).build();
+    assertTableVersionOnDataAndMetadataTable(reloaded, HoodieTableVersion.TWO);
+    return reloaded;
+  }
+
+  private void initTableOfType(HoodieTableType tableType, Map<String, String> params) throws IOException {
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      params.put(TYPE.key(), HoodieTableType.MERGE_ON_READ.name());
+      metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
+    }
+  }
+
   private void downgradeTableConfigsFromTwoToOne(HoodieWriteConfig cfg) throws IOException {
+    downgradeTableConfigsFromTwoToOne(cfg, null);
+  }
+
+  private void downgradeTableConfigsFromTwoToOne(HoodieWriteConfig cfg, String orderingField) throws IOException {
     Properties properties = new Properties(cfg.getProps());
     properties.remove(HoodieTableConfig.RECORDKEY_FIELDS.key());
     properties.remove(HoodieTableConfig.PARTITION_FIELDS.key());
     properties.remove(HoodieTableConfig.NAME.key());
     properties.remove(BASE_FILE_FORMAT.key());
+    properties.remove(HoodieTableConfig.PRECOMBINE_FIELD.key());
     properties.setProperty(HoodieTableConfig.VERSION.key(), "1");
+    if (orderingField != null) {
+      properties.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), orderingField);
+    }
 
     metaClient = HoodieTestUtils.init(storageConf, basePath, getTableType(), properties);
     // set hoodie.table.version to 1 in hoodie.properties file

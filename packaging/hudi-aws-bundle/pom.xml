@@ -82,9 +82,6 @@
                                     <include>org.apache.httpcomponents:httpcore</include>
                                     <include>io.netty:*</include>
                                     <include>software.amazon.awssdk:*</include>
-                                    <!-- Kinesis KCL and deaggregation for JsonKinesisSource -->
-                                    <include>com.amazonaws:amazon-kinesis-deaggregator</include>
-                                    <include>com.amazonaws:amazon-kinesis-client</include>
                                     <include>io.dropwizard.metrics:metrics-core</include>
                                     <include>com.beust:jcommander</include>
                                     <include>commons-io:commons-io</include>
@@ -111,10 +108,6 @@
                                 <relocation>
                                     <pattern>org.openjdk.jol.</pattern>
                                     <shadedPattern>org.apache.hudi.org.openjdk.jol.</shadedPattern>
-                                </relocation>
-                                <relocation>
-                                    <pattern>org.apache.httpcomponents.</pattern>
-                                    <shadedPattern>org.apache.hudi.aws.org.apache.httpcomponents.</shadedPattern>
                                 </relocation>
                             </relocations>
                             <createDependencyReducedPom>true</createDependencyReducedPom>

@@ -22,10 +22,6 @@ import org.apache.hudi.common.util.hash.Hash;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -89,7 +85,7 @@ public class TestInternalBloomFilter {
       }
       byte[] serialized = serialize(filter);
       InternalBloomFilter deserialized = new InternalBloomFilter();
-      deserialized.readFields(new DataInputStream(new ByteArrayInputStream(serialized)));
+      deserialized.readFields(BloomSerDeTestUtils.asDataInput(serialized));
       for (Key key : keys) {
         assertTrue(deserialized.membershipTest(key));
       }
@@ -113,7 +109,7 @@ public class TestInternalBloomFilter {
     // The last byte carries bits 56..60; bits 61..63 are beyond vectorSize and must be ignored.
     mutated[mutated.length - 1] |= (byte) 0xE0;
     InternalBloomFilter deserialized = new InternalBloomFilter();
-    deserialized.readFields(new DataInputStream(new ByteArrayInputStream(mutated)));
+    deserialized.readFields(BloomSerDeTestUtils.asDataInput(mutated));
     for (Key key : keys) {
       assertTrue(deserialized.membershipTest(key));
     }
@@ -210,9 +206,7 @@ public class TestInternalBloomFilter {
   }
 
   private static byte[] serialize(InternalBloomFilter filter) throws IOException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    filter.write(new DataOutputStream(baos));
-    return baos.toByteArray();
+    return BloomSerDeTestUtils.serialize(filter::write);
   }
 
   /** Packs the oracle bits with the Hadoop BloomFilter byte layout: bit i at byte i >> 3, mask 1 << (i & 7). */
@@ -228,7 +222,7 @@ public class TestInternalBloomFilter {
 
   private static InternalBloomFilter copy(InternalBloomFilter filter) throws IOException {
     InternalBloomFilter copied = new InternalBloomFilter();
-    copied.readFields(new DataInputStream(new ByteArrayInputStream(serialize(filter))));
+    copied.readFields(BloomSerDeTestUtils.asDataInput(serialize(filter)));
     return copied;
   }
 }

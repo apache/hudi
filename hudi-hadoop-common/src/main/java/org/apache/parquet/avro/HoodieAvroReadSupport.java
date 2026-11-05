@@ -50,6 +50,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
   }
 
   public HoodieAvroReadSupport() {
+    super(GenericData.get());
     tableSchema = Option.empty();
   }
 
@@ -87,7 +88,7 @@ public class HoodieAvroReadSupport<T> extends AvroReadSupport<T> {
     String requestedProjectionString = configuration.get(AVRO_REQUESTED_PROJECTION);
     if (requestedProjectionString != null) {
       HoodieSchema avroRequestedProjection = HoodieSchema.parse(requestedProjectionString);
-      Configuration conf = new Configuration();
+      Configuration conf = new Configuration(false);
       configuration.forEach(entry -> conf.set(entry.getKey(), entry.getValue()));
       projection = new AvroSchemaConverter(conf).convert(avroRequestedProjection.toAvroSchema());
     }

@@ -34,6 +34,7 @@ import org.apache.hudi.source.reader.HoodieSourceReader;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.DefaultHoodieSplitDiscover;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
+import org.apache.hudi.source.split.GlobalHoodieSplitProvider;
 import org.apache.hudi.source.split.HoodieContinuousSplitDiscover;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSourceSplitSerializer;
@@ -135,23 +136,33 @@ public class HoodieSource<T> extends FileIndexReader implements Source<T, Hoodie
   private SplitEnumerator<HoodieSourceSplit, HoodieSplitEnumeratorState> createEnumerator(
       SplitEnumeratorContext<HoodieSourceSplit> enumContext,
       @Nullable HoodieSplitEnumeratorState enumeratorState) {
-    HoodieSplitProvider splitProvider;
-    HoodieSplitAssigner splitAssigner = HoodieSplitAssigners.createHoodieSplitAssigner(
-            scanContext.getConf(), enumContext.currentParallelism());
+    final boolean streaming = scanContext.isStreaming();
 
-    if (enumeratorState == null) {
+    // Streaming keeps per-subtask assignment (DefaultHoodieSplitProvider) so that a file id's
+    // successive incremental splits stay affine to one reader. Bounded reads instead use a shared
+    // work-stealing pool: the full split set is known up front and each split is independent and
+    // order-free (one split per file group, no cross-commit continuation), so any reader can read
+    // any split. Serving from one pool keeps every reader busy until it is drained, which removes
+    // the straggler tail that count-balanced, non-stealing assignment produces.
+    HoodieSplitProvider splitProvider;
+    if (streaming) {
+      HoodieSplitAssigner splitAssigner = HoodieSplitAssigners.createHoodieSplitAssigner(
+          scanContext.getConf(), enumContext.currentParallelism());
       splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
     } else {
+      splitProvider = new GlobalHoodieSplitProvider();
+    }
+
+    if (enumeratorState != null) {
       log.info(
           "Hoodie source restored {} splits from state for table {}",
           enumeratorState.getPendingSplitStates().size(), tableName);
       List<HoodieSourceSplit> pendingSplits =
           enumeratorState.getPendingSplitStates().stream().map(HoodieSourceSplitState::getSplit).collect(Collectors.toList());
-      splitProvider = new DefaultHoodieSplitProvider(splitAssigner);
       splitProvider.onDiscoveredSplits(pendingSplits);
     }
 
-    if (scanContext.isStreaming()) {
+    if (streaming) {
       HoodieContinuousSplitDiscover discover = new DefaultHoodieSplitDiscover(
           scanContext);
 

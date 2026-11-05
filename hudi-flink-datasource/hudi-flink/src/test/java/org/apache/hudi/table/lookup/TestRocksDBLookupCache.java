@@ -28,9 +28,14 @@ import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.VarCharType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -74,6 +79,55 @@ class TestRocksDBLookupCache {
 
     cache.close();
     cache.close();
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {1, 1024, 2051})
+  void testBatchedWrites(int rowCount) throws Exception {
+    RowType keyType = RowType.of(new VarCharType(VarCharType.MAX_LENGTH));
+    RowType rowType = RowType.of(new VarCharType(VarCharType.MAX_LENGTH), new IntType());
+    try (RocksDBLookupCache cache = new RocksDBLookupCache(
+        InternalSerializers.create(keyType), InternalSerializers.create(rowType), tempFile.getAbsolutePath())) {
+      RowData lookupKey = key("维度");
+      GenericRowData reuse = GenericRowData.of(StringData.fromString("维度"), 0);
+      for (int i = 0; i < rowCount; i++) {
+        reuse.setField(1, i);
+        cache.addRow(lookupKey, reuse);
+      }
+      reuse.setField(1, -1);
+      List<RowData> rows = cache.getRows(lookupKey);
+      assertEquals(IntStream.range(0, rowCount).boxed().collect(Collectors.toList()),
+          rows.stream().map(row -> row.getInt(1)).sorted().collect(Collectors.toList()));
+
+      cache.addRow(lookupKey, row("维度", rowCount));
+      cache.flush();
+      cache.flush();
+      assertEquals(rowCount + 1, cache.getRows(lookupKey).size());
+
+      // Clear must discard both persisted rows and the unflushed tail of a load.
+      cache.addRow(key("pending"), row("pending", 1));
+      cache.clear();
+      assertNull(cache.getRows(lookupKey));
+      assertNull(cache.getRows(key("pending")));
+      cache.addRow(lookupKey, row("维度", -1));
+      assertEquals(-1, cache.getRows(lookupKey).get(0).getInt(1));
+    }
+  }
+
+  @Test
+  void testLargeRows() throws Exception {
+    RowType keyType = RowType.of(new VarCharType(VarCharType.MAX_LENGTH));
+    RowType rowType = RowType.of(new VarCharType(VarCharType.MAX_LENGTH), new IntType());
+    String value = String.join("", Collections.nCopies(1024 * 1024, "x"));
+    try (RocksDBLookupCache cache = new RocksDBLookupCache(
+        InternalSerializers.create(keyType), InternalSerializers.create(rowType), tempFile.getAbsolutePath())) {
+      cache.addRow(key("large"), row(value, 1));
+      cache.addRow(key("large"), row("tail", 2));
+      List<RowData> rows = cache.getRows(key("large"));
+      assertEquals(2, rows.size());
+      assertEquals(value, rows.get(0).getString(0).toString());
+      assertEquals("tail", rows.get(1).getString(0).toString());
+    }
   }
 
   private static RowData key(String key) {

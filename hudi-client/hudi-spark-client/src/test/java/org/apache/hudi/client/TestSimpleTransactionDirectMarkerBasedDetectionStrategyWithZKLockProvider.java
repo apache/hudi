@@ -82,7 +82,10 @@ public class TestSimpleTransactionDirectMarkerBasedDetectionStrategyWithZKLockPr
     initHoodieStorage();
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.MERGE_ON_READ);
 
-    Properties properties = getPropertiesForKeyGen();
+    // Meta fields populated, matching the table created above. The no-arg getPropertiesForKeyGen()
+    // hardcodes populate=false, which the writer-vs-table meta-fields check rejects rather than
+    // silently narrowing the table -- and this fixture is not about meta fields at all.
+    Properties properties = getPropertiesForKeyGen(true);
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     server = new TestingServer();
     properties.setProperty(ZK_BASE_PATH_PROP_KEY, basePath);

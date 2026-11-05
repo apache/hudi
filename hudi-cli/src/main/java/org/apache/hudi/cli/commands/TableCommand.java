@@ -25,6 +25,7 @@ import org.apache.hudi.cli.TableHeader;
 import org.apache.hudi.common.config.HoodieTimeGeneratorConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -250,6 +251,110 @@ public class TableCommand {
 
     Set<String> deleteConfigs = Arrays.stream(csConfigs.split(",")).collect(Collectors.toSet());
     HoodieTableConfig.delete(client.getStorage(), client.getMetaPath(), deleteConfigs);
+
+    HoodieCLI.refreshTableMetadata();
+    Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();
+    return renderOldNewProps(newProps, oldProps);
+  }
+
+  @ShellMethod(key = "table set-meta-fields-mode",
+      value = "Set hoodie.meta.fields.mode on an existing table. This is the sanctioned way to change "
+          + "the property — a write never can, since it is a physical-storage decision baked into "
+          + "files at write time. Two guards apply on a table that already has commits: widening the "
+          + "mode (adding a populated meta column) is refused outright, because existing files are "
+          + "not rewritten and the table would advertise a column that is null for every earlier "
+          + "row; narrowing is refused unless --force is passed, since it leaves mixed-mode files "
+          + "whose incremental / file-pruning semantics differ between old and new data.")
+  public String setMetaFieldsMode(
+      @ShellOption(value = {"--target-mode"},
+          help = "One of ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY, COMMIT_TIME_AND_FILE_NAME")
+      final String targetModeStr,
+      @ShellOption(value = {"--force"}, defaultValue = "false",
+          help = "Allow NARROWING the mode on a table that already has commits. Does not permit "
+              + "widening, which is refused regardless. Existing files are not rewritten — new "
+              + "commits use the new mode, old commits keep the old one. Incremental queries and "
+              + "file-name-based lookups will silently drop rows from commits written under the "
+              + "incompatible mode.")
+      final boolean force) throws IOException {
+    MetaFieldsMode targetMode;
+    try {
+      // Resolve through the public configuration API rather than valueOf: it is case-insensitive,
+      // trims, and lists the allowed values in its message, so an operator typing
+      // `commit_time_only` is not rejected and the error text matches what a bad value in
+      // hoodie.properties or a write option produces.
+      Properties targetProps = new Properties();
+      targetProps.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), targetModeStr);
+      targetMode = MetaFieldsMode.resolve(targetProps);
+    } catch (IllegalArgumentException e) {
+      throw new HoodieException("Invalid --target-mode: " + e.getMessage(), e);
+    }
+
+    HoodieCLI.refreshTableMetadata();
+    HoodieTableMetaClient client = HoodieCLI.getTableMetaClient();
+    Map<String, String> oldProps = client.getTableConfig().propsMap();
+    MetaFieldsMode currentMode = client.getTableConfig().getMetaFieldsMode();
+
+    if (currentMode == targetMode) {
+      return String.format("Table is already in %s mode; nothing to change.", targetMode);
+    }
+
+    int commitCount = client.getActiveTimeline().getCommitsTimeline().countInstants();
+
+    // Meta-field population is one-way for a table that already holds data, and --force does not
+    // override it: dropping a column leaves earlier files carrying values nothing reads, which a
+    // reader can ignore, but *adding* one leaves later files claiming a column earlier files do not
+    // physically have. Nothing distinguishes the two sets, so a widened table advertises a column
+    // that is silently null for every pre-existing row — incremental queries would then admit the
+    // table and drop exactly those rows. There is no consequence for an operator to accept here, so
+    // this is a hard failure rather than a --force gate.
+    //
+    // Same predicate the write path uses (BaseHoodieWriteClient#validateAgainstTableProperties), so
+    // the CLI and the writer cannot disagree about which transitions are legal.
+    if (commitCount > 0 && targetMode.isWiderThan(currentMode)) {
+      throw new HoodieException(String.format(
+          "Refusing to widen hoodie.meta.fields.mode from %s to %s on a table with %d commit(s): "
+              + "%s populates meta columns that %s does not, and this command does not rewrite "
+              + "existing files. The table would advertise a column that is null for every row "
+              + "written so far, which incremental queries and file-name lookups silently skip. "
+              + "Narrowing the mode is allowed; to widen, recreate the table.",
+          currentMode, targetMode, commitCount, targetMode, currentMode));
+    }
+
+    // Safety check: refuse to change the mode on a table with commits unless --force.
+    if (commitCount > 0 && !force) {
+      throw new HoodieException(String.format(
+          "Refusing to change hoodie.meta.fields.mode on a table that already has %d commit(s). "
+              + "Existing files were written under %s and will not be rewritten by this command; "
+              + "new commits would be written under %s, producing mixed-mode files whose "
+              + "incremental / file-pruning semantics differ between old and new data. "
+              + "Pass --force if you accept the consequences, or recreate the table to change "
+              + "the mode cleanly.",
+          commitCount, currentMode, targetMode));
+    }
+    if (commitCount > 0) {
+      log.warn("--force passed: changing hoodie.meta.fields.mode from {} to {} on a table with "
+              + "{} commit(s). Existing files retain the old layout; new commits use the new "
+              + "layout. Incremental queries and file-name lookups may silently drop rows written "
+              + "under the incompatible mode.",
+          currentMode, targetMode, commitCount);
+    }
+
+    // Persist both properties, always, and derive the legacy boolean from the mode rather than
+    // letting the caller supply it — the same invariant HoodieTableMetaClient.TableBuilder enforces
+    // at creation. hoodie.properties can then never contradict itself, which is what lets a
+    // pre-1.3.0 reader (which sees only the boolean) treat a selective table as NONE instead of
+    // assuming meta columns that are physically null.
+    //
+    // The mode is written even for ALL and NONE rather than deleted. Deleting it would leave the
+    // table resolving through the legacy fallback, which is indistinguishable from a table that
+    // predates the property — and it would make this command's effect invisible to anyone reading
+    // hoodie.properties. Writing it explicitly also keeps the value present for the v10 -> v9
+    // downgrade handler, which reads the mode to derive the boolean it writes back.
+    Properties toUpdate = new Properties();
+    toUpdate.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), targetMode.name());
+    toUpdate.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(),
+        String.valueOf(targetMode.toLegacyPopulateMetaFields()));
+    HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), toUpdate);
 
     HoodieCLI.refreshTableMetadata();
     Map<String, String> newProps = HoodieCLI.getTableMetaClient().getTableConfig().propsMap();

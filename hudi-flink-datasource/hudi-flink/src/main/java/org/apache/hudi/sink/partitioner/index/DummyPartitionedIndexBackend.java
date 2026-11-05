@@ -40,6 +40,11 @@ public class DummyPartitionedIndexBackend implements PartitionedIndexBackend {
   }
 
   @Override
+  public void bootstrap(String partitionPath, String recordKey, String fileId) {
+    // do nothing
+  }
+
+  @Override
   public void close() throws IOException {
     // do nothing
   }

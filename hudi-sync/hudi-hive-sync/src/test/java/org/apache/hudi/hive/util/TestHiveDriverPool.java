@@ -24,6 +24,7 @@ import org.apache.hudi.hive.HoodieHiveSyncException;
 
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.Driver;
+import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse;
 import org.junit.jupiter.api.Test;
 import org.mockito.invocation.InvocationOnMock;
 
@@ -48,12 +49,15 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link HiveDriverPool} that exercise bootstrap, dispatch, error
  * propagation, and close semantics without standing up a real Hive instance.
  */
 class TestHiveDriverPool {
+
+  private static final CommandProcessorResponse SUCCESS = new CommandProcessorResponse(0);
 
   private static HiveSyncConfig configWithEmptyHiveConf() {
     HiveSyncConfig config = mock(HiveSyncConfig.class);
@@ -103,13 +107,13 @@ class TestHiveDriverPool {
       seenThreadsByDriver.put(d, ConcurrentHashMap.newKeySet());
       doAnswer((InvocationOnMock inv) -> {
         seenThreadsByDriver.get(d).add(Thread.currentThread().getName());
-        return null;
+        return SUCCESS;
       }).when(d).run(anyString());
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       List<String> sqls = Arrays.asList("SELECT 1", "SELECT 2", "SELECT 3", "SELECT 4");
-      HiveDriverPool.Dispatch futures = pool.dispatchAll(sqls);
+      ParallelDispatch futures = pool.dispatchAll(sqls);
       pool.awaitAll(futures);
       assertEquals(2, seenThreadsByDriver.size(), "Expected exactly 2 worker Drivers");
       int totalCalls = seenThreadsByDriver.values().stream().mapToInt(Set::size).sum();
@@ -131,16 +135,56 @@ class TestHiveDriverPool {
         if (sql.equals("FAIL")) {
           throw new RuntimeException("boom: " + sql);
         }
-        return null;
+        return SUCCESS;
       }).when(d).run(anyString());
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
-      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
+      ParallelDispatch futures = pool.dispatchAll(Arrays.asList("OK", "FAIL", "OK"));
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(futures));
       assertNotNull(ex.getCause());
       assertTrue(ex.getCause().getMessage().contains("boom"));
+    }
+  }
+
+  /**
+   * Driver.run() reports a statement Hive rejects through its response rather than by throwing,
+   * so a batch that only watched for exceptions would report the sync as applied.
+   */
+  @Test
+  void awaitAllThrowsWhenHiveRejectsAStatement() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      doAnswer(inv -> "REJECTED".equals(inv.getArgument(0))
+          ? new CommandProcessorResponse(10, "FAILED: SemanticException table is not partitioned", "42000")
+          : SUCCESS).when(d).run(anyString());
+      return d;
+    };
+    try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
+      ParallelDispatch dispatch = pool.dispatchAll(Arrays.asList("OK", "REJECTED", "OK"));
+      HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
+          () -> pool.awaitAll(dispatch));
+      String message = ex.getCause().getMessage();
+      assertTrue(message.contains("SemanticException table is not partitioned"), message);
+      assertTrue(message.contains("REJECTED"), "The error must name the statement; was " + message);
+    }
+  }
+
+  @Test
+  void runOnEachWorkerThrowsWhenHiveRejectsASetupStatement() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      when(d.run(anyString())).thenReturn(
+          new CommandProcessorResponse(10, "FAILED: SemanticException Database does not exist: db1", "42000"));
+      return d;
+    };
+    try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
+      HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
+          () -> pool.runOnEachWorker(Collections.singletonList("USE `db1`")));
+      assertTrue(ex.getCause().getMessage().contains("Database does not exist: db1"));
     }
   }
 
@@ -157,13 +201,13 @@ class TestHiveDriverPool {
         maxInFlight.updateAndGet(prev -> Math.max(prev, now));
         hold.await(2, TimeUnit.SECONDS);
         inFlight.decrementAndGet();
-        return null;
+        return SUCCESS;
       }).when(d).run(anyString());
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       // 5 SQLs against pool of size 2 → max in-flight should be 2.
-      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("a", "b", "c", "d", "e"));
+      ParallelDispatch futures = pool.dispatchAll(Arrays.asList("a", "b", "c", "d", "e"));
       // Release after a short wait so all SQLs progress.
       Thread.sleep(150);
       hold.countDown();
@@ -183,6 +227,55 @@ class TestHiveDriverPool {
     pool.close();
     assertThrows(IllegalStateException.class,
         () -> pool.dispatchAll(Arrays.asList("anything")));
+  }
+
+  /**
+   * Driver.compile() registers a shutdown hook that Driver.close() does not remove -- only
+   * destroy() does. Closing a pooled Driver without destroying it therefore leaks it, and
+   * everything its last query referenced, into the static ShutdownHookManager for the life
+   * of the JVM. A long-running sync loop builds a pool per sync, so this grows without bound.
+   */
+  @Test
+  void closeDestroysEachPooledDriver() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    List<Driver> drivers = Collections.synchronizedList(new ArrayList<>());
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      drivers.add(d);
+      return d;
+    };
+    HiveDriverPool pool = new HiveDriverPool(config, 3, factory);
+    pool.close();
+
+    assertEquals(3, drivers.size());
+    for (Driver d : drivers) {
+      verify(d, times(1)).close();
+      verify(d, times(1)).destroy();
+    }
+  }
+
+  /**
+   * The hook removal is the whole point of destroy(), so a Driver whose close() blows up must
+   * still be destroyed -- otherwise the failure that made teardown interesting is also the one
+   * that leaks the Driver.
+   */
+  @Test
+  void closeDestroysPooledDriverEvenWhenCloseThrows() throws Exception {
+    HiveSyncConfig config = configWithEmptyHiveConf();
+    List<Driver> drivers = Collections.synchronizedList(new ArrayList<>());
+    HiveDriverPool.DriverFactory factory = (db) -> {
+      Driver d = mock(Driver.class);
+      when(d.close()).thenThrow(new RuntimeException("close failed"));
+      drivers.add(d);
+      return d;
+    };
+    HiveDriverPool pool = new HiveDriverPool(config, 2, factory);
+    pool.close();
+
+    assertEquals(2, drivers.size());
+    for (Driver d : drivers) {
+      verify(d, times(1)).destroy();
+    }
   }
 
   @Test
@@ -208,13 +301,13 @@ class TestHiveDriverPool {
       sqlsByDriver.put(d, java.util.Collections.synchronizedList(new java.util.ArrayList<>()));
       doAnswer((InvocationOnMock inv) -> {
         sqlsByDriver.get(d).add(inv.getArgument(0));
-        return null;
+        return SUCCESS;
       }).when(d).run(anyString());
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 3, factory)) {
       pool.runOnEachWorker(Arrays.asList("USE `db1`"));
-      HiveDriverPool.Dispatch futures = pool.dispatchAll(Arrays.asList("ALTER 1", "ALTER 2", "ALTER 3"));
+      ParallelDispatch futures = pool.dispatchAll(Arrays.asList("ALTER 1", "ALTER 2", "ALTER 3"));
       pool.awaitAll(futures);
 
       assertEquals(3, sqlsByDriver.size(), "Expected one Driver per worker");
@@ -246,12 +339,12 @@ class TestHiveDriverPool {
         if (sql.equals("FAIL")) {
           throw new RuntimeException("boom");
         }
-        return null;
+        return SUCCESS;
       }).when(d).run(anyString());
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
-      HiveDriverPool.Dispatch dispatch = pool.dispatchAll(Arrays.asList("FAIL", "PENDING_A", "PENDING_B"));
+      ParallelDispatch dispatch = pool.dispatchAll(Arrays.asList("FAIL", "PENDING_A", "PENDING_B"));
 
       HoodieHiveSyncException ex = assertThrows(HoodieHiveSyncException.class,
           () -> pool.awaitAll(dispatch));
@@ -296,13 +389,13 @@ class TestHiveDriverPool {
           // parked on future 0 at the moment worker 1 would pick up AFTER_FAIL.
           releaseSlow.await(5, TimeUnit.SECONDS);
         }
-        return null;
+        return SUCCESS;
       }).when(d).run(anyString());
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 2, factory)) {
       // Round-robin over 2 workers: index 0 -> worker 0, indices 1 and 2 -> worker 1.
-      HiveDriverPool.Dispatch dispatch =
+      ParallelDispatch dispatch =
           pool.dispatchAll(Arrays.asList("SLOW", "FAIL", "AFTER_FAIL"));
       assertTrue(failed.await(5, TimeUnit.SECONDS), "FAIL must have run");
       releaseSlow.countDown();
@@ -349,7 +442,7 @@ class TestHiveDriverPool {
       return d;
     };
     try (HiveDriverPool pool = new HiveDriverPool(config, 1, factory)) {
-      HiveDriverPool.Dispatch dispatch = pool.dispatchAll(Collections.singletonList("FAIL"));
+      ParallelDispatch dispatch = pool.dispatchAll(Collections.singletonList("FAIL"));
       assertTrue(entered.await(10, TimeUnit.SECONDS), "Driver must have started the statement");
       assertTrue(dispatch.futureAt(0).cancel(false),
           "Sanity: a running FutureTask is still NEW, so cancel(false) must succeed");

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.table.action.commit;
 
+import org.apache.hudi.io.MergeContext;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -43,10 +45,24 @@ public class TestBucketTypeAndInfo {
     assertSame(BucketType.INSERT, info.getBucketType());
     assertEquals("fileId-1", info.getFileIdPrefix());
     assertEquals("2024/01/01", info.getPartitionPath());
+    assertEquals(MergeContext.UNKNOWN_NUM_UPDATES, info.getNumUpdates(),
+        "The three-arg constructor should default numUpdates to unknown");
+
+    BucketInfo infoWithNumUpdates = new BucketInfo(BucketType.UPDATE, "fileId-1", "2024/01/01", 42L);
+    assertEquals(42L, infoWithNumUpdates.getNumUpdates());
   }
 
   @Test
-  void bucketInfoEqualsAndHashCodeUseAllFields() {
+  void bucketInfoEqualsAndHashCodeIgnoreNumUpdates() {
+    BucketInfo a = new BucketInfo(BucketType.UPDATE, "f1", "p1", 10L);
+    BucketInfo differentNumUpdates = new BucketInfo(BucketType.UPDATE, "f1", "p1", 20L);
+    assertEquals(a, differentNumUpdates,
+        "Bucket identity is (bucketType, fileIdPrefix, partitionPath); numUpdates is metadata");
+    assertEquals(a.hashCode(), differentNumUpdates.hashCode());
+  }
+
+  @Test
+  void bucketInfoEqualsAndHashCodeUseIdentityFields() {
     BucketInfo a = new BucketInfo(BucketType.UPDATE, "f1", "p1");
     BucketInfo same = new BucketInfo(BucketType.UPDATE, "f1", "p1");
     BucketInfo differentType = new BucketInfo(BucketType.INSERT, "f1", "p1");
@@ -64,9 +80,10 @@ public class TestBucketTypeAndInfo {
 
   @Test
   void bucketInfoToStringContainsFields() {
-    String rendered = new BucketInfo(BucketType.INSERT, "fileId-9", "part-9").toString();
+    String rendered = new BucketInfo(BucketType.INSERT, "fileId-9", "part-9", 42L).toString();
     assertTrue(rendered.contains("INSERT"));
     assertTrue(rendered.contains("fileId-9"));
     assertTrue(rendered.contains("part-9"));
+    assertTrue(rendered.contains("numUpdates=42"));
   }
 }

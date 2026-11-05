@@ -50,6 +50,7 @@ import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
@@ -133,6 +134,10 @@ import static org.apache.hudi.table.marker.ConflictDetectionUtils.getDefaultEarl
     description = "Configurations that control write behavior on Hudi tables. These can be directly passed down from even "
         + "higher level frameworks (e.g Spark datasources, Flink sink) and utilities (e.g Hudi Streamer).")
 public class HoodieWriteConfig extends HoodieConfig {
+
+  private static final String GZIP_COMPRESSION_CODEC = "gzip";
+  private static final String ZSTD_COMPRESSION_CODEC = "zstd";
+  private static final String MIN_SPARK_VERSION_WITH_ZSTD_DEFAULT = "3.5.0";
   private static final long serialVersionUID = 0L;
 
   // This is a constant as is should never be changed via config (will invalidate previous commits)
@@ -166,6 +171,19 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("1.0.0")
       .withDocumentation("If enabled, writers automatically migrate the table to the specified write table version "
           + "if the current table version is lower.");
+
+  public static final ConfigProperty<Boolean> ALLOW_META_FIELDS_MODE_RETENTION_ON_DOWNGRADE = ConfigProperty
+      .key("hoodie.downgrade.allow.meta.fields.mode.retention")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("Permits downgrading a table below version 10 while it still carries a selective "
+          + HoodieTableConfig.META_FIELDS_MODE.key() + ". Only consulted for tables created at version 10 or "
+          + "later: those never existed under an older version, so no reader outside this deployment has ever "
+          + "had to honor the mode. Setting this asserts that every reader of the table understands "
+          + HoodieTableConfig.META_FIELDS_MODE.key() + " rather than relying on "
+          + HoodieTableConfig.POPULATE_META_FIELDS.key() + " alone. Tables created before version 10 are "
+          + "downgraded without this flag -- they predate the mode, so returning them to a version that "
+          + "predates it is not a new state for them.");
 
   public static final ConfigProperty<String> TAGGED_RECORD_STORAGE_LEVEL_VALUE = ConfigProperty
       .key("hoodie.write.tagged.record.storage.level")
@@ -269,8 +287,12 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.1.0")
       .supportedVersions("0.14.2", "0.15.1", "1.0.3")
-      .withDocumentation("This config only takes effect for writing table version 8 and below. "
-          + "If set to false, the record key field name is encoded and prepended "
+      .withDocumentation("Only takes effect when the table property `hoodie.table.complex.keygenerator.encoding` is absent. "
+          + "That property is set on every new table and backfilled on an existing table by the next write or upgrade, "
+          + "from the encoding found in its data; once present it is authoritative and this config is ignored. When the "
+          + "encoding cannot be determined from the data and `hoodie.write.complex.keygen.validation.enable` is false, "
+          + "this config supplies the value that gets recorded. For writing table version 8 and below without the "
+          + "table property: if set to false, the record key field name is encoded and prepended "
           + "in the case where a single record key field is used in the complex key generator, "
           + "i.e., record keys stored in _hoodie_record_key meta field is in the format of "
           + "`<field_name>:<field_value>`, which conforms to the behavior "
@@ -285,8 +307,9 @@ public class HoodieWriteConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.1.0")
       .supportedVersions("0.14.2", "0.15.1", "1.0.3")
-      .withDocumentation("This config only takes effect for writing table version 8 and below, "
-          + "upgrade or downgrade. If set to true, the writer enables the validation on whether the "
+      .withDocumentation("Only takes effect when the table property `hoodie.table.complex.keygenerator.encoding` is absent "
+          + "and the record key encoding cannot be determined from the table's data during a write, upgrade or "
+          + "downgrade. If set to true, the writer enables the validation on whether the "
           + "table uses the complex key generator with a single record key field, which can be affected "
           + "by a breaking change in 0.14.1, 0.15.0, 1.0.0, 1.0.1, 1.0.2 releases, causing key "
           + "encoding change and potential duplicates in the table. The validation fails the "
@@ -1415,6 +1438,40 @@ public class HoodieWriteConfig extends HoodieConfig {
     return new Builder();
   }
 
+  @VisibleForTesting
+  static String getDefaultParquetCompressionCodec(EngineType engineType) {
+    switch (engineType) {
+      case FLINK:
+        return ZSTD_COMPRESSION_CODEC;
+      case SPARK:
+        // Spark 3.5 and newer use ZSTD. Spark 3.3 and 3.4 retain GZIP because their
+        // non-vectorized file-group reader uses parquet-java 1.12.x and can leak off-heap
+        // memory when reading ZSTD files: https://issues.apache.org/jira/browse/PARQUET-2160.
+        Option<String> sparkVersion = getSparkRuntimeVersion();
+        return sparkVersion.isPresent()
+            && StringUtils.compareVersions(sparkVersion.get(), MIN_SPARK_VERSION_WITH_ZSTD_DEFAULT) >= 0
+            ? ZSTD_COMPRESSION_CODEC : GZIP_COMPRESSION_CODEC;
+      default:
+        // The Java client does not own its Parquet runtime: Parquet dependencies are provided by
+        // the embedding application, and older Parquet versions use Hadoop native ZSTD rather than
+        // zstd-jni. For example, the recommended Kafka HDFS Connector 10.1.0 uses Parquet 1.11.1,
+        // which risks leaking memory when reading ZSTD-compressed files. Keep GZIP as the portable
+        // default across supported Java deployments.
+        return GZIP_COMPRESSION_CODEC;
+    }
+  }
+
+  private static Option<String> getSparkRuntimeVersion() {
+    try {
+      Class<?> sparkPackageClass = Class.forName("org.apache.spark.package$");
+      Object sparkPackage = sparkPackageClass.getField("MODULE$").get(null);
+      return Option.of((String) sparkPackageClass.getMethod("SPARK_VERSION").invoke(sparkPackage));
+    } catch (ReflectiveOperationException | LinkageError e) {
+      log.debug("Unable to resolve the Spark runtime version; using the legacy Parquet compression codec default: {}", e.toString());
+      return Option.empty();
+    }
+  }
+
   /**
    * base properties.
    */
@@ -1761,6 +1818,12 @@ public class HoodieWriteConfig extends HoodieConfig {
     return BulkInsertSortMode.valueOf(sortMode.toUpperCase());
   }
 
+  public boolean isLSMTreeStorageLayout() {
+    return HoodieTableConfig.TableStorageLayout.fromConfigValue(
+        getStringOrDefault(HoodieTableConfig.TABLE_STORAGE_LAYOUT))
+        == HoodieTableConfig.TableStorageLayout.LSM_TREE;
+  }
+
   public boolean isMergeDataValidationCheckEnabled() {
     return getBoolean(MERGE_DATA_VALIDATION_CHECK_ENABLE);
   }
@@ -1773,8 +1836,36 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getInt(MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT);
   }
 
+  /**
+   * @return true when every meta column is populated.
+   *
+   * <p>Derived from {@link #getMetaFieldsMode()} so that call sites still written against the
+   * deprecated {@code hoodie.populate.meta.fields} boolean observe the same answer as the enum:
+   * only {@link MetaFieldsMode#ALL} populates every meta column.
+   */
   public boolean populateMetaFields() {
-    return getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS);
+    return getMetaFieldsMode().toLegacyPopulateMetaFields();
+  }
+
+  /**
+   * @return the {@link MetaFieldsMode} configured for writes.
+   */
+  public MetaFieldsMode getMetaFieldsMode() {
+    return MetaFieldsMode.resolve(this);
+  }
+
+  /**
+   * @return true when {@code _hoodie_commit_time} is physically populated on every row.
+   */
+  public boolean isCommitTimePopulated() {
+    return getMetaFieldsMode().isCommitTimePopulated();
+  }
+
+  /**
+   * @return true when {@code _hoodie_file_name} is physically populated on every row.
+   */
+  public boolean isFileNamePopulated() {
+    return getMetaFieldsMode().isFileNamePopulated();
   }
 
   /**
@@ -1919,6 +2010,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean inlineCompactionEnabled() {
     return getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
+  }
+
+  public int getCompactionPlanParallelism() {
+    return getInt(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM);
   }
 
   public boolean scheduleInlineCompaction() {
@@ -2449,6 +2544,13 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED);
   }
 
+  /**
+   * @deprecated the underlying config has had no effect since 1.1.0. Both the Spark row writer and
+   *     the Avro Parquet writer take the Parquet timestamp unit from the writer schema's logical
+   *     type, so the value returned here does not describe what gets written. Declare the precision
+   *     in the writer schema instead. Scheduled for removal.
+   */
+  @Deprecated
   public String parquetOutputTimestampType() {
     return getString(HoodieStorageConfig.PARQUET_OUTPUT_TIMESTAMP_TYPE);
   }
@@ -2526,6 +2628,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean isLockingMetricsEnabled() {
     return metricsConfig.isLockingMetricsEnabled();
+  }
+
+  public boolean isRecordIndexLookupMetricsEnabled() {
+    return metricsConfig.isRecordIndexLookupMetricsEnabled();
   }
 
   public MetricsReporterType getMetricsReporterType() {
@@ -3587,9 +3693,45 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    /**
+     * @deprecated since 1.3.0, use {@link #withMetaFieldsMode(MetaFieldsMode)} instead
+     * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
+     */
+    @Deprecated
     public Builder withPopulateMetaFields(boolean populateMetaFields) {
       writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
       return this;
+    }
+
+    public Builder withMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+      // Leaving the mode unset defers to the deprecated populate.meta.fields boolean. The legacy
+      // boolean is derived from the mode in build() rather than here, so the two cannot be made to
+      // disagree by calling the setters in either order.
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE,
+          metaFieldsMode == null ? "" : metaFieldsMode.name());
+      return this;
+    }
+
+    /**
+     * Rewrite the deprecated {@code populate.meta.fields} boolean from {@code meta.fields.mode}
+     * whenever a mode is set, so the two can never disagree on the resulting config.
+     *
+     * <p>Done at build time, not in the setter: {@code withPopulateMetaFields} does not re-derive
+     * the mode, so deriving in {@link #withMetaFieldsMode} alone would make the invariant depend on
+     * call order. {@code withMetaFieldsMode(COMMIT_TIME_ONLY).withPopulateMetaFields(true)} would
+     * leave a selective mode sitting next to {@code populate.meta.fields=true} — a config that
+     * resolves correctly (the mode wins) but carries the contradiction to disk on any path that
+     * copies raw write-config props into {@code hoodie.properties}, misleading pre-1.3.0 readers
+     * into treating the table as ALL.
+     */
+    private void deriveMetaFieldsPopulationOptions() {
+      MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(writeConfig);
+      writeConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+
+      // The mode is the source of truth. Always rewrite the deprecated boolean so inherited props,
+      // direct builder calls, and their ordering all produce the same coherent config.
+      writeConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+          Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
     }
 
     public Builder withAllowOperationMetadataField(boolean allowOperationMetadataField) {
@@ -3724,8 +3866,15 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     protected void setDefaults() {
       writeConfig.setDefaultValue(MARKERS_TYPE, getDefaultMarkersType(engineType));
+      if (writeConfig.isLSMTreeStorageLayout()) {
+        writeConfig.setDefaultValue(BULK_INSERT_SORT_MODE, BulkInsertSortMode.PARTITION_SORT.name());
+      }
       // Check for mandatory properties
       writeConfig.setDefaults(HoodieWriteConfig.class.getName());
+      // Resolve this engine-dependent default only after the final engine type is known. The
+      // property remains unset in a partial HoodieStorageConfig, so explicit values are preserved.
+      writeConfig.setDefaultValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME,
+          getDefaultParquetCompressionCodec(engineType));
       // Make sure the props is propagated
       writeConfig.setDefaultOnCondition(
           !isIndexConfigSet, HoodieIndexConfig.newBuilder().withEngineType(engineType).fromProperties(
@@ -3772,6 +3921,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           HoodieTTLConfig.newBuilder().fromProperties(writeConfig.getProps()).build());
 
       autoAdjustConfigsForConcurrencyMode(isLockProviderPropertySet);
+      // Keep the legacy boolean coherent after every explicit and derived default has been applied.
+      deriveMetaFieldsPopulationOptions();
     }
 
     private boolean isLockRequiredForSingleWriter() {
@@ -3869,6 +4020,9 @@ public class HoodieWriteConfig extends HoodieConfig {
         }
       }
 
+      checkArgument(writeConfig.getCompactionPlanParallelism() > 0,
+          HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key() + " must be positive");
+
       boolean inlineCompact = writeConfig.getBoolean(HoodieCompactionConfig.INLINE_COMPACT);
       boolean inlineCompactSchedule = writeConfig.getBoolean(HoodieCompactionConfig.SCHEDULE_INLINE_COMPACT);
       checkArgument(!(inlineCompact && inlineCompactSchedule), String.format("Either of inline compaction (%s) or "
@@ -3889,6 +4043,26 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(ttlStatsMaxParallelism > 0,
           String.format("%s must be positive, but was %d",
               HoodieTTLConfig.STATS_MAX_PARALLELISM.key(), ttlStatsMaxParallelism));
+
+      // hoodie.meta.fields.mode is the source of truth for meta-column population; the deprecated
+      // populate.meta.fields boolean is consulted only when the mode is absent. There is therefore
+      // no ambiguous combination to reject here — MetaFieldsMode.resolve throws on unrecognized
+      // values.
+      MetaFieldsMode metaFieldsMode = writeConfig.getMetaFieldsMode();
+      // Selective meta-field modes are CoW-only in this release. MoR log-write path does not yet
+      // respect the mode, which would silently produce log records with null meta columns.
+      boolean isSelective = metaFieldsMode.isSelective();
+      checkArgument(!(writeConfig.getTableType() == HoodieTableType.MERGE_ON_READ && isSelective),
+          String.format("%s=%s is currently supported for COPY_ON_WRITE tables only. MoR support is a follow-up. "
+                  + "For MoR use %s=ALL or %s=NONE.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode,
+              HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
+      // Java-client writers do not yet support selective meta-field population.
+      checkArgument(!(engineType == EngineType.JAVA && isSelective),
+          String.format("%s=%s is currently supported for Spark and Flink writers only. Support for engine=%s is a follow-up. "
+                  + "Use %s=ALL or %s=NONE.",
+              HoodieTableConfig.META_FIELDS_MODE.key(), metaFieldsMode, engineType,
+              HoodieTableConfig.META_FIELDS_MODE.key(), HoodieTableConfig.META_FIELDS_MODE.key()));
     }
 
     public HoodieWriteConfig build() {
@@ -3928,11 +4102,4 @@ public class HoodieWriteConfig extends HoodieConfig {
     }
   }
 
-  public boolean isFileGroupReaderBasedMergeHandle() {
-    return isFileGroupReaderBasedMergeHandle(props);
-  }
-
-  public static boolean isFileGroupReaderBasedMergeHandle(TypedProperties props) {
-    return ReflectionUtils.isSubClass(ConfigUtils.getStringWithAltKeys(props, HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME, true), FileGroupReaderBasedMergeHandle.class);
-  }
 }

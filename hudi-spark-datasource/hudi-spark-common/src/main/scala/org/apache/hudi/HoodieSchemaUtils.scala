@@ -137,7 +137,7 @@ object HoodieSchemaUtils {
         val shouldReconcileSchema = opts.getOrElse(DataSourceWriteOptions.RECONCILE_SCHEMA.key(),
           DataSourceWriteOptions.RECONCILE_SCHEMA.defaultValue().toString).toBoolean
         val canonicalizedSourceSchema = if (shouldCanonicalizeSchema) {
-          canonicalizeSchema(sourceSchema, latestTableSchema, opts, !shouldReconcileSchema)
+          canonicalizeSchema(sourceSchema, latestTableSchema, !shouldReconcileSchema)
         } else {
           InternalSchemaConverter.fixNullOrdering(sourceSchema)
         }
@@ -276,11 +276,10 @@ object HoodieSchemaUtils {
    *
    * TODO support casing reconciliation
    */
-  private def canonicalizeSchema(sourceSchema: HoodieSchema, latestTableSchema: HoodieSchema, opts : Map[String, String],
+  private def canonicalizeSchema(sourceSchema: HoodieSchema, latestTableSchema: HoodieSchema,
                                  shouldReorderColumns: Boolean): HoodieSchema = {
     reconcileSchemaRequirements(sourceSchema, latestTableSchema, shouldReorderColumns)
   }
-
 
   private def reconcileSchemasLegacy(tableSchema: HoodieSchema, newSchema: HoodieSchema): (HoodieSchema, Boolean) = {
     // Legacy reconciliation implements following semantic

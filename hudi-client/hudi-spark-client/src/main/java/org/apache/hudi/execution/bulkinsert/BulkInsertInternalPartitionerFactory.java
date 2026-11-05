@@ -45,12 +45,27 @@ public abstract class BulkInsertInternalPartitionerFactory {
         return new RDDSimpleBucketBulkInsertPartitioner(table);
       }
     }
+    if (table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+      switch (config.getBulkInsertSortMode()) {
+        case GLOBAL_SORT:
+          return new LSMGlobalSortPartitioner<>(config);
+        case PARTITION_SORT:
+          return new LSMPartitionSortPartitioner<>(config);
+        case PARTITION_PATH_REPARTITION_AND_SORT:
+          return new LSMPartitionPathRepartitionAndSortPartitioner<>(
+              table.isPartitioned(), config);
+        default:
+          throw new HoodieException(
+              "The bulk insert sort mode \"" + config.getBulkInsertSortMode().name()
+                  + "\" does not guarantee record ordering and is not supported for LSM tables.");
+      }
+    }
     return get(config, table.isPartitioned(), enforceNumOutputPartitions);
   }
 
-  public static BulkInsertPartitioner get(HoodieWriteConfig config,
-                                          boolean isTablePartitioned,
-                                          boolean enforceNumOutputPartitions) {
+  static BulkInsertPartitioner get(HoodieWriteConfig config,
+                                   boolean isTablePartitioned,
+                                   boolean enforceNumOutputPartitions) {
     BulkInsertSortMode sortMode = config.getBulkInsertSortMode();
 
     switch (sortMode) {

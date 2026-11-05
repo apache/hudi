@@ -93,7 +93,7 @@ class TestHoodieLsmFileGroupReader {
     tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.EVENT_TIME_ORDERING.name());
     tableConfig.setValue(HoodieTableConfig.BASE_FILE_FORMAT, HoodieFileFormat.PARQUET.name());
     tableConfig.setValue(HoodieTableConfig.LOG_FILE_FORMAT, HoodieFileFormat.PARQUET.name());
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "NONE");
     storageConfiguration = mock(StorageConfiguration.class);
     HoodieStorage storage = mock(HoodieStorage.class);
     when(storage.newInstance(any(StoragePath.class), any(StorageConfiguration.class))).thenReturn(storage);
@@ -224,6 +224,29 @@ class TestHoodieLsmFileGroupReader {
       List<IndexedRecord> records = drain(iterator);
       assertEquals(1, records.size());
       assertEquals("b", records.get(0).get(1).toString());
+    }
+  }
+
+  @Test
+  void testBaseFileOnlyPathPreservesDuplicateRecordKeys() throws IOException {
+    HoodieReaderContext<IndexedRecord> readerContext = spy(context());
+    StoragePathInfo baseFilePathInfo = pathInfo("/tmp/file1_1-0-1_001.parquet");
+    doReturn(ClosableIterator.wrap(Arrays.asList(
+        recordWithCommitTime("001", "a", "first", 1),
+        recordWithCommitTime("001", "a", "second", 2)).iterator()))
+        .when(readerContext).getFileRecordIterator(
+            eq(baseFilePathInfo), anyLong(), anyLong(), any(HoodieSchema.class),
+            any(HoodieSchema.class), any(HoodieStorage.class));
+
+    try (HoodieLsmFileGroupReader<IndexedRecord> reader = reader(
+        readerContext, Option.of(new HoodieBaseFile(baseFilePathInfo)), Collections.emptyList(), 0L);
+         ClosableIterator<IndexedRecord> iterator = reader.getClosableIterator()) {
+      List<IndexedRecord> records = drain(iterator);
+      assertEquals(2, records.size());
+      assertEquals("a", records.get(0).get(1).toString());
+      assertEquals("first", records.get(0).get(2).toString());
+      assertEquals("a", records.get(1).get(1).toString());
+      assertEquals("second", records.get(1).get(2).toString());
     }
   }
 

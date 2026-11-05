@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -166,6 +167,19 @@ public class HudiBackgroundSplitLoader
 
         Futures.whenAllComplete(futures)
                 .run(() -> {
+                    // Guava does not order the per-future exception callbacks against this
+                    // combiner, so a failure in the last future could otherwise finish the
+                    // queue before the error listener records it and HudiSplitSource.isFinished
+                    // would answer true with no pending exception. Surface failures here first;
+                    // the listener is idempotent, so double reporting is harmless.
+                    for (ListenableFuture<Void> future : futures) {
+                        try {
+                            Futures.getDone(future);
+                        }
+                        catch (ExecutionException e) {
+                            errorListener.accept(e.getCause());
+                        }
+                    }
                     asyncQueue.finish();
                     log.info("Partition pruning split generation finished on table %s.%s", tableHandle.getSchemaName(), tableHandle.getTableName());
                 }, directExecutor());

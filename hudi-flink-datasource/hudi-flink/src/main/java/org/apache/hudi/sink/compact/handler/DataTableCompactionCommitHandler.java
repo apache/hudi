@@ -111,6 +111,13 @@ public class DataTableCompactionCommitHandler implements CompactionCommitHandler
   @Override
   public void commitIfNecessary(CompactionCommitEvent event) {
     String instant = event.getInstant();
+    if (event.isFailed()
+        || (event.getWriteStatuses() != null
+        && event.getWriteStatuses().stream().anyMatch(writeStatus -> writeStatus.getTotalErrorRecords() > 0))) {
+      log.warn("Received abnormal CompactionCommitEvent of instant {}, task ID is {},"
+              + " is failed: {}, error record count: {}",
+          instant, event.getTaskID(), event.isFailed(), getNumErrorRecords(event));
+    }
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileId(), event);
 
@@ -251,6 +258,14 @@ public class DataTableCompactionCommitHandler implements CompactionCommitHandler
   private void reset(String instant) {
     this.commitBuffer.remove(instant);
     this.compactionPlanCache.remove(instant);
+  }
+
+  private long getNumErrorRecords(CompactionCommitEvent event) {
+    if (event.getWriteStatuses() == null) {
+      return -1L;
+    }
+    return event.getWriteStatuses().stream()
+        .map(WriteStatus::getTotalErrorRecords).reduce(Long::sum).orElse(0L);
   }
 
   @Override

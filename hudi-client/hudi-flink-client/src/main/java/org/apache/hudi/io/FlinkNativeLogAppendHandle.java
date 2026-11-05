@@ -59,6 +59,18 @@ public class FlinkNativeLogAppendHandle<T, I, K, O>
     return true;
   }
 
+  // Flink finalizes each mini-batch as at most one native data file and one native delete file,
+  // so the underlying file-size limit does not roll over either writer within the mini-batch.
+  @Override
+  protected boolean canWriteDataFile() {
+    return true;
+  }
+
+  @Override
+  protected boolean canWriteDeleteFile() {
+    return true;
+  }
+
   @Override
   protected boolean needsUpdateLocation() {
     return false;

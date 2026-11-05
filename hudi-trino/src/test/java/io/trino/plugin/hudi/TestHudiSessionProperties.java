@@ -14,14 +14,18 @@
 package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
+import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.testing.TestingConnectorSession;
 import org.junit.jupiter.api.Test;
 
 import static io.trino.plugin.hudi.HudiSessionProperties.getColumnsToHide;
 import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
+import static io.trino.plugin.hudi.HudiSessionProperties.getTargetSplitSize;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 public class TestHudiSessionProperties
 {
@@ -49,5 +53,19 @@ public class TestHudiSessionProperties
                 .build();
         assertThat(getRecordMergerImpls(session))
                 .containsExactly("com.example.MergerOne", "com.example.MergerTwo");
+    }
+
+    @Test
+    public void testSessionPropertyTargetSplitSizeRejectsZero()
+    {
+        // A zero target split size would make split generation loop forever, so reject it when the property is read
+        HudiSessionProperties sessionProperties = new HudiSessionProperties(new HudiConfig(), new ParquetReaderConfig());
+        ConnectorSession session = TestingConnectorSession.builder()
+                .setPropertyMetadata(sessionProperties.getSessionProperties())
+                .setPropertyValues(ImmutableMap.of("target_split_size", "0B"))
+                .build();
+        assertThatThrownBy(() -> getTargetSplitSize(session))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("target_split_size must be at least 1B: 0B");
     }
 }

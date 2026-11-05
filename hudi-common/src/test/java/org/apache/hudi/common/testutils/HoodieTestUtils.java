@@ -86,13 +86,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
-import static org.apache.hudi.common.util.HoodieStorageUtils.DEFAULT_URI;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -107,6 +107,11 @@ public class HoodieTestUtils {
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};
   public static final String HADOOP_STORAGE_CONF = "org.apache.hudi.storage.hadoop.HadoopStorageConfiguration";
+  /**
+   * Base URI for storage that a test does not care about the location of. Test-only: production
+   * code has no default filesystem, it resolves storage from the path it is about to touch.
+   */
+  public static final String DEFAULT_URI = "file:///";
   public static final InstantGenerator INSTANT_GENERATOR = new DefaultInstantGenerator();
   public static final TimelineFactory TIMELINE_FACTORY = new DefaultTimelineFactory();
   public static final InstantFileNameGenerator INSTANT_FILE_NAME_GENERATOR = new DefaultInstantFileNameGenerator();
@@ -144,6 +149,16 @@ public class HoodieTestUtils {
 
   public static HoodieStorage getDefaultStorage() {
     return getStorage(DEFAULT_URI);
+  }
+
+  /**
+   * Storage on the local filesystem, carrying the given configuration.
+   *
+   * <p>Use when a test has a configuration to preserve but no path to resolve from. Prefer
+   * {@link #getStorage(StoragePath)} whenever a path is available.
+   */
+  public static HoodieStorage getLocalStorage(StorageConfiguration<?> conf) {
+    return HoodieStorageUtils.getStorage(DEFAULT_URI, conf);
   }
 
   public static HoodieStorage getStorage(String path) {
@@ -538,6 +553,20 @@ public class HoodieTestUtils {
         }
       }
     }
+  }
+
+  /**
+   * Asserts that hoodie.properties holds exactly the expected table configs, ignoring the checksum and the
+   * create schema. The table-config tests of each engine pin table creation per table version through this
+   * check, so a table config change updates their expected configs instead of adding a new test.
+   */
+  public static void assertTableConfigs(HoodieStorage storage, String basePath, Map<String, String> expectedConfigs) {
+    Map<String, String> actualConfigs = new TreeMap<>();
+    HoodieTableConfig.loadFromHoodieProps(storage, basePath).getProps()
+        .forEach((key, value) -> actualConfigs.put((String) key, (String) value));
+    actualConfigs.remove(HoodieTableConfig.TABLE_CHECKSUM.key());
+    actualConfigs.remove(HoodieTableConfig.CREATE_SCHEMA.key());
+    assertEquals(new TreeMap<>(expectedConfigs), actualConfigs);
   }
 
   public static void validateTableConfig(HoodieStorage storage,

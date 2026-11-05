@@ -137,7 +137,7 @@ bash setupKafka.sh -n <num_kafka_messages_per_batch> -b <num_batches>
 ### 5 - Run the Sink connector worker (multiple workers can be run)
 
 The Kafka connect is a distributed platform, with the ability to run one or more workers (each running multiple tasks) 
-that parallely process the records from the Kafka partitions for the same topic. We provide a properties file with 
+that parallelly process the records from the Kafka partitions for the same topic. We provide a properties file with 
 default properties to start a Hudi connector. 
 
 Note that if multiple workers need to be run, the webserver needs to be reconfigured for subsequent workers to ensure

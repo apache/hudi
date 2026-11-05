@@ -31,6 +31,7 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.trino.plugin.base.session.PropertyMetadataUtil.dataSizeProperty;
 import static io.trino.plugin.base.session.PropertyMetadataUtil.durationProperty;
 import static io.trino.plugin.base.session.PropertyMetadataUtil.validateMaxDataSize;
+import static io.trino.plugin.base.session.PropertyMetadataUtil.validateMinDataSize;
 import static io.trino.plugin.hive.parquet.ParquetReaderConfig.PARQUET_READER_MAX_SMALL_FILE_THRESHOLD;
 import static io.trino.spi.StandardErrorCode.INVALID_SESSION_PROPERTY;
 import static io.trino.spi.session.PropertyMetadata.booleanProperty;
@@ -188,6 +189,7 @@ public class HudiSessionProperties
                         TARGET_SPLIT_SIZE,
                         "The target split size",
                         hudiConfig.getTargetSplitSize(),
+                        value -> validateMinDataSize(TARGET_SPLIT_SIZE, value, DataSize.ofBytes(1)),
                         false),
                 integerProperty(
                         MAX_SPLITS_PER_SECOND,

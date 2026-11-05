@@ -133,7 +133,7 @@ class TestPositionBasedFileGroupRecordBuffer {
     tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, "id");
     tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, RecordMergeMode.COMMIT_TIME_ORDERING.name());
     tableConfig.setValue(HoodieTableConfig.BASE_FILE_FORMAT, HoodieFileFormat.PARQUET.name());
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, "NONE");
     HoodieReaderContext<IndexedRecord> context = new HoodieAvroReaderContext(
         mock(StorageConfiguration.class), tableConfig, Option.empty(), Option.empty());
     context.initRecordMerger(new TypedProperties());

@@ -125,7 +125,7 @@ public class HoodieAvroRecord<T extends HoodieRecordPayload> extends HoodieRecor
 
   @Override
   public Object[] getColumnValues(HoodieSchema recordSchema, String[] columns, boolean consistentLogicalTimestampEnabled) {
-    return HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema.toAvroSchema(), consistentLogicalTimestampEnabled);
+    return HoodieAvroUtils.getRecordColumnValues(this, columns, recordSchema, consistentLogicalTimestampEnabled);
   }
 
   @Override

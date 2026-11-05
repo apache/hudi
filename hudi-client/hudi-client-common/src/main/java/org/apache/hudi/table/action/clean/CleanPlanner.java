@@ -578,10 +578,10 @@ public class CleanPlanner<T, I, K, O> implements Serializable {
   private List<CleanFileInfo> getCleanFileInfoForSlice(FileSlice nextSlice) {
     List<CleanFileInfo> cleanPaths = new ArrayList<>();
     if (nextSlice.getBaseFile().isPresent()) {
-      HoodieBaseFile dataFile = nextSlice.getBaseFile().get();
-      cleanPaths.add(new CleanFileInfo(dataFile.getPath(), false));
-      if (dataFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
-        cleanPaths.add(new CleanFileInfo(dataFile.getBootstrapBaseFile().get().getPath(), true));
+      HoodieBaseFile baseFile = nextSlice.getBaseFile().get();
+      cleanPaths.add(new CleanFileInfo(baseFile.getPath(), false));
+      if (baseFile.getBootstrapBaseFile().isPresent() && config.shouldCleanBootstrapBaseFile()) {
+        cleanPaths.add(new CleanFileInfo(baseFile.getBootstrapBaseFile().get().getPath(), true));
       }
     }
 

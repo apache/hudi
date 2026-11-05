@@ -184,6 +184,15 @@ public enum WriteOperationType {
     return operationType == BULK_INSERT_PREPPED || operationType == INSERT_PREPPED | operationType == UPSERT_PREPPED || operationType == DELETE_PREPPED;
   }
 
+  /**
+   * @return true when the operation type is not known, either because it is {@link #UNKNOWN} or because it was
+   * never set. Replace commits written by systems other than Hudi, which register existing files, carry no
+   * known operation type.
+   */
+  public static boolean isUnknown(WriteOperationType operationType) {
+    return operationType == null || operationType == UNKNOWN;
+  }
+
   public static boolean isCompactionOrClustering(WriteOperationType operationType) {
     return operationType == COMPACT || operationType == CLUSTER;
   }

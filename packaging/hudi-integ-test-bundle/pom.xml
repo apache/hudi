@@ -306,6 +306,13 @@
                     <exclude>io/trino/jdbc/$internal/airlift/compress/v3/**</exclude>
                   </excludes>
                 </filter>
+                <filter>
+                  <!-- Timeline UI assets ship only in hudi-timeline-server-bundle; the standalone-only UI cannot be served from engine bundles -->
+                  <artifact>org.apache.hudi:hudi-timeline-service</artifact>
+                  <excludes>
+                    <exclude>public/**</exclude>
+                  </excludes>
+                </filter>
               </filters>
             </configuration>
           </execution>
@@ -679,7 +686,7 @@
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
-      <version>0.23.0</version>
+      <version>0.24.0</version>
     </dependency>
 
     <!-- zookeeper -->

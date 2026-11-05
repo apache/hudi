@@ -21,9 +21,13 @@ package org.apache.hudi.table.action.commit;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -40,10 +44,16 @@ import org.apache.hudi.config.HoodieLayoutConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.data.HoodieJavaRDD;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.io.MergeContext;
+import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.KeyGeneratorInterface;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
@@ -82,6 +92,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -91,6 +102,7 @@ import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -248,6 +260,43 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     WriteStatus writeStatus = statuses.get(0);
     assertEquals(1, statuses.size(), "Should be only one file generated");
     assertEquals(4, writeStatus.getStat().getNumWrites());// 3 rewritten records + 1 new record
+  }
+
+  @Test
+  public void testUpsertPropagatesProfiledNumUpdatesToMergeHandle() throws Exception {
+    // End-to-end check of the numUpdates plumbing: workload profile -> UpsertPartitioner ->
+    // BucketInfo -> handleUpdate -> MergeContext -> HoodieMergeHandleFactory -> merge handle.
+    // Also exercises the factory reflection against the MergeContext constructor signature for
+    // a custom merge handle class in a real upsert.
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withProps(Collections.singletonMap(
+            HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(),
+            NumUpdatesRecordingMergeHandle.class.getName()))
+        .build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+    String firstCommitTime = writeClient.startCommit();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    List<HoodieRecord> records = new ArrayList<>();
+    records.add(createSimpleRecord("aeb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 12));
+    records.add(createSimpleRecord("aeb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:20:41.415Z", 100));
+    records.add(createSimpleRecord("aeb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15));
+    JavaRDD<WriteStatus> writeStatuses = writeClient.insert(jsc.parallelize(records, 1), firstCommitTime);
+    writeClient.commit(firstCommitTime, writeStatuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+    // Update two existing records and insert a new one. The tagged update count for the single
+    // file group must be exactly 2, no matter how the new insert is routed.
+    List<HoodieRecord> secondBatch = Arrays.asList(
+        createSimpleRecord("aeb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15),
+        createSimpleRecord("aeb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:20:41.415Z", 101),
+        createSimpleRecord("aeb5b87d-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 51));
+    NumUpdatesRecordingMergeHandle.RECORDED_NUM_UPDATES.set(Long.MIN_VALUE);
+    String secondCommitTime = writeClient.startCommit();
+    writeStatuses = writeClient.upsert(jsc.parallelize(secondBatch, 1), secondCommitTime);
+    writeClient.commit(secondCommitTime, writeStatuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+    assertEquals(2L, NumUpdatesRecordingMergeHandle.RECORDED_NUM_UPDATES.get(),
+        "The merge handle must receive the tagged update count from workload profiling");
   }
 
   private FileStatus[] getIncrementalFiles(String partitionPath, String startCommitTime, int numCommitsToPull)
@@ -454,7 +503,8 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
             instantTime, context.parallelize(updates));
     final List<List<WriteStatus>> updateStatus = jsc.parallelize(Arrays.asList(1))
         .map(x -> (Iterator<List<WriteStatus>>)
-            newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator()))
+            newActionExecutor.handleUpdate(
+                partitionPath, fileId, updates.size(), updates.iterator()))
         .map(Transformations::flatten).collect();
     assertEquals(updates.size() - numRecordsInPartition,
         updateStatus.get(0).get(0).getTotalErrorRecords());
@@ -531,6 +581,138 @@ public class TestCopyOnWriteActionExecutor extends HoodieClientTestBase implemen
     partitionMetadata.readFromFS();
     assertTrue(partitionMetadata.getPartitionDepth() == 3);
     assertTrue(partitionMetadata.readPartitionCreatedCommitTime().get().equals(instantTime));
+  }
+
+  @Test
+  public void testCompactionIsNotSupportedOnCopyOnWrite() {
+    HoodieWriteConfig config = makeHoodieClientConfig();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table =
+        (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+
+    assertThrows(HoodieNotSupportedException.class,
+        () -> table.scheduleCompaction(context, makeNewCommitTime(), Option.empty()));
+    assertThrows(HoodieNotSupportedException.class, () -> table.compact(context, makeNewCommitTime()));
+  }
+
+  /**
+   * {@link org.apache.hudi.table.HoodieCompactionHandler#handleInsert} is the map-based entry point used by the
+   * compactor, so it is not reached by a regular insert through the write client.
+   */
+  @Test
+  public void testHandleInsertThroughTheCompactionHandler() throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfig();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+    String instantTime = writeClient.startCommit();
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table =
+        (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+
+    // The write handle needs a live Spark TaskContext to build its write token, so drive it from inside a task.
+    // The records are built there too: they carry their schema by reference and do not survive a round trip.
+    int numRecords = 3;
+    List<WriteStatus> statuses = jsc.parallelize(Arrays.asList(1), 1)
+        .map(x -> {
+          Map<String, HoodieRecord<?>> recordMap = new HashMap<>();
+          for (int i = 0; i < numRecords; i++) {
+            HoodieRecord record = createSimpleRecord("key-" + i, "2016-01-31T03:16:41.415Z", i);
+            recordMap.put(record.getRecordKey(), record);
+          }
+          return table.handleInsert(instantTime, "2016/01/31", FSUtils.createNewFileIdPfx(), recordMap);
+        })
+        .flatMap(Transformations::flattenAsIterator).collect();
+
+    assertEquals(1, statuses.size());
+    assertFalse(statuses.get(0).hasErrors());
+    assertEquals(numRecords, statuses.get(0).getStat().getNumWrites());
+  }
+
+  /**
+   * {@link org.apache.hudi.table.HoodieCompactionHandler#handleUpdate} builds the merge handle through
+   * {@link org.apache.hudi.table.HoodieSparkCopyOnWriteTable#getUpdateHandle}, which rejects key generators that do
+   * not extend BaseKeyGenerator once the meta fields are switched off.
+   */
+  @Test
+  public void testGetUpdateHandleRejectsNonBaseKeyGeneratorWhenMetaFieldsAreDisabled() throws Exception {
+    Properties props = new Properties();
+    props.setProperty(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(), HoodieWriteMergeHandle.class.getName());
+    props.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    props.setProperty(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), NonBaseKeyGenerator.class.getName());
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withProps(props).build();
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieSparkCopyOnWriteTable table =
+        (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+
+    HoodieRecord updated = createSimpleRecord("key-0", "2016-01-31T03:16:41.415Z", 99);
+    Map<String, HoodieRecord<?>> keyToNewRecords =
+        Collections.singletonMap(updated.getRecordKey(), updated);
+
+    assertThrows(HoodieException.class, () -> table.handleUpdate(
+        makeNewCommitTime(), "2016/01/31", FSUtils.createNewFileIdPfx(), keyToNewRecords, null));
+  }
+
+  @Test
+  public void testRollbackBootstrapRestoresTableToInitialState() throws Exception {
+    // The metadata table is rebuilt by a bootstrap re-attempt, and restoring it back past its own first base file
+    // is not supported, so keep it out of this test.
+    Properties props = new Properties();
+    props.setProperty(HoodieMetadataConfig.ENABLE.key(), "false");
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder().withProps(props).build();
+    SparkRDDWriteClient writeClient = getHoodieWriteClient(config);
+
+    String instantTime = writeClient.startCommit();
+    List<HoodieRecord> records = Collections.singletonList(
+        createSimpleRecord("key-0", "2016-01-31T03:16:41.415Z", 10));
+    JavaRDD<WriteStatus> writeStatuses = writeClient.insert(jsc.parallelize(records, 1), instantTime);
+    writeClient.commit(instantTime, writeStatuses, Option.empty(), COMMIT_ACTION,
+        Collections.emptyMap(), Option.empty());
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertFalse(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty());
+
+    HoodieSparkCopyOnWriteTable table =
+        (HoodieSparkCopyOnWriteTable) HoodieSparkTable.create(config, context, metaClient);
+    table.rollbackBootstrap(context, makeNewCommitTime());
+
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty());
+  }
+
+  /**
+   * A merge handle that records the numUpdates it receives, to assert the end-to-end propagation
+   * from workload profiling. Only valid in local-mode tests where the executor shares the JVM.
+   */
+  public static class NumUpdatesRecordingMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
+    public static final AtomicLong RECORDED_NUM_UPDATES = new AtomicLong(Long.MIN_VALUE);
+
+    public NumUpdatesRecordingMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                          MergeContext<T> mergeContext, String partitionPath, String fileId,
+                                          TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+      super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+      RECORDED_NUM_UPDATES.set(mergeContext.getNumUpdates());
+    }
+  }
+
+  /**
+   * A key generator that deliberately does not extend {@link org.apache.hudi.keygen.BaseKeyGenerator}, which is the
+   * only shape supported when the meta fields are turned off.
+   */
+  public static class NonBaseKeyGenerator implements KeyGeneratorInterface {
+
+    public NonBaseKeyGenerator(TypedProperties props) {
+      // The config only has to be loadable; it is rejected before it is ever used.
+    }
+
+    @Override
+    public HoodieKey getKey(GenericRecord record) {
+      return new HoodieKey(record.get("_row_key").toString(), "2016/01/31");
+    }
+
+    @Override
+    public List<String> getRecordKeyFieldNames() {
+      return Collections.singletonList("_row_key");
+    }
   }
 
   // methods below were copied from [[TestBulkInsertInternalPartitioner]]

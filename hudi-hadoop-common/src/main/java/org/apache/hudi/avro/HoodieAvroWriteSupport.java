@@ -29,7 +29,6 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.CollectionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
@@ -44,7 +43,7 @@ import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
 import org.apache.parquet.schema.MessageType;
 
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -63,7 +62,9 @@ import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_VARIANT_
  *
  * <p>When variant columns are configured for shredding (via {@link HoodieSchema.Variant#isShredded()}),
  * this class transforms variant records at write time to populate {@code typed_value} columns
- * by parsing variant binary data using a {@link VariantShreddingProvider} loaded via reflection.</p>
+ * by parsing variant binary data using a {@link VariantShreddingProvider} loaded via reflection.
+ * A variant is transformed wherever the effective schema declares {@code typed_value} - a record
+ * field at any depth, an array element or a map value - mirroring the row write path.</p>
  */
 public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
 
@@ -72,20 +73,10 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   protected final Properties properties;
 
   /**
-   * Whether variant write shredding is enabled via config.
+   * Plans the value-level transform for the whole record, or is null when the effective schema
+   * declares no shredded variant anywhere and records can be written untouched.
    */
-  private final boolean variantWriteShreddingEnabled;
-
-  /**
-   * The effective (possibly shredded) Avro schema used for writing.
-   */
-  private final Schema effectiveAvroSchema;
-
-  /**
-   * Variant fields that need shredding, keyed by their index in the effective schema.
-   * Empty if no shredding is needed.
-   */
-  private final Map<Integer, ShreddedVariantField> shreddedVariantFields;
+  private final Shredder rootShredder;
 
   /**
    * Provider for variant shredding (loaded via reflection). Null if no shredding is needed.
@@ -107,45 +98,17 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
       footerMetadata.put(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY, vectorMeta);
     }
 
-    this.effectiveAvroSchema = effectiveSchema.toAvroSchema();
-    this.variantWriteShreddingEnabled = Boolean.parseBoolean(
+    boolean shreddingEnabled = Boolean.parseBoolean(
         properties.getProperty(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.key(),
             String.valueOf(PARQUET_VARIANT_WRITE_SHREDDING_ENABLED.defaultValue())));
 
-    // When shredding is enabled, collect the variant fields that need shredding.
-    Map<Integer, ShreddedVariantField> shreddedFields = new LinkedHashMap<>();
+    // When shredding is enabled, plan the transform for every position the effective schema
+    // declares shredded; null means there is none and records pass through untouched.
+    this.rootShredder = shreddingEnabled ? buildShredder(effectiveSchema) : null;
 
-    if (effectiveSchema.getType() == HoodieSchemaType.RECORD) {
-      List<HoodieSchemaField> fields = effectiveSchema.getFields();
-      for (int i = 0; i < fields.size(); i++) {
-        HoodieSchemaField field = fields.get(i);
-        HoodieSchema fieldSchema = field.schema();
-        // Unwrap nullable union to get the underlying type
-        if (fieldSchema.isNullable()) {
-          fieldSchema = fieldSchema.getNonNullType();
-        }
-        if (fieldSchema.getType() != HoodieSchemaType.VARIANT) {
-          continue;
-        }
-        if (variantWriteShreddingEnabled) {
-          HoodieSchema.Variant variant = (HoodieSchema.Variant) fieldSchema;
-          if (variant.isShredded() && variant.getTypedValueField().isPresent()) {
-            // Get the Avro sub-schema for this variant field from the effective schema
-            Schema fieldAvroSchema = effectiveAvroSchema.getFields().get(i).schema();
-            // Unwrap nullable union
-            if (fieldAvroSchema.getType() == Schema.Type.UNION) {
-              fieldAvroSchema = getNonNullFromUnion(fieldAvroSchema);
-            }
-            shreddedFields.put(i, new ShreddedVariantField(fieldAvroSchema, variant));
-          }
-        }
-      }
-    }
-
-    this.shreddedVariantFields = shreddedFields;
-
-    // Load shredding provider via reflection if needed
-    if (!shreddedVariantFields.isEmpty()) {
+    // Load shredding provider via reflection if needed. A schema that is shredded only below the
+    // top level needs it just as much, so this is keyed off the whole tree, not the root fields.
+    if (rootShredder != null) {
       String providerClass = properties.getProperty(PARQUET_VARIANT_SHREDDING_PROVIDER_CLASS.key());
       if (providerClass == null || providerClass.isEmpty()) {
         throw new HoodieException("Variant write shredding is enabled and the write schema requires shredding "
@@ -167,9 +130,12 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
    * unused typed_value columns.</p>
    *
    * <p>When shredding is enabled and a forced shredding schema is configured via
-   * {@link HoodieStorageConfig#PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST},
-   * all variant fields are replaced with shredded variants using the forced schema.
-   * This handles the case where the input schema is unshredded but shredding is desired.</p>
+   * {@link HoodieStorageConfig#PARQUET_VARIANT_FORCE_SHREDDING_SCHEMA_FOR_TEST}, every variant
+   * that is a record member - at the top level or at any depth, including records nested under
+   * arrays and maps - is replaced with a shredded variant using the forced schema. This handles
+   * the case where the input schema is unshredded but shredding is desired. A variant that is
+   * directly an array element or a map value is left alone, mirroring the row write path; such a
+   * position only shreds when the write schema itself declares {@code typed_value} there.</p>
    *
    * <p>When shredding is enabled without a forced schema, the schema is returned as-is
    * (already-shredded variants stay shredded, unshredded variants stay unshredded).</p>
@@ -212,55 +178,182 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
   @SuppressWarnings("unchecked")
   @Override
   public void write(T record) {
-    if (!shreddedVariantFields.isEmpty() && shreddingProvider != null) {
-      super.write((T) shredRecord((IndexedRecord) record));
-    } else {
-      super.write(record);
-    }
+    super.write(rootShredder == null ? record : (T) rootShredder.shred(record, shreddingProvider));
   }
 
   /**
-   * Builds a shredded copy of {@code inputRecord}: variant fields configured for shredding are
-   * transformed via the {@link VariantShreddingProvider} to populate {@code typed_value}; all other
-   * fields are copied across as-is.
+   * Plans the shredding transform for one position of the effective schema, or returns {@code null}
+   * when nothing below it is a shredded variant and the value can be copied by reference. The
+   * mirror image of {@code HoodieVariantReconstruction.buildRebuilder} on the read side.
+   *
+   * <p>Walking values (and not just splicing the schema) is mandatory: {@link AvroWriteSupport}
+   * serializes through {@link ConvertingGenericData}, which inherits the positional
+   * {@code GenericData.getField}, so a {@code typed_value} spliced into a nested variant while the
+   * record below stays the untransformed {@code {metadata, value}} would have parquet read index 2
+   * off a 2-field record and fail the write.</p>
+   *
+   * <p>A genuine multi-branch union is out of scope, deliberately: {@code getNonNullType()} only
+   * unwraps the nullable two-branch form, so anything else comes back a UNION and lands in
+   * {@code default}, leaving any variant inside it unshredded. The schema side agrees -
+   * {@code VariantSchemaUtils.applyForcedShreddingAt} has the same {@code default} arm, and so does
+   * the read side in {@code HoodieVariantReconstruction.buildRebuilder} - so the three cannot drift
+   * apart on their own; changing any one has to be a deliberate change to all of them. The one
+   * shape the schema-side pass-through cannot represent (a record type with a variant member both
+   * under a union and at a forced position) is rejected at splice time, before this walk runs.</p>
    */
-  private GenericRecord shredRecord(IndexedRecord inputRecord) {
-    GenericRecord shreddedRecord = new GenericData.Record(effectiveAvroSchema);
-
-    // Copy all fields, transforming variant fields that need shredding
-    List<Schema.Field> effectiveFields = effectiveAvroSchema.getFields();
-    Schema inputSchema = inputRecord.getSchema();
-
-    for (int i = 0; i < effectiveFields.size(); i++) {
-      Schema.Field effectiveField = effectiveFields.get(i);
-      String fieldName = effectiveField.name();
-      Schema.Field inputField = inputSchema.getField(fieldName);
-      if (inputField == null) {
-        continue;
+  private static Shredder buildShredder(HoodieSchema effective) {
+    HoodieSchema unwrapped = effective.getNonNullType();
+    switch (unwrapped.getType()) {
+      case VARIANT: {
+        HoodieSchema.Variant variant = (HoodieSchema.Variant) unwrapped;
+        return variant.isShredded() && variant.getTypedValueField().isPresent()
+            ? new VariantShredder(unwrapped.getAvroSchema(), variant) : null;
       }
-
-      ShreddedVariantField shreddedField = shreddedVariantFields.get(i);
-      if (shreddedField != null) {
-        // This is a shredded variant field - transform it
-        Object fieldValue = inputRecord.get(inputField.pos());
-        if (fieldValue instanceof GenericRecord) {
-          GenericRecord variantRecord = (GenericRecord) fieldValue;
-          GenericRecord shreddedVariant = shreddingProvider.shredVariantRecord(
-              variantRecord,
-              shreddedField.avroSchema,
-              shreddedField.hoodieSchema);
-          shreddedRecord.put(i, shreddedVariant);
-        } else {
-          // Null or unexpected type - copy as-is
-          shreddedRecord.put(i, fieldValue);
+      case RECORD: {
+        List<HoodieSchemaField> fields = unwrapped.getFields();
+        String[] fieldNames = new String[fields.size()];
+        Shredder[] fieldShredders = new Shredder[fields.size()];
+        boolean anyShredded = false;
+        for (int i = 0; i < fields.size(); i++) {
+          fieldNames[i] = fields.get(i).name();
+          fieldShredders[i] = buildShredder(fields.get(i).schema());
+          anyShredded |= fieldShredders[i] != null;
         }
-      } else {
-        // Non-variant field - copy as-is
-        shreddedRecord.put(i, inputRecord.get(inputField.pos()));
+        return anyShredded
+            ? new RecordShredder(unwrapped.getAvroSchema(), fieldNames, fieldShredders) : null;
       }
+      case ARRAY: {
+        Shredder elementShredder = buildShredder(unwrapped.getElementType());
+        return elementShredder == null
+            ? null : new ArrayShredder(unwrapped.getAvroSchema(), elementShredder);
+      }
+      case MAP: {
+        Shredder valueShredder = buildShredder(unwrapped.getValueType());
+        return valueShredder == null ? null : new MapShredder(valueShredder);
+      }
+      default:
+        return null;
+    }
+  }
+
+  /** Transforms one value into the shape the effective schema declares for its position. */
+  private interface Shredder {
+    Object shred(Object value, VariantShreddingProvider provider);
+  }
+
+  private static final class VariantShredder implements Shredder {
+    private final Schema shreddedAvroSchema;
+    private final HoodieSchema.Variant variant;
+
+    private VariantShredder(Schema shreddedAvroSchema, HoodieSchema.Variant variant) {
+      this.shreddedAvroSchema = shreddedAvroSchema;
+      this.variant = variant;
     }
 
-    return shreddedRecord;
+    @Override
+    public Object shred(Object value, VariantShreddingProvider provider) {
+      // A null variant, or an unexpected type, passes through unchanged.
+      return value instanceof GenericRecord
+          ? provider.shredVariantRecord((GenericRecord) value, shreddedAvroSchema, variant)
+          : value;
+    }
+  }
+
+  private static final class RecordShredder implements Shredder {
+    private final Schema effectiveSchema;
+    private final String[] fieldNames;
+    // Indexed by field position in the effective record; null for fields copied by reference.
+    private final Shredder[] fieldShredders;
+    // Input records are not rewritten before they reach the writer (HoodieAvroIndexedRecord passes
+    // them through) and nested records carry their own schema, so fields are matched by NAME.
+    // One writer sees one input schema instance per level, so a single-entry cache resolves the
+    // name lookups once; the write support is single-threaded.
+    private Schema cachedInputSchema;
+    private int[] cachedInputPositions;
+
+    private RecordShredder(Schema effectiveSchema, String[] fieldNames, Shredder[] fieldShredders) {
+      this.effectiveSchema = effectiveSchema;
+      this.fieldNames = fieldNames;
+      this.fieldShredders = fieldShredders;
+    }
+
+    @Override
+    public Object shred(Object value, VariantShreddingProvider provider) {
+      if (!(value instanceof IndexedRecord)) {
+        return value;
+      }
+      IndexedRecord in = (IndexedRecord) value;
+      int[] inputPositions = inputPositionsFor(in.getSchema());
+      GenericRecord out = new GenericData.Record(effectiveSchema);
+      for (int i = 0; i < inputPositions.length; i++) {
+        if (inputPositions[i] < 0) {
+          // The input does not carry this field; leave it null rather than guessing a position.
+          continue;
+        }
+        Object fieldValue = in.get(inputPositions[i]);
+        out.put(i, fieldShredders[i] == null
+            ? fieldValue : fieldShredders[i].shred(fieldValue, provider));
+      }
+      return out;
+    }
+
+    private int[] inputPositionsFor(Schema inputSchema) {
+      if (inputSchema == cachedInputSchema) {
+        return cachedInputPositions;
+      }
+      int[] inputPositions = new int[fieldNames.length];
+      for (int i = 0; i < fieldNames.length; i++) {
+        Schema.Field inputField = inputSchema.getField(fieldNames[i]);
+        inputPositions[i] = inputField == null ? -1 : inputField.pos();
+      }
+      cachedInputSchema = inputSchema;
+      cachedInputPositions = inputPositions;
+      return inputPositions;
+    }
+  }
+
+  private static final class ArrayShredder implements Shredder {
+    private final Schema effectiveSchema;
+    private final Shredder elementShredder;
+
+    private ArrayShredder(Schema effectiveSchema, Shredder elementShredder) {
+      this.effectiveSchema = effectiveSchema;
+      this.elementShredder = elementShredder;
+    }
+
+    @Override
+    public Object shred(Object value, VariantShreddingProvider provider) {
+      if (!(value instanceof Collection)) {
+        return value;
+      }
+      Collection<?> in = (Collection<?>) value;
+      GenericData.Array<Object> out = new GenericData.Array<>(in.size(), effectiveSchema);
+      for (Object element : in) {
+        out.add(elementShredder.shred(element, provider));
+      }
+      return out;
+    }
+  }
+
+  private static final class MapShredder implements Shredder {
+    private final Shredder valueShredder;
+
+    private MapShredder(Shredder valueShredder) {
+      this.valueShredder = valueShredder;
+    }
+
+    @Override
+    public Object shred(Object value, VariantShreddingProvider provider) {
+      if (!(value instanceof Map)) {
+        return value;
+      }
+      Map<?, ?> in = (Map<?, ?>) value;
+      Map<Object, Object> out = new LinkedHashMap<>(in.size());
+      for (Map.Entry<?, ?> entry : in.entrySet()) {
+        out.put(entry.getKey(), valueShredder.shred(entry.getValue(), provider));
+      }
+      return out;
+    }
   }
 
   @Override
@@ -283,69 +376,16 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
     footerMetadata.put(key, value);
   }
 
-  /**
-   * Bundles the Avro sub-schema and {@link HoodieSchema.Variant} for a shredded variant field,
-   * keyed by effective-schema field index in {@link #shreddedVariantFields}.
-   */
-  private static final class ShreddedVariantField {
-    private final Schema avroSchema;
-    private final HoodieSchema.Variant hoodieSchema;
-
-    ShreddedVariantField(Schema avroSchema, HoodieSchema.Variant hoodieSchema) {
-      this.avroSchema = avroSchema;
-      this.hoodieSchema = hoodieSchema;
-    }
-  }
-
   private static final Pattern DECIMAL_PATTERN = Pattern.compile(
       "decimal\\s*\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*\\)");
 
   /**
-   * Applies a forced shredding schema to all variant fields in the given schema.
-   * The forced schema DDL (e.g., {@code "a int, b string"}) defines the typed_value
+   * Applies a forced shredding schema to the variant record members of the given schema, at any
+   * depth. The forced schema DDL (e.g., {@code "a int, b string"}) defines the typed_value
    * fields that will be added to each variant column.
    */
   private static HoodieSchema applyForcedShreddingSchema(HoodieSchema schema, String ddl) {
-    if (schema.getType() != HoodieSchemaType.RECORD) {
-      return schema;
-    }
-
-    Map<String, HoodieSchema> shreddedFields = parseShreddingDDL(ddl);
-
-    List<HoodieSchemaField> fields = schema.getFields();
-    List<HoodieSchemaField> newFields = new ArrayList<>();
-    boolean changed = false;
-
-    for (HoodieSchemaField field : fields) {
-      HoodieSchema fieldSchema = field.schema();
-      boolean wasNullable = fieldSchema.isNullable();
-      HoodieSchema unwrapped = wasNullable ? fieldSchema.getNonNullType() : fieldSchema;
-
-      if (unwrapped.getType() == HoodieSchemaType.VARIANT) {
-        HoodieSchema.Variant shreddedVariant = HoodieSchema.createVariantShreddedObject(
-            unwrapped.getAvroSchema().getName(),
-            unwrapped.getAvroSchema().getNamespace(),
-            unwrapped.getAvroSchema().getDoc(),
-            shreddedFields);
-        HoodieSchema replacement = wasNullable
-            ? HoodieSchema.createNullable(shreddedVariant) : shreddedVariant;
-        // replacement already mirrors the field's original nullability, so withSchema alone suffices.
-        newFields.add(HoodieSchemaUtils.createNewSchemaField(field.withSchema(replacement)));
-        changed = true;
-      } else {
-        newFields.add(HoodieSchemaUtils.createNewSchemaField(field));
-      }
-    }
-
-    if (!changed) {
-      return schema;
-    }
-
-    return HoodieSchema.createRecord(
-        schema.getAvroSchema().getName(),
-        schema.getAvroSchema().getNamespace(),
-        schema.getAvroSchema().getDoc(),
-        newFields);
+    return VariantSchemaUtils.applyForcedShredding(schema, parseShreddingDDL(ddl));
   }
 
   /**
@@ -397,18 +437,6 @@ public class HoodieAvroWriteSupport<T> extends AvroWriteSupport<T> {
         }
         throw new IllegalArgumentException("Unsupported shredding type: " + type);
     }
-  }
-
-  /**
-   * Extracts the non-null type from a union schema.
-   */
-  private static Schema getNonNullFromUnion(Schema unionSchema) {
-    for (Schema type : unionSchema.getTypes()) {
-      if (type.getType() != Schema.Type.NULL) {
-        return type;
-      }
-    }
-    throw new IllegalArgumentException("Union schema does not contain a non-null type: " + unionSchema);
   }
 
   private static class HoodieBloomFilterAvroWriteSupport extends HoodieBloomFilterWriteSupport<String> {

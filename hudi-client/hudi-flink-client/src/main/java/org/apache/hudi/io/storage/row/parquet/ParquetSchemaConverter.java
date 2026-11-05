@@ -313,7 +313,7 @@ public class ParquetSchemaConverter {
       case DECIMAL:
         int precision = ((DecimalType) type).getPrecision();
         int scale = ((DecimalType) type).getScale();
-        int numBytes = computeMinBytesForDecimalPrecision(precision);
+        int numBytes = resolveDecimalByteLength(fieldSchema, precision);
         return Types.primitive(
                 PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY, repetition)
             .as(LogicalTypeAnnotation.decimalType(scale, precision))
@@ -446,5 +446,15 @@ public class ParquetSchemaConverter {
       numBytes += 1;
     }
     return numBytes;
+  }
+
+  static int resolveDecimalByteLength(HoodieSchema fieldSchema, int precision) {
+    if (fieldSchema instanceof HoodieSchema.Decimal) {
+      HoodieSchema.Decimal decimalSchema = (HoodieSchema.Decimal) fieldSchema;
+      if (decimalSchema.isFixed()) {
+        return decimalSchema.getFixedSize();
+      }
+    }
+    return computeMinBytesForDecimalPrecision(precision);
   }
 }

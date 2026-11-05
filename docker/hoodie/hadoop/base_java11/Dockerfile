@@ -36,7 +36,8 @@ RUN set -x \
     && tar -xvf /tmp/hadoop.tar.gz -C /opt/ \
     && rm /tmp/hadoop.tar.gz* \
     && ln -s /opt/hadoop-$HADOOP_VERSION/etc/hadoop /etc/hadoop \
-    && cp /etc/hadoop/mapred-site.xml.template /etc/hadoop/mapred-site.xml \
+    # Hadoop 2.x ships only mapred-site.xml.template; 3.x ships mapred-site.xml directly
+    && if [ -f /etc/hadoop/mapred-site.xml.template ]; then cp /etc/hadoop/mapred-site.xml.template /etc/hadoop/mapred-site.xml; fi \
     && mkdir /hadoop-data
 
 ENV HADOOP_PREFIX=/opt/hadoop-$HADOOP_VERSION

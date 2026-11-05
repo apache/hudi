@@ -13,7 +13,6 @@
  */
 package io.trino.plugin.hudi;
 
-import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
 import io.airlift.log.Logger;
@@ -34,7 +33,8 @@ import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplit;
 import io.trino.spi.connector.ConnectorSplitSource;
-import io.trino.spi.connector.DynamicFilter;
+import io.trino.spi.connector.DynamicFilterSnapshot;
+import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
@@ -56,7 +56,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
@@ -66,22 +69,18 @@ import static io.trino.plugin.hudi.HudiSessionProperties.getMinimumAssignedSplit
 import static io.trino.plugin.hudi.HudiSessionProperties.getStandardSplitWeightSize;
 import static io.trino.plugin.hudi.HudiSessionProperties.isHudiMetadataTableEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.isSizeBasedSplitWeightsEnabled;
-import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class HudiSplitSource
         implements ConnectorSplitSource
 {
     private static final Logger log = Logger.get(HudiSplitSource.class);
 
-    private static final ConnectorSplitBatch EMPTY_BATCH = new ConnectorSplitBatch(ImmutableList.of(), false);
     private final AsyncQueue<ConnectorSplit> queue;
     private final ScheduledFuture splitLoaderFuture;
     private final AtomicReference<TrinoException> trinoException = new AtomicReference<>();
-    private final DynamicFilter dynamicFilter;
+    private final AtomicBoolean finished = new AtomicBoolean();
     private final long dynamicFilteringWaitTimeoutMillis;
-    private final Stopwatch dynamicFilterWaitStopwatch;
 
     public HudiSplitSource(
             ConnectorSession session,
@@ -91,77 +90,85 @@ public class HudiSplitSource
             int maxSplitsPerSecond,
             int maxOutstandingSplits,
             Lazy<Map<String, Partition>> lazyPartitions,
-            DynamicFilter dynamicFilter,
             Duration dynamicFilteringWaitTimeoutMillis)
     {
-        boolean enableMetadataTable = isHudiMetadataTableEnabled(session);
-        Lazy<HoodieTableMetadata> lazyTableMetadata = Lazy.lazily(() -> {
-            HoodieTimer timer = HoodieTimer.start();
-            HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
-                    .enable(enableMetadataTable)
-                    .build();
-            HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
-            HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
+        this(
+                new ThrottledAsyncQueue<>(maxSplitsPerSecond, maxOutstandingSplits, executor),
+                splitLoaderExecutorService,
+                (queue, errorListener) -> {
+                    boolean enableMetadataTable = isHudiMetadataTableEnabled(session);
+                    Lazy<HoodieTableMetadata> lazyTableMetadata = Lazy.lazily(() -> {
+                        HoodieTimer timer = HoodieTimer.start();
+                        HoodieMetadataConfig metadataConfig = HoodieMetadataConfig.newBuilder()
+                                .enable(enableMetadataTable)
+                                .build();
+                        HoodieTableMetaClient metaClient = tableHandle.getMetaClient();
+                        HoodieEngineContext engineContext = new HoodieLocalEngineContext(metaClient.getStorage().getConf());
 
-            // Defer to the native factory, which creates a HoodieBackedTableMetadata when the
-            // metadata table is enabled and initialized, and falls back to FileSystemBackedTableMetadata
-            // otherwise.
-            HoodieTableMetadata tableMetadata = NativeTableMetadataFactory.getInstance().create(
-                    engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
-            log.info("Loaded table metadata for table: %s in %s ms", tableHandle.getSchemaTableName(), timer.endTimer());
-            return tableMetadata;
+                        // Defer to the native factory, which creates a HoodieBackedTableMetadata when the
+                        // metadata table is enabled and initialized, and falls back to FileSystemBackedTableMetadata
+                        // otherwise.
+                        HoodieTableMetadata tableMetadata = NativeTableMetadataFactory.getInstance().create(
+                                engineContext, metaClient.getStorage(), metadataConfig, metaClient.getBasePath().toString(), true);
+                        log.info("Loaded table metadata for table: %s in %s ms", tableHandle.getSchemaTableName(), timer.endTimer());
+                        return tableMetadata;
+                    });
+
+                    HudiDirectoryLister hudiDirectoryLister = new HudiSnapshotDirectoryLister(
+                            session,
+                            tableHandle,
+                            enableMetadataTable,
+                            lazyTableMetadata);
+
+                    return new HudiBackgroundSplitLoader(
+                            session,
+                            tableHandle,
+                            hudiDirectoryLister,
+                            queue,
+                            executor,
+                            createSplitWeightProvider(session),
+                            lazyPartitions,
+                            enableMetadataTable,
+                            lazyTableMetadata,
+                            errorListener);
+                },
+                tableHandle.getSchemaTableName(),
+                dynamicFilteringWaitTimeoutMillis);
+    }
+
+    // Visible for tests: lets a test drive the split loader directly while keeping the
+    // error-listener wiring (set trinoException, then finish the queue -- isFinished
+    // relies on that order) identical to production.
+    HudiSplitSource(
+            AsyncQueue<ConnectorSplit> queue,
+            ScheduledExecutorService splitLoaderExecutorService,
+            BiFunction<AsyncQueue<ConnectorSplit>, Consumer<Throwable>, Runnable> splitLoaderFactory,
+            SchemaTableName tableName,
+            Duration dynamicFilteringWaitTimeoutMillis)
+    {
+        this.queue = queue;
+        Runnable splitLoader = splitLoaderFactory.apply(queue, throwable -> {
+            trinoException.compareAndSet(null, new TrinoException(HUDI_CANNOT_OPEN_SPLIT,
+                    "Failed to generate splits for " + tableName, throwable));
+            queue.finish();
         });
-
-        HudiDirectoryLister hudiDirectoryLister = new HudiSnapshotDirectoryLister(
-                session,
-                tableHandle,
-                enableMetadataTable,
-                lazyTableMetadata);
-
-        this.queue = new ThrottledAsyncQueue<>(maxSplitsPerSecond, maxOutstandingSplits, executor);
-        HudiBackgroundSplitLoader splitLoader = new HudiBackgroundSplitLoader(
-                session,
-                tableHandle,
-                hudiDirectoryLister,
-                queue,
-                executor,
-                createSplitWeightProvider(session),
-                lazyPartitions,
-                enableMetadataTable,
-                lazyTableMetadata,
-                throwable -> {
-                    trinoException.compareAndSet(null, new TrinoException(HUDI_CANNOT_OPEN_SPLIT,
-                            "Failed to generate splits for " + tableHandle.getSchemaTableName(), throwable));
-                    queue.finish();
-                });
         this.splitLoaderFuture = splitLoaderExecutorService.schedule(splitLoader, 0, TimeUnit.MILLISECONDS);
-        this.dynamicFilter = requireNonNull(dynamicFilter, "dynamicFilter is null");
         this.dynamicFilteringWaitTimeoutMillis = dynamicFilteringWaitTimeoutMillis.toMillis();
-        this.dynamicFilterWaitStopwatch = Stopwatch.createStarted();
     }
 
     @Override
-    public CompletableFuture<ConnectorSplitBatch> getNextBatch(int maxSize)
+    public CompletableFuture<List<ConnectorSplit>> getNextBatch(int maxSize, DynamicFilterSnapshot dynamicFilterSnapshot)
     {
-        // If dynamic filtering is enabled and we haven't timed out, wait for the build side to provide the dynamic filter.
-        long timeLeft = dynamicFilteringWaitTimeoutMillis - dynamicFilterWaitStopwatch.elapsed(MILLISECONDS);
-        if (dynamicFilter.isAwaitable() && timeLeft > 0) {
-            // If the filter is not ready, return an empty batch. The query engine will call getNextBatch() again.
-            // As long as isFinished() is false, effectively polling until the filter is ready or timeout occurs.
-            return dynamicFilter.isBlocked()
-                    .thenApply(_ -> EMPTY_BATCH)
-                    .completeOnTimeout(EMPTY_BATCH, timeLeft, MILLISECONDS);
-        }
-
         TupleDomain<HiveColumnHandle> dynamicFilterPredicate =
-                dynamicFilter.getCurrentPredicate().transformKeys(HiveColumnHandle.class::cast);
+                dynamicFilterSnapshot.currentPredicate().transformKeys(HiveColumnHandle.class::cast);
 
         if (dynamicFilterPredicate.isNone()) {
             close();
-            return completedFuture(new ConnectorSplitBatch(ImmutableList.of(), true));
+            // The queue may still hold undrained splits, so queue.isFinished() would never turn true here
+            finished.set(true);
+            return completedFuture(ImmutableList.of());
         }
 
-        boolean noMoreSplits = isFinished();
         Throwable throwable = trinoException.get();
         if (throwable != null) {
             return CompletableFuture.failedFuture(throwable);
@@ -169,13 +176,9 @@ public class HudiSplitSource
 
         return toCompletableFuture(Futures.transform(
                 queue.getBatchAsync(maxSize),
-                splits ->
-                {
-                    List<ConnectorSplit> filteredSplits = splits.stream()
-                            .filter(split -> partitionMatchesPredicate((HudiSplit) split, dynamicFilterPredicate))
-                            .collect(toImmutableList());
-                    return new ConnectorSplitBatch(filteredSplits, noMoreSplits);
-                },
+                splits -> splits.stream()
+                        .filter(split -> partitionMatchesPredicate((HudiSplit) split, dynamicFilterPredicate))
+                        .collect(toImmutableList()),
                 directExecutor()));
     }
 
@@ -188,7 +191,17 @@ public class HudiSplitSource
     @Override
     public boolean isFinished()
     {
-        return splitLoaderFuture.isDone() && queue.isFinished();
+        // The failure callback sets trinoException before finishing the queue, so once the queue
+        // reports finished the exception (if any) is visible here. Claiming finished while an
+        // exception is pending would let the engine stop polling and end the scan silently;
+        // reporting unfinished instead makes the next getNextBatch surface the failure.
+        return finished.get() || (splitLoaderFuture.isDone() && queue.isFinished() && trinoException.get() == null);
+    }
+
+    @Override
+    public long getRequestedDynamicFilterWaitTimeoutMillis()
+    {
+        return dynamicFilteringWaitTimeoutMillis;
     }
 
     public static HudiSplitWeightProvider createSplitWeightProvider(ConnectorSession session)

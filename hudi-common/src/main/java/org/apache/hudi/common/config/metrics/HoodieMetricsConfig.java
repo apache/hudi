@@ -109,6 +109,21 @@ public class HoodieMetricsConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation("Enable metrics for locking infra. Useful when operating in multiwriter mode");
 
+  public static final ConfigProperty<Boolean> RLI_LOOKUP_METRICS_ENABLE = ConfigProperty
+      .key(METRIC_PREFIX + ".rli.lookup.enable")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Collect counters for the record level index lookup phase (records looked up, "
+          + "hits, misses, shards read and time spent) and report them at each commit through the "
+          + "configured metrics reporter. Off unless set explicitly, including when " + TURN_METRICS_ON.key()
+          + " is on: collection registers a Spark accumulator per table and runs on every shard read, so "
+          + "it is opted into by name rather than inherited on upgrade. Requires " + TURN_METRICS_ON.key()
+          + " as well, since the reporter is the only destination. Spark only: the record level index "
+          + "lookup is a Spark write-path concern, and other engines produce no counters. Counters are "
+          + "aggregated per table per JVM rather than per writer, so two write clients on one table in "
+          + "one process share them.");
+
   public static final ConfigProperty<String> METRICS_REPORTER_FILE_BASED_CONFIGS_PATH = ConfigProperty
       .key(METRIC_PREFIX + ".configs.properties")
       .defaultValue("")
@@ -200,6 +215,10 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
   public boolean isLockingMetricsEnabled() {
     return getBoolean(HoodieMetricsConfig.LOCK_METRICS_ENABLE);
+  }
+
+  public boolean isRecordIndexLookupMetricsEnabled() {
+    return getBoolean(HoodieMetricsConfig.RLI_LOOKUP_METRICS_ENABLE);
   }
 
   public MetricsReporterType getMetricsReporterType() {
@@ -408,6 +427,11 @@ public class HoodieMetricsConfig extends HoodieConfig {
 
     public Builder withExecutorMetrics(boolean enable) {
       hoodieMetricsConfig.setValue(EXECUTOR_METRICS_ENABLE, String.valueOf(enable));
+      return this;
+    }
+
+    public Builder withRecordIndexLookupMetrics(boolean enable) {
+      hoodieMetricsConfig.setValue(RLI_LOOKUP_METRICS_ENABLE, String.valueOf(enable));
       return this;
     }
 

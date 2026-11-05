@@ -31,8 +31,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.io.hfile.DataSize.SIZEOF_INT16;
-import static org.apache.hudi.io.hfile.HFileBlock.getVariableLengthEncodedBytes;
 import static org.apache.hudi.io.hfile.HFileBlockType.TRAILER;
+import static org.apache.hudi.io.hfile.HFileFileInfoBlock.getProtobufVarIntBytes;
 import static org.apache.hudi.io.hfile.HFileInfo.KEY_VALUE_VERSION_WITH_MVCC_TS;
 import static org.apache.hudi.io.hfile.HFileInfo.LAST_KEY;
 import static org.apache.hudi.io.hfile.HFileInfo.MAX_MVCC_TS_KEY;
@@ -50,6 +50,9 @@ public class HFileWriterImpl implements HFileWriter {
   //           + 2 bytes (length of key length)
   //           + 10 bytes (check sum, timestamp, key type).
   private static final int EXTRA_BYTES_PER_DATA_ENTRY = 21;
+  // Block sizes are 4-byte ints. The 2 MiB headroom covers the header, checksums (< 512 KiB) and
+  // deflate growth of incompressible data (< 660 KiB); HFileBlock#serialize checks the exact bound.
+  static final long MAX_UNCOMPRESSED_DATA_BLOCK_BYTES = Integer.MAX_VALUE - (2L << 20);
   private final OutputStream outputStream;
   private final HFileContext context;
   // Meta Info map.
@@ -65,6 +68,7 @@ public class HFileWriterImpl implements HFileWriter {
   private long currentOffset;
   private long loadOnOpenSectionOffset;
   private final int blockSize;
+  private final long maxUncompressedDataBlockBytes;
 
   // Variables used to record necessary information to reduce
   // the memory usage.
@@ -76,9 +80,17 @@ public class HFileWriterImpl implements HFileWriter {
   private long totalValueLength = 0;
 
   public HFileWriterImpl(HFileContext context, OutputStream outputStream) {
+    this(context, outputStream, MAX_UNCOMPRESSED_DATA_BLOCK_BYTES);
+  }
+
+  /**
+   * @param maxUncompressedDataBlockBytes max uncompressed bytes per data block, lowered in tests.
+   */
+  HFileWriterImpl(HFileContext context, OutputStream outputStream, long maxUncompressedDataBlockBytes) {
     this.outputStream = outputStream;
     this.context = context;
-    this.blockSize = this.context.getBlockSize();
+    this.maxUncompressedDataBlockBytes = maxUncompressedDataBlockBytes;
+    this.blockSize = (int) Math.min(this.context.getBlockSize(), maxUncompressedDataBlockBytes);
     this.uncompressedDataBlockBytes = 0L;
     this.totalUncompressedDataBlockBytes = 0L;
     this.currentOffset = 0L;
@@ -92,19 +104,36 @@ public class HFileWriterImpl implements HFileWriter {
   // Append a data kv pair.
   public void append(String key, byte[] value) throws IOException {
     byte[] keyBytes = StringUtils.getUTF8Bytes(key);
+    long entryBytes = (long) keyBytes.length + value.length + EXTRA_BYTES_PER_DATA_ENTRY;
+    // Records with the same key must be put into the same block.
+    boolean flushBeforeAppend = !Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
+        && uncompressedDataBlockBytes + entryBytes > blockSize;
+    // Check before mutating state so a rejected record leaves no trace.
+    checkDataBlockCapacity((flushBeforeAppend ? 0 : uncompressedDataBlockBytes) + entryBytes, key);
     lastKey = keyBytes;
     totalKeyLength += keyBytes.length;
     totalValueLength += value.length;
-    // Records with the same key must be put into the same block.
-    if (!Arrays.equals(currentDataBlock.getLastKeyContent(), keyBytes)
-        && uncompressedDataBlockBytes + keyBytes.length + value.length + EXTRA_BYTES_PER_DATA_ENTRY > blockSize) {
+    if (flushBeforeAppend) {
       flushCurrentDataBlock();
       uncompressedDataBlockBytes = 0;
     }
     currentDataBlock.add(keyBytes, value);
-    int uncompressedKeyValueSize = keyBytes.length + value.length;
-    uncompressedDataBlockBytes += uncompressedKeyValueSize + EXTRA_BYTES_PER_DATA_ENTRY;
-    totalUncompressedDataBlockBytes += uncompressedKeyValueSize + EXTRA_BYTES_PER_DATA_ENTRY;
+    uncompressedDataBlockBytes += entryBytes;
+    totalUncompressedDataBlockBytes += entryBytes;
+  }
+
+  /**
+   * Rejects an append that would grow the block past its capacity, which only an oversized record
+   * or a run of same-key records can do.
+   */
+  private void checkDataBlockCapacity(long uncompressedBytes, String key) {
+    if (uncompressedBytes > maxUncompressedDataBlockBytes) {
+      throw new IllegalArgumentException(String.format(
+          "Data block would hold %d uncompressed bytes after appending key %s, exceeding the "
+              + "maximum of %d bytes: a single record, or records sharing the same key, cannot "
+              + "exceed the maximum size of one data block",
+          uncompressedBytes, key, maxUncompressedDataBlockBytes));
+    }
   }
 
   // Append a metadata kv pair.
@@ -144,8 +173,8 @@ public class HFileWriterImpl implements HFileWriter {
     // 3. Create an index entry.
     rootIndexBlock.add(
         currentDataBlock.getFirstKey(), lastDataBlockOffset, blockBuffer.limit());
-    // 4. Create a new data block.
-    currentDataBlock = HFileDataBlock.createDataBlockToWrite(context, currentOffset);
+    // 4. Create a new data block whose previous-block offset points at the block just flushed.
+    currentDataBlock = HFileDataBlock.createDataBlockToWrite(context, lastDataBlockOffset);
   }
 
   // NOTE that: reader assumes that every meta info piece
@@ -200,7 +229,7 @@ public class HFileWriterImpl implements HFileWriter {
     ByteBuffer trailer = ByteBuffer.allocate(TRAILER_SIZE);
     trailer.limit(TRAILER_SIZE);
     trailer.put(TRAILER.getMagic());
-    trailer.put(getVariableLengthEncodedBytes(trailerProto.getSerializedSize()));
+    trailer.put(getProtobufVarIntBytes(trailerProto.getSerializedSize()));
     trailer.put(trailerProto.toByteArray());
     // Force trailer to have fixed length.
     trailer.position(TRAILER_SIZE - 1);

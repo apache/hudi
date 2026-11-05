@@ -55,6 +55,17 @@ public class InLineFsDataInputStream extends FSDataInputStream {
     outerStream.seek(startOffset);
   }
 
+  // The offset-adjusting wrapper does not own the outer stream, so the inherited close() only
+  // closes the wrapper; the outer FSDataInputStream must be closed here or its file handle leaks.
+  @Override
+  public void close() throws IOException {
+    try {
+      super.close();
+    } finally {
+      outerStream.close();
+    }
+  }
+
   @Override
   public void seek(long desired) throws IOException {
     if (desired > length) {

@@ -244,6 +244,35 @@ class TestS3StorageLockClient {
   }
 
   @Test
+  void testTryUpsertLockFile_unexpectedS3StatusIsReportedAsUnknownError() {
+    StorageLockData lockData = new StorageLockData(false, 6000L, "myTxOwner");
+    AwsServiceException ex403 = S3Exception.builder().statusCode(403).build();
+    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex403);
+
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.empty());
+
+    assertEquals(UNKNOWN_ERROR, result.getLeft());
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).warn(contains("Error writing lock file"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex403));
+  }
+
+  @Test
+  void testTryRenewLockFile_unexpectedErrorIsReportedRatherThanThrown() {
+    StorageLockData lockData = new StorageLockData(false, 7000L, "myTxOwner");
+    StorageLockFile prevLockFile = new StorageLockFile(lockData, "old-etag");
+    AwsServiceException ex400 = AwsServiceException.builder().statusCode(400).build();
+    when(mockS3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class))).thenThrow(ex400);
+
+    Pair<LockUpsertResult, Option<StorageLockFile>> result =
+            lockService.tryUpsertLockFile(lockData, Option.of(prevLockFile));
+
+    assertEquals(UNKNOWN_ERROR, result.getLeft(), "a renewal keeps the failure to itself, only creation throws early");
+    assertTrue(result.getRight().isEmpty());
+    verify(mockLogger).error(contains("Unexpected SDK error"), eq(OWNER_ID), eq(LOCK_FILE_PATH), eq(ex400));
+  }
+
+  @Test
   void testTryCreateLockFile_unexpectedError() {
     StorageLockData lockData = new StorageLockData(false, 8000L, "myTxOwner");
     AwsServiceException ex400 = AwsServiceException.builder().statusCode(400).build();

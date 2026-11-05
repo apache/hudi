@@ -96,8 +96,8 @@ public class SchemaChangeUtils {
   /**
    * Whether a column type change is a timestamp precision change that must be authorized by an
    * explicit per-field override (see {@code hoodie.write.timestamp.logical.type.overrides}). This
-   * covers timestamp-micros/millis flips, local-timestamp-micros/millis flips, and the forward-fix
-   * from a bare {@code long} to a local-timestamp logical type that 0.x dropped.
+   * covers timestamp-micros/millis flips, local-timestamp-micros/millis flips, and promoting a bare
+   * {@code long} to a timestamp logical type (UTC or local).
    */
   public static boolean isGatedTimestampChange(Type src, Type dst) {
     if (src.equals(dst)) {
@@ -109,7 +109,7 @@ public class SchemaChangeUtils {
     if (isLocalTimestamp(src) && isLocalTimestamp(dst)) {
       return true;
     }
-    return src.typeId() == Type.TypeID.LONG && isLocalTimestamp(dst);
+    return src.typeId() == Type.TypeID.LONG && (isUtcTimestamp(dst) || isLocalTimestamp(dst));
   }
 
   /**
@@ -170,9 +170,10 @@ public class SchemaChangeUtils {
             || dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;
       case LONG:
         if (allowTimestampPrecisionEvolution
-            && (dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS)) {
-          // Forward-fix path: 0.x stored local-timestamp columns as bare long because its converter
-          // did not recognize the logical type. Allow attaching the logical type when the gate is open.
+            && (dst.typeId() == Type.TypeID.TIMESTAMP || dst.typeId() == Type.TypeID.TIMESTAMP_MILLIS
+                || dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MILLIS || dst.typeId() == Type.TypeID.LOCAL_TIMESTAMP_MICROS)) {
+          // A bare long carries no precision signal, so promoting it to a timestamp logical type is
+          // authorized only by an explicit per-field override.
           return true;
         }
         return dst == Types.FloatType.get() || dst == Types.DoubleType.get() || dst == Types.StringType.get() || dst.typeId() == Type.TypeID.DECIMAL || dst.typeId() == Type.TypeID.DECIMAL_FIXED;

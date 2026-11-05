@@ -32,6 +32,9 @@ import org.apache.hudi.metadata.index.model.IndexUpdateContext;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.mockito.MockedStatic;
 
 import java.io.IOException;
@@ -146,9 +149,12 @@ class TestPartitionStatsIndexer {
         new HoodieCommitMetadata())));
   }
 
-  @Test
+  /** A writer may leave the operation type unset, e.g. one that registers files written outside Hudi. */
+  @ParameterizedTest
+  @NullSource
+  @EnumSource(value = WriteOperationType.class, names = "UPSERT")
   @SuppressWarnings("unchecked")
-  void testBuildUpdateWithNonEmptyCommitMetadataProducesPartitionEntry() {
+  void testBuildUpdateWithNonEmptyCommitMetadataProducesPartitionEntry(WriteOperationType operationType) {
     HoodieEngineContext engineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieEngineContext testDataEngineContext = new HoodieLocalEngineContext(getDefaultStorageConf());
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
@@ -164,7 +170,7 @@ class TestPartitionStatsIndexer {
     when(recordMerger.getRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
 
     HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
-    commitMetadata.setOperationType(WriteOperationType.UPSERT);
+    commitMetadata.setOperationType(operationType);
     HoodieWriteStat writeStat = new HoodieWriteStat();
     writeStat.setPartitionPath("p1");
     writeStat.setPath("p1/fileid-1_1-0-1_012.parquet");

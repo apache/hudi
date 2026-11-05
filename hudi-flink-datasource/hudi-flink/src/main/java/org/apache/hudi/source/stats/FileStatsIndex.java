@@ -128,13 +128,13 @@ public class FileStatsIndex implements ColumnStatsIndex {
   }
 
   @Override
-  public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles) {
+  public Set<String> computeCandidateFiles(ColumnStatsProbe probe, List<String> allFiles, List<String> candidatePartitions) {
     if (probe == null || !isIndexAvailable()) {
       return null;
     }
     try {
       String[] targetColumns = probe.getReferencedCols();
-      final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns);
+      final List<RowData> statsRows = readColumnStatsIndexByColumns(targetColumns, candidatePartitions);
       return candidatesInMetadataTable(probe, statsRows, allFiles);
     } catch (Throwable t) {
       log.error("Failed to read metadata index: {} for data skipping", getIndexPartitionName(), t);
@@ -306,10 +306,9 @@ public class FileStatsIndex implements ColumnStatsIndex {
 
       List<Tuple3> columnStats = alignedColumnRowsMap.values().stream().map(row -> {
         if (row == null) {
-          // NOTE: Since we're assuming missing column to essentially contain exclusively
-          //       null values, we set null-count to be equal to value-count (this behavior is
-          //       consistent with reading non-existent columns from Parquet)
-          return Tuple3.of(null, null, valueCount);
+          // Missing statistics do not imply all-null data. A null null-count marks
+          // unknown statistics so the probe can conservatively retain this candidate.
+          return Tuple3.of(null, null, null);
         } else {
           GenericRowData gr = (GenericRowData) row;
           return Tuple3.of(gr.getField(ORD_MIN_VAL), gr.getField(ORD_MAX_VAL), gr.getField(ORD_NULL_CNT));
@@ -384,20 +383,27 @@ public class FileStatsIndex implements ColumnStatsIndex {
     return converter.convert(rawVal);
   }
 
+  /**
+   * Reads statistics for the requested columns and relative partition paths.
+   * Column prefixes limit reads to the referenced columns; partition prefixes further restrict reads after partition pruning.
+   * An empty partition list reads all partitions using column-only prefixes.
+   */
   @VisibleForTesting
-  public List<RowData> readColumnStatsIndexByColumns(String[] targetColumns) {
-    // NOTE: If specific columns have been provided, we can considerably trim down amount of data fetched
-    //       by only fetching Column Stats Index records pertaining to the requested columns.
-    //       Otherwise, we fall back to read whole Column Stats Index
+  public List<RowData> readColumnStatsIndexByColumns(String[] targetColumns, List<String> candidatePartitions) {
     ValidationUtils.checkArgument(targetColumns.length > 0,
         "Column stats is only valid when push down filters have referenced columns");
 
     // Read Metadata Table's column stats Flink's RowData list by
-    //    - Fetching the records by key-prefixes (column names)
+    //    - Fetching the records by key-prefixes (column names and candidate partitions, when provided)
     //    - Deserializing fetched records into [[RowData]]s
-    List<ColumnStatsIndexPrefixRawKey> rawKeys = Arrays.stream(targetColumns)
-        .map(ColumnStatsIndexPrefixRawKey::new)  // Just column name, no partition
-        .collect(Collectors.toList());
+    List<ColumnStatsIndexPrefixRawKey> rawKeys;
+    if (candidatePartitions.isEmpty()) {
+      rawKeys = Arrays.stream(targetColumns).map(ColumnStatsIndexPrefixRawKey::new).collect(Collectors.toList());
+    } else {
+      rawKeys = candidatePartitions.stream().distinct()
+          .flatMap(partition -> Arrays.stream(targetColumns).map(column -> new ColumnStatsIndexPrefixRawKey(column, partition)))
+          .collect(Collectors.toList());
+    }
 
     HoodieData<HoodieRecord<HoodieMetadataPayload>> records =
         getMetadataTable().getRecordsByKeyPrefixes(

@@ -44,7 +44,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.hive.ql.exec.vector.BytesColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.orc.OrcFile;
-import org.apache.orc.OrcProto.UserMetadataItem;
 import org.apache.orc.Reader;
 import org.apache.orc.Reader.Options;
 import org.apache.orc.RecordReader;
@@ -64,9 +63,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.BinaryUtil.toBytes;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToHadoopPath;
 
@@ -206,13 +205,9 @@ public class OrcUtils extends FileFormatUtils {
     try (Reader reader = OrcFile.createReader(
         convertToHadoopPath(filePath), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
       Map<String, String> footerVals = new HashMap<>();
-      List<UserMetadataItem> metadataItemList = reader.getFileTail().getFooter().getMetadataList();
-      Map<String, String> metadata = metadataItemList.stream().collect(Collectors.toMap(
-          UserMetadataItem::getName,
-          metadataItem -> metadataItem.getValue().toStringUtf8()));
       for (String footerName : footerNames) {
-        if (metadata.containsKey(footerName)) {
-          footerVals.put(footerName, metadata.get(footerName));
+        if (reader.hasMetadataValue(footerName)) {
+          footerVals.put(footerName, fromUTF8Bytes(toBytes(reader.getMetadataValue(footerName))));
         } else if (required) {
           throw new MetadataNotFoundException(
               "Could not find index in ORC footer. Looked for key " + footerName + " in " + filePath);
@@ -231,7 +226,8 @@ public class OrcUtils extends FileFormatUtils {
       if (reader.hasMetadataValue("orc.avro.schema")) {
         ByteBuffer metadataValue = reader.getMetadataValue("orc.avro.schema");
         byte[] bytes = toBytes(metadataValue);
-        return HoodieSchema.parse(new String(bytes));
+        // Must match HoodieAvroOrcWriter, which writes this value as UTF-8.
+        return HoodieSchema.parse(fromUTF8Bytes(bytes));
       } else {
         TypeDescription orcSchema = reader.getSchema();
         return AvroOrcUtils.createSchema(orcSchema);

@@ -20,6 +20,7 @@ package org.apache.hudi.client.model;
 
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -123,6 +124,17 @@ public class HoodieFlinkRecord extends HoodieRecord<RowData> {
   @Override
   public HoodieRecordType getRecordType() {
     return HoodieRecordType.FLINK;
+  }
+
+  /**
+   * Returns the cached record key, computing and caching it on the first lookup if absent.
+   * The record context is not consulted when this record already carries a key.
+   */
+  public String getRecordKey(HoodieSchema recordSchema, RecordContext<RowData> recordContext) {
+    if (key == null) {
+      key = new HoodieKey(recordContext.getRecordKey(data, recordSchema), null);
+    }
+    return getRecordKey();
   }
 
   @Override

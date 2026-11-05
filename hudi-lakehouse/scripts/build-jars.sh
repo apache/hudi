@@ -43,7 +43,7 @@ if [[ "$BUILD_BUNDLE" == 1 ]]; then
   # disables Maven's activeByDefault profiles, so relying on defaults is fragile.
   echo ">>> Building Hudi Spark bundle (spark${SPARK_VERSION})"
   (cd "$REPO_ROOT" && mvn clean package -pl packaging/hudi-spark-bundle -am \
-      "-Dspark${SPARK_VERSION}" -Dflink2.1 "${MVN_ARGS[@]}")
+      "-Dspark${SPARK_VERSION}" -Dflink2.2 "${MVN_ARGS[@]}")
 fi
 
 if [[ "$BUILD_PLUGIN" == 1 ]]; then

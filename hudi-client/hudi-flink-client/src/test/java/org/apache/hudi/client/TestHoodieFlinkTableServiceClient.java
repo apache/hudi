@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client;
 
+import org.apache.hudi.callback.common.HoodieWriteCommitCallbackMessage;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -31,6 +32,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieLockConfig;
+import org.apache.hudi.config.HoodieWriteCommitCallbackConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieException;
@@ -43,6 +45,7 @@ import org.apache.hudi.table.action.compact.CompactHelpers;
 import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkersFactory;
 import org.apache.hudi.testutils.HoodieFlinkClientTestHarness;
+import org.apache.hudi.testutils.RecordingCommitCallback;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,12 +56,16 @@ import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -107,7 +114,11 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
       writerFactory.when(() -> FlinkHoodieBackedTableMetadataWriter.create(any(), any(), any(), any()))
           .thenReturn(metadataWriter);
 
+      context.getStorageConf().set("dfs.nameservices", "remote-cluster");
       tableServiceClient.initMetadataTable();
+      writerFactory.verify(() -> FlinkHoodieBackedTableMetadataWriter.create(
+          argThat(conf -> "remote-cluster".equals(conf.getString("dfs.nameservices").orElse(null))),
+          same(writeConfig), same(context), any()));
     } finally {
       tableServiceClient.close();
     }
@@ -218,15 +229,21 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
 
   @Test
   void testCompleteClusteringCommitsAndCleansMarkers() {
+    RecordingCommitCallback.reset();
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath(metaClient.getBasePath())
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withCallbackConfig(HoodieWriteCommitCallbackConfig.newBuilder()
+            .writeCommitCallbackOn("true")
+            .withCallbackClass(RecordingCommitCallback.class.getName())
+            .build())
         .build();
     HoodieFlinkTable table = mock(HoodieFlinkTable.class);
     HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
     when(table.getActiveTimeline()).thenReturn(activeTimeline);
     when(table.getInstantGenerator()).thenReturn(metaClient.getInstantGenerator());
     HoodieInstant clusteringInstant = mock(HoodieInstant.class);
+    when(clusteringInstant.getAction()).thenReturn(HoodieTimeline.CLUSTERING_ACTION);
     HoodieReplaceCommitMetadata metadata = new HoodieReplaceCommitMetadata();
     TestableHoodieFlinkTableServiceClient client =
         new TestableHoodieFlinkTableServiceClient(context, writeConfig, Option.empty(), table);
@@ -244,6 +261,9 @@ public class TestHoodieFlinkTableServiceClient extends HoodieFlinkClientTestHarn
     }
 
     verify(writeMarkers).quietDeleteMarkerDir(any(), any(Integer.class));
+    List<HoodieWriteCommitCallbackMessage> messages = RecordingCommitCallback.messages();
+    assertEquals(1, messages.size(), "callback must fire once for the clustering commit");
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, messages.get(0).getCommitActionType().orElse(null));
   }
 
   private static class TestableHoodieFlinkTableServiceClient extends HoodieFlinkTableServiceClient<Object> {

@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.common.config.{DFSPropertiesConfiguration, HoodieCommonConfig, HoodieConfig, TypedProperties}
 import org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE
 import org.apache.hudi.common.config.RecordMergeMode.CUSTOM
-import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, OverwriteWithLatestAvroPayload, WriteOperationType}
+import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, MetaFieldsMode, OverwriteWithLatestAvroPayload, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.util.StringUtils
 import org.apache.hudi.common.util.StringUtils.isNullOrEmpty
@@ -226,7 +226,7 @@ object HoodieWriterUtils {
   }
 
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-                          tableConfig: HoodieConfig): Unit = {
+                          tableConfig: HoodieTableConfig): Unit = {
     validateTableConfig(spark, params, tableConfig, false)
   }
 
@@ -261,7 +261,35 @@ object HoodieWriterUtils {
    * Detects conflicts between new parameters and existing table configurations
    */
   def validateTableConfig(spark: SparkSession, params: Map[String, String],
-                          tableConfig: HoodieConfig, isOverWriteMode: Boolean): Unit = {
+                          tableConfig: HoodieTableConfig, isOverWriteMode: Boolean): Unit = {
+    // Fail fast on writes that would produce a slash-separated layout with more than one
+    // partition field. The extra path fragments cannot be lined up with the partition columns on
+    // read (HUDI issue #19666), so without this check the write commits cleanly and every
+    // subsequent read of the table fails. Checked regardless of save mode, since an Overwrite
+    // produces the same layout.
+    // NOTE: equalsIgnoreCase rather than toBoolean, since every other reader of this flag goes
+    //       through Boolean.parseBoolean semantics and treats a value like "1" as false, while
+    //       toBoolean would throw on it
+    val slashSeparatedDatePartitioning =
+      params.get(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key).exists(_.equalsIgnoreCase("true")) ||
+        (null != tableConfig && tableConfig.getSlashSeparatedDatePartitioning)
+    if (slashSeparatedDatePartitioning) {
+      // The table config is the source of truth for an existing table; for a new one the
+      // datasource value may still carry the CustomKeyGenerator "field:type" format, which the
+      // comma count is insensitive to
+      val partitionFields = Option(tableConfig)
+        .flatMap(tc => Option(HoodieTableConfig.getPartitionFieldProp(tc).orElse(null)))
+        .filter(_.nonEmpty)
+        .getOrElse(params.getOrElse(PARTITIONPATH_FIELD.key(), ""))
+      val partitionFieldCount = partitionFields.split(",").count(_.trim.nonEmpty)
+      if (partitionFieldCount > 1) {
+        throw new HoodieException(s"${HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING.key} requires"
+          + s" a single partition field, but found $partitionFieldCount: $partitionFields."
+          + " The slash-separated layout of a multi-field partition path cannot be read back."
+          + " Recreate the table with a single date partition field or without this config --"
+          + " an existing table's config cannot be changed in place.")
+      }
+    }
     // If Overwrite is set as save mode, we don't need to do table config validation.
     if (!isOverWriteMode) {
       val resolver = spark.sessionState.conf.resolver
@@ -350,6 +378,32 @@ object HoodieWriterUtils {
           val mergeStrategyId = params.getOrElse(HoodieWriteConfig.RECORD_MERGE_STRATEGY_ID.key(), null)
           if (!StringUtils.isNullOrEmpty(mergeStrategyId)) {
             diffConfigs.append(s"${HoodieTableConfig.RECORD_MERGE_STRATEGY_ID}:\t$mergeStrategyId\tnull\n")
+          }
+        }
+
+        // hoodie.meta.fields.mode is a physical-storage decision baked into files at write time.
+        // Changing it at runtime would silently produce mixed-mode files whose incremental / file
+        // pruning behavior differs between old and new commits. The generic loop above cannot catch
+        // this on its own: it only flags a key when the on-disk value is non-null, so a table
+        // predating the property would let a null → selective transition slip through.
+        //
+        // Compare resolved modes rather than raw presence. A legacy table resolves to ALL or NONE
+        // through its deprecated boolean, so null → COMMIT_TIME_ONLY is still
+        // rejected, while a write that
+        // restates the mode the table already has (mode=ALL against a default table, or mode=NONE
+        // against populate.meta.fields=false) is no longer a spurious conflict. That case matters
+        // because the property is backfilled only by NineToTenUpgradeHandler and current() is
+        // already TEN — a table at v10 without it will never be upgraded again, so rejecting an
+        // explicit restatement would leave it no way to adopt the property at all.
+        val paramsMetaFieldsMode = params.getOrElse(HoodieTableConfig.META_FIELDS_MODE.key(), "")
+        if (paramsMetaFieldsMode.nonEmpty) {
+          val requestedMode = MetaFieldsMode.resolve(params.asJava)
+          val tableMetaFieldsMode = tableConfig.getMetaFieldsMode
+          if (requestedMode != tableMetaFieldsMode) {
+            diffConfigs.append(
+              s"${HoodieTableConfig.META_FIELDS_MODE.key()}:\t$requestedMode\t$tableMetaFieldsMode"
+                + " (immutable at runtime; set only at table creation / hudi-cli / upgrade; "
+                + "existing tables must be recreated to change this)\n")
           }
         }
       }

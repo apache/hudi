@@ -22,7 +22,9 @@ package org.apache.hudi.metadata;
 import org.apache.hudi.avro.model.HoodieInstantInfo;
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
 import org.apache.hudi.avro.model.HoodieRollbackPlan;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
@@ -32,6 +34,7 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -93,6 +96,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
@@ -273,7 +277,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
         partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice1));
         partitionFileSlicePairs.add(FileSliceAndPartition.of(p, fileSlice2));
         // NOTE: we need to set table config as we are not using write client explicitly and these configs are needed for log record reader
-        metaClient.getTableConfig().setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+        metaClient.getTableConfig().setValue(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
         metaClient.getTableConfig().setValue(HoodieTableConfig.RECORDKEY_FIELDS.key(), "_row_key");
         metaClient.getTableConfig().setValue(HoodieTableConfig.PARTITION_FIELDS.key(), "partition_path");
         List<HoodieColumnRangeMetadata<Comparable>> columnRangeMetadataLogFile = HoodieTableMetadataUtil.getLogFileColumnRangeMetadata(
@@ -334,11 +338,16 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
                                        List<HoodieRecord> records,
                                        HoodieTableMetaClient metaClient,
                                        HoodieLocalEngineContext engineContext) throws IOException {
+    HoodieConfig writerConfig = new HoodieConfig();
+    writerConfig.getProps().putAll(metaClient.getTableConfig().getProps());
+    // This low-level test path bypasses HoodieWriteConfig, and does not contain codec configuration,
+    // so set the codec explicitly here.
+    writerConfig.setValue(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "zstd");
     HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
         instant,
         path,
         metaClient.getStorage(),
-        metaClient.getTableConfig(),
+        writerConfig,
         HOODIE_SCHEMA_WITH_METADATA_FIELDS,
         engineContext.getTaskContextSupplier(),
         HoodieRecord.HoodieRecordType.AVRO);
@@ -559,7 +568,7 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
             Lazy.eagerly(Option.of(HOODIE_SCHEMA_WITH_METADATA_FIELDS)), false, V1).keySet()));
 
     //test with meta cols disabled
-    tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS.key(), "false");
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE.key(), MetaFieldsMode.NONE.name());
     metadataConfig = HoodieMetadataConfig.newBuilder()
         .enable(true).withMetadataIndexColumnStats(true)
         .build();
@@ -595,6 +604,51 @@ public class TestHoodieTableMetadataUtil extends HoodieCommonTestHarness {
     expected.add("localTimestampMillisField");
     assertListEquality(expected, new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, metadataConfig,
         Lazy.eagerly(Option.of(schema)), true, V1).keySet()));
+  }
+
+  /**
+   * The schema-absent branch of {@code getColumnsToIndexWithoutRequiredMetaFields}, which
+   * {@link #testGetColumnsToIndex()} never reaches because every case there supplies a schema. With no
+   * explicit column list it yields only the always-indexed meta columns; with one it throws, since those
+   * names cannot be resolved without a schema. While initializing it returns them unresolved instead.
+   */
+  @Test
+  public void testGetColumnsToIndexWhenTableSchemaIsAbsent() {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+
+    HoodieMetadataConfig noColumnList = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .build();
+    assertListEquality(new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX)),
+        new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, noColumnList,
+            Lazy.eagerly(Option.empty()), false, V1).keySet()));
+
+    HoodieMetadataConfig withColumnList = HoodieMetadataConfig.newBuilder()
+        .enable(true).withMetadataIndexColumnStats(true)
+        .withColumnStatsIndexForColumns("col_1,col_2")
+        .build();
+    Throwable thrown = assertThrows(IllegalArgumentException.class,
+        () -> HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, withColumnList,
+            Lazy.eagerly(Option.empty()), false, V1),
+        "an explicit column list cannot be resolved without a table schema");
+    assertTrue(String.valueOf(thrown.getMessage()).contains("Table schema not found"),
+        () -> "the failure should name the missing schema, but was: " + thrown.getMessage());
+
+    // Table initialisation is the exception: the configured names are recorded without schemas, so col
+    // stats can be enabled before the first commit has produced one. The meta columns are added by the
+    // caller either way.
+    //
+    // The schema is supplied as a lazy that fails if it is ever forced, because this branch must return
+    // without resolving it at all. ColumnStatsIndexer passes isTableInitializing=true together with a
+    // Lazy.lazily(tryResolveSchemaForTable) whenever an explicit column list is set, including on tables
+    // that already have data, so resolving here would cost a schema read on that path. An eagerly-computed
+    // empty Option cannot tell "never resolved" from "resolved and absent"; this can.
+    List<String> expectedWhileInitialising = new ArrayList<>(Arrays.asList(HoodieTableMetadataUtil.META_COLS_TO_ALWAYS_INDEX));
+    expectedWhileInitialising.addAll(Arrays.asList("col_1", "col_2"));
+    assertListEquality(expectedWhileInitialising,
+        new ArrayList<>(HoodieTableMetadataUtil.getColumnsToIndex(tableConfig, withColumnList,
+            Lazy.lazily(() -> fail("the initializing branch must not resolve the table schema")),
+            true, V1).keySet()));
   }
 
   private void assertListEquality(List<String> expected, List<String> actual) {

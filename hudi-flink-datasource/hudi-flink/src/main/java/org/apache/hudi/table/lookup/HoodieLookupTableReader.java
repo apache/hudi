@@ -28,16 +28,19 @@ import org.apache.flink.table.data.RowData;
 
 import javax.annotation.Nullable;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import static org.apache.hudi.common.util.CloseableUtils.closeSuppressing;
+
 /**
  * Hudi look up table reader.
  */
-public class HoodieLookupTableReader implements Serializable {
+public class HoodieLookupTableReader implements Serializable, Closeable {
   private static final long serialVersionUID = 1L;
 
   private final SerializableSupplier<InputFormat<RowData, ?>> inputFormatSupplier;
@@ -53,11 +56,17 @@ public class HoodieLookupTableReader implements Serializable {
   }
 
   public void open() throws IOException {
+    close();
     this.inputFormat = inputFormatSupplier.get();
-    inputFormat.configure(conf);
-    this.inputSplits = Arrays.stream(inputFormat.createInputSplits(1)).collect(Collectors.toList());
-    ((RichInputFormat) inputFormat).openInputFormat();
-    inputFormat.open(inputSplits.remove(0));
+    try {
+      inputFormat.configure(conf);
+      this.inputSplits = Arrays.stream(inputFormat.createInputSplits(1)).collect(Collectors.toList());
+      ((RichInputFormat) inputFormat).openInputFormat();
+      inputFormat.open(inputSplits.remove(0));
+    } catch (IOException | RuntimeException e) {
+      closeSuppressing(this, e);
+      throw e;
+    }
   }
 
   @Nullable
@@ -77,12 +86,21 @@ public class HoodieLookupTableReader implements Serializable {
     return null;
   }
 
+  @Override
   public void close() throws IOException {
-    if (this.inputFormat != null) {
-      inputFormat.close();
+    InputFormat format = this.inputFormat;
+    this.inputFormat = null;
+    this.inputSplits = null;
+    if (format == null) {
+      return;
     }
-    if (inputFormat instanceof RichInputFormat) {
-      ((RichInputFormat) inputFormat).closeInputFormat();
+
+    if (format instanceof RichInputFormat) {
+      try (Closeable ignored = ((RichInputFormat) format)::closeInputFormat) {
+        format.close();
+      }
+    } else {
+      format.close();
     }
   }
 }

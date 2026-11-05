@@ -49,7 +49,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -790,9 +792,106 @@ public class TestFSUtils extends HoodieCommonTestHarness {
       "gs://my-bucket/path/to/s3a://object",
       "gs://my-bucket s3a://my-object",
   })
-  
   void testUriDoesNotChange(String uri) {
     assertEquals(uri, FSUtils.s3aToS3(uri));
+  }
+
+  static Stream<Arguments> normalizeBasePathForLockingCases() {
+    return Stream.of(
+        // Canonical form strips all trailing slashes (none is appended).
+        Arguments.of("s3://my-bucket/path", "s3://my-bucket/path"),
+        Arguments.of("s3://my-bucket/path/", "s3://my-bucket/path"),
+        Arguments.of("s3://my-bucket/path///", "s3://my-bucket/path"),
+        // s3a:// is normalized to s3:// (delegates to s3aToS3), case-insensitively.
+        Arguments.of("s3a://my-bucket/path", "s3://my-bucket/path"),
+        Arguments.of("S3A://my-bucket/path/", "s3://my-bucket/path"),
+        // Whitespace surrounding the path is stripped.
+        Arguments.of("  s3://my-bucket/path  ", "s3://my-bucket/path"),
+        Arguments.of("\ts3a://my-bucket/path/\n", "s3://my-bucket/path"),
+        // Whitespace BETWEEN the path and its trailing slashes must be stripped too. Trimming
+        // first and stripping slashes afterwards leaves "s3://my-bucket/path " here, which
+        // hashes to a different lock than the canonical form and is not idempotent.
+        Arguments.of("s3://my-bucket/path /", "s3://my-bucket/path"),
+        Arguments.of("s3://my-bucket/path // ", "s3://my-bucket/path"),
+        // Non-S3 schemes pass through (still get trailing-slash stripping).
+        Arguments.of("gs://my-bucket/path", "gs://my-bucket/path"),
+        Arguments.of("gs://my-bucket/path//", "gs://my-bucket/path"),
+        // Inner consecutive slashes are intentionally NOT touched (could be a real S3 key).
+        Arguments.of("s3://my-bucket//inner/path", "s3://my-bucket//inner/path"),
+        // S3 object keys are allowed to end with ':' - a final-segment colon must NOT be
+        // mis-classified as the "scheme-only" case. The trailing ':' is part of the key and
+        // is preserved after any trailing slashes are stripped.
+        Arguments.of("s3://my-bucket/foo:", "s3://my-bucket/foo:"),
+        Arguments.of("s3://my-bucket/foo:/", "s3://my-bucket/foo:"),
+        Arguments.of("s3://my-bucket/foo:bar:/", "s3://my-bucket/foo:bar:"),
+        Arguments.of("s3a://my-bucket/foo:///", "s3://my-bucket/foo:"));
+  }
+
+  /**
+   * Every benign formatting variant of one table's base path must canonicalize to the same
+   * string, since implicit lock providers hash this to pick a lock row / znode.
+   */
+  @ParameterizedTest
+  @MethodSource("normalizeBasePathForLockingCases")
+  void testNormalizeBasePathForLocking(String input, String expected) {
+    assertEquals(expected, FSUtils.normalizeBasePathForLocking(input));
+  }
+
+  @Test
+  void testNormalizeBasePathForLockingPreservesUnusualCharacters() {
+    // URL-unsafe and equals/colon/plus/hash/ampersand/space characters pass through unchanged
+    // except for the trailing-slash and s3a-scheme rules. Hudi does not re-encode paths
+    // internally so the lock key must be byte-stable across these characters.
+    assertEquals(
+        "s3://my-bucket/datalake/db=foo:bar/dt=2024-01-01T00:00:00+05:30/region=us east/category=a&b=c/vehicle#1/file",
+        FSUtils.normalizeBasePathForLocking(
+            "s3a://my-bucket/datalake/db=foo:bar/dt=2024-01-01T00:00:00+05:30/region=us east/category=a&b=c/vehicle#1/file"));
+  }
+
+  /**
+   * The canonical form must be a fixed point. Both implicit lock providers document that this
+   * helper is idempotent and pass already-normalized values back through it.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "s3://my-bucket/path",
+      "s3://my-bucket/path/",
+      "  s3://my-bucket/path  ",
+      "s3://my-bucket/path /",
+      "s3://my-bucket/path /// ",
+      // Control characters that String#trim strips but Character#isWhitespace does not. The
+      // strip loop has to use the same rule as trim, or these reopen the non-idempotence.
+      "s3://my-bucket/path\u0001/",
+      "s3://my-bucket/path\u001b//",
+      "\u0002s3a://my-bucket/path\u0008/",
+      "s3a://my-bucket/path//",
+      "s3://my-bucket//inner/path/",
+      "s3://my-bucket/foo:/",
+      "gs://my-bucket/path//",
+  })
+  void testNormalizeBasePathForLockingIsIdempotent(String input) {
+    String once = FSUtils.normalizeBasePathForLocking(input);
+    assertEquals(once, FSUtils.normalizeBasePathForLocking(once));
+  }
+
+  @Test
+  void testNormalizeBasePathForLockingRejectsNull() {
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(null));
+  }
+
+  /**
+   * Empty, all-slash and scheme-only inputs are rejected - stripping leaves nothing meaningful
+   * to lock against, and hashing them would collapse unrelated tables onto one lock.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {
+      "", "   ", "/", "///", " / ",
+      // Scheme roots are rejected for every scheme, not just s3. These previously hashed to a
+      // working lock key, so this is a behaviour change, not just tightened validation.
+      "s3://", "s3:///", "s3a://", "s3a:///", "file:/", "file://", "file:///", "hdfs:/", "gs:///",
+  })
+  void testNormalizeBasePathForLockingRejectsUnlockablePaths(String basePath) {
+    assertThrows(IllegalArgumentException.class, () -> FSUtils.normalizeBasePathForLocking(basePath));
   }
 
   private StoragePath getHoodieTempDir() {

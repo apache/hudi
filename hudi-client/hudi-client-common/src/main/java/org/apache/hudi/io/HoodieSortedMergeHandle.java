@@ -18,7 +18,6 @@
 
 package org.apache.hudi.io;
 
-import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -33,8 +32,6 @@ import org.apache.hudi.table.HoodieTable;
 import javax.annotation.concurrent.NotThreadSafe;
 
 import java.io.IOException;
-import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -51,9 +48,9 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
   private final Queue<String> newRecordKeysSorted = new PriorityQueue<>(StringUtils.UTF8_LEXICOGRAPHIC_COMPARATOR);
 
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
-                                 Iterator<HoodieRecord<T>> recordItr, String partitionPath, String fileId, TaskContextSupplier taskContextSupplier,
-                                 Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, recordItr, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+                                 MergeContext<T> mergeContext, String partitionPath, String fileId,
+                                 TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
     newRecordKeysSorted.addAll(keyToNewRecords.keySet());
   }
 
@@ -62,8 +59,8 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
    */
   public HoodieSortedMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                  Map<String, HoodieRecord<T>> keyToNewRecordsOrig, String partitionPath, String fileId,
-                                 HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, keyToNewRecordsOrig, partitionPath, fileId, dataFileToBeMerged, taskContextSupplier, keyGeneratorOpt);
+                                 HoodieBaseFile baseFile, TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+    super(config, instantTime, hoodieTable, keyToNewRecordsOrig, partitionPath, fileId, baseFile, taskContextSupplier, keyGeneratorOpt);
 
     newRecordKeysSorted.addAll(keyToNewRecords.keySet());
   }
@@ -104,10 +101,10 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
   }
 
   @Override
-  public List<WriteStatus> close() {
+  protected void writeIncomingRecords() throws IOException {
     // write out any pending records (this can happen when inserts are turned into updates)
-    while (!newRecordKeysSorted.isEmpty()) {
-      try {
+    try {
+      while (!newRecordKeysSorted.isEmpty()) {
         String key = newRecordKeysSorted.poll();
         HoodieRecord<T> hoodieRecord = keyToNewRecords.get(key);
         if (!writtenRecordKeys.contains(hoodieRecord.getRecordKey())) {
@@ -119,13 +116,9 @@ public class HoodieSortedMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<
           insertRecordsWritten++;
           writtenRecordKeys.add(hoodieRecord.getRecordKey());
         }
-      } catch (IOException e) {
-        throw new HoodieUpsertException("Failed to close UpdateHandle", e);
       }
+    } finally {
+      newRecordKeysSorted.clear();
     }
-
-    newRecordKeysSorted.clear();
-
-    return super.close();
   }
 }

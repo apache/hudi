@@ -114,7 +114,7 @@ public class PartitionStatsIndexer extends BaseIndexer {
     checkState(MetadataPartitionType.COLUMN_STATS.isMetadataPartitionAvailable(dataTableMetaClient),
         "Column stats partition must be enabled to generate partition stats. Please enable: " + HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key());
     // Generate Hoodie Pair data of partition name and list of column range metadata for all the files in that partition
-    boolean isDeletePartition = context.commitMetadata().getOperationType().equals(WriteOperationType.DELETE_PARTITION);
+    boolean isDeletePartition = WriteOperationType.DELETE_PARTITION.equals(context.commitMetadata().getOperationType());
     final HoodieData<HoodieRecord> records = convertMetadataToPartitionStatsRecords(
         context.commitMetadata(), context.instantTime(), engineContext, dataTableWriteConfig,
         dataTableMetaClient, context.tableMetadata(), dataTableWriteConfig.getMetadataConfig(),

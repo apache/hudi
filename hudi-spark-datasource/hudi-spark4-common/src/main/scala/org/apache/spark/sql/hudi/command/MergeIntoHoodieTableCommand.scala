@@ -21,7 +21,7 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieSch
 import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema
 import org.apache.hudi.HoodieSparkSqlWriter.CANONICALIZE_SCHEMA
-import org.apache.hudi.common.config.RecordMergeMode
+import org.apache.hudi.common.config.{ConfigProperty, RecordMergeMode}
 import org.apache.hudi.common.model.{HoodieAvroRecordMerger, HoodieRecordMerger}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion, PartialUpdateMode}
@@ -266,6 +266,56 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       "ordering fields",
       updatingActions.flatMap(_.assignments))
 
+  /**
+   * Target partition columns mapped onto the [[sourceTable]] expression supplying each, resolved
+   * from the `ON` condition first and then the source output. A keyed target is written from the
+   * source alone, so a partition column missing from it lands in the default partition.
+   *
+   * NOTE: assignments are not a source - key generation runs before the payload evaluates them, so
+   *       `UPDATE SET t.dt = s.new_dt` names the record's new partition, not its current one.
+   */
+  private lazy val partitionFieldsAssociatedExpressions: Seq[(Attribute, Expression)] =
+    if (!hasPrimaryKey() || hoodieCatalogTable.partitionFields.isEmpty) {
+      Seq.empty
+    } else {
+      val resolver = sparkSession.sessionState.conf.resolver
+      // Already produced by the ON-condition path; re-adding would alias one column twice.
+      val resolvedFromCondition = recordKeyAttributeToConditionExpression
+      hoodieCatalogTable.partitionFields.toSeq.flatMap { partitionField =>
+        if (resolvedFromCondition.exists { case (attr, _) => resolver(attr.name, partitionField) }) {
+          Seq.empty
+        } else {
+          try {
+            resolveFieldAssociationsBetweenSourceAndTarget(
+              resolver,
+              mergeInto.targetTable,
+              mergeInto.sourceTable,
+              Seq(partitionField),
+              "partition fields",
+              Seq.empty)
+          } catch {
+            case _: MergeIntoFieldResolutionException =>
+              throw new MergeIntoFieldResolutionException(
+                s"Failed to resolve partition fields `$partitionField` within the source-table output. " +
+                  s"Project `$partitionField` in the source query, or match on it in the ON condition.")
+          }
+        }
+      }
+    }
+
+  /**
+   * True when a global index re-keys a matched record onto the partition its existing version
+   * occupies, making the incoming partition value irrelevant. Found records only, so callers must
+   * also establish the statement cannot insert.
+   *
+   * NOTE: [[isGlobalIndexEnabled]] returns the value of `update.partition.path`, so it is true
+   *       precisely when this re-keying does NOT happen - hence the negation.
+   */
+  private def isGlobalIndexRekeyingToExistingPartition(props: Map[String, String]): Boolean =
+    props.get(HoodieIndexConfig.INDEX_TYPE.key).exists { indexType =>
+      isGlobalIndexType(indexType) && !isGlobalIndexEnabled(indexType, props)
+    }
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
     this.sparkSession = sparkSession
     // TODO move to analysis phase
@@ -273,7 +323,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     val props = buildMergeIntoConfig(hoodieCatalogTable)
     validate(props)
 
-    val processedInputDf: DataFrame = getProcessedInputDf
+    val processedInputDf: DataFrame = getProcessedInputDf(props)
     // Do the upsert
     executeUpsert(processedInputDf, props)
     // Refresh the table in the catalog
@@ -340,7 +390,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * <li>{@code ts = source.sts}</li>
    * </ul>
    */
-  private def getProcessedInputDf: DataFrame = {
+  private def getProcessedInputDf(props: Map[String, String]): DataFrame = {
     val resolver = sparkSession.sessionState.analyzer.resolver
 
     // For pkless table, we need to project the meta columns by joining with the target table;
@@ -361,7 +411,20 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
 
     val inputPlanAttributes = inputPlan.output
 
-    val requiredAttributesMap = recordKeyAttributeToConditionExpression ++ orderingFieldsAssociatedExpressions
+    // A re-keying global index places a matched record by its existing partition, so the value the
+    // source carries is irrelevant. That covers found records only, hence the insert-clause check.
+    val partitionAssociations =
+      if (insertingActions.isEmpty && isGlobalIndexRekeyingToExistingPartition(props)) Seq.empty
+      else partitionFieldsAssociatedExpressions
+
+    // Deduped by target attribute: one column can be reached by more than one path (e.g. an
+    // ordering column also matched on in the ON condition) and each entry projects its own Alias.
+    val requiredAttributesMap =
+      (recordKeyAttributeToConditionExpression ++ orderingFieldsAssociatedExpressions ++ partitionAssociations)
+        .foldLeft(Seq.empty[(Attribute, Expression)]) { (acc, association) =>
+          if (acc.exists { case (seen, _) => resolver(seen.name, association._1.name) }) acc
+          else acc :+ association
+        }
 
     val (existingAttributesMap, missingAttributesMap) = requiredAttributesMap.partition {
       case (keyAttr, _) => inputPlanAttributes.exists(attr => resolver(keyAttr.name, attr.name))
@@ -472,11 +535,13 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
         // NOTE: For updating clause we allow partial assignments, where only some of the fields of the target
         //       table's records are updated (w/ the missing ones keeping their existing values)
         serializeConditionalAssignments(updatingActions.map(a => (a.condition, a.assignments)),
+          parameters,
           partialAssignmentMode = Some(PartialAssignmentMode.ORIGINAL_VALUE),
           keepUpdatedFieldsOnly = writePartialUpdates),
       // Append (encoded) inserting actions
       PAYLOAD_INSERT_CONDITION_AND_ASSIGNMENTS ->
         serializeConditionalAssignments(insertingActions.map(a => (a.condition, a.assignments)),
+          parameters,
           partialAssignmentMode = Some(PartialAssignmentMode.NULL_VALUE),
           keepUpdatedFieldsOnly = false,
           validator = validateInsertingAssignmentExpression)
@@ -486,7 +551,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
     writeParams ++= deletingActions.headOption.map {
       case DeleteAction(condition) =>
         PAYLOAD_DELETE_CONDITION -> serializeConditionalAssignments(Seq(condition -> Seq.empty),
-          keepUpdatedFieldsOnly = false)
+          parameters, keepUpdatedFieldsOnly = false)
     }.toSeq
 
     // Append
@@ -496,7 +561,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
       PAYLOAD_RECORD_AVRO_SCHEMA ->
         HoodieSchemaUtils.removeMetadataFields(
           HoodieSchemaConversionUtils.convertUserStructTypeToHoodieSchema(enrichedSourceDF.schema, "record", "")).toString,
-      PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput))
+      PAYLOAD_EXPECTED_COMBINED_SCHEMA -> encodeAsBase64String(toStructType(joinedExpectedOutput(parameters)))
     )
 
     // Append original payload class
@@ -617,13 +682,14 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * updated fields, to be written to the log files in a MOR table.
    */
   private def serializeConditionalAssignments(conditionalAssignments: Seq[(Option[Expression], Seq[Assignment])],
+                                              props: Map[String, String],
                                               partialAssignmentMode: Option[PartialAssignmentMode] = None,
                                               keepUpdatedFieldsOnly: Boolean,
                                               validator: Expression => Unit = scalaFunction1Noop): String = {
     val boundConditionalAssignments =
       conditionalAssignments.map {
         case (condition, assignments) =>
-          val boundCondition = condition.map(bindReferences).getOrElse(Literal.create(true, BooleanType))
+          val boundCondition = condition.map(bindReferences(_, props)).getOrElse(Literal.create(true, BooleanType))
           // NOTE: For deleting actions there's no assignments provided and no re-ordering is required.
           //       All other actions are expected to provide assignments correspondent to every field
           //       of the [[targetTable]] being assigned
@@ -637,7 +703,7 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
           //       of these expressions could be inserted into the target table as is
           val boundAssignmentExprs = reorderedAssignments.map {
             case Assignment(attr: Attribute, value) =>
-              val boundExpr = bindReferences(value)
+              val boundExpr = bindReferences(value, props)
               validator(boundExpr)
               // Alias resulting expression w/ target table's expected column name, as well as
               // do casting if necessary
@@ -726,11 +792,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * Binding is necessary for [[ExpressionPayload]] to use the code-gen to effectively perform
    * handling of the records (combining updated records, as well as producing new records to be inserted)
    */
-  private def bindReferences(expr: Expression): Expression = {
+  private def bindReferences(expr: Expression, props: Map[String, String]): Expression = {
     // NOTE: Since original source dataset could be augmented w/ additional columns (please
     //       check its corresponding java-doc for more details) we have to get up-to-date list
     //       of its output attributes
-    val joinedExpectedOutputAttributes = joinedExpectedOutput
+    val joinedExpectedOutputAttributes = joinedExpectedOutput(props)
 
     bindReference(expr, joinedExpectedOutputAttributes, allowFailures = false)
   }
@@ -739,11 +805,11 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    * Output of the expected (left) join of the a) [[sourceTable]] dataset (potentially amended w/ primary-key,
    * ordering columns) with b) existing [[targetTable]]
    */
-  private def joinedExpectedOutput: Seq[Attribute] = {
+  private def joinedExpectedOutput(props: Map[String, String]): Seq[Attribute] = {
     // NOTE: We're relying on [[sourceDataset]] here instead of [[mergeInto.sourceTable]],
     //       as it could be amended to add missing primary-key and/or ordering columns.
     //       Please check [[sourceDataset]] scala-doc for more details
-    (getProcessedInputDf.queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
+    (getProcessedInputDf(props).queryExecution.analyzed.output ++ mergeInto.targetTable.output).filterNot(a => isMetaField(a.name))
   }
 
   private def validateInsertingAssignmentExpression(expr: Expression): Unit = {
@@ -898,7 +964,9 @@ case class MergeIntoHoodieTableCommand(mergeInto: MergeIntoTable) extends Hoodie
    */
   private def checkSchemaMergeIntoCompatibility(assignments: Seq[Assignment], props: Map[String, String]): Unit = {
     if (assignments.nonEmpty) {
-      // Assert data type matching for partition key
+      // Assert data type matching for partition key. Unresolvable is not an error here: this only
+      // type-checks, per action, so a column supplied by the other clause looks unresolvable.
+      // Resolvability is enforced by [[partitionFieldsAssociatedExpressions]].
       hoodieCatalogTable.partitionFields.foreach {
         partitionField => {
           try {
@@ -1122,17 +1190,23 @@ object MergeIntoHoodieTableCommand {
     }
   }
 
+  // Global index types mapped to the config governing whether a matched record is re-keyed onto its
+  // existing partition. One map, so a type cannot be recorded as global without its config.
+  // INMEMORY is excluded: its lookup is keyed by HoodieKey, so it does not span partitions.
+  private val globalIndexUpdatePartitionPathConfigs: Map[String, ConfigProperty[String]] = Map(
+    HoodieIndex.IndexType.GLOBAL_SIMPLE.name -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+    HoodieIndex.IndexType.GLOBAL_BLOOM.name -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+    HoodieIndex.IndexType.RECORD_INDEX.name -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE,
+    HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE)
+
+  def isGlobalIndexType(indexType: String): Boolean =
+    globalIndexUpdatePartitionPathConfigs.contains(indexType)
+
   // Check if goal index is enabled for specific indexes.
-  def isGlobalIndexEnabled(indexType: String, parameters: Map[String, String]): Boolean = {
-    Seq(
-      HoodieIndex.IndexType.GLOBAL_SIMPLE -> HoodieIndexConfig.SIMPLE_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.GLOBAL_BLOOM -> HoodieIndexConfig.BLOOM_INDEX_UPDATE_PARTITION_PATH_ENABLE,
-      HoodieIndex.IndexType.RECORD_INDEX -> HoodieIndexConfig.RECORD_INDEX_UPDATE_PARTITION_PATH_ENABLE
-    ).collectFirst {
-      case (hoodieIndex, config) if indexType == hoodieIndex.name =>
-        parameters.getOrElse(config.key, config.defaultValue().toString).toBoolean
-    }.getOrElse(false)
-  }
+  def isGlobalIndexEnabled(indexType: String, parameters: Map[String, String]): Boolean =
+    globalIndexUpdatePartitionPathConfigs.get(indexType).exists { config =>
+      parameters.getOrElse(config.key, config.defaultValue()).toBoolean
+    }
 
   def useCustomMergeMode(parameters: Map[String, String]): Boolean = {
     val mergeModeOpt = parameters.get(DataSourceWriteOptions.RECORD_MERGE_MODE.key)

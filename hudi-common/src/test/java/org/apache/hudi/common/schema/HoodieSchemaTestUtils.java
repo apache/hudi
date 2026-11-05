@@ -96,4 +96,16 @@ public class HoodieSchemaTestUtils {
         HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES), null, null),
         HoodieSchemaField.of("value", HoodieSchema.create(HoodieSchemaType.BYTES), null, null)));
   }
+
+  /**
+   * The shredded twin of {@link #createPlainVariantRecord}: the on-disk shredded variant layout
+   * {@code {metadata: bytes, value: nullable bytes, typed_value}} as a plain record without the
+   * variant logicalType, i.e. what converting a parquet footer of a shredded file gives back.
+   */
+  public static HoodieSchema createPlainShreddedVariantRecord(String recordName, HoodieSchema typedValue) {
+    return HoodieSchema.createRecord(recordName, null, null, false, Arrays.asList(
+        HoodieSchemaField.of("metadata", HoodieSchema.create(HoodieSchemaType.BYTES), null, null),
+        HoodieSchemaField.of("value", HoodieSchema.createNullable(HoodieSchemaType.BYTES), null, null),
+        HoodieSchemaField.of("typed_value", typedValue, null, null)));
+  }
 }

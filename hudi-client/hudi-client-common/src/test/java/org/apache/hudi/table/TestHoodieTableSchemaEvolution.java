@@ -189,6 +189,17 @@ public class TestHoodieTableSchemaEvolution {
     // Should pass because the field is found via alias and type hasn't changed
     assertDoesNotThrow(() -> 
         HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata));
+
+    // The assertion above passes whether or not the alias resolves: an unresolved alias returns a null writer
+    // field, which the writerField != null guard then skips. Changing the type behind the same alias is what
+    // makes the lookup decide the outcome.
+    String retypedWriterSchemaStr = writerSchemaStr.replace(
+        "{\"name\": \"new_name\", \"type\": \"string\"}",
+        "{\"name\": \"new_name\", \"type\": \"int\"}");
+    HoodieSchema retypedWriterSchema = HoodieSchema.parse(retypedWriterSchemaStr);
+
+    assertThrows(SchemaCompatibilityException.class, () ->
+        HoodieTable.validateSecondaryIndexSchemaEvolution(tableSchema, retypedWriterSchema, indexMetadata));
   }
 
   @Test

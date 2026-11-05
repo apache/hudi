@@ -108,7 +108,7 @@ public class JdbcSource extends RowSource {
         passwordFileStream = fileSystem.open(new Path(getStringWithAltKeys(properties, JdbcSourceConfig.PASSWORD_FILE)));
         byte[] bytes = new byte[passwordFileStream.available()];
         passwordFileStream.read(bytes);
-        dataFrameReader = dataFrameReader.option(Config.PASSWORD_PROP, new String(bytes));
+        dataFrameReader = dataFrameReader.option(Config.PASSWORD_PROP, StringUtils.fromUTF8Bytes(bytes));
       } else {
         throw new IllegalArgumentException(String.format("JDBCSource needs either a %s or %s to connect to RDBMS "
             + "datasource", JdbcSourceConfig.PASSWORD_FILE.key(), JdbcSourceConfig.PASSWORD.key()));

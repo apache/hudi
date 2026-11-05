@@ -69,11 +69,11 @@ class TestVectorConversionUtils {
     DataType requested = DataTypes.ROW(
         DataTypes.FIELD("codes", DataTypes.ARRAY(DataTypes.TINYINT()).notNull()),
         DataTypes.FIELD("id", DataTypes.INT().notNull()),
-        DataTypes.FIELD("float_vec", DataTypes.ARRAY(DataTypes.FLOAT()))).notNull();
+        DataTypes.FIELD("Float_Vec", DataTypes.ARRAY(DataTypes.FLOAT()))).notNull();
     HoodieSchema projectedSchema = HoodieSchema.createRecord("projected", null, null, Arrays.asList(
         HoodieSchemaField.of("codes", INT8_VECTOR),
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("float_vec", FLOAT_VECTOR)));
+        HoodieSchemaField.of("Float_Vec", FLOAT_VECTOR)));
     DataType physical = VectorConversionUtils.getParquetReadDataType(
         requested, projectedSchema, detected);
     RowType physicalRow = (RowType) physical.getLogicalType();
@@ -92,6 +92,14 @@ class TestVectorConversionUtils {
     assertEquals(LogicalTypeRoot.VARBINARY, physicalTypes[1].getLogicalType().getTypeRoot());
     assertEquals(LogicalTypeRoot.VARBINARY, physicalTypes[2].getLogicalType().getTypeRoot());
     assertEquals(LogicalTypeRoot.VARBINARY, physicalTypes[3].getLogicalType().getTypeRoot());
+
+    String[] mismatchedNames = {"id", "float_vec", "double_vec", "codes"};
+    Map<Integer, HoodieSchema.Vector> mismatched =
+        VectorConversionUtils.detectVectorColumns(mismatchedNames, selected, schema);
+    assertFalse(mismatched.containsKey(2));
+    DataType[] mismatchedPhysicalTypes =
+        VectorConversionUtils.getParquetReadFieldTypes(mismatchedNames, fieldTypes, schema);
+    assertEquals(LogicalTypeRoot.ARRAY, mismatchedPhysicalTypes[1].getLogicalType().getTypeRoot());
   }
 
   @Test
@@ -149,7 +157,7 @@ class TestVectorConversionUtils {
   private static HoodieSchema vectorRecordSchema() {
     return HoodieSchema.createRecord("vectors", null, null, Arrays.asList(
         HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.INT)),
-        HoodieSchemaField.of("float_vec", FLOAT_VECTOR),
+        HoodieSchemaField.of("Float_Vec", FLOAT_VECTOR),
         HoodieSchemaField.of("double_vec", DOUBLE_VECTOR),
         HoodieSchemaField.of("codes", INT8_VECTOR)));
   }

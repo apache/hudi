@@ -19,6 +19,7 @@
 package org.apache.hudi.table.upgrade;
 
 import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -39,6 +40,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -58,6 +61,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.URI;
@@ -70,7 +74,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getCommitTimeAtUTC;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -115,6 +118,41 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     originalMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
     assertEquals(numCompactionInstants + 1, originalMetaClient.getActiveTimeline().filterCompletedOrMajorOrMinorCompactionInstants().countInstants());
     assertTrue(originalMetaClient.getTableConfig().isMetadataTableAvailable());
+  }
+
+  @ParameterizedTest
+  @MethodSource("legacyFixtureUpgradePairs")
+  public void testLegacyUpgradeHandlersWithFixtureTables(
+      HoodieTableVersion fromVersion, HoodieTableVersion toVersion) throws Exception {
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion);
+    Dataset<Row> originalData = readTableData(originalMetaClient, "before legacy fixture upgrade");
+    StoragePath metadataTablePath = HoodieTableMetadata.getMetadataTableBasePath(originalMetaClient.getBasePath());
+    if (originalMetaClient.getStorage().exists(metadataTablePath)) {
+      originalMetaClient.getStorage().deleteDirectory(metadataTablePath);
+    }
+
+    StoragePath auxiliaryCompactionFile = null;
+    if (fromVersion == HoodieTableVersion.FIVE) {
+      HoodieInstant requestedCompaction = originalMetaClient.getInstantGenerator().createNewInstant(
+          HoodieInstant.State.REQUESTED, HoodieTimeline.COMPACTION_ACTION, "20250802170400000");
+      originalMetaClient.getActiveTimeline().saveToCompactionRequested(
+          requestedCompaction, HoodieCompactionPlan.newBuilder().setVersion(1).build());
+      String instantFileName = originalMetaClient.getInstantFileNameGenerator().getFileName(requestedCompaction);
+      auxiliaryCompactionFile = new StoragePath(originalMetaClient.getMetaAuxiliaryPath(), instantFileName);
+      originalMetaClient.getStorage().create(auxiliaryCompactionFile, false).close();
+      assertTrue(originalMetaClient.getStorage().exists(auxiliaryCompactionFile));
+    }
+
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
+    new LegacyFixtureUpgradeDowngrade(
+        originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null);
+
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
+    assertEquals(toVersion, resultMetaClient.getTableConfig().getTableVersion());
+    if (auxiliaryCompactionFile != null) {
+      assertFalse(resultMetaClient.getStorage().exists(auxiliaryCompactionFile));
+    }
+    validateDataConsistency(originalData, resultMetaClient, "after legacy fixture upgrade");
   }
 
   @Disabled
@@ -373,6 +411,8 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
                                                                 boolean enableValidation) throws Exception {
     HoodieTableMetaClient originalMetaClient = loadFixtureTable(fromVersion, "-complex-keygen");
     assertTrue(KeyGeneratorType.isComplexKeyGenerator(originalMetaClient.getTableConfig()));
+    assertFalse(originalMetaClient.getTableConfig().contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
+        "Fixture tables predate the encoding property");
 
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath(originalMetaClient.getBasePath().toString())
@@ -382,26 +422,58 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     String operation = fromVersion.lesserThan(toVersion) ? "upgrade" : "downgrade";
     Dataset<Row> originalData = readTableData(originalMetaClient, "before " + operation);
 
-    if (enableValidation) {
-      HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
-          () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null),
-          "Expected HoodieUpgradeDowngradeException for upgrade with complex keygen validation enabled");
+    // The fixtures predate the property, so every move deduces the encoding from the data and records it,
+    // in either direction and whatever the validation setting.
+    new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
+        .run(toVersion, null);
 
-      assertEquals(getComplexKeygenErrorMessage(operation), exception.getMessage(), "Exception message should mention complex key generator issue");
-    } else {
-      // Should succeed
-      new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
-          .run(toVersion, null);
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(originalMetaClient.getBasePath())
+        .build();
 
-      HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
-          .setConf(storageConf().newInstance())
-          .setBasePath(originalMetaClient.getBasePath())
-          .build();
+    assertTableVersionOnDataAndMetadataTable(resultMetaClient, toVersion);
+    validateVersionSpecificProperties(resultMetaClient, toVersion);
+    validateDataConsistency(originalData, resultMetaClient, "after " + operation);
 
-      assertTableVersionOnDataAndMetadataTable(resultMetaClient, toVersion);
-      validateVersionSpecificProperties(resultMetaClient, toVersion);
-      validateDataConsistency(originalData, resultMetaClient, "after " + operation);
-    }
+    // The v6 fixture was written by 0.14.0 (`id:<value>` keys), the v8 and v9 fixtures with bare values: the
+    // move must record what each actually carries so later writes keep matching.
+    ComplexKeyGenEncoding expectedEncoding = fromVersion.equals(HoodieTableVersion.SIX)
+        ? ComplexKeyGenEncoding.FIELD_PREFIXED : ComplexKeyGenEncoding.VALUE_ONLY;
+    assertEquals(Option.of(expectedEncoding), resultMetaClient.getTableConfig().getComplexKeyGenEncoding(),
+        "The " + operation + " must persist the record key encoding found in the data");
+    assertEquals(expectedEncoding, KeyGenUtils.resolveComplexKeyGenEncoding(resultMetaClient).get());
+  }
+
+  /**
+   * A persisted encoding is authoritative on every table version, so a downgrade keeps it and passes the
+   * validation; the fixture has no property, so seed one first.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"VALUE_ONLY", "FIELD_PREFIXED"})
+  public void testDowngradeFromNineKeepsPersistedComplexKeygenEncoding(String persistedEncoding) throws Exception {
+    HoodieTableMetaClient originalMetaClient = loadFixtureTable(HoodieTableVersion.NINE, "-complex-keygen");
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), persistedEncoding);
+    HoodieTableConfig.update(originalMetaClient.getStorage(), originalMetaClient.getMetaPath(), props);
+    originalMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
+    assertEquals(persistedEncoding, originalMetaClient.getTableConfig().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(originalMetaClient.getBasePath().toString())
+        .withAutoUpgradeVersion(true)
+        .withComplexKeygenValidation(true)
+        .build();
+    new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance())
+        .run(HoodieTableVersion.EIGHT, null);
+
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance())
+        .setBasePath(originalMetaClient.getBasePath())
+        .build();
+    assertEquals(HoodieTableVersion.EIGHT, resultMetaClient.getTableConfig().getTableVersion());
+    assertEquals(persistedEncoding, resultMetaClient.getTableConfig().getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING),
+        "The encoding property must survive the downgrade");
   }
 
   @ParameterizedTest
@@ -689,6 +761,13 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     return Stream.of(
         Arguments.of(HoodieTableVersion.FOUR),   // Hudi 0.11.1
         Arguments.of(HoodieTableVersion.FIVE)    // Hudi 0.12.2
+    );
+  }
+
+  private static Stream<Arguments> legacyFixtureUpgradePairs() {
+    return Stream.of(
+        Arguments.of(HoodieTableVersion.FOUR, HoodieTableVersion.FIVE),
+        Arguments.of(HoodieTableVersion.FIVE, HoodieTableVersion.SIX)
     );
   }
 
@@ -1184,5 +1263,18 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     // will perform real time query and do dataframe validation
     validateDataConsistency(expectedDataWithNewRecord, metaClientV6, "dataframe validation after v9->v6 downgrade for " + payloadType);
     log.info("Completed payload upgrade/downgrade test for: {}", payloadType);
+  }
+
+  private static class LegacyFixtureUpgradeDowngrade extends UpgradeDowngrade {
+    LegacyFixtureUpgradeDowngrade(HoodieTableMetaClient metaClient, HoodieWriteConfig config,
+                                  org.apache.hudi.common.engine.HoodieEngineContext context,
+                                  SupportsUpgradeDowngrade upgradeDowngradeHelper) {
+      super(metaClient, config, context, upgradeDowngradeHelper);
+    }
+
+    @Override
+    public boolean needsUpgradeOrDowngrade(HoodieTableVersion toWriteVersion) {
+      return true;
+    }
   }
 }

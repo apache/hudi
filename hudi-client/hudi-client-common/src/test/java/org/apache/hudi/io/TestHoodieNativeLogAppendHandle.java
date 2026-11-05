@@ -35,12 +35,18 @@ import org.apache.hudi.common.table.log.AppendResult;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieAppendException;
+import org.apache.hudi.exception.HoodieEarlyConflictDetectionException;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.io.cdc.HoodieNativeLogFormatWriter;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.MockedConstruction;
 
@@ -49,8 +55,14 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -62,6 +74,7 @@ import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 public class TestHoodieNativeLogAppendHandle {
@@ -91,12 +104,10 @@ public class TestHoodieNativeLogAppendHandle {
       HoodieNativeLogFormatWriter writer = writers.constructed().get(0);
 
       handle.writeData(inputRecord, true);
-      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class),
-          eq(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class));
       handle.writeDeleteRecord(inputRecord);
       verify(inputRecord).clearNewLocation();
-      verify(writer).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class),
-          eq(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+      verify(writer).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class));
 
       handle.flushWriter();
       verify(writer).flushAppend(any());
@@ -133,7 +144,7 @@ public class TestHoodieNativeLogAppendHandle {
       handle.writeData(inputRecord, false);
       InOrder rolloverOrder = inOrder(writer);
       rolloverOrder.verify(writer).flushAppend(any());
-      rolloverOrder.verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class), any());
+      rolloverOrder.verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class));
 
       handle.flushWriter();
       verify(writer, times(2)).flushAppend(any());
@@ -162,7 +173,7 @@ public class TestHoodieNativeLogAppendHandle {
   }
 
   @Test
-  public void testUsesConfiguredKeyWithoutMetadataFieldsAndSkipsIgnoredRecords() throws Exception {
+  public void testWritesWithoutMetadataFieldsAndSkipsIgnoredRecords() throws Exception {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
         .withPath("/tmp")
         .withSchema(SCHEMA)
@@ -171,7 +182,6 @@ public class TestHoodieNativeLogAppendHandle {
         .withWriteRecordPositionsEnabled(false)
         .build();
     HoodieTable table = table(config);
-    when(table.getMetaClient().getTableConfig().getRecordKeyFieldProp()).thenReturn("id");
 
     try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
         HoodieNativeLogFormatWriter.class, (writer, context) -> {
@@ -186,16 +196,16 @@ public class TestHoodieNativeLogAppendHandle {
       HoodieRecord ignoredRecord = mock(HoodieRecord.class);
       when(ignoredRecord.shouldIgnore(any(HoodieSchema.class), any())).thenReturn(true);
       handle.writeData(ignoredRecord, false);
-      verify(writer, never()).appendRecord(eq(ignoredRecord), any(), any());
+      verify(writer, never()).appendRecord(eq(ignoredRecord), any());
 
       HoodieRecord inputRecord = mock(HoodieRecord.class);
       HoodieRecord populatedRecord = mock(HoodieRecord.class);
       when(inputRecord.prependMetaFields(any(HoodieSchema.class), any(HoodieSchema.class), any(), any()))
           .thenReturn(populatedRecord);
       handle.writeData(inputRecord, false);
-      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class), eq("id"));
+      verify(writer).appendRecord(eq(populatedRecord), any(HoodieSchema.class));
       handle.writeDeleteWithoutMetadata(inputRecord);
-      verify(writer).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class), eq("id"));
+      verify(writer).appendDeleteRecord(eq(inputRecord), any(HoodieSchema.class));
     }
   }
 
@@ -214,6 +224,177 @@ public class TestHoodieNativeLogAppendHandle {
 
       HoodieAppendException exception = assertThrows(HoodieAppendException.class, handle::flushWriter);
       assertTrue(exception.getMessage().contains("file-1"));
+    }
+  }
+
+  private static Stream<Arguments> rolloverFlushFailures() {
+    return Stream.of(new IOException("flush failed"), new IllegalStateException("metadata failed"))
+        .flatMap(failure -> Stream.of(false, true).map(deleteRecord -> Arguments.of(failure, deleteRecord)));
+  }
+
+  @ParameterizedTest
+  @MethodSource("rolloverFlushFailures")
+  public void testRolloverFlushFailureIsNotIgnored(Exception failure, boolean deleteRecord) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withProps(config().getProps())
+        .withAllowOperationMetadataField(false)
+        .withWriteIgnoreFailed(true)
+        .build();
+    RuntimeException closeFailure = new IllegalStateException("close failed");
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) -> {
+          when(writer.hasPendingWrites()).thenReturn(true);
+          when(writer.canWriteDataFile()).thenReturn(false);
+          when(writer.canWriteDeleteFile()).thenReturn(false);
+          doThrow(failure).when(writer).flushAppend(any());
+          doThrow(closeFailure).when(writer).close();
+        })) {
+      TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table(config));
+      handle.createWriter();
+      handle.doInit = false;
+      HoodieRecord record = mock(HoodieRecord.class);
+      HoodieRecord nextRecord = mock(HoodieRecord.class);
+      when(record.getPartitionPath()).thenReturn("partition");
+      when(record.getMetadata()).thenReturn(Option.empty());
+      when(record.isDelete(any(), any())).thenReturn(deleteRecord);
+      when(record.prependMetaFields(any(), any(), any(), any())).thenReturn(record);
+      handle.recordItr = Arrays.asList(record, nextRecord).iterator();
+
+      HoodieException exception = assertThrows(HoodieException.class, handle::doAppend);
+      assertEquals(HoodieAppendException.class, exception.getCause().getClass());
+      assertSame(failure, exception.getCause().getCause());
+      assertArrayEquals(new Throwable[] {closeFailure}, exception.getCause().getSuppressed());
+      assertTrue(handle.isClosed());
+      assertNull(handle.getWriter());
+      assertNull(handle.recordItr);
+      assertFalse(handle.writeStatus.hasErrors(), "A flush failure must not be recorded as a single-record failure");
+      assertDoesNotThrow(handle::close);
+
+      HoodieNativeLogFormatWriter writer = writers.constructed().get(0);
+      verify(writer).flushAppend(any());
+      verify(writer).close();
+      verify(writer, never()).appendRecord(any(), any());
+      verify(writer, never()).appendDeleteRecord(any(), any());
+      verifyNoInteractions(nextRecord);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testRolloverFlushErrorPropagatesUnchanged(boolean deleteRecord) throws Exception {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withProps(config().getProps())
+        .withAllowOperationMetadataField(false)
+        .withWriteIgnoreFailed(true)
+        .build();
+    AssertionError failure = new AssertionError("flush failed");
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) -> {
+          when(writer.hasPendingWrites()).thenReturn(true);
+          doThrow(failure).when(writer).flushAppend(any());
+        })) {
+      TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table(config));
+      handle.createWriter();
+      handle.doInit = false;
+      HoodieRecord record = mock(HoodieRecord.class);
+      HoodieRecord nextRecord = mock(HoodieRecord.class);
+      when(record.getPartitionPath()).thenReturn("partition");
+      when(record.getMetadata()).thenReturn(Option.empty());
+      when(record.isDelete(any(), any())).thenReturn(deleteRecord);
+      when(record.prependMetaFields(any(), any(), any(), any())).thenReturn(record);
+      handle.recordItr = Arrays.asList(record, nextRecord).iterator();
+
+      try {
+        // Errors bypass the Exception handlers instead of being wrapped as append exceptions.
+        assertSame(failure, assertThrows(AssertionError.class, handle::doAppend));
+        assertFalse(handle.writeStatus.hasErrors());
+        HoodieNativeLogFormatWriter writer = writers.constructed().get(0);
+        verify(writer).flushAppend(any());
+        verify(writer, never()).appendRecord(any(), any());
+        verify(writer, never()).appendDeleteRecord(any(), any());
+        verifyNoInteractions(nextRecord);
+      } finally {
+        handle.closeWriter();
+      }
+    }
+  }
+
+  @Test
+  public void testRecordWriteFailureCanStillBeIgnored() throws Exception {
+    HoodieWriteConfig config = config();
+    config.setValue(HoodieWriteConfig.IGNORE_FAILED, "true");
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) -> {
+          when(writer.canWriteDataFile()).thenReturn(true);
+          doThrow(new IOException("record write failed")).when(writer).appendRecord(any(), any());
+        })) {
+      TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table(config));
+      handle.createWriter();
+      handle.doInit = false;
+      HoodieRecord record = mock(HoodieRecord.class);
+      when(record.getPartitionPath()).thenReturn("partition");
+      when(record.getMetadata()).thenReturn(Option.empty());
+      when(record.prependMetaFields(any(), any(), any(), any())).thenReturn(record);
+
+      assertFalse(handle.writeRecord(record));
+      assertFalse(handle.isClosed());
+      assertEquals(1, handle.writeStatus.getTotalErrorRecords());
+      verify(writers.constructed().get(0), never()).close();
+      handle.close();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testWriteFailureClosesNativeWriter(boolean useRecordMap) throws Exception {
+    HoodieWriteConfig config = config();
+    // Conflict detection must fail the handle even when individual write failures may be ignored.
+    config.setValue(HoodieWriteConfig.IGNORE_FAILED, "true");
+    HoodieTable table = table(config);
+    HoodieEarlyConflictDetectionException failure = new HoodieEarlyConflictDetectionException("conflict");
+    RuntimeException closeFailure = new IllegalStateException("close failed");
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) -> {
+          when(writer.canWriteDataFile()).thenReturn(true);
+          doThrow(failure).when(writer).appendRecord(any(), any());
+          doThrow(closeFailure).when(writer).close();
+        })) {
+      TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table);
+      handle.createWriter();
+      handle.doInit = false;
+      HoodieRecord record = mock(HoodieRecord.class);
+      when(record.getPartitionPath()).thenReturn("partition");
+      when(record.getMetadata()).thenReturn(Option.empty());
+      when(record.prependMetaFields(any(), any(), any(), any())).thenReturn(record);
+
+      assertThrows(HoodieException.class, () -> {
+        if (useRecordMap) {
+          handle.write(Collections.singletonMap("key", record));
+        } else {
+          handle.writeRecord(record);
+        }
+      });
+      assertTrue(handle.isClosed());
+      assertNull(handle.getWriter());
+      assertDoesNotThrow(handle::close);
+      assertArrayEquals(new Throwable[] {closeFailure}, failure.getSuppressed());
+      verify(writers.constructed().get(0)).close();
+    }
+  }
+
+  @Test
+  public void testCloseFailureClearsNativeWriter() throws Exception {
+    HoodieWriteConfig config = config();
+    RuntimeException failure = new IllegalStateException("close failed");
+    try (MockedConstruction<HoodieNativeLogFormatWriter> writers = mockConstruction(
+        HoodieNativeLogFormatWriter.class, (writer, context) -> doThrow(failure).when(writer).close())) {
+      TestableNativeLogAppendHandle handle = new TestableNativeLogAppendHandle(config, table(config));
+      handle.createWriter();
+      assertSame(failure, assertThrows(IllegalStateException.class, handle::close));
+      assertTrue(handle.isClosed());
+      assertNull(handle.getWriter());
+      assertDoesNotThrow(handle::close);
+      verify(writers.constructed().get(0)).close();
     }
   }
 

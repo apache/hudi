@@ -19,10 +19,9 @@ package org.apache.spark.sql.hudi.common
 
 import org.apache.hudi.{DefaultSparkRecordMerger, HoodieSparkUtils}
 import org.apache.hudi.HoodieFileIndex.DataSkippingFailureMode
-import org.apache.hudi.common.avro.AvroSchemaCache
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.engine.HoodieLocalEngineContext
-import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord}
+import org.apache.hudi.common.model.{FileSlice, HoodieAvroRecordMerger, HoodieLogFile, HoodieRecord, HoodieReplaceCommitMetadata}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.HoodieLogFormat
@@ -113,6 +112,12 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       try {
         testFun
       } finally {
+        // The INMEMORY index keeps a JVM-static record-location map; reset it after every test so
+        // stale keys from an earlier test cannot misroute writes in a later one. withRecordType
+        // clears it between record-type iterations, but only on success and only for tests that use
+        // it, so a throwing or non-withRecordType INMEMORY test would otherwise leak state here.
+        // Runs before the catalog cleanup so it holds even if a drop throws.
+        HoodieInMemoryHashIndex.clear()
         val catalog = spark.sessionState.catalog
         catalog.listDatabases().foreach { db =>
           catalog.listTables(db).foreach { table =>
@@ -140,15 +145,29 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     assertResult(expects.map(row => Row(row: _*)).toArray)(array)
   }
 
+  /**
+   * Analysis-time twin of [[checkNestedExceptionContains(runnable:Runnable)*]]: `spark.sql` is
+   * lazy for queries, so this only catches failures raised while the statement is built.
+   */
   protected def checkNestedExceptionContains(sql: String)(errorMsg: String): Unit = {
+    checkNestedExceptionContains(() => spark.sql(sql))(errorMsg)
+  }
+
+  /**
+   * The runnable twin of [[checkNestedExceptionContains(sql:String)*]], for failures that only
+   * surface at EXECUTION time (e.g. a per-file read guard): `spark.sql` alone is lazy for
+   * queries, so the caller collects inside the runnable. Walks the whole cause chain, unlike
+   * [[checkExceptionContain(runnable:Runnable)*]], which checks only the top and the root cause.
+   */
+  protected def checkNestedExceptionContains(runnable: Runnable)(errorMsg: String): Unit = {
     var hasException = false
     try {
-      spark.sql(sql)
+      runnable.run()
     } catch {
       case e: Throwable =>
         var t = e
         while (t != null) {
-          if (t.getMessage.trim.contains(errorMsg.trim)) {
+          if (t.getMessage != null && t.getMessage.trim.contains(errorMsg.trim)) {
             hasException = true
           }
           t = t.getCause
@@ -403,6 +422,12 @@ object HoodieSparkSqlTestBase {
     metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getRight
   }
 
+  def getLastReplaceCommitMetadata(spark: SparkSession, tablePath: String): HoodieReplaceCommitMetadata = {
+    val metaClient = createMetaClient(spark, tablePath)
+    val lastInstant = metaClient.getActiveTimeline.getLastCommitMetadataWithValidData.get.getLeft
+    metaClient.getActiveTimeline.readReplaceCommitMetadata(lastInstant)
+  }
+
   def getLastCleanMetadata(spark: SparkSession, tablePath: String) = {
     val metaClient = createMetaClient(spark, tablePath)
 
@@ -483,26 +508,6 @@ object HoodieSparkSqlTestBase {
     })
     nonExistentConfigs.foreach(e => assertFalse(
       tableConfig.contains(e), s"$e should not be present in the table config"))
-  }
-
-  def enableComplexKeygenValidation(spark: SparkSession,
-                                    tableName: String): Unit = {
-    setComplexKeygenValidation(spark, tableName, value = true)
-  }
-
-  def disableComplexKeygenValidation(spark: SparkSession,
-                                     tableName: String): Unit = {
-    setComplexKeygenValidation(spark, tableName, value = false)
-  }
-
-  private def setComplexKeygenValidation(spark: SparkSession,
-                                         tableName: String,
-                                         value: Boolean): Unit = {
-    spark.sql(
-      s"""
-         |ALTER TABLE $tableName
-         |SET TBLPROPERTIES (hoodie.write.complex.keygen.validation.enable = '$value')
-         |""".stripMargin)
   }
 
   private def checkMessageContains(e: Throwable, text: String): Boolean =

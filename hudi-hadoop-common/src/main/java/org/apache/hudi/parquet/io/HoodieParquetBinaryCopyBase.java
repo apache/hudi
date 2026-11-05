@@ -19,6 +19,8 @@
 package org.apache.hudi.parquet.io;
 
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.HoodieException;
 
@@ -119,6 +121,20 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
   // Flag to control schema evolution behavior
   protected Boolean schemaEvolutionEnabled = null;
 
+  /**
+   * Whether {@code _hoodie_file_name} is populated on this table.
+   *
+   * <p>Binary copy rewrites the column to the output file name, which is right for a table that
+   * populates it and wrong for one that does not -- clustering would hand such a table a file name it
+   * never advertised. Defaults to {@code ALL} so callers that do not state a mode keep the historical
+   * behaviour.
+   */
+  private MetaFieldsMode metaFieldsMode = MetaFieldsMode.ALL;
+
+  public void setMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+    this.metaFieldsMode = java.util.Objects.requireNonNull(metaFieldsMode, "metaFieldsMode");
+  }
+
   public HoodieParquetBinaryCopyBase(Configuration conf) {
     this.conf = conf;
   }
@@ -129,9 +145,13 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
   protected void initFileWriter(Path outPutFile, CompressionCodecName newCodecName, MessageType schema) {
     try {
-      // For meta column '_hoodie_file_name', rewriter will mask value with output file name
-      Binary maskValue = Binary.fromString(outPutFile.getName());
-      maskColumns.put(ColumnPath.fromDotString(HoodieRecord.FILENAME_METADATA_FIELD), maskValue);
+      // For meta column '_hoodie_file_name', rewriter will mask value with output file name -- but
+      // only on a table that populates it. Masking unconditionally would give a COMMIT_TIME_ONLY or
+      // NONE table a populated file name that contradicts the mode it advertises.
+      if (metaFieldsMode.isFileNamePopulated()) {
+        Binary maskValue = Binary.fromString(outPutFile.getName());
+        maskColumns.put(ColumnPath.fromDotString(HoodieRecord.FILENAME_METADATA_FIELD), maskValue);
+      }
       this.requiredSchema = schema;
       this.newCodecName = newCodecName;
       ParquetFileWriter.Mode writerMode = ParquetFileWriter.Mode.CREATE;
@@ -140,6 +160,7 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
       writer.start();
       log.info("init writer ");
     } catch (Exception e) {
+      closeParquetFileWriterQuietly(e);
       log.error("failed to init parquet writer", e);
       throw new HoodieException(e);
     }
@@ -147,16 +168,46 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
 
   @Override
   public void close() throws IOException {
-    Map<String, String> extraMetaData = finalizeMetadata();
-    extraMetaData = extraMetaData == null ? new HashMap<>() : extraMetaData;
-    extraMetaData.remove("parquet.avro.schema");
-    extraMetaData.remove("org.apache.spark.sql.parquet.row.metadata");
-    writer.end(extraMetaData);
-    // Release the buffer
-    reusableBlockBuffer = null;
+    if (writer == null) {
+      return;
+    }
+    try {
+      Map<String, String> extraMetaData = finalizeMetadata();
+      extraMetaData = extraMetaData == null ? new HashMap<>() : extraMetaData;
+      extraMetaData.remove("parquet.avro.schema");
+      extraMetaData.remove("org.apache.spark.sql.parquet.row.metadata");
+      writer.end(extraMetaData);
+    } catch (IOException | RuntimeException e) {
+      closeParquetFileWriterQuietly(e);
+      throw e;
+    } finally {
+      writer = null;
+      // Release the buffer
+      reusableBlockBuffer = null;
+    }
   }
 
   protected abstract Map<String, String> finalizeMetadata();
+
+  private void closeParquetFileWriterQuietly(Throwable failure) {
+    // Parquet 1.12.x/1.13.x have no close() API; a failed start()/end() can leave the stream open.
+    // Newer versions implement AutoCloseable, allowing explicit cleanup here.
+    ParquetFileWriter parquetFileWriter = writer;
+    writer = null;
+    if (parquetFileWriter instanceof AutoCloseable) {
+      CloseableUtils.closeSuppressing((AutoCloseable) parquetFileWriter, failure);
+    }
+  }
+
+  @VisibleForTesting
+  void setWriter(ParquetFileWriter writer) {
+    this.writer = writer;
+  }
+
+  @VisibleForTesting
+  ParquetFileWriter getWriter() {
+    return writer;
+  }
 
   public void processBlocksFromReader(CompressionConverter.TransParquetFileReader reader, BlockMetaData block, String originalCreatedBy) throws IOException {
 
@@ -473,22 +524,20 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         new ColumnChunkPageWriteStore(compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(), props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
+    try (Closeable columnWriter = cWriter::close; Closeable columnStore = cStore::close) {
+      // For masked column, we assume it's present (DL = max) and not repeated (RL = 0)
+      // This is valid for _hoodie_file_name which is a top-level field.
+      int rlvl = 0;
+      int dlvl = descriptor.getMaxDefinitionLevel();
 
-    // For masked column, we assume it's present (DL = max) and not repeated (RL = 0)
-    // This is valid for _hoodie_file_name which is a top-level field.
-    int rlvl = 0;
-    int dlvl = descriptor.getMaxDefinitionLevel();
+      for (int i = 0; i < totalChunkValues; i++) {
+        cWriter.write(maskValue, rlvl, dlvl);
+        cStore.endRecord();
+      }
 
-    for (int i = 0; i < totalChunkValues; i++) {
-      cWriter.write(maskValue, rlvl, dlvl);
-      cStore.endRecord();
+      cStore.flush();
+      cPageStore.flushToFileWriter(writer);
     }
-
-    cStore.flush();
-    cPageStore.flushToFileWriter(writer);
-
-    cStore.close();
-    cWriter.close();
   }
 
   private void addNullColumn(ColumnDescriptor descriptor, long totalChunkValues, EncodingStats encodingStats, ParquetFileWriter writer, MessageType schema, CompressionCodecName newCodecName)
@@ -505,32 +554,32 @@ public abstract class HoodieParquetBinaryCopyBase implements Closeable {
         new ColumnChunkPageWriteStore(compressor, newSchema, props.getAllocator(), props.getColumnIndexTruncateLength(), props.getPageWriteChecksumEnabled(), null, numBlocksRewritten);
     ColumnWriteStore cStore = props.newColumnWriteStore(newSchema, cPageStore);
     ColumnWriter cWriter = cStore.getColumnWriter(descriptor);
-    int dMax = descriptor.getMaxDefinitionLevel();
+    try (Closeable columnWriter = cWriter::close; Closeable columnStore = cStore::close) {
+      int dMax = descriptor.getMaxDefinitionLevel();
 
-    for (int i = 0; i < totalChunkValues; i++) {
-      int rlvl = 0;
-      int dlvl = 0;
-      if (dlvl == dMax) {
-        // since we checked ether optional or repeated, dlvl should be > 0
-        if (dlvl == 0) {
-          throw new IOException("definition level is detected to be 0 for column " + Arrays.stream(descriptor.getPath()).collect(Collectors.joining(".")) + " to be nullified");
+      for (int i = 0; i < totalChunkValues; i++) {
+        int rlvl = 0;
+        int dlvl = 0;
+        if (dlvl == dMax) {
+          // since we checked ether optional or repeated, dlvl should be > 0
+          if (dlvl == 0) {
+            throw new IOException("definition level is detected to be 0 for column " + Arrays.stream(descriptor.getPath()).collect(Collectors.joining(".")) + " to be nullified");
+          }
+          // we just write one null for the whole list at the top level,
+          // instead of nullify the elements in the list one by one
+          if (rlvl == 0) {
+            cWriter.writeNull(rlvl, dlvl - 1);
+          }
+        } else {
+          // A zero repetition level starts a new record; a zero definition level marks the field absent.
+          cWriter.writeNull(rlvl, dlvl);
         }
-        // we just write one null for the whole list at the top level,
-        // instead of nullify the elements in the list one by one
-        if (rlvl == 0) {
-          cWriter.writeNull(rlvl, dlvl - 1);
-        }
-      } else {
-        cWriter.writeNull(rlvl, dlvl); // 因为repeatition level没有重复所以后面都是以0在第一层，definition level是字段path的第0层
+        cStore.endRecord();
       }
-      cStore.endRecord();
+
+      cStore.flush();
+      cPageStore.flushToFileWriter(writer);
     }
-
-    cStore.flush();
-    cPageStore.flushToFileWriter(writer);
-
-    cStore.close();
-    cWriter.close();
   }
 
   private List<ColumnDescriptor> missedColumns(MessageType requiredSchema, MessageType fileSchema) {

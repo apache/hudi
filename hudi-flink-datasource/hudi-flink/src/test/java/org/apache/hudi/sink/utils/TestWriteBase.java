@@ -620,6 +620,16 @@ public class TestWriteBase {
       return this;
     }
 
+    /**
+     * Checks base-file records without Hudi metadata fields.
+     */
+    public TestHarness checkWrittenDataNoMeta(
+        Map<String, String> expected,
+        int partitions) throws IOException {
+      TestData.checkWrittenData(this.baseFile, expected, partitions, TestData::filterOutVariablesWithoutHudiMetadata);
+      return this;
+    }
+
     public TestHarness checkWrittenAllData(Map<String, String> expected, int partitions) throws IOException {
       TestData.checkWrittenAllData(baseFile, expected, partitions);
       return this;

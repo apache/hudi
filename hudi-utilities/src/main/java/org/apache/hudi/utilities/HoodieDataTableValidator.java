@@ -212,8 +212,8 @@ public class HoodieDataTableValidator implements Serializable {
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      HoodieMetadataTableValidator.Config config = (HoodieMetadataTableValidator.Config) o;
-      return basePath.equals(config.basePath)
+      Config config = (Config) o;
+      return Objects.equals(basePath, config.basePath)
           && Objects.equals(continuous, config.continuous)
           && Objects.equals(minValidateIntervalSeconds, config.minValidateIntervalSeconds)
           && Objects.equals(parallelism, config.parallelism)
@@ -228,7 +228,7 @@ public class HoodieDataTableValidator implements Serializable {
     @Override
     public int hashCode() {
       return Objects.hash(basePath, continuous, minValidateIntervalSeconds, parallelism, ignoreFailed, sparkMaster, sparkMemory,
-          assumeDatePartitioning, propsFilePath, configs, help);
+          assumeDatePartitioning, propsFilePath, configs);
     }
   }
 

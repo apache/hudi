@@ -46,7 +46,6 @@ import java.nio.ByteOrder;
 import java.sql.Timestamp;
 import java.util.Arrays;
 
-import static org.apache.flink.formats.parquet.utils.ParquetSchemaConverter.computeMinBytesForDecimalPrecision;
 import static org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader.JULIAN_EPOCH_OFFSET_DAYS;
 import static org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader.MILLIS_IN_DAY;
 import static org.apache.flink.formats.parquet.vector.reader.TimestampColumnReader.NANOS_PER_MILLISECOND;
@@ -116,7 +115,7 @@ public class ParquetRowDataWriter {
         return new BinaryWriter();
       case DECIMAL:
         DecimalType decimalType = (DecimalType) t;
-        return createDecimalWriter(decimalType.getPrecision(), decimalType.getScale());
+        return createDecimalWriter(decimalType.getPrecision(), decimalType.getScale(), fieldSchema);
       case TINYINT:
         return new ByteWriter();
       case SMALLINT:
@@ -426,24 +425,21 @@ public class ParquetRowDataWriter {
     return Binary.fromConstantByteBuffer(buf);
   }
 
-  private FieldWriter createDecimalWriter(int precision, int scale) {
+  private FieldWriter createDecimalWriter(int precision, int scale, HoodieSchema fieldSchema) {
     Preconditions.checkArgument(
         precision <= DecimalType.MAX_PRECISION,
         "Decimal precision %s exceeds max precision %s",
         precision,
         DecimalType.MAX_PRECISION);
+    int numBytes = ParquetSchemaConverter.resolveDecimalByteLength(fieldSchema, precision);
 
     /*
      * This is optimizer for UnscaledBytesWriter.
      */
     class LongUnscaledBytesWriter implements FieldWriter {
-      private final int numBytes;
-      private final int initShift;
       private final byte[] decimalBuffer;
 
       private LongUnscaledBytesWriter() {
-        this.numBytes = computeMinBytesForDecimalPrecision(precision);
-        this.initShift = 8 * (numBytes - 1);
         this.decimalBuffer = new byte[numBytes];
       }
 
@@ -460,12 +456,15 @@ public class ParquetRowDataWriter {
       }
 
       private void doWrite(long unscaled) {
-        int i = 0;
-        int shift = initShift;
-        while (i < numBytes) {
-          decimalBuffer[i] = (byte) (unscaled >> shift);
-          i += 1;
-          shift -= 8;
+        // Parquet encodes FIXED_LEN_BYTE_ARRAY decimals as big-endian two's complement. A compact
+        // Flink decimal provides at most eight value bytes, so pad wider Avro fixed types with the
+        // sign byte to preserve the value.
+        int firstValueByte = Math.max(0, numBytes - Long.BYTES);
+        Arrays.fill(decimalBuffer, 0, firstValueByte, unscaled < 0 ? (byte) -1 : (byte) 0);
+        // Copy from the least-significant byte backwards to produce the big-endian representation.
+        for (int i = numBytes - 1; i >= firstValueByte; i--) {
+          decimalBuffer[i] = (byte) unscaled;
+          unscaled >>= Byte.SIZE;
         }
 
         recordConsumer.addBinary(Binary.fromReusedByteArray(decimalBuffer, 0, numBytes));
@@ -473,11 +472,9 @@ public class ParquetRowDataWriter {
     }
 
     class UnscaledBytesWriter implements FieldWriter {
-      private final int numBytes;
       private final byte[] decimalBuffer;
 
       private UnscaledBytesWriter() {
-        this.numBytes = computeMinBytesForDecimalPrecision(precision);
         this.decimalBuffer = new byte[numBytes];
       }
 

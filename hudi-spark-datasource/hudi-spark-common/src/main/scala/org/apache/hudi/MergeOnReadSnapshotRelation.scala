@@ -37,7 +37,8 @@ import org.apache.spark.sql.types.StructType
 import scala.collection.JavaConverters._
 
 case class HoodieMergeOnReadFileSplit(dataFile: Option[PartitionedFile],
-                                      logFiles: List[HoodieLogFile]) extends HoodieFileSplit
+                                      logFiles: List[HoodieLogFile],
+                                      partitionValues: InternalRow = InternalRow.empty) extends HoodieFileSplit
 
 case class MergeOnReadSnapshotRelation(override val sqlContext: SQLContext,
                                        override val optParams: Map[String, String],
@@ -90,6 +91,16 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
   protected val mergeType: String = optParams.getOrElse(DataSourceReadOptions.REALTIME_MERGE.key,
     DataSourceReadOptions.REALTIME_MERGE.defaultValue)
 
+  /**
+   * Instant this query is targeting: the as-of instant when time-travel is requested, otherwise
+   * the last instant of the (potentially narrowed) query timeline.
+   *
+   * NOTE: This is deliberately a `lazy val` rather than a `def`, so the instant is captured once
+   *       per relation instance instead of being re-derived from [[timeline]] on each
+   *       [[composeRDD]]. This preserves the behavior of the `lazy val tableState` it replaces.
+   */
+  protected lazy val targetInstantTime: Option[String] = queryTimestamp
+
   protected override def composeRDD(fileSplits: Seq[HoodieMergeOnReadFileSplit],
                                     tableSchema: HoodieTableSchema,
                                     requiredSchema: HoodieTableSchema,
@@ -107,7 +118,7 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
       fileReaders = readers,
       tableSchema = tableSchema,
       requiredSchema = requiredSchema,
-      tableState = tableState,
+      targetInstantTime = targetInstantTime,
       mergeType = mergeType,
       fileSplits = fileSplits,
       optionalFilters = optionalFilters,
@@ -132,7 +143,17 @@ abstract class BaseMergeOnReadSnapshotRelation(sqlContext: SQLContext,
           getPartitionColumnsAsInternalRow(file.getPathInfo), file.getPathInfo.getPath, 0, file.getFileSize)
       }
 
-      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles)
+      // Non-empty exactly when a reader has to take the partition columns off the path rather than the
+      // data files, i.e. on any of shouldExtractPartitionValuesFromPartitionPath's triggers: dropped
+      // partition columns, the extract-from-path read option (which also covers tables that do persist
+      // them), or a bootstrap data-queries-only read. A log-only slice still lives in the partition
+      // directory, so a log file's path resolves them just as the base file does.
+      // NOTE: HoodieLogFile#getPathInfo is transient and null for log files built from a path.
+      val partitionValues = partitionedBaseFile.map(_.partitionValues).getOrElse {
+        logFiles.headOption.map(f => getPartitionColumnsAsInternalRow(f.getPath)).getOrElse(InternalRow.empty)
+      }
+
+      HoodieMergeOnReadFileSplit(partitionedBaseFile, logFiles, partitionValues)
     }.toList
   }
 }

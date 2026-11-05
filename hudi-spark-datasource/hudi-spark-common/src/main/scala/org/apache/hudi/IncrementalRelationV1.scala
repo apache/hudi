@@ -32,11 +32,8 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
-import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
-import org.apache.hudi.hadoop.fs.HadoopFSUtils
-import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.table.HoodieSparkTable
 import org.apache.hudi.util.IncrementalRelationUtil
 
@@ -89,8 +86,12 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
       s"option ${DataSourceReadOptions.START_COMMIT.key}")
   }
 
-  if (!metaClient.getTableConfig.populateMetaFields()) {
-    throw new HoodieException("Incremental queries are not supported when meta fields are disabled")
+  if (!metaClient.getTableConfig.isCommitTimePopulated()) {
+    throw new HoodieException("Incremental queries are not supported when _hoodie_commit_time is not populated. "
+      + "hoodie.meta.fields.mode is a physical-storage decision baked into files at write time, so it cannot be "
+      + "changed by flipping write options, and it cannot be widened afterwards either — hudi-cli may only narrow a "
+      + "mode, since existing files are never rewritten. Recreating the table is the only way to enable incremental "
+      + "queries on it: create it with hoodie.meta.fields.mode=COMMIT_TIME_ONLY (or COMMIT_TIME_AND_FILE_NAME, or ALL).")
   }
 
   private val useEndInstantSchema = optParams.getOrElse(INCREMENTAL_READ_SCHEMA_USE_END_INSTANTTIME.key,
@@ -251,18 +252,12 @@ class IncrementalRelationV1(val sqlContext: SQLContext,
           if (fallbackToFullTableScan) {
             val timer = HoodieTimer.start
 
-            val allFilesToCheck = filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths
-            val storageConf = HadoopFSUtils.getStorageConfWithCopy(sqlContext.sparkContext.hadoopConfiguration)
-            val localBasePathStr = basePath.toString
-            val firstNotFoundPath = sqlContext.sparkContext.parallelize(allFilesToCheck.toSeq, allFilesToCheck.size)
-              .map(path => {
-                val storage = HoodieStorageUtils.getStorage(localBasePathStr, storageConf)
-                storage.exists(new StoragePath(path))
-              }).collect().find(v => !v)
+            val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(
+              sqlContext, metaClient, filteredMetaBootstrapFullPaths ++ filteredRegularFullPaths)
             val timeTaken = timer.endTimer()
             log.info("Checking if paths exists took " + timeTaken + "ms")
 
-            if (firstNotFoundPath.isDefined) {
+            if (missingFileFound) {
               doFullTableScan = true
               log.info("Falling back to full table scan as some files cannot be found.")
             }

@@ -22,7 +22,9 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -30,6 +32,8 @@ import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
+import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -39,20 +43,33 @@ import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.assertTableConfigs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -102,6 +119,39 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     assertEquals("val", metaClient.getActiveTimeline().readCommitMetadata(completedInstant).getExtraMetadata().get("key"));
   }
 
+  /**
+   * The archived timeline is cached by the meta client that loaded it, and a serialized copy (as shipped to
+   * executors) must not carry it, since it holds every loaded archived instant and its details.
+   */
+  @Test
+  void testArchivedTimelineCacheIsNotSerialized() throws IOException, ClassNotFoundException {
+    HoodieArchivedTimeline archivedTimeline = metaClient.getArchivedTimeline();
+    assertSame(archivedTimeline, metaClient.getArchivedTimeline());
+
+    Set<Class<?>> serializedClasses = new HashSet<>();
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream out = new ObjectOutputStream(bytes) {
+      {
+        enableReplaceObject(true);
+      }
+
+      @Override
+      protected Object replaceObject(Object obj) {
+        serializedClasses.add(obj.getClass());
+        return obj;
+      }
+    }) {
+      out.writeObject(metaClient);
+    }
+    assertTrue(serializedClasses.stream().noneMatch(HoodieArchivedTimeline.class::isAssignableFrom),
+        "The archived timeline was serialized with the meta client: " + serializedClasses);
+
+    try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      HoodieTableMetaClient deserializedMetaClient = (HoodieTableMetaClient) in.readObject();
+      assertNotNull(deserializedMetaClient.getArchivedTimeline());
+    }
+  }
+
   @Test
   void testCommitTimeline() throws IOException {
     HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
@@ -146,20 +196,169 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   @Test
-  void testTableVersion() throws IOException {
+  void testMetaFieldsModeDerivesLegacyBooleanAndOverridesContradictions() throws IOException {
+    // hoodie.properties must never record a legacy boolean that contradicts the mode: a pre-1.3.0
+    // reader ignores hoodie.meta.fields.mode entirely and would otherwise treat a selectively
+    // written table as ALL. For NONE that is unsafe — an old incremental reader would run against
+    // all-null commit times and silently return no rows.
+    //
+    // The mode is the only source of truth: the deprecated boolean is always derived from it.
+    for (MetaFieldsMode mode : MetaFieldsMode.values()) {
+      final String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-derive-" + mode.name();
+      HoodieTableMetaClient created = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-derive-" + mode.name())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), path);
+      assertEquals(mode, created.getTableConfig().getMetaFieldsMode());
+      assertEquals(mode.toLegacyPopulateMetaFields(), created.getTableConfig().populateMetaFields(),
+          "the legacy boolean must be derived from the mode for " + mode);
+
+      // Restating the derived value is coherent and must be accepted.
+      final String restatedPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-restate-" + mode.name();
+      HoodieTableMetaClient restated = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-restate-" + mode.name())
+          .setPopulateMetaFields(mode.toLegacyPopulateMetaFields())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), restatedPath);
+      assertEquals(mode, restated.getTableConfig().getMetaFieldsMode());
+
+      // A contradicting legacy boolean is ignored in favor of the mode.
+      final String conflictPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-conflict-" + mode.name();
+      HoodieTableMetaClient conflict = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-conflict-" + mode.name())
+          .setPopulateMetaFields(!mode.toLegacyPopulateMetaFields())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), conflictPath);
+      assertEquals(mode, conflict.getTableConfig().getMetaFieldsMode());
+      assertEquals(mode.toLegacyPopulateMetaFields(), conflict.getTableConfig().populateMetaFields());
+    }
+
+    // No explicit mode: pre-1.3.0 behavior is preserved by inferring and recording the mode.
+    final String legacyPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-legacy";
+    HoodieTableMetaClient legacy = HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("mfm-legacy")
+        .setPopulateMetaFields(false)
+        .initTable(this.metaClient.getStorageConf(), legacyPath);
+    assertEquals(MetaFieldsMode.NONE, legacy.getTableConfig().getMetaFieldsMode());
+    assertEquals(MetaFieldsMode.NONE.name(),
+        legacy.getTableConfig().getString(HoodieTableConfig.META_FIELDS_MODE),
+        "legacy table settings must be normalized to the mode property");
+    assertFalse(legacy.getTableConfig().populateMetaFields());
+  }
+
+  /**
+   * From table version 10 a newly created table records only {@code hoodie.meta.fields.mode}; below
+   * that it records the deprecated boolean too.
+   *
+   * <p>The split is about who reads the table. Selective modes have to work on older versions -- a
+   * fleet adopting this feature runs patched and unpatched pipelines against the same v6 tables for
+   * months, and an unpatched reader knows only the boolean. With the property absent it falls back
+   * to its {@code true} default and would treat a selective table as ALL, over-claiming meta columns
+   * that are physically null. A table only reaches v10 once everything touching it understands the
+   * mode, so by then the boolean is redundant.
+   *
+   * <p>The v9-to-v10 upgrade similarly persists the mode and removes the deprecated boolean.
+   */
+  @Test
+  void testMetaFieldsModeDropsTheLegacyBooleanFromTableVersionTen() throws IOException {
+    for (MetaFieldsMode mode : MetaFieldsMode.values()) {
+      final String newPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "mfm-v10-" + mode.name();
+      HoodieTableConfig newTable = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+          .setTableName("mfm-v10-" + mode.name())
+          .setTableVersion(HoodieTableVersion.TEN.versionCode())
+          .setMetaFieldsMode(mode)
+          .initTable(this.metaClient.getStorageConf(), newPath)
+          .getTableConfig();
+      assertEquals(mode, newTable.getMetaFieldsMode());
+      assertFalse(newTable.getProps().containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+          "a table created at v10 records the mode alone for " + mode);
+
+      for (HoodieTableVersion oldVersion : Arrays.asList(HoodieTableVersion.SIX, HoodieTableVersion.NINE)) {
+        final String oldPath = tempDir.toAbsolutePath() + Path.SEPARATOR
+            + "mfm-v" + oldVersion.versionCode() + "-" + mode.name();
+        HoodieTableConfig oldTable = HoodieTableMetaClient.newTableBuilder()
+            .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+            .setTableName("mfm-v" + oldVersion.versionCode() + "-" + mode.name())
+            .setTableVersion(oldVersion.versionCode())
+            .setMetaFieldsMode(mode)
+            .initTable(this.metaClient.getStorageConf(), oldPath)
+            .getTableConfig();
+        assertEquals(mode, oldTable.getMetaFieldsMode());
+        assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+            oldTable.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
+            "a table at version " + oldVersion.versionCode()
+                + " must persist the derived boolean for unpatched readers, " + mode);
+      }
+    }
+  }
+
+  /**
+   * A null version leaves the table version unset on the builder, so the default version is covered as well.
+   */
+  @ParameterizedTest
+  @MethodSource("tableVersionsAndKeyGeneratorSettings")
+  void testTableConfigsBasedOnVersion(HoodieTableVersion version, boolean setKeyGeneratorType) throws IOException {
     final String basePath = tempDir.toAbsolutePath() + Path.SEPARATOR + "t1";
-    HoodieTableMetaClient metaClient1 = HoodieTableMetaClient.newTableBuilder()
+    HoodieTableMetaClient.TableBuilder tableBuilder = HoodieTableMetaClient.newTableBuilder()
         .setTableType(HoodieTableType.MERGE_ON_READ.name())
         .setTableName("table-version-test")
-        .setTableVersion(HoodieTableVersion.SIX.versionCode())
-        .initTable(this.metaClient.getStorageConf(), basePath);
-    assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableVersion());
+        .setRecordKeyFields("key")
+        .setPartitionFields("partition")
+        .setOrderingFields("ts");
+    if (version != null) {
+      tableBuilder.setTableVersion(version.versionCode());
+    }
+    if (setKeyGeneratorType) {
+      tableBuilder.setKeyGeneratorType(KeyGeneratorType.SIMPLE.name());
+    } else {
+      tableBuilder.setKeyGeneratorClassProp(KeyGeneratorType.SIMPLE.getClassName());
+    }
+    HoodieTableVersion expectedVersion = version == null ? HoodieTableVersion.current() : version;
+    HoodieTableMetaClient createdMetaClient = tableBuilder.initTable(this.metaClient.getStorageConf(), basePath);
+    assertEquals(expectedVersion, createdMetaClient.getTableConfig().getTableVersion());
+    assertTableConfigs(createdMetaClient.getStorage(), basePath, expectedTableConfigs(expectedVersion));
+  }
 
-    HoodieTableMetaClient metaClient2 = HoodieTableMetaClient.builder()
-        .setConf(this.metaClient.getStorageConf())
-        .setBasePath(basePath)
-        .build();
-    assertEquals(HoodieTableVersion.SIX, metaClient2.getTableConfig().getTableVersion());
+  private static Stream<Arguments> tableVersionsAndKeyGeneratorSettings() {
+    return Stream.of(null, HoodieTableVersion.SIX, HoodieTableVersion.EIGHT, HoodieTableVersion.NINE, HoodieTableVersion.TEN)
+        .flatMap(version -> Stream.of(Arguments.of(version, false), Arguments.of(version, true)));
+  }
+
+  private static Map<String, String> expectedTableConfigs(HoodieTableVersion version) {
+    Map<String, String> configs = new HashMap<>();
+    configs.put("hoodie.table.name", "table-version-test");
+    configs.put("hoodie.table.type", "MERGE_ON_READ");
+    configs.put("hoodie.table.version", String.valueOf(version.versionCode()));
+    configs.put("hoodie.table.recordkey.fields", "key");
+    configs.put("hoodie.table.partition.fields", "partition");
+    configs.put("hoodie.table.ordering.fields", "ts");
+    configs.put("hoodie.table.keygenerator.type", "SIMPLE");
+    configs.put("hoodie.meta.fields.mode", "ALL");
+    configs.put("hoodie.datasource.write.drop.partition.columns", "false");
+    configs.put("hoodie.archivelog.folder", "archived");
+    configs.put("hoodie.timeline.path", "timeline");
+    configs.put("hoodie.timeline.history.path", "history");
+    if (version.lesserThan(HoodieTableVersion.EIGHT)) {
+      configs.put("hoodie.timeline.layout.version", "1");
+      configs.put("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleKeyGenerator");
+    } else {
+      configs.put("hoodie.timeline.layout.version", "2");
+      configs.put("hoodie.table.initial.version", String.valueOf(version.versionCode()));
+      configs.put("hoodie.record.merge.mode", "EVENT_TIME_ORDERING");
+    }
+    if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
+      configs.put("hoodie.record.merge.strategy.id", "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5");
+    }
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      configs.put("hoodie.populate.meta.fields", "true");
+    }
+    return configs;
   }
 
   @Test
@@ -277,6 +476,90 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
     String randomDefinitionPath = "/a/b/c";
     metaClient.getTableConfig().setValue(HoodieTableConfig.RELATIVE_INDEX_DEFINITION_PATH.key(), "/a/b/c");
     assertEquals(randomDefinitionPath, metaClient.getIndexDefinitionPath());
+  }
+
+  /**
+   * A single-field complex keygen table records {@code FIELD_PREFIXED} on creation, or the encoding the caller
+   * declares, on every table version. Only that shape is tracked: a key generator that is not complex, several
+   * record key fields, or an unpopulated {@code _hoodie_record_key} leave the property off the table.
+   */
+  @Test
+  void testComplexKeyGenEncodingOnTableCreation() throws IOException {
+    int tableId = 0;
+    for (HoodieTableVersion version : Arrays.asList(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT,
+        HoodieTableVersion.NINE, HoodieTableVersion.current())) {
+      HoodieTableMetaClient created = complexKeyGenTableBuilder(version, null)
+          .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+      assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), created.getTableConfig().getComplexKeyGenEncoding());
+
+      // the encoding describes the stored keys, so a declared VALUE_ONLY is recorded on every table version:
+      // a version 8 table carrying bare keys keeps them once it is upgraded to 9 and above
+      HoodieTableMetaClient.TableBuilder valueOnly = complexKeyGenTableBuilder(version, ComplexKeyGenEncoding.VALUE_ONLY);
+      String valueOnlyPath = tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++;
+      assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY),
+          valueOnly.initTable(this.metaClient.getStorageConf(), valueOnlyPath).getTableConfig().getComplexKeyGenEncoding());
+    }
+
+    // without a stored record key there is no encoding to record, whatever the version
+    HoodieTableMetaClient virtualKeys = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setPopulateMetaFields(false)
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+    assertFalse(virtualKeys.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // a key generator that is not complex keys the record its own way, so there is no `<field>:` prefix to track
+    HoodieTableMetaClient simpleKeyGen = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setKeyGeneratorType(KeyGeneratorType.SIMPLE.name())
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+    assertFalse(simpleKeyGen.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // several record key fields are always joined as `<field>:<value>,<field>:<value>`, the same on every release
+    HoodieTableMetaClient multiField = complexKeyGenTableBuilder(HoodieTableVersion.current(), null)
+        .setRecordKeyFields("id,name")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId++);
+    assertFalse(multiField.getTableConfig().getComplexKeyGenEncoding().isPresent());
+
+    // an encoding declared on an untracked shape describes nothing, so it is not recorded either
+    HoodieTableMetaClient multiFieldDeclared =
+        complexKeyGenTableBuilder(HoodieTableVersion.current(), ComplexKeyGenEncoding.VALUE_ONLY)
+            .setRecordKeyFields("id,name")
+            .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ckg" + tableId);
+    assertFalse(multiFieldDeclared.getTableConfig().getComplexKeyGenEncoding().isPresent());
+  }
+
+  /**
+   * TRUNCATE TABLE and ALTER TABLE RENAME re-create the table from its own properties, which carry both the
+   * table version and the recorded encoding. An upgraded table at version 9 or above holding VALUE_ONLY must
+   * survive that round trip.
+   */
+  @Test
+  void testReInitFromPropertiesOfUpgradedValueOnlyTable() throws IOException {
+    String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "reinit";
+    HoodieTableMetaClient created = complexKeyGenTableBuilder(HoodieTableVersion.EIGHT, ComplexKeyGenEncoding.VALUE_ONLY)
+        .initTable(this.metaClient.getStorageConf(), path);
+    // the table is upgraded, the way the 8 to 9 hop leaves it: current version, encoding untouched
+    created.getTableConfig().setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.current().versionCode()));
+    HoodieTableConfig.update(created.getStorage(), created.getMetaPath(), created.getTableConfig().getProps());
+    created.reloadTableConfig();
+    assertEquals(HoodieTableVersion.current(), created.getTableConfig().getTableVersion());
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), created.getTableConfig().getComplexKeyGenEncoding());
+
+    HoodieTableMetaClient reInitialised = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(created.getTableConfig().getProps())
+        .initTable(this.metaClient.getStorageConf(), path);
+
+    assertEquals(HoodieTableVersion.current(), reInitialised.getTableConfig().getTableVersion());
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), reInitialised.getTableConfig().getComplexKeyGenEncoding());
+  }
+
+  private static HoodieTableMetaClient.TableBuilder complexKeyGenTableBuilder(HoodieTableVersion version, ComplexKeyGenEncoding encoding) {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.COPY_ON_WRITE.name())
+        .setTableName("table")
+        .setTableVersion(version)
+        .setRecordKeyFields("id")
+        .setPartitionFields("dt")
+        .setKeyGeneratorType(KeyGeneratorType.COMPLEX.name())
+        .setComplexKeyGenEncoding(encoding);
   }
 
   @Test

@@ -19,6 +19,7 @@
 package org.apache.hudi.client.heartbeat;
 
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -162,6 +164,156 @@ public class TestHoodieHeartbeatClient extends HoodieCommonTestHarness {
           .until(() -> hoodieHeartbeatClient.getHeartbeat(instantTime1).getNumHeartbeats() >= 2);
     } finally {
       hoodieHeartbeatClient.close();
+    }
+  }
+
+  /**
+   * stop() must not delete the heartbeat file while a scheduled refresh is still writing it. A
+   * refresh landing after the delete recreates the file, and on storage that enforces preconditions
+   * it changes the object generation so a generation-matched delete is rejected (e.g. GCS 412).
+   */
+  @Test
+  public void testStopWaitsForInFlightHeartbeatRefresh() throws Exception {
+    // A longer interval also widens the bounded-write timeout, so a slow CI box cannot let the write
+    // time out before the test releases it, which would let the delete run first.
+    long interval = 5000L;
+    CountDownLatch refreshEntered = new CountDownLatch(1);
+    CountDownLatch releaseRefresh = new CountDownLatch(1);
+    OrderRecordingStorage storage = new OrderRecordingStorage(
+        (FileSystem) metaClient.getStorage().getFileSystem(), refreshEntered, releaseRefresh);
+    HoodieHeartbeatClient client = new HoodieHeartbeatClient(
+        storage, metaClient.getBasePath().toString(), interval, numTolerableMisses);
+    try {
+      client.start(instantTime1);
+      assertTrue(refreshEntered.await(20, SECONDS), "Scheduled heartbeat refresh never started");
+
+      Thread stopper = new Thread(() -> client.stop(instantTime1));
+      stopper.start();
+      // Without awaiting termination, stop() runs straight through and never parks here.
+      await().atMost(20, SECONDS).until(() -> stopper.getState() == Thread.State.TIMED_WAITING
+          || stopper.getState() == Thread.State.WAITING
+          || stopper.getState() == Thread.State.BLOCKED);
+
+      releaseRefresh.countDown();
+      stopper.join(SECONDS.toMillis(20));
+      assertFalse(stopper.isAlive(), "stop() did not complete after the refresh was released");
+
+      assertTrue(storage.events().contains("delete"), "stop() never deleted the heartbeat file");
+      assertEquals("delete", storage.events().get(storage.events().size() - 1),
+          "No heartbeat refresh may follow the delete; events were " + storage.events());
+    } finally {
+      releaseRefresh.countDown();
+      client.close();
+    }
+  }
+
+  /**
+   * A rejected heartbeat delete must never propagate. HoodieStorage.deleteFile throws
+   * HoodieIOException (unchecked) when the object still exists after the delete was refused, which is
+   * what a generation-matched delete does on storage that enforces preconditions. Callers reach this
+   * from postCommit, where the commit is already durable.
+   */
+  @Test
+  public void testDeleteHeartbeatFileSwallowsHoodieIOException() {
+    ThrowOnDeleteStorage storage =
+        new ThrowOnDeleteStorage((FileSystem) metaClient.getStorage().getFileSystem());
+    assertFalse(WriterHeartbeatUtils.deleteHeartbeatFile(storage, basePath, instantTime1),
+        "A refused heartbeat delete must be reported via the return value, never thrown");
+  }
+
+  /** Interrupting a thread parked in stop() must re-assert the interrupt rather than swallow it. */
+  @Test
+  public void testStopReassertsInterruptWhileAwaiting() throws Exception {
+    // A longer interval widens the bounded-write window, so the await is still parked when interrupted.
+    long interval = 5000L;
+    CountDownLatch refreshEntered = new CountDownLatch(1);
+    CountDownLatch releaseRefresh = new CountDownLatch(1);
+    OrderRecordingStorage storage = new OrderRecordingStorage(
+        (FileSystem) metaClient.getStorage().getFileSystem(), refreshEntered, releaseRefresh);
+    HoodieHeartbeatClient client = new HoodieHeartbeatClient(
+        storage, metaClient.getBasePath().toString(), interval, numTolerableMisses);
+    try {
+      client.start(instantTime1);
+      assertTrue(refreshEntered.await(20, SECONDS), "Scheduled heartbeat refresh never started");
+
+      AtomicBoolean interruptPreserved = new AtomicBoolean();
+      Thread stopper = new Thread(() -> {
+        client.stop(instantTime1);
+        interruptPreserved.set(Thread.currentThread().isInterrupted());
+      });
+      stopper.start();
+      await().atMost(20, SECONDS).until(() -> stopper.getState() == Thread.State.TIMED_WAITING
+          || stopper.getState() == Thread.State.WAITING
+          || stopper.getState() == Thread.State.BLOCKED);
+      stopper.interrupt();
+      stopper.join(SECONDS.toMillis(20));
+
+      assertFalse(stopper.isAlive(), "stop() did not return after being interrupted");
+      assertTrue(interruptPreserved.get(), "stop() swallowed the interrupt");
+    } finally {
+      releaseRefresh.countDown();
+      client.close();
+    }
+  }
+
+  /** Refuses every delete with HoodieIOException, as a precondition-enforcing store does. */
+  private static class ThrowOnDeleteStorage extends HoodieHadoopStorage {
+
+    ThrowOnDeleteStorage(FileSystem fs) {
+      super(fs);
+    }
+
+    @Override
+    public boolean deleteFile(StoragePath path) {
+      throw new HoodieIOException("Failed to delete invalid data file: " + path);
+    }
+  }
+
+  /**
+   * Records create/delete order and blocks the first scheduled refresh until released. The block
+   * ignores interruption, as a storage write already in flight would.
+   */
+  private static class OrderRecordingStorage extends HoodieHadoopStorage {
+
+    private final List<String> events = new CopyOnWriteArrayList<>();
+    private final AtomicBoolean gated = new AtomicBoolean(false);
+    private final CountDownLatch refreshEntered;
+    private final CountDownLatch releaseRefresh;
+
+    OrderRecordingStorage(FileSystem fs, CountDownLatch refreshEntered, CountDownLatch releaseRefresh) {
+      super(fs);
+      this.refreshEntered = refreshEntered;
+      this.releaseRefresh = releaseRefresh;
+    }
+
+    List<String> events() {
+      return events;
+    }
+
+    @Override
+    public OutputStream create(StoragePath path, boolean overwrite) throws IOException {
+      // The first create is start()'s synchronous beat; gate only the first scheduled refresh.
+      if (!events.isEmpty() && gated.compareAndSet(false, true)) {
+        refreshEntered.countDown();
+        boolean released = false;
+        while (!released) {
+          try {
+            releaseRefresh.await();
+            released = true;
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }
+      }
+      OutputStream stream = super.create(path, overwrite);
+      events.add("create");
+      return stream;
+    }
+
+    @Override
+    public boolean deleteFile(StoragePath path) throws IOException {
+      events.add("delete");
+      return super.deleteFile(path);
     }
   }
 

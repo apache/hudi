@@ -189,14 +189,14 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       BaseFileOnlyView roView = getHoodieTableFileSystemView(metaClient,
           metaClient.getCommitsTimeline().filterCompletedInstants(), allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
+      Stream<HoodieBaseFile> baseFilesToRead = roView.getLatestBaseFiles();
       Map<String, Long> fileIdToSize =
-          dataFilesToRead.collect(Collectors.toMap(HoodieBaseFile::getFileId, HoodieBaseFile::getFileSize));
+          baseFilesToRead.collect(Collectors.toMap(HoodieBaseFile::getFileId, HoodieBaseFile::getFileSize));
 
       roView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-      dataFilesToRead = roView.getLatestBaseFiles();
-      List<HoodieBaseFile> dataFilesList = dataFilesToRead.collect(Collectors.toList());
-      assertTrue(dataFilesList.size() > 0,
+      baseFilesToRead = roView.getLatestBaseFiles();
+      List<HoodieBaseFile> baseFilesList = baseFilesToRead.collect(Collectors.toList());
+      assertTrue(baseFilesList.size() > 0,
           "Should list the base files we wrote in the delta commit");
 
       /**
@@ -224,10 +224,10 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       allFiles = listAllBaseFilesInPath(hoodieTable);
       roView = getHoodieTableFileSystemView(metaClient,
           hoodieTable.getActiveTimeline().reload().getCommitsTimeline().filterCompletedInstants(), allFiles);
-      dataFilesToRead = roView.getLatestBaseFiles();
-      List<HoodieBaseFile> newDataFilesList = dataFilesToRead.collect(Collectors.toList());
+      baseFilesToRead = roView.getLatestBaseFiles();
+      List<HoodieBaseFile> newBaseFilesList = baseFilesToRead.collect(Collectors.toList());
       Map<String, Long> fileIdToNewSize =
-          newDataFilesList.stream().collect(Collectors.toMap(HoodieBaseFile::getFileId, HoodieBaseFile::getFileSize));
+          newBaseFilesList.stream().collect(Collectors.toMap(HoodieBaseFile::getFileId, HoodieBaseFile::getFileSize));
 
       assertTrue(fileIdToNewSize.entrySet().stream().anyMatch(entry -> fileIdToSize.get(entry.getKey()) < entry.getValue()));
 
@@ -866,12 +866,12 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       List<StoragePathInfo> allFiles = listAllBaseFilesInPath(hoodieTable);
       BaseFileOnlyView roView =
           getHoodieTableFileSystemView(metaClient, metaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
-      Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
-      assertFalse(dataFilesToRead.findAny().isPresent());
+      Stream<HoodieBaseFile> baseFilesToRead = roView.getLatestBaseFiles();
+      assertFalse(baseFilesToRead.findAny().isPresent());
 
       roView = getHoodieTableFileSystemView(metaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-      dataFilesToRead = roView.getLatestBaseFiles();
-      assertTrue(dataFilesToRead.findAny().isPresent(),
+      baseFilesToRead = roView.getLatestBaseFiles();
+      assertTrue(baseFilesToRead.findAny().isPresent(),
           "should list the base files we wrote in the delta commit");
 
       /**
@@ -905,7 +905,8 @@ public class TestHoodieMergeOnReadTable extends SparkClientFunctionalTestHarness
       actionExecutor.getUpsertPartitioner(new WorkloadProfile(buildProfile(deleteRDD)));
       final List<List<WriteStatus>> deleteStatus = jsc().parallelize(Arrays.asList(1))
           .map(x -> (Iterator<List<WriteStatus>>)
-              actionExecutor.handleUpdate(partitionPath, fileId, fewRecordsForDelete.iterator()))
+              actionExecutor.handleUpdate(
+                  partitionPath, fileId, fewRecordsForDelete.size(), fewRecordsForDelete.iterator()))
           .map(Transformations::flatten).collect();
 
       // Verify there are  errors because records are from multiple partitions (but handleUpdate is invoked for

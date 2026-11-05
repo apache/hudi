@@ -250,44 +250,33 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
   }
 
   /**
-   * Prune the partition by the filter.This implementation is fork from
+   * Lists the partitions of the table matching the partition predicates. The pruning is forked from
    * org.apache.spark.sql.execution.datasources.PartitioningAwareFileIndex#prunePartitions.
+   *
+   * Whether this lists the table depends on the predicates and the query:
+   *  - No partition predicate: returns [[getAllQueryPartitionPaths]]. For an incremental query whose start
+   *    is inside the active timeline these are the partitions written by the instants in range, read from
+   *    the commit metadata. Otherwise (snapshot query, or an incremental query starting from `earliest` or
+   *    before the active timeline) every partition of the table is listed.
+   *  - Equality predicates on all partition columns: a single existence check, no listing.
+   *  - Equality predicates on the leading partition columns: only the partitions under that prefix are listed.
+   *  - No bound leading prefix: hive-style, URL-encoded tables list from the table root, evaluating the
+   *    predicates through the metadata table, with no incremental shortcut. Other tables fall back to
+   *    [[getAllQueryPartitionPaths]] as above.
+   *
+   * Callers that already hold the candidate partitions (e.g. incremental reads, which know the partitions
+   * modified by the commits in range) should use [[filterPartitionPaths]] instead, which never lists the table.
    *
    * @param predicates The filter condition.
    * @return The pruned partition paths.
    */
   def listMatchingPartitionPaths(predicates: Seq[Expression]): Seq[PartitionPath] = {
-    val resolve = spark.sessionState.analyzer.resolver
     val partitionColumnNames = getPartitionColumns
-
-    // Resolves GetStructField chain to full dot-path: GetStructField(attr("a"), _, "b") → "a.b"
-    def getFieldPath(expr: Expression): Option[String] = expr match {
-      case a: AttributeReference => Some(a.name)
-      case GetStructField(child, _, Some(fieldName)) =>
-        getFieldPath(child).map(_ + "." + fieldName)
-      case _ => None
-    }
-
-    // True if every column reference in expr resolves to a partition column.
-    // For nested columns, walks GetStructField chains to match the full dot-path.
-    // Example: partition = "nested_record.level"
-    //   nested_record.level = 'INFO'   → GetStructField path "nested_record.level" → true
-    //   nested_record.nested_int = 10  → GetStructField path "nested_record.nested_int" → false
-    //   IsNotNull(nested_record)       → AttributeReference "nested_record" not in partitionColumnNames → false
-    def referencesOnlyPartitionColumns(expr: Expression): Boolean = expr match {
-      case g: GetStructField =>
-        getFieldPath(g).exists(path => partitionColumnNames.exists(pc => resolve(path, pc)))
-      case a: AttributeReference =>
-        partitionColumnNames.exists(pc => resolve(a.name, pc))
-      case _ =>
-        expr.children.forall(referencesOnlyPartitionColumns)
-    }
-
     val partitionPruningPredicates = predicates.filter(referencesOnlyPartitionColumns)
 
     if (partitionPruningPredicates.isEmpty) {
       val queryPartitionPaths = getAllQueryPartitionPaths.asScala.toSeq
-      logInfo(s"No partition predicates provided, listing full table (${queryPartitionPaths.size} partitions)")
+      logInfo(s"No partition predicates provided, using all query partitions (${queryPartitionPaths.size} partitions)")
       queryPartitionPaths
     } else {
       // NOTE: We fallback to already cached partition-paths only in cases when we can subsequently
@@ -307,48 +296,102 @@ class SparkHoodieTableFileIndex(spark: SparkSession,
       //       we might not be able to properly parse partition-values from the listed partition-paths.
       //       In that case, we simply could not apply partition pruning and will have to regress to scanning
       //       the whole table
-      if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
-        val predicate = partitionPruningPredicates.reduce(expressions.And)
-        val partitionFieldNames = partitionSchema.fieldNames
-        val transformedPredicate = predicate.transform {
-          case g @ GetStructField(_, _, Some(_)) =>
-            getFieldPath(g).flatMap { path =>
-              val idx = partitionFieldNames.indexWhere(name => resolve(path, name))
-              if (idx >= 0) Some(BoundReference(idx, partitionSchema(idx).dataType, nullable = true))
-              else None
-            }.getOrElse(g)
-          case a: AttributeReference =>
-            val index = partitionSchema.indexWhere(sf => resolve(a.name, sf.name))
-            if (index >= 0) BoundReference(index, partitionSchema(index).dataType, nullable = true)
-            else a
-        }
-        val boundPredicate: BasePredicate = try {
-          // Try using 1-arg constructor via reflection
-          val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
-          val ctor = clazz.getConstructor(classOf[Expression])
-          ctor.newInstance(transformedPredicate).asInstanceOf[BasePredicate]
-        } catch {
-          case _: NoSuchMethodException | _: IllegalArgumentException =>
-            // Fallback: Try using 2-arg constructor for certain Spark runtime
-            val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
-            val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
-            ctor.newInstance(transformedPredicate, java.lang.Boolean.FALSE)
-              .asInstanceOf[BasePredicate]
-        }
-        val prunedPartitionPaths = partitionPaths.filter {
-          partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.getValues))
-        }.toSeq
+      prunePartitionPaths(partitionPaths.toSeq, partitionPruningPredicates)
+    }
+  }
 
-        logInfo(s"Using provided predicates to prune number of target table's partitions scanned from" +
-          s" ${partitionPaths.size} to ${prunedPartitionPaths.size}")
+  /**
+   * Prunes the given relative partition paths by the partition predicates, without listing the table.
+   * Used by incremental reads, which already know the partitions modified by the commits in range.
+   *
+   * @param relativePartitionPaths The candidate relative partition paths.
+   * @param predicates             The filter condition.
+   * @return The relative partition paths matching the partition predicates.
+   */
+  def filterPartitionPaths(relativePartitionPaths: Seq[String], predicates: Seq[Expression]): Seq[String] = {
+    val partitionPruningPredicates = predicates.filter(referencesOnlyPartitionColumns)
+    if (partitionPruningPredicates.isEmpty) {
+      relativePartitionPaths
+    } else {
+      prunePartitionPaths(relativePartitionPaths.map(convertToPartitionPath), partitionPruningPredicates).map(_.getPath)
+    }
+  }
 
-        prunedPartitionPaths
-      } else {
-        logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
-          s" following path(s): ${partitionPaths.find(_.getValues.length == 0).map(e => e.getPath)}")
+  // Resolves GetStructField chain to full dot-path: GetStructField(attr("a"), _, "b") → "a.b"
+  private def getFieldPath(expr: Expression): Option[String] = expr match {
+    case a: AttributeReference => Some(a.name)
+    case GetStructField(child, _, Some(fieldName)) =>
+      getFieldPath(child).map(_ + "." + fieldName)
+    case _ => None
+  }
 
-        partitionPaths.toSeq
+  // True if every column reference in expr resolves to a partition column.
+  // For nested columns, walks GetStructField chains to match the full dot-path.
+  // Example: partition = "nested_record.level"
+  //   nested_record.level = 'INFO'   → GetStructField path "nested_record.level" → true
+  //   nested_record.nested_int = 10  → GetStructField path "nested_record.nested_int" → false
+  //   IsNotNull(nested_record)       → AttributeReference "nested_record" not in partitionColumnNames → false
+  private def referencesOnlyPartitionColumns(expr: Expression): Boolean = {
+    val resolve = spark.sessionState.analyzer.resolver
+    val partitionColumnNames = getPartitionColumns
+    expr match {
+      case g: GetStructField =>
+        getFieldPath(g).exists(path => partitionColumnNames.exists(pc => resolve(path, pc)))
+      case a: AttributeReference =>
+        partitionColumnNames.exists(pc => resolve(a.name, pc))
+      case _ =>
+        expr.children.forall(referencesOnlyPartitionColumns)
+    }
+  }
+
+  /**
+   * Evaluates the (non-empty) partition pruning predicates against the partition values of the given
+   * partition paths.
+   */
+  private def prunePartitionPaths(partitionPaths: Seq[PartitionPath],
+                                  partitionPruningPredicates: Seq[Expression]): Seq[PartitionPath] = {
+    val resolve = spark.sessionState.analyzer.resolver
+    if (haveProperPartitionValues(partitionPaths.toSeq) && partitionSchema.nonEmpty) {
+      val predicate = partitionPruningPredicates.reduce(expressions.And)
+      val partitionFieldNames = partitionSchema.fieldNames
+      val transformedPredicate = predicate.transform {
+        case g @ GetStructField(_, _, Some(_)) =>
+          getFieldPath(g).flatMap { path =>
+            val idx = partitionFieldNames.indexWhere(name => resolve(path, name))
+            if (idx >= 0) Some(BoundReference(idx, partitionSchema(idx).dataType, nullable = true))
+            else None
+          }.getOrElse(g)
+        case a: AttributeReference =>
+          val index = partitionSchema.indexWhere(sf => resolve(a.name, sf.name))
+          if (index >= 0) BoundReference(index, partitionSchema(index).dataType, nullable = true)
+          else a
       }
+      val boundPredicate: BasePredicate = try {
+        // Try using 1-arg constructor via reflection
+        val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
+        val ctor = clazz.getConstructor(classOf[Expression])
+        ctor.newInstance(transformedPredicate).asInstanceOf[BasePredicate]
+      } catch {
+        case _: NoSuchMethodException | _: IllegalArgumentException =>
+          // Fallback: Try using 2-arg constructor for certain Spark runtime
+          val clazz = Class.forName("org.apache.spark.sql.catalyst.expressions.InterpretedPredicate")
+          val ctor = clazz.getConstructor(classOf[Expression], classOf[Boolean])
+          ctor.newInstance(transformedPredicate, java.lang.Boolean.FALSE)
+            .asInstanceOf[BasePredicate]
+      }
+      val prunedPartitionPaths = partitionPaths.filter {
+        partitionPath => boundPredicate.eval(InternalRow.fromSeq(partitionPath.getValues))
+      }.toSeq
+
+      logInfo(s"Using provided predicates to prune number of target table's partitions scanned from" +
+        s" ${partitionPaths.size} to ${prunedPartitionPaths.size}")
+
+      prunedPartitionPaths
+    } else {
+      logWarning(s"Unable to apply partition pruning, due to failure to parse partition values from the" +
+        s" following path(s): ${partitionPaths.find(_.getValues.length == 0).map(e => e.getPath)}")
+
+      partitionPaths.toSeq
     }
   }
 

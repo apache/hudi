@@ -30,6 +30,7 @@ import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
+import static org.apache.hudi.common.fs.FSUtils.normalizeBasePathForLocking;
 import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 
 /**
@@ -41,8 +42,8 @@ import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
 public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBasedLockProviderBase {
   protected static final Logger LOG = LoggerFactory.getLogger(DynamoDBBasedImplicitPartitionKeyLockProvider.class);
 
-  private final String hudiTableBasePath;
- 
+  private final String normalizedHudiTableBasePath;
+
   public DynamoDBBasedImplicitPartitionKeyLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
     this(lockConfiguration, conf, null);
   }
@@ -50,24 +51,56 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
   public DynamoDBBasedImplicitPartitionKeyLockProvider(
       final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf, DynamoDbClient dynamoDB) {
     super(lockConfiguration, conf, dynamoDB);
-    hudiTableBasePath = s3aToS3(lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
+    normalizedHudiTableBasePath = normalizeBasePathForLocking(
+        lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
+  }
+
+  /**
+   * Compute the DynamoDB partition key for a given Hudi table base path. Exposed as a static
+   * helper so that the formula is testable without standing up a DynamoDB client.
+   *
+   * <p>Accepts a raw basePath - normalization is applied here. {@code normalizeBasePathForLocking}
+   * is idempotent, so passing an already-normalized path is safe. Note that the instance field
+   * {@code normalizedHudiTableBasePath} cannot be used here: the parent constructor invokes this
+   * through {@code getDynamoDBPartitionKey} before the subclass has a chance to assign the field.
+   * That ordering is also why the path is normalized twice per construction - once here and once
+   * for the field; it is a pure function over a short string, run once per provider.
+   *
+   * <p>ROLLOUT: for a table whose configured {@code hoodie.base.path} ends in '/' or carries
+   * surrounding whitespace, this returns a different DynamoDB partition key than releases before
+   * HUDI's normalization fix. Such a table must have all of its writers upgraded together - a
+   * rolling upgrade would leave old and new writers on two different lock rows for the same
+   * table, losing mutual exclusion. Base paths without a trailing slash are unaffected.
+   */
+  public static String derivePartitionKey(String hudiTableBasePath) {
+    String normalized = normalizeBasePathForLocking(hudiTableBasePath);
+    String partitionKey = HashID.generateXXHashAsString(normalized, HashID.Size.BITS_64);
+    LOG.info("The DynamoDB partition key of the lock provider for the base path {} (normalized: {}) is {}",
+        hudiTableBasePath, normalized, partitionKey);
+    // Releases before this change hashed s3aToS3(basePath) directly. When the canonical form
+    // differs, this writer has moved to a new lock row and cannot exclude a writer still running
+    // the old code, so say so loudly rather than leaving it to be inferred from the INFO line.
+    String legacyForm = s3aToS3(hudiTableBasePath);
+    if (!legacyForm.equals(normalized)) {
+      LOG.warn("DynamoDB partition key for base path {} moved from {} to {}. Every writer of this "
+              + "table must be upgraded together; a writer still on the previous release locks on "
+              + "the old partition key and will NOT be excluded by this one.",
+          hudiTableBasePath,
+          HashID.generateXXHashAsString(legacyForm, HashID.Size.BITS_64),
+          partitionKey);
+    }
+    return partitionKey;
   }
 
   @Override
   public String getDynamoDBPartitionKey(LockConfiguration lockConfiguration) {
-    // Ensure consistent format for S3 URI.
-    String hudiTableBasePathNormalized = s3aToS3(lockConfiguration.getConfig().getString(
-        HoodieCommonConfig.BASE_PATH.key()));
-    String partitionKey = HashID.generateXXHashAsString(hudiTableBasePathNormalized, HashID.Size.BITS_64);
-    LOG.info(String.format("The DynamoDB partition key of the lock provider for the base path %s is %s",
-        hudiTableBasePathNormalized, partitionKey));
-    return partitionKey;
+    return derivePartitionKey(lockConfiguration.getConfig().getString(HoodieCommonConfig.BASE_PATH.key()));
   }
 
   @Override
   protected String generateLogSuffixString() {
     return StringUtils.join("DynamoDb table = ", tableName,
         ", partition key = ", dynamoDBPartitionKey,
-        ", hudi table base path = ", hudiTableBasePath);
+        ", hudi table base path = ", normalizedHudiTableBasePath);
   }
 }

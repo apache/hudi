@@ -42,6 +42,7 @@ import org.apache.hudi.common.model.HoodiePreWriteCleanerPolicy;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -58,7 +59,6 @@ import org.apache.hudi.common.schema.internal.utils.SchemaChangeUtils;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -85,6 +85,7 @@ import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
@@ -115,14 +116,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1144,7 +1144,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   @VisibleForTesting
   String startCommit(Option<String> providedInstantTime, String actionType, HoodieTableMetaClient metaClient) {
-    if (needsUpgrade(metaClient)) {
+    if (needsUpgradeOrBackfill(metaClient)) {
       // unclear what instant to use, since upgrade does have a given instant.
       executeUsingTxnManager(Option.empty(), () -> tryUpgrade(metaClient, Option.empty()));
     }
@@ -1153,7 +1153,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         HoodieTimeline.COMMIT_ACTION, () -> tableServiceClient.rollbackFailedWrites(metaClient));
 
     txnManager.beginStateChange(Option.empty(), lastCompletedTxnAndMetadata.map(Pair::getLeft));
-    String instantTime;
+    String instantTime = null;
     HoodieInstant instant = null;
     try {
       instantTime = providedInstantTime.orElseGet(() -> createNewInstantTime(false));
@@ -1174,6 +1174,17 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         instant = metaClient.createNewInstant(State.REQUESTED, actionType, instantTime);
         metaClient.getActiveTimeline().createNewInstant(instant);
       }
+    } catch (RuntimeException | Error failure) {
+      // The caller does not know the allocated instant until startCommit returns. In particular, a
+      // failed timeline write must not leave its heartbeat running on a client reused by streaming.
+      if (instantTime != null && config.getFailedWritesCleanPolicy().isLazy()) {
+        try {
+          heartbeatClient.stop(instantTime);
+        } catch (RuntimeException cleanupFailure) {
+          failure.addSuppressed(cleanupFailure);
+        }
+      }
+      throw failure;
     } finally {
       txnManager.endStateChange(Option.ofNullable(instant));
     }
@@ -1452,10 +1463,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Performs necessary bootstrapping operations (for ex, validating whether Metadata Table has to be bootstrapped).
+   * Performs necessary bootstrapping operations and validates the table properties.
    *
-   * <p>NOTE: THIS OPERATION IS EXECUTED UNDER LOCK, THEREFORE SHOULD AVOID ANY OPERATIONS
-   *          NOT REQUIRING EXTERNAL SYNCHRONIZATION
+   * <p>Upgrade and metadata table initialization execute under lock. Table properties are validated afterward.
    *
    * @param metaClient instance of {@link HoodieTableMetaClient}
    * @param instantTime current inflight instant time
@@ -1466,15 +1476,15 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       ownerInstant = Option.of(metaClient.createNewInstant(HoodieInstant.State.INFLIGHT, CommitUtils.getCommitActionType(operationType,
           metaClient.getTableType()), instantTime.get()));
     }
-    boolean requiresInitTable = needsUpgrade(metaClient) || config.isMetadataTableEnabled();
-    if (!requiresInitTable) {
-      return;
+    boolean requiresInitTable = needsUpgradeOrBackfill(metaClient) || config.isMetadataTableEnabled();
+    if (requiresInitTable) {
+      executeUsingTxnManager(ownerInstant, () -> {
+        tryUpgrade(metaClient, instantTime);
+        // TODO: this also does MT table management..
+        initMetadataTable(instantTime, metaClient);
+      });
     }
-    executeUsingTxnManager(ownerInstant, () -> {
-      tryUpgrade(metaClient, instantTime);
-      // TODO: this also does MT table management..
-      initMetadataTable(instantTime, metaClient);
-    });
+    validateAgainstTableProperties(metaClient, config, operationType);
   }
 
   /**
@@ -1514,9 +1524,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     doInitTable(operationType, metaClient, instantTime);
     HoodieTable table = createTable(config, metaClient);
 
-    // Validate table properties
-    validateAgainstTableProperties(table.getMetaClient().getTableConfig(), config);
-
     switch (operationType) {
       case INSERT:
       case INSERT_PREPPED:
@@ -1543,13 +1550,64 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     return true;
   }
 
-  public void validateAgainstTableProperties(HoodieTableConfig tableConfig, HoodieWriteConfig writeConfig) {
+  /**
+   * A write that keys records needs {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} recorded before it keys them.
+   * Engines that key records outside the client (Spark, the streamer) record it when ingestion is set up, before
+   * this client exists, so the default only checks; a client whose callers hand it keyed records may record it here.
+   */
+  protected void ensureComplexKeyGenEncodingRecorded(HoodieTableMetaClient metaClient) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (KeyGenUtils.requireComplexKeyGenEncodingTracked(tableConfig) && !tableConfig.getComplexKeyGenEncoding().isPresent()) {
+      throw new HoodieException(KeyGenUtils.getComplexKeygenEncodingMissingMessage());
+    }
+  }
+
+  /**
+   * Validates the write configuration against the table properties. For writes that key records,
+   * ensures the complex key generator encoding is recorded; engines may record a missing encoding.
+   *
+   * <p>Nothing reconciles the write config against the table beforehand. That is deliberate: the mode
+   * is read further down the write path by handles and writer factories, some of which hold no table
+   * config at all, so the write config has to be correct on its own rather than corrected on the way
+   * in. This gate is what makes that true, by refusing writes whose meta-field settings do not already
+   * agree with the table.
+   */
+  public void validateAgainstTableProperties(HoodieTableMetaClient metaClient, HoodieWriteConfig writeConfig, WriteOperationType operationType) {
+    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
+      ensureComplexKeyGenEncodingRecorded(metaClient);
+    }
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
     // mismatch of table versions.
     CommonClientUtils.validateTableVersion(tableConfig, writeConfig);
 
-    // Once meta fields are disabled, it cant be re-enabled for a given table.
-    if (!tableConfig.populateMetaFields() && writeConfig.populateMetaFields()) {
-      throw new HoodieException(HoodieTableConfig.POPULATE_META_FIELDS.key() + " already disabled for the table. Can't be re-enabled back");
+    // Meta-field population is physical, so a writer must not disagree with the table about which
+    // meta columns hold values. Compare the full enum rather than the legacy booleans: those collapse
+    // every selective mode to false, so a writer claiming COMMIT_TIME_ONLY against a NONE table would
+    // slip through and advertise commit times that were never written.
+    //
+    // hoodie.meta.fields.mode is a table property, changeable only via hudi-cli or an upgrade -- never
+    // as a side effect of a write.
+    MetaFieldsMode tableMetaFieldsMode = tableConfig.getMetaFieldsMode();
+
+    // The writer's resolved mode must equal the table's. Both directions are wrong, for different
+    // reasons: widening would leave earlier commits missing a column later ones have, and readers
+    // cannot tell the two apart; narrowing would leave rows the table still advertises as populated,
+    // which incremental queries then silently skip. Only hudi-cli or an upgrade may change the mode.
+    //
+    // HoodieWriteConfig normalizes legacy input into hoodie.meta.fields.mode as its last defaulting
+    // step. Consequently this comparison has one source of truth on both sides, including when the
+    // caller supplied only the deprecated boolean or no meta-field option at all.
+    MetaFieldsMode writeMetaFieldsMode = writeConfig.getMetaFieldsMode();
+    if (writeMetaFieldsMode != tableMetaFieldsMode) {
+      throw new HoodieException(String.format(
+          "%s mismatch: table is %s but the writer requests %s. Meta columns are physical, so the writer must "
+              + "match the table%s. Set %s=%s on the writer, or change the table's mode through "
+              + "hudi-cli.",
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode, writeMetaFieldsMode,
+          writeMetaFieldsMode.isWiderThan(tableMetaFieldsMode)
+              ? " -- enabling a column now would leave earlier commits without it"
+              : " -- writing fewer of them leaves rows the table still advertises as populated",
+          HoodieTableConfig.META_FIELDS_MODE.key(), tableMetaFieldsMode));
     }
 
     // Meta fields can be disabled only when either {@code SimpleKeyGenerator}, {@code ComplexKeyGenerator},
@@ -1563,10 +1621,22 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
     }
-    if (tableConfig.getTableVersion().lesserThan(HoodieTableVersion.NINE)
-            && config.enableComplexKeygenValidation()
-            && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
+
+    // A bloom index needs the record key on disk. Without it the writer never builds a bloom filter
+    // (enableBloomFilter is gated on the same flag), so the reader finds no filter in the footer,
+    // HoodieKeyLookupHandle#getBloomFilter returns null, and addKey NPEs on the first upsert. Reject
+    // the combination here rather than let it fail mid-write with an unattributable
+    // NullPointerException.
+    if (!tableConfig.isRecordKeyPopulated()) {
+      HoodieIndex.IndexType indexType = writeConfig.getIndexType();
+      if (indexType == HoodieIndex.IndexType.BLOOM || indexType == HoodieIndex.IndexType.GLOBAL_BLOOM) {
+        throw new HoodieException(String.format(
+            "%s index requires the %s meta column, which %s=%s does not populate. The bloom filter is "
+                + "never written, so lookups would fail on the first upsert. Use SIMPLE, GLOBAL_SIMPLE, "
+                + "BUCKET or RECORD_INDEX instead, or use a mode that populates the record key.",
+            indexType, HoodieRecord.RECORD_KEY_METADATA_FIELD,
+            HoodieTableConfig.META_FIELDS_MODE.key(), tableConfig.getMetaFieldsMode()));
+      }
     }
     //Check to make sure it's not a COW table with consistent hashing bucket index
     if (tableConfig.getTableType() == HoodieTableType.COPY_ON_WRITE) {
@@ -1626,8 +1696,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
   }
 
   /**
-   * Upgrades the hoodie table if need be when moving to a new Hudi version.
-   * This method is called within a lock. Try to avoid double locking from within this method.
+   * Upgrades the hoodie table if need be when moving to a new Hudi version, and backfills the table configs
+   * that readers of the table version need but the table does not carry.
+   * This method is called within a lock, except when the Flink stream write coordinator calls it on start.
+   * Try to avoid double locking from within this method.
    * @param metaClient instance of {@link HoodieTableMetaClient} to use.
    * @param instantTime instant time of interest if we have one.
    */
@@ -1652,11 +1724,31 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
       metaClient.reloadTableConfig();
       metaClient.reloadActiveTimeline();
     }
+
+    backfillTableConfigs(metaClient);
   }
 
-  private boolean needsUpgrade(HoodieTableMetaClient metaClient) {
+  private void backfillTableConfigs(HoodieTableMetaClient metaClient) {
+    if (!HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig()).isPresent()) {
+      return;
+    }
+    // another writer may have backfilled the table since this meta client loaded its config
+    metaClient.reloadTableConfig();
+    Option<String> missingKeyGeneratorClass = HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig());
+    if (missingKeyGeneratorClass.isPresent()) {
+      log.info("Backfilling {}={} for table {}", HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(),
+          missingKeyGeneratorClass.get(), metaClient.getBasePath());
+      Properties updatedProps = new Properties();
+      updatedProps.setProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), missingKeyGeneratorClass.get());
+      HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), updatedProps);
+      metaClient.reloadTableConfig();
+    }
+  }
+
+  private boolean needsUpgradeOrBackfill(HoodieTableMetaClient metaClient) {
     UpgradeDowngrade upgradeDowngrade = new UpgradeDowngrade(metaClient, config, context, upgradeDowngradeHelper);
-    return upgradeDowngrade.needsUpgrade(config.getWriteVersion());
+    return upgradeDowngrade.needsUpgrade(config.getWriteVersion())
+        || HoodieTableConfig.getMissingKeyGeneratorClass(metaClient.getTableConfig()).isPresent();
   }
 
   /**

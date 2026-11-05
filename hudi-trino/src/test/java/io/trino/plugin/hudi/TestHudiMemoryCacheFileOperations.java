@@ -76,7 +76,7 @@ public class TestHudiMemoryCacheFileOperations
         assertFileSystemAccesses(
                 query,
                 ImmutableMultiset.<FileOperation>builder()
-                        .addCopies(new FileOperation("FileSystemCache.cacheInput", DATA), 2)
+                        .addCopies(new FileOperation("BlobCache.get", DATA), 2)
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
                         .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
@@ -85,7 +85,7 @@ public class TestHudiMemoryCacheFileOperations
         assertFileSystemAccesses(
                 query,
                 ImmutableMultiset.<FileOperation>builder()
-                        .addCopies(new FileOperation("FileSystemCache.cacheInput", DATA), 2)
+                        .addCopies(new FileOperation("BlobCache.get", DATA), 2)
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
                         .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
@@ -102,7 +102,7 @@ public class TestHudiMemoryCacheFileOperations
 
         assertFileSystemAccesses(query,
                 ImmutableMultiset.<FileOperation>builder()
-                        .addCopies(new FileOperation("FileSystemCache.cacheInput", DATA), 6)
+                        .addCopies(new FileOperation("BlobCache.get", DATA), 6)
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
@@ -110,7 +110,7 @@ public class TestHudiMemoryCacheFileOperations
 
         assertFileSystemAccesses(query,
                 ImmutableMultiset.<FileOperation>builder()
-                        .addCopies(new FileOperation("FileSystemCache.cacheInput", DATA), 6)
+                        .addCopies(new FileOperation("BlobCache.get", DATA), 6)
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
@@ -127,7 +127,7 @@ public class TestHudiMemoryCacheFileOperations
     private static Multiset<FileOperation> getFileOperations(QueryRunner queryRunner)
     {
         return queryRunner.getSpans().stream()
-                .filter(span -> span.getName().startsWith("Input.") || span.getName().startsWith("InputFile.") || span.getName().startsWith("FileSystemCache."))
+                .filter(span -> span.getName().startsWith("Input.") || span.getName().startsWith("InputFile.") || span.getName().startsWith("FileSystemCache.") || span.getName().startsWith("BlobCache."))
                 .filter(span -> !span.getName().startsWith("InputFile.newInput"))
                 .filter(span -> !span.getName().startsWith("InputFile.exists"))
                 .filter(span -> !isTrinoSchemaOrPermissions(getFileLocation(span)))

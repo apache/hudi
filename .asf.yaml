@@ -45,77 +45,57 @@ github:
       required_pull_request_reviews:
         required_approving_review_count: 1
       required_status_checks:
+        # The merge queue tests each PR against the latest master, so PRs need not be up to date.
         strict: false
         contexts:
-          - validate-source
-          - validate-pr
-          - validate-pr-title
-          - validate-commit-coauthor
-          - test-hudi-trino-plugin
-          - test-spark-client-and-hadoop-common (scala-2.12, spark3.5, flink2.1)
-          - test-utilities (scala-2.12, spark3.5, flink2.1)
-          - test-common-and-other-modules (scala-2.12, spark3.5, flink2.1)
-          - test-hudi-hadoop-mr-and-hudi-java-client (scala-2.12, spark3.5, flink2.1)
-          - test-spark-java-tests-part1 (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
-          - test-spark-java-tests-part1 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
-          - test-spark-java-tests-part1 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-java-tests-part2 (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
-          - test-spark-java-tests-part2 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
-          - test-spark-java-tests-part2 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-java-tests-part3 (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
-          - test-spark-java-tests-part3 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
-          - test-spark-java-tests-part3 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-scala-dml-tests (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
-          - test-spark-scala-dml-tests (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
-          - test-spark-scala-dml-tests (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-scala-other-tests (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
-          - test-spark-scala-other-tests (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
-          - test-spark-scala-other-tests (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-java17-java-tests-part1 (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-java17-java-tests-part1 (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
-          - test-spark-java17-java-tests-part1 (scala-2.13, spark4.1, hudi-spark-datasource/hudi-spark4.1.x)
-          - test-spark-java17-java-tests-part1 (scala-2.13, spark4.2, hudi-spark-datasource/hudi-spark4.2.x)
-          - test-spark-java17-java-tests-part2 (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-java17-java-tests-part2 (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
-          - test-spark-java17-java-tests-part2 (scala-2.13, spark4.1, hudi-spark-datasource/hudi-spark4.1.x)
-          - test-spark-java17-java-tests-part2 (scala-2.13, spark4.2, hudi-spark-datasource/hudi-spark4.2.x)
-          - test-spark-java17-java-tests-part3 (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-java17-java-tests-part3 (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
-          - test-spark-java17-java-tests-part3 (scala-2.13, spark4.1, hudi-spark-datasource/hudi-spark4.1.x)
-          - test-spark-java17-java-tests-part3 (scala-2.13, spark4.2, hudi-spark-datasource/hudi-spark4.2.x)
-          - test-spark-java17-scala-dml-tests (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-java17-scala-dml-tests (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
-          - test-spark-java17-scala-dml-tests (scala-2.13, spark4.1, hudi-spark-datasource/hudi-spark4.1.x)
-          - test-spark-java17-scala-dml-tests (scala-2.13, spark4.2, hudi-spark-datasource/hudi-spark4.2.x)
-          - test-spark-java17-scala-other-tests (scala-2.13, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - test-spark-java17-scala-other-tests (scala-2.13, spark4.0, hudi-spark-datasource/hudi-spark4.0.x)
-          - test-spark-java17-scala-other-tests (scala-2.13, spark4.1, hudi-spark-datasource/hudi-spark4.1.x)
-          - test-spark-java17-scala-other-tests (scala-2.13, spark4.2, hudi-spark-datasource/hudi-spark4.2.x)
-          - test-flink-1 (flink1.18, 1.11.4, 1.13.1)
-          - test-flink-1 (flink1.19, 1.11.4, 1.13.1)
-          - test-flink-1 (flink1.20, 1.11.4, 1.13.1)
-          - test-flink-1 (flink2.0, 1.11.4, 1.14.4)
-          - test-flink-1 (flink2.1, 1.11.4, 1.15.2)
-          - test-flink-2 (flink2.1, 1.11.4, 1.15.2)
-          - build-spark-java17 (scala-2.12, spark3.3, hudi-spark-datasource/hudi-spark3.3.x)
-          - build-spark-java17 (scala-2.12, spark3.4, hudi-spark-datasource/hudi-spark3.4.x)
-          - build-spark-java17 (scala-2.12, spark3.5, hudi-spark-datasource/hudi-spark3.5.x)
-          - build-flink-java17 (scala-2.12, flink2.1, 1.11.4, 1.15.2)
-          - validate-bundles (scala-2.12, flink1.18, 1.11.4, 1.13.1, spark3.3, spark3.3.4)
-          - validate-bundles (scala-2.12, flink1.18, 1.11.4, 1.13.1, spark3.4, spark3.4.3)
-          - validate-bundles (scala-2.13, flink1.19, 1.11.4, 1.13.1, spark3.5, spark3.5.1)
-          - validate-bundles (scala-2.13, flink1.20, 1.11.4, 1.13.1, spark3.5, spark3.5.1)
-          - validate-bundle-spark4 (scala-2.13, flink1.20, 1.11.4, 1.13.1, spark4.0, spark4.0.0)
-          - validate-bundle-spark4 (scala-2.13, flink1.20, 1.11.4, 1.13.1, spark4.1, spark4.1.1)
-          - validate-bundle-spark4 (scala-2.13, flink1.20, 1.11.4, 1.13.1, spark4.2, spark4.2.0)
-          - validate-bundles-java11 (scala-2.12, flink2.0, 1.11.4, 1.14.4, spark3.5, spark3.5.1)
-          - validate-bundles-java11 (scala-2.12, flink2.1, 1.11.4, 1.15.2, spark3.5, spark3.5.1)
-          - docker-java17-test (scala-2.12, flink2.1, spark3.5, spark3.5.0)
-          - docker-java17-test (scala-2.13, flink2.1, spark3.5, spark3.5.0)
-          - docker-java17-test (scala-2.13, flink2.1, spark4.0, spark4.0.0)
-          - docker-java17-test (scala-2.13, flink2.1, spark4.1, spark4.1.1)
-          - docker-java17-test (scala-2.13, flink1.20, spark4.2, spark4.2.0)
-          - integration-tests (spark3.5, flink2.1, spark-3.5.3/spark-3.5.3-bin-hadoop3.tgz)
+          # Only contexts that report on every PR and every merge-queue group may be listed: a
+          # context left without a run to report it blocks merges indefinitely (#18598).
+          # The per-job test contexts are not listed. Each Java CI workflow ends with one aggregate
+          # job over all of its jobs, so resharding a workflow never touches this file. There is
+          # one aggregate per workflow, not one for both, because the ASF Actions policy caps the
+          # jobs running at once per workflow at 20 (15 recommended).
+          # validate-pr-and-source runs the PR metadata and source release checks in one job.
+          - validate-pr-and-source
+          - Java CI result
+          - Java CI Engines result
+  # Raw GitHub Rulesets API payload, as in apache/arrow-rs and apache/datafusion-comet.
+  # Rulesets and classic branch protection apply together.
+  rulesets:
+    - name: Merge Queue
+      target: branch
+      enforcement: active
+      bypass_actors:
+        # apache/root (ASF Infra) can recover a blocked queue.
+        - actor_id: 118420
+          actor_type: Team
+          bypass_mode: always
+        # apache/hudi-committers can merge a PR without the queue, through the PR only (no direct
+        # pushes). A failed entry leaves the queue and is re-queued with "Merge when ready"; the
+        # bypass is for a known flake that keeps failing, a stalled queue, or an urgent fix.
+        - actor_id: 3084687
+          actor_type: Team
+          bypass_mode: pull_request
+      conditions:
+        ref_name:
+          include:
+            - "~DEFAULT_BRANCH"
+          exclude: []
+      rules:
+        - type: merge_queue
+          parameters:
+            merge_method: SQUASH
+            grouping_strategy: ALLGREEN
+            # Two groups build at a time. A group invalidated mid-run still runs to the end,
+            # because workflows cannot react to the merge_group destroyed event, so this caps
+            # the waste per failed entry at one full Java CI run.
+            max_entries_to_build: 2
+            # Merges up to five already-green entries together; each PR keeps its own squash
+            # commit, and CI builds are not batched.
+            min_entries_to_merge: 1
+            max_entries_to_merge: 5
+            min_entries_to_merge_wait_minutes: 0
+            # A full Java CI run plus ASF runner queueing.
+            check_response_timeout_minutes: 300
   collaborators:
     - ad1happy2go
     - rangareddy

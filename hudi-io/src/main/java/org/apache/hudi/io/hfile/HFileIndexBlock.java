@@ -52,4 +52,40 @@ public abstract class HFileIndexBlock extends HFileBlock {
   public boolean isEmpty() {
     return entries.isEmpty();
   }
+
+  /**
+   * Encodes an integer using {@code WritableUtils} variable-length encoding (VInt): the encoding
+   * the HFile block index uses for the per-entry key length and that the reader decodes
+   * ({@link org.apache.hudi.io.util.IOUtils#readVarLong}). Values in [-112, 127] use a single
+   * byte; otherwise the first byte carries the number of following big-endian value bytes and the
+   * sign. This is NOT interchangeable with the Protobuf varint
+   * ({@link HFileFileInfoBlock#getProtobufVarIntBytes(int)}): the two diverge for values >= 128.
+   *
+   * @param value the integer value to encode.
+   * @return the encoded byte array.
+   */
+  static byte[] getVarIntBytes(int value) {
+    if (value >= -112 && value <= 127) {
+      return new byte[] {(byte) value};
+    }
+    long longValue = value;
+    int len = -112;
+    if (longValue < 0) {
+      longValue ^= -1L;
+      len = -120;
+    }
+    long tmp = longValue;
+    while (tmp != 0) {
+      tmp >>= 8;
+      len--;
+    }
+    int numBytes = (len < -120) ? -(len + 120) : -(len + 112);
+    byte[] result = new byte[1 + numBytes];
+    result[0] = (byte) len;
+    for (int idx = 0; idx < numBytes; idx++) {
+      int shiftBits = (numBytes - idx - 1) * 8;
+      result[1 + idx] = (byte) ((longValue >> shiftBits) & 0xFF);
+    }
+    return result;
+  }
 }

@@ -20,9 +20,12 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.VisibleForTesting;
@@ -57,6 +60,9 @@ public class BaseFileRecordParsingUtils {
    * @param writesFileIdEncoding fileID encoding for the table.
    * @param instantTime          instant time of interest.
    * @param storage              instance of {@link HoodieStorage}.
+   * @param isPartitionedRLI     whether the record index is partitioned.
+   * @param generateRecordKeys   whether the table carries no record key, so that every row is keyed by the file path
+   *                             relative to the table base path and the row position, see {@link HoodieTableConfig#hasRecordKey()}.
    * @return Iterator of {@link HoodieRecord}s for RLI Metadata partition.
    */
   public static Iterator<HoodieRecord> generateRLIMetadataHoodieRecordsForBaseFile(String basePath,
@@ -64,17 +70,20 @@ public class BaseFileRecordParsingUtils {
                                                                                    Integer writesFileIdEncoding,
                                                                                    String instantTime,
                                                                                    HoodieStorage storage,
-                                                                                   boolean isPartitionedRLI) {
+                                                                                   boolean isPartitionedRLI,
+                                                                                   boolean generateRecordKeys) {
     String partition = writeStat.getPartitionPath();
     String latestFileName = FSUtils.getFileNameFromPath(writeStat.getPath());
-    String fileId = FSUtils.getFileId(latestFileName);
+    // a file written outside Hudi keeps its own name, which may contain underscores, so the file id is parsed from the marker
+    String fileId = FileNameParser.parseBaseFile(latestFileName).map(FileNameParser.BaseFileName::getFileId)
+        .orElseGet(() -> FSUtils.getFileId(latestFileName));
 
     Set<RecordStatus> recordStatuses = new HashSet<>();
     recordStatuses.add(RecordStatus.INSERT);
     recordStatuses.add(RecordStatus.DELETE);
     // for RLI, we are only interested in INSERTS and DELETES
     Map<RecordStatus, List<String>> recordStatusListMap = getRecordKeyStatuses(basePath, writeStat.getPartitionPath(), latestFileName, writeStat.getPrevBaseFile(), storage,
-        recordStatuses);
+        recordStatuses, generateRecordKeys);
     List<HoodieRecord> hoodieRecords = new ArrayList<>();
     if (recordStatusListMap.containsKey(RecordStatus.INSERT)) {
       long instantTimeMillis = HoodieMetadataPayload.parseRecordIndexInstantTime(instantTime);
@@ -126,7 +135,27 @@ public class BaseFileRecordParsingUtils {
                                                                      String prevFileName,
                                                                      HoodieStorage storage,
                                                                      Set<RecordStatus> recordStatusesOfInterest) {
-    Set<String> recordKeysFromLatestBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, latestFileName);
+    return getRecordKeyStatuses(basePath, partition, latestFileName, prevFileName, storage, recordStatusesOfInterest, false);
+  }
+
+  /**
+   * Fetch list of record keys deleted or updated in file referenced in the {@link HoodieWriteStat} passed.
+   *
+   * @param basePath           base path of the table.
+   * @param storage            {@link HoodieStorage} instance of interest.
+   * @param generateRecordKeys whether the table carries no record key, so that every row is keyed by the file path
+   *                           relative to the table base path and the row position.
+   * @return list of record keys deleted or updated.
+   */
+  @VisibleForTesting
+  public static Map<RecordStatus, List<String>> getRecordKeyStatuses(String basePath,
+                                                                     String partition,
+                                                                     String latestFileName,
+                                                                     String prevFileName,
+                                                                     HoodieStorage storage,
+                                                                     Set<RecordStatus> recordStatusesOfInterest,
+                                                                     boolean generateRecordKeys) {
+    Set<String> recordKeysFromLatestBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, latestFileName, generateRecordKeys);
     if (prevFileName == null) {
       if (recordStatusesOfInterest.contains(RecordStatus.INSERT)) {
         return Collections.singletonMap(RecordStatus.INSERT, new ArrayList<>(recordKeysFromLatestBaseFile));
@@ -137,7 +166,7 @@ public class BaseFileRecordParsingUtils {
     } else {
       // read from previous base file and find difference to also generate delete records.
       // we will return updates and deletes from this code block
-      Set<String> recordKeysFromPreviousBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, prevFileName);
+      Set<String> recordKeysFromPreviousBaseFile = getRecordKeysFromBaseFile(storage, basePath, partition, prevFileName, generateRecordKeys);
       Map<RecordStatus, List<String>> toReturn = new HashMap<>(recordStatusesOfInterest.size());
       if (recordStatusesOfInterest.contains(RecordStatus.DELETE)) {
         toReturn.put(RecordStatus.DELETE, recordKeysFromPreviousBaseFile.stream()
@@ -167,10 +196,43 @@ public class BaseFileRecordParsingUtils {
     }
   }
 
-  private static Set<String> getRecordKeysFromBaseFile(HoodieStorage storage, String basePath, String partition, String fileName) {
-    StoragePath dataFilePath = new StoragePath(basePath, StringUtils.isNullOrEmpty(partition) ? fileName : (partition + StoragePath.SEPARATOR) + fileName);
+  /**
+   * Generates RLI Metadata delete records for every record key in the given base file.
+   * Used when a file group is replaced by a commit that does not rewrite its records, for example a replace commit
+   * that registers files written outside Hudi.
+   *
+   * @param basePath           base path of the table.
+   * @param partition          partition of the base file.
+   * @param dataFilePath       path of the base file on storage.
+   * @param storage            instance of {@link HoodieStorage}.
+   * @param isPartitionedRLI   whether the record index is partitioned.
+   * @param generateRecordKeys whether the table carries no record key, so that every row is keyed by the file path
+   *                           relative to the table base path and the row position.
+   * @return Iterator of delete {@link HoodieRecord}s for RLI Metadata partition.
+   */
+  public static Iterator<HoodieRecord> generateRLIMetadataHoodieRecordsForReplacedBaseFile(String basePath,
+                                                                                           String partition,
+                                                                                           StoragePath dataFilePath,
+                                                                                           HoodieStorage storage,
+                                                                                           boolean isPartitionedRLI,
+                                                                                           boolean generateRecordKeys) {
+    return getRecordKeysFromBaseFile(storage, basePath, dataFilePath, generateRecordKeys).stream()
+        .map(recordKey -> HoodieMetadataPayload.createRecordIndexDelete(recordKey, partition, isPartitionedRLI))
+        .iterator();
+  }
+
+  private static Set<String> getRecordKeysFromBaseFile(HoodieStorage storage, String basePath, String partition, String fileName, boolean generateRecordKeys) {
+    // a file written outside Hudi is recorded with an external file marker that is not part of the name on storage.
+    String filePathInPartition = ExternalFilePathUtil.getFilePathInPartition(fileName);
+    StoragePath dataFilePath = new StoragePath(basePath, StringUtils.isNullOrEmpty(partition) ? filePathInPartition : (partition + StoragePath.SEPARATOR) + filePathInPartition);
+    return getRecordKeysFromBaseFile(storage, basePath, dataFilePath, generateRecordKeys);
+  }
+
+  private static Set<String> getRecordKeysFromBaseFile(HoodieStorage storage, String basePath, StoragePath dataFilePath, boolean generateRecordKeys) {
     FileFormatUtils fileFormatUtils = HoodieIOFactory.getIOFactory(storage).getFileFormatUtils(HoodieFileFormat.PARQUET);
-    return fileFormatUtils.readRowKeys(storage, dataFilePath);
+    return generateRecordKeys
+        ? fileFormatUtils.readRowKeys(storage, dataFilePath, new StoragePath(basePath))
+        : fileFormatUtils.readRowKeys(storage, dataFilePath);
   }
 
   public enum RecordStatus {

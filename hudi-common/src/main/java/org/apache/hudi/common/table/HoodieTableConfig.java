@@ -39,6 +39,7 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteNonDefaultsWithLatestAvroPayload;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
@@ -61,6 +62,7 @@ import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -328,11 +330,39 @@ public class HoodieTableConfig extends HoodieConfig {
       .noDefaultValue()
       .withDocumentation("Base path of the dataset that needs to be bootstrapped as a Hudi table");
 
+  /**
+   * @deprecated since 1.3.0, use {@link #META_FIELDS_MODE} instead. {@code true} maps to
+   * {@link MetaFieldsMode#ALL} and {@code false} maps to {@link MetaFieldsMode#NONE}. This property
+   * is still honored for tables written before {@code hoodie.meta.fields.mode} existed, but it is
+   * consulted only when the mode property is absent.
+   */
+  @Deprecated
   public static final ConfigProperty<Boolean> POPULATE_META_FIELDS = ConfigProperty
       .key("hoodie.populate.meta.fields")
       .defaultValue(true)
-      .withDocumentation("When enabled, populates all meta fields. When disabled, no meta fields are populated "
+      .deprecatedAfter("1.2.0")
+      .withDocumentation("Deprecated — use hoodie.meta.fields.mode instead (true maps to ALL, false maps to NONE). "
+          + "When enabled, populates all meta fields. When disabled, no meta fields are populated "
           + "and incremental queries will not be functional. This is only meant to be used for append only/immutable data for batch processing");
+
+  // NOTE: deliberately carries no sinceVersion. validateConfigVersion() silently *removes* any
+  // property whose sinceVersion exceeds the table's version (see the props.remove call in
+  // dropInvalidConfigs), so declaring one here would strip the mode from every table below that
+  // version on load -- reverting it to ALL without a word. Meta-field population is not a v10
+  // concept: a table as old as v6 can carry a selective mode, set at creation or through the
+  // hudi-cli, and 1.x supports writing to those tables. v6 is the floor only because that is the
+  // oldest version 1.x can write. Anything that keys meta-field behavior on table version rather
+  // than on this property will therefore be wrong for those tables.
+  public static final ConfigProperty<String> META_FIELDS_MODE = ConfigProperty
+      .key("hoodie.meta.fields.mode")
+      .noDefaultValue()
+      .withDocumentation("Which Hudi meta columns are physically populated on disk. Allowed values are "
+          + "ALL, NONE, COMMIT_TIME_ONLY, FILE_NAME_ONLY and COMMIT_TIME_AND_FILE_NAME. "
+          + "Selective modes are supported by Spark and Flink COPY_ON_WRITE writers. This supersedes the "
+          + "deprecated hoodie.populate.meta.fields boolean, which is consulted only when this property is unset "
+          + "(true maps to ALL, false maps to NONE). Supported on any table version 1.x can write, not just the "
+          + "latest. Set only at table creation, via the hudi-cli, or during table upgrade — the property is "
+          + "immutable at runtime because it is a physical-storage decision baked into files at write time.");
 
   public static final ConfigProperty<String> KEY_GENERATOR_CLASS_NAME = ConfigProperty
       .key("hoodie.table.keygenerator.class")
@@ -384,6 +414,18 @@ public class HoodieTableConfig extends HoodieConfig {
       .sinceVersion("1.1.0")
       .withDocumentation("This property when set, will define how two versions of the record will be merged together when records are partially formed");
 
+  public static final ConfigProperty<String> COMPLEX_KEYGEN_ENCODING = ConfigProperty
+      .key("hoodie.table.complex.keygenerator.encoding")
+      .noDefaultValue()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Encoding of the _hoodie_record_key meta field for a ComplexKeyGenerator configured with a "
+          + "single record key field: FIELD_PREFIXED (`<field_name>:<field_value>`) or VALUE_ONLY (bare `<field_value>`). "
+          + "New tables are created with FIELD_PREFIXED. An existing table without this property gets it backfilled "
+          + "by the next write or upgrade, from the encoding found in its data. Once present it is authoritative for "
+          + "writers and readers on every table version, and is kept across upgrades and downgrades. The backfill "
+          + "inspects the most recently written data file only, so a table that already contains both encodings is "
+          + "not repaired by it.");
+
   public static final ConfigProperty<String> URL_ENCODE_PARTITIONING = KeyGeneratorOptions.URL_ENCODE_PARTITIONING;
   public static final ConfigProperty<String> HIVE_STYLE_PARTITIONING_ENABLE = KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE;
   public static final ConfigProperty<String> SLASH_SEPARATED_DATE_PARTITIONING = KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING;
@@ -402,7 +444,9 @@ public class HoodieTableConfig extends HoodieConfig {
 
   private static final Set<String> CONFIGS_REQUIRED_FOR_OLDER_VERSIONED_TABLES = new HashSet<>(Arrays.asList(
       KEY_GENERATOR_CLASS_NAME.key(),
-      KEY_GENERATOR_TYPE.key()
+      KEY_GENERATOR_TYPE.key(),
+      // records what the data of a table at any version carries, so it must survive on older versions too
+      COMPLEX_KEYGEN_ENCODING.key()
   ));
 
   public static final ConfigProperty<String> TABLE_CHECKSUM = ConfigProperty
@@ -652,9 +696,33 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       hoodieConfig.setDefaultValue(DROP_PARTITION_COLUMNS);
 
+      MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(hoodieConfig);
+      if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+        hoodieConfig.setValue(POPULATE_META_FIELDS,
+            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
+      }
+      getMissingKeyGeneratorClass(hoodieConfig).ifPresent(
+          keyGeneratorClass -> hoodieConfig.setValue(KEY_GENERATOR_CLASS_NAME, keyGeneratorClass));
+
       dropInvalidConfigs(hoodieConfig);
       storeProperties(hoodieConfig.getProps(), outputStream, propertyPath);
     }
+  }
+
+  /**
+   * Returns the key generator class that a table below version 8 records only through its key generator type.
+   * Hudi 0.x reads only the class, so such a table must carry it as well.
+   */
+  public static Option<String> getMissingKeyGeneratorClass(HoodieConfig config) {
+    if (!getTableVersion(config).lesserThan(HoodieTableVersion.EIGHT)
+        || config.contains(KEY_GENERATOR_CLASS_NAME) || !config.contains(KEY_GENERATOR_TYPE)) {
+      return Option.empty();
+    }
+    String keyGeneratorType = config.getString(KEY_GENERATOR_TYPE);
+    return Option.fromJavaOptional(Arrays.stream(KeyGeneratorType.values())
+        .filter(type -> type != KeyGeneratorType.USER_PROVIDED && type.name().equals(keyGeneratorType))
+        .map(KeyGeneratorType::getClassName)
+        .findFirst());
   }
 
   public static long generateChecksum(Properties props) {
@@ -1231,9 +1299,56 @@ public class HoodieTableConfig extends HoodieConfig {
 
   /**
    * @returns true is meta fields need to be populated. else returns false.
+   *
+   * <p>Derived from {@link #getMetaFieldsMode()} so that call sites still written against the
+   * deprecated boolean observe the same answer as the enum: only {@link MetaFieldsMode#ALL}
+   * populates every meta column. Selective modes report {@code false} here, which keeps
+   * key-dependent machinery (bloom filters, record-level index) correctly disabled.
    */
   public boolean populateMetaFields() {
-    return Boolean.parseBoolean(getStringOrDefault(POPULATE_META_FIELDS));
+    return getMetaFieldsMode().toLegacyPopulateMetaFields();
+  }
+
+  /**
+   * @return the configured {@link MetaFieldsMode}, falling back to the deprecated
+   * {@link #POPULATE_META_FIELDS} setting for legacy tables. This method is side-effect free and
+   * never returns {@code null}.
+   */
+  public MetaFieldsMode getMetaFieldsMode() {
+    return MetaFieldsMode.resolve(this);
+  }
+
+  /**
+   * @return true when the {@code _hoodie_commit_time} meta column is physically populated on disk.
+   */
+  public boolean isCommitTimePopulated() {
+    return getMetaFieldsMode().isCommitTimePopulated();
+  }
+
+  /**
+   * @return true when the {@code _hoodie_file_name} meta column is physically populated on disk.
+   */
+  public boolean isFileNamePopulated() {
+    return getMetaFieldsMode().isFileNamePopulated();
+  }
+
+  /**
+   * @return true when the {@code _hoodie_record_key} meta column is physically populated on disk.
+   * Only {@link MetaFieldsMode#ALL} populates the record-key column; every selective mode leaves
+   * it null.
+   */
+  public boolean isRecordKeyPopulated() {
+    return getMetaFieldsMode().isRecordKeyPopulated();
+  }
+
+  /**
+   * @return true when the rows of this table carry a record key, either in the populated
+   * {@code _hoodie_record_key} meta column or in configured record key fields. A table that only
+   * registers files written by another system has neither; the record index and the secondary
+   * index then key its rows by file path and row position instead.
+   */
+  public boolean hasRecordKey() {
+    return isRecordKeyPopulated() || getRecordKeyFields().map(fields -> fields.length > 0).orElse(false);
   }
 
   /**
@@ -1313,6 +1428,26 @@ public class HoodieTableConfig extends HoodieConfig {
       // For table version <= 8, partial update is not supported.
       return Option.empty();
     }
+  }
+
+  /**
+   * @return the persisted record key encoding of a single-field complex key generator table
+   * ({@link #COMPLEX_KEYGEN_ENCODING}), or empty when the property has not been set on the table.
+   */
+  public Option<ComplexKeyGenEncoding> getComplexKeyGenEncoding() {
+    return contains(COMPLEX_KEYGEN_ENCODING)
+        ? Option.of(ComplexKeyGenEncoding.fromString(getString(COMPLEX_KEYGEN_ENCODING)))
+        : Option.empty();
+  }
+
+  /**
+   * @return whether the table uses the complex key generator with exactly one record key field, the shape
+   * whose {@code _hoodie_record_key} encoding is tracked by {@link #COMPLEX_KEYGEN_ENCODING}.
+   */
+  public boolean isComplexKeyGenWithSingleRecordKeyField() {
+    Option<String[]> recordKeyFields = getRecordKeyFields();
+    return KeyGeneratorType.isComplexKeyGenerator(this)
+        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
   }
 
   /**

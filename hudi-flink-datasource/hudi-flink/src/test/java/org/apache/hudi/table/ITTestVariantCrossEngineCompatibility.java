@@ -40,6 +40,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 /**
@@ -134,5 +136,50 @@ public class ITTestVariantCrossEngineCompatibility {
     HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_mor_spark.zip", morSparkTargetDir, getClass());
     String morSparkPath = morSparkTargetDir.resolve("variant_mor_spark").toString();
     verifyFlinkCanReadSparkVariantTable(morSparkPath, "MERGE_ON_READ", "MOR table with SPARK record type");
+  }
+
+  @Test
+  public void testFlinkReadShreddedVariantCOWTableFailsFast() throws Exception {
+    // The fixture's first file group is SHREDDED (its variant group carries typed_value; one row
+    // holds its key in the per-field residual) and the second is unshredded. Flink has no
+    // shredded-variant read support, so the read must fail fast instead of returning nulls or a
+    // partial payload; a passing full read here means shredded support arrived and this pin
+    // should flip to value assertions.
+    Path targetDir = tempDir.resolve("shredded_mixed");
+    HoodieTestUtils.extractZipToDirectory("variant_backward_compat/variant_shredded_mixed_cow.zip", targetDir, getClass());
+    String tablePath = targetDir.resolve("variant_shredded_mixed_cow").toString();
+
+    TableEnvironment tableEnv = TestTableEnvs.getBatchTableEnv();
+    tableEnv.executeSql(String.format(
+        "CREATE TABLE shredded_variant_table ("
+            + "  id INT,"
+            + "  v VARIANT,"
+            + "  ts BIGINT,"
+            + "  PRIMARY KEY (id) NOT ENFORCED"
+            + ") WITH ("
+            + "  'connector' = 'hudi',"
+            + "  'path' = '%s',"
+            + "  'table.type' = 'COPY_ON_WRITE'"
+            + ")",
+        tablePath));
+
+    Exception failure = assertThrows(Exception.class, () -> {
+      TableResult result = tableEnv.executeSql("SELECT id, v, ts FROM shredded_variant_table ORDER BY id");
+      CollectionUtil.iteratorToList(result.collect());
+    });
+    // Assert the guard's own message (ParquetSplitReaderUtil.isShreddedVariant), not just any
+    // failure mentioning "variant": an unrelated error naming the column must not green this pin.
+    boolean guardFired = false;
+    for (Throwable t = failure; t != null; t = t.getCause()) {
+      String message = t.getMessage() == null ? "" : t.getMessage();
+      if (message.contains("Shredded Variant is not supported in Flink")) {
+        guardFired = true;
+        break;
+      }
+    }
+    assertTrue(guardFired,
+        "Reading a shredded variant file must fail through the shredded-variant guard, got: " + failure);
+
+    tableEnv.executeSql("DROP TABLE shredded_variant_table");
   }
 }

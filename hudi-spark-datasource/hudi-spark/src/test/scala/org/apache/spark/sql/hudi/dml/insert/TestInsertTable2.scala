@@ -19,23 +19,27 @@
 
 package org.apache.spark.sql.hudi.dml.insert
 
-import org.apache.hudi.DataSourceWriteOptions.{COW_TABLE_TYPE_OPT_VAL, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, RECORDKEY_FIELD, SPARK_SQL_INSERT_INTO_OPERATION, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{COW_TABLE_TYPE_OPT_VAL, ENABLE_ROW_WRITER, MOR_TABLE_TYPE_OPT_VAL, PARTITIONPATH_FIELD, RECORDKEY_FIELD, SPARK_SQL_INSERT_INTO_OPERATION, TABLE_TYPE}
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.HoodieSparkUtils
 import org.apache.hudi.client.WriteClientTestUtils
+import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.config.HoodieClusteringConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
 import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
-import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.getLastCommitMetadata
+import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.{getLastCommitMetadata, getLastReplaceCommitMetadata}
 
 import java.io.File
+
+import scala.collection.JavaConverters._
 
 class TestInsertTable2 extends HoodieSparkSqlTestBase {
 
@@ -431,10 +435,15 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
                | location '${tablePath}'
                | tblproperties (
                |  primaryKey = 'id',
-               |  preCombineField = 'ts'
+               |  preCombineField = 'ts',
+               |  '${HoodieTableConfig.POPULATE_META_FIELDS.key}' = '$populateMetaConfig'
                | )
                |""".stripMargin)
 
+          // Meta-field population is a table property, so it is declared at create time rather than
+          // only on the writer below. A writer that disagrees with the table about which meta columns
+          // hold values is rejected -- narrowing an existing ALL table on the fly used to happen
+          // silently and is what produced rows the table still advertised as populated.
           val rowsWithSimilarKey = Seq((1, "a1", 10.0, 1000L), (1, "a1", 11.0, 1001L))
           rowsWithSimilarKey.toDF("id", "name", "value", "ts")
             .write.format("hudi")
@@ -683,6 +692,160 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
               getLastCommitMetadata(spark, s"${tmp.getCanonicalPath}/$partitionedTable").getOperationType
             }
           }
+        }
+      }
+    }
+  }
+
+  test("Test bulk insert with insert overwrite against pending clustering") {
+    // The only coverage of rejectIfOverlappingPendingClustering on the row-writer path; the RDD
+    // path is covered by TestInsertOverwriteWithClustering. Clustering is pending on one of two
+    // partitions: overwriting the other must succeed and leave the plan pending, overwriting the
+    // clustered one must be rejected before anything is written. Static mode resolves the target
+    // partition from the PARTITION clause and dynamic mode from the rows, so both arms of
+    // DatasetBulkInsertOverwriteCommitActionExecutor.resolveTargetPartitions are driven, with meta
+    // fields populated (the unpopulated case bypasses the check today, see #19770).
+    Seq("static", "dynamic").foreach { overwriteMode =>
+      withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value(),
+        ENABLE_ROW_WRITER.key -> "true",
+        "hoodie.datasource.overwrite.mode" -> overwriteMode) {
+        withTempDir { tmp =>
+          withTable(generateTableName) { tableName =>
+            val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+            spark.sql(
+              s"""
+                 |create table $tableName (
+                 |  id int,
+                 |  name string,
+                 |  price double,
+                 |  dt string
+                 |) using hudi
+                 | tblproperties (
+                 |  type = 'cow',
+                 |  primaryKey = 'id'
+                 | )
+                 | partitioned by (dt)
+                 | location '$tablePath'
+           """.stripMargin)
+            // Two commits into 2021-07-18 give the size-based planner two file groups to cluster.
+            spark.sql(s"insert into $tableName values(1, 'a1', 10, '2021-07-18')")
+            spark.sql(s"insert into $tableName values(2, 'a2', 20, '2021-07-18')")
+            spark.sql(s"insert into $tableName values(3, 'a3', 30, '2021-07-19')")
+            spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule', selected_partitions => 'dt=2021-07-18')")
+            val metaClient = createMetaClient(spark, tablePath)
+            assertResult(1)(metaClient.getActiveTimeline.filterPendingClusteringTimeline().countInstants())
+
+            def overwriteSql(dt: String, id: Int, name: String, price: Int): String = overwriteMode match {
+              case "static" => s"insert overwrite table $tableName partition (dt = '$dt') values($id, '$name', $price)"
+              case "dynamic" => s"insert overwrite table $tableName partition (dt) values($id, '$name', $price, '$dt')"
+            }
+
+            // Non-overlapping partition: the overwrite goes through and the plan stays pending.
+            spark.sql(overwriteSql("2021-07-19", 4, "b1", 40))
+            checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+              Seq(1, "a1", 10.0, "2021-07-18"),
+              Seq(2, "a2", 20.0, "2021-07-18"),
+              Seq(4, "b1", 40.0, "2021-07-19")
+            )
+            assertResult(WriteOperationType.INSERT_OVERWRITE) {
+              getLastCommitMetadata(spark, tablePath).getOperationType
+            }
+            val replaced = getLastReplaceCommitMetadata(spark, tablePath).getPartitionToReplaceFileIds
+            assertResult(Set("dt=2021-07-19"))(replaced.keySet().asScala.toSet)
+            assertResult(1)(replaced.get("dt=2021-07-19").size())
+            assertResult(1)(metaClient.reloadActiveTimeline().filterPendingClusteringTimeline().countInstants())
+
+            // Overlapping partition: rejected by the default SparkRejectUpdateStrategy before any
+            // write materializes, so no data files are written (the requested instant is left behind).
+            checkExceptionContain(overwriteSql("2021-07-18", 1, "a1_new", 11))(
+              "Not allowed to update the clustering file group")
+            checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+              Seq(1, "a1", 10.0, "2021-07-18"),
+              Seq(2, "a2", 20.0, "2021-07-18"),
+              Seq(4, "b1", 40.0, "2021-07-19")
+            )
+
+            if (overwriteMode == "static") {
+              // Without a partition value, static mode expands `partition (dt)` to every existing
+              // partition, a two-element STATIC_OVERWRITE_PARTITION_PATHS (the HUDI-7183 shape),
+              // which overlaps the plan and is rejected. Dynamic mode resolves only the row's
+              // partition, which is the successful statement above.
+              checkExceptionContain(s"insert overwrite table $tableName partition (dt) values(5, 'c1', 50, '2021-07-19')")(
+                "Not allowed to update the clustering file group")
+              checkAnswer(s"select id, name, price, dt from $tableName order by id")(
+                Seq(1, "a1", 10.0, "2021-07-18"),
+                Seq(2, "a2", 20.0, "2021-07-18"),
+                Seq(4, "b1", 40.0, "2021-07-19")
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+
+  test("Test bulk insert with insert overwrite on unpartitioned table against pending clustering") {
+    // Forcing INSERT_OVERWRITE drives the unpartitioned arm of
+    // DatasetBulkInsertOverwriteCommitActionExecutor.resolveTargetPartitions. The deduced
+    // INSERT_OVERWRITE_TABLE is covered off the row writer only: on that path SaveMode.Overwrite
+    // recreates the table before the executor runs, taking the pending plan with it (#15984).
+    withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value(),
+      ENABLE_ROW_WRITER.key -> "true") {
+      withTempDir { tmp =>
+        withTable(generateTableName) { tableName =>
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double
+               |) using hudi
+               | tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id'
+               | )
+               | location '$tablePath'
+         """.stripMargin)
+          spark.sql(s"insert into $tableName values(1, 'a1', 10)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 20)")
+          spark.sql(s"call run_clustering(table => '$tableName', op => 'schedule')")
+          assertResult(1)(createMetaClient(spark, tablePath).getActiveTimeline.filterPendingClusteringTimeline().countInstants())
+
+          // Scoped to the overwrite statement only, so the seeding inserts above stay inserts rather
+          // than overwrites and each seeds its own file group.
+          withSQLConf(DataSourceWriteOptions.OPERATION.key -> WriteOperationType.INSERT_OVERWRITE.value()) {
+            checkExceptionContain(s"insert overwrite table $tableName values(3, 'b1', 30)")(
+              "Not allowed to update the clustering file group")
+          }
+          checkAnswer(s"select id, name, price from $tableName order by id")(
+            Seq(1, "a1", 10.0),
+            Seq(2, "a2", 20.0)
+          )
+
+          // The deduced INSERT_OVERWRITE_TABLE is covered off the row writer, since the row-writer
+          // variant recreates the table before the check (#15984): the RDD-side
+          // SparkInsertOverwriteTableCommitActionExecutor override must reject as well.
+          withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.INSERT.value()) {
+            checkExceptionContain(s"insert overwrite table $tableName values(3, 'b1', 30)")(
+              "Not allowed to update the clustering file group")
+          }
+          checkAnswer(s"select id, name, price from $tableName order by id")(
+            Seq(1, "a1", 10.0),
+            Seq(2, "a2", 20.0)
+          )
+
+          // SparkAllowUpdateStrategy is the other branch of rejectIfOverlappingPendingClustering:
+          // the overlap is deferred to conflict resolution, the overwrite goes through and the plan
+          // is left pending.
+          withSQLConf(DataSourceWriteOptions.OPERATION.key -> WriteOperationType.INSERT_OVERWRITE.value(),
+            HoodieClusteringConfig.UPDATES_STRATEGY.key -> classOf[SparkAllowUpdateStrategy[_]].getName) {
+            spark.sql(s"insert overwrite table $tableName values(3, 'b1', 30)")
+          }
+          checkAnswer(s"select id, name, price from $tableName order by id")(
+            Seq(3, "b1", 30.0)
+          )
+          assertResult(1)(createMetaClient(spark, tablePath).getActiveTimeline.filterPendingClusteringTimeline().countInstants())
         }
       }
     }

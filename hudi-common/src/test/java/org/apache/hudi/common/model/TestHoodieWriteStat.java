@@ -95,15 +95,15 @@ public class TestHoodieWriteStat {
     // Utf8
     minMaxValues.add(Pair.of(new Utf8(getUTF8Bytes("abcdec")), new Utf8(getUTF8Bytes("zyxwvu"))));
     // Int
-    minMaxValues.add(Pair.of(new Integer(-1000), new Integer(999999)));
+    minMaxValues.add(Pair.of(Integer.valueOf(-1000), Integer.valueOf(999999)));
     // Long
-    minMaxValues.add(Pair.of(new Long(-100000L), Long.MAX_VALUE));
+    minMaxValues.add(Pair.of(Long.valueOf(-100000L), Long.MAX_VALUE));
     // boolean
     minMaxValues.add(Pair.of(false, true));
     // double
-    minMaxValues.add(Pair.of(new Double(0.123), new Double(10.123)));
+    minMaxValues.add(Pair.of(Double.valueOf(0.123), Double.valueOf(10.123)));
     // float
-    minMaxValues.add(Pair.of(new Float(0.0123), new Float(200.123)));
+    minMaxValues.add(Pair.of(Float.valueOf(0.0123f), Float.valueOf(200.123f)));
     // Date
     minMaxValues.add(Pair.of(new java.sql.Date(1000 * 60 * 60 * 10), new java.sql.Date(1000 * 60 * 60 * 60)));
     // LocalDate

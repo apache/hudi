@@ -381,7 +381,10 @@ class TestStorageBasedLockProvider {
     assertTrue(lockProvider.tryLock());
     when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(false);
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true);
-    assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
+    // The cause must distinguish this from the other FAILED_TO_RELEASE paths.
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_HEARTBEAT_STOP_FAILED), exception.getMessage());
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
   }
 
@@ -404,6 +407,8 @@ class TestStorageBasedLockProvider {
 
     HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
     assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
+    // A steal is a terminal expire-write failure, not an exhausted throttle budget.
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_EXPIRE_WRITE_FAILED), exception.getMessage());
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
   }
 
@@ -495,6 +500,8 @@ class TestStorageBasedLockProvider {
 
     HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
     assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
+    // Exhausting the retry budget must be distinguishable from a hard expire-write failure.
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_THROTTLE_RETRIES_EXHAUSTED), exception.getMessage());
     // 1 initial attempt + THROTTLE_MAX_RETRIES retries.
     verify(mockLockService, times(1 + StorageBasedLockProvider.THROTTLE_MAX_RETRIES))
         .tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
@@ -503,6 +510,38 @@ class TestStorageBasedLockProvider {
     assertEquals(1L, sleepCaptor.getAllValues().get(0));
     assertEquals(2L, sleepCaptor.getAllValues().get(1));
     assertEquals(4L, sleepCaptor.getAllValues().get(2));
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
+  }
+
+  @Test
+  void testUnlockThrowsExceptionWhenInterruptedDuringThrottleBackoff() throws InterruptedException {
+    // The first expire attempt is THROTTLED, then the backoff sleep is interrupted. unlock()
+    // must abandon the retry, re-set the interrupt flag, and report the interruption as the
+    // cause rather than an exhausted retry budget.
+    when(mockLockService.readCurrentLockFile()).thenReturn(Pair.of(LockGetResult.NOT_EXISTS, Option.empty()));
+    StorageLockData data = new StorageLockData(false, System.currentTimeMillis() + DEFAULT_LOCK_VALIDITY_MS, ownerId);
+    StorageLockFile realLockFile = new StorageLockFile(data, "v1");
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.empty())))
+        .thenReturn(Pair.of(LockUpsertResult.SUCCESS, Option.of(realLockFile)));
+    when(mockHeartbeatManager.startHeartbeatForThread(any())).thenReturn(true);
+    assertTrue(lockProvider.tryLock());
+
+    when(mockHeartbeatManager.stopHeartbeat(true)).thenReturn(true);
+    when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(true).thenReturn(false);
+    when(mockLockService.tryUpsertLockFile(any(), eq(Option.of(realLockFile))))
+        .thenReturn(Pair.of(LockUpsertResult.THROTTLED, Option.empty()));
+    doThrow(new InterruptedException("interrupted while backing off"))
+        .when(lockProvider).sleepForThrottleRetry(anyLong());
+
+    HoodieLockException exception = assertThrows(HoodieLockException.class, () -> lockProvider.unlock());
+    assertTrue(exception.getMessage().contains("FAILED_TO_RELEASE"));
+    assertTrue(exception.getMessage().contains(StorageBasedLockProvider.CAUSE_INTERRUPTED_DURING_THROTTLE_BACKOFF),
+        exception.getMessage());
+    // The interrupt flag must be re-set so callers up the stack still observe it. Clear it here
+    // so the flag does not leak into subsequent tests on this thread.
+    assertTrue(Thread.interrupted());
+    // Only the initial attempt ran; the interruption aborted the retry loop.
+    verify(mockLockService, times(1)).tryUpsertLockFile(any(), eq(Option.of(realLockFile)));
     when(mockHeartbeatManager.hasActiveHeartbeat()).thenReturn(false);
   }
 

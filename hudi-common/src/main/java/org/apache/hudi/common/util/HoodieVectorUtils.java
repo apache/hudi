@@ -84,7 +84,7 @@ public final class HoodieVectorUtils {
       HoodieSchema.Vector.VectorElementType elemType) {
     int expectedSize = dim * elemType.getElementSize();
     ValidationUtils.checkArgument(bytes.length == expectedSize,
-        "Vector byte array length mismatch: expected " + expectedSize + " but got " + bytes.length);
+        () -> "Vector byte array length mismatch: expected " + expectedSize + " but got " + bytes.length);
     ByteBuffer buffer = ByteBuffer.wrap(bytes).order(HoodieSchema.VectorLogicalType.VECTOR_BYTE_ORDER);
     switch (elemType) {
       case FLOAT:

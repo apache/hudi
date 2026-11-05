@@ -122,9 +122,9 @@ public class ClusteringUtils {
    * Transitions the provided clustering instant fron inflight to complete based on the clustering
    * action type. After HUDI-7905, the new clustering commits are written with clustering action.
    */
-  public static <T> void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
-                                                                         HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
-                                                                         TableFormatCompletionAction tableFormatCompletionAction) {
+  public static void transitionClusteringOrReplaceInflightToComplete(boolean shouldLock, HoodieInstant clusteringInstant,
+                                                                     HoodieReplaceCommitMetadata metadata, HoodieActiveTimeline activeTimeline,
+                                                                     TableFormatCompletionAction tableFormatCompletionAction) {
     if (clusteringInstant.getAction().equals(HoodieTimeline.CLUSTERING_ACTION)) {
       activeTimeline.transitionClusterInflightToComplete(shouldLock, clusteringInstant, metadata, tableFormatCompletionAction);
     } else {

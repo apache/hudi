@@ -236,8 +236,11 @@ public class BootstrapExecutorUtils implements Serializable {
         .setTableVersion(bootstrapConfig.getWriteVersion())
         .setRecordKeyFields(props.getString(RECORDKEY_FIELD_NAME.key()))
         .setOrderingFields(ConfigUtils.getOrderingFieldsStrDuringWrite(props))
-        .setPopulateMetaFields(props.getBoolean(
-            POPULATE_META_FIELDS.key(), POPULATE_META_FIELDS.defaultValue()))
+        // null when unstated: getBoolean's two-arg form returns a primitive, so passing the `true`
+        // default would contradict an explicit hoodie.meta.fields.mode and reject the table at
+        // creation. Matches StreamSync and HoodieSparkSqlWriter.
+        .setPopulateMetaFields(props.containsKey(POPULATE_META_FIELDS.key())
+            ? props.getBoolean(POPULATE_META_FIELDS.key()) : null)
         .setArchiveLogFolder(props.getString(
             TIMELINE_HISTORY_PATH.key(), TIMELINE_HISTORY_PATH.defaultValue()))
         .setPayloadClassName(cfg.payloadClass)

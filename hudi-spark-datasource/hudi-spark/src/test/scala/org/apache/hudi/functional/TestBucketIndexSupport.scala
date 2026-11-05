@@ -36,7 +36,7 @@ import org.apache.hudi.timeline.service.TimelineService
 
 import org.apache.avro.generic.GenericData
 import org.apache.spark.sql.{BucketPartitionUtils, HoodieCatalystExpressionUtils, SparkSession}
-import org.apache.spark.sql.catalyst.expressions.PredicateHelper
+import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 
@@ -196,9 +196,6 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
     equalTo = "A = 5 Or (A = 2 and B = 'abc')"
     exprBucketAnswerCheck(bucketIndexSupport, equalTo, List.apply(bucket5Id8, bucket2Id5), fallback = false)
     exprFilePathAnswerCheck(bucketIndexSupport, equalTo, Set.apply(bucket5Id8FileName, bucket2Id5FileName), allFileNames, fallback = false)
-    equalTo = "A = 5 And (A = 2 Or B = 'abc')"
-    exprBucketAnswerCheck(bucketIndexSupport, equalTo, List.apply(bucket5Id8), fallback = false)
-    exprFilePathAnswerCheck(bucketIndexSupport, equalTo, Set.apply(bucket5Id8FileName), allFileNames, fallback = false)
     equalTo = "A = 5 And (A = 2 Or B = 'abc')"
     exprBucketAnswerCheck(bucketIndexSupport, equalTo, List.apply(bucket5Id8), fallback = false)
     exprFilePathAnswerCheck(bucketIndexSupport, equalTo, Set.apply(bucket5Id8FileName), allFileNames, fallback = false)
@@ -378,11 +375,20 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
     exprBucketAnswerCheck(bucketIndexSupport, fallBack, List.empty, fallback = true)
   }
 
-  def exprBucketAnswerCheck(bucketIndexSupport: BucketIndexSupport, exprRaw: String, expectResult: List[Int], fallback: Boolean): Unit = {
+  /**
+   * Resolves an expression and runs it through the optimizer, wrapped in
+   * [[HoodieDummyExpressionHolder]] so that the expression's references are exposed as plan output.
+   * Spark 4 validates plans after every optimizer rule (SPARK-44219) and rejects a plan whose
+   * aliases are not reachable from its output, which the holder Spark ships does not satisfy.
+   */
+  protected def optimizeResolvedExpr(exprRaw: String): Expression = {
     val resolveExpr = HoodieCatalystExpressionUtils.resolveExpr(spark, exprRaw, structSchema)
-    val dummyExpressionHolder = HoodieDummyExpressionHolder(Seq(resolveExpr), resolveExpr.references.toSeq)
-    val optimizerPlan = spark.sessionState.optimizer.execute(dummyExpressionHolder)
-    val optimizerExpr = optimizerPlan.asInstanceOf[HoodieDummyExpressionHolder].exprs.head
+    val holder = HoodieDummyExpressionHolder(Seq(resolveExpr), resolveExpr.references.toSeq)
+    spark.sessionState.optimizer.execute(holder).asInstanceOf[HoodieDummyExpressionHolder].exprs.head
+  }
+
+  def exprBucketAnswerCheck(bucketIndexSupport: BucketIndexSupport, exprRaw: String, expectResult: List[Int], fallback: Boolean): Unit = {
+    val optimizerExpr = optimizeResolvedExpr(exprRaw)
 
     val bucketSet = bucketIndexSupport.filterQueriesWithBucketHashField(splitConjunctivePredicates(optimizerExpr))
     if (fallback) {
@@ -401,10 +407,7 @@ class TestBucketIndexSupport extends HoodieSparkClientTestBase with PredicateHel
 
   def exprFilePathAnswerCheck(bucketIndexSupport: BucketIndexSupport, exprRaw: String, expectResult: Set[String],
                               allFileStatus: Set[String], fallback: Boolean): Unit = {
-    val resolveExpr = HoodieCatalystExpressionUtils.resolveExpr(spark, exprRaw, structSchema)
-    val dummyExpressionHolder = HoodieDummyExpressionHolder(Seq(resolveExpr), resolveExpr.references.toSeq)
-    val optimizerPlan = spark.sessionState.optimizer.execute(dummyExpressionHolder)
-    val optimizerExpr = optimizerPlan.asInstanceOf[HoodieDummyExpressionHolder].exprs.head
+    val optimizerExpr = optimizeResolvedExpr(exprRaw)
 
     val bucketSet = bucketIndexSupport.filterQueriesWithBucketHashField(splitConjunctivePredicates(optimizerExpr))
     if (fallback) {

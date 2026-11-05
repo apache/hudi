@@ -242,6 +242,21 @@ public class TestParquetSchemaConverter {
   }
 
   @Test
+  void testDecimalFixedLenWidthFromHoodieSchema() {
+    HoodieSchema hoodieSchema = HoodieSchema.parse(
+        "{\"type\":\"record\",\"name\":\"rec\",\"fields\":["
+            + "{\"name\":\"fixed_decimal\",\"type\":{\"type\":\"fixed\",\"name\":\"dec_fixed\","
+            + "\"size\":10,\"logicalType\":\"decimal\",\"precision\":20,\"scale\":2}},"
+            + "{\"name\":\"bytes_decimal\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\","
+            + "\"precision\":20,\"scale\":2}}]}");
+
+    MessageType messageType = ParquetSchemaConverter.convertToParquetMessageType("converted", hoodieSchema);
+
+    assertEquals(10, messageType.getType("fixed_decimal").asPrimitiveType().getTypeLength());
+    assertEquals(9, messageType.getType("bytes_decimal").asPrimitiveType().getTypeLength());
+  }
+
+  @Test
   void testUnannotatedFixedLenByteArrayConvertsToBytes() {
     MessageType messageType = new MessageType(
         "test",

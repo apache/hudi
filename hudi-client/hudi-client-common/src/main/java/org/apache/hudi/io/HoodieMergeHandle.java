@@ -44,6 +44,15 @@ public interface HoodieMergeHandle<T, I, K, O> {
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   HoodieBaseFile baseFileForMerge();
 
+  /**
+   * @return the number of incoming update and delete records tagged to the file group based on
+   *         workload profiling, or {@link MergeContext#UNKNOWN_NUM_UPDATES} if unknown. See
+   *         {@link MergeContext} for the exact semantics; this is a lower bound, not the
+   *         incoming record count.
+   */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  long getNumUpdates();
+
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
   void setPartitionFields(Option<String[]> partitionFields);
 

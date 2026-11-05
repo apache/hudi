@@ -21,7 +21,11 @@ package org.apache.hudi.common.util;
 import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.collection.FlatLists;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.HoodieException;
 
 import java.util.function.Function;
 
@@ -29,6 +33,155 @@ import java.util.function.Function;
  * Utility functions used by BULK_INSERT practitioners while sorting records.
  */
 public class SortUtils {
+
+  /**
+   * Rejects sort columns whose type cannot serve as a sort key. Spark's RowOrdering.isOrderable
+   * is false for both VARIANT and MAP, which is the binding constraint on the row path. On the
+   * Avro path only MAP is outright uncomparable (GenericData.compare throws "Can't compare
+   * maps!"); a variant's {metadata, value} record does compare, but by its bytes, which is never
+   * a meaningful sort key. The walk recurses through records and array elements just as
+   * isOrderable does, so a struct or an array that merely holds a variant or a map at depth is
+   * rejected too, and the error names the nested member that made the column unorderable. Without
+   * this check the failure surfaces deep in the write job (an AnalysisException from the row
+   * partitioner, a ClassCastException from the record-based one) without naming the column.
+   *
+   * <p>Every column, top-level or dotted, is resolved by
+   * {@link #resolveSortColumn(HoodieSchema, String)} and checked at the leaf it lands on, so
+   * matching is case-insensitive, mirroring Spark's column resolution. A name that does not
+   * resolve - a field the schema does not have, a path through a non-record, a meta column on a
+   * data-only schema - is left for the caller to handle.
+   *
+   * @param sortColumns the configured sort columns, may be null or empty
+   * @param schema      schema of the data, with or without metadata fields
+   */
+  public static void validateSortableColumns(String[] sortColumns, HoodieSchema schema) {
+    if (sortColumns == null || sortColumns.length == 0
+        || schema == null || schema.getType() != HoodieSchemaType.RECORD) {
+      return;
+    }
+    for (String sortColumn : sortColumns) {
+      String columnName = sortColumn.trim();
+      Option<HoodieSchema> leaf = resolveSortColumn(schema, columnName);
+      if (leaf.isPresent()) {
+        validateSortableColumn(columnName, leaf.get());
+      }
+    }
+  }
+
+  /**
+   * Resolves a sort column the way the partitioners do, not as a parquet path: every dotted segment
+   * names a field of the enclosing record, matched exactly first and then case-insensitively (the
+   * row partitioner resolves {@code Column(name)} through Spark's analyzer, case-insensitive by
+   * default), and only a RECORD is descended into, so {@code s.tags} stops at the MAP for the
+   * sortability check and {@code s.tags.key_value.value} does not resolve. HoodieSchema's
+   * getNestedField does neither: it matches case-sensitively and walks the {@code .list.element} /
+   * {@code .key_value.value} accessor levels.
+   *
+   * @param schema the record the column is resolved against, with or without metadata fields
+   * @param path   the sort column as configured, top-level or dotted
+   * @return schema of the leaf the path lands on, or empty when it does not resolve
+   */
+  public static Option<HoodieSchema> resolveSortColumn(HoodieSchema schema, String path) {
+    if (schema == null || StringUtils.isNullOrEmpty(path)) {
+      return Option.empty();
+    }
+    HoodieSchema resolved = schema;
+    // The -1 keeps empty segments, so `s.` or `.s` fail to resolve instead of collapsing to `s`.
+    for (String segment : path.split("\\.", -1)) {
+      HoodieSchema enclosing = resolved.getNonNullType();
+      if (enclosing.getType() != HoodieSchemaType.RECORD) {
+        return Option.empty();
+      }
+      HoodieSchema match = null;
+      for (HoodieSchemaField field : enclosing.getFields()) {
+        if (field.name().equals(segment)) {
+          match = field.schema();
+          break;
+        }
+        if (match == null && field.name().equalsIgnoreCase(segment)) {
+          match = field.schema();
+        }
+      }
+      if (match == null) {
+        return Option.empty();
+      }
+      resolved = match;
+    }
+    return Option.of(resolved);
+  }
+
+  /**
+   * The check behind {@link #validateSortableColumns(String[], HoodieSchema)} for a caller that
+   * already holds the leaf - after {@link #resolveSortColumn(HoodieSchema, String)}, say - and
+   * wants the error reported under the name it uses for the column.
+   *
+   * @param columnName   the column as the caller names it, so a nested path reads as one in the error
+   * @param columnSchema schema of the column's value, nullable or not
+   */
+  public static void validateSortableColumn(String columnName, HoodieSchema columnSchema) {
+    Option<Pair<String, HoodieSchemaType>> unorderable = findUnorderableNode(columnSchema, columnName);
+    if (unorderable.isPresent()) {
+      // Only a nested offender needs pointing at; at the top level the column and its type already say it.
+      String nested = unorderable.get().getLeft().equals(columnName) ? ""
+          : String.format("it holds a %s at '%s', and ", unorderable.get().getRight(), unorderable.get().getLeft());
+      throw new HoodieException(String.format(
+          "Sorting by column '%s' of type %s is not supported: %sVARIANT and MAP have no ordering, "
+              + "at any depth. Remove it from the sort columns.",
+          columnName, columnSchema.getNonNullType().getType(), nested));
+    }
+  }
+
+  /**
+   * Mirrors Spark's RowOrdering.isOrderable, but reports where it fails rather than just that it
+   * does: VARIANT and MAP are the unorderable leaves, a record is orderable when every field is,
+   * an array when its element type is, and every other type - BLOB (a struct of atomics in Spark)
+   * and VECTOR (an array of floats) included - is orderable.
+   *
+   * @param schema the node to walk
+   * @param path   dotted path of {@code schema}, extended with "." + name per record field and
+   *               with "[]" per array element
+   * @return the path and type of the first unorderable node, or empty when the schema is orderable
+   */
+  private static Option<Pair<String, HoodieSchemaType>> findUnorderableNode(HoodieSchema schema, String path) {
+    HoodieSchema unwrapped = schema.isNullable() ? schema.getNonNullType() : schema;
+    switch (unwrapped.getType()) {
+      case VARIANT:
+      case MAP:
+        return Option.of(Pair.of(path, unwrapped.getType()));
+      case RECORD:
+        for (HoodieSchemaField field : unwrapped.getFields()) {
+          Option<Pair<String, HoodieSchemaType>> found = findUnorderableNode(field.schema(), path + "." + field.name());
+          if (found.isPresent()) {
+            return found;
+          }
+        }
+        return Option.empty();
+      case ARRAY:
+        return findUnorderableNode(unwrapped.getElementType(), path + "[]");
+      default:
+        return Option.empty();
+    }
+  }
+
+  /** Overload for callers holding the write schema as an Avro json string; no-op when either side is absent. */
+  public static void validateSortableColumns(String[] sortColumns, String avroSchema) {
+    if (sortColumns == null || sortColumns.length == 0 || StringUtils.isNullOrEmpty(avroSchema)) {
+      return;
+    }
+    validateSortableColumns(sortColumns, HoodieSchema.parse(avroSchema));
+  }
+
+  /**
+   * Overload for callers holding the sort columns as a comma-separated string. The split does not trim;
+   * the array overload trims each entry, so spaces around the commas are tolerated either way.
+   */
+  public static void validateSortableColumns(String sortColumnsCsv, String avroSchema) {
+    if (StringUtils.isNullOrEmpty(sortColumnsCsv)) {
+      return;
+    }
+    validateSortableColumns(sortColumnsCsv.split(","), avroSchema);
+  }
+
   static Object[] prependPartitionPath(String partitionPath, Object[] columnValues) {
     Object[] prependColumnValues = new Object[columnValues.length + 1];
     System.arraycopy(columnValues, 0, prependColumnValues, 1, columnValues.length);

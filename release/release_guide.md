@@ -283,23 +283,73 @@ Here is how to go about a bug fix release.
 
 - Create a branch in your repo (<user>/hudi).
 - Cherry-pick commits from master that needs to be part of this release. (git cherry-pick commit-hash). You need to manually resolve the conflicts. For eg, a file might have been moved to a diff class in master where as in your release branch, it could be in older place. You need to take a call where to place it. Similar things like file addition, file deletion, etc.
-- Update the release version by running `mvn versions:set -DnewVersion=${RELEASE_VERSION}-rc${RC_NUM}`, with "RELEASE" as the version and "RC_NUM" as the RC number.  Make sure the version changes are intended.  Then git commit the changes.
+- Update the release version by running `mvn versions:set -DnewVersion=${RELEASE_VERSION}-rc${RC_NUM}`, with "RELEASE" as the version and "RC_NUM" as the RC number. `versions:set` does not reach `docker/trino/shim/pom.xml` (outside the reactor, parent is `trino-root`), so also bump its `dep.hudi.version` with `sed -i.bak "s#<dep.hudi.version>[^<]*</dep.hudi.version>#<dep.hudi.version>${RELEASE_VERSION}-rc${RC_NUM}</dep.hudi.version>#" docker/trino/shim/pom.xml && rm docker/trino/shim/pom.xml.bak`. `git grep -n '<old-version>' -- '*pom.xml'` must return nothing.  Make sure the version changes are intended.  Then git commit the changes.
 - Ensure both compilation and tests are good.
 - If apache/hudi is not set as upstream, then add it as upstream: `git remote add upstream https://github.com/apache/hudi.git`
 - Once the branch is ready with all commits, go ahead and push your branch to upstream.
 - Go to apache/hudi repo locally and pull this branch. Here after you can work on this branch and push to origin when need be.
 - Do not forget to set the env variables from above section.
 
+## hudi-trino Trino pin-back
+
+On master hudi-trino tracks `trinodb/trino` master at the commit in `trino.sha`, whose `trino.version` is a
+`-SNAPSHOT` that resolves from nowhere but a local build. A release must depend on a released Trino, and the pin-back
+must land on the release branch before the source release is generated (see "Build a release candidate", the Generate
+Source Release step) -- otherwise the voted tarball ships a `-SNAPSHOT` Trino pin that cannot be built from Central.
+
+1. Wait for the latest released Trino `NNN` to be available on Maven Central.
+2. In a `trinodb/trino` checkout, find the tagged commit: `TAG_SHA=$(git rev-list -n1 NNN)`.
+3. If the pin is behind the tag, advance master's pin to `TAG_SHA` first by dispatching the
+   `Hudi Trino SPI Compatibility` workflow with `trino_ref=NNN` (it then verifies and pins exactly that tag rather
+   than master HEAD) and merging the pin PR a committer opens from the pushed `bot/trino-pin` branch. If the pin is ahead of the tag, enumerate the adaptations that would be lost with
+   `git log NNN..<pin> -- core/trino-spi lib/trino-filesystem lib/trino-filesystem-manager lib/trino-hdfs lib/trino-memory-context`
+   and revert them forward on the release branch only, never on master.
+4. On the release branch set `trino.version=NNN`, `trino.sha=TAG_SHA` and `trino.e2e.version=NNN` in the root
+   pom, the `<parent>` version in `docker/trino/shim/pom.xml`, and the `ARG TRINO_VERSION` default in
+   `docker/trino/Dockerfile` (`trino.e2e.version` is the trino-jdbc version and the released fallback base image that
+   `build_image.sh` uses without `--base-image`). Re-check SPI-surface-coupled
+   dependency scopes against `NNN` (e.g. `jts-core` is `provided` because it joined the Trino SPI surface in 482;
+   the shim's SpiDependencyChecker fails the build loudly if a scope no longer matches the target release).
+5. Verify the released Trino resolves from Central against an empty local repository
+   (scope the check to io.trino: the module's hudi siblings are not on Central until this release completes):
+   `mvn dependency:get -Dartifact=io.trino:trino-hive:NNN -Dmaven.repo.local=$(mktemp -d)`
+6. Check for dependency drift before cutting the RC: hudi-trino compiles and tests against Hudi's managed versions,
+   while the plugin bundles Trino's `NNN` versions. Dispatch the drift check on the release branch. The run stays
+   green either way: drift shows as a `Dependency drift` warning and a table in the run's job summary, and files or
+   updates the drift issue:
+   `gh workflow run hudi_trino_dependency_drift.yml -R apache/hudi --ref release-X.Y.Z`
+   Or run it locally from the release branch (JDK 17 for the first `mvn install`, JDK 25 for the rest, with a
+   `trinodb/trino` checkout at `TAG_SHA`):
+   ```
+   rm -rf ~/.m2/repository/io/trino  # artifacts an older pin left behind carry the same SNAPSHOT coordinates
+   mvn install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common,:hudi-client-common,:hudi-java-client -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
+   scripts/trino/bootstrap_trino.sh /path/to/trino
+   mvn -Phudi-trino -pl hudi-trino install -Dmaven.test.skip=true
+   mvn -Phudi-trino,hudi-trino-tests -pl hudi-trino dependency:list -DincludeScope=test -DoutputFile=/tmp/deps-hudi-trino.txt -DappendOutput=false
+   HUDI_VERSION=$(mvn -q -N help:evaluate -Dexpression=project.version -DforceStdout)
+   for scope in runtime provided; do  # runtime is what the plugin bundles, provided the SPI surface the server supplies
+     mvn -f docker/trino/shim/pom.xml dependency:list -Dair.check.skip-dependency=false \
+       -DincludeScope=$scope -Ddep.hudi.version=$HUDI_VERSION \
+       -DoutputFile=/tmp/deps-plugin-$scope.txt -DappendOutput=false
+   done
+   cat /tmp/deps-plugin-runtime.txt /tmp/deps-plugin-provided.txt > /tmp/deps-plugin.txt
+   python3 scripts/trino/check_dependency_drift.py --ours /tmp/deps-hudi-trino.txt --reference /tmp/deps-plugin.txt
+   ```
+   Locally the script exits 1 on drift and prints the same table.
+   If it reports drift, bump the matching version properties in `hudi-trino/pom.xml` on the release branch and rerun
+   until it is clean.
+7. The E2E workflow builds its Trino server image from the pinned tag commit, as on master; the staging deploy flow
+   in "Build a release candidate" is unchanged.
+
 ## Verify that a Release Build Works
 
-Run "mvn -Prelease clean install" to ensure that the build processes are in good shape. // You need to execute this command once you have the release branch in apache/hudi
+Run the `mvn -Prelease clean install` command below to ensure that the build processes are in good shape. // You need to execute this command once you have the release branch in apache/hudi
 
 Good to run this for all profiles
 
 ```shell
-mvn -Prelease clean install
-mvn -Prelease clean install -Dscala-2.12
-mvn -Prelease clean install -Dspark3
+# -Prelease turns off the activeByDefault profiles; keep these in sync with the activeByDefault spark and flink profiles in the root pom.xml
+mvn -Prelease clean install -Dscala-2.12 -Dspark3.5 -Dflink2.2
 ```
 
 ## Checklist to proceed to the next step
@@ -325,6 +375,9 @@ Set up a few environment variables to simplify Maven commands that follow. This 
 1. git checkout ${RELEASE_BRANCH} 
 2. Run mvn version to set the proper rc number in all artifacts 
    1. mvn versions:set -DnewVersion=${RELEASE_VERSION}-rc${RC_NUM}
+   2. `versions:set` does not reach `docker/trino/shim/pom.xml` (outside the reactor, parent is `trino-root`). Bump its `dep.hudi.version` by hand:
+      `sed -i.bak "s#<dep.hudi.version>[^<]*</dep.hudi.version>#<dep.hudi.version>${RELEASE_VERSION}-rc${RC_NUM}</dep.hudi.version>#" docker/trino/shim/pom.xml && rm docker/trino/shim/pom.xml.bak`
+   3. Check that `git grep -n '<old-version>' -- '*pom.xml'` returns nothing.
 3. Run Unit tests  and ensure they succeed 
    1. mvn test -DskipITs=true 
 4. Run Integration Tests and ensure they succeed
@@ -429,6 +482,8 @@ Set up a few environment variables to simplify Maven commands that follow. This 
           and `./scripts/release/deploy_staging_jars_java25.sh 2>&1 | tee -a "/tmp/${RELEASE_VERSION}-${RC_NUM}.deploy3.log"`.
           This step must run after the Java 11 step in 9.4.1, which installs the upstream Hudi modules that hudi-trino
           resolves from the local m2 (the script does not pass `-am` because Lombok cannot run on JDK 25).
+       4. The hudi-trino Trino pin-back already happened when the release branch was cut (see the
+          "hudi-trino Trino pin-back" section under "Cut a release branch"); the Java 25 deploy needs no extra steps.
    5. Note that each of the Java 17 and Java 25 builds uploads its artifacts to its own separate staging repo. Use the
       `copy_staging_repo.sh` script once per extra staging repo to copy all artifacts into the Java 11 staging repo
       so that all artifacts stay in the same repo.
@@ -602,13 +657,16 @@ Once the release candidate has been reviewed and approved by the community, the 
 
 1. Drop all RC orgapachehudi-XXX in [Apache Nexus Staging Repositories](https://repository.apache.org/#stagingRepositories).
 2. change the version from ${RELEASE_VERSION}-rc${RC_NUM} to ${RELEASE_VERSION} against release branch, use command `mvn versions:set -DnewVersion=${RELEASE_VERSION}`, e.g. change 0.5.1-rc1 to 0.5.1.
+   1. `versions:set` does not reach `docker/trino/shim/pom.xml`. Bump its `dep.hudi.version` by hand:
+      `sed -i.bak "s#<dep.hudi.version>[^<]*</dep.hudi.version>#<dep.hudi.version>${RELEASE_VERSION}</dep.hudi.version>#" docker/trino/shim/pom.xml && rm docker/trino/shim/pom.xml.bak`
+   2. Check that `git grep -n "${RELEASE_VERSION}-rc" -- '*pom.xml'` returns nothing.
 3. Commit and push the version change to release branch.
     1. git commit -am "chore: Update release version to reflect published version  ${RELEASE_VERSION}"
    2. git push origin release-${RELEASE_VERSION}
 4. Repeat the steps from **_Generate Source Release (f) to Stage source releases on [dist.apache.org](http://dist.apache.org/) (i)_**. Including staging jars with the release version and uploading source release.
    > **Note that make sure remove the -rc${RC_NUM} suffix when repeat the above steps. and please also verify the steps.  Ensure git tag is also done without -rc${RC_NUM}**
 5. One more step is to [deploy source code to release](https://www.apache.org/legal/release-policy.html#upload-ci) dist. [https://dist.apache.org/repos/dist/release/hudi](https://dist.apache.org/repos/dist/release/hudi). 
-   Only PMC will have access to this repo. So, if you are not a PMC, do get help from somone who is.
+   Only PMC will have access to this repo. So, if you are not a PMC, do get help from someone who is.
    1. svn checkout https://dist.apache.org/repos/dist/release/hudi --depth=immediates, if you would not checkout, please try svn checkout https://dist.apache.org/repos/dist/release/hudi again.
    2. Make a directory for the new release:
       ```shell

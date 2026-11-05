@@ -38,6 +38,8 @@ import org.apache.spark.api.java.JavaRDD;
 
 import java.util.List;
 
+import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
+
 /**
  * A spark implementation of {@link BaseBulkInsertHelper}.
  *
@@ -69,12 +71,17 @@ public class SparkBulkInsertHelper<T, R> extends BaseBulkInsertHelper<T, HoodieD
                                                                  final Option<BulkInsertPartitioner> userDefinedBulkInsertPartitioner) {
     HoodieWriteMetadata result = new HoodieWriteMetadata();
 
+    boolean isLsmTable = table.getMetaClient().getTableConfig().isLSMTreeStorageLayout();
+    checkArgument(!isLsmTable || userDefinedBulkInsertPartitioner.isEmpty(),
+        "User-defined bulk insert partitioners are not supported for LSM tables because "
+            + "their record-key ordering cannot be verified");
+    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner
+        .orElseGet(() -> BulkInsertInternalPartitionerFactory.get(table, config));
+
     // Transition bulk_insert state to inflight
     table.getActiveTimeline().transitionRequestedToInflight(table.getInstantGenerator().createNewInstant(HoodieInstant.State.REQUESTED,
             executor.getCommitActionType(), instantTime), Option.empty(),
         config.shouldAllowMultiWriteOnSameInstant());
-
-    BulkInsertPartitioner partitioner = userDefinedBulkInsertPartitioner.orElseGet(() -> BulkInsertInternalPartitionerFactory.get(table, config));
 
     // Write new files
     HoodieData<WriteStatus> writeStatuses =

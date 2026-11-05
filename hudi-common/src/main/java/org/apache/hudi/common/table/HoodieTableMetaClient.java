@@ -38,6 +38,7 @@ import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.table.timeline.CommitMetadataSerDe;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
@@ -65,6 +66,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.io.util.FileIOUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.HoodieInstantWriter;
@@ -84,6 +86,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -103,6 +106,7 @@ import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigs
 import static org.apache.hudi.common.table.HoodieTableConfig.inferMergingConfigsForV9TableCreation;
 import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
+import static org.apache.hudi.common.util.StringUtils.fromUTF8Bytes;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -163,7 +167,8 @@ public class HoodieTableMetaClient implements Serializable {
 
   // In-memory cache for archived timeline based on the start instant time
   // Only one entry should be present in this map
-  private final Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();
+  // Not serialized, so a copy shipped to an executor does not carry the loaded archived instants and their details
+  private transient Map<String, HoodieArchivedTimeline> archivedTimelineMap = new HashMap<>();
 
   protected StoragePath basePath;
   protected StoragePath metaPath;
@@ -355,7 +360,7 @@ public class HoodieTableMetaClient implements Serializable {
     try {
       Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
       if (bytesOpt.isPresent()) {
-        return Option.of(HoodieIndexMetadata.fromJson(new String(bytesOpt.get())));
+        return Option.of(HoodieIndexMetadata.fromJson(fromUTF8Bytes(bytesOpt.get())));
       } else {
         return Option.of(new HoodieIndexMetadata());
       }
@@ -384,6 +389,7 @@ public class HoodieTableMetaClient implements Serializable {
     in.defaultReadObject();
 
     storage = null; // will be lazily initialized
+    archivedTimelineMap = new HashMap<>();
   }
 
   private void writeObject(java.io.ObjectOutputStream out) throws IOException {
@@ -1014,6 +1020,8 @@ public class HoodieTableMetaClient implements Serializable {
     private String bootstrapBasePath;
     private Boolean bootstrapIndexEnable;
     private Boolean populateMetaFields;
+    private MetaFieldsMode metaFieldsMode;
+    private ComplexKeyGenEncoding complexKeyGenEncoding;
     private String keyGeneratorClassProp;
     private String partitionValueExtractorClass;
     private String keyGeneratorType;
@@ -1171,8 +1179,40 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
-    public TableBuilder setPopulateMetaFields(boolean populateMetaFields) {
+    /**
+     * @param populateMetaFields {@code null} when the caller did not state the property. That is
+     *        distinct from {@code false}: when no mode is stated, {@code false} is inferred as
+     *        {@link MetaFieldsMode#NONE}, while an unstated value defaults to {@link MetaFieldsMode#ALL}.
+     * @deprecated since 1.3.0, use {@link #setMetaFieldsMode(MetaFieldsMode)} instead
+     * ({@code true} maps to {@link MetaFieldsMode#ALL}, {@code false} to {@link MetaFieldsMode#NONE}).
+     */
+    @Deprecated
+    public TableBuilder setPopulateMetaFields(Boolean populateMetaFields) {
       this.populateMetaFields = populateMetaFields;
+      return this;
+    }
+
+    public TableBuilder setComplexKeyGenEncoding(ComplexKeyGenEncoding complexKeyGenEncoding) {
+      this.complexKeyGenEncoding = complexKeyGenEncoding;
+      return this;
+    }
+
+    public TableBuilder setMetaFieldsMode(MetaFieldsMode metaFieldsMode) {
+      this.metaFieldsMode = metaFieldsMode;
+      return this;
+    }
+
+    /**
+     * Convenience overload that accepts the raw on-disk string (e.g. from properties files).
+     * Empty or null values leave the mode unset — the table then resolves to ALL or NONE from the
+     * deprecated populate.meta.fields boolean.
+     */
+    public TableBuilder setMetaFieldsModeFromString(String rawMode) {
+      if (rawMode == null || rawMode.trim().isEmpty()) {
+        this.metaFieldsMode = null;
+        return this;
+      }
+      this.metaFieldsMode = MetaFieldsMode.valueOf(rawMode.trim().toUpperCase(Locale.ROOT));
       return this;
     }
 
@@ -1380,6 +1420,9 @@ public class HoodieTableMetaClient implements Serializable {
       if (hoodieConfig.contains(HoodieTableConfig.RECORDKEY_FIELDS)) {
         setRecordKeyFields(hoodieConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS));
       }
+      if (hoodieConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+        setComplexKeyGenEncoding(ComplexKeyGenEncoding.fromString(hoodieConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)));
+      }
       if (hoodieConfig.contains(HoodieTableConfig.TIMELINE_TIMEZONE)) {
         setCommitTimezone(HoodieTimelineTimeZone.valueOf(hoodieConfig.getStringOrDefault(HoodieTableConfig.TIMELINE_TIMEZONE)));
       }
@@ -1394,6 +1437,9 @@ public class HoodieTableMetaClient implements Serializable {
       }
       if (hoodieConfig.contains(HoodieTableConfig.POPULATE_META_FIELDS)) {
         setPopulateMetaFields(hoodieConfig.getBoolean(HoodieTableConfig.POPULATE_META_FIELDS));
+      }
+      if (hoodieConfig.contains(HoodieTableConfig.META_FIELDS_MODE)) {
+        setMetaFieldsModeFromString(hoodieConfig.getString(HoodieTableConfig.META_FIELDS_MODE));
       }
       if (hoodieConfig.contains(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME)) {
         setKeyGeneratorClassProp(hoodieConfig.getString(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME));
@@ -1535,8 +1581,18 @@ public class HoodieTableMetaClient implements Serializable {
           tableConfig.setValue(HoodieTableConfig.CDC_SUPPLEMENTAL_LOGGING_MODE, cdcSupplementalLoggingMode);
         }
       }
-      if (null != populateMetaFields) {
-        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS, Boolean.toString(populateMetaFields));
+      // Resolve legacy input through the shared mode precedence and persist the result for every
+      // newly created table.
+      if (metaFieldsMode == null) {
+        metaFieldsMode = MetaFieldsMode.fromLegacyPopulateMetaFields(populateMetaFields);
+      }
+
+      tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, metaFieldsMode.name());
+      if (tableVersion.lesserThan(HoodieTableVersion.TEN)) {
+        // Below table version 10, also record the deprecated boolean for unpatched readers. From v10
+        // the mode alone is sufficient, including after upgrading from v9.
+        tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
+            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
       }
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);
@@ -1550,6 +1606,13 @@ public class HoodieTableMetaClient implements Serializable {
                 USER_PROVIDED.name()));
         KeyGeneratorType type = KeyGeneratorType.valueOf(keyGeneratorType);
         tableConfig.setValue(HoodieTableConfig.KEY_GENERATOR_TYPE, type.name());
+      }
+      if (tableConfig.isComplexKeyGenWithSingleRecordKeyField() && metaFieldsMode.isRecordKeyPopulated()) {
+        // The property describes the record keys the table's data carries, not what the table version implies:
+        // a version 8 table storing bare values keeps VALUE_ONLY across the upgrade to 9 and above. The builder
+        // therefore records what the caller declares, defaulting to the `<field>:<value>` keys a new table gets.
+        ComplexKeyGenEncoding encoding = complexKeyGenEncoding != null ? complexKeyGenEncoding : ComplexKeyGenEncoding.FIELD_PREFIXED;
+        tableConfig.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
       }
       if (null != slashSeparatedDatePartitioning) {
         tableConfig.setValue(HoodieTableConfig.SLASH_SEPARATED_DATE_PARTITIONING, Boolean.toString(slashSeparatedDatePartitioning));

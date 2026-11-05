@@ -176,7 +176,7 @@ class TestTupleDomainUtilsTest
         // "other_col" is an irrelevant column
         TupleDomain<String> tupleDomain = TupleDomain.withColumnDomains(Map.of(
                 "key1", Domain.singleValue(BIGINT, 1L), // EQUALS
-                "key2", Domain.multipleValues(VARCHAR, List.of("a", "b")), // IN
+                "key2", Domain.multipleValues(VARCHAR, List.of(Slices.utf8Slice("a"), Slices.utf8Slice("b"))), // IN
                 "other_col", Domain.create(ValueSet.ofRanges(Range.greaterThan(BIGINT, 10L)), false)));
         List<String> sourceFields = List.of("key1", "key2");
         assertThat(TupleDomainUtils.areDomainsInOrEqualOnly(tupleDomain, sourceFields)).isTrue();

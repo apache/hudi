@@ -19,22 +19,19 @@
 
 package org.apache.hudi
 
-import org.apache.hudi.RecordLevelIndexSupport.{filterQueryWithRecordKey, getPrunedStoragePaths}
+import org.apache.hudi.RecordLevelIndexSupport.filterQueryWithRecordKey
 import org.apache.hudi.SecondaryIndexSupport.filterQueriesWithSecondaryKey
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.data.HoodieListData
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX
-import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
-import scala.collection.{mutable, JavaConverters}
+import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 class SecondaryIndexSupport(spark: SparkSession,
@@ -54,8 +51,7 @@ class SecondaryIndexSupport(spark: SparkSession,
     }
     lazy val (_, secondaryKeys) = if (isIndexAvailable) filterQueriesWithSecondaryKey(queryFilters, secondaryKeyConfigOpt.map(_._2)) else (List.empty, List.empty)
     if (isIndexAvailable && queryFilters.nonEmpty && secondaryKeys.nonEmpty) {
-      val prunedStoragePaths = getPrunedStoragePaths(prunedPartitionsAndFileSlices, fileIndex)
-      Some(getCandidateFilesFromSecondaryIndex(prunedStoragePaths, secondaryKeys, secondaryKeyConfigOpt.get._1))
+      Some(getCandidateFilesFromSecondaryIndex(prunedPartitionsAndFileSlices, fileIndex, secondaryKeys, secondaryKeyConfigOpt.get._1))
     } else {
       Option.empty
     }
@@ -79,23 +75,14 @@ class SecondaryIndexSupport(spark: SparkSession,
    * @param secondaryKeys - List of secondary keys.
    * @return Sequence of file names which need to be queried
    */
-  private def getCandidateFilesFromSecondaryIndex(allFiles: Seq[StoragePath], secondaryKeys: List[String], secondaryIndexName: String): Set[String] = {
+  private def getCandidateFilesFromSecondaryIndex(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
+                                                  fileIndex: HoodieFileIndex,
+                                                  secondaryKeys: List[String],
+                                                  secondaryIndexName: String): Set[String] = {
     val secondaryIndexData = metadataTable.readSecondaryIndexLocationsWithKeys(
         HoodieListData.eager(JavaConverters.seqAsJavaListConverter(secondaryKeys).asJava), secondaryIndexName)
     try {
-      val recordKeyLocationsList = HoodieDataUtils.dedupeAndCollectAsList(secondaryIndexData)
-      val fileIdToPartitionMap: mutable.Map[String, String] = mutable.Map.empty
-      val candidateFiles: mutable.Set[String] = mutable.Set.empty
-      recordKeyLocationsList.forEach(recordKeyAndLocation => fileIdToPartitionMap.put(recordKeyAndLocation.getValue.getFileId, recordKeyAndLocation.getValue.getPartitionPath))
-
-      for (file <- allFiles) {
-        val fileId = FSUtils.getFileIdFromFilePath(file)
-        val partitionOpt = fileIdToPartitionMap.get(fileId)
-        if (partitionOpt.isDefined) {
-          candidateFiles += file.getName
-        }
-      }
-      candidateFiles.toSet
+      filterCandidateFiles(prunedPartitionsAndFileSlices, fileIndex, collectFileIdToPartitionMap(secondaryIndexData))
     } finally {
       // Clean up the RDD to avoid memory leaks
       secondaryIndexData.unpersistWithDependencies()

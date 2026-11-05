@@ -18,8 +18,8 @@
 
 package org.apache.hudi.common.avro.processors;
 
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
 import org.apache.avro.LogicalTypes;
@@ -62,7 +62,7 @@ public abstract class DecimalLogicalTypeProcessor extends JsonFieldProcessor {
         // Case 2: Object is a number in String format.
         try {
           //encoded big decimal
-          bigDecimal = HoodieSchemaUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj), schema);
+          bigDecimal = HoodieAvroUtils.convertBytesToBigDecimal(decodeStringToBigDecimalBytes(obj), schema);
         } catch (IllegalArgumentException e) {
           //no-op
         }

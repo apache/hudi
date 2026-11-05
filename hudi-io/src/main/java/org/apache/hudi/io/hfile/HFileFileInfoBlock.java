@@ -23,6 +23,7 @@ import org.apache.hudi.io.hfile.protobuf.generated.HFileProtos;
 import org.apache.hudi.io.util.IOUtils;
 
 import com.google.protobuf.ByteString;
+import com.google.protobuf.CodedOutputStream;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -103,11 +104,31 @@ public class HFileFileInfoBlock extends HFileBlock {
     outputStream.write(PB_MAGIC);
     byte[] payload = builder.build().toByteArray();
     try {
-      outputStream.write(getVariableLengthEncodedBytes(payload.length));
+      outputStream.write(getProtobufVarIntBytes(payload.length));
     } catch (IOException e) {
       throw new RuntimeException("Failed to calculate File Info variable length");
     }
     outputStream.write(payload);
     return ByteBuffer.wrap(outputStream.toByteArray());
+  }
+
+  /**
+   * Encodes an integer as a Protobuf varint (base-128, little-endian with MSB continuation bits,
+   * via {@link CodedOutputStream#writeUInt32NoTag}): the length framing Protobuf's
+   * {@code writeDelimitedTo} produces. It is used for the file info and trailer length prefixes,
+   * which the reader decodes with {@code parseDelimitedFrom}. This is NOT interchangeable with the
+   * Hadoop {@code WritableUtils} VInt used by the block index
+   * ({@link HFileIndexBlock#getVarIntBytes(int)}): the two diverge for values >= 128.
+   *
+   * @param value the integer value to encode.
+   * @return the Protobuf varint encoding.
+   * @throws IOException upon error.
+   */
+  static byte[] getProtobufVarIntBytes(int value) throws IOException {
+    ByteArrayOutputStream varIntBuffer = new ByteArrayOutputStream();
+    CodedOutputStream varIntOutput = CodedOutputStream.newInstance(varIntBuffer);
+    varIntOutput.writeUInt32NoTag(value);
+    varIntOutput.flush();
+    return varIntBuffer.toByteArray();
   }
 }

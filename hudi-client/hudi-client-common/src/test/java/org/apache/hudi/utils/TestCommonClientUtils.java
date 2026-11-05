@@ -20,8 +20,11 @@
 
 package org.apache.hudi.utils;
 
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.util.CommonClientUtils;
@@ -29,6 +32,7 @@ import org.apache.hudi.util.CommonClientUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.stream.Stream;
@@ -108,6 +112,37 @@ class TestCommonClientUtils {
         Arguments.of(HoodieTableVersion.NINE, false),
         Arguments.of(HoodieTableVersion.TEN, true)
     );
+  }
+
+  /**
+   * Every base file format needs a case in the getLogBlockType switch; a missing one only surfaces as a
+   * HoodieException on the inline log write path (write version below TEN), which is how VORTEX shipped (#19252).
+   */
+  // TODO(#19252): drop the VORTEX exclusion once the VORTEX case lands in getLogBlockType.
+  @ParameterizedTest
+  @EnumSource(value = HoodieFileFormat.class, mode = EnumSource.Mode.EXCLUDE, names = {"HOODIE_LOG", "VORTEX"})
+  void testGetLogBlockTypeMapsEveryBaseFileFormat(HoodieFileFormat format) {
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(writeConfig.getLogDataBlockFormat()).thenReturn(Option.empty());
+    when(tableConfig.getBaseFileFormat()).thenReturn(format);
+
+    assertEquals(expectedLogBlockType(format), CommonClientUtils.getLogBlockType(writeConfig, tableConfig));
+  }
+
+  private static HoodieLogBlock.HoodieLogBlockType expectedLogBlockType(HoodieFileFormat format) {
+    switch (format) {
+      case PARQUET:
+      case ORC:
+      case LANCE:
+      case VORTEX:
+        return HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK;
+      case HFILE:
+        return HoodieLogBlock.HoodieLogBlockType.HFILE_DATA_BLOCK;
+      default:
+        throw new IllegalArgumentException("No expected log block type for " + format
+            + "; add it here and to CommonClientUtils#getLogBlockType");
+    }
   }
 
   @ParameterizedTest(name = "Table version {0} with write version {1} should be valid: {2}")

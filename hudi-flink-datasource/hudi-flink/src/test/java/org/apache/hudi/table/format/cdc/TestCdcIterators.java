@@ -46,7 +46,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -117,12 +120,41 @@ class TestCdcIterators {
 
     assertTrue(iterator.hasNext());
     assertSame(row, iterator.next());
+    verify(firstIterator).close();
+    verify(imageManager, never()).close();
     assertFalse(iterator.hasNext());
+    verify(secondIterator).close();
+    verify(imageManager, never()).close();
     iterator.close();
 
-    verify(firstIterator).close();
-    verify(secondIterator).close();
     verify(imageManager).close();
+  }
+
+  @Test
+  void testCdcFileSplitsIteratorSuppressesImageManagerCloseFailure() {
+    HoodieCDCFileSplit split = new HoodieCDCFileSplit(
+        "001", HoodieCDCInferenceCase.BASE_FILE_INSERT, "first.parquet");
+    ClosableIterator<RowData> recordIterator = mockIterator();
+    when(recordIterator.hasNext()).thenReturn(true);
+    RuntimeException iteratorFailure = new RuntimeException("iterator close failed");
+    doThrow(iteratorFailure).when(recordIterator).close();
+    CdcImageManager imageManager = mock(CdcImageManager.class);
+    RuntimeException managerFailure = new RuntimeException("manager close failed");
+    doThrow(managerFailure).when(imageManager).close();
+    CdcIterators.CdcFileSplitsIterator iterator =
+        new CdcIterators.CdcFileSplitsIterator(
+            new HoodieCDCFileSplit[] {split}, imageManager, ignored -> recordIterator);
+    assertTrue(iterator.hasNext());
+
+    assertSame(iteratorFailure, assertThrows(RuntimeException.class, iterator::close));
+    assertEquals(1, iteratorFailure.getSuppressed().length);
+    assertSame(managerFailure, iteratorFailure.getSuppressed()[0]);
+    verify(recordIterator, times(1)).close();
+    verify(imageManager, times(1)).close();
+
+    iterator.close();
+    verify(recordIterator, times(1)).close();
+    verify(imageManager, times(1)).close();
   }
 
   @Test

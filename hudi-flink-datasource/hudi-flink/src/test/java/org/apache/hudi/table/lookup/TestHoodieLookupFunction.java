@@ -29,6 +29,8 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
 import java.io.IOException;
@@ -77,9 +79,12 @@ class TestHoodieLookupFunction {
     }
   }
 
-  @Test
-  void testLookupCacheDoesNotReloadWhenCompletedCommitHasNotChanged() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"heap", "rocksdb"})
+  void testLookupCacheDoesNotReloadWhenCompletedCommitHasNotChanged(String cacheType) throws Exception {
     Configuration conf = getConf();
+    conf.set(FlinkOptions.LOOKUP_JOIN_CACHE_TYPE, cacheType);
+    conf.set(FlinkOptions.LOOKUP_JOIN_ROCKSDB_PATH, new File(tempFile, "rocksdb").getAbsolutePath());
     TestData.writeData(TestData.DATA_SET_SINGLE_INSERT, conf);
 
     CountingLookupTableReader reader = new CountingLookupTableReader(TestData.DATA_SET_SINGLE_INSERT, conf);
@@ -100,6 +105,25 @@ class TestHoodieLookupFunction {
       assertTrue(getNextLoadTime(function) > System.currentTimeMillis(),
           "The next lookup reload check should be delayed after detecting an unchanged commit");
     } finally {
+      function.close();
+    }
+  }
+
+  @Test
+  void testReaderIsClosedWhenCacheReloadFails() throws Exception {
+    Configuration conf = getConf();
+    TestData.writeData(TestData.DATA_SET_SINGLE_INSERT, conf);
+
+    FailingLookupTableReader reader = new FailingLookupTableReader(conf);
+    HoodieLookupFunction function = newLookupFunction(reader, conf);
+    function.open(null);
+
+    Thread.currentThread().interrupt();
+    try {
+      assertThrows(RuntimeException.class, () -> function.lookup(lookupKey()));
+      assertEquals(1, reader.closeCount, "The failed reload attempt should close the reader");
+    } finally {
+      Thread.interrupted();
       function.close();
     }
   }
@@ -130,7 +154,7 @@ class TestHoodieLookupFunction {
     function.close();
   }
 
-  private HoodieLookupFunction newLookupFunction(CountingLookupTableReader reader, Configuration conf) {
+  private HoodieLookupFunction newLookupFunction(HoodieLookupTableReader reader, Configuration conf) {
     return new HoodieLookupFunction(
         reader,
         TestConfigurations.ROW_TYPE,
@@ -203,6 +227,29 @@ class TestHoodieLookupFunction {
     @Override
     public void close() throws IOException {
       // no-op
+    }
+  }
+
+  private static class FailingLookupTableReader extends HoodieLookupTableReader {
+    private int closeCount;
+
+    private FailingLookupTableReader(Configuration conf) {
+      super(() -> null, conf);
+    }
+
+    @Override
+    public void open() {
+      // no-op
+    }
+
+    @Override
+    public RowData read(RowData reuse) throws IOException {
+      throw new IOException("expected");
+    }
+
+    @Override
+    public void close() {
+      closeCount++;
     }
   }
 }

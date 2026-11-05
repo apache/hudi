@@ -30,6 +30,7 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.OptionalInt;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -158,6 +159,32 @@ public class TestHoodieColumnProjectionUtils {
 
     assertFalse(mask.childOrAll("blob_data").isAll());
     assertEquals(OptionalInt.of(0), mask.childOrAll("blob_data").physicalIndexOf("reference"));
+  }
+
+  @Test
+  void testColumnsReadingShreddedPaths() {
+    Configuration conf = new Configuration();
+    // No nested path configured for the column: it is read whole, shredded group included.
+    assertEquals(Collections.singletonList("s"),
+        HoodieColumnProjectionUtils.columnsReadingShreddedPaths(conf, Collections.singletonList("s.inner")));
+
+    // `select s.other` materializes nothing of s.inner, so the read never touches the group.
+    conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "s.other");
+    assertTrue(HoodieColumnProjectionUtils.columnsReadingShreddedPaths(
+        conf, Collections.singletonList("s.inner")).isEmpty());
+
+    // A path that names the group, the column above it, or a leaf below it all reach the group.
+    for (String reachingPath : Arrays.asList("s.inner", "s", "s.inner.x")) {
+      conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, reachingPath);
+      assertEquals(Collections.singletonList("s"),
+          HoodieColumnProjectionUtils.columnsReadingShreddedPaths(conf, Collections.singletonList("s.inner")),
+          "path " + reachingPath + " reaches s.inner");
+    }
+
+    // Paths configured for another column say nothing about this one, which stays read whole.
+    conf.set(HoodieColumnProjectionUtils.READ_NESTED_COLUMN_PATH_CONF_STR, "t.other");
+    assertEquals(Collections.singletonList("s"),
+        HoodieColumnProjectionUtils.columnsReadingShreddedPaths(conf, Collections.singletonList("s.inner")));
   }
 
   private static HoodieSchema rowSchemaWithBlobColumn() {

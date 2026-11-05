@@ -29,12 +29,13 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not, ParseT
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.functions.{col, lower}
+import org.apache.spark.sql.functions.{col, date_format, lit, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.internal.SQLConf.{ANSI_ENABLED, SESSION_LOCAL_TIMEZONE}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
@@ -93,7 +94,9 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     "testBasicLookupFilterExpressionsSource",
     "testAdvancedLookupFilterExpressionsSource",
     "testCompositeFilterExpressionsSource",
-    "testSupportedAndUnsupportedDataSkippingColumnsSource"
+    "testSupportedAndUnsupportedDataSkippingColumnsSource",
+    "testNonOrderPreservingTransformationsSource",
+    "testNegativeFactorSource"
   ))
   def testLookupFilterExpressions(sourceFilterExprStr: String, input: Seq[IndexRow], expectedOutput: Seq[String]): Unit = {
     // We have to fix the timezone to make sure all date-bound utilities output
@@ -105,6 +108,18 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     val rows: Seq[String] = applyFilterExpr(optimizedExpr, input)
 
     assertEquals(expectedOutput, rows)
+  }
+
+  @Test
+  def testCollationChangingCastDoesNotPrune(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark4_0, "String collations only exist on Spark 4.x")
+    // Stats are in UTF8_BINARY order ("B" < "a"), but the filter compares in UTF8_LCASE order
+    // ("a" < "B"): re-applying the cast to the bounds gives "B" <= "a" = false and would wrongly
+    // prune file_1, which holds "a". Must fall back to always-true, keeping the file
+    testLookupFilterExpressions(
+      "CAST(B AS STRING COLLATE UTF8_LCASE) = 'a'",
+      Seq(IndexRow("file_1", valueCount = 2, B_minValue = "B", B_maxValue = "a", B_nullCount = 0)),
+      Seq("file_1"))
   }
 
   @ParameterizedTest
@@ -120,6 +135,26 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     val rows: Seq[String] = applyFilterExpr(resolvedFilterExpr, input)
 
     assertEquals(expectedOutput, rows)
+  }
+
+  @Test
+  def testTimestampToStringCastAcrossDstFallBack(): Unit = {
+    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "America/New_York")
+    try {
+      // 05:30Z formats as 01:30 EDT but the later 06:10Z formats as 01:10 EST, so the string max
+      // is smaller than the min. Re-applying the cast over min/max stats would wrongly prune
+      // file_1 even though its 01:30 row matches; must fall back to always-true, keeping the file
+      val input = Seq(
+        IndexRow("file_1", valueCount = 2,
+          C_minValue = new Timestamp(1793511000000L), // 2026-11-01 05:30Z
+          C_maxValue = new Timestamp(1793513400000L), // 2026-11-01 06:10Z
+          C_nullCount = 0))
+      val resolvedFilterExpr = resolveExpr(spark, "CAST(C AS STRING) > '2026-11-01 01:20:00'", sourceTableSchema)
+
+      assertEquals(Seq("file_1"), applyFilterExpr(resolvedFilterExpr, input))
+    } finally {
+      spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+    }
   }
 
   @ParameterizedTest
@@ -259,15 +294,29 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1", "file_2", "file_3")),
       arguments(
-        // Composite expression
+        // NOTE: file_1 may hold "B" (sorting between "ABC" and "abc"), whose lower-case form "b" doesn't
+        //       start w/ "abc", even though lower(B_minValue) = lower(B_maxValue) = "abc" does
         Not(sparkAdapter.getExpressionFromColumn(lower(col("B")).startsWith("abc"))),
         Seq(
-          IndexRow("file_1", valueCount = 1, B_minValue = "ABA", B_maxValue = "ADF", B_nullCount = 1), // may contain strings starting w/ "ABC" (after upper)
-          IndexRow("file_2", valueCount = 1, B_minValue = "ADF", B_maxValue = "AZY", B_nullCount = 0),
-          IndexRow("file_3", valueCount = 1, B_minValue = "AAA", B_maxValue = "ABA", B_nullCount = 0),
-          IndexRow("file_4", valueCount = 1, B_minValue = "ABC123", B_maxValue = "ABC345", B_nullCount = 0) // all strings start w/ "ABC" (after upper)
+          IndexRow("file_1", valueCount = 3, B_minValue = "ABC", B_maxValue = "abc", B_nullCount = 0)
         ),
-        Seq("file_1", "file_2", "file_3"))
+        Seq("file_1")),
+      arguments(
+        // NOTE: file_1 holds "Zebra", whose lower-case form is the queried "zebra", even though
+        //       lower(B_maxValue) = "apple" sorts before it
+        sparkAdapter.getExpressionFromColumn(lower(col("B")) === "zebra"),
+        Seq(
+          IndexRow("file_1", valueCount = 2, B_minValue = "Zebra", B_maxValue = "apple", B_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        // NOTE: file_1 holds "apple", whose upper-case form is the queried "APPLE", even though
+        //       upper(B_minValue) = "ZEBRA" sorts after it
+        sparkAdapter.getExpressionFromColumn(upper(col("B")) === "APPLE"),
+        Seq(
+          IndexRow("file_1", valueCount = 2, B_minValue = "Zebra", B_maxValue = "apple", B_nullCount = 0)
+        ),
+        Seq("file_1"))
     )
   }
 
@@ -299,24 +348,76 @@ object TestDataSkippingUtils {
           IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null)
         ),
         Seq("file_1", "file_2")
+      ),
+      // NOTE: file_1 holds no stats for B (for ex, B was added by schema evolution after it was written),
+      //       hence it could hold nulls for B and could NOT be pruned
+      arguments(
+        "B is null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 1)
+        ),
+        Seq("file_1", "file_3")
+      ),
+      arguments(
+        "B <=> null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0),
+          IndexRow("file_3", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 1)
+        ),
+        Seq("file_1", "file_3")
+      ),
+      arguments(
+        "A = 1 and B is null",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_2", valueCount = 2, A_minValue = 2, A_maxValue = 3, A_nullCount = 0, B_minValue = null, B_maxValue = null, B_nullCount = null),
+          IndexRow("file_3", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0, B_minValue = "a", B_maxValue = "b", B_nullCount = 0)
+        ),
+        Seq("file_1")
       )
     )
   }
 
   def testMiscLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
-    // NOTE: Have to use [[Arrays.stream]], as Scala can't resolve properly 2 overloads for [[Stream.of]]
-    //       (for single element)
-    java.util.Arrays.stream(
-      Array(
-        arguments(
-          InSet(UnresolvedAttribute("A"), HashSet(0, 1)),
-          Seq(
-            IndexRow("file_1", valueCount = 1, 1, 2, 0),
-            IndexRow("file_2", valueCount = 1, -1, 1, 0),
-            IndexRow("file_3", valueCount = 1, -2, -1, 0)
-          ),
-          Seq("file_1", "file_2"))
-      )
+    java.util.stream.Stream.of(
+      arguments(
+        InSet(UnresolvedAttribute("A"), HashSet(0, 1)),
+        Seq(
+          IndexRow("file_1", valueCount = 1, 1, 2, 0),
+          IndexRow("file_2", valueCount = 1, -1, 1, 0),
+          IndexRow("file_3", valueCount = 1, -2, -1, 0)
+        ),
+        Seq("file_1", "file_2")),
+      arguments(
+        // Composite expression
+        // NOTE: date_format(C, 'yyyy-MM-dd') preserves the ordering of C, so this filter is translated and
+        //       file_1, whose dates all fall in 03/2022, is pruned
+        Not(sparkAdapter.getExpressionFromColumn(date_format(col("C"), "yyyy-MM-dd").startsWith("2022-03"))),
+        Seq(
+          IndexRow("file_1", valueCount = 2,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 2,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1648785048000L), // 04/01/2022
+            C_nullCount = 0)
+        ),
+        Seq("file_2")),
+      arguments(
+        // An infinite factor turns the zero min into NaN (0 * Infinity), which sorts above every
+        // number, so the translated bound A_minValue * Infinity <= Infinity is false and would
+        // wrongly prune file_1, although A = 1 gives Infinity <= Infinity. Built with lit() since
+        // SQL has no infinite double literal. Must fall back to always-true, keeping the file
+        sparkAdapter.getExpressionFromColumn(
+          col("A").cast(DoubleType) * lit(Double.PositiveInfinity) <= lit(Double.PositiveInfinity)),
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 1, A_nullCount = 0)
+        ),
+        Seq("file_1"))
     )
   }
 
@@ -557,6 +658,51 @@ object TestDataSkippingUtils {
     )
   }
 
+  def testNegativeFactorSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      // Multiplying by a negative constant reverses ordering: the translated bound
+      // A_minValue * -1.0 < 5.0 is 10 < 5 and would wrongly prune file_1, although A = 0 gives
+      // 0 < 5. Must fall back to always-true, keeping the file
+      arguments(
+        "CAST(A AS DOUBLE) * -1.0D < 5.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = -10, A_maxValue = 0, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Dividing by a negative constant reverses ordering the same way
+      arguments(
+        "CAST(A AS DOUBLE) / -2.0D < 5.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = -20, A_maxValue = 0, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Adding a term that references the column can carry a negative factor past the Multiply
+      // check: A + A * -2 = -A, so the translated bound A_minValue + A_minValue * -2 < -5 is
+      // 0 < -5 and would wrongly prune file_1, although A = 10 gives -10 < -5
+      arguments(
+        "A + A * -2 < -5",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = 10, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Multiplying and dividing by a positive constant still translate and prune
+      arguments(
+        "CAST(A AS DOUBLE) * 2.0D < 5.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 3, A_maxValue = 4, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        "CAST(A AS DOUBLE) / 2.0D > 50.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2"))
+    )
+  }
+
   def testCompositeFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     // NOTE: all timestamps in UTC
     java.util.stream.Stream.of(
@@ -741,6 +887,31 @@ object TestDataSkippingUtils {
             C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
             C_nullCount = 0)
         ),
+        Seq("file_1")),
+      arguments(
+        // datediff(end, start) preserves the ordering of its end date, hence is translated
+        "datediff(CAST(C AS DATE), DATE '2022-03-07') >= 2",
+        Seq(
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_maxValue = new Timestamp(1646797848000L), // 03/09/2022
+            C_nullCount = 0),
+          IndexRow("file_2", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        // NOTE: datediff(end, start) reverses the ordering of its start date, so it isn't translated:
+        //       file_1 holds 03/08/2022 (1 day before the end date) though its min is 2 days before it
+        "datediff(DATE '2022-03-09', CAST(C AS DATE)) <= 1",
+        Seq(
+          IndexRow("file_1", valueCount = 1,
+            C_minValue = new Timestamp(1646625048000L), // 03/07/2022
+            C_maxValue = new Timestamp(1646711448000L), // 03/08/2022
+            C_nullCount = 0)
+        ),
         Seq("file_1"))
       // NOTE: The analysis-time to_timestamp(B, fmt) composite that used to live here moved to
       //       testDateParsingFilterExpressionsAfterReplaceExpressionsSource: on the real read
@@ -817,6 +988,63 @@ object TestDataSkippingUtils {
       // bounds (Coalesce(bound, true)) must keep the file -- it holds 2022-03-07, which matches
       arguments("to_timestamp(B, 'yyyy-MM-dd') > '2022-03-06 12:00:00'", inputUnparseableMax,
         Seq("file_mixed"))
+    )
+  }
+
+  def testNonOrderPreservingTransformationsSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      // Issue #19445 repro: cast(4294967297L as int) wraps around to 1 in non-ANSI mode, so
+      // re-applying the cast over min/max stats would wrongly prune both files; a narrowing
+      // cast must instead fall back to always-true, keeping every file
+      arguments(
+        "CAST(A AS INT) > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 3, A_minValue = 1, A_maxValue = 4294967297L, A_nullCount = 0)
+        ),
+        Seq("file_1", "file_2")),
+      // Casting to boolean is A != 0, so min -5 and max 5 both cast to true; re-applying the cast
+      // over min/max stats would wrongly prune file_1 even though its 0 row matches. Must fall
+      // back to always-true, keeping the file
+      arguments(
+        "CAST(A AS BOOLEAN) = false",
+        Seq(
+          IndexRow("file_1", valueCount = 3, A_minValue = -5, A_maxValue = 5, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // A widening (up) cast still translates and prunes
+      arguments(
+        "CAST(A AS DOUBLE) > 100.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // A decimal column compared with a double is cast to double, which still translates and prunes
+      arguments(
+        "CAST(A AS DECIMAL(20, 0)) > 100.5D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // A timestamp casts to smallint through its epoch seconds, so 65537s wraps around to 1 in
+      // non-ANSI mode; re-applying the cast over min/max stats would wrongly prune file_1 even
+      // though a row at 200s matches. Must fall back to always-true, keeping the file
+      arguments(
+        "CAST(C AS SMALLINT) > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 3, C_minValue = new Timestamp(1000L), C_maxValue = new Timestamp(65537000L), C_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Casting a timestamp to bigint still translates and prunes
+      arguments(
+        "CAST(C AS BIGINT) > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, C_minValue = new Timestamp(1000L), C_maxValue = new Timestamp(50000L), C_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, C_minValue = new Timestamp(101000L), C_maxValue = new Timestamp(200000L), C_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 }

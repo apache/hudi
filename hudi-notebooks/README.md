@@ -79,6 +79,42 @@ This project provides a ready-to-use Docker Compose environment for running Apac
 - Spark, Hive, and Hudi configs are in `conf/` and automatically copied into containers.
 - S3 access keys and endpoints are set for MinIO and referenced in Spark/Hive configs.
 
+### Using another S3-compatible object store
+
+Hudi reads and writes through the Hadoop S3A connector, so the same `fs.s3a.*`
+settings work against any S3-compatible object store: Amazon S3, or a compatible
+provider such as Backblaze B2, Cloudflare R2, or MinIO. This demo points
+`fs.s3a.endpoint` at the bundled MinIO service; to target a different store,
+edit `conf/hadoop/core-site.xml` (and the matching Spark/Hive configs) with that
+provider's endpoint and credentials:
+
+```xml
+<property>
+  <name>fs.s3a.endpoint</name>
+  <!-- Amazon S3: https://s3.<region>.amazonaws.com
+       any other provider: its S3 endpoint URL -->
+  <value>https://your-s3-endpoint.example.com</value>
+</property>
+<property>
+  <name>fs.s3a.access.key</name>
+  <value>ACCESS_KEY</value>
+</property>
+<property>
+  <name>fs.s3a.secret.key</name>
+  <value>SECRET_KEY</value>
+</property>
+<property>
+  <name>fs.s3a.path.style.access</name>
+  <!-- MinIO and most other providers need path-style addressing;
+       leave this out for Amazon S3 -->
+  <value>true</value>
+</property>
+```
+
+For Amazon S3 the region-default endpoint is used when `fs.s3a.endpoint` is
+omitted; most other S3-compatible providers need an explicit endpoint and
+`fs.s3a.path.style.access=true`.
+
 ## 📒 Example: Using JupyterLab
 
 1. Open [http://localhost:8888](http://localhost:8888) in your browser.

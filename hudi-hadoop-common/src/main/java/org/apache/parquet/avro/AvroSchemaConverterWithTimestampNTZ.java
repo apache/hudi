@@ -128,6 +128,20 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
     return new MessageType(schema.getFullName(), convertFields(schema.getFields(), ""));
   }
 
+  /**
+   * Returns the parquet VARIANT logical type annotation, or null when the running parquet version
+   * predates it (1.16 / Spark 4.1). Resolved reflectively because this engine-agnostic module also
+   * compiles and runs against parquet 1.15.2 on Spark 4.0, where {@code variantType} does not exist.
+   */
+  private static LogicalTypeAnnotation variantLogicalType() {
+    try {
+      return (LogicalTypeAnnotation) LogicalTypeAnnotation.class
+          .getMethod("variantType", byte.class).invoke(null, (byte) 1);
+    } catch (ReflectiveOperationException e) {
+      return null;
+    }
+  }
+
   private List<Type> convertFields(List<HoodieSchemaField> fields, String schemaPath) {
     List<Type> types = new ArrayList<Type>(fields.size());
     for (HoodieSchemaField field : fields) {
@@ -266,9 +280,21 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
       case UNION:
         return convertUnion(fieldName, schema, repetition, schemaPath);
       case VARIANT:
-        // Variant is represented as a record with value and metadata binary fields
-        // Convert the variant schema's fields to Parquet types
-        return new GroupType(repetition, fieldName, convertFields(schema.getFields(), schemaPath));
+        // Variant is a group of value/metadata (plus typed_value when shredded). Tag it with the
+        // VARIANT logical type so external readers recognize the column as a Variant, matching
+        // Spark's native parquet schema and the row-writer path. The annotation only exists in
+        // parquet 1.16+ (Spark 4.1+); on older parquet (Spark 4.0/3.x) variantLogicalType() returns
+        // null and the group stays unannotated. Built via the Types builder because the
+        // annotation-bearing GroupType constructor is not public outside org.apache.parquet.schema.
+        Types.GroupBuilder<GroupType> variantBuilder = Types.buildGroup(repetition);
+        LogicalTypeAnnotation variantAnnotation = variantLogicalType();
+        if (variantAnnotation != null) {
+          variantBuilder.as(variantAnnotation);
+        }
+        for (Type variantFieldType : convertFields(schema.getFields(), schemaPath)) {
+          variantBuilder.addField(variantFieldType);
+        }
+        return variantBuilder.named(fieldName);
       default:
         throw new UnsupportedOperationException("Cannot convert Avro type " + type);
     }
@@ -328,8 +354,8 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
   }
 
   private HoodieSchema convertFields(String name, List<Type> parquetFields, Map<String, Integer> names) {
+    String ns = nextDedupNamespace(name, names);
     List<HoodieSchemaField> fields = new ArrayList<>(parquetFields.size());
-    Integer nameCount = names.merge(name, 1, (oldValue, value) -> oldValue + 1);
     for (Type parquetType : parquetFields) {
       HoodieSchema fieldSchema = convertField(parquetType, names);
       if (parquetType.isRepetition(REPEATED)) {
@@ -342,8 +368,14 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
             parquetType.getName(), fieldSchema, null, (Object) null));
       }
     }
-    HoodieSchema schema = HoodieSchema.createRecord(name, null, nameCount > 1 ? name + nameCount : null, false, fields);
+    HoodieSchema schema = HoodieSchema.createRecord(name, null, ns, false, fields);
     return schema;
+  }
+
+  // PARQUET-2456: repeated record and fixed names get a dedup namespace so the schema survives toString and parse
+  private static String nextDedupNamespace(String name, Map<String, Integer> names) {
+    Integer nameCount = names.merge(name, 1, (oldValue, value) -> oldValue + 1);
+    return nameCount > 1 ? name + nameCount : null;
   }
 
   private HoodieSchema convertField(final Type parquetType, Map<String, Integer> names) {
@@ -355,7 +387,7 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
 
       // Handle logical type annotations directly with HoodieSchema creation methods
       if (annotation != null) {
-        HoodieSchema logicalSchema = convertLogicalTypeAnnotationToHoodieSchema(annotation, parquetType);
+        HoodieSchema logicalSchema = convertLogicalTypeAnnotationToHoodieSchema(annotation, parquetType, names);
         if (logicalSchema != null) {
           return logicalSchema;
         }
@@ -379,7 +411,7 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
             @Override
             public HoodieSchema convertINT96(PrimitiveTypeName primitiveTypeName) {
               if (readInt96AsFixed) {
-                return HoodieSchema.createFixed("INT96", "INT96 represented as byte[12]", null, 12);
+                return HoodieSchema.createFixed("INT96", null, "INT96 represented as byte[12]", 12);
               }
               throw new IllegalArgumentException(
                   "INT96 is deprecated. As interim enable READ_INT96_AS_FIXED flag to read as byte array.");
@@ -398,7 +430,9 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
                 return HoodieSchema.createUUID();
               } else {
                 int size = parquetType.asPrimitiveType().getTypeLength();
-                return HoodieSchema.createFixed(parquetType.getName(), null, null, size);
+                String name = parquetType.getName();
+                String ns = nextDedupNamespace(name, names);
+                return HoodieSchema.createFixed(name, ns, null, size);
               }
             }
             @Override
@@ -502,10 +536,12 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
    *
    * @param annotation Parquet logical type annotation
    * @param parquetType The parquet type containing the annotation
+   * @param names counts of record and fixed names seen so far, used to namespace repeated names
    * @return HoodieSchema with the logical type applied, or null if no logical type conversion is needed
    * @throws IllegalArgumentException if the logical type is not compatible with the primitive type
    */
-  private HoodieSchema convertLogicalTypeAnnotationToHoodieSchema(LogicalTypeAnnotation annotation, Type parquetType) {
+  private HoodieSchema convertLogicalTypeAnnotationToHoodieSchema(LogicalTypeAnnotation annotation, Type parquetType,
+                                                                  Map<String, Integer> names) {
     if (annotation == null) {
       return null;
     }
@@ -519,7 +555,8 @@ public class AvroSchemaConverterWithTimestampNTZ extends HoodieAvroParquetSchema
         if (primitiveType == FIXED_LEN_BYTE_ARRAY) {
           int fixedSize = parquetType.asPrimitiveType().getTypeLength();
           String name = parquetType.getName();
-          return java.util.Optional.of(HoodieSchema.createDecimal(name, null, null,
+          String ns = nextDedupNamespace(name, names);
+          return java.util.Optional.of(HoodieSchema.createDecimal(name, ns, null,
               decimalLogicalType.getPrecision(), decimalLogicalType.getScale(), fixedSize));
         } else if (primitiveType == BINARY) {
           return java.util.Optional.of(HoodieSchema.createDecimal(decimalLogicalType.getPrecision(), decimalLogicalType.getScale()));

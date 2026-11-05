@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -119,5 +120,33 @@ public class TestSchemaChangeUtils {
     Map<String, Type> overrides = SchemaChangeUtils.parseTimestampLogicalTypeOverrides("ts:timestamp-micros");
     assertThrows(UnsupportedOperationException.class,
         () -> overrides.put("other", Types.TimestampMillisType.get()));
+  }
+
+  @Test
+  void gatedTimestampChangeCoversFlipsAndLongPromotions() {
+    // Precision flips (either direction) are gated.
+    assertTrue(SchemaChangeUtils.isGatedTimestampChange(Types.TimestampType.get(), Types.TimestampMillisType.get()));
+    assertTrue(SchemaChangeUtils.isGatedTimestampChange(Types.LocalTimestampMicrosType.get(), Types.LocalTimestampMillisType.get()));
+    // Promoting a bare long to any timestamp logical type (UTC or local) is gated.
+    assertTrue(SchemaChangeUtils.isGatedTimestampChange(Types.LongType.get(), Types.TimestampType.get()));
+    assertTrue(SchemaChangeUtils.isGatedTimestampChange(Types.LongType.get(), Types.TimestampMillisType.get()));
+    assertTrue(SchemaChangeUtils.isGatedTimestampChange(Types.LongType.get(), Types.LocalTimestampMillisType.get()));
+    assertTrue(SchemaChangeUtils.isGatedTimestampChange(Types.LongType.get(), Types.LocalTimestampMicrosType.get()));
+    // Unrelated promotions and identical types are not gated.
+    assertFalse(SchemaChangeUtils.isGatedTimestampChange(Types.LongType.get(), Types.StringType.get()));
+    assertFalse(SchemaChangeUtils.isGatedTimestampChange(Types.IntType.get(), Types.TimestampType.get()));
+    assertFalse(SchemaChangeUtils.isGatedTimestampChange(Types.TimestampType.get(), Types.TimestampType.get()));
+  }
+
+  @Test
+  void typeUpdateAllowGatesLongToTimestampBehindTheOverride() {
+    // Promoting a bare long to any timestamp logical type is allowed only when the gate is open.
+    for (Type ts : new Type[] {Types.TimestampType.get(), Types.TimestampMillisType.get(),
+        Types.LocalTimestampMillisType.get(), Types.LocalTimestampMicrosType.get()}) {
+      assertTrue(SchemaChangeUtils.isTypeUpdateAllow(Types.LongType.get(), ts, true));
+      assertFalse(SchemaChangeUtils.isTypeUpdateAllow(Types.LongType.get(), ts, false));
+    }
+    // Existing long widening is unaffected by the gate.
+    assertTrue(SchemaChangeUtils.isTypeUpdateAllow(Types.LongType.get(), Types.DoubleType.get(), false));
   }
 }

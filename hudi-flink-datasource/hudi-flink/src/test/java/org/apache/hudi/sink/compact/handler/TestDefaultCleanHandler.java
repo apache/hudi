@@ -21,12 +21,59 @@ package org.apache.hudi.sink.compact.handler;
 import org.apache.hudi.client.HoodieFlinkWriteClient;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 class TestDefaultCleanHandler {
+
+  @Test
+  void testCloseWaitsForInitialCleaning() {
+    HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
+    try (DefaultCleanHandler handler = new DefaultCleanHandler(writeClient)) {
+      handler.clean();
+    }
+    InOrder order = inOrder(writeClient);
+    order.verify(writeClient).clean();
+    order.verify(writeClient).close();
+    verifyNoMoreInteractions(writeClient);
+  }
+
+  @Test
+  void testCheckpointCleaningDoesNotStartTwice() {
+    HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
+    try (DefaultCleanHandler handler = new DefaultCleanHandler(writeClient)) {
+      handler.startAsyncCleaning();
+      handler.startAsyncCleaning();
+      handler.waitForCleaningFinish();
+    }
+    InOrder order = inOrder(writeClient);
+    order.verify(writeClient).startAsyncCleaning();
+    order.verify(writeClient).waitForCleaningFinish();
+    order.verify(writeClient).close();
+    verifyNoMoreInteractions(writeClient);
+  }
+
+  @Test
+  void testCleaningStartFailureAllowsRetry() {
+    HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
+    doThrow(new RuntimeException("expected")).doNothing().when(writeClient).startAsyncCleaning();
+    try (DefaultCleanHandler handler = new DefaultCleanHandler(writeClient)) {
+      assertDoesNotThrow(handler::startAsyncCleaning);
+      handler.startAsyncCleaning();
+      handler.waitForCleaningFinish();
+    }
+    verify(writeClient, times(2)).startAsyncCleaning();
+    verify(writeClient).waitForCleaningFinish();
+    verify(writeClient).close();
+    verifyNoMoreInteractions(writeClient);
+  }
 
   @Test
   void testCloseClosesWriteClientWithoutTriggeringClean() {

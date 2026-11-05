@@ -89,7 +89,10 @@ public class TestHoodieKeyLocationFetchHandle extends HoodieSparkClientTestHarne
   public void testFetchHandle(boolean populateMetaFields) throws Exception {
     metaClient = HoodieTestUtils.init(storageConf, basePath, HoodieTableType.COPY_ON_WRITE, populateMetaFields ? new Properties() : getPropertiesForKeyGen());
     config = getConfigBuilder()
-        .withProperties(getPropertiesForKeyGen())
+        // Match the table created above. This test does not build a write client, so the
+        // writer-vs-table meta-fields check never runs on it -- but leaving the writer on
+        // populate=false against a populated table is a disagreement waiting to surface.
+        .withProperties(getPropertiesForKeyGen(populateMetaFields))
         .withIndexConfig(HoodieIndexConfig.newBuilder()
             .build()).build();
 

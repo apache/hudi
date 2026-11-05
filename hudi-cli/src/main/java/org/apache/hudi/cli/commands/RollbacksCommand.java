@@ -138,8 +138,10 @@ public class RollbacksCommand {
     }
 
     SparkLauncher sparkLauncher = SparkUtil.initLauncher(sparkPropertiesPath);
-    SparkMain.addAppArgs(sparkLauncher, SparkMain.SparkCommand.ROLLBACK, master, sparkMemory, instantTime,
-        HoodieCLI.basePath, rollbackUsingMarkers);
+    SparkMain.addNamedAppArgs(sparkLauncher, SparkMain.SparkCommand.ROLLBACK, master, sparkMemory,
+        "instantTime", instantTime,
+        "basePath", HoodieCLI.basePath,
+        "rollbackUsingMarkers", rollbackUsingMarkers);
     Process process = sparkLauncher.launch();
     InputStreamConsumer.captureOutput(process);
     int exitCode = process.waitFor();

@@ -24,6 +24,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -41,6 +42,9 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
 import org.apache.hudi.io.HoodieCreateHandle;
+import org.apache.hudi.io.HoodieWriteMergeHandle;
+import org.apache.hudi.io.MergeContext;
+import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
 import org.apache.hudi.table.HoodieJavaTable;
@@ -67,6 +71,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
@@ -120,6 +125,59 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
         .withEngineType(EngineType.JAVA)
         .withPath(basePath)
         .withSchema(SCHEMA.toString());
+  }
+
+  @Test
+  public void testUpsertPropagatesProfiledNumUpdatesToMergeHandle() throws Exception {
+    // End-to-end check of the numUpdates plumbing for the Java client: workload profile ->
+    // JavaUpsertPartitioner -> BucketInfo -> handleUpdate -> MergeContext -> merge handle.
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withProps(Collections.singletonMap(
+            HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key(),
+            NumUpdatesRecordingMergeHandle.class.getName()))
+        .build();
+    int startInstant = 1;
+    String firstCommitTime = makeNewCommitTime(startInstant++, "%09d");
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+    WriteClientTestUtils.startCommitWithTime(writeClient, firstCommitTime);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+
+    List<HoodieRecord> records = new ArrayList<>();
+    records.add(createSimpleRecord("aeb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 12));
+    records.add(createSimpleRecord("aeb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 100));
+    records.add(createSimpleRecord("aeb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15));
+    writeClient.commit(firstCommitTime, writeClient.insert(records, firstCommitTime), Option.empty(), COMMIT_ACTION, Collections.emptyMap());
+
+    // Update two existing records and insert a new one. The tagged update count for the single
+    // file group must be exactly 2, no matter how the new insert is routed.
+    List<HoodieRecord> secondBatch = Arrays.asList(
+        createSimpleRecord("aeb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 15),
+        createSimpleRecord("aeb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 101),
+        createSimpleRecord("aeb5b87d-1fej-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 51));
+    NumUpdatesRecordingMergeHandle.RECORDED_NUM_UPDATES.set(Long.MIN_VALUE);
+    String secondCommitTime = makeNewCommitTime(startInstant++, "%09d");
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    WriteClientTestUtils.startCommitWithTime(writeClient, secondCommitTime);
+    List<WriteStatus> statuses = writeClient.upsert(secondBatch, secondCommitTime);
+    writeClient.commit(secondCommitTime, statuses, Option.empty(), COMMIT_ACTION, Collections.emptyMap());
+
+    assertEquals(2L, NumUpdatesRecordingMergeHandle.RECORDED_NUM_UPDATES.get(),
+        "The merge handle must receive the tagged update count from workload profiling");
+  }
+
+  /**
+   * A merge handle that records the numUpdates it receives, to assert the end-to-end propagation
+   * from workload profiling.
+   */
+  public static class NumUpdatesRecordingMergeHandle<T, I, K, O> extends HoodieWriteMergeHandle<T, I, K, O> {
+    public static final AtomicLong RECORDED_NUM_UPDATES = new AtomicLong(Long.MIN_VALUE);
+
+    public NumUpdatesRecordingMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
+                                          MergeContext<T> mergeContext, String partitionPath, String fileId,
+                                          TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
+      super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
+      RECORDED_NUM_UPDATES.set(mergeContext.getNumUpdates());
+    }
   }
 
   @Test
@@ -413,7 +471,7 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
 
     taskContextSupplier.reset();
     final List<List<WriteStatus>> updateStatus = new ArrayList<>();
-    newActionExecutor.handleUpdate(partitionPath, fileId, updates.iterator())
+    newActionExecutor.handleUpdate(partitionPath, fileId, updates.size(), updates.iterator())
         .forEachRemaining(x -> updateStatus.add((List<WriteStatus>)x));
     assertEquals(updates.size() - numRecordsInPartition, updateStatus.get(0).get(0).getTotalErrorRecords());
   }
