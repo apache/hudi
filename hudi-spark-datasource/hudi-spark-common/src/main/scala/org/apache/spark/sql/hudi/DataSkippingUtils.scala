@@ -22,7 +22,7 @@ import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Expression, ExtractValue, GetStructField}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
-import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Compiler}
+import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, StatsFilterCompiler}
 
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -41,7 +41,7 @@ object DataSkippingUtils extends Logging {
   def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, isExpressionIndex: Boolean = false, indexedCols : Seq[String] = Seq.empty,
                                               hasNonIndexedCols : AtomicBoolean = new AtomicBoolean(false)): Expression = {
     try {
-      Compiler.compile(dataTableFilterExpr, ColumnStatsSource(indexedCols), strictResolution = !isExpressionIndex)
+      StatsFilterCompiler.compile(dataTableFilterExpr, ColumnStatsSource(indexedCols), strictResolution = !isExpressionIndex)
     } catch {
       case e: AnalysisException =>
         logDebug(s"Failed to translated provided data table filter expr into column stats one ($dataTableFilterExpr)", e)

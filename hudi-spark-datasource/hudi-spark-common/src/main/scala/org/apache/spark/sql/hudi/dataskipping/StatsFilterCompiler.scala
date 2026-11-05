@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
  *
  *  1. Shape (here): how conditions combine (AND / OR / NOT).
  *  2. [[Leaf]]: the canonical `term OP constant`.
- *  3. [[Range]]: what values the term can take in a file, from a [[RangeSource]] and [[RangeRules]].
+ *  3. [[TermRange]]: what values the term can take in a file, from a [[RangeSource]] and [[RangeRules]].
  *  4. [[Verdict]]: given the range, the boolean check per OP.
  *
  * Invariants:
@@ -35,7 +35,7 @@ import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
  *    a leaf as NotEq / NotIn / NotStartsWith, and any other NOT is TRUE.
  *  - Compile only: the result is an expression over the stats table; Spark evaluates it.
  */
-object Compiler {
+object StatsFilterCompiler {
 
   /**
    * @param strictResolution when true, an unresolved node (at any level, AND / OR included) compiles
@@ -67,7 +67,7 @@ object Compiler {
   // Stages 2 to 4, for one leaf
   private def compileLeaf(e: Expression, source: RangeSource): Expression =
     Leaf.parse(e)
-      .flatMap(l => Range.derive(l.term, source).map(r => Verdict(l, r)))
+      .flatMap(l => TermRange.derive(l.term, source).map(r => Verdict(l, r)))
       .map(keepOnNull)
       .getOrElse(TrueLiteral)
 

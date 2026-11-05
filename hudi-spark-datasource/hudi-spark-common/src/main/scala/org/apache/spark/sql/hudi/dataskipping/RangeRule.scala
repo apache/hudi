@@ -47,6 +47,9 @@ case object Increasing extends Direction
 /**
  * Order-reversing (non-increasing): a <= b implies f(a) >= f(b), so f(hi) is the low bound and
  * f(lo) the high bound. Unused today; negative factors would use it.
+ *
+ * NOTE: A chain with a decreasing step derives no range when the term also references the column
+ *       off the chain; see [[TermRange.derive]]
  */
 case object Decreasing extends Direction
 
@@ -65,15 +68,15 @@ case object Decreasing extends Direction
 case class Step(term: Expression,
                 child: Expression,
                 direction: Direction,
-                fileGuard: Option[Range => Expression],
+                fileGuard: Option[TermRange => Expression],
                 partial: Boolean) {
 
-  def apply(r: Range): Range = {
+  def apply(r: TermRange): TermRange = {
     val (lo, hi) = direction match {
       case Increasing => (r.lo, r.hi)
       case Decreasing => (r.hi, r.lo)
     }
-    Range(
+    TermRange(
       lo = guarded(rebuild(lo), r),
       hi = guarded(rebuild(hi), r),
       nulls = if (partial) None else r.nulls,
@@ -81,7 +84,7 @@ case class Step(term: Expression,
   }
 
   // NOTE: Uses `term.dataType` (same as the rebuilt bound's) since stats-table bounds are unresolved here
-  private def guarded(bound: Expression, r: Range): Expression = fileGuard match {
+  private def guarded(bound: Expression, r: TermRange): Expression = fileGuard match {
     case Some(guard) => If(guard(r), bound, Literal(null, term.dataType))
     case None => bound
   }
@@ -119,6 +122,4 @@ object RangeRules {
     ConstantOperandRule,
     MonotonicFunctionRule,
     CastRule)
-
-  def of(term: Expression): Seq[Step] = all.flatMap(_.steps(term))
 }

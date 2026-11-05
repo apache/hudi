@@ -33,13 +33,13 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.getTargetIndexedColumnName
  *
  * Invariant: no range means unknown, and unknown keeps the file.
  */
-case class Range(lo: Expression, hi: Expression, nulls: Option[Expression], rows: Option[Expression])
+case class TermRange(lo: Expression, hi: Expression, nulls: Option[Expression], rows: Option[Expression])
 
 /**
  * Where ranges come from. Returns `None` for anything it does not hold stats for.
  */
 sealed trait RangeSource {
-  def rangeOf(term: Expression): Option[Range]
+  def rangeOf(term: Expression): Option[TermRange]
 }
 
 /**
@@ -50,10 +50,10 @@ sealed trait RangeSource {
  *       stored f(col) bounds are compared as is
  */
 case class ColumnStatsSource(indexedCols: Seq[String]) extends RangeSource {
-  override def rangeOf(term: Expression): Option[Range] = term match {
+  override def rangeOf(term: Expression): Option[TermRange] = term match {
     case column: AttributeReference =>
       getTargetIndexedColumnName(column, indexedCols).map { colName =>
-        Range(
+        TermRange(
           lo = statsColumn(getMinColumnNameFor(colName)),
           hi = statsColumn(getMaxColumnNameFor(colName)),
           nulls = Some(statsColumn(getNullCountColumnNameFor(colName))),
@@ -66,18 +66,57 @@ case class ColumnStatsSource(indexedCols: Seq[String]) extends RangeSource {
   private def statsColumn(name: String): Expression = sparkAdapter.getExpressionFromColumn(col(name))
 }
 
-object Range {
+object TermRange {
 
-  def derive(term: Expression, source: RangeSource): Option[Range] =
-    viaRules(term, source).map(rebindOffChainReferences(term, source, _))
+  def derive(term: Expression, source: RangeSource): Option[TermRange] =
+    derive(term, source, RangeRules.all)
+
+  /**
+   * Same as [[derive]], over the given rule table; tests pass their own rules here.
+   *
+   * A chain with a [[Decreasing]] step whose bounds still reference the column off the chain
+   * derives no range (the file is kept): [[rebindOffChainReferences]] pairs the column's min
+   * with the low bound, but past a [[Decreasing]] step the low bound is built from the max.
+   */
+  private[dataskipping] def derive(term: Expression, source: RangeSource, rules: Seq[RangeRule]): Option[TermRange] =
+    viaRules(term, source, rules).flatMap { chain =>
+      if (chain.hasDecreasingStep && hasOffChainReferences(term, chain.range)) {
+        None
+      } else {
+        Some(rebindOffChainReferences(term, source, chain.range))
+      }
+    }
+
+  /**
+   * A derived range, and whether any step of the chain that derived it is [[Decreasing]].
+   */
+  private case class Chain(range: TermRange, hasDecreasingStep: Boolean)
 
   /**
    * The source first; otherwise the first rule step whose child derives a range. Several steps
    * only arise for operators accepted on either side (for ex, `BitwiseOr`), tried in today's order.
    */
-  private def viaRules(term: Expression, source: RangeSource): Option[Range] =
-    source.rangeOf(term).orElse(
-      RangeRules.of(term).view.flatMap(step => viaRules(step.child, source).map(step.apply)).headOption)
+  private def viaRules(term: Expression, source: RangeSource, rules: Seq[RangeRule]): Option[Chain] =
+    source.rangeOf(term).map(r => Chain(r, hasDecreasingStep = false)).orElse(
+      rules.flatMap(_.steps(term)).view.flatMap { step =>
+        viaRules(step.child, source, rules).map { chain =>
+          Chain(step.apply(chain.range), chain.hasDecreasingStep || step.direction == Decreasing)
+        }
+      }.headOption)
+
+  /**
+   * Whether a bound still holds the column once the chain rebuilt its slots, i.e. the term
+   * references the column off the rule chain.
+   */
+  private def hasOffChainReferences(term: Expression, r: TermRange): Boolean =
+    term.references.size == 1 && {
+      val column = term.references.head.exprId
+      def referencesColumn(bound: Expression): Boolean = bound.find {
+        case a: AttributeReference => a.exprId == column
+        case _ => false
+      }.isDefined
+      referencesColumn(r.lo) || referencesColumn(r.hi)
+    }
 
   /**
    * Re-binds EVERY reference to the column, including ones in operands off the rule chain (for ex,
@@ -85,12 +124,12 @@ object Range {
    * only rebuilds its chain slot, so the leftover references are re-bound to the same bound here.
    * Such terms are not order-preserving in general; kept as is so the output stays identical.
    */
-  private def rebindOffChainReferences(term: Expression, source: RangeSource, r: Range): Range = {
+  private def rebindOffChainReferences(term: Expression, source: RangeSource, r: TermRange): TermRange = {
     if (term.references.size != 1) {
       r
     } else {
       val column = term.references.head.exprId
-      def rebind(bound: Expression, pick: Range => Expression): Expression = bound.transformDown {
+      def rebind(bound: Expression, pick: TermRange => Expression): Expression = bound.transformDown {
         case a: AttributeReference if a.exprId == column => source.rangeOf(a).map(pick).getOrElse(a)
       }
       r.copy(lo = rebind(r.lo, _.lo), hi = rebind(r.hi, _.hi))

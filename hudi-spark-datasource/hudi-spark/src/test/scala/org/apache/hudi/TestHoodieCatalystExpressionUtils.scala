@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, Rand, ShiftLeft, Sqrt, Upper}
-import org.apache.spark.sql.hudi.dataskipping.RangeRules
+import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -43,13 +43,12 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val binAttr = AttributeReference("bin", BinaryType)()
 
   /**
-   * Walks the rule table down to a bare column: the attribute itself, else the first rule step
-   * whose child resolves to one. Like the stage-3 range walk, it does not check reference count.
+   * The column `expr` is ranged through, found by the production range walk ([[TermRange.derive]])
+   * with one of its columns indexed at a time.
    */
-  private def matched(expr: Expression): Option[AttributeReference] = expr match {
-    case attrRef: AttributeReference => Some(attrRef)
-    case _ => RangeRules.of(expr).view.flatMap(step => matched(step.child)).headOption
-  }
+  private def matched(expr: Expression): Option[AttributeReference] =
+    expr.collect { case attrRef: AttributeReference => attrRef }.distinct
+      .find(attrRef => TermRange.derive(expr, ColumnStatsSource(Seq(attrRef.name))).isDefined)
 
   @Test
   def testIdentityAttributeMatches(): Unit = {

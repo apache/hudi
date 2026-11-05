@@ -28,7 +28,7 @@ import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
  */
 object Verdict {
 
-  def apply(leaf: Leaf, r: Range): Expression = leaf.op match {
+  def apply(leaf: Leaf, r: TermRange): Expression = leaf.op match {
     case Op.Eq => mayContain(r, single(leaf))
     // Only a file holding nothing but `value` fails `term != value`
     case Op.NotEq => Not(onlyContains(r, single(leaf)))
@@ -59,11 +59,11 @@ object Verdict {
   }
 
   // Some value of the file may equal `v`: lo <= v <= hi
-  private def mayContain(r: Range, v: Expression): Expression =
+  private def mayContain(r: TermRange, v: Expression): Expression =
     And(LessThanOrEqual(r.lo, v), GreaterThanOrEqual(r.hi, v))
 
   // Every value of the file equals `v`: lo = v = hi
-  private def onlyContains(r: Range, v: Expression): Expression =
+  private def onlyContains(r: TermRange, v: Expression): Expression =
     And(EqualTo(r.lo, v), EqualTo(r.hi, v))
 
   private def single(leaf: Leaf): Expression = leaf.values.head
