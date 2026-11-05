@@ -17,16 +17,75 @@
 
 package org.apache.spark.sql.hudi.streaming
 
+import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.CleanerUtils
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.spark.sql.{DataFrame, SQLContext}
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.execution.datasources.HadoopFsRelation
+import org.apache.spark.sql.types.StructType
+
 import scala.collection.JavaConverters._
 
 /** Conservative reset and history validation for checkpointed latest-state streaming consumers. */
-private[streaming] object HoodieStreamingSourceSafety {
+private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSupport {
+  private class RebuildRequired(message: String) extends HoodieException(message)
+
+  def strategy(parameters: Map[String, String]): String = {
+    val config = DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY
+    val value = parameters.getOrElse(config.key(), config.defaultValue())
+    require(Set("FAIL", "READ_UPTO_LATEST_COMMIT", "READ_LATEST").contains(value),
+      s"Invalid ${config.key()}=$value; expected FAIL, READ_UPTO_LATEST_COMMIT or READ_LATEST")
+    value
+  }
+
+  def recover(sqlContext: SQLContext,
+              metaClient: HoodieTableMetaClient,
+              schema: => StructType,
+              parameters: Map[String, String],
+              strategy: String,
+              start: String,
+              end: String,
+              completionTime: Boolean,
+              resumed: Boolean): Option[DataFrame] = {
+    lazy val recoverySchema = schema
+    try {
+      validate(metaClient, start, end, completionTime, resumed)
+      None
+    } catch {
+      case error: RebuildRequired => strategy match {
+        case "FAIL" => throw error
+        case "READ_LATEST" =>
+          Some(sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession,
+            sqlContext.sparkContext.emptyRDD[InternalRow], recoverySchema, isStreaming = true))
+        case "READ_UPTO_LATEST_COMMIT" =>
+          // Spark owns the batch end/checkpoint. Never read a newer snapshot and checkpoint an older end.
+          val writes = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants()
+            .getInstants.asScala.toSeq
+          def offset(i: HoodieInstant): String = if (completionTime) i.getCompletionTime else i.requestedTime()
+          val included = writes.filter(i => offset(i) <= end)
+          val bound = included.map(_.requestedTime()).reduceOption((a, b) => if (a > b) a else b)
+          if (bound.isEmpty || writes.exists(i => offset(i) > end && i.requestedTime() <= bound.get)) {
+            throw new HoodieException("Cannot reconstruct the recovery snapshot at the checkpointed batch end. "
+              + "Rebuild downstream tables and checkpoints together.", error)
+          }
+          val options = parameters ++ Map(
+            DataSourceReadOptions.QUERY_TYPE.key() -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,
+            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key() -> bound.get)
+          val relation = DefaultSource.createRelation(sqlContext, metaClient, recoverySchema, options)
+          Some(relation match {
+            case fsRelation: HadoopFsRelation => sparkAdapter.createStreamingDataFrame(sqlContext, fsRelation, recoverySchema)
+            case _ => sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession,
+              sqlContext.baseRelationToDataFrame(relation).queryExecution.toRdd, recoverySchema, isStreaming = true)
+          })
+      }
+    }
+  }
+
   def validate(metaClient: HoodieTableMetaClient,
                start: String,
                end: String,
@@ -48,8 +107,10 @@ private[streaming] object HoodieStreamingSourceSafety {
       if (completionTime) instant.getCompletionTime else instant.requestedTime()
     }
     def fail(reason: String): Nothing = {
-      throw new HoodieException(s"Streaming source rebuild required for ${metaClient.getBasePath}: $reason. "
-        + "Stop downstream consumers and rebuild affected downstream tables and checkpoints in dependency order.")
+      throw new RebuildRequired(s"Streaming source rebuild required for ${metaClient.getBasePath}: $reason. "
+        + "Stop downstream consumers and rebuild affected downstream tables and checkpoints in dependency order. "
+        + s"To explicitly accept recovery risks, set ${DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key()} "
+        + "to READ_UPTO_LATEST_COMMIT (snapshot replay) or READ_LATEST (skip the gap).")
     }
 
     val checkpointInstant = completed.find(i => offset(i) == start)
@@ -64,7 +125,7 @@ private[streaming] object HoodieStreamingSourceSafety {
     val requestedStart = checkpointInstant.map(_.requestedTime())
     val unreadWrites = timeline.getCommitsTimeline.filterCompletedInstants().getInstants.asScala
       .filter(i => offset(i) > start && offset(i) <= end).toSeq
-    val earliestUnread = unreadWrites.map(_.requestedTime()).sorted.headOption
+    val earliestUnread = unreadWrites.map(_.requestedTime()).reduceOption((a, b) => if (a < b) a else b)
     val completedByRequestedTime = completed.map(i => i.requestedTime() -> i).toMap
     // Usually only new cleans matter. Retain earlier cleans for late-completing writes,
     // or a user-specified initial offset whose requested-time boundary is unknown.

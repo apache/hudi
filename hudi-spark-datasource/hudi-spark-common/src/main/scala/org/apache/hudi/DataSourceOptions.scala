@@ -130,21 +130,21 @@ object DataSourceReadOptions {
       + "completion_time <= END_COMMIT are fetched out. "
       + "Point in time type queries make more sense with begin and end completion times specified.")
 
-  val STREAMING_READ_FAIL_ON_DATA_LOSS: ConfigProperty[Boolean] = ConfigProperty
-    .key("hoodie.datasource.read.streaming.fail.on.data.loss")
-    .defaultValue(false)
+  val STREAMING_READ_RECOVERY_STRATEGY: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.streaming.recovery.strategy")
+    .defaultValue("FAIL")
+    .withValidValues("FAIL", "READ_UPTO_LATEST_COMMIT", "READ_LATEST")
     .sinceVersion("1.3.0")
-    .withDocumentation("Fail latest-state streaming reads with a rebuild-required error when a saved offset "
-      + "is no longer in the active timeline, required history has been cleaned, or a logical overwrite "
-      + "occurs after the offset. Enable for downstream Hudi tables that cannot tolerate resets or replay. "
-      + "Clustering is allowed. This conservative check requires retaining the checkpoint instant in the "
-      + "active timeline; tune hoodie.keep.min.commits and hoodie.keep.max.commits for consumer lag. "
-      + "Archived offsets require rebuilding the downstream table and checkpoint. With "
-      + "hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS, any clean after the offset that deletes files "
-      + "requires rebuilding, even if the deleted files were not needed, because no retention boundary is recorded. "
-      + "Set spark.hoodie.datasource.read.streaming.fail.on.data.loss in the flow SQLConf for SDP graph-internal "
-      + "reads; explicit reader options override this setting when Spark forwards them. The default false "
-      + "preserves existing source behavior. This does not provide hard-delete CDC.")
+    .withDocumentation("Recovery when a saved latest-state streaming offset is archived, cleaned, or reset. "
+      + "FAIL stops with an actionable error. READ_UPTO_LATEST_COMMIT reads a single full snapshot at the "
+      + "batch end, then resumes increments; this may duplicate append rows or retain stale downstream upsert keys. "
+      + "READ_LATEST skips the unread range, accepting data loss. Rebuilding downstream tables and checkpoints "
+      + "together is the safe reset recovery. This strategy overrides incremental full-table-scan fallback. "
+      + "Initial earliest/latest/instant selection still uses hoodie.datasource.streaming.startOffset. "
+      + "Tune hoodie.keep.min.commits and hoodie.keep.max.commits for consumer lag. "
+      + "KEEP_LATEST_FILE_VERSIONS cleaning records no retention boundary, so any new clean deleting files "
+      + "requires recovery even if those files were not needed. For SDP internal reads set "
+      + "spark.hoodie.datasource.read.streaming.recovery.strategy in flow SQLConf. CDC is unchanged.")
 
   val STREAMING_READ_TABLE_VERSION: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.streaming.table.version")

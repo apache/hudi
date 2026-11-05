@@ -662,9 +662,9 @@ class TestStreamingSource extends StreamTest {
             .setOrderingFields("ts").initTable(conf, tablePath)
           val metaClient = initialize()
           addData(tablePath, Seq(("1", "old", "10", "001")))
-          def source(enabled: Option[Boolean] = Some(true)): org.apache.spark.sql.execution.streaming.Source = {
-            val options = commonOptions + ("path" -> tablePath) ++ enabled.map { value =>
-              DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.key() -> value.toString
+          def source(strategy: Option[String] = None): org.apache.spark.sql.execution.streaming.Source = {
+            val options = commonOptions + ("path" -> tablePath) ++ strategy.map { value =>
+              DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> value
             }
             val checkpoint = s"${dir.getCanonicalPath}/checkpoint"
             if (completionTime) {
@@ -701,14 +701,35 @@ class TestStreamingSource extends StreamTest {
           assert(concurrentResetError.getMessage.contains("logical reset"))
           var sessionReader: org.apache.spark.sql.execution.streaming.Source = null
           withSQLConf(
-            "spark.hoodie.datasource.read.streaming.fail.on.data.loss" -> "true") {
-            assert(source(enabled = Some(false)).getBatch(Some(saved), resetEnd).isStreaming)
-            sessionReader = source(enabled = None)
+            "spark.hoodie.datasource.read.streaming.recovery.strategy" -> "FAIL") {
+            assert(source(strategy = Some("READ_LATEST")).getBatch(Some(saved), resetEnd).isStreaming)
+            sessionReader = source(strategy = None)
           }
           val sessionError = intercept[org.apache.hudi.exception.HoodieException] {
             sessionReader.getBatch(Some(saved), resetEnd)
           }
           assert(sessionError.getMessage.contains("logical reset"))
+          def batchIds(batch: org.apache.spark.sql.DataFrame): Seq[String] = {
+            val idIndex = batch.schema.fieldIndex("id")
+            batch.queryExecution.logical.collectFirst {
+              case relation: org.apache.spark.sql.execution.datasources.LogicalRelation =>
+                spark.sqlContext.baseRelationToDataFrame(relation.relation).select("id")
+                  .collect().map(_.getString(0)).toSeq.sorted
+              case relation: org.apache.spark.sql.execution.LogicalRDD =>
+                relation.rdd.collect().map(_.getUTF8String(idIndex).toString).toSeq.sorted
+            }.get
+          }
+          val snapshotReader = source(Some("READ_UPTO_LATEST_COMMIT"))
+          assert(batchIds(snapshotReader.getBatch(Some(saved), resetEnd)) == Seq("3"))
+          addData(tablePath, Seq(("5", "after-recovery", "50", "005")))
+          // Recovery must remain bounded by Spark's end even if another commit has arrived.
+          assert(batchIds(snapshotReader.getBatch(Some(saved), resetEnd)) == Seq("3"))
+          assert(batchIds(snapshotReader.getBatch(Some(resetEnd), snapshotReader.getOffset.get)) == Seq("5"))
+          val skipped = source(Some("READ_LATEST")).getBatch(Some(saved), resetEnd)
+          assert(skipped.queryExecution.logical.collectFirst {
+            case relation: org.apache.spark.sql.execution.LogicalRDD => relation.rdd.count()
+          }.contains(0L))
+          intercept[IllegalArgumentException] { source(Some("invalid")) }
           // A fresh checkpoint rebuilds from the current snapshot instead of rejecting old resets.
           assert(source().getBatch(None, resetEnd).isStreaming)
 
@@ -732,6 +753,8 @@ class TestStreamingSource extends StreamTest {
           }
           assert(recreationError.getMessage.contains("rebuild required"))
           assert(recreationError.getMessage.contains("recreated"))
+          val recreatedReader = source(Some("READ_UPTO_LATEST_COMMIT"))
+          assert(batchIds(recreatedReader.getBatch(Some(saved), recreatedReader.getOffset.get)) == Seq("4"))
         }
       }
     }
@@ -749,7 +772,7 @@ class TestStreamingSource extends StreamTest {
         val reader = new org.apache.spark.sql.hudi.streaming.HoodieStreamSourceV2(spark.sqlContext,
           metaClient, s"${dir.getCanonicalPath}/checkpoint", None,
           commonOptions ++ Map("path" -> tablePath,
-            DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.key() -> "true"),
+            DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> "FAIL"),
           org.apache.spark.sql.hudi.streaming.HoodieEarliestOffsetRangeLimit, HoodieTableVersion.current())
         val saved = reader.getOffset.get
         addData(tablePath, Seq(("1", "new", "20", "002")))
