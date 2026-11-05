@@ -60,28 +60,36 @@ private[streaming] object HoodieStreamingSourceSafety {
       fail(s"source offset moved backwards from $start to $end")
     }
 
-    timeline.getCleanerTimeline.filterCompletedInstants().getInstants.asScala.foreach { clean =>
-      val metadata = CleanerUtils.getCleanerMetadata(metaClient, clean)
-      val retained = metadata.getEarliestCommitToRetain
-      val firstWrite = timeline.getWriteTimeline.filterCompletedInstants().firstInstant()
-      // File-version cleaning does not expose a retention boundary. Refuse to infer safety.
-      if ((retained == null || retained.isEmpty) && metadata.getTotalFilesDeleted > 0 && offset(clean) > start) {
-        fail("the cleaner did not record an earliest retained commit")
+    val firstWrite = timeline.getWriteTimeline.filterCompletedInstants().firstInstant()
+    val requestedStart = checkpointInstant.map(_.requestedTime())
+    val unreadWrites = timeline.getCommitsTimeline.filterCompletedInstants().getInstants.asScala
+      .filter(i => offset(i) > start && offset(i) <= end).toSeq
+    val earliestUnread = unreadWrites.map(_.requestedTime()).sorted.headOption
+    val completedByRequestedTime = completed.map(i => i.requestedTime() -> i).toMap
+    // Usually only new cleans matter. Retain earlier cleans for late-completing writes,
+    // or a user-specified initial offset whose requested-time boundary is unknown.
+    timeline.getCleanerTimeline.filterCompletedInstants().getInstants.asScala
+      .filter(clean => offset(clean) > start || requestedStart.isEmpty ||
+        requestedStart.exists(_ < clean.requestedTime()) || earliestUnread.exists(_ < clean.requestedTime()))
+      .foreach { clean =>
+        val metadata = CleanerUtils.getCleanerMetadata(metaClient, clean)
+        val retained = metadata.getEarliestCommitToRetain
+        // File-version cleaning does not expose a retention boundary. Refuse to infer safety.
+        if ((retained == null || retained.isEmpty) && metadata.getTotalFilesDeleted > 0 && offset(clean) > start) {
+          fail("the cleaner did not record an earliest retained commit; KEEP_LATEST_FILE_VERSIONS "
+            + "cannot prove incremental safety after deleting files")
+        }
+        val boundary = Option(retained).filter(_.nonEmpty)
+        val retainedInstant = completedByRequestedTime.get(retained)
+        val expired = boundary.exists { floor =>
+          requestedStart.exists(_ < floor) || earliestUnread.exists(_ < floor) ||
+            (requestedStart.isEmpty && retainedInstant.exists(i => start < offset(i))) ||
+            (requestedStart.isEmpty && retainedInstant.isEmpty && firstWrite.isPresent)
+        }
+        if (expired) {
+          fail(s"history after offset $start has been cleaned (earliest retained commit $retained)")
+        }
       }
-      val boundary = Option(retained).filter(_.nonEmpty)
-      val requestedStart = checkpointInstant.map(_.requestedTime())
-      val unreadWrites = timeline.getCommitsTimeline.filterCompletedInstants().getInstants.asScala
-        .filter(i => offset(i) > start && offset(i) <= end)
-      val retainedInstant = completed.find(_.requestedTime() == retained)
-      val expired = boundary.exists { floor =>
-        requestedStart.exists(_ < floor) || unreadWrites.exists(_.requestedTime() < floor) ||
-          (requestedStart.isEmpty && retainedInstant.exists(i => start < offset(i))) ||
-          (requestedStart.isEmpty && retainedInstant.isEmpty && firstWrite.isPresent)
-      }
-      if (expired) {
-        fail(s"history after offset $start has been cleaned (earliest retained commit $retained)")
-      }
-    }
 
     completed.filter(i => i.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION &&
       offset(i) > start).foreach { instant =>

@@ -42,13 +42,21 @@ completed timeline. Missing history, including an archived offset or a physical
 table recreation, produces a `Streaming source rebuild required` error. The
 check also rejects a cleaner retention boundary beyond the saved offset and
 cleaning after that offset which deleted files without recording a retention
-boundary (for example file-version retention).
+boundary. With `hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS`, a clean
+after the checkpoint that deletes any files triggers this conservative failure,
+even if those files were not needed by the consumer. No earliest retained commit
+is recorded for this policy, so the guard cannot establish incremental safety.
+Repeated recovery will not make version-based cleaning compatible with a lagging
+consumer; choose a cleaner policy with a retention boundary and retain enough
+history for the consumer.
 
 Completed replace commits after the offset are rejected unless their operation
 is clustering. This includes table overwrite and partition overwrite/deletion,
 and protects a batch even when a reset completed after its captured end offset.
 Ordinary clustering and compaction remain readable. An earliest read with a new
-checkpoint can read the current snapshot after a reset.
+checkpoint can read the current snapshot after a reset. Once timeline-preserving
+`TRUNCATE TABLE` (#20378) lands, its non-clustering replace commit is also an
+expected rebuild-required failure for downstream readers.
 
 ## Recovery and limits
 
@@ -63,7 +71,8 @@ still contains the data needed to reconstruct the graph. Spark
 tracked by #20492; it is not established by this source-safety change.
 
 This is a conservative active-timeline contract. Retain enough active timeline
-history for the slowest consumer; the guard does not prove safety from archived
+history for the slowest consumer by tuning `hoodie.keep.min.commits` and
+`hoodie.keep.max.commits`; the guard does not prove safety from archived
 metadata or silently fall back to a full-table scan. Physical recreation is
 detected before the next resumed batch, not while an empty source produces no
 batch. Copying a table together with identical timeline history is not detected
