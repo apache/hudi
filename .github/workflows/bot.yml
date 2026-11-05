@@ -182,10 +182,10 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dtest="TestHoodieDeltaStreamer*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           files: ./jacoco-report.xml
@@ -791,10 +791,10 @@ jobs:
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests "$JAVA_UT_NON_FUNCTIONAL_FILTER" -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           files: ./jacoco-report.xml
@@ -852,10 +852,10 @@ jobs:
         run:
           mvn test -Pfunctional-tests-c -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           files: ./jacoco-report.xml
@@ -1082,10 +1082,10 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           files: ./jacoco-report.xml
@@ -1143,10 +1143,10 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           files: ./jacoco-report.xml
@@ -1269,14 +1269,19 @@ jobs:
     permissions: {}
     needs:
       - test-spark-client-and-hadoop-common
-      - test-utilities
+      - test-utilities-streamer
+      - test-utilities-rest
       - test-common-and-other-modules
       - test-hudi-hadoop-mr-and-hudi-java-client
-      - test-spark-java17-java-tests-part1
-      - test-spark-java17-java-tests-part2
-      - test-spark-java17-java-tests-part3
-      - test-spark-java17-scala-dml-tests
-      - test-spark-java17-scala-other-tests
+      - test-spark-java17-ut-functional
+      - test-spark-java17-ut-other
+      - test-spark-java17-ut-fat-and-ftc
+      - test-spark-java17-fta
+      - test-spark-java17-ftb
+      - test-spark-java17-scala-dml-1
+      - test-spark-java17-scala-dml-2
+      - test-spark-java17-scala-other-1
+      - test-spark-java17-scala-other-2
     steps:
       - name: Summarize job results
         env:
