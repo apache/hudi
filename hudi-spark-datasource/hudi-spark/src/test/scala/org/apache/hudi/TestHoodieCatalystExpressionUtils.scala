@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expression, FromUnixTime, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, Sqrt, ToUnixTimestamp, UnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expression, FromUTCTimestamp, FromUnixTime, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, Sqrt, ToUTCTimestamp, ToUnixTimestamp, UnixTimestamp, Upper}
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -118,6 +118,26 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(dateAttr), matched(DateSub(dateAttr, Literal(1))))
     // DateDiff(end, start) = end - start preserves the ordering of its end date.
     assertEquals(Some(dateAttr), matched(DateDiff(dateAttr, Literal(java.sql.Date.valueOf("2022-03-07")))))
+  }
+
+  @Test
+  def testUtcTimestampConversionsRequireFixedOffsetZone(): Unit = {
+    // A zone with DST runs local time backwards across a fall-back and shifts the spring-forward gap.
+    assertEquals(None, matched(FromUTCTimestamp(tsAttr, Literal("America/New_York"))))
+    assertEquals(None, matched(ToUTCTimestamp(tsAttr, Literal("America/New_York"))))
+    // A fixed-offset zone shifts every timestamp by the same amount.
+    assertEquals(Some(tsAttr), matched(FromUTCTimestamp(tsAttr, Literal("+08:00"))))
+    assertEquals(Some(tsAttr), matched(ToUTCTimestamp(tsAttr, Literal("UTC"))))
+    // Zones are resolved the way Spark evaluates them: Etc/GMT+5 is a fixed -05:00, and +8:00 is +08:00.
+    assertEquals(Some(tsAttr), matched(FromUTCTimestamp(tsAttr, Literal("Etc/GMT+5"))))
+    assertEquals(Some(tsAttr), matched(ToUTCTimestamp(tsAttr, Literal("+8:00"))))
+    // Non-literal, null and unknown zones are not matched.
+    assertEquals(None, matched(FromUTCTimestamp(tsAttr, strAttr)))
+    assertEquals(None, matched(FromUTCTimestamp(tsAttr, Literal(null, StringType))))
+    assertEquals(None, matched(ToUTCTimestamp(tsAttr, Literal("Not/AZone"))))
+    // A zone with historical offset changes but no DST is not fixed-offset either; GMT+8 is.
+    assertEquals(None, matched(FromUTCTimestamp(tsAttr, Literal("Asia/Kolkata"))))
+    assertEquals(Some(tsAttr), matched(ToUTCTimestamp(tsAttr, Literal("GMT+8"))))
   }
 
   @Test
