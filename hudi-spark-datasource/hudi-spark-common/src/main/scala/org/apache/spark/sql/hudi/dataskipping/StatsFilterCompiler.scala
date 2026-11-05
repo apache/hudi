@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dataskipping
 
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, Not, Or}
+import org.apache.spark.sql.catalyst.expressions.{And, Coalesce, Expression, Not, Or}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 
 /**
@@ -67,12 +67,15 @@ object StatsFilterCompiler {
   // Stages 2 to 4, for one leaf
   private def compileLeaf(e: Expression, source: RangeSource): Expression =
     Leaf.parse(e)
-      .flatMap(l => TermRange.derive(l.term, source).map(r => Verdict(l, r)))
-      .map(keepOnNull)
+      .flatMap(l => TermRange.derive(l.term, source).map(r => keepOnNull(Verdict(l, r), r)))
       .getOrElse(TrueLiteral)
 
-  // A verdict over a missing (NULL) stat must keep the file. Identity today; #19474 turns it into
-  // `Coalesce(Seq(e, TrueLiteral))`, here and only here, and lifts the guarded-chain check in
-  // `TermRange.derive`
-  private def keepOnNull(e: Expression): Expression = e
+  /**
+   * A NULL verdict drops the file. Where a NULL bound means unknown (a partial or guarded step
+   * derived the range, see [[TermRange]]), the verdict must keep the file instead: here and only
+   * here. A column or a total, unguarded chain keeps the NULL verdict, which drops a file of only
+   * NULLs (no row of it passes `term OP value`)
+   */
+  private def keepOnNull(verdict: Expression, r: TermRange): Expression =
+    if (r.nullBoundIsUnknown) Coalesce(Seq(verdict, TrueLiteral)) else verdict
 }

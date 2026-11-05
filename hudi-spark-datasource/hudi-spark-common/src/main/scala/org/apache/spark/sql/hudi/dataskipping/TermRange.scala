@@ -31,9 +31,20 @@ import org.apache.spark.sql.hudi.DataSkippingUtils.getTargetIndexedColumnName
  * are its null and value counts, when known. A range is read from a [[RangeSource]] for a column,
  * or derived through a chain of [[Step]]s from the range of the step's child.
  *
+ * `nullBoundIsUnknown` says what a NULL `lo` / `hi` means. False for a column, and for a chain of
+ * total, unguarded steps: the bound is NULL only when every value of the file is NULL, and no row of
+ * such a file passes `term OP value`, so the NULL verdict may drop it. True once a `partial` step
+ * (the term is undefined for some values) or a `fileGuard` step (the mapping is unknown outside the
+ * guard) derived the range: the bound may be NULL in a file holding matching rows, and
+ * [[StatsFilterCompiler]] keeps the file on a NULL verdict.
+ *
  * Invariant: no range means unknown, and unknown keeps the file.
  */
-case class TermRange(lo: Expression, hi: Expression, nulls: Option[Expression], rows: Option[Expression])
+case class TermRange(lo: Expression,
+                     hi: Expression,
+                     nulls: Option[Expression],
+                     rows: Option[Expression],
+                     nullBoundIsUnknown: Boolean)
 
 /**
  * Where ranges come from. Returns `None` for anything it does not hold stats for.
@@ -57,7 +68,8 @@ case class ColumnStatsSource(indexedCols: Seq[String]) extends RangeSource {
           lo = statsColumn(getMinColumnNameFor(colName)),
           hi = statsColumn(getMaxColumnNameFor(colName)),
           nulls = Some(statsColumn(getNullCountColumnNameFor(colName))),
-          rows = Some(statsColumn(getValueCountColumnNameFor)))
+          rows = Some(statsColumn(getValueCountColumnNameFor)),
+          nullBoundIsUnknown = false)
       }
     case _ => None
   }
@@ -74,18 +86,15 @@ object TermRange {
   /**
    * Same as [[derive]], over the given rule table; tests pass their own rules here.
    *
-   * Two kinds of chain derive no range (the file is kept):
-   *  - A chain with a [[Decreasing]] step whose bounds still reference the column off the chain:
-   *    [[rebindOffChainReferences]] pairs the column's min with the low bound, but past a
-   *    [[Decreasing]] step the low bound is built from the max.
-   *  - A chain with a `fileGuard` step: outside the guard its bounds are NULL, and a NULL verdict
-   *    prunes the file until `StatsFilterCompiler.keepOnNull` keeps it (#19474).
+   * A chain with a [[Decreasing]] step whose bounds still reference the column off the chain derives
+   * no range (the file is kept): [[rebindOffChainReferences]] pairs the column's min with the low
+   * bound, but past a [[Decreasing]] step the low bound is built from the max.
+   *
+   * A chain with a `fileGuard` or `partial` step derives a range whose `nullBoundIsUnknown` is set.
    */
   def derive(term: Expression, source: RangeSource, rules: Seq[RangeRule]): Option[TermRange] =
     viaRules(term, source, rules).flatMap { chain =>
-      if (chain.hasGuardedStep) {
-        None
-      } else if (chain.hasDecreasingStep && hasOffChainReferences(term, chain.range)) {
+      if (chain.hasDecreasingStep && hasOffChainReferences(term, chain.range)) {
         None
       } else {
         Some(rebindOffChainReferences(term, source, chain.range))
@@ -93,23 +102,21 @@ object TermRange {
     }
 
   /**
-   * A derived range, and whether any step of the chain that derived it is [[Decreasing]] or has a
-   * `fileGuard`.
+   * A derived range, and whether any step of the chain that derived it is [[Decreasing]].
    */
-  private case class Chain(range: TermRange, hasDecreasingStep: Boolean, hasGuardedStep: Boolean)
+  private case class Chain(range: TermRange, hasDecreasingStep: Boolean)
 
   /**
    * The source first; otherwise the first rule step whose child derives a range. Several steps
    * only arise for operators accepted on either side (for ex, `BitwiseOr`), tried in today's order.
    */
   private def viaRules(term: Expression, source: RangeSource, rules: Seq[RangeRule]): Option[Chain] =
-    source.rangeOf(term).map(r => Chain(r, hasDecreasingStep = false, hasGuardedStep = false)).orElse(
+    source.rangeOf(term).map(r => Chain(r, hasDecreasingStep = false)).orElse(
       rules.flatMap(_.steps(term)).view.flatMap { step =>
         viaRules(step.child, source, rules).map { chain =>
           Chain(
             step.apply(chain.range),
-            hasDecreasingStep = chain.hasDecreasingStep || step.direction == Decreasing,
-            hasGuardedStep = chain.hasGuardedStep || step.fileGuard.isDefined)
+            hasDecreasingStep = chain.hasDecreasingStep || step.direction == Decreasing)
         }
       }.headOption)
 

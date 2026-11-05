@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dataskipping
 
-import org.apache.spark.sql.catalyst.expressions.{Expression, If, Literal}
+import org.apache.spark.sql.catalyst.expressions.{Expression, If, Literal, TryEval}
 import org.apache.spark.sql.hudi.dataskipping.rules.{CastRule, ConstantOperandRule, DateTimeFormatRule, MonotonicFunctionRule, PrefixRule, TimeZoneShiftRule}
 
 /**
@@ -33,8 +33,9 @@ import org.apache.spark.sql.hudi.dataskipping.rules.{CastRule, ConstantOperandRu
  *   <li>[[Decreasing]]: a <= b implies f(a) >= f(b)</li>
  * </ul>
  * The claim must hold for every value the file's range can hold (or wherever the step's
- * `fileGuard` is true). If it is false, data skipping drops files that have matching rows. When
- * unsure, return Nil: that only costs pruning, never correctness.
+ * `fileGuard` is true), except values for which `term` is undefined when the step is `partial`. If it
+ * is false, data skipping drops files that have matching rows. When unsure, return Nil: that only
+ * costs pruning, never correctness.
  */
 sealed trait Direction
 
@@ -60,11 +61,12 @@ case object Decreasing extends Direction
  * @param child     the operand whose range is pushed through, for ex `x`
  * @param direction whether `term` grows or shrinks with `child`
  * @param fileGuard per-file condition under which the mapping holds (for ex, no overflow); outside it
- *                  the bounds become NULL, i.e. unknown. `None` for every step today; until #19474
- *                  keeps files on NULL verdicts, [[TermRange.derive]] gives guarded chains no range
- * @param partial   whether `term` can be NULL for a non-NULL `child` (for ex, `log` of a negative), in
- *                  which case null / value counts of the child no longer describe `term`. No behavioral
- *                  effect yet: IS NULL / IS NOT NULL only take bare columns
+ *                  the bounds become NULL, i.e. unknown, and [[StatsFilterCompiler]] keeps the file
+ * @param partial   whether `term` can be undefined for a non-NULL `child` (for ex, `log` of a negative,
+ *                  or a parse of an unparseable string). Spark reports that as NULL or, depending on
+ *                  the session (for ex, ANSI), as an exception; the rebuilt bounds are wrapped in
+ *                  [[TryEval]] so that both are a NULL bound, i.e. unknown, and the file is kept. The
+ *                  null / value counts of the child no longer describe `term`
  */
 case class Step(term: Expression,
                 child: Expression,
@@ -78,10 +80,11 @@ case class Step(term: Expression,
       case Decreasing => (r.hi, r.lo)
     }
     TermRange(
-      lo = guarded(rebuild(lo), r),
-      hi = guarded(rebuild(hi), r),
+      lo = guarded(nullOnFailure(rebuild(lo)), r),
+      hi = guarded(nullOnFailure(rebuild(hi)), r),
       nulls = if (partial) None else r.nulls,
-      rows = if (partial) None else r.rows)
+      rows = if (partial) None else r.rows,
+      nullBoundIsUnknown = r.nullBoundIsUnknown || partial || fileGuard.isDefined)
   }
 
   // NOTE: Uses `term.dataType` (same as the rebuilt bound's) since stats-table bounds are unresolved here
@@ -89,6 +92,10 @@ case class Step(term: Expression,
     case Some(guard) => If(guard(r), bound, Literal(null, term.dataType))
     case None => bound
   }
+
+  // NOTE: TryEval is in every supported Spark version, so no version-specific shape (for ex, a
+  //       `failOnError = false` copy of each parse expression) is needed
+  private def nullOnFailure(bound: Expression): Expression = if (partial) TryEval(bound) else bound
 
   /**
    * `term` with its `child` slot replaced by `x`. Version-specific shapes (for ex, `ParseToDate`)

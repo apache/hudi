@@ -476,61 +476,61 @@ cs	startswith(EXPM1(x), 'ab')	true:boolean
 ei	startswith(EXPM1(x), 'ab')	((EXPM1(x_minValue) <= 'ab') AND (EXPM1(x_maxValue) >= 'ab'))
 cs	NOT startswith(EXPM1(x), 'ab')	true:boolean
 ei	NOT startswith(EXPM1(x), 'ab')	NOT (startswith(EXPM1(x_minValue), 'ab') AND startswith(EXPM1(x_maxValue), 'ab'))
-cs	(ln(x) = 0.0:double)	((ln(x_minValue) <= 0.0:double) AND (ln(x_maxValue) >= 0.0:double))
-cs	(0.0:double < ln(x))	(ln(x_maxValue) > 0.0:double)
-cs	(ln(x) >= 0.0:double)	(ln(x_maxValue) >= 0.0:double)
-cs	NOT (ln(x) = 0.0:double)	NOT ((ln(x_minValue) = 0.0:double) AND (ln(x_maxValue) = 0.0:double))
-cs	(ln(x) = cast(0.0:double as double))	((ln(x_minValue) <= cast(0.0:double as double)) AND (ln(x_maxValue) >= cast(0.0:double as double)))
-cs	ln(x) IN (0.0:double, null:double)	(((ln(x_minValue) <= 0.0:double) AND (ln(x_maxValue) >= 0.0:double)) OR ((ln(x_minValue) <= null:double) AND (ln(x_maxValue) >= null:double)))
-cs	NOT ln(x) IN (0.0:double)	NOT ((ln(x_minValue) = 0.0:double) AND (ln(x_maxValue) = 0.0:double))
+cs	(ln(x) = 0.0:double)	coalesce(((tryeval(ln(x_minValue)) <= 0.0:double) AND (tryeval(ln(x_maxValue)) >= 0.0:double)), true:boolean)
+cs	(0.0:double < ln(x))	coalesce((tryeval(ln(x_maxValue)) > 0.0:double), true:boolean)
+cs	(ln(x) >= 0.0:double)	coalesce((tryeval(ln(x_maxValue)) >= 0.0:double), true:boolean)
+cs	NOT (ln(x) = 0.0:double)	coalesce(NOT ((tryeval(ln(x_minValue)) = 0.0:double) AND (tryeval(ln(x_maxValue)) = 0.0:double)), true:boolean)
+cs	(ln(x) = cast(0.0:double as double))	coalesce(((tryeval(ln(x_minValue)) <= cast(0.0:double as double)) AND (tryeval(ln(x_maxValue)) >= cast(0.0:double as double))), true:boolean)
+cs	ln(x) IN (0.0:double, null:double)	coalesce((((tryeval(ln(x_minValue)) <= 0.0:double) AND (tryeval(ln(x_maxValue)) >= 0.0:double)) OR ((tryeval(ln(x_minValue)) <= null:double) AND (tryeval(ln(x_maxValue)) >= null:double))), true:boolean)
+cs	NOT ln(x) IN (0.0:double)	coalesce(NOT ((tryeval(ln(x_minValue)) = 0.0:double) AND (tryeval(ln(x_maxValue)) = 0.0:double)), true:boolean)
 cs	startswith(ln(x), 'ab')	true:boolean
-ei	startswith(ln(x), 'ab')	((ln(x_minValue) <= 'ab') AND (ln(x_maxValue) >= 'ab'))
+ei	startswith(ln(x), 'ab')	coalesce(((tryeval(ln(x_minValue)) <= 'ab') AND (tryeval(ln(x_maxValue)) >= 'ab')), true:boolean)
 cs	NOT startswith(ln(x), 'ab')	true:boolean
-ei	NOT startswith(ln(x), 'ab')	NOT (startswith(ln(x_minValue), 'ab') AND startswith(ln(x_maxValue), 'ab'))
-cs	(LOG10(x) = 0.0:double)	((LOG10(x_minValue) <= 0.0:double) AND (LOG10(x_maxValue) >= 0.0:double))
-cs	(0.0:double < LOG10(x))	(LOG10(x_maxValue) > 0.0:double)
-cs	(LOG10(x) >= 0.0:double)	(LOG10(x_maxValue) >= 0.0:double)
-cs	NOT (LOG10(x) = 0.0:double)	NOT ((LOG10(x_minValue) = 0.0:double) AND (LOG10(x_maxValue) = 0.0:double))
-cs	(LOG10(x) = cast(0.0:double as double))	((LOG10(x_minValue) <= cast(0.0:double as double)) AND (LOG10(x_maxValue) >= cast(0.0:double as double)))
-cs	LOG10(x) IN (0.0:double, null:double)	(((LOG10(x_minValue) <= 0.0:double) AND (LOG10(x_maxValue) >= 0.0:double)) OR ((LOG10(x_minValue) <= null:double) AND (LOG10(x_maxValue) >= null:double)))
-cs	NOT LOG10(x) IN (0.0:double)	NOT ((LOG10(x_minValue) = 0.0:double) AND (LOG10(x_maxValue) = 0.0:double))
+ei	NOT startswith(ln(x), 'ab')	coalesce(NOT (startswith(tryeval(ln(x_minValue)), 'ab') AND startswith(tryeval(ln(x_maxValue)), 'ab')), true:boolean)
+cs	(LOG10(x) = 0.0:double)	coalesce(((tryeval(LOG10(x_minValue)) <= 0.0:double) AND (tryeval(LOG10(x_maxValue)) >= 0.0:double)), true:boolean)
+cs	(0.0:double < LOG10(x))	coalesce((tryeval(LOG10(x_maxValue)) > 0.0:double), true:boolean)
+cs	(LOG10(x) >= 0.0:double)	coalesce((tryeval(LOG10(x_maxValue)) >= 0.0:double), true:boolean)
+cs	NOT (LOG10(x) = 0.0:double)	coalesce(NOT ((tryeval(LOG10(x_minValue)) = 0.0:double) AND (tryeval(LOG10(x_maxValue)) = 0.0:double)), true:boolean)
+cs	(LOG10(x) = cast(0.0:double as double))	coalesce(((tryeval(LOG10(x_minValue)) <= cast(0.0:double as double)) AND (tryeval(LOG10(x_maxValue)) >= cast(0.0:double as double))), true:boolean)
+cs	LOG10(x) IN (0.0:double, null:double)	coalesce((((tryeval(LOG10(x_minValue)) <= 0.0:double) AND (tryeval(LOG10(x_maxValue)) >= 0.0:double)) OR ((tryeval(LOG10(x_minValue)) <= null:double) AND (tryeval(LOG10(x_maxValue)) >= null:double))), true:boolean)
+cs	NOT LOG10(x) IN (0.0:double)	coalesce(NOT ((tryeval(LOG10(x_minValue)) = 0.0:double) AND (tryeval(LOG10(x_maxValue)) = 0.0:double)), true:boolean)
 cs	startswith(LOG10(x), 'ab')	true:boolean
-ei	startswith(LOG10(x), 'ab')	((LOG10(x_minValue) <= 'ab') AND (LOG10(x_maxValue) >= 'ab'))
+ei	startswith(LOG10(x), 'ab')	coalesce(((tryeval(LOG10(x_minValue)) <= 'ab') AND (tryeval(LOG10(x_maxValue)) >= 'ab')), true:boolean)
 cs	NOT startswith(LOG10(x), 'ab')	true:boolean
-ei	NOT startswith(LOG10(x), 'ab')	NOT (startswith(LOG10(x_minValue), 'ab') AND startswith(LOG10(x_maxValue), 'ab'))
-cs	(LOG1P(x) = 0.0:double)	((LOG1P(x_minValue) <= 0.0:double) AND (LOG1P(x_maxValue) >= 0.0:double))
-cs	(0.0:double < LOG1P(x))	(LOG1P(x_maxValue) > 0.0:double)
-cs	(LOG1P(x) >= 0.0:double)	(LOG1P(x_maxValue) >= 0.0:double)
-cs	NOT (LOG1P(x) = 0.0:double)	NOT ((LOG1P(x_minValue) = 0.0:double) AND (LOG1P(x_maxValue) = 0.0:double))
-cs	(LOG1P(x) = cast(0.0:double as double))	((LOG1P(x_minValue) <= cast(0.0:double as double)) AND (LOG1P(x_maxValue) >= cast(0.0:double as double)))
-cs	LOG1P(x) IN (0.0:double, null:double)	(((LOG1P(x_minValue) <= 0.0:double) AND (LOG1P(x_maxValue) >= 0.0:double)) OR ((LOG1P(x_minValue) <= null:double) AND (LOG1P(x_maxValue) >= null:double)))
-cs	NOT LOG1P(x) IN (0.0:double)	NOT ((LOG1P(x_minValue) = 0.0:double) AND (LOG1P(x_maxValue) = 0.0:double))
+ei	NOT startswith(LOG10(x), 'ab')	coalesce(NOT (startswith(tryeval(LOG10(x_minValue)), 'ab') AND startswith(tryeval(LOG10(x_maxValue)), 'ab')), true:boolean)
+cs	(LOG1P(x) = 0.0:double)	coalesce(((tryeval(LOG1P(x_minValue)) <= 0.0:double) AND (tryeval(LOG1P(x_maxValue)) >= 0.0:double)), true:boolean)
+cs	(0.0:double < LOG1P(x))	coalesce((tryeval(LOG1P(x_maxValue)) > 0.0:double), true:boolean)
+cs	(LOG1P(x) >= 0.0:double)	coalesce((tryeval(LOG1P(x_maxValue)) >= 0.0:double), true:boolean)
+cs	NOT (LOG1P(x) = 0.0:double)	coalesce(NOT ((tryeval(LOG1P(x_minValue)) = 0.0:double) AND (tryeval(LOG1P(x_maxValue)) = 0.0:double)), true:boolean)
+cs	(LOG1P(x) = cast(0.0:double as double))	coalesce(((tryeval(LOG1P(x_minValue)) <= cast(0.0:double as double)) AND (tryeval(LOG1P(x_maxValue)) >= cast(0.0:double as double))), true:boolean)
+cs	LOG1P(x) IN (0.0:double, null:double)	coalesce((((tryeval(LOG1P(x_minValue)) <= 0.0:double) AND (tryeval(LOG1P(x_maxValue)) >= 0.0:double)) OR ((tryeval(LOG1P(x_minValue)) <= null:double) AND (tryeval(LOG1P(x_maxValue)) >= null:double))), true:boolean)
+cs	NOT LOG1P(x) IN (0.0:double)	coalesce(NOT ((tryeval(LOG1P(x_minValue)) = 0.0:double) AND (tryeval(LOG1P(x_maxValue)) = 0.0:double)), true:boolean)
 cs	startswith(LOG1P(x), 'ab')	true:boolean
-ei	startswith(LOG1P(x), 'ab')	((LOG1P(x_minValue) <= 'ab') AND (LOG1P(x_maxValue) >= 'ab'))
+ei	startswith(LOG1P(x), 'ab')	coalesce(((tryeval(LOG1P(x_minValue)) <= 'ab') AND (tryeval(LOG1P(x_maxValue)) >= 'ab')), true:boolean)
 cs	NOT startswith(LOG1P(x), 'ab')	true:boolean
-ei	NOT startswith(LOG1P(x), 'ab')	NOT (startswith(LOG1P(x_minValue), 'ab') AND startswith(LOG1P(x_maxValue), 'ab'))
-cs	(LOG2(x) = 0.0:double)	((LOG2(x_minValue) <= 0.0:double) AND (LOG2(x_maxValue) >= 0.0:double))
-cs	(0.0:double < LOG2(x))	(LOG2(x_maxValue) > 0.0:double)
-cs	(LOG2(x) >= 0.0:double)	(LOG2(x_maxValue) >= 0.0:double)
-cs	NOT (LOG2(x) = 0.0:double)	NOT ((LOG2(x_minValue) = 0.0:double) AND (LOG2(x_maxValue) = 0.0:double))
-cs	(LOG2(x) = cast(0.0:double as double))	((LOG2(x_minValue) <= cast(0.0:double as double)) AND (LOG2(x_maxValue) >= cast(0.0:double as double)))
-cs	LOG2(x) IN (0.0:double, null:double)	(((LOG2(x_minValue) <= 0.0:double) AND (LOG2(x_maxValue) >= 0.0:double)) OR ((LOG2(x_minValue) <= null:double) AND (LOG2(x_maxValue) >= null:double)))
-cs	NOT LOG2(x) IN (0.0:double)	NOT ((LOG2(x_minValue) = 0.0:double) AND (LOG2(x_maxValue) = 0.0:double))
+ei	NOT startswith(LOG1P(x), 'ab')	coalesce(NOT (startswith(tryeval(LOG1P(x_minValue)), 'ab') AND startswith(tryeval(LOG1P(x_maxValue)), 'ab')), true:boolean)
+cs	(LOG2(x) = 0.0:double)	coalesce(((tryeval(LOG2(x_minValue)) <= 0.0:double) AND (tryeval(LOG2(x_maxValue)) >= 0.0:double)), true:boolean)
+cs	(0.0:double < LOG2(x))	coalesce((tryeval(LOG2(x_maxValue)) > 0.0:double), true:boolean)
+cs	(LOG2(x) >= 0.0:double)	coalesce((tryeval(LOG2(x_maxValue)) >= 0.0:double), true:boolean)
+cs	NOT (LOG2(x) = 0.0:double)	coalesce(NOT ((tryeval(LOG2(x_minValue)) = 0.0:double) AND (tryeval(LOG2(x_maxValue)) = 0.0:double)), true:boolean)
+cs	(LOG2(x) = cast(0.0:double as double))	coalesce(((tryeval(LOG2(x_minValue)) <= cast(0.0:double as double)) AND (tryeval(LOG2(x_maxValue)) >= cast(0.0:double as double))), true:boolean)
+cs	LOG2(x) IN (0.0:double, null:double)	coalesce((((tryeval(LOG2(x_minValue)) <= 0.0:double) AND (tryeval(LOG2(x_maxValue)) >= 0.0:double)) OR ((tryeval(LOG2(x_minValue)) <= null:double) AND (tryeval(LOG2(x_maxValue)) >= null:double))), true:boolean)
+cs	NOT LOG2(x) IN (0.0:double)	coalesce(NOT ((tryeval(LOG2(x_minValue)) = 0.0:double) AND (tryeval(LOG2(x_maxValue)) = 0.0:double)), true:boolean)
 cs	startswith(LOG2(x), 'ab')	true:boolean
-ei	startswith(LOG2(x), 'ab')	((LOG2(x_minValue) <= 'ab') AND (LOG2(x_maxValue) >= 'ab'))
+ei	startswith(LOG2(x), 'ab')	coalesce(((tryeval(LOG2(x_minValue)) <= 'ab') AND (tryeval(LOG2(x_maxValue)) >= 'ab')), true:boolean)
 cs	NOT startswith(LOG2(x), 'ab')	true:boolean
-ei	NOT startswith(LOG2(x), 'ab')	NOT (startswith(LOG2(x_minValue), 'ab') AND startswith(LOG2(x_maxValue), 'ab'))
-cs	(ln(EXP(x)) = 0.0:double)	((ln(EXP(x_minValue)) <= 0.0:double) AND (ln(EXP(x_maxValue)) >= 0.0:double))
-cs	(0.0:double < ln(EXP(x)))	(ln(EXP(x_maxValue)) > 0.0:double)
-cs	(ln(EXP(x)) >= 0.0:double)	(ln(EXP(x_maxValue)) >= 0.0:double)
-cs	NOT (ln(EXP(x)) = 0.0:double)	NOT ((ln(EXP(x_minValue)) = 0.0:double) AND (ln(EXP(x_maxValue)) = 0.0:double))
-cs	(ln(EXP(x)) = cast(0.0:double as double))	((ln(EXP(x_minValue)) <= cast(0.0:double as double)) AND (ln(EXP(x_maxValue)) >= cast(0.0:double as double)))
-cs	ln(EXP(x)) IN (0.0:double, null:double)	(((ln(EXP(x_minValue)) <= 0.0:double) AND (ln(EXP(x_maxValue)) >= 0.0:double)) OR ((ln(EXP(x_minValue)) <= null:double) AND (ln(EXP(x_maxValue)) >= null:double)))
-cs	NOT ln(EXP(x)) IN (0.0:double)	NOT ((ln(EXP(x_minValue)) = 0.0:double) AND (ln(EXP(x_maxValue)) = 0.0:double))
+ei	NOT startswith(LOG2(x), 'ab')	coalesce(NOT (startswith(tryeval(LOG2(x_minValue)), 'ab') AND startswith(tryeval(LOG2(x_maxValue)), 'ab')), true:boolean)
+cs	(ln(EXP(x)) = 0.0:double)	coalesce(((tryeval(ln(EXP(x_minValue))) <= 0.0:double) AND (tryeval(ln(EXP(x_maxValue))) >= 0.0:double)), true:boolean)
+cs	(0.0:double < ln(EXP(x)))	coalesce((tryeval(ln(EXP(x_maxValue))) > 0.0:double), true:boolean)
+cs	(ln(EXP(x)) >= 0.0:double)	coalesce((tryeval(ln(EXP(x_maxValue))) >= 0.0:double), true:boolean)
+cs	NOT (ln(EXP(x)) = 0.0:double)	coalesce(NOT ((tryeval(ln(EXP(x_minValue))) = 0.0:double) AND (tryeval(ln(EXP(x_maxValue))) = 0.0:double)), true:boolean)
+cs	(ln(EXP(x)) = cast(0.0:double as double))	coalesce(((tryeval(ln(EXP(x_minValue))) <= cast(0.0:double as double)) AND (tryeval(ln(EXP(x_maxValue))) >= cast(0.0:double as double))), true:boolean)
+cs	ln(EXP(x)) IN (0.0:double, null:double)	coalesce((((tryeval(ln(EXP(x_minValue))) <= 0.0:double) AND (tryeval(ln(EXP(x_maxValue))) >= 0.0:double)) OR ((tryeval(ln(EXP(x_minValue))) <= null:double) AND (tryeval(ln(EXP(x_maxValue))) >= null:double))), true:boolean)
+cs	NOT ln(EXP(x)) IN (0.0:double)	coalesce(NOT ((tryeval(ln(EXP(x_minValue))) = 0.0:double) AND (tryeval(ln(EXP(x_maxValue))) = 0.0:double)), true:boolean)
 cs	startswith(ln(EXP(x)), 'ab')	true:boolean
-ei	startswith(ln(EXP(x)), 'ab')	((ln(EXP(x_minValue)) <= 'ab') AND (ln(EXP(x_maxValue)) >= 'ab'))
+ei	startswith(ln(EXP(x)), 'ab')	coalesce(((tryeval(ln(EXP(x_minValue))) <= 'ab') AND (tryeval(ln(EXP(x_maxValue))) >= 'ab')), true:boolean)
 cs	NOT startswith(ln(EXP(x)), 'ab')	true:boolean
-ei	NOT startswith(ln(EXP(x)), 'ab')	NOT (startswith(ln(EXP(x_minValue)), 'ab') AND startswith(ln(EXP(x_maxValue)), 'ab'))
+ei	NOT startswith(ln(EXP(x)), 'ab')	coalesce(NOT (startswith(tryeval(ln(EXP(x_minValue))), 'ab') AND startswith(tryeval(ln(EXP(x_maxValue))), 'ab')), true:boolean)
 cs	(EXP(cast(a as double)) = 0.0:double)	((EXP(cast(a_minValue as double)) <= 0.0:double) AND (EXP(cast(a_maxValue as double)) >= 0.0:double))
 cs	(0.0:double < EXP(cast(a as double)))	(EXP(cast(a_maxValue as double)) > 0.0:double)
 cs	(EXP(cast(a as double)) >= 0.0:double)	(EXP(cast(a_maxValue as double)) >= 0.0:double)
@@ -816,44 +816,44 @@ cs	startswith(date_add(cast(ts as date), 1:int), 'ab')	true:boolean
 ei	startswith(date_add(cast(ts as date), 1:int), 'ab')	((date_add(cast(ts_minValue as date), 1:int) <= 'ab') AND (date_add(cast(ts_maxValue as date), 1:int) >= 'ab'))
 cs	NOT startswith(date_add(cast(ts as date), 1:int), 'ab')	true:boolean
 ei	NOT startswith(date_add(cast(ts as date), 1:int), 'ab')	NOT (startswith(date_add(cast(ts_minValue as date), 1:int), 'ab') AND startswith(date_add(cast(ts_maxValue as date), 1:int), 'ab'))
-cs	(date_format(ts, 'yyyy-MM-dd') = '')	((date_format(ts_minValue, 'yyyy-MM-dd') <= '') AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= ''))
-cs	('' < date_format(ts, 'yyyy-MM-dd'))	(date_format(ts_maxValue, 'yyyy-MM-dd') > '')
-cs	(date_format(ts, 'yyyy-MM-dd') >= '')	(date_format(ts_maxValue, 'yyyy-MM-dd') >= '')
-cs	NOT (date_format(ts, 'yyyy-MM-dd') = '')	NOT ((date_format(ts_minValue, 'yyyy-MM-dd') = '') AND (date_format(ts_maxValue, 'yyyy-MM-dd') = ''))
-cs	(date_format(ts, 'yyyy-MM-dd') = cast('' as string))	((date_format(ts_minValue, 'yyyy-MM-dd') <= cast('' as string)) AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= cast('' as string)))
-cs	date_format(ts, 'yyyy-MM-dd') IN ('', null:string)	(((date_format(ts_minValue, 'yyyy-MM-dd') <= '') AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= '')) OR ((date_format(ts_minValue, 'yyyy-MM-dd') <= null:string) AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= null:string)))
-cs	NOT date_format(ts, 'yyyy-MM-dd') IN ('')	NOT ((date_format(ts_minValue, 'yyyy-MM-dd') = '') AND (date_format(ts_maxValue, 'yyyy-MM-dd') = ''))
-cs	startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	((date_format(ts_minValue, 'yyyy-MM-dd') <= 'ab') AND (date_format(ts_maxValue, 'yyyy-MM-dd') >= 'ab'))
-cs	NOT startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	NOT (startswith(date_format(ts_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(date_format(ts_maxValue, 'yyyy-MM-dd'), 'ab'))
-cs	(date_format(ts, cast(ts as string)) = '')	((date_format(ts_minValue, cast(ts_minValue as string)) <= '') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= ''))
-cs	('' < date_format(ts, cast(ts as string)))	(date_format(ts_maxValue, cast(ts_maxValue as string)) > '')
-cs	(date_format(ts, cast(ts as string)) >= '')	(date_format(ts_maxValue, cast(ts_maxValue as string)) >= '')
-cs	NOT (date_format(ts, cast(ts as string)) = '')	NOT ((date_format(ts_minValue, cast(ts_minValue as string)) = '') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) = ''))
-cs	(date_format(ts, cast(ts as string)) = cast('' as string))	((date_format(ts_minValue, cast(ts_minValue as string)) <= cast('' as string)) AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= cast('' as string)))
-cs	date_format(ts, cast(ts as string)) IN ('', null:string)	(((date_format(ts_minValue, cast(ts_minValue as string)) <= '') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= '')) OR ((date_format(ts_minValue, cast(ts_minValue as string)) <= null:string) AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= null:string)))
-cs	NOT date_format(ts, cast(ts as string)) IN ('')	NOT ((date_format(ts_minValue, cast(ts_minValue as string)) = '') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) = ''))
-cs	startswith(date_format(ts, cast(ts as string)), 'ab')	((date_format(ts_minValue, cast(ts_minValue as string)) <= 'ab') AND (date_format(ts_maxValue, cast(ts_maxValue as string)) >= 'ab'))
-cs	NOT startswith(date_format(ts, cast(ts as string)), 'ab')	NOT (startswith(date_format(ts_minValue, cast(ts_minValue as string)), 'ab') AND startswith(date_format(ts_maxValue, cast(ts_maxValue as string)), 'ab'))
-cs	(from_unixtime(l, 'yyyy-MM-dd') = '')	((from_unixtime(l_minValue, 'yyyy-MM-dd') <= '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= ''))
-cs	('' < from_unixtime(l, 'yyyy-MM-dd'))	(from_unixtime(l_maxValue, 'yyyy-MM-dd') > '')
-cs	(from_unixtime(l, 'yyyy-MM-dd') >= '')	(from_unixtime(l_maxValue, 'yyyy-MM-dd') >= '')
-cs	NOT (from_unixtime(l, 'yyyy-MM-dd') = '')	NOT ((from_unixtime(l_minValue, 'yyyy-MM-dd') = '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = ''))
-cs	(from_unixtime(l, 'yyyy-MM-dd') = cast('' as string))	((from_unixtime(l_minValue, 'yyyy-MM-dd') <= cast('' as string)) AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= cast('' as string)))
-cs	from_unixtime(l, 'yyyy-MM-dd') IN ('', null:string)	(((from_unixtime(l_minValue, 'yyyy-MM-dd') <= '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= '')) OR ((from_unixtime(l_minValue, 'yyyy-MM-dd') <= null:string) AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= null:string)))
-cs	NOT from_unixtime(l, 'yyyy-MM-dd') IN ('')	NOT ((from_unixtime(l_minValue, 'yyyy-MM-dd') = '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = ''))
-cs	startswith(from_unixtime(l, 'yyyy-MM-dd'), 'ab')	((from_unixtime(l_minValue, 'yyyy-MM-dd') <= 'ab') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') >= 'ab'))
-cs	NOT startswith(from_unixtime(l, 'yyyy-MM-dd'), 'ab')	NOT (startswith(from_unixtime(l_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(from_unixtime(l_maxValue, 'yyyy-MM-dd'), 'ab'))
-cs	(to_unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= 0:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:bigint))
-cs	(0:bigint < to_unix_timestamp(s, 'yyyy-MM-dd'))	(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') > 0:bigint)
-cs	(to_unix_timestamp(s, 'yyyy-MM-dd') >= 0:bigint)	(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:bigint)
-cs	NOT (to_unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	NOT ((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') = 0:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') = 0:bigint))
-cs	(to_unix_timestamp(s, 'yyyy-MM-dd') = cast(0:bigint as bigint))	((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= cast(0:bigint as bigint)) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= cast(0:bigint as bigint)))
-cs	to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint, null:bigint)	(((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= 0:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:bigint)) OR ((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= null:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= null:bigint)))
-cs	NOT to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint)	NOT ((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') = 0:bigint) AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') = 0:bigint))
+cs	(date_format(ts, 'yyyy-MM-dd') = '')	coalesce(((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string) <= '') AND (if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) >= '')), true:boolean)
+cs	('' < date_format(ts, 'yyyy-MM-dd'))	coalesce((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) > ''), true:boolean)
+cs	(date_format(ts, 'yyyy-MM-dd') >= '')	coalesce((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) >= ''), true:boolean)
+cs	NOT (date_format(ts, 'yyyy-MM-dd') = '')	coalesce(NOT ((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string) = '') AND (if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) = '')), true:boolean)
+cs	(date_format(ts, 'yyyy-MM-dd') = cast('' as string))	coalesce(((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string) <= cast('' as string)) AND (if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) >= cast('' as string))), true:boolean)
+cs	date_format(ts, 'yyyy-MM-dd') IN ('', null:string)	coalesce((((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string) <= '') AND (if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) >= '')) OR ((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string) <= null:string) AND (if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) >= null:string))), true:boolean)
+cs	NOT date_format(ts, 'yyyy-MM-dd') IN ('')	coalesce(NOT ((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string) = '') AND (if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) = '')), true:boolean)
+cs	startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	coalesce(((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string) <= 'ab') AND (if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) >= 'ab')), true:boolean)
+cs	NOT startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	coalesce(NOT (startswith(if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string), 'ab') AND startswith(if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string), 'ab')), true:boolean)
+cs	(date_format(ts, cast(ts as string)) = '')	true:boolean
+cs	('' < date_format(ts, cast(ts as string)))	true:boolean
+cs	(date_format(ts, cast(ts as string)) >= '')	true:boolean
+cs	NOT (date_format(ts, cast(ts as string)) = '')	true:boolean
+cs	(date_format(ts, cast(ts as string)) = cast('' as string))	true:boolean
+cs	date_format(ts, cast(ts as string)) IN ('', null:string)	true:boolean
+cs	NOT date_format(ts, cast(ts as string)) IN ('')	true:boolean
+cs	startswith(date_format(ts, cast(ts as string)), 'ab')	true:boolean
+cs	NOT startswith(date_format(ts, cast(ts as string)), 'ab')	true:boolean
+cs	(from_unixtime(l, 'yyyy-MM-dd') = '')	coalesce(((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) <= '') AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) >= '')), true:boolean)
+cs	('' < from_unixtime(l, 'yyyy-MM-dd'))	coalesce((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) > ''), true:boolean)
+cs	(from_unixtime(l, 'yyyy-MM-dd') >= '')	coalesce((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) >= ''), true:boolean)
+cs	NOT (from_unixtime(l, 'yyyy-MM-dd') = '')	coalesce(NOT ((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) = '') AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) = '')), true:boolean)
+cs	(from_unixtime(l, 'yyyy-MM-dd') = cast('' as string))	coalesce(((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) <= cast('' as string)) AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) >= cast('' as string))), true:boolean)
+cs	from_unixtime(l, 'yyyy-MM-dd') IN ('', null:string)	coalesce((((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) <= '') AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) >= '')) OR ((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) <= null:string) AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) >= null:string))), true:boolean)
+cs	NOT from_unixtime(l, 'yyyy-MM-dd') IN ('')	coalesce(NOT ((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) = '') AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) = '')), true:boolean)
+cs	startswith(from_unixtime(l, 'yyyy-MM-dd'), 'ab')	coalesce(((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) <= 'ab') AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) >= 'ab')), true:boolean)
+cs	NOT startswith(from_unixtime(l, 'yyyy-MM-dd'), 'ab')	coalesce(NOT (startswith(if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string), 'ab') AND startswith(if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string), 'ab')), true:boolean)
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint)), true:boolean)
+cs	(0:bigint < to_unix_timestamp(s, 'yyyy-MM-dd'))	coalesce((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) > 0:bigint), true:boolean)
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') >= 0:bigint)	coalesce((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint), true:boolean)
+cs	NOT (to_unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	coalesce(NOT ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint)), true:boolean)
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') = cast(0:bigint as bigint))	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= cast(0:bigint as bigint)) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= cast(0:bigint as bigint))), true:boolean)
+cs	to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint, null:bigint)	coalesce((((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint)) OR ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= null:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= null:bigint))), true:boolean)
+cs	NOT to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint)	coalesce(NOT ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint)), true:boolean)
 cs	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
-ei	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	((to_unix_timestamp(s_minValue, 'yyyy-MM-dd') <= 'ab') AND (to_unix_timestamp(s_maxValue, 'yyyy-MM-dd') >= 'ab'))
+ei	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 'ab') AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 'ab')), true:boolean)
 cs	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
-ei	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	NOT (startswith(to_unix_timestamp(s_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd'), 'ab'))
+ei	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(NOT (startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint), 'ab') AND startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint), 'ab')), true:boolean)
 cs	(to_unix_timestamp(ts, 'yyyy-MM-dd') = 0:bigint)	((to_unix_timestamp(ts_minValue, 'yyyy-MM-dd') <= 0:bigint) AND (to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') >= 0:bigint))
 cs	(0:bigint < to_unix_timestamp(ts, 'yyyy-MM-dd'))	(to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') > 0:bigint)
 cs	(to_unix_timestamp(ts, 'yyyy-MM-dd') >= 0:bigint)	(to_unix_timestamp(ts_maxValue, 'yyyy-MM-dd') >= 0:bigint)
@@ -876,17 +876,17 @@ cs	startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	true:boolean
 ei	startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	((from_utc_timestamp(ts_minValue, 'UTC') <= 'ab') AND (from_utc_timestamp(ts_maxValue, 'UTC') >= 'ab'))
 cs	NOT startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	true:boolean
 ei	NOT startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	NOT (startswith(from_utc_timestamp(ts_minValue, 'UTC'), 'ab') AND startswith(from_utc_timestamp(ts_maxValue, 'UTC'), 'ab'))
-cs	(to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	((to_utc_timestamp(ts_minValue, 'America/New_York') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp))
-cs	(0:timestamp < to_utc_timestamp(ts, 'America/New_York'))	(to_utc_timestamp(ts_maxValue, 'America/New_York') > 0:timestamp)
-cs	(to_utc_timestamp(ts, 'America/New_York') >= 0:timestamp)	(to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp)
-cs	NOT (to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, 'America/New_York') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') = 0:timestamp))
-cs	(to_utc_timestamp(ts, 'America/New_York') = cast(0:timestamp as timestamp))	((to_utc_timestamp(ts_minValue, 'America/New_York') <= cast(0:timestamp as timestamp)) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= cast(0:timestamp as timestamp)))
-cs	to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp, null:timestamp)	(((to_utc_timestamp(ts_minValue, 'America/New_York') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp)) OR ((to_utc_timestamp(ts_minValue, 'America/New_York') <= null:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= null:timestamp)))
-cs	NOT to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, 'America/New_York') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') = 0:timestamp))
+cs	(to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	true:boolean
+cs	(0:timestamp < to_utc_timestamp(ts, 'America/New_York'))	true:boolean
+cs	(to_utc_timestamp(ts, 'America/New_York') >= 0:timestamp)	true:boolean
+cs	NOT (to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	true:boolean
+cs	(to_utc_timestamp(ts, 'America/New_York') = cast(0:timestamp as timestamp))	true:boolean
+cs	to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp, null:timestamp)	true:boolean
+cs	NOT to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp)	true:boolean
 cs	startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
-ei	startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	((to_utc_timestamp(ts_minValue, 'America/New_York') <= 'ab') AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 'ab'))
+ei	startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
 cs	NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
-ei	NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	NOT (startswith(to_utc_timestamp(ts_minValue, 'America/New_York'), 'ab') AND startswith(to_utc_timestamp(ts_maxValue, 'America/New_York'), 'ab'))
+ei	NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
 cs	(left(s, 2:int) = '')	((left(s_minValue, 2:int) <= '') AND (left(s_maxValue, 2:int) >= ''))
 cs	('' < left(s, 2:int))	(left(s_maxValue, 2:int) > '')
 cs	(left(s, 2:int) >= '')	(left(s_maxValue, 2:int) >= '')
@@ -934,39 +934,39 @@ cs	startswith(abs(a), 'ab')	true:boolean
 ei	startswith(abs(a), 'ab')	true:boolean
 cs	NOT startswith(abs(a), 'ab')	true:boolean
 ei	NOT startswith(abs(a), 'ab')	true:boolean
-cs	(to_date(s) = 0:date)	((to_date(s_minValue) <= 0:date) AND (to_date(s_maxValue) >= 0:date))
-cs	(0:date < to_date(s))	(to_date(s_maxValue) > 0:date)
-cs	(to_date(s) >= 0:date)	(to_date(s_maxValue) >= 0:date)
-cs	NOT (to_date(s) = 0:date)	NOT ((to_date(s_minValue) = 0:date) AND (to_date(s_maxValue) = 0:date))
-cs	(to_date(s) = cast(0:date as date))	((to_date(s_minValue) <= cast(0:date as date)) AND (to_date(s_maxValue) >= cast(0:date as date)))
-cs	to_date(s) IN (0:date, null:date)	(((to_date(s_minValue) <= 0:date) AND (to_date(s_maxValue) >= 0:date)) OR ((to_date(s_minValue) <= null:date) AND (to_date(s_maxValue) >= null:date)))
-cs	NOT to_date(s) IN (0:date)	NOT ((to_date(s_minValue) = 0:date) AND (to_date(s_maxValue) = 0:date))
+cs	(to_date(s) = 0:date)	true:boolean
+cs	(0:date < to_date(s))	true:boolean
+cs	(to_date(s) >= 0:date)	true:boolean
+cs	NOT (to_date(s) = 0:date)	true:boolean
+cs	(to_date(s) = cast(0:date as date))	true:boolean
+cs	to_date(s) IN (0:date, null:date)	true:boolean
+cs	NOT to_date(s) IN (0:date)	true:boolean
 cs	startswith(to_date(s), 'ab')	true:boolean
-ei	startswith(to_date(s), 'ab')	((to_date(s_minValue) <= 'ab') AND (to_date(s_maxValue) >= 'ab'))
+ei	startswith(to_date(s), 'ab')	true:boolean
 cs	NOT startswith(to_date(s), 'ab')	true:boolean
-ei	NOT startswith(to_date(s), 'ab')	NOT (startswith(to_date(s_minValue), 'ab') AND startswith(to_date(s_maxValue), 'ab'))
-cs	(to_date(s, 'yyyy-MM-dd') = 0:date)	((to_date(s_minValue, 'yyyy-MM-dd') <= 0:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') >= 0:date))
-cs	(0:date < to_date(s, 'yyyy-MM-dd'))	(to_date(s_maxValue, 'yyyy-MM-dd') > 0:date)
-cs	(to_date(s, 'yyyy-MM-dd') >= 0:date)	(to_date(s_maxValue, 'yyyy-MM-dd') >= 0:date)
-cs	NOT (to_date(s, 'yyyy-MM-dd') = 0:date)	NOT ((to_date(s_minValue, 'yyyy-MM-dd') = 0:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') = 0:date))
-cs	(to_date(s, 'yyyy-MM-dd') = cast(0:date as date))	((to_date(s_minValue, 'yyyy-MM-dd') <= cast(0:date as date)) AND (to_date(s_maxValue, 'yyyy-MM-dd') >= cast(0:date as date)))
-cs	to_date(s, 'yyyy-MM-dd') IN (0:date, null:date)	(((to_date(s_minValue, 'yyyy-MM-dd') <= 0:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') >= 0:date)) OR ((to_date(s_minValue, 'yyyy-MM-dd') <= null:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') >= null:date)))
-cs	NOT to_date(s, 'yyyy-MM-dd') IN (0:date)	NOT ((to_date(s_minValue, 'yyyy-MM-dd') = 0:date) AND (to_date(s_maxValue, 'yyyy-MM-dd') = 0:date))
+ei	NOT startswith(to_date(s), 'ab')	true:boolean
+cs	(to_date(s, 'yyyy-MM-dd') = 0:date)	true:boolean
+cs	(0:date < to_date(s, 'yyyy-MM-dd'))	true:boolean
+cs	(to_date(s, 'yyyy-MM-dd') >= 0:date)	true:boolean
+cs	NOT (to_date(s, 'yyyy-MM-dd') = 0:date)	true:boolean
+cs	(to_date(s, 'yyyy-MM-dd') = cast(0:date as date))	true:boolean
+cs	to_date(s, 'yyyy-MM-dd') IN (0:date, null:date)	true:boolean
+cs	NOT to_date(s, 'yyyy-MM-dd') IN (0:date)	true:boolean
 cs	startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	true:boolean
-ei	startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	((to_date(s_minValue, 'yyyy-MM-dd') <= 'ab') AND (to_date(s_maxValue, 'yyyy-MM-dd') >= 'ab'))
+ei	startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	true:boolean
 cs	NOT startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	true:boolean
-ei	NOT startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	NOT (startswith(to_date(s_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(to_date(s_maxValue, 'yyyy-MM-dd'), 'ab'))
-cs	(to_timestamp(s, 'yyyy-MM-dd') = 0:timestamp)	((to_timestamp(s_minValue, 'yyyy-MM-dd') <= 0:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:timestamp))
-cs	(0:timestamp < to_timestamp(s, 'yyyy-MM-dd'))	(to_timestamp(s_maxValue, 'yyyy-MM-dd') > 0:timestamp)
-cs	(to_timestamp(s, 'yyyy-MM-dd') >= 0:timestamp)	(to_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:timestamp)
-cs	NOT (to_timestamp(s, 'yyyy-MM-dd') = 0:timestamp)	NOT ((to_timestamp(s_minValue, 'yyyy-MM-dd') = 0:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') = 0:timestamp))
-cs	(to_timestamp(s, 'yyyy-MM-dd') = cast(0:timestamp as timestamp))	((to_timestamp(s_minValue, 'yyyy-MM-dd') <= cast(0:timestamp as timestamp)) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= cast(0:timestamp as timestamp)))
-cs	to_timestamp(s, 'yyyy-MM-dd') IN (0:timestamp, null:timestamp)	(((to_timestamp(s_minValue, 'yyyy-MM-dd') <= 0:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= 0:timestamp)) OR ((to_timestamp(s_minValue, 'yyyy-MM-dd') <= null:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= null:timestamp)))
-cs	NOT to_timestamp(s, 'yyyy-MM-dd') IN (0:timestamp)	NOT ((to_timestamp(s_minValue, 'yyyy-MM-dd') = 0:timestamp) AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') = 0:timestamp))
+ei	NOT startswith(to_date(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+cs	(to_timestamp(s, 'yyyy-MM-dd') = 0:timestamp)	true:boolean
+cs	(0:timestamp < to_timestamp(s, 'yyyy-MM-dd'))	true:boolean
+cs	(to_timestamp(s, 'yyyy-MM-dd') >= 0:timestamp)	true:boolean
+cs	NOT (to_timestamp(s, 'yyyy-MM-dd') = 0:timestamp)	true:boolean
+cs	(to_timestamp(s, 'yyyy-MM-dd') = cast(0:timestamp as timestamp))	true:boolean
+cs	to_timestamp(s, 'yyyy-MM-dd') IN (0:timestamp, null:timestamp)	true:boolean
+cs	NOT to_timestamp(s, 'yyyy-MM-dd') IN (0:timestamp)	true:boolean
 cs	startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
-ei	startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	((to_timestamp(s_minValue, 'yyyy-MM-dd') <= 'ab') AND (to_timestamp(s_maxValue, 'yyyy-MM-dd') >= 'ab'))
+ei	startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
 cs	NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
-ei	NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	NOT (startswith(to_timestamp(s_minValue, 'yyyy-MM-dd'), 'ab') AND startswith(to_timestamp(s_maxValue, 'yyyy-MM-dd'), 'ab'))
+ei	NOT startswith(to_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
 cs	(to_date(cast(ts as string)) = 0:date)	true:boolean
 cs	(0:date < to_date(cast(ts as string)))	true:boolean
 cs	(to_date(cast(ts as string)) >= 0:date)	true:boolean
@@ -978,17 +978,17 @@ cs	startswith(to_date(cast(ts as string)), 'ab')	true:boolean
 ei	startswith(to_date(cast(ts as string)), 'ab')	true:boolean
 cs	NOT startswith(to_date(cast(ts as string)), 'ab')	true:boolean
 ei	NOT startswith(to_date(cast(ts as string)), 'ab')	true:boolean
-cs	(cast(to_date(s) as timestamp) = 0:timestamp)	((cast(to_date(s_minValue) as timestamp) <= 0:timestamp) AND (cast(to_date(s_maxValue) as timestamp) >= 0:timestamp))
-cs	(0:timestamp < cast(to_date(s) as timestamp))	(cast(to_date(s_maxValue) as timestamp) > 0:timestamp)
-cs	(cast(to_date(s) as timestamp) >= 0:timestamp)	(cast(to_date(s_maxValue) as timestamp) >= 0:timestamp)
-cs	NOT (cast(to_date(s) as timestamp) = 0:timestamp)	NOT ((cast(to_date(s_minValue) as timestamp) = 0:timestamp) AND (cast(to_date(s_maxValue) as timestamp) = 0:timestamp))
-cs	(cast(to_date(s) as timestamp) = cast(0:timestamp as timestamp))	((cast(to_date(s_minValue) as timestamp) <= cast(0:timestamp as timestamp)) AND (cast(to_date(s_maxValue) as timestamp) >= cast(0:timestamp as timestamp)))
-cs	cast(to_date(s) as timestamp) IN (0:timestamp, null:timestamp)	(((cast(to_date(s_minValue) as timestamp) <= 0:timestamp) AND (cast(to_date(s_maxValue) as timestamp) >= 0:timestamp)) OR ((cast(to_date(s_minValue) as timestamp) <= null:timestamp) AND (cast(to_date(s_maxValue) as timestamp) >= null:timestamp)))
-cs	NOT cast(to_date(s) as timestamp) IN (0:timestamp)	NOT ((cast(to_date(s_minValue) as timestamp) = 0:timestamp) AND (cast(to_date(s_maxValue) as timestamp) = 0:timestamp))
+cs	(cast(to_date(s) as timestamp) = 0:timestamp)	true:boolean
+cs	(0:timestamp < cast(to_date(s) as timestamp))	true:boolean
+cs	(cast(to_date(s) as timestamp) >= 0:timestamp)	true:boolean
+cs	NOT (cast(to_date(s) as timestamp) = 0:timestamp)	true:boolean
+cs	(cast(to_date(s) as timestamp) = cast(0:timestamp as timestamp))	true:boolean
+cs	cast(to_date(s) as timestamp) IN (0:timestamp, null:timestamp)	true:boolean
+cs	NOT cast(to_date(s) as timestamp) IN (0:timestamp)	true:boolean
 cs	startswith(cast(to_date(s) as timestamp), 'ab')	true:boolean
-ei	startswith(cast(to_date(s) as timestamp), 'ab')	((cast(to_date(s_minValue) as timestamp) <= 'ab') AND (cast(to_date(s_maxValue) as timestamp) >= 'ab'))
+ei	startswith(cast(to_date(s) as timestamp), 'ab')	true:boolean
 cs	NOT startswith(cast(to_date(s) as timestamp), 'ab')	true:boolean
-ei	NOT startswith(cast(to_date(s) as timestamp), 'ab')	NOT (startswith(cast(to_date(s_minValue) as timestamp), 'ab') AND startswith(cast(to_date(s_maxValue) as timestamp), 'ab'))
+ei	NOT startswith(cast(to_date(s) as timestamp), 'ab')	true:boolean
 cs	((cast(a as bigint) + 1:bigint) = 0:bigint)	(((cast(a_minValue as bigint) + 1:bigint) <= 0:bigint) AND ((cast(a_maxValue as bigint) + 1:bigint) >= 0:bigint))
 cs	(0:bigint < (cast(a as bigint) + 1:bigint))	((cast(a_maxValue as bigint) + 1:bigint) > 0:bigint)
 cs	((cast(a as bigint) + 1:bigint) >= 0:bigint)	((cast(a_maxValue as bigint) + 1:bigint) >= 0:bigint)
@@ -1083,7 +1083,7 @@ cs	((a * 2:int) >= 0:int)	((a_maxValue * 2:int) >= 0:int)
 cs	NOT NOT (shiftleft(a, 1:int) = 0:int)	true:boolean
 cs	(0:timestamp < from_utc_timestamp(ts, 'UTC'))	(from_utc_timestamp(ts_maxValue, 'UTC') > 0:timestamp)
 cs	NOT (from_unixtime(l, 'yyyy-MM-dd') IN ('', null:string) OR NOT ((dec = cast(0.00:decimal(10,2) as decimal(10,2))) OR startswith(to_date(s, 'yyyy-MM-dd'), 'ab')))	true:boolean
-ei	NOT (from_unixtime(l, 'yyyy-MM-dd') IN ('', null:string) OR NOT ((dec = cast(0.00:decimal(10,2) as decimal(10,2))) OR startswith(to_date(s, 'yyyy-MM-dd'), 'ab')))	NOT (((from_unixtime(l_minValue, 'yyyy-MM-dd') = '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = '')) OR ((from_unixtime(l_minValue, 'yyyy-MM-dd') = null:string) AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = null:string)))
+ei	NOT (from_unixtime(l, 'yyyy-MM-dd') IN ('', null:string) OR NOT ((dec = cast(0.00:decimal(10,2) as decimal(10,2))) OR startswith(to_date(s, 'yyyy-MM-dd'), 'ab')))	coalesce(NOT (((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) = '') AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) = '')) OR ((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) = null:string) AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) = null:string))), true:boolean)
 cs	((date_format(ts, cast(ts as string)) = cast('' as string)) OR NOT (NOT NOT startswith(coalesce(a, 1:int), 'ab') AND ((a = b) OR NOT date_add(d, 1:int) IN (0:date))))	true:boolean
 ei	((date_format(ts, cast(ts as string)) = cast('' as string)) OR NOT (NOT NOT startswith(coalesce(a, 1:int), 'ab') AND ((a = b) OR NOT date_add(d, 1:int) IN (0:date))))	true:boolean
 cs	((0:int < cast(ts as int)) OR (cast(ts as bigint) >= 0:bigint))	true:boolean
@@ -1102,7 +1102,7 @@ ei	NOT (startswith((a + 1:int), 'ab') AND ((0.000:decimal(13,3) < (dec * 1.5:dec
 cs	(NOT (((from_unixtime(l, 'yyyy-MM-dd') = cast('' as string)) OR NOT (x = 0.0:double)) OR NOT (a + a) IN (0:int)) OR NOT (NOT (NOT startswith(to_date(s), 'ab') AND ((a + 'x') = cast(0:int as int))) OR NOT (NOT startswith((a + b), 'ab') AND dec IS NOT NULL)))	true:boolean
 ei	(NOT (((from_unixtime(l, 'yyyy-MM-dd') = cast('' as string)) OR NOT (x = 0.0:double)) OR NOT (a + a) IN (0:int)) OR NOT (NOT (NOT startswith(to_date(s), 'ab') AND ((a + 'x') = cast(0:int as int))) OR NOT (NOT startswith((a + b), 'ab') AND dec IS NOT NULL)))	true:boolean
 cs	((((cast(a as bigint) + 1:bigint) = cast(0:bigint as bigint)) AND (NOT startswith(cast(dec as double), 'ab') AND NOT from_unixtime(l, 'yyyy-MM-dd') IN (''))) AND (NOT (date_add(d, 1:int) = 0:date) OR ((0:int * a) = cast(0:int as int))))	true:boolean
-ei	((((cast(a as bigint) + 1:bigint) = cast(0:bigint as bigint)) AND (NOT startswith(cast(dec as double), 'ab') AND NOT from_unixtime(l, 'yyyy-MM-dd') IN (''))) AND (NOT (date_add(d, 1:int) = 0:date) OR ((0:int * a) = cast(0:int as int))))	((((cast(a_minValue as bigint) + 1:bigint) <= cast(0:bigint as bigint)) AND ((cast(a_maxValue as bigint) + 1:bigint) >= cast(0:bigint as bigint))) AND (NOT (startswith(cast(dec_minValue as double), 'ab') AND startswith(cast(dec_maxValue as double), 'ab')) AND NOT ((from_unixtime(l_minValue, 'yyyy-MM-dd') = '') AND (from_unixtime(l_maxValue, 'yyyy-MM-dd') = ''))))
+ei	((((cast(a as bigint) + 1:bigint) = cast(0:bigint as bigint)) AND (NOT startswith(cast(dec as double), 'ab') AND NOT from_unixtime(l, 'yyyy-MM-dd') IN (''))) AND (NOT (date_add(d, 1:int) = 0:date) OR ((0:int * a) = cast(0:int as int))))	((((cast(a_minValue as bigint) + 1:bigint) <= cast(0:bigint as bigint)) AND ((cast(a_maxValue as bigint) + 1:bigint) >= cast(0:bigint as bigint))) AND (NOT (startswith(cast(dec_minValue as double), 'ab') AND startswith(cast(dec_maxValue as double), 'ab')) AND coalesce(NOT ((if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_minValue, 'yyyy-MM-dd'), null:string) = '') AND (if(((l_minValue >= -62135510400:bigint) AND (l_maxValue < 253402214400:bigint)), from_unixtime(l_maxValue, 'yyyy-MM-dd'), null:string) = '')), true:boolean)))
 cs	((lower(s) = cast('' as string)) AND NOT ((x / -2.0:double) = cast(0.0:double as double)))	true:boolean
 cs	NOT (to_date(cast(ts as string)) = 0:date)	true:boolean
 cs	NOT (NOT (NOT shiftright(8:int, a) IN (0:int) AND ((cast(a as smallint) >= 0:smallint) AND (0:timestamp < from_utc_timestamp(ts, 'UTC')))) AND NOT (a = 0:int))	true:boolean
@@ -1125,7 +1125,7 @@ cs	(NOT (NOT (cast(ts as bigint) IN (0:bigint, null:bigint) OR ((x / x) = 0.0:do
 cs	((0:int < shiftleft(a, 1:int)) AND (2:int * a) IN (0:int, null:int))	((shiftleft(a_maxValue, 1:int) > 0:int) AND ((((2:int * a_minValue) <= 0:int) AND ((2:int * a_maxValue) >= 0:int)) OR (((2:int * a_minValue) <= null:int) AND ((2:int * a_maxValue) >= null:int))))
 cs	NOT (NOT ((cast(ts as bigint) = cast(0:bigint as bigint)) AND (0:int < datediff(d, d))) AND NOT (NOT substring(s, 1:int, 2:int) IN ('') AND (0:timestamp < to_timestamp(s, 'yyyy-MM-dd'))))	true:boolean
 cs	((0.0:double < ln(EXP(x))) AND NOT ((ln(EXP(x)) IN (0.0:double, null:double) AND ((a + a) >= 0:int)) OR NOT (NOT cast((a + 1:int) as bigint) IN (0:bigint) AND NOT startswith(shiftleft(a, 1:int), 'ab'))))	true:boolean
-ei	((0.0:double < ln(EXP(x))) AND NOT ((ln(EXP(x)) IN (0.0:double, null:double) AND ((a + a) >= 0:int)) OR NOT (NOT cast((a + 1:int) as bigint) IN (0:bigint) AND NOT startswith(shiftleft(a, 1:int), 'ab'))))	(ln(EXP(x_maxValue)) > 0.0:double)
+ei	((0.0:double < ln(EXP(x))) AND NOT ((ln(EXP(x)) IN (0.0:double, null:double) AND ((a + a) >= 0:int)) OR NOT (NOT cast((a + 1:int) as bigint) IN (0:bigint) AND NOT startswith(shiftleft(a, 1:int), 'ab'))))	coalesce((tryeval(ln(EXP(x_maxValue))) > 0.0:double), true:boolean)
 cs	NOT (NOT (NOT ((0.00:decimal(10,2) < dec) OR NOT startswith(LOG2(x), 'ab')) OR (ts IN (0:timestamp, b) AND NOT startswith(substring(s, 1:int, 2:int), 'ab'))) AND NOT cast(a as smallint) IN (0:smallint))	true:boolean
 ei	NOT (NOT (NOT ((0.00:decimal(10,2) < dec) OR NOT startswith(LOG2(x), 'ab')) OR (ts IN (0:timestamp, b) AND NOT startswith(substring(s, 1:int, 2:int), 'ab'))) AND NOT cast(a as smallint) IN (0:smallint))	true:boolean
 cs	(shiftright(8:int, a) = cast(0:int as int))	true:boolean
@@ -1160,3 +1160,160 @@ cs	(st = struct(0:int))	true:boolean
 cs	arr INSET (array())	true:boolean
 cs	arr IN (array())	true:boolean
 cs	(arr = array())	true:boolean
+cs	(gettimestamp(s, 'yyyy-MM-dd') = 0:timestamp)	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd')), null:timestamp) <= 0:timestamp) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) >= 0:timestamp)), true:boolean)
+cs	(0:timestamp < gettimestamp(s, 'yyyy-MM-dd'))	coalesce((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) > 0:timestamp), true:boolean)
+cs	(gettimestamp(s, 'yyyy-MM-dd') >= 0:timestamp)	coalesce((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) >= 0:timestamp), true:boolean)
+cs	NOT (gettimestamp(s, 'yyyy-MM-dd') = 0:timestamp)	coalesce(NOT ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd')), null:timestamp) = 0:timestamp) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) = 0:timestamp)), true:boolean)
+cs	(gettimestamp(s, 'yyyy-MM-dd') = cast(0:timestamp as timestamp))	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd')), null:timestamp) <= cast(0:timestamp as timestamp)) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) >= cast(0:timestamp as timestamp))), true:boolean)
+cs	gettimestamp(s, 'yyyy-MM-dd') IN (0:timestamp, null:timestamp)	coalesce((((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd')), null:timestamp) <= 0:timestamp) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) >= 0:timestamp)) OR ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd')), null:timestamp) <= null:timestamp) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) >= null:timestamp))), true:boolean)
+cs	NOT gettimestamp(s, 'yyyy-MM-dd') IN (0:timestamp)	coalesce(NOT ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd')), null:timestamp) = 0:timestamp) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) = 0:timestamp)), true:boolean)
+cs	startswith(gettimestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	startswith(gettimestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd')), null:timestamp) <= 'ab') AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp) >= 'ab')), true:boolean)
+cs	NOT startswith(gettimestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	NOT startswith(gettimestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(NOT (startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd')), null:timestamp), 'ab') AND startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd')), null:timestamp), 'ab')), true:boolean)
+cs	(gettimestamp(s, 'MM/dd/yyyy') = 0:timestamp)	true:boolean
+cs	(0:timestamp < gettimestamp(s, 'MM/dd/yyyy'))	true:boolean
+cs	(gettimestamp(s, 'MM/dd/yyyy') >= 0:timestamp)	true:boolean
+cs	NOT (gettimestamp(s, 'MM/dd/yyyy') = 0:timestamp)	true:boolean
+cs	(gettimestamp(s, 'MM/dd/yyyy') = cast(0:timestamp as timestamp))	true:boolean
+cs	gettimestamp(s, 'MM/dd/yyyy') IN (0:timestamp, null:timestamp)	true:boolean
+cs	NOT gettimestamp(s, 'MM/dd/yyyy') IN (0:timestamp)	true:boolean
+cs	startswith(gettimestamp(s, 'MM/dd/yyyy'), 'ab')	true:boolean
+ei	startswith(gettimestamp(s, 'MM/dd/yyyy'), 'ab')	true:boolean
+cs	NOT startswith(gettimestamp(s, 'MM/dd/yyyy'), 'ab')	true:boolean
+ei	NOT startswith(gettimestamp(s, 'MM/dd/yyyy'), 'ab')	true:boolean
+cs	(gettimestamp(ts, 'MM/dd/yyyy') = 0:timestamp)	((gettimestamp(ts_minValue, 'MM/dd/yyyy') <= 0:timestamp) AND (gettimestamp(ts_maxValue, 'MM/dd/yyyy') >= 0:timestamp))
+cs	(0:timestamp < gettimestamp(ts, 'MM/dd/yyyy'))	(gettimestamp(ts_maxValue, 'MM/dd/yyyy') > 0:timestamp)
+cs	(gettimestamp(ts, 'MM/dd/yyyy') >= 0:timestamp)	(gettimestamp(ts_maxValue, 'MM/dd/yyyy') >= 0:timestamp)
+cs	NOT (gettimestamp(ts, 'MM/dd/yyyy') = 0:timestamp)	NOT ((gettimestamp(ts_minValue, 'MM/dd/yyyy') = 0:timestamp) AND (gettimestamp(ts_maxValue, 'MM/dd/yyyy') = 0:timestamp))
+cs	(gettimestamp(ts, 'MM/dd/yyyy') = cast(0:timestamp as timestamp))	((gettimestamp(ts_minValue, 'MM/dd/yyyy') <= cast(0:timestamp as timestamp)) AND (gettimestamp(ts_maxValue, 'MM/dd/yyyy') >= cast(0:timestamp as timestamp)))
+cs	gettimestamp(ts, 'MM/dd/yyyy') IN (0:timestamp, null:timestamp)	(((gettimestamp(ts_minValue, 'MM/dd/yyyy') <= 0:timestamp) AND (gettimestamp(ts_maxValue, 'MM/dd/yyyy') >= 0:timestamp)) OR ((gettimestamp(ts_minValue, 'MM/dd/yyyy') <= null:timestamp) AND (gettimestamp(ts_maxValue, 'MM/dd/yyyy') >= null:timestamp)))
+cs	NOT gettimestamp(ts, 'MM/dd/yyyy') IN (0:timestamp)	NOT ((gettimestamp(ts_minValue, 'MM/dd/yyyy') = 0:timestamp) AND (gettimestamp(ts_maxValue, 'MM/dd/yyyy') = 0:timestamp))
+cs	startswith(gettimestamp(ts, 'MM/dd/yyyy'), 'ab')	true:boolean
+ei	startswith(gettimestamp(ts, 'MM/dd/yyyy'), 'ab')	((gettimestamp(ts_minValue, 'MM/dd/yyyy') <= 'ab') AND (gettimestamp(ts_maxValue, 'MM/dd/yyyy') >= 'ab'))
+cs	NOT startswith(gettimestamp(ts, 'MM/dd/yyyy'), 'ab')	true:boolean
+ei	NOT startswith(gettimestamp(ts, 'MM/dd/yyyy'), 'ab')	NOT (startswith(gettimestamp(ts_minValue, 'MM/dd/yyyy'), 'ab') AND startswith(gettimestamp(ts_maxValue, 'MM/dd/yyyy'), 'ab'))
+cs	(cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date) = 0:date)	coalesce(((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) <= 0:date) AND (cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) >= 0:date)), true:boolean)
+cs	(0:date < cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date))	coalesce((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) > 0:date), true:boolean)
+cs	(cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date) >= 0:date)	coalesce((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) >= 0:date), true:boolean)
+cs	NOT (cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date) = 0:date)	coalesce(NOT ((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) = 0:date) AND (cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) = 0:date)), true:boolean)
+cs	(cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date) = cast(0:date as date))	coalesce(((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) <= cast(0:date as date)) AND (cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) >= cast(0:date as date))), true:boolean)
+cs	cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date) IN (0:date, null:date)	coalesce((((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) <= 0:date) AND (cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) >= 0:date)) OR ((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) <= null:date) AND (cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) >= null:date))), true:boolean)
+cs	NOT cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date) IN (0:date)	coalesce(NOT ((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) = 0:date) AND (cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) = 0:date)), true:boolean)
+cs	startswith(cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date), 'ab')	true:boolean
+ei	startswith(cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date), 'ab')	coalesce(((cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) <= 'ab') AND (cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date) >= 'ab')), true:boolean)
+cs	NOT startswith(cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date), 'ab')	true:boolean
+ei	NOT startswith(cast(gettimestamp(s, 'yyyy-MM-dd HH:mm:ss') as date), 'ab')	coalesce(NOT (startswith(cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_minValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date), 'ab') AND startswith(cast(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(gettimestamp(s_maxValue, 'yyyy-MM-dd HH:mm:ss')), null:timestamp) as date), 'ab')), true:boolean)
+cs	(unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint)), true:boolean)
+cs	(0:bigint < unix_timestamp(s, 'yyyy-MM-dd'))	coalesce((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) > 0:bigint), true:boolean)
+cs	(unix_timestamp(s, 'yyyy-MM-dd') >= 0:bigint)	coalesce((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint), true:boolean)
+cs	NOT (unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	coalesce(NOT ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint)), true:boolean)
+cs	(unix_timestamp(s, 'yyyy-MM-dd') = cast(0:bigint as bigint))	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= cast(0:bigint as bigint)) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= cast(0:bigint as bigint))), true:boolean)
+cs	unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint, null:bigint)	coalesce((((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint)) OR ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= null:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= null:bigint))), true:boolean)
+cs	NOT unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint)	coalesce(NOT ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint)), true:boolean)
+cs	startswith(unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	startswith(unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 'ab') AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 'ab')), true:boolean)
+cs	NOT startswith(unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	NOT startswith(unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(NOT (startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint), 'ab') AND startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint), 'ab')), true:boolean)
+cs	(unix_timestamp(s, 'yyyy-M-d') = 0:bigint)	true:boolean
+cs	(0:bigint < unix_timestamp(s, 'yyyy-M-d'))	true:boolean
+cs	(unix_timestamp(s, 'yyyy-M-d') >= 0:bigint)	true:boolean
+cs	NOT (unix_timestamp(s, 'yyyy-M-d') = 0:bigint)	true:boolean
+cs	(unix_timestamp(s, 'yyyy-M-d') = cast(0:bigint as bigint))	true:boolean
+cs	unix_timestamp(s, 'yyyy-M-d') IN (0:bigint, null:bigint)	true:boolean
+cs	NOT unix_timestamp(s, 'yyyy-M-d') IN (0:bigint)	true:boolean
+cs	startswith(unix_timestamp(s, 'yyyy-M-d'), 'ab')	true:boolean
+ei	startswith(unix_timestamp(s, 'yyyy-M-d'), 'ab')	true:boolean
+cs	NOT startswith(unix_timestamp(s, 'yyyy-M-d'), 'ab')	true:boolean
+ei	NOT startswith(unix_timestamp(s, 'yyyy-M-d'), 'ab')	true:boolean
+cs	(unix_timestamp(d, 'MM/dd/yyyy') = 0:bigint)	((unix_timestamp(d_minValue, 'MM/dd/yyyy') <= 0:bigint) AND (unix_timestamp(d_maxValue, 'MM/dd/yyyy') >= 0:bigint))
+cs	(0:bigint < unix_timestamp(d, 'MM/dd/yyyy'))	(unix_timestamp(d_maxValue, 'MM/dd/yyyy') > 0:bigint)
+cs	(unix_timestamp(d, 'MM/dd/yyyy') >= 0:bigint)	(unix_timestamp(d_maxValue, 'MM/dd/yyyy') >= 0:bigint)
+cs	NOT (unix_timestamp(d, 'MM/dd/yyyy') = 0:bigint)	NOT ((unix_timestamp(d_minValue, 'MM/dd/yyyy') = 0:bigint) AND (unix_timestamp(d_maxValue, 'MM/dd/yyyy') = 0:bigint))
+cs	(unix_timestamp(d, 'MM/dd/yyyy') = cast(0:bigint as bigint))	((unix_timestamp(d_minValue, 'MM/dd/yyyy') <= cast(0:bigint as bigint)) AND (unix_timestamp(d_maxValue, 'MM/dd/yyyy') >= cast(0:bigint as bigint)))
+cs	unix_timestamp(d, 'MM/dd/yyyy') IN (0:bigint, null:bigint)	(((unix_timestamp(d_minValue, 'MM/dd/yyyy') <= 0:bigint) AND (unix_timestamp(d_maxValue, 'MM/dd/yyyy') >= 0:bigint)) OR ((unix_timestamp(d_minValue, 'MM/dd/yyyy') <= null:bigint) AND (unix_timestamp(d_maxValue, 'MM/dd/yyyy') >= null:bigint)))
+cs	NOT unix_timestamp(d, 'MM/dd/yyyy') IN (0:bigint)	NOT ((unix_timestamp(d_minValue, 'MM/dd/yyyy') = 0:bigint) AND (unix_timestamp(d_maxValue, 'MM/dd/yyyy') = 0:bigint))
+cs	startswith(unix_timestamp(d, 'MM/dd/yyyy'), 'ab')	true:boolean
+ei	startswith(unix_timestamp(d, 'MM/dd/yyyy'), 'ab')	((unix_timestamp(d_minValue, 'MM/dd/yyyy') <= 'ab') AND (unix_timestamp(d_maxValue, 'MM/dd/yyyy') >= 'ab'))
+cs	NOT startswith(unix_timestamp(d, 'MM/dd/yyyy'), 'ab')	true:boolean
+ei	NOT startswith(unix_timestamp(d, 'MM/dd/yyyy'), 'ab')	NOT (startswith(unix_timestamp(d_minValue, 'MM/dd/yyyy'), 'ab') AND startswith(unix_timestamp(d_maxValue, 'MM/dd/yyyy'), 'ab'))
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss') = 0:bigint)	true:boolean
+cs	(0:bigint < to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss'))	true:boolean
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss') >= 0:bigint)	true:boolean
+cs	NOT (to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss') = 0:bigint)	true:boolean
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss') = cast(0:bigint as bigint))	true:boolean
+cs	to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss') IN (0:bigint, null:bigint)	true:boolean
+cs	NOT to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss') IN (0:bigint)	true:boolean
+cs	startswith(to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss'), 'ab')	true:boolean
+ei	startswith(to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss'), 'ab')	true:boolean
+cs	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss'), 'ab')	true:boolean
+ei	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd HH:mm:ss'), 'ab')	true:boolean
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint)), true:boolean)
+cs	(0:bigint < to_unix_timestamp(s, 'yyyy-MM-dd'))	coalesce((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) > 0:bigint), true:boolean)
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') >= 0:bigint)	coalesce((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint), true:boolean)
+cs	NOT (to_unix_timestamp(s, 'yyyy-MM-dd') = 0:bigint)	coalesce(NOT ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint)), true:boolean)
+cs	(to_unix_timestamp(s, 'yyyy-MM-dd') = cast(0:bigint as bigint))	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= cast(0:bigint as bigint)) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= cast(0:bigint as bigint))), true:boolean)
+cs	to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint, null:bigint)	coalesce((((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 0:bigint)) OR ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= null:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= null:bigint))), true:boolean)
+cs	NOT to_unix_timestamp(s, 'yyyy-MM-dd') IN (0:bigint)	coalesce(NOT ((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint) AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) = 0:bigint)), true:boolean)
+cs	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 'ab') AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 'ab')), true:boolean)
+cs	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
+ei	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(NOT (startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint), 'ab') AND startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint), 'ab')), true:boolean)
+cs	(date_format(ts, 'yyyy-MM-dd HH:mm') = '')	true:boolean
+cs	('' < date_format(ts, 'yyyy-MM-dd HH:mm'))	true:boolean
+cs	(date_format(ts, 'yyyy-MM-dd HH:mm') >= '')	true:boolean
+cs	NOT (date_format(ts, 'yyyy-MM-dd HH:mm') = '')	true:boolean
+cs	(date_format(ts, 'yyyy-MM-dd HH:mm') = cast('' as string))	true:boolean
+cs	date_format(ts, 'yyyy-MM-dd HH:mm') IN ('', null:string)	true:boolean
+cs	NOT date_format(ts, 'yyyy-MM-dd HH:mm') IN ('')	true:boolean
+cs	startswith(date_format(ts, 'yyyy-MM-dd HH:mm'), 'ab')	true:boolean
+cs	NOT startswith(date_format(ts, 'yyyy-MM-dd HH:mm'), 'ab')	true:boolean
+cs	(date_format(ts, 'yyyy-MM-dd') = '')	true:boolean
+cs	('' < date_format(ts, 'yyyy-MM-dd'))	true:boolean
+cs	(date_format(ts, 'yyyy-MM-dd') >= '')	true:boolean
+cs	NOT (date_format(ts, 'yyyy-MM-dd') = '')	true:boolean
+cs	(date_format(ts, 'yyyy-MM-dd') = cast('' as string))	true:boolean
+cs	date_format(ts, 'yyyy-MM-dd') IN ('', null:string)	true:boolean
+cs	NOT date_format(ts, 'yyyy-MM-dd') IN ('')	true:boolean
+cs	startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	true:boolean
+cs	NOT startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	true:boolean
+cs	(date_format(ts, 'MM/dd/yyyy') = '')	true:boolean
+cs	('' < date_format(ts, 'MM/dd/yyyy'))	true:boolean
+cs	(date_format(ts, 'MM/dd/yyyy') >= '')	true:boolean
+cs	NOT (date_format(ts, 'MM/dd/yyyy') = '')	true:boolean
+cs	(date_format(ts, 'MM/dd/yyyy') = cast('' as string))	true:boolean
+cs	date_format(ts, 'MM/dd/yyyy') IN ('', null:string)	true:boolean
+cs	NOT date_format(ts, 'MM/dd/yyyy') IN ('')	true:boolean
+cs	startswith(date_format(ts, 'MM/dd/yyyy'), 'ab')	true:boolean
+cs	NOT startswith(date_format(ts, 'MM/dd/yyyy'), 'ab')	true:boolean
+cs	(from_unixtime(l, 'dd-MM-yyyy') = '')	true:boolean
+cs	('' < from_unixtime(l, 'dd-MM-yyyy'))	true:boolean
+cs	(from_unixtime(l, 'dd-MM-yyyy') >= '')	true:boolean
+cs	NOT (from_unixtime(l, 'dd-MM-yyyy') = '')	true:boolean
+cs	(from_unixtime(l, 'dd-MM-yyyy') = cast('' as string))	true:boolean
+cs	from_unixtime(l, 'dd-MM-yyyy') IN ('', null:string)	true:boolean
+cs	NOT from_unixtime(l, 'dd-MM-yyyy') IN ('')	true:boolean
+cs	startswith(from_unixtime(l, 'dd-MM-yyyy'), 'ab')	true:boolean
+cs	NOT startswith(from_unixtime(l, 'dd-MM-yyyy'), 'ab')	true:boolean
+cs	(from_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	true:boolean
+cs	(0:timestamp < from_utc_timestamp(ts, 'America/New_York'))	true:boolean
+cs	(from_utc_timestamp(ts, 'America/New_York') >= 0:timestamp)	true:boolean
+cs	NOT (from_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	true:boolean
+cs	(from_utc_timestamp(ts, 'America/New_York') = cast(0:timestamp as timestamp))	true:boolean
+cs	from_utc_timestamp(ts, 'America/New_York') IN (0:timestamp, null:timestamp)	true:boolean
+cs	NOT from_utc_timestamp(ts, 'America/New_York') IN (0:timestamp)	true:boolean
+cs	startswith(from_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
+ei	startswith(from_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
+cs	NOT startswith(from_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
+ei	NOT startswith(from_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
+cs	(to_utc_timestamp(ts, '+08:00') = 0:timestamp)	((to_utc_timestamp(ts_minValue, '+08:00') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') >= 0:timestamp))
+cs	(0:timestamp < to_utc_timestamp(ts, '+08:00'))	(to_utc_timestamp(ts_maxValue, '+08:00') > 0:timestamp)
+cs	(to_utc_timestamp(ts, '+08:00') >= 0:timestamp)	(to_utc_timestamp(ts_maxValue, '+08:00') >= 0:timestamp)
+cs	NOT (to_utc_timestamp(ts, '+08:00') = 0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, '+08:00') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') = 0:timestamp))
+cs	(to_utc_timestamp(ts, '+08:00') = cast(0:timestamp as timestamp))	((to_utc_timestamp(ts_minValue, '+08:00') <= cast(0:timestamp as timestamp)) AND (to_utc_timestamp(ts_maxValue, '+08:00') >= cast(0:timestamp as timestamp)))
+cs	to_utc_timestamp(ts, '+08:00') IN (0:timestamp, null:timestamp)	(((to_utc_timestamp(ts_minValue, '+08:00') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') >= 0:timestamp)) OR ((to_utc_timestamp(ts_minValue, '+08:00') <= null:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') >= null:timestamp)))
+cs	NOT to_utc_timestamp(ts, '+08:00') IN (0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, '+08:00') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') = 0:timestamp))
+cs	startswith(to_utc_timestamp(ts, '+08:00'), 'ab')	true:boolean
+ei	startswith(to_utc_timestamp(ts, '+08:00'), 'ab')	((to_utc_timestamp(ts_minValue, '+08:00') <= 'ab') AND (to_utc_timestamp(ts_maxValue, '+08:00') >= 'ab'))
+cs	NOT startswith(to_utc_timestamp(ts, '+08:00'), 'ab')	true:boolean
+ei	NOT startswith(to_utc_timestamp(ts, '+08:00'), 'ab')	NOT (startswith(to_utc_timestamp(ts_minValue, '+08:00'), 'ab') AND startswith(to_utc_timestamp(ts_maxValue, '+08:00'), 'ab'))

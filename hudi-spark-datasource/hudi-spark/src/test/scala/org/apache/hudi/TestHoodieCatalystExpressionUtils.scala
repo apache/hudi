@@ -17,10 +17,10 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateSub, Divide, Exp, Expression, Literal, Log, Lower, Multiply, ParseToDate, Rand, ShiftLeft, Sqrt, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expression, FromUnixTime, FromUTCTimestamp, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, Sqrt, ToUnixTimestamp, ToUTCTimestamp, UnixTimestamp, Upper}
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Test
 
@@ -119,10 +119,55 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testDateParsingTransformationsPreserveOrdering(): Unit = {
-    // ParseToDate's case-class arity differs across Spark versions, so DateTimeFormatRule matches it
-    // by type and steps into `left`. The 1-arg auxiliary constructor is stable on all profiles,
-    // letting this pin that match everywhere.
-    assertEquals(Some(strAttr), matched(new ParseToDate(strAttr)))
+    // to_date / to_timestamp reach data skipping as their replacement: GetTimestamp, whose arity
+    // differs across Spark versions, so DateTimeFormatRule matches it by type. The ParseTo* 2-arg
+    // auxiliary constructors are stable on all profiles, letting this pin that match everywhere
+    def toTimestamp(input: Expression, format: String): Expression =
+      new ParseToTimestamp(input, Literal(format)).withTimeZone("UTC").asInstanceOf[ParseToTimestamp].replacement
+    def toDate(input: Expression, format: String): Expression =
+      new ParseToDate(input, Literal(format)).withTimeZone("UTC").asInstanceOf[ParseToDate].replacement
+
+    assertTrue(toTimestamp(strAttr, "yyyy-MM-dd").isInstanceOf[GetTimestamp])
+    assertEquals(Some(strAttr), matched(toTimestamp(strAttr, "yyyy-MM-dd HH:mm:ss")))
+    // to_date wraps GetTimestamp in a cast to date; the range walks through both
+    assertEquals(Some(strAttr), matched(toDate(strAttr, "yyyy-MM-dd")))
+    // The pre-optimizer shapes are not matched: production filters are optimized first
+    assertEquals(None, matched(new ParseToDate(strAttr, Literal("yyyy-MM-dd"))))
+    // Lexicographic order of 'MM/dd/yyyy' or unpadded strings is not chronological
+    assertEquals(None, matched(toTimestamp(strAttr, "MM/dd/yyyy")))
+    assertEquals(None, matched(toDate(strAttr, "yyyy-M-d")))
+    // Converting a timestamp or date does not use the format
+    assertEquals(Some(tsAttr), matched(toTimestamp(tsAttr, "MM/dd/yyyy")))
+    assertEquals(Some(dateAttr), matched(toTimestamp(dateAttr, "MM/dd/yyyy")))
+
+    // unix_timestamp and to_unix_timestamp take the same guards (parity, #19481)
+    assertEquals(Some(strAttr), matched(UnixTimestamp(strAttr, Literal("yyyy-MM-dd"), Some("UTC"))))
+    assertEquals(Some(strAttr), matched(ToUnixTimestamp(strAttr, Literal("yyyy-MM-dd"), Some("UTC"))))
+    assertEquals(None, matched(UnixTimestamp(strAttr, Literal("MM/dd/yyyy"), Some("UTC"))))
+    assertEquals(None, matched(ToUnixTimestamp(strAttr, Literal("MM/dd/yyyy"), Some("UTC"))))
+    // A time-of-day parse is refused in a zone with a spring-forward gap, a date-only one is not
+    assertEquals(None, matched(UnixTimestamp(strAttr, Literal("yyyy-MM-dd HH:mm:ss"), Some("America/Los_Angeles"))))
+    assertEquals(Some(strAttr), matched(UnixTimestamp(strAttr, Literal("yyyy-MM-dd"), Some("America/Los_Angeles"))))
+    // No time zone, no step
+    assertEquals(None, matched(UnixTimestamp(strAttr, Literal("yyyy-MM-dd"), None)))
+    assertEquals(Some(tsAttr), matched(UnixTimestamp(tsAttr, Literal("MM/dd/yyyy"), Some("UTC"))))
+  }
+
+  @Test
+  def testDateFormattingAndTimeZoneShiftsPreserveOrdering(): Unit = {
+    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("UTC"))))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("MM/dd/yyyy"), Some("UTC"))))
+    // A time-of-day format is refused in a zone with a fall-back overlap, a date-only one is not
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("America/Los_Angeles"))))
+    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd"), Some("America/Los_Angeles"))))
+    assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd HH:mm:ss"), Some("UTC"))))
+    assertEquals(None, matched(FromUnixTime(longAttr, Literal("dd-MM-yyyy"), Some("UTC"))))
+
+    assertEquals(Some(tsAttr), matched(FromUTCTimestamp(tsAttr, Literal("+08:00"))))
+    assertEquals(None, matched(FromUTCTimestamp(tsAttr, Literal("America/New_York"))))
+    assertEquals(Some(tsAttr), matched(ToUTCTimestamp(tsAttr, Literal("UTC"))))
+    assertEquals(None, matched(ToUTCTimestamp(tsAttr, Literal("America/New_York"))))
+    assertEquals(None, matched(ToUTCTimestamp(tsAttr, strAttr)))
   }
 
   @Test
