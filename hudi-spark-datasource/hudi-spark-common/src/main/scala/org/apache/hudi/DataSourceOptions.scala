@@ -138,7 +138,10 @@ object DataSourceReadOptions {
       + "is no longer in the active timeline, required history has been cleaned, or a logical overwrite "
       + "occurs after the offset. Enable for downstream Hudi tables that cannot tolerate resets or replay. "
       + "Clustering is allowed. This conservative check requires retaining the checkpoint instant in the "
-      + "active timeline; archived offsets require rebuilding the downstream table and checkpoint. "
+      + "active timeline; tune hoodie.keep.min.commits and hoodie.keep.max.commits for consumer lag. "
+      + "Archived offsets require rebuilding the downstream table and checkpoint. With "
+      + "hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS, any clean after the offset that deletes files "
+      + "requires rebuilding, even if the deleted files were not needed, because no retention boundary is recorded. "
       + "Set spark.hoodie.datasource.read.streaming.fail.on.data.loss in the flow SQLConf for SDP graph-internal "
       + "reads; explicit reader options override this setting when Spark forwards them. The default false "
       + "preserves existing source behavior. This does not provide hard-delete CDC.")
