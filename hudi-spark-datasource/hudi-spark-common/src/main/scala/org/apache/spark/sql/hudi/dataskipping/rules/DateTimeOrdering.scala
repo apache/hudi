@@ -17,15 +17,24 @@
 
 package org.apache.spark.sql.hudi.dataskipping.rules
 
-import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, GreaterThanOrEqual, LessThan, Literal, Not, TryEval}
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.hudi.dataskipping.Step.Guard
 import org.apache.spark.sql.hudi.dataskipping.TimeZones
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.StringType
+import org.apache.spark.sql.types.{LongType, StringType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 
+import java.time.Instant
+import java.time.zone.{ZoneOffsetTransition, ZoneRules}
+import java.util.concurrent.ConcurrentHashMap
+
+import scala.collection.JavaConverters._
+import scala.util.Try
+
 /**
- * Shared guards of [[DateTimeFormatRule]]: when does turning a timestamp into text (formatting) or
- * text into a timestamp (parsing) preserve ordering?
+ * Shared guards of [[DateTimeFormatRule]], and of [[CastRule]] for a timestamp's local date: when does
+ * turning a timestamp into text (formatting) or text into a timestamp (parsing) preserve ordering?
  *
  *  - Pattern: the format is a literal on the allowlist below. Every allowlisted pattern is year-first
  *    and fixed-width, so the lexicographic order of the strings is the chronological order of the
@@ -42,10 +51,10 @@ import org.apache.spark.unsafe.types.UTF8String
  *    EST). Across a spring-forward gap, a wall clock inside the gap is shifted forward past later ones
  *    (for ex, in America/Los_Angeles '2022-03-13 02:30:00' parses after '2022-03-13 03:05:00'). A
  *    date-only parse is monotone in every zone (a gap shifts a start of day by less than a day).
- *
- * NOTE: A date-only format is assumed monotone in every zone: the local date only runs backwards where
- *       the clocks fall back across midnight, which tzdb last records in 2010 (America/St_Johns at
- *       00:01; see #20525)
+ *  - Zone, a timestamp's local date (formatting, and `CAST(ts AS DATE)`): the local date runs
+ *    backwards where the clocks fell back across midnight (for ex, America/St_Johns went from 00:01
+ *    on 2009-11-01 back to 23:01 on 2009-10-31). A file spanning such an instant takes no bounds (see
+ *    [[noLocalDateReversal]]), and a zone whose current rules keep doing it takes no step.
  */
 object DateTimeOrdering {
 
@@ -125,4 +134,59 @@ object DateTimeOrdering {
   // the zone never changes its offset (an unknown zone is not fixed)
   private def isZoneSafe(p: Pattern, timeZoneId: Option[String]): Boolean =
     !p.hasTimeOfDay || timeZoneId.exists(TimeZones.isFixedOffsetZone)
+
+  private val localDateReversalsByZoneId = new ConcurrentHashMap[String, Option[Seq[Instant]]]()
+
+  /**
+   * Instants at which the local date runs backwards in the zone, resolved the way Spark evaluates it and
+   * cached per zone id (see the overload over `ZoneRules`). None, so that the rendering takes no step, if
+   * there is no zone (not analyzed), the zone is unknown, or its current rules keep doing it.
+   */
+  def localDateReversals(timeZoneId: Option[String]): Option[Seq[Instant]] =
+    timeZoneId.flatMap { id =>
+      localDateReversalsByZoneId.computeIfAbsent(id,
+        _ => Try(DateTimeUtils.getZoneId(id).getRules).toOption.flatMap(rules => localDateReversals(rules)))
+    }
+
+  /**
+   * Instants at which the local date runs backwards in a zone with the given rules, that is where its clocks fell back
+   * across midnight, or None if its current rules keep doing it. Falling back at midnight itself (for ex, Asia/Beirut)
+   * repeats the previous date without running backwards, since the local date before the transition is that of the
+   * instant just before it
+   */
+  def localDateReversals(rules: ZoneRules): Option[Seq[Instant]] = {
+    def isReversal(transition: ZoneOffsetTransition): Boolean = transition.isOverlap &&
+      transition.getDateTimeAfter.toLocalDate.isBefore(transition.getDateTimeBefore.minusNanos(1).toLocalDate)
+    // NOTE: A rule falls back at the same time of day every year, so a single year shows whether it reverses the date
+    if (rules.getTransitionRules.asScala.exists(rule => isReversal(rule.createTransition(2000)))) {
+      None
+    } else {
+      Some(rules.getTransitions.asScala.filter(isReversal).map(_.getInstant).toList)
+    }
+  }
+
+  /**
+   * File guard of rendering a timestamp's local date: the file's range spans none of `instants`, since only
+   * a file spanning one can hold rows that render outside of [f(lo), f(hi)]. None, i.e. unguarded, without
+   * instants.
+   *
+   * @param toLiteral an instant as a value of the rendered input: [[asTimestamp]] or [[asEpochSeconds]]
+   */
+  def noLocalDateReversal(instants: Seq[Instant], toLiteral: Instant => Literal): Option[Guard] =
+    if (instants.isEmpty) {
+      None
+    } else {
+      // NOTE: A one-sided verdict (for ex, `<`) reads one bound, while the guard reads both, so a bound that cannot be
+      //       evaluated (for ex, from_utc_timestamp of the largest timestamp) is NULL here, which keeps the file
+      Some { r =>
+        val (lo, hi) = (TryEval(r.lo), TryEval(r.hi))
+        instants.map(toLiteral).map(t => Not(And(LessThan(lo, t), GreaterThanOrEqual(hi, t)))).reduce[Expression](And(_, _))
+      }
+    }
+
+  /** An instant as a timestamp, the input of `CAST(ts AS DATE)` and `date_format`. */
+  val asTimestamp: Instant => Literal = instant => Literal(DateTimeUtils.instantToMicros(instant), TimestampType)
+
+  /** An instant as seconds since the epoch, the input of `from_unixtime`. */
+  val asEpochSeconds: Instant => Literal = instant => Literal(instant.getEpochSecond, LongType)
 }

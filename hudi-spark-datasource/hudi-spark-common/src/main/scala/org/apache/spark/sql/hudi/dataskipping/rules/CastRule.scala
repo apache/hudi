@@ -28,6 +28,7 @@ import scala.util.Try
  *
  * Shared guard: [[preservesOrder]] of the child type to the target type. The (from, to) allowlist
  * lives here, at the top of this object, and is deny-by-default: a cast pair not listed has no range.
+ * A timestamp to date cast is ranged apart from it, with a per-file guard (see [[steps]]).
  */
 object CastRule extends RangeRule {
 
@@ -49,6 +50,9 @@ object CastRule extends RangeRule {
    *  - string to date/timestamp, since unpadded strings sort differently from what they parse to (for
    *    ex, "2022-1-5" > "2022-01-10" as strings, but parses to an earlier date). Expression indexes on
    *    to_date/to_timestamp do not need it: [[TermRange]] asks the source for the cast itself first
+   *  - timestamp to date, since the local date runs backwards where the clocks fell back across
+   *    midnight (for ex, America/St_Johns went from 00:01 on 2009-11-01 back to 23:01 on 2009-10-31).
+   *    [[steps]] ranges it with a per-file guard instead
    */
   private[dataskipping] def preservesOrder(from: DataType, to: DataType): Boolean =
     (from, to) match {
@@ -78,9 +82,8 @@ object CastRule extends RangeRule {
       case (TimestampType, LongType | FloatType | DoubleType) => true
       // NOTE: A date maps to the start of that day, which increases with the date
       case (DateType, TimestampType | TimestampNTZType) => true
-      // NOTE: Truncating to the (local) date is non-decreasing, also across a DST fall-back since
-      //       the date does not repeat
-      case (TimestampType | TimestampNTZType, DateType) => true
+      // NOTE: A timestamp_ntz truncates to its wall-clock date, which never runs backwards
+      case (TimestampNTZType, DateType) => true
 
       // Binary and strings
       // NOTE: The default (UTF8_BINARY) string compares by its bytes, same as binary. Matching the
@@ -92,6 +95,14 @@ object CastRule extends RangeRule {
     }
 
   override def steps(term: Expression): Seq[Step] = term match {
+    // NOTE: The allowlist rejects this cast: a file spanning an instant at which the local date runs
+    //       backwards takes no bounds, and a zone whose current rules keep doing it takes no step
+    case Cast(child, DateType, timeZoneId, _) if hasDataType(child) && child.dataType == TimestampType =>
+      DateTimeOrdering.localDateReversals(timeZoneId).toSeq.map { instants =>
+        Step(term, child, Increasing,
+          fileGuard = DateTimeOrdering.noLocalDateReversal(instants, DateTimeOrdering.asTimestamp), partial = false)
+      }
+
     // NOTE: Some casts (for ex, string to date in non-ANSI mode) return NULL on malformed input;
     //       `partial` is left false for now, as it has no behavioral effect yet
     case cast @ Cast(child, _, _, _) if hasDataType(child) && preservesOrder(child.dataType, cast.dataType) =>
