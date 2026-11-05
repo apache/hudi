@@ -32,21 +32,28 @@ spark = SparkSession.active()
 
 @dp.temporary_view(name="input_events")
 def input_events():
-    return spark.readStream.schema("id INT, ts LONG, value STRING").json(spark.conf.get("hudi.test.input"))
+    return spark.readStream.schema("id INT, ts LONG, value STRING, part STRING").json(spark.conf.get("hudi.test.input"))
 '''
 
 # The downstream insert operation makes replay visible as duplicate business rows.
 # Explicit projection excludes the upstream table's reserved Hudi metadata fields.
 FLOWS = '''SET spark.hoodie.datasource.write.operation=upsert;
 CREATE STREAMING TABLE upsert_events USING hudi
+PARTITIONED BY (part)
 TBLPROPERTIES ('type'='{table_type}', 'primaryKey'='id', 'preCombineField'='ts')
-AS SELECT id, ts, value FROM STREAM input_events;
+AS SELECT id, ts, value, part FROM STREAM input_events;
 
 SET spark.hoodie.datasource.write.operation=insert;
 CREATE STREAMING TABLE downstream_events USING hudi
+PARTITIONED BY (part)
 TBLPROPERTIES ('type'='{table_type}', 'primaryKey'='id', 'preCombineField'='ts')
-AS SELECT id, ts, value FROM STREAM upsert_events;
+AS SELECT id, ts, value, part FROM STREAM upsert_events;
 '''
+
+
+def require(condition, message):
+    if not condition:
+        raise AssertionError(message)
 
 
 def verify(mode, remote, root):
@@ -54,18 +61,22 @@ def verify(mode, remote, root):
 
     spark = SparkSession.builder.remote(remote).getOrCreate()
     try:
-        assert spark.conf.get("spark.hudi.test.run.id") == root.name
-        old = (1, 1, "old")
-        new = (1, 2, "new")
+        require(spark.conf.get("spark.hudi.test.run.id") == root.name, "Connected to the wrong server")
+        old = (1, 1, "old", "a")
+        new = (1, 2, "new", "a")
+        stable = [(2, 1, "stable-b", "b"), (3, 1, "stable-a", "a")]
+        added = (4, 2, "added", "b")
         for table, expected in (
-            ("upsert_events", [old] if mode == "first" else [new]),
-            ("downstream_events", [old] if mode == "first" else [old, new]),
+            ("upsert_events", [old] + stable if mode == "first" else [new] + stable + [added]),
+            ("downstream_events", [old] + stable if mode == "first" else [old, new] + stable + [added]),
         ):
             actual = [tuple(row) for row in spark.table(f"sdp_test.{table}")
-                      .select("id", "ts", "value").orderBy("ts").collect()]
-            assert actual == expected, (table, actual, expected)
+                      .select("id", "ts", "value", "part").orderBy("id", "ts").collect()]
+            require(actual == expected, (table, actual, expected))
+            partitions = [row[0] for row in spark.sql(f"SHOW PARTITIONS sdp_test.{table}").collect()]
+            require(sorted(partitions) == ["part=a", "part=b"], (table, partitions))
             properties = dict(spark.sql(f"SHOW TBLPROPERTIES sdp_test.{table}").collect())
-            assert not any("write.operation" in key for key in properties), properties
+            require(not any("write.operation" in key for key in properties), properties)
         print(f"Verified {mode}: incremental upstream-to-downstream rows through Spark Connect")
     finally:
         spark.stop()
@@ -96,30 +107,43 @@ def scenario(harness, table_type, metadata):
     spec_path.write_text(json.dumps(spec, indent=2))
     for name in ("source.py", "flows.sql", "spark-pipeline.yml"):
         (harness.logs / name).write_text((harness.root / name).read_text())
-    for name, timestamp, value in (("first", 1, "old"), ("second", 2, "new")):
-        row = json.dumps({"id": 1, "ts": timestamp, "value": value}) + "\n"
-        (input_dir / f"{name}.json").write_text(row * (2 if name == "first" else 1))
+    batches = (
+        ("first", [(1, 1, "old", "a"), (1, 1, "old", "a"),
+                   (2, 1, "stable-b", "b"), (3, 1, "stable-a", "a")]),
+        ("second", [(1, 2, "new", "a"), (4, 2, "added", "b")]),
+    )
+    for name, rows in batches:
+        (input_dir / f"{name}.json").write_text("".join(
+            json.dumps(dict(zip(("id", "ts", "value", "part"), row))) + "\n" for row in rows))
         harness.run_pipeline(spec_path, name=f"pipeline-{name}")
         harness.client(Path(__file__).resolve(), name)
+        if metadata:
+            for table in ("upsert_events", "downstream_events"):
+                metadata_path = harness.root / "warehouse" / "sdp_test.db" / table / ".hoodie" / "metadata"
+                require((metadata_path / ".hoodie" / "hoodie.properties").is_file(),
+                        f"Metadata table was not initialized for {table}")
+                metadata_timeline = metadata_path / ".hoodie" / "timeline"
+                require(any(p.suffix in (".commit", ".deltacommit") for p in metadata_timeline.iterdir()),
+                        f"No completed metadata writes for {table}")
     def commits():
         result = {}
         for table in ("upsert_events", "downstream_events"):
             timeline = harness.root / "warehouse" / "sdp_test.db" / table / ".hoodie" / "timeline"
             result[table] = sorted(p.name for p in timeline.iterdir()
                                    if p.suffix in (".commit", ".deltacommit", ".replacecommit"))
-            assert result[table], f"No completed commits found for {table}"
+            require(result[table], f"No completed commits found for {table}")
         return result
 
     before = commits()
     if table_type == "mor":
         # The upsert update creates a log file and must actually exercise async compaction.
-        assert any(name.endswith(".commit") for name in before["upsert_events"]), before
+        require(any(name.endswith(".commit") for name in before["upsert_events"]), before)
         # AvailableNow may capture its end offset before async compaction completes.
         # Drain that maintenance instant before asserting a quiescent restart.
         harness.run_pipeline(spec_path, name="pipeline-compaction-catchup")
         harness.client(Path(__file__).resolve(), "restart")
         caught_up = commits()
-        assert before["upsert_events"] == caught_up["upsert_events"], (before, caught_up)
+        require(before["upsert_events"] == caught_up["upsert_events"], (before, caught_up))
         (harness.logs / "compaction-catchup.json").write_text(
             json.dumps({"before": before, "after": caught_up}, indent=2))
         before = caught_up
@@ -128,7 +152,7 @@ def scenario(harness, table_type, metadata):
     harness.run_pipeline(spec_path, name="pipeline-restart")
     harness.client(Path(__file__).resolve(), "restart")
     after = commits()
-    assert before == after, (before, after)
+    require(before == after, (before, after))
     (harness.logs / "restart-commits.json").write_text(json.dumps({"before": before, "after": after}, indent=2))
     print("PASS: exact two-stage rows and unchanged restart timelines")
 
@@ -142,7 +166,7 @@ def main():
     parser.add_argument("--bundle", type=Path, required=True)
     parser.add_argument("--logs", type=Path, default=Path("target/chaining-acceptance-logs"))
     parser.add_argument("--table-type", choices=("cow", "mor"), default="cow")
-    parser.add_argument("--metadata", choices=("enabled", "disabled"), default="disabled")
+    parser.add_argument("--metadata", choices=("enabled", "disabled"), default="enabled")
     args = parser.parse_args()
     if not (args.harness_dir / "harness.py").is_file():
         parser.error("The #20453 harness is required; pass its spark-pipelines directory with --harness-dir")
