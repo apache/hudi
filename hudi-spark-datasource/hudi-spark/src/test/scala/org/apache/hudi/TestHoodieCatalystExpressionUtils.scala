@@ -125,13 +125,16 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // A fixed-offset zone shifts every timestamp by the same amount.
     assertEquals(Some(tsAttr), matched(FromUTCTimestamp(tsAttr, Literal("+08:00"))))
     assertEquals(Some(tsAttr), matched(ToUTCTimestamp(tsAttr, Literal("UTC"))))
-    // Zones are resolved the way Spark evaluates them: the short ID EST is a fixed -05:00, and +8:00 is +08:00.
-    assertEquals(Some(tsAttr), matched(FromUTCTimestamp(tsAttr, Literal("EST"))))
+    // Zones are resolved the way Spark evaluates them: Etc/GMT+5 is a fixed -05:00, and +8:00 is +08:00.
+    assertEquals(Some(tsAttr), matched(FromUTCTimestamp(tsAttr, Literal("Etc/GMT+5"))))
     assertEquals(Some(tsAttr), matched(ToUTCTimestamp(tsAttr, Literal("+8:00"))))
     // Non-literal, null and unknown zones are not matched.
     assertEquals(None, matched(FromUTCTimestamp(tsAttr, strAttr)))
     assertEquals(None, matched(FromUTCTimestamp(tsAttr, Literal(null, StringType))))
     assertEquals(None, matched(ToUTCTimestamp(tsAttr, Literal("Not/AZone"))))
+    // A zone with historical offset changes but no DST is not fixed-offset either; GMT+8 is.
+    assertEquals(None, matched(FromUTCTimestamp(tsAttr, Literal("Asia/Kolkata"))))
+    assertEquals(Some(tsAttr), matched(ToUTCTimestamp(tsAttr, Literal("GMT+8"))))
   }
 
   @Test

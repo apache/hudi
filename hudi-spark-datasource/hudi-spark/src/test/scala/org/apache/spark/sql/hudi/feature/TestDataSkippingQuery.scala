@@ -270,4 +270,54 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test data skipping keeps rows across DST transitions of from_utc_timestamp and to_utc_timestamp") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf(
+        "hoodie.metadata.enable" -> "true",
+        "hoodie.metadata.index.column.stats.enable" -> "true",
+        "hoodie.metadata.index.partition.stats.enable" -> "true",
+        "hoodie.enable.data.skipping" -> "true",
+        // keep every insert in its own base file
+        "hoodie.parquet.small.file.limit" -> "0"
+      ) {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  ts timestamp,
+             |  dt string
+             |) using hudi
+             | tblproperties (primaryKey = 'id', type = 'cow')
+             | partitioned by (dt)
+             | location '${tmp.getCanonicalPath}'
+                """.stripMargin)
+        // 05:30Z is 01:30 EDT, but the later 06:10Z is 01:10 EST (#20518). One insert writes both rows to one
+        // file, so the file's and the partition's ts range both span the New York fall-back
+        spark.sql(s"insert into $tableName values " +
+          "(1, timestamp'2026-11-01 05:30:00', 'fall'), (2, timestamp'2026-11-01 06:10:00', 'fall')")
+        // Read as New York time, 02:30 falls in the spring-forward gap and maps to 07:30Z, past the 07:00Z of
+        // the later 03:00. Two inserts write one file each, so only the partition's ts range spans the gap
+        spark.sql(s"insert into $tableName values (3, timestamp'2026-03-08 02:30:00', 'spring')")
+        spark.sql(s"insert into $tableName values (4, timestamp'2026-03-08 03:00:00', 'spring')")
+        checkAnswer(s"select dt, count(distinct _hoodie_file_name) from $tableName group by dt order by dt")(
+          Seq("fall", 1L),
+          Seq("spring", 2L)
+        )
+
+        // The column stats of row 3's single-row file keep it, so only the partition stats index could
+        // wrongly prune it
+        checkAnswer(s"select id from $tableName where to_utc_timestamp(ts, 'America/New_York') " +
+          "between timestamp'2026-03-08 07:15:00' and timestamp'2026-03-08 08:00:00'")(
+          Seq(3)
+        )
+        // Both the column stats and the partition stats index could wrongly prune row 1's file
+        checkAnswer(s"select id from $tableName where from_utc_timestamp(ts, 'America/New_York') " +
+          "> timestamp'2026-11-01 01:20:00'")(
+          Seq(1)
+        )
+      }
+    }
+  }
 }

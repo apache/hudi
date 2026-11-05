@@ -45,8 +45,8 @@ object TimeZoneShiftRule extends RangeRule {
   }
 
   // Only a literal zone is matched, since the optimizer folds a constant zone to a literal before data
-  // skipping runs. It is resolved the way Spark evaluates it, so for ex the short ID EST is a fixed
-  // -05:00 while PST is America/Los_Angeles; an unknown zone is not matched
+  // skipping runs. It is resolved the way Spark evaluates it, so for ex +8:00 is +08:00 and the short
+  // ID PST is America/Los_Angeles; an unknown zone is not matched
   private def isFixedOffsetTimeZone(expr: Expression): Boolean = expr match {
     case Literal(timeZone, _) if timeZone != null =>
       Try(DateTimeUtils.getZoneId(timeZone.toString).getRules.isFixedOffset).getOrElse(false)

@@ -146,8 +146,8 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
       // file_1 even though its 01:30 row matches; must fall back to always-true, keeping the file
       val input = Seq(
         IndexRow("file_1", valueCount = 2,
-          C_minValue = new Timestamp(1793511000000L), // 2026-11-01 05:30Z
-          C_maxValue = new Timestamp(1793513400000L), // 2026-11-01 06:10Z
+          C_minValue = TestDataSkippingUtils.NyFallBackEdt0130,
+          C_maxValue = TestDataSkippingUtils.NyFallBackEst0110,
           C_nullCount = 0))
       val resolvedFilterExpr = resolveExpr(spark, "CAST(C AS STRING) > '2026-11-01 01:20:00'", sourceTableSchema)
 
@@ -204,6 +204,11 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 }
 
 object TestDataSkippingUtils {
+  // New York local time runs backwards across the DST fall-back: 05:30Z is 01:30 EDT, but the later
+  // 06:10Z is 01:10 EST
+  private val NyFallBackEdt0130 = new Timestamp(1793511000000L) // 2026-11-01 05:30Z
+  private val NyFallBackEst0110 = new Timestamp(1793513400000L) // 2026-11-01 06:10Z
+
   def testStringsLookupFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
       arguments(
@@ -922,8 +927,8 @@ object TestDataSkippingUtils {
         "from_utc_timestamp(C, 'America/New_York') > TIMESTAMP '2026-11-01 01:20:00'",
         Seq(
           IndexRow("file_1", valueCount = 2,
-            C_minValue = new Timestamp(1793511000000L), // 2026-11-01 05:30Z
-            C_maxValue = new Timestamp(1793513400000L), // 2026-11-01 06:10Z
+            C_minValue = NyFallBackEdt0130,
+            C_maxValue = NyFallBackEst0110,
             C_nullCount = 0)
         ),
         Seq("file_1")),
@@ -945,8 +950,8 @@ object TestDataSkippingUtils {
         "from_utc_timestamp(C, '+08:00') > TIMESTAMP '2026-11-01 13:20:00'",
         Seq(
           IndexRow("file_1", valueCount = 2,
-            C_minValue = new Timestamp(1793511000000L), // 2026-11-01 05:30Z
-            C_maxValue = new Timestamp(1793513400000L), // 2026-11-01 06:10Z
+            C_minValue = NyFallBackEdt0130,
+            C_maxValue = NyFallBackEst0110,
             C_nullCount = 0),
           IndexRow("file_2", valueCount = 2,
             C_minValue = new Timestamp(1793491200000L), // 2026-11-01 00:00Z
