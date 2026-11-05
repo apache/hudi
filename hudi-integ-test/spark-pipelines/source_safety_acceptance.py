@@ -107,7 +107,7 @@ def scenario(harness, table_type, metadata):
         "libraries": [{"glob": {"include": "source.py"}}, {"glob": {"include": "flows.sql"}}],
         "configuration": {
             "hudi.test.input": input_dir.as_uri(),
-            "spark.hoodie.datasource.read.streaming.fail.on.data.loss": "true",
+            "spark.hoodie.datasource.read.streaming.recovery.strategy": "FAIL",
             "spark.sql.shuffle.partitions": "2",
             "spark.sql.pipelines.maxFlowRetryAttempts": "0",
             "spark.hoodie.metadata.enable": str(metadata).lower(),

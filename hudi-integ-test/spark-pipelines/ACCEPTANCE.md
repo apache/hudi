@@ -69,5 +69,5 @@ runnable examples within the harness's isolated filesystem layout.
 
 ## Source reset and expired-history safeguards
 
-See [guarded streaming-table chaining](SOURCE_SAFETY.md) for the opt-in reader
-configuration, recovery contract, and `source_safety_acceptance.py` scenario.
+See [streaming source recovery](SOURCE_SAFETY.md) for the default failure
+policy, explicit recovery strategies, and `source_safety_acceptance.py` scenario.
