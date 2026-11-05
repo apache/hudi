@@ -1165,7 +1165,37 @@ object TestDataSkippingUtils {
             C_maxValue = new Timestamp(1793494800000L), // 2026-11-01 01:00Z
             C_nullCount = 0)
         ),
-        Seq("file_1"))
+        Seq("file_1")),
+      // Issue #20460 repros: integral arithmetic wraps around on overflow in non-ANSI mode, so
+      // re-applying it over min/max stats maps the max below the min and would wrongly prune
+      // file_1, whose first row matches (51 * 2 = 102, 0 + 1 = 1, 1 << 1 = 2). Must fall back to
+      // always-true, keeping the file
+      arguments(
+        "A * 2L > 100",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 51, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        "A + 1 > 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 0, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      arguments(
+        "shiftleft(A, 1) > 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // Floating-point addition saturates to infinity instead, so it still translates and prunes
+      arguments(
+        "CAST(A AS DOUBLE) + 1.0D > 101.0D",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 }

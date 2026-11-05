@@ -35,6 +35,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val intAttr = AttributeReference("i", IntegerType)()
   private val strAttr = AttributeReference("s", StringType)()
   private val dblAttr = AttributeReference("d", DoubleType)()
+  private val fltAttr = AttributeReference("f", FloatType)()
   private val dateAttr = AttributeReference("dt", DateType)()
   private val longAttr = AttributeReference("l", LongType)()
   private val decAttr = AttributeReference("dec", DecimalType(10, 2))()
@@ -60,24 +61,43 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testArithmeticTransformationsPreserveOrdering(): Unit = {
-    assertEquals(Some(intAttr), matched(Add(intAttr, Literal(1))))
-    assertEquals(Some(intAttr), matched(Add(Literal(1), intAttr)))
-    assertEquals(Some(intAttr), matched(Multiply(intAttr, Literal(2))))
-    assertEquals(Some(intAttr), matched(Multiply(Literal(2), intAttr)))
+    assertEquals(Some(dblAttr), matched(Add(dblAttr, Literal(1.0d))))
+    assertEquals(Some(dblAttr), matched(Add(Literal(1.0d), dblAttr)))
+    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.0d))))
+    assertEquals(Some(dblAttr), matched(Multiply(Literal(2.0d), dblAttr)))
     assertEquals(Some(intAttr), matched(Divide(intAttr, Literal(2))))
     assertEquals(Some(intAttr), matched(BitwiseOr(intAttr, Literal(1))))
     assertEquals(Some(intAttr), matched(BitwiseOr(Literal(1), intAttr)))
-    assertEquals(Some(intAttr), matched(ShiftLeft(intAttr, Literal(1))))
+  }
+
+  @Test
+  def testOverflowingArithmeticDoesNotPreserveOrdering(): Unit = {
+    // Integral results wrap around on overflow in non-ANSI mode (for ex, Long.MaxValue * 2 = -2).
+    assertEquals(None, matched(Add(intAttr, Literal(1))))
+    assertEquals(None, matched(Add(Literal(1), intAttr)))
+    assertEquals(None, matched(Add(longAttr, Literal(1L))))
+    assertEquals(None, matched(Multiply(intAttr, Literal(2))))
+    assertEquals(None, matched(Multiply(Literal(2L), longAttr)))
+    // Decimal results overflow into NULL.
+    assertEquals(None, matched(Add(decAttr, Literal(Decimal(1), DecimalType(10, 2)))))
+    assertEquals(None, matched(Multiply(decAttr, Literal(Decimal(2), DecimalType(10, 2)))))
+    // ShiftLeft only takes integral values, so it always can wrap.
+    assertEquals(None, matched(ShiftLeft(intAttr, Literal(1))))
+    assertEquals(None, matched(ShiftLeft(longAttr, Literal(1))))
+    // Float and double results saturate to infinity instead, keeping the ordering.
+    assertEquals(Some(fltAttr), matched(Add(fltAttr, Literal(1.0f))))
+    assertEquals(Some(fltAttr), matched(Multiply(Literal(2.0f), fltAttr)))
+    assertEquals(Some(longAttr), matched(Add(Cast(longAttr, DoubleType), Literal(1.0d))))
   }
 
   @Test
   def testMultiplyDivideRequirePositiveLiteralFactor(): Unit = {
     // Negative factors reverse ordering.
     assertEquals(None, matched(Multiply(dblAttr, Literal(-1.0d))))
-    assertEquals(None, matched(Multiply(Literal(-1), intAttr)))
+    assertEquals(None, matched(Multiply(Literal(-1.0d), dblAttr)))
     assertEquals(None, matched(Divide(dblAttr, Literal(Decimal(-2), DecimalType(1, 0)))))
     // Zero collapses ordering and makes division undefined.
-    assertEquals(None, matched(Multiply(intAttr, Literal(0L))))
+    assertEquals(None, matched(Multiply(dblAttr, Literal(0.0d))))
     assertEquals(None, matched(Divide(dblAttr, Literal(0.0d))))
     // NaN fails the positive check; typed null literals carry a null value.
     assertEquals(None, matched(Multiply(dblAttr, Literal(Double.NaN))))
@@ -85,13 +105,13 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(None, matched(Multiply(dblAttr, Literal(Double.PositiveInfinity))))
     assertEquals(None, matched(Multiply(Literal(Float.PositiveInfinity), dblAttr)))
     assertEquals(None, matched(Divide(dblAttr, Literal(Double.PositiveInfinity))))
-    assertEquals(None, matched(Multiply(intAttr, Literal(null, IntegerType))))
+    assertEquals(None, matched(Multiply(dblAttr, Literal(null, DoubleType))))
     // Non-literal factors are not matched, even when reference-free or the column itself.
-    assertEquals(None, matched(Multiply(intAttr, Add(Literal(1), Literal(1)))))
-    assertEquals(None, matched(Multiply(intAttr, intAttr)))
+    assertEquals(None, matched(Multiply(dblAttr, Add(Literal(1.0d), Literal(1.0d)))))
+    assertEquals(None, matched(Multiply(dblAttr, dblAttr)))
     // Strictly positive literals of any numeric type match in the supported operand positions.
     assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.5d))))
-    assertEquals(Some(longAttr), matched(Multiply(Literal(3L), longAttr)))
+    assertEquals(Some(fltAttr), matched(Multiply(Literal(3.0f), fltAttr)))
     assertEquals(Some(dblAttr), matched(Divide(dblAttr, Literal(Decimal(2), DecimalType(1, 0)))))
   }
 
@@ -100,10 +120,18 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // A + A * -2 = -A reverses ordering, so an operand referencing the column must not match.
     assertEquals(None, matched(Add(dblAttr, Multiply(dblAttr, Literal(-2.0d)))))
     assertEquals(None, matched(Add(Multiply(dblAttr, Literal(-2.0d)), dblAttr)))
-    assertEquals(None, matched(Add(intAttr, intAttr)))
+    assertEquals(None, matched(Add(dblAttr, dblAttr)))
     // Data skipping re-evaluates the operand against the min/max bounds, so it must be a constant.
     assertEquals(None, matched(Add(dblAttr, Rand(Literal(0L)))))
     assertEquals(None, matched(Add(Rand(Literal(0L)), dblAttr)))
+    // An infinite addend maps the opposite infinity to NaN (-Infinity + Infinity), which sorts above
+    // every number; a NaN or null addend is not finite either.
+    assertEquals(None, matched(Add(dblAttr, Literal(Double.PositiveInfinity))))
+    assertEquals(None, matched(Add(Literal(Float.NegativeInfinity), fltAttr)))
+    assertEquals(None, matched(Add(dblAttr, Literal(Double.NaN))))
+    assertEquals(None, matched(Add(dblAttr, Literal(null, DoubleType))))
+    // A foldable addend is evaluated, as the optimizer would fold it into a literal.
+    assertEquals(Some(dblAttr), matched(Add(dblAttr, Add(Literal(1.0d), Literal(2.0d)))))
   }
 
   @Test
@@ -293,7 +321,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testNestedComposition(): Unit = {
-    assertEquals(Some(intAttr), matched(Add(Multiply(intAttr, Literal(2)), Literal(3))))
+    assertEquals(Some(dblAttr), matched(Add(Multiply(dblAttr, Literal(2.0d)), Literal(3.0d))))
   }
 
   @Test
