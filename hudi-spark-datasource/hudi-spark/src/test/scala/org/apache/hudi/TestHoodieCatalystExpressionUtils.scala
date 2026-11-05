@@ -191,6 +191,14 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), newYork)))
     assertEquals(None, matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd HH:mm:ss"), newYork)))
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd XXX"), newYork)))
+    // So does every pattern letter that is not a date field, each on its own: hours, am-pm, day period, minutes,
+    // seconds, fractions, zone names and offsets.
+    "aBhKkHmsSAnNVvzOXxZ".foreach { letter =>
+      assertEquals(None, matched(DateFormatClass(tsAttr, Literal(s"yyyy-MM-dd $letter"), newYork)), s"letter $letter")
+    }
+    // A field outside the quotes or after an escaped quote is still a field.
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd 'at' HH 'h'"), newYork)))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy''HH"), newYork)))
     // A date-only pattern renders the local date, which never runs backwards in New York; neither quoted text nor
     // a non-ASCII character is a field.
     assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd"), newYork)))
@@ -199,6 +207,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // Any pattern keeps the ordering in a session zone whose offset never changes.
     assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("UTC"))))
     assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd HH:mm:ss"), Some("+08:00"))))
+    // PST resolves to America/Los_Angeles; Kolkata has no DST but historical offset changes.
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("PST"))))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("Asia/Kolkata"))))
     // A non-literal or null pattern, an unknown zone or an unresolved session zone is not matched.
     assertEquals(None, matched(DateFormatClass(tsAttr, strAttr, newYork)))
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal(null, StringType), newYork)))

@@ -18,8 +18,7 @@
 package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{And, DateFormatClass, Expression, FromUnixTime, GetTimestamp, GreaterThanOrEqual, LessThan, Literal, ToUnixTimestamp, UnixTimestamp}
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange}
+import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange, TimeZones}
 import org.apache.spark.sql.types.{DataType, DateType, LongType, StringType, TimestampNTZType, TimestampType}
 
 import java.time.{LocalDate, ZoneOffset}
@@ -57,7 +56,7 @@ object DateTimeFormatRule extends RangeRule {
     //       zone's offset never changes: local time runs backwards across a DST fall-back (for ex, 05:30Z is
     //       01:30 EDT but the later 06:10Z is 01:10 EST). A date-only pattern is assumed unaffected: the local
     //       date only runs backwards where the clocks fall back across midnight, which tzdb last records in 2010
-    //       (America/St_Johns at 00:01)
+    //       (America/St_Johns at 00:01; see #20525)
     case DateFormatClass(timestamp, format, timeZoneId)
       if dataTypeOf(timestamp).contains(TimestampType) && DateTimeOrdering.formatPreservesOrder(format) &&
         isZoneSafePattern(format, timeZoneId) =>
@@ -155,10 +154,6 @@ object DateTimeFormatRule extends RangeRule {
         value.toString.replaceAll("'[^']*'", "").forall(c => !(c < 128 && c.isLetter) || DATE_ONLY_PATTERN_LETTERS.contains(c))
       case _ => false
     }
-    isDateOnly || timeZoneId.exists(isFixedOffsetZone)
+    isDateOnly || timeZoneId.exists(TimeZones.isFixedOffsetZone)
   }
-
-  // Whether the zone, resolved the way Spark evaluates it, never changes its offset. An unknown zone is not fixed
-  private def isFixedOffsetZone(zoneId: String): Boolean =
-    Try(DateTimeUtils.getZoneId(zoneId).getRules.isFixedOffset).getOrElse(false)
 }
