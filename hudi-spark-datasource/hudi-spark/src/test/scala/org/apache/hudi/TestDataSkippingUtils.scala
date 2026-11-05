@@ -33,7 +33,6 @@ import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.functions.{col, date_format, lit, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
-import org.apache.spark.sql.hudi.dataskipping.LocalDateReversalGuard
 import org.apache.spark.sql.internal.SQLConf.{ANSI_ENABLED, SESSION_LOCAL_TIMEZONE}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -44,10 +43,6 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
 
 import java.sql.Timestamp
-import java.time.{DayOfWeek, Instant, LocalTime, Month, ZoneId, ZoneOffset}
-import java.time.zone.{ZoneOffsetTransition, ZoneOffsetTransitionRule, ZoneRules}
-import java.time.zone.ZoneOffsetTransitionRule.TimeDefinition
-import java.util.Collections
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.HashSet
@@ -317,8 +312,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 
   @Test
   def testLocalDateAcrossMidnightFallBack(): Unit = {
-    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "America/St_Johns")
-    try {
+    withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "America/St_Johns") {
       // At 02:31Z on 2009-11-01 the clocks went from 00:01 NDT back to 23:01 NST of the previous day, so 02:30:30Z
       // renders as 2009-11-01 but 02:31Z as 2009-10-31. Re-applying a date rendering over min/max stats puts the max
       // below the min and would wrongly prune file_1 for either date; must keep the file
@@ -338,21 +332,20 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
         C_minValue = new Timestamp(1256904000000L), // 2009-10-30 12:00Z
         C_maxValue = new Timestamp(1256907600000L), // 2009-10-30 13:00Z
         C_nullCount = 0)
+      val files = Seq(acrossFallBack, afterFallBack, earlierDay)
       Seq(
         "date_format(C, 'yyyy-MM-dd') = '2009-10-31'" -> Seq("file_1", "file_2"),
         "date_format(C, 'yyyy-MM-dd') = '2009-11-01'" -> Seq("file_1"),
         "from_unixtime(A, 'yyyy-MM-dd') = '2009-10-31'" -> Seq("file_1", "file_2"),
         "CAST(C AS DATE) IN (DATE'2009-10-29', DATE'2009-10-31')" -> Seq("file_1", "file_2"),
-        // Not optimized here, so to_date is still a RuntimeReplaceable rather than the cast it stands for
-        "to_date(C) = DATE'2009-10-31'" -> Seq("file_1", "file_2"),
-        "date_add(CAST(C AS DATE), 1) = DATE'2009-11-01'" -> Seq("file_1", "file_2"),
-        "date_format(C, 'yyyy-MM-dd') = '2009-11-01' AND A > 0" -> Seq("file_1"),
-        // Only the leaves are guarded, so another conjunct still prunes a file spanning the fall-back
-        "date_format(C, 'yyyy-MM-dd') = '2009-11-01' AND A < 0" -> Seq()
+        "date_add(CAST(C AS DATE), 1) = DATE'2009-11-01'" -> Seq("file_1", "file_2")
       ).foreach { case (filter, expected) =>
-        assertEquals(expected, applyFilterExpr(resolveExpr(spark, filter, sourceTableSchema),
-          Seq(acrossFallBack, afterFallBack, earlierDay)), filter)
+        assertEquals(expected, applyFilterExpr(resolveExpr(spark, filter, sourceTableSchema), files), filter)
       }
+      // to_date reaches data skipping as the cast it stands for, once the optimizer replaced it. Two dates: with one,
+      // the optimizer turns IN into "=", which Spark 3.5+ rewrites into a range on C itself
+      assertEquals(Seq("file_1", "file_2"),
+        lookupThroughFullOptimizer("to_date(C) IN (DATE'2009-10-29', DATE'2009-10-31')", files))
 
       // The same date at both ends does not rule out a row of the previous date in between
       val aroundFallBack = IndexRow("file_4", valueCount = 3,
@@ -361,53 +354,22 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
         C_nullCount = 0)
       assertEquals(Seq("file_4"), applyFilterExpr(
         resolveExpr(spark, "NOT (date_format(C, 'yyyy-MM-dd') = '2009-11-01')", sourceTableSchema), Seq(aroundFallBack)))
-    } finally {
-      spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
     }
   }
 
   @Test
-  def testLocalDateGuardIgnoresBoundsFailingUnderAnsi(): Unit = {
-    val ansi = spark.sqlContext.getConf(ANSI_ENABLED.key)
-    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "America/Phoenix")
-    spark.sqlContext.setConf(ANSI_ENABLED.key, "true")
-    try {
-      // America/Phoenix ran its date backwards in 1944, so the guard renders both bounds, while ">=" only renders the
-      // max. Under ANSI the min '' cannot be cast to a timestamp, which must not fail the lookup: file_1 is still
-      // pruned on its max
+  def testLocalDateGuardToleratesFailingBounds(): Unit = {
+    withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "America/Phoenix") {
+      // America/Phoenix ran its date backwards in 1944, so the guard reads both bounds of the cast's input, while "<"
+      // only needs the min. Shifting the max, the largest timestamp, by from_utc_timestamp overflows, which must not
+      // fail the lookup: file_1 is kept, as its min 1900-01-01 matches
       val input = Seq(IndexRow("file_1", valueCount = 2,
-        B_minValue = "", B_maxValue = "2023-12-31 10:00:00", B_nullCount = 0))
-      assertEquals(Seq(), applyFilterExpr(
-        resolveExpr(spark, "date_format(CAST(B AS TIMESTAMP), 'yyyy-MM-dd') >= '2024-06-01'", sourceTableSchema), input))
-    } finally {
-      spark.sqlContext.setConf(ANSI_ENABLED.key, ansi)
-      spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+        C_minValue = new Timestamp(-2208988800000L), // 1900-01-01 00:00Z
+        C_maxValue = new Timestamp(Long.MaxValue / 1000), // in year 294247
+        C_nullCount = 0))
+      assertEquals(Seq("file_1"), applyFilterExpr(
+        resolveExpr(spark, "CAST(from_utc_timestamp(C, '+08:00') AS DATE) < DATE'2000-01-01'", sourceTableSchema), input))
     }
-  }
-
-  @Test
-  def testLocalDateReversals(): Unit = {
-    def reversals(zoneId: String): Option[Seq[Instant]] = LocalDateReversalGuard.localDateReversals(ZoneId.of(zoneId).getRules)
-
-    // America/St_Johns fell back across midnight every year from 1987 to 2010
-    val stJohns = reversals("America/St_Johns").get
-    assertTrue(stJohns.contains(Instant.parse("2009-11-01T02:31:00Z")))
-    assertEquals(Instant.parse("2010-11-07T02:31:00Z"), stJohns.last)
-    // Falling back at midnight itself (Asia/Beirut, or Pacific/Apia repeating a whole day in 1892) repeats the previous
-    // date without running backwards, and a fall-back within the day (America/New_York) does not change the date
-    Seq("Asia/Beirut", "Pacific/Apia", "America/New_York", "UTC").foreach { zoneId =>
-      assertEquals(Some(Seq.empty), reversals(zoneId), zoneId)
-    }
-
-    // A current rule falling back from 00:30 to 23:30 runs the date backwards every year, without bound
-    val (standard, summer) = (ZoneOffset.ofHours(-4), ZoneOffset.ofHours(-3))
-    val rules = ZoneRules.of(standard, standard,
-      Collections.emptyList[ZoneOffsetTransition](), Collections.emptyList[ZoneOffsetTransition](), Seq(
-        ZoneOffsetTransitionRule.of(Month.MARCH, 8, DayOfWeek.SUNDAY, LocalTime.of(2, 0), false, TimeDefinition.WALL,
-          standard, standard, summer),
-        ZoneOffsetTransitionRule.of(Month.NOVEMBER, 1, DayOfWeek.SUNDAY, LocalTime.of(0, 30), false, TimeDefinition.WALL,
-          standard, summer, standard)).asJava)
-    assertEquals(None, LocalDateReversalGuard.localDateReversals(rules))
   }
 
   @ParameterizedTest

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dataskipping
 
-import org.apache.spark.sql.catalyst.expressions.{Expression, If, Literal, TryEval}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, If, Literal, TryEval}
 import org.apache.spark.sql.hudi.dataskipping.rules.{CastRule, ConstantOperandRule, DateTimeFormatRule, MonotonicFunctionRule, PrefixRule, TimeZoneShiftRule}
 
 /**
@@ -71,7 +71,7 @@ case object Decreasing extends Direction
 case class Step(term: Expression,
                 child: Expression,
                 direction: Direction,
-                fileGuard: Option[TermRange => Expression],
+                fileGuard: Option[Step.Guard],
                 partial: Boolean) {
 
   def apply(r: TermRange): TermRange = {
@@ -107,6 +107,18 @@ case class Step(term: Expression,
     } else {
       term.transformDown { case c if c fastEquals child => x }
     }
+}
+
+object Step {
+
+  /** A per-file condition over the range of the step's child, see `fileGuard` of [[Step]]. */
+  type Guard = TermRange => Expression
+
+  /** Both guards: the mapping holds where each one does. A missing guard leaves the other as is. */
+  def andGuards(a: Option[Guard], b: Option[Guard]): Option[Guard] = (a, b) match {
+    case (Some(x), Some(y)) => Some(r => And(x(r), y(r)))
+    case _ => a.orElse(b)
+  }
 }
 
 /**

@@ -64,12 +64,10 @@ object StatsFilterCompiler {
     case leaf => compileLeaf(leaf, source)
   }
 
-  // Stages 2 to 4, for one leaf. A verdict over a date rendering also keeps the files spanning a local date
-  // reversal ([[LocalDateReversalGuard]])
+  // Stages 2 to 4, for one leaf
   private def compileLeaf(e: Expression, source: RangeSource): Expression =
     Leaf.parse(e)
-      .flatMap(l => TermRange.derive(l.term, source).flatMap(r =>
-        LocalDateReversalGuard(e, source, Verdict(l, r)).map(keepOnNull(_, r))))
+      .flatMap(l => TermRange.derive(l.term, source).map(r => keepOnNull(Verdict(l, r), r)))
       .getOrElse(TrueLiteral)
 
   /**
