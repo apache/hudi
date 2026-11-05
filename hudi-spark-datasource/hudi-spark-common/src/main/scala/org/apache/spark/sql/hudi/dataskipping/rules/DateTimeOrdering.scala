@@ -1,0 +1,127 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.spark.sql.hudi.dataskipping.rules
+
+import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
+import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.StringType
+import org.apache.spark.unsafe.types.UTF8String
+
+import scala.util.Try
+
+/**
+ * Shared guards of [[DateTimeFormatRule]]: when does turning a timestamp into text (formatting) or
+ * text into a timestamp (parsing) preserve ordering?
+ *
+ *  - Pattern: the format is a literal on the allowlist below. Every allowlisted pattern is year-first
+ *    and fixed-width, so the lexicographic order of the strings is the chronological order of the
+ *    values they denote, within years 0001 to 9999 (outside, the year gets a sign or a fifth digit).
+ *    Parsing also refuses a pattern with a quoted letter (for ex, 'T'): the parser matches it in any
+ *    case, and the cases sort apart ('2022-03-05t09:00:00' parses, and sorts after
+ *    '2022-03-05T23:00:00'). Formatting always writes the letter as quoted.
+ *  - Policy: `spark.sql.legacy.timeParserPolicy` is not LEGACY. LEGACY parses with SimpleDateFormat,
+ *    which is lenient (for ex, '2022-3-6', '2022-03-06x' and ' 2022-03-06' all parse with
+ *    'yyyy-MM-dd'), so parseable strings are no longer fixed-width.
+ *  - Zone, parsing only: a time-of-day pattern parsed in the session time zone needs a fixed-offset
+ *    zone. Across a spring-forward gap, a wall clock inside the gap is shifted forward past later ones
+ *    (for ex, in America/Los_Angeles '2022-03-13 02:30:00' parses after '2022-03-13 03:05:00'). A
+ *    date-only parse is monotone in every zone (a gap shifts a start of day by less than a day).
+ *
+ * NOTE: The zone side of formatting is guarded elsewhere: a time-of-day pattern in a DST session
+ *       zone by #20521, a local date that runs backwards at a fall-back across midnight by #20526
+ */
+object DateTimeOrdering {
+
+  /**
+   * An allowlisted format pattern.
+   *
+   * @param hasTimeOfDay     it holds a field finer than the day
+   * @param hasLetterLiteral it holds a quoted letter (for ex, 'T'), which parsing matches in any case
+   */
+  case class Pattern(hasTimeOfDay: Boolean, hasLetterLiteral: Boolean)
+
+  // NOTE: Year-first, fixed-width patterns only. Day-first or month-first patterns (for ex,
+  //       'dd-MM-yyyy', 'MM/dd/yyyy'), unpadded fields (for ex, 'yyyy-M-d'), and text fields (for ex,
+  //       'EEE', 'MMM') do not sort chronologically. 'SSS' parses 1 to 3 digits, whose order as a
+  //       decimal fraction matches their lexicographic order
+  private val datePatterns: Set[String] = Set(
+    "yyyy",
+    "yyyy-MM",
+    "yyyy-MM-dd",
+    "yyyyMMdd",
+    "yyyy/MM/dd")
+
+  private val dateTimePatterns: Set[String] = Set(
+    "yyyy-MM-dd HH",
+    "yyyy-MM-dd HH:mm",
+    "yyyy-MM-dd HH:mm:ss",
+    "yyyy-MM-dd HH:mm:ss.SSS",
+    "yyyy-MM-dd'T'HH:mm:ss",
+    "yyyy-MM-dd'T'HH:mm:ss.SSS",
+    "yyyyMMddHHmmss",
+    "yyyy/MM/dd HH:mm:ss")
+
+  /**
+   * The allowlisted pattern of a format operand. Only literals: a default format (for ex, the one of
+   * `unix_timestamp(s)`) is a literal too.
+   */
+  def pattern(format: Expression): Option[Pattern] = format match {
+    case Literal(value: UTF8String, _: StringType) =>
+      val p = value.toString
+      if (datePatterns.contains(p)) {
+        Some(Pattern(hasTimeOfDay = false, hasLetterLiteral = letterLiteral.findFirstIn(p).isDefined))
+      } else if (dateTimePatterns.contains(p)) {
+        Some(Pattern(hasTimeOfDay = true, hasLetterLiteral = letterLiteral.findFirstIn(p).isDefined))
+      } else {
+        None
+      }
+    case _ => None
+  }
+
+  // A quoted literal holding a letter, for ex 'T'
+  private val letterLiteral = "'[^']*[A-Za-z][^']*'".r
+
+  /**
+   * Read when the rule runs, i.e. from the session that compiles the filter, which is the one that
+   * evaluates it.
+   */
+  def isLegacyTimeParserPolicy: Boolean =
+    // NOTE: An enum conf from Spark 4.1 on, a string conf before, so it is compared as a string
+    "LEGACY".equalsIgnoreCase(SQLConf.get.getConf(SQLConf.LEGACY_TIME_PARSER_POLICY).toString)
+
+  /** Whether formatting with `format` preserves ordering (see the object scaladoc). */
+  def formatPreservesOrder(format: Expression): Boolean =
+    !isLegacyTimeParserPolicy && pattern(format).isDefined
+
+  /**
+   * Whether parsing with `format` in `timeZoneId` preserves ordering (see the object scaladoc).
+   *
+   * @param zoneDependent false when the result does not depend on the zone (for ex, parsing into
+   *                      TIMESTAMP_NTZ), which skips the zone guard. A time zone is still required
+   */
+  def parsePreservesOrder(format: Expression, timeZoneId: Option[String], zoneDependent: Boolean): Boolean =
+    !isLegacyTimeParserPolicy && timeZoneId.isDefined && pattern(format).exists { p =>
+      !p.hasLetterLiteral && (!zoneDependent || !p.hasTimeOfDay || timeZoneId.exists(isFixedOffsetZone))
+    }
+
+  // Whether the zone, resolved the way Spark evaluates it, never changes its offset. An unknown zone is
+  // not fixed
+  private def isFixedOffsetZone(timeZoneId: String): Boolean =
+    Try(DateTimeUtils.getZoneId(timeZoneId).getRules.isFixedOffset).getOrElse(false)
+}

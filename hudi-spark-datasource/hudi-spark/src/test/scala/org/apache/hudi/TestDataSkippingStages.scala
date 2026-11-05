@@ -19,12 +19,15 @@ package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, If, In, InSet, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith, UnaryMinus}
+import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, If, In, InSet, IsNull, LeafExpression, LessThan, LessThanOrEqual, Literal, Log, Not, Or, StartsWith, TryEval, UnaryMinus}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, Increasing, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, Verdict}
-import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
+import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering
+import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering.Pattern
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{DataType, DoubleType, IntegerType, StringType, StructField, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
-import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
 /**
@@ -43,7 +46,8 @@ class TestDataSkippingStages {
     lo = UnresolvedAttribute("lo"),
     hi = UnresolvedAttribute("hi"),
     nulls = Some(UnresolvedAttribute("nulls")),
-    rows = Some(UnresolvedAttribute("rows")))
+    rows = Some(UnresolvedAttribute("rows")),
+    nullBoundIsUnknown = false)
 
   private val source = ColumnStatsSource(Seq("x"))
   private lazy val xRange = source.rangeOf(x).get
@@ -149,14 +153,17 @@ class TestDataSkippingStages {
     val term = Add(x, Literal(1.0d))
     val step = Step(term, x, Increasing, fileGuard = None, partial = false)
     assertEquals(
-      TermRange(Add(markers.lo, Literal(1.0d)), Add(markers.hi, Literal(1.0d)), markers.nulls, markers.rows),
+      TermRange(Add(markers.lo, Literal(1.0d)), Add(markers.hi, Literal(1.0d)), markers.nulls, markers.rows,
+        nullBoundIsUnknown = false),
       step(markers))
   }
 
   @Test
   def testDecreasingStepSwapsBounds(): Unit = {
     val step = Step(UnaryMinus(x), x, Decreasing, fileGuard = None, partial = false)
-    assertEquals(TermRange(UnaryMinus(markers.hi), UnaryMinus(markers.lo), markers.nulls, markers.rows), step(markers))
+    assertEquals(
+      TermRange(UnaryMinus(markers.hi), UnaryMinus(markers.lo), markers.nulls, markers.rows, nullBoundIsUnknown = false),
+      step(markers))
   }
 
   @Test
@@ -170,14 +177,25 @@ class TestDataSkippingStages {
         lo = If(guard(markers), Add(markers.lo, Literal(1.0d)), unknown),
         hi = If(guard(markers), Add(markers.hi, Literal(1.0d)), unknown),
         nulls = markers.nulls,
-        rows = markers.rows),
+        rows = markers.rows,
+        nullBoundIsUnknown = true),
       step(markers))
   }
 
   @Test
-  def testPartialStepDropsCounts(): Unit = {
+  def testPartialStepDropsCountsAndTurnsFailuresIntoNull(): Unit = {
     val step = Step(Abs(x), x, Increasing, fileGuard = None, partial = true)
-    assertEquals(TermRange(Abs(markers.lo), Abs(markers.hi), None, None), step(markers))
+    assertEquals(
+      TermRange(TryEval(Abs(markers.lo)), TryEval(Abs(markers.hi)), None, None, nullBoundIsUnknown = true),
+      step(markers))
+  }
+
+  @Test
+  def testNullBoundIsUnknownSticksAlongTheChain(): Unit = {
+    // A total, unguarded step above a partial one: its bounds are NULL wherever the partial one's are
+    val partial = Step(Abs(x), x, Increasing, fileGuard = None, partial = true)
+    val total = Step(Add(Abs(x), ten), Abs(x), Increasing, fileGuard = None, partial = false)
+    assertTrue(total(partial(markers)).nullBoundIsUnknown)
   }
 
   /** `-child`, order-reversing. */
@@ -210,11 +228,12 @@ class TestDataSkippingStages {
   @Test
   def testDeriveThroughDecreasingStep(): Unit = {
     assertEquals(
-      Some(TermRange(UnaryMinus(xRange.hi), UnaryMinus(xRange.lo), xRange.nulls, xRange.rows)),
+      Some(TermRange(UnaryMinus(xRange.hi), UnaryMinus(xRange.lo), xRange.nulls, xRange.rows, nullBoundIsUnknown = false)),
       TermRange.derive(UnaryMinus(x), source, stubRules))
     // An increasing step above a decreasing one, with a constant other operand
     assertEquals(
-      Some(TermRange(Add(UnaryMinus(xRange.hi), ten), Add(UnaryMinus(xRange.lo), ten), xRange.nulls, xRange.rows)),
+      Some(TermRange(Add(UnaryMinus(xRange.hi), ten), Add(UnaryMinus(xRange.lo), ten), xRange.nulls, xRange.rows,
+        nullBoundIsUnknown = false)),
       TermRange.derive(Add(UnaryMinus(x), ten), source, stubRules))
   }
 
@@ -222,7 +241,8 @@ class TestDataSkippingStages {
   def testDeriveRebindsOffChainReferencesOnIncreasingChains(): Unit = {
     // Matches the pre-stage translator: the off-chain `abs(x)` is re-bound to the same bound
     assertEquals(
-      Some(TermRange(Add(xRange.lo, Abs(xRange.lo)), Add(xRange.hi, Abs(xRange.hi)), xRange.nulls, xRange.rows)),
+      Some(TermRange(Add(xRange.lo, Abs(xRange.lo)), Add(xRange.hi, Abs(xRange.hi)), xRange.nulls, xRange.rows,
+        nullBoundIsUnknown = false)),
       TermRange.derive(Add(x, Abs(x)), source, stubRules))
   }
 
@@ -234,10 +254,16 @@ class TestDataSkippingStages {
   }
 
   @Test
-  def testDeriveGivesNoRangeForGuardedChain(): Unit = {
-    // Outside the guard the bounds are NULL, and a NULL verdict still prunes the file (#19474)
-    assertEquals(None, TermRange.derive(Abs(x), source, Seq(GuardedAbsRule)))
-    assertEquals(None, TermRange.derive(Add(Abs(x), ten), source, Seq(GuardedAbsRule, AddLeftRule)))
+  def testDeriveThroughGuardedChainMarksNullBoundsUnknown(): Unit = {
+    // Outside the guard the bounds are NULL, which StatsFilterCompiler turns into keeping the file
+    val unknown = Literal(null, DoubleType)
+    val guard = LessThan(xRange.hi, ten)
+    assertEquals(
+      Some(TermRange(If(guard, Abs(xRange.lo), unknown), If(guard, Abs(xRange.hi), unknown), xRange.nulls, xRange.rows,
+        nullBoundIsUnknown = true)),
+      TermRange.derive(Abs(x), source, Seq(GuardedAbsRule)))
+    assertTrue(TermRange.derive(Add(Abs(x), ten), source, Seq(GuardedAbsRule, AddLeftRule)).get.nullBoundIsUnknown)
+    assertFalse(TermRange.derive(Add(x, ten), source, Seq(AddLeftRule)).get.nullBoundIsUnknown)
   }
 
   @Test
@@ -246,5 +272,121 @@ class TestDataSkippingStages {
     // No production rule is decreasing yet
     assertEquals(None, TermRange.derive(UnaryMinus(x), source))
     assertEquals(None, TermRange.derive(Add(AttributeReference("i", IntegerType)(), Literal(1)), source))
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Stage 4: keeping the file on a NULL verdict
+  // ---------------------------------------------------------------------------------------------
+
+  /**
+   * The compiled `filter` evaluated over a file whose stats are all NULL, for ex one holding only
+   * NULLs. NULL drops the file, like FALSE.
+   */
+  private def overNullStats(filter: Expression, statsSource: ColumnStatsSource, statsType: DataType): Any =
+    StatsFilterCompiler.compile(filter, statsSource, strictResolution = true).transform {
+      case stat: LeafExpression if !stat.isInstanceOf[Literal] => Literal(null, statsType)
+    }.eval()
+
+  @Test
+  def testKeepOnNullOnlyForPartialOrGuardedChains(): Unit = {
+    // A column: its bounds are NULL only when all its values are, which no row passes; IN included
+    assertEquals(null, overNullStats(LessThan(x, ten), source, DoubleType))
+    assertEquals(null, overNullStats(In(x, Seq(ten, Literal(1.0d))), source, DoubleType))
+    // A total, unguarded chain: same
+    assertEquals(null, overNullStats(LessThan(Add(x, Literal(1.0d)), ten), source, DoubleType))
+    // A partial chain: log is undefined below 0, so a NULL bound may stand for matching rows
+    assertEquals(true, overNullStats(LessThan(Log(x), ten), source, DoubleType))
+    // A guarded chain: date_format only holds within years 0001 to 9999
+    val ts = AttributeReference("ts", TimestampType)()
+    val formatted = EqualTo(DateFormatClass(ts, Literal("yyyy-MM-dd"), Some("UTC")), Literal("2024-01-01"))
+    assertEquals(true, overNullStats(formatted, ColumnStatsSource(Seq("ts")), TimestampType))
+  }
+
+  @Test
+  def testKeepOnNullWrapsOnlyPartialOrGuardedVerdicts(): Unit = {
+    assertEquals(LessThan(xRange.lo, ten), StatsFilterCompiler.compile(LessThan(x, ten), source, strictResolution = true))
+    assertEquals(
+      Coalesce(Seq(LessThan(TryEval(Log(xRange.lo)), ten), TrueLiteral)),
+      StatsFilterCompiler.compile(LessThan(Log(x), ten), source, strictResolution = true))
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Stage 3: date / time ordering guards
+  // ---------------------------------------------------------------------------------------------
+
+  private val dateOnly = Literal("yyyy-MM-dd")
+  private val timeOfDay = Literal("yyyy-MM-dd HH:mm:ss")
+  private val isoTimeOfDay = Literal("yyyy-MM-dd'T'HH:mm:ss")
+
+  @Test
+  def testDateTimePatternAllowlist(): Unit = {
+    assertEquals(Some(Pattern(hasTimeOfDay = false, hasLetterLiteral = false)), DateTimeOrdering.pattern(dateOnly))
+    assertEquals(Some(Pattern(hasTimeOfDay = true, hasLetterLiteral = false)), DateTimeOrdering.pattern(timeOfDay))
+    assertEquals(Some(Pattern(hasTimeOfDay = true, hasLetterLiteral = true)), DateTimeOrdering.pattern(isoTimeOfDay))
+    // Not year-first, or not fixed-width
+    assertEquals(None, DateTimeOrdering.pattern(Literal("MM/dd/yyyy")))
+    assertEquals(None, DateTimeOrdering.pattern(Literal("dd-MM-yyyy")))
+    assertEquals(None, DateTimeOrdering.pattern(Literal("yyyy-M-d")))
+    assertEquals(None, DateTimeOrdering.pattern(Literal("yyyy-MMM-dd")))
+    // Only literals
+    assertEquals(None, DateTimeOrdering.pattern(AttributeReference("f", StringType)()))
+    assertEquals(None, DateTimeOrdering.pattern(Literal(null, StringType)))
+  }
+
+  @Test
+  def testDateTimeZoneGuards(): Unit = {
+    // UTC and fixed offsets never shift, so a time-of-day parse is accepted
+    Seq("UTC", "+08:00", "-05:30", "GMT+8").foreach { zone =>
+      assertTrue(DateTimeOrdering.parsePreservesOrder(timeOfDay, Some(zone), zoneDependent = true), zone)
+    }
+
+    // America/Los_Angeles skips 02:00 to 03:00 when springing forward, so a time-of-day parse is
+    // refused...
+    val losAngeles = Some("America/Los_Angeles")
+    assertFalse(DateTimeOrdering.parsePreservesOrder(timeOfDay, losAngeles, zoneDependent = true))
+    // ... unless parsing into TIMESTAMP_NTZ, which reads the wall clock as is
+    assertTrue(DateTimeOrdering.parsePreservesOrder(timeOfDay, losAngeles, zoneDependent = false))
+    // ... while a date-only parse is monotone in every zone
+    assertTrue(DateTimeOrdering.parsePreservesOrder(dateOnly, losAngeles, zoneDependent = true))
+    // Asia/Kolkata has had no DST since 1945, but its offset changed, so it is not fixed
+    assertFalse(DateTimeOrdering.parsePreservesOrder(timeOfDay, Some("Asia/Kolkata"), zoneDependent = true))
+
+    // No time zone (not analyzed) or an unknown one
+    assertFalse(DateTimeOrdering.parsePreservesOrder(dateOnly, None, zoneDependent = false))
+    assertFalse(DateTimeOrdering.parsePreservesOrder(timeOfDay, Some("Not/A_Zone"), zoneDependent = true))
+    // A pattern off the allowlist, in any zone
+    assertFalse(DateTimeOrdering.formatPreservesOrder(Literal("MM/dd/yyyy")))
+    assertFalse(DateTimeOrdering.parsePreservesOrder(Literal("yyyy-M-d"), Some("UTC"), zoneDependent = true))
+    // Formatting takes no zone guard here (#20521, #20526)
+    assertTrue(DateTimeOrdering.formatPreservesOrder(timeOfDay))
+  }
+
+  @Test
+  def testDateTimeLetterLiteralIsFormatOnly(): Unit = {
+    // The parser matches 'T' in any case: '2022-03-05t09:00:00' parses, and sorts after
+    // '2022-03-05T23:00:00'. Formatting always writes 'T'
+    assertFalse(DateTimeOrdering.parsePreservesOrder(isoTimeOfDay, Some("UTC"), zoneDependent = true))
+    assertFalse(DateTimeOrdering.parsePreservesOrder(Literal("yyyy-MM-dd'T'HH:mm:ss.SSS"), Some("UTC"), zoneDependent = false))
+    assertTrue(DateTimeOrdering.formatPreservesOrder(isoTimeOfDay))
+  }
+
+  @Test
+  def testDateTimeGuardsRefuseLegacyParserPolicy(): Unit = {
+    def withPolicy(policy: String)(body: => Unit): Unit = {
+      val conf = new SQLConf
+      conf.setConfString(SQLConf.LEGACY_TIME_PARSER_POLICY.key, policy)
+      SQLConf.withExistingConf(conf)(body)
+    }
+    // SimpleDateFormat parses leniently (for ex, '2022-3-6' with 'yyyy-MM-dd')
+    withPolicy("LEGACY") {
+      assertFalse(DateTimeOrdering.formatPreservesOrder(dateOnly))
+      assertFalse(DateTimeOrdering.parsePreservesOrder(dateOnly, Some("UTC"), zoneDependent = true))
+    }
+    Seq("CORRECTED", "EXCEPTION").foreach { policy =>
+      withPolicy(policy) {
+        assertTrue(DateTimeOrdering.formatPreservesOrder(dateOnly), policy)
+        assertTrue(DateTimeOrdering.parsePreservesOrder(dateOnly, Some("UTC"), zoneDependent = true), policy)
+      }
+    }
   }
 }

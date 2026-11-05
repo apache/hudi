@@ -19,22 +19,22 @@ package org.apache.hudi
 
 import org.apache.hudi.ColumnStatsIndexSupport.composeIndexSchema
 import org.apache.hudi.SparkAdapterSupport.sparkAdapter
-import org.apache.hudi.testutils.HoodieSparkClientTestBase
+import org.apache.hudi.testutils.{HoodieDummyExpressionHolder, HoodieSparkClientTestBase}
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
-import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not}
+import org.apache.spark.sql.catalyst.expressions.{Expression, InSet, Not, ParseToDate, ParseToTimestamp}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.functions.{col, date_format, lit, lower, upper}
 import org.apache.spark.sql.hudi.DataSkippingUtils
-import org.apache.spark.sql.internal.SQLConf.SESSION_LOCAL_TIMEZONE
+import org.apache.spark.sql.internal.SQLConf.{ANSI_ENABLED, SESSION_LOCAL_TIMEZONE}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
@@ -185,6 +185,86 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     assertEquals(output, rows)
   }
 
+
+  @ParameterizedTest
+  @MethodSource(Array("testDateTimeFilterExpressionsSource"))
+  def testDateTimeLookupThroughFullOptimizer(sourceFilterExprStr: String,
+                                             input: Seq[IndexRow],
+                                             expectedOutput: Seq[String]): Unit = {
+    // We have to fix the timezone to make sure all date-bound utilities output
+    // is consistent with the fixtures
+    spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
+
+    // ANSI flips the parse expressions to throw on unparseable input (ANSI is the default on
+    // Spark 4): the outcome must be the same either way, and the lookup must not throw
+    Seq("false", "true").foreach { ansi =>
+      withSqlConf(ANSI_ENABLED.key -> ansi) {
+        assertEquals(expectedOutput, lookupThroughFullOptimizer(sourceFilterExprStr, input), s"ANSI $ansi")
+      }
+    }
+  }
+
+  @Test
+  def testDateTimeLookupInDstZone(): Unit = {
+    // America/Los_Angeles springs forward at 2022-03-13 02:00
+    withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "America/Los_Angeles") {
+      // '02:30' does not exist and parses as 03:30, past the max '03:05', so pruning on the parsed
+      // bounds would drop file_gap, which holds '03:00:00'. Must keep the file
+      val gap = Seq(IndexRow("file_gap", valueCount = 3,
+        B_minValue = "2022-03-13 02:30:00", B_maxValue = "2022-03-13 03:05:00", B_nullCount = 0))
+      assertEquals(Seq("file_gap"), lookupThroughFullOptimizer(
+        "unix_timestamp(B, 'yyyy-MM-dd HH:mm:ss') = 1647165600", gap)) // 2022-03-13 03:00:00 PDT
+      assertEquals(Seq("file_gap"), lookupThroughFullOptimizer(
+        "to_unix_timestamp(B, 'yyyy-MM-dd HH:mm:ss') = 1647165600", gap))
+      assertEquals(Seq("file_gap"), lookupThroughFullOptimizer(
+        "to_timestamp(B, 'yyyy-MM-dd HH:mm:ss') = '2022-03-13 03:00:00'", gap))
+
+      // A date-only parse does not depend on the time of day, so it still prunes in this zone
+      val dates = Seq(
+        IndexRow("file_1", valueCount = 2, B_minValue = "2022-03-13", B_maxValue = "2022-03-14", B_nullCount = 0),
+        IndexRow("file_2", valueCount = 2, B_minValue = "2022-03-10", B_maxValue = "2022-03-11", B_nullCount = 0))
+      assertEquals(Seq("file_1"), lookupThroughFullOptimizer("to_date(B, 'yyyy-MM-dd') >= '2022-03-12'", dates))
+      assertEquals(Seq("file_1"), lookupThroughFullOptimizer(
+        "date_format(to_timestamp(B, 'yyyy-MM-dd'), 'yyyy-MM-dd') >= '2022-03-12'", dates))
+    }
+  }
+
+  /**
+   * Runs `filter` through the full session optimizer before translating it, as on the read path: the
+   * optimizer's ReplaceExpressions rewrites RuntimeReplaceable nodes (for ex, to_date and
+   * to_timestamp into GetTimestamp) before any filter reaches Hudi's file pruning.
+   */
+  private def lookupThroughFullOptimizer(filter: String, input: Seq[IndexRow]): Seq[String] = {
+    val optimizedFilterExpr = fullyOptimize(resolveExpr(spark, filter, sourceTableSchema))
+    assertTrue(
+      optimizedFilterExpr.collectFirst {
+        case p: ParseToDate => p
+        case p: ParseToTimestamp => p
+      }.isEmpty,
+      s"Expected ReplaceExpressions to rewrite RuntimeReplaceable date parsing nodes, got: $optimizedFilterExpr")
+    applyFilterExpr(optimizedFilterExpr, input)
+  }
+
+  private def withSqlConf[T](conf: (String, String))(body: => T): T = {
+    val (key, value) = conf
+    val previous = spark.conf.getOption(key)
+    spark.conf.set(key, value)
+    try {
+      body
+    } finally {
+      previous match {
+        case Some(v) => spark.conf.set(key, v)
+        case None => spark.conf.unset(key)
+      }
+    }
+  }
+
+  private def fullyOptimize(expr: Expression): Expression = {
+    val holder = HoodieDummyExpressionHolder(Seq(expr), expr.references.toSeq)
+    spark.sessionState.optimizer.execute(holder)
+      .asInstanceOf[HoodieDummyExpressionHolder]
+      .exprs.head
+  }
 
   private def optimize(expr: Expression): Expression = {
     val rules: Seq[Rule[LogicalPlan]] =
@@ -650,7 +730,7 @@ object TestDataSkippingUtils {
     // NOTE: all timestamps in UTC
     java.util.stream.Stream.of(
       arguments(
-        "date_format(C, 'MM/dd/yyyy') = '03/07/2022'",
+        "date_format(C, 'yyyy-MM-dd') = '2022-03-07'",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -663,7 +743,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_2")),
       arguments(
-        "'03/07/2022' = date_format(C, 'MM/dd/yyyy')",
+        "'2022-03-07' = date_format(C, 'yyyy-MM-dd')",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -676,7 +756,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_2")),
       arguments(
-        "'03/07/2022' != date_format(C, 'MM/dd/yyyy')",
+        "'2022-03-07' != date_format(C, 'yyyy-MM-dd')",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -689,7 +769,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') != '03/07/2022'",
+        "date_format(C, 'yyyy-MM-dd') != '2022-03-07'",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -702,7 +782,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') < '03/08/2022'",
+        "date_format(C, 'yyyy-MM-dd') < '2022-03-08'",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -715,7 +795,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_2")),
       arguments(
-        "'03/08/2022' > date_format(C, 'MM/dd/yyyy')",
+        "'2022-03-08' > date_format(C, 'yyyy-MM-dd')",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -728,7 +808,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_2")),
       arguments(
-        "'03/08/2022' < date_format(C, 'MM/dd/yyyy')",
+        "'2022-03-08' < date_format(C, 'yyyy-MM-dd')",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -741,7 +821,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') > '03/08/2022'",
+        "date_format(C, 'yyyy-MM-dd') > '2022-03-08'",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -754,7 +834,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') <= '03/07/2022'",
+        "date_format(C, 'yyyy-MM-dd') <= '2022-03-07'",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -767,7 +847,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_2")),
       arguments(
-        "'03/07/2022' >= date_format(C, 'MM/dd/yyyy')",
+        "'2022-03-07' >= date_format(C, 'yyyy-MM-dd')",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -780,7 +860,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_2")),
       arguments(
-        "'03/09/2022' <= date_format(C, 'MM/dd/yyyy')",
+        "'2022-03-09' <= date_format(C, 'yyyy-MM-dd')",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -793,7 +873,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') >= '03/09/2022'",
+        "date_format(C, 'yyyy-MM-dd') >= '2022-03-09'",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -806,7 +886,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') IN ('03/09/2022')",
+        "date_format(C, 'yyyy-MM-dd') IN ('2022-03-09')",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -819,7 +899,7 @@ object TestDataSkippingUtils {
         ),
         Seq("file_1")),
       arguments(
-        "date_format(C, 'MM/dd/yyyy') NOT IN ('03/07/2022')",
+        "date_format(C, 'yyyy-MM-dd') NOT IN ('2022-03-07')",
         Seq(
           IndexRow("file_1", valueCount = 1,
             C_minValue = new Timestamp(1646711448000L), // 03/08/2022
@@ -829,20 +909,6 @@ object TestDataSkippingUtils {
             C_minValue = new Timestamp(1646625048000L), // 03/07/2022
             C_maxValue = new Timestamp(1646625048000L), // 03/07/2022
             C_nullCount = 0)
-        ),
-        Seq("file_1")),
-      arguments(
-        // Should be identical to the one above
-        "date_format(to_timestamp(B, 'yyyy-MM-dd'), 'MM/dd/yyyy') NOT IN ('03/06/2022')",
-        Seq(
-          IndexRow("file_1", valueCount = 1,
-            B_minValue = "2022-03-07", // 03/07/2022
-            B_maxValue = "2022-03-08", // 03/08/2022
-            B_nullCount = 0),
-          IndexRow("file_2", valueCount = 1,
-            B_minValue = "2022-03-06", // 03/06/2022
-            B_maxValue = "2022-03-06", // 03/06/2022
-            B_nullCount = 0)
         ),
         Seq("file_1")),
       arguments(
@@ -870,7 +936,140 @@ object TestDataSkippingUtils {
             C_nullCount = 0)
         ),
         Seq("file_1"))
+      // NOTE: Parsing (to_date / to_timestamp with a format) is pinned in
+      //       testDateTimeFilterExpressionsSource instead: on the real read path the optimizer
+      //       always rewrites ParseToDate / ParseToTimestamp before Hudi sees the filter
+    )
+  }
 
+  def testDateTimeFilterExpressionsSource(): java.util.stream.Stream[Arguments] = {
+    // NOTE: All timestamps in UTC. Column B holds 'yyyy-MM-dd' formatted strings, for which
+    //       lexicographic ordering coincides with chronological ordering
+    val input = Seq(
+      IndexRow("file_1", valueCount = 1,
+        B_minValue = "2022-03-07",
+        B_maxValue = "2022-03-08",
+        B_nullCount = 0),
+      IndexRow("file_2", valueCount = 1,
+        B_minValue = "2022-03-06",
+        B_maxValue = "2022-03-06",
+        B_nullCount = 0)
+    )
+    // Column B holding 'yyyy-MM-dd HH:mm:ss' strings, the default format of unix_timestamp
+    val inputDateTime = Seq(
+      IndexRow("file_1", valueCount = 2,
+        B_minValue = "2022-03-07 00:00:00",
+        B_maxValue = "2022-03-08 23:59:59",
+        B_nullCount = 0),
+      IndexRow("file_2", valueCount = 2,
+        B_minValue = "2022-03-06 00:00:00",
+        B_maxValue = "2022-03-06 23:59:59",
+        B_nullCount = 0)
+    )
+    val inputTimestamps = Seq(
+      IndexRow("file_1", valueCount = 2,
+        C_minValue = new Timestamp(1646711448000L), // 2022-03-08 03:50:48
+        C_maxValue = new Timestamp(1646797848000L), // 2022-03-09 03:50:48
+        C_nullCount = 0),
+      IndexRow("file_2", valueCount = 2,
+        C_minValue = new Timestamp(1646625048000L), // 2022-03-07 03:50:48
+        C_maxValue = new Timestamp(1646711448000L), // 2022-03-08 03:50:48
+        C_nullCount = 0)
+    )
+    // Column A holding seconds since the epoch. Long.MaxValue seconds overflow microseconds and
+    // format as '1969-12-31', below the min: file_overflow holds 2022-03-07 but would be pruned
+    val inputSeconds = Seq(
+      IndexRow("file_1", valueCount = 2, A_minValue = 1646611200L, A_maxValue = 1646697599L, A_nullCount = 0),
+      IndexRow("file_2", valueCount = 2, A_minValue = 1646697600L, A_maxValue = 1646783999L, A_nullCount = 0),
+      IndexRow("file_overflow", valueCount = 3, A_minValue = 0L, A_maxValue = Long.MaxValue, A_nullCount = 0)
+    )
+    // US-format strings: the lexicographic min/max ('03/06/2022' / '12/31/2021') do NOT
+    // correspond to the chronologically smallest/largest values
+    val inputUsFormat = Seq(
+      IndexRow("file_us", valueCount = 2,
+        B_minValue = "03/06/2022",
+        B_maxValue = "12/31/2021",
+        B_nullCount = 0)
+    )
+    // Variable-width year-first strings: '2022-11-5' < '2022-3-6' lexicographically even though
+    // it is the chronologically larger value
+    val inputVariableWidth = Seq(
+      IndexRow("file_slop", valueCount = 2,
+        B_minValue = "2022-11-5",
+        B_maxValue = "2022-3-6",
+        B_nullCount = 0)
+    )
+    // The lexicographic max 'zzz' does not parse; the file still holds a parseable matching value
+    val inputUnparseableMax = Seq(
+      IndexRow("file_mixed", valueCount = 2,
+        B_minValue = "2022-03-07",
+        B_maxValue = "zzz",
+        B_nullCount = 0)
+    )
+    // The max '2022-3-6' starts with a digit but does not parse with 'yyyy-MM-dd' (it only parses
+    // leniently, so the Spark 3 EXCEPTION parser policy throws on it, as ANSI does); the file still
+    // holds, for ex, '2022-03-07'
+    val inputSloppyMax = Seq(
+      IndexRow("file_sloppy", valueCount = 3,
+        B_minValue = "2022-03-01",
+        B_maxValue = "2022-3-6",
+        B_nullCount = 0)
+    )
+    // The parser matches the quoted 'T' in any case, so '2022-03-05t09:00:00' parses (09:00) but
+    // sorts after '2022-03-05T23:00:00' (23:00): the bounds are 23:00 and 09:00
+    val inputIsoCase = Seq(
+      IndexRow("file_iso", valueCount = 2,
+        B_minValue = "2022-03-05T23:00:00",
+        B_maxValue = "2022-03-05t09:00:00",
+        B_nullCount = 0)
+    )
+    java.util.stream.Stream.of(
+      // to_date(B) is replaced with Cast(B as date), which the Cast rule refuses (string to date is not
+      // order-preserving, #20513), so every file is kept (regression pin; does not exercise GetTimestamp)
+      arguments("to_date(B) > '2022-03-06'", input, Seq("file_1", "file_2")),
+      // to_date(B, fmt) is replaced with Cast(GetTimestamp(B, fmt) as date), but the optimizer
+      // then folds the outer cast-to-date into the comparison bound, so the rule sees a bare
+      // GetTimestamp here; see the date_add case below for a shape that retains the cast
+      arguments("to_date(B, 'yyyy-MM-dd') > '2022-03-06'", input, Seq("file_1")),
+      arguments("to_date(B, 'yyyy-MM-dd') = '2022-03-08'", input, Seq("file_1")),
+      // to_timestamp(B) is replaced with Cast(B as timestamp), refused by the Cast rule as well
+      // (regression pin, same as to_date(B) above)
+      arguments("to_timestamp(B) > '2022-03-06 12:00:00'", input, Seq("file_1", "file_2")),
+      // to_timestamp(B, fmt) is replaced with a bare GetTimestamp(B, fmt)
+      arguments("to_timestamp(B, 'yyyy-MM-dd') > '2022-03-06 12:00:00'", input, Seq("file_1")),
+      // The only optimized shape that retains Cast(GetTimestamp(...) as date): the range walks
+      // through date_add, the cast and the timestamp parse back to B
+      arguments("date_add(to_date(B, 'yyyy-MM-dd'), 1) > '2022-03-07'", input, Seq("file_1")),
+      // unix_timestamp and to_unix_timestamp parse the same way, so they prune the same way
+      arguments("unix_timestamp(B, 'yyyy-MM-dd') > 1646568000", input, Seq("file_1")), // 2022-03-06 12:00
+      arguments("to_unix_timestamp(B, 'yyyy-MM-dd') > 1646568000", input, Seq("file_1")),
+      arguments("unix_timestamp(B) > 1646611200", inputDateTime, Seq("file_1")), // 2022-03-07 00:00
+      arguments("to_unix_timestamp(B) > 1646611200", inputDateTime, Seq("file_1")),
+      // Formatting a parsed string: under the real optimizer ReplaceExpressions rewrites
+      // to_timestamp, and OptimizeIn turns the single-element NOT IN into Not(EqualTo(...))
+      arguments("date_format(to_timestamp(B, 'yyyy-MM-dd'), 'yyyy/MM/dd') NOT IN ('2022/03/06')",
+        input, Seq("file_1")),
+      arguments("date_format(C, 'yyyy-MM-dd HH:mm:ss') > '2022-03-08 12:00:00'", inputTimestamps, Seq("file_1")),
+      // Seconds outside years 0001 to 9999 do not format to sortable strings: file_overflow is kept
+      arguments("from_unixtime(A, 'yyyy-MM-dd') = '2022-03-07'", inputSeconds, Seq("file_1", "file_overflow")),
+      // Non-order-preserving formats: translation must fall back to keeping every file (safe, not
+      // smart). Pruning on the lexicographic min/max of US-format strings would wrongly drop
+      // file_us, which contains 2022-03-06
+      arguments("to_date(B, 'MM/dd/yyyy') = '2022-03-06'", inputUsFormat, Seq("file_us")),
+      arguments("unix_timestamp(B, 'MM/dd/yyyy') = 1646524800", inputUsFormat, Seq("file_us")), // 2022-03-06
+      // Variable-width year-first format: equally order-breaking, equally rejected
+      arguments("to_date(B, 'yyyy-M-d') = '2022-11-05'", inputVariableWidth, Seq("file_slop")),
+      arguments("date_format(C, 'MM/dd/yyyy') = '03/07/2022'", inputTimestamps, Seq("file_1", "file_2")),
+      // A quoted letter is format-only: parsing with it keeps file_iso, whose 23:00 row matches...
+      arguments("to_timestamp(B, \"yyyy-MM-dd'T'HH:mm:ss\") > '2022-03-05 12:00:00'", inputIsoCase, Seq("file_iso")),
+      // ... while formatting with it still prunes, since date_format always writes 'T'
+      arguments("date_format(C, \"yyyy-MM-dd'T'HH:mm:ss\") > '2022-03-08T12:00:00'", inputTimestamps, Seq("file_1")),
+      // Unparseable stat values: their bound is NULL, which must keep the file (and not throw), as it
+      // holds 2022-03-07, which matches
+      arguments("to_timestamp(B, 'yyyy-MM-dd') > '2022-03-06 12:00:00'", inputUnparseableMax,
+        Seq("file_mixed")),
+      arguments("to_date(B, 'yyyy-MM-dd') > '2022-03-06'", inputSloppyMax, Seq("file_sloppy")),
+      arguments("unix_timestamp(B, 'yyyy-MM-dd') > 1646568000", inputSloppyMax, Seq("file_sloppy"))
     )
   }
 

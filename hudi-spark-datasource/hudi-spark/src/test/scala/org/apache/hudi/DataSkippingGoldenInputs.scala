@@ -19,7 +19,7 @@ package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, BinaryOperator, BitwiseOr, Cast, Coalesce, Concat, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, Substring, TimeZoneAwareExpression, ToUnixTimestamp, ToUTCTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, BinaryOperator, BitwiseOr, Cast, Coalesce, Concat, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, Substring, TimeZoneAwareExpression, ToUnixTimestamp, ToUTCTimestamp, UnixTimestamp, Upper}
 import org.apache.spark.sql.catalyst.util.ArrayData
 import org.apache.spark.sql.types.{ArrayType, BooleanType, DataType, DateType, Decimal, DecimalType, DoubleType, IntegerType, LongType, ShortType, StringType, StructField, StructType, TimestampType}
 
@@ -98,6 +98,26 @@ object DataSkippingGoldenInputs {
     UnresolvedAttribute("a"), Add(UnresolvedAttribute("a"), Literal(1)))
 
   /**
+   * Date / time terms added after the golden file was first generated. They are kept out of [[terms]]
+   * so that the seeded trees, which sample the leaves of [[terms]], stay the same.
+   *
+   * `to_date` / `to_timestamp` with a format reach data skipping as their optimizer replacement
+   * (`GetTimestamp`, under a cast to date for `to_date`), built here through the 2-arg constructors,
+   * which are stable across Spark versions unlike `GetTimestamp`'s.
+   */
+  private val dateTimeTerms: Seq[Expression] = Seq(
+    new ParseToTimestamp(s, Literal("yyyy-MM-dd")).replacement,
+    new ParseToTimestamp(s, Literal("MM/dd/yyyy")).replacement,
+    new ParseToTimestamp(ts, Literal("MM/dd/yyyy")).replacement,
+    new ParseToDate(s, Literal("yyyy-MM-dd HH:mm:ss")).replacement,
+    UnixTimestamp(s, Literal("yyyy-MM-dd"), Some("UTC")), UnixTimestamp(s, Literal("yyyy-M-d"), Some("UTC")),
+    UnixTimestamp(d, Literal("MM/dd/yyyy"), Some("UTC")),
+    ToUnixTimestamp(s, Literal("yyyy-MM-dd HH:mm:ss"), Some("America/Los_Angeles")),
+    ToUnixTimestamp(s, Literal("yyyy-MM-dd"), Some("America/Los_Angeles")),
+    DateFormatClass(ts, Literal("MM/dd/yyyy"), Some("UTC")),
+    FromUnixTime(l, Literal("dd-MM-yyyy"), Some("UTC")))
+
+  /**
    * Sets a time zone wherever the analyzer would, so that resolution does not depend on the Spark
    * version (for ex, `cast(s as date)` needs a time zone on Spark 3.5 but not on Spark 4). Inputs
    * meant to be unresolved are unresolved for another reason.
@@ -127,8 +147,8 @@ object DataSkippingGoldenInputs {
   }
 
   /**
-   * Every input, in golden file order: the leaves, a seeded sample of AND / OR / NOT trees, then the
-   * struct and array leaves.
+   * Every input, in golden file order: the leaves, a seeded sample of AND / OR / NOT trees, the
+   * struct and array leaves, then the leaves of [[dateTimeTerms]].
    */
   def inputs: Seq[Expression] = {
     val allLeaves = terms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
@@ -145,7 +165,8 @@ object DataSkippingGoldenInputs {
           case _ => Not(tree(depth - 1))
         }
       }
-    allLeaves ++ (1 to 60).map(_ => tree(3)) ++ nestedLeaves
+    allLeaves ++ (1 to 60).map(_ => tree(3)) ++ nestedLeaves ++
+      dateTimeTerms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
   }
 
   /**
