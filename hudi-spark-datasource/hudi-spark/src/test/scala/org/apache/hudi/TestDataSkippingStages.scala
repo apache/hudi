@@ -316,11 +316,13 @@ class TestDataSkippingStages {
 
   private val dateOnly = Literal("yyyy-MM-dd")
   private val timeOfDay = Literal("yyyy-MM-dd HH:mm:ss")
+  private val isoTimeOfDay = Literal("yyyy-MM-dd'T'HH:mm:ss")
 
   @Test
   def testDateTimePatternAllowlist(): Unit = {
-    assertEquals(Some(Pattern(hasTimeOfDay = false)), DateTimeOrdering.pattern(dateOnly))
-    assertEquals(Some(Pattern(hasTimeOfDay = true)), DateTimeOrdering.pattern(timeOfDay))
+    assertEquals(Some(Pattern(hasTimeOfDay = false, hasLetterLiteral = false)), DateTimeOrdering.pattern(dateOnly))
+    assertEquals(Some(Pattern(hasTimeOfDay = true, hasLetterLiteral = false)), DateTimeOrdering.pattern(timeOfDay))
+    assertEquals(Some(Pattern(hasTimeOfDay = true, hasLetterLiteral = true)), DateTimeOrdering.pattern(isoTimeOfDay))
     // Not year-first, or not fixed-width
     assertEquals(None, DateTimeOrdering.pattern(Literal("MM/dd/yyyy")))
     assertEquals(None, DateTimeOrdering.pattern(Literal("dd-MM-yyyy")))
@@ -357,6 +359,15 @@ class TestDataSkippingStages {
     assertFalse(DateTimeOrdering.parsePreservesOrder(Literal("yyyy-M-d"), Some("UTC"), zoneDependent = true))
     // Formatting takes no zone guard here (#20521, #20526)
     assertTrue(DateTimeOrdering.formatPreservesOrder(timeOfDay))
+  }
+
+  @Test
+  def testDateTimeLetterLiteralIsFormatOnly(): Unit = {
+    // The parser matches 'T' in any case: '2022-03-05t09:00:00' parses, and sorts after
+    // '2022-03-05T23:00:00'. Formatting always writes 'T'
+    assertFalse(DateTimeOrdering.parsePreservesOrder(isoTimeOfDay, Some("UTC"), zoneDependent = true))
+    assertFalse(DateTimeOrdering.parsePreservesOrder(Literal("yyyy-MM-dd'T'HH:mm:ss.SSS"), Some("UTC"), zoneDependent = false))
+    assertTrue(DateTimeOrdering.formatPreservesOrder(isoTimeOfDay))
   }
 
   @Test

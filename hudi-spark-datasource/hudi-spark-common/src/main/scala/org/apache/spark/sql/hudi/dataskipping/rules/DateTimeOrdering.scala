@@ -32,6 +32,9 @@ import scala.util.Try
  *  - Pattern: the format is a literal on the allowlist below. Every allowlisted pattern is year-first
  *    and fixed-width, so the lexicographic order of the strings is the chronological order of the
  *    values they denote, within years 0001 to 9999 (outside, the year gets a sign or a fifth digit).
+ *    Parsing also refuses a pattern with a quoted letter (for ex, 'T'): the parser matches it in any
+ *    case, and the cases sort apart ('2022-03-05t09:00:00' parses, and sorts after
+ *    '2022-03-05T23:00:00'). Formatting always writes the letter as quoted.
  *  - Policy: `spark.sql.legacy.timeParserPolicy` is not LEGACY. LEGACY parses with SimpleDateFormat,
  *    which is lenient (for ex, '2022-3-6', '2022-03-06x' and ' 2022-03-06' all parse with
  *    'yyyy-MM-dd'), so parseable strings are no longer fixed-width.
@@ -45,8 +48,13 @@ import scala.util.Try
  */
 object DateTimeOrdering {
 
-  /** An allowlisted format pattern; `hasTimeOfDay` when it holds a field finer than the day. */
-  case class Pattern(hasTimeOfDay: Boolean)
+  /**
+   * An allowlisted format pattern.
+   *
+   * @param hasTimeOfDay     it holds a field finer than the day
+   * @param hasLetterLiteral it holds a quoted letter (for ex, 'T'), which parsing matches in any case
+   */
+  case class Pattern(hasTimeOfDay: Boolean, hasLetterLiteral: Boolean)
 
   // NOTE: Year-first, fixed-width patterns only. Day-first or month-first patterns (for ex,
   //       'dd-MM-yyyy', 'MM/dd/yyyy'), unpadded fields (for ex, 'yyyy-M-d'), and text fields (for ex,
@@ -77,21 +85,25 @@ object DateTimeOrdering {
     case Literal(value: UTF8String, _: StringType) =>
       val p = value.toString
       if (datePatterns.contains(p)) {
-        Some(Pattern(hasTimeOfDay = false))
+        Some(Pattern(hasTimeOfDay = false, hasLetterLiteral = letterLiteral.findFirstIn(p).isDefined))
       } else if (dateTimePatterns.contains(p)) {
-        Some(Pattern(hasTimeOfDay = true))
+        Some(Pattern(hasTimeOfDay = true, hasLetterLiteral = letterLiteral.findFirstIn(p).isDefined))
       } else {
         None
       }
     case _ => None
   }
 
+  // A quoted literal holding a letter, for ex 'T'
+  private val letterLiteral = "'[^']*[A-Za-z][^']*'".r
+
   /**
    * Read when the rule runs, i.e. from the session that compiles the filter, which is the one that
    * evaluates it.
    */
   def isLegacyTimeParserPolicy: Boolean =
-    "LEGACY".equalsIgnoreCase(SQLConf.get.getConf(SQLConf.LEGACY_TIME_PARSER_POLICY))
+    // NOTE: An enum conf from Spark 4.1 on, a string conf before, so it is compared as a string
+    "LEGACY".equalsIgnoreCase(SQLConf.get.getConf(SQLConf.LEGACY_TIME_PARSER_POLICY).toString)
 
   /** Whether formatting with `format` preserves ordering (see the object scaladoc). */
   def formatPreservesOrder(format: Expression): Boolean =
@@ -105,7 +117,7 @@ object DateTimeOrdering {
    */
   def parsePreservesOrder(format: Expression, timeZoneId: Option[String], zoneDependent: Boolean): Boolean =
     !isLegacyTimeParserPolicy && timeZoneId.isDefined && pattern(format).exists { p =>
-      !zoneDependent || !p.hasTimeOfDay || timeZoneId.exists(isFixedOffsetZone)
+      !p.hasLetterLiteral && (!zoneDependent || !p.hasTimeOfDay || timeZoneId.exists(isFixedOffsetZone))
     }
 
   // Whether the zone, resolved the way Spark evaluates it, never changes its offset. An unknown zone is

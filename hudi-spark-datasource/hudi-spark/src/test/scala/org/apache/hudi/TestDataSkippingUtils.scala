@@ -1010,18 +1010,26 @@ object TestDataSkippingUtils {
         B_maxValue = "2022-3-6",
         B_nullCount = 0)
     )
+    // The parser matches the quoted 'T' in any case, so '2022-03-05t09:00:00' parses (09:00) but
+    // sorts after '2022-03-05T23:00:00' (23:00): the bounds are 23:00 and 09:00
+    val inputIsoCase = Seq(
+      IndexRow("file_iso", valueCount = 2,
+        B_minValue = "2022-03-05T23:00:00",
+        B_maxValue = "2022-03-05t09:00:00",
+        B_nullCount = 0)
+    )
     java.util.stream.Stream.of(
-      // to_date(B) is replaced with Cast(B as date), handled by the Cast rule (regression pin; does
-      // not exercise GetTimestamp)
-      arguments("to_date(B) > '2022-03-06'", input, Seq("file_1")),
+      // to_date(B) is replaced with Cast(B as date), which the Cast rule refuses (string to date is not
+      // order-preserving, #20513), so every file is kept (regression pin; does not exercise GetTimestamp)
+      arguments("to_date(B) > '2022-03-06'", input, Seq("file_1", "file_2")),
       // to_date(B, fmt) is replaced with Cast(GetTimestamp(B, fmt) as date), but the optimizer
       // then folds the outer cast-to-date into the comparison bound, so the rule sees a bare
       // GetTimestamp here; see the date_add case below for a shape that retains the cast
       arguments("to_date(B, 'yyyy-MM-dd') > '2022-03-06'", input, Seq("file_1")),
       arguments("to_date(B, 'yyyy-MM-dd') = '2022-03-08'", input, Seq("file_1")),
-      // to_timestamp(B) is replaced with Cast(B as timestamp), handled by the Cast rule (regression
-      // pin, same as to_date(B) above)
-      arguments("to_timestamp(B) > '2022-03-06 12:00:00'", input, Seq("file_1")),
+      // to_timestamp(B) is replaced with Cast(B as timestamp), refused by the Cast rule as well
+      // (regression pin, same as to_date(B) above)
+      arguments("to_timestamp(B) > '2022-03-06 12:00:00'", input, Seq("file_1", "file_2")),
       // to_timestamp(B, fmt) is replaced with a bare GetTimestamp(B, fmt)
       arguments("to_timestamp(B, 'yyyy-MM-dd') > '2022-03-06 12:00:00'", input, Seq("file_1")),
       // The only optimized shape that retains Cast(GetTimestamp(...) as date): the range walks
@@ -1047,6 +1055,10 @@ object TestDataSkippingUtils {
       // Variable-width year-first format: equally order-breaking, equally rejected
       arguments("to_date(B, 'yyyy-M-d') = '2022-11-05'", inputVariableWidth, Seq("file_slop")),
       arguments("date_format(C, 'MM/dd/yyyy') = '03/07/2022'", inputTimestamps, Seq("file_1", "file_2")),
+      // A quoted letter is format-only: parsing with it keeps file_iso, whose 23:00 row matches...
+      arguments("to_timestamp(B, \"yyyy-MM-dd'T'HH:mm:ss\") > '2022-03-05 12:00:00'", inputIsoCase, Seq("file_iso")),
+      // ... while formatting with it still prunes, since date_format always writes 'T'
+      arguments("date_format(C, \"yyyy-MM-dd'T'HH:mm:ss\") > '2022-03-08T12:00:00'", inputTimestamps, Seq("file_1")),
       // Unparseable stat values: their bound is NULL, which must keep the file (and not throw), as it
       // holds 2022-03-07, which matches
       arguments("to_timestamp(B, 'yyyy-MM-dd') > '2022-03-06 12:00:00'", inputUnparseableMax,
