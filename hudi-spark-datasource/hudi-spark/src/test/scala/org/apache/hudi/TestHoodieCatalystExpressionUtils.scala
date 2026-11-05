@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expression, FromUTCTimestamp, FromUnixTime, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, Sqrt, ToUTCTimestamp, ToUnixTimestamp, UnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expression, FromUnixTime, FromUTCTimestamp, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, Sqrt, ToUnixTimestamp, ToUTCTimestamp, UnixTimestamp, Upper}
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
