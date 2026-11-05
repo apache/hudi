@@ -60,9 +60,8 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
 
 
   // Capture flow-scoped SQLConf once; explicit reader options take precedence.
-  private val failOnDataLoss = DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, parameters)
-    .get(DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.key())
-    .map(_.toBoolean).getOrElse(DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.defaultValue())
+  private val recoveryStrategy = HoodieStreamingSourceSafety.strategy(
+    DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, parameters))
 
   private lazy val tableType = metaClient.getTableType
 
@@ -143,66 +142,67 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
       .getOrElse(initialOffsets)
     var endOffset = HoodieSourceOffset(end)
 
-    if (!isCDCQuery && failOnDataLoss) {
-      HoodieStreamingSourceSafety.validate(metaClient, startOffset.offsetCommitTime,
-        endOffset.offsetCommitTime, completionTime = hollowCommitHandlingMode == USE_TRANSITION_TIME, resumed = start.isDefined)
-    }
+    val recovery = if (isCDCQuery) None else HoodieStreamingSourceSafety.recover(
+      sqlContext, metaClient, schema, parameters, recoveryStrategy, startOffset.offsetCommitTime,
+      endOffset.offsetCommitTime, completionTime = hollowCommitHandlingMode == USE_TRANSITION_TIME, resumed = start.isDefined)
+    recovery.getOrElse {
+      // We update the offsets here since until this point the latest offsets have been
+      // calculated no matter if it is in the expected version.
+      // We translate them here, then the rest logic should be intact.
+      startOffset = HoodieSourceOffset(translateCheckpoint(startOffset.offsetCommitTime))
+      endOffset = HoodieSourceOffset(translateCheckpoint(endOffset.offsetCommitTime))
 
-    // We update the offsets here since until this point the latest offsets have been
-    // calculated no matter if it is in the expected version.
-    // We translate them here, then the rest logic should be intact.
-    startOffset = HoodieSourceOffset(translateCheckpoint(startOffset.offsetCommitTime))
-    endOffset = HoodieSourceOffset(translateCheckpoint(endOffset.offsetCommitTime))
-
-    if (startOffset == endOffset) {
-      sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession,
-        sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
-    } else {
-      if (isCDCQuery) {
-        val cdcOptions = Map(
-          DataSourceReadOptions.START_COMMIT.key()-> startCommitTime(startOffset),
-          DataSourceReadOptions.END_COMMIT.key() -> endOffset.offsetCommitTime
-        )
-        val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
-          new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
-            sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
-        } else {
-          new HoodieMergeOnReadCDCHadoopFsRelationFactory(
-            sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
-        }
-        sparkAdapter.createStreamingDataFrame(sqlContext, relation, HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA)
+      if (startOffset == endOffset) {
+        sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession,
+          sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
       } else {
-        // Consume the data between (startCommitTime, endCommitTime]
-        val incParams = parameters ++ Map(
-          DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
-          DataSourceReadOptions.START_COMMIT.key -> startCommitTime(startOffset),
-          DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime,
-          INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandlingMode.name
-        )
-        if (enableFileGroupReader) {
+        if (isCDCQuery) {
+          val cdcOptions = Map(
+            DataSourceReadOptions.START_COMMIT.key()-> startCommitTime(startOffset),
+            DataSourceReadOptions.END_COMMIT.key() -> endOffset.offsetCommitTime
+          )
           val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
-            new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
-              .build()
+            new HoodieCopyOnWriteCDCHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
           } else {
-            new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
-              .build()
+            new HoodieMergeOnReadCDCHadoopFsRelationFactory(
+              sqlContext, metaClient, parameters ++ cdcOptions, schemaOption, isBootstrappedTable).build()
           }
-          sparkAdapter.createStreamingDataFrame(sqlContext, relation, schema)
+          sparkAdapter.createStreamingDataFrame(sqlContext, relation, HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA)
         } else {
-          val requiredColumns = schema.fields.map(_.name)
-          val rdd = tableType match {
-            case HoodieTableType.COPY_ON_WRITE =>
-              val serDe = HoodieSparkUtils.getCatalystRowSerDe(schema)
-              new IncrementalRelationV1(sqlContext, incParams, Some(schema), metaClient)
-                .buildScan(requiredColumns)
-                .map(serDe.serializeRow)
-            case HoodieTableType.MERGE_ON_READ =>
-              new MergeOnReadIncrementalRelationV1(sqlContext, incParams, metaClient, Some(schema))
-                .buildScan(requiredColumns, Array.empty[Filter])
-                .asInstanceOf[RDD[InternalRow]]
-            case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
+          // Consume the data between (startCommitTime, endCommitTime]
+          val incParams = parameters ++ Map(
+            DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key() -> "false",
+            DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+            DataSourceReadOptions.START_COMMIT.key -> startCommitTime(startOffset),
+            DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime,
+            INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key -> hollowCommitHandlingMode.name
+          )
+          if (enableFileGroupReader) {
+            val relation = if (tableType == HoodieTableType.COPY_ON_WRITE) {
+              new HoodieCopyOnWriteIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
+                .build()
+            } else {
+              new HoodieMergeOnReadIncrementalHadoopFsRelationFactoryV1(sqlContext, metaClient, incParams, Option(schema), isBootstrappedTable)
+                .build()
+            }
+            sparkAdapter.createStreamingDataFrame(sqlContext, relation, schema)
+          } else {
+            val requiredColumns = schema.fields.map(_.name)
+            val rdd = tableType match {
+              case HoodieTableType.COPY_ON_WRITE =>
+                val serDe = HoodieSparkUtils.getCatalystRowSerDe(schema)
+                new IncrementalRelationV1(sqlContext, incParams, Some(schema), metaClient)
+                  .buildScan(requiredColumns)
+                  .map(serDe.serializeRow)
+              case HoodieTableType.MERGE_ON_READ =>
+                new MergeOnReadIncrementalRelationV1(sqlContext, incParams, metaClient, Some(schema))
+                  .buildScan(requiredColumns, Array.empty[Filter])
+                  .asInstanceOf[RDD[InternalRow]]
+              case _ => throw new IllegalArgumentException(s"UnSupport tableType: $tableType")
+            }
+            sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession,rdd, schema, isStreaming = true)
           }
-          sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession,rdd, schema, isStreaming = true)
         }
       }
     }
