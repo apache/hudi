@@ -626,17 +626,17 @@ cs	startswith(cast(dec as double), 'ab')	true:boolean
 ei	startswith(cast(dec as double), 'ab')	((cast(dec_minValue as double) <= 'ab') AND (cast(dec_maxValue as double) >= 'ab'))
 cs	NOT startswith(cast(dec as double), 'ab')	true:boolean
 ei	NOT startswith(cast(dec as double), 'ab')	NOT (startswith(cast(dec_minValue as double), 'ab') AND startswith(cast(dec_maxValue as double), 'ab'))
-cs	(cast(s as date) = 0:date)	((cast(s_minValue as date) <= 0:date) AND (cast(s_maxValue as date) >= 0:date))
-cs	(0:date < cast(s as date))	(cast(s_maxValue as date) > 0:date)
-cs	(cast(s as date) >= 0:date)	(cast(s_maxValue as date) >= 0:date)
-cs	NOT (cast(s as date) = 0:date)	NOT ((cast(s_minValue as date) = 0:date) AND (cast(s_maxValue as date) = 0:date))
-cs	(cast(s as date) = cast(0:date as date))	((cast(s_minValue as date) <= cast(0:date as date)) AND (cast(s_maxValue as date) >= cast(0:date as date)))
-cs	cast(s as date) IN (0:date, null:date)	(((cast(s_minValue as date) <= 0:date) AND (cast(s_maxValue as date) >= 0:date)) OR ((cast(s_minValue as date) <= null:date) AND (cast(s_maxValue as date) >= null:date)))
-cs	NOT cast(s as date) IN (0:date)	NOT ((cast(s_minValue as date) = 0:date) AND (cast(s_maxValue as date) = 0:date))
+cs	(cast(s as date) = 0:date)	true:boolean
+cs	(0:date < cast(s as date))	true:boolean
+cs	(cast(s as date) >= 0:date)	true:boolean
+cs	NOT (cast(s as date) = 0:date)	true:boolean
+cs	(cast(s as date) = cast(0:date as date))	true:boolean
+cs	cast(s as date) IN (0:date, null:date)	true:boolean
+cs	NOT cast(s as date) IN (0:date)	true:boolean
 cs	startswith(cast(s as date), 'ab')	true:boolean
-ei	startswith(cast(s as date), 'ab')	((cast(s_minValue as date) <= 'ab') AND (cast(s_maxValue as date) >= 'ab'))
+ei	startswith(cast(s as date), 'ab')	true:boolean
 cs	NOT startswith(cast(s as date), 'ab')	true:boolean
-ei	NOT startswith(cast(s as date), 'ab')	NOT (startswith(cast(s_minValue as date), 'ab') AND startswith(cast(s_maxValue as date), 'ab'))
+ei	NOT startswith(cast(s as date), 'ab')	true:boolean
 cs	(cast(d as timestamp) = 0:timestamp)	((cast(d_minValue as timestamp) <= 0:timestamp) AND (cast(d_maxValue as timestamp) >= 0:timestamp))
 cs	(0:timestamp < cast(d as timestamp))	(cast(d_maxValue as timestamp) > 0:timestamp)
 cs	(cast(d as timestamp) >= 0:timestamp)	(cast(d_maxValue as timestamp) >= 0:timestamp)

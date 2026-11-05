@@ -19,52 +19,45 @@ package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{Cast, Expression}
 import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step}
-import org.apache.spark.sql.types.{BooleanType, DataType, DecimalType, DoubleType, FloatType, LongType, NumericType, StringType, TimestampType}
+import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StringType, TimestampNTZType, TimestampType}
 
 import scala.util.Try
 
 /**
  * `Cast`.
  *
- * Shared guard: [[preservesOrder]] of the child type to the target type (rejects, for ex, string to
- * numeric, timestamp to string, narrowing numeric casts, and collation changes). The (from, to)
- * allowlist lives here, at the top of this object.
- *
- * NOTE: The trailing arm still accepts every pair not listed; making the allowlist deny-by-default
- *       (trailing `case _ => false`) is pending in #20513
+ * Shared guard: [[preservesOrder]] of the child type to the target type. The (from, to) allowlist
+ * lives here, at the top of this object, and is deny-by-default: a cast pair not listed has no range.
  */
 object CastRule extends RangeRule {
 
   /**
    * Checks whether casting expression of [[from]] [[DataType]] to [[to]] [[DataType]] will
-   * preserve ordering of the elements
+   * preserve ordering of the elements.
+   *
+   * Only casts known to preserve ordering are accepted; anything else is rejected. A rejection only
+   * costs pruning opportunity, never correctness, and makes new types (for ex, Spark 4 collations or
+   * TimeType) safe by construction. Notable rejected classes:
+   *  - string to/from numeric re-orders values (for ex, "10" < "9" lexicographically)
+   *  - timestamp to string formats in the session time zone, so local time repeats across a DST
+   *    fall-back (for ex, 01:30 EDT is followed by 01:10 EST)
+   *  - collation-changing string casts (for ex, "B" < "a" in UTF8_BINARY but "a" < "B" in UTF8_LCASE)
+   *  - casts to boolean (for ex, min -5 and max 5 both cast to true while 0 casts to false)
+   *  - narrowing numeric casts, which overflow and wrap around in non-ANSI mode (for ex, bigint to int)
+   *  - timestamp to/from timestamp_ntz, which shifts across DST (for ex, a local time in the
+   *    spring-forward gap shifts forward, so 02:30 maps after 03:00)
+   *  - string to date/timestamp, since unpadded strings sort differently from what they parse to (for
+   *    ex, "2022-1-5" > "2022-01-10" as strings, but parses to an earlier date). Expression indexes on
+   *    to_date/to_timestamp do not need it: `ExpressionIndexSupport` strips the function first
    */
   private[dataskipping] def preservesOrder(from: DataType, to: DataType): Boolean =
     (from, to) match {
-      // NOTE: Casting between String and Numeric types re-orders elements (for ex, "10" < "9"
-      //       lexicographically). These match by type, so that collated strings on Spark 4 are
-      //       rejected as well
-      case (_: StringType, _: NumericType) => false
-      case (_: NumericType, _: StringType) => false
-      // NOTE: Timestamps format in the session time zone, so local time repeats across a DST
-      //       fall-back (for ex, 01:30 EDT is followed by 01:10 EST) and the strings re-order
-      case (TimestampType, _: StringType) => false
-      // NOTE: On Spark 4 StringType carries a collation, and casting to a different collation changes
-      //       the sort order (for ex, "B" < "a" in UTF8_BINARY but "a" < "B" in UTF8_LCASE). Equality
-      //       also compares the char/varchar length constraint, so those casts are conservatively
-      //       rejected too. On Spark 3 StringType is a singleton, making this arm trivially true
-      case (fromStr: StringType, toStr: StringType) => fromStr == toStr
-      // NOTE: Every type casts to a string, so collated targets are rejected whatever the source
-      //       (for ex, binary bounds are in byte order, which UTF8_LCASE does not follow)
-      case (_, toStr: StringType) => toStr == StringType
-      // NOTE: Casting to boolean maps every non-zero (or "true"-like) value to true, so it is not
-      //       monotonic (for ex, min -5 and max 5 both cast to true while 0 casts to false)
-      case (BooleanType, BooleanType) => true
-      case (_, BooleanType) => false
-      // NOTE: A collated string does not sort by its bytes, so casting it to any non-string type
-      //       (for ex, binary, which compares bytes) can re-order values. String targets are
-      //       handled above, so this only rejects collated sources
-      case (fromStr: StringType, _) => fromStr == StringType
+      // NOTE: On Spark 4 StringType equality includes the collation and the char/varchar length
+      //       constraint, so a collation-changing cast is not an identity (for ex, "B" < "a" in
+      //       UTF8_BINARY but "a" < "B" in UTF8_LCASE). On Spark 3 StringType is a singleton
+      case _ if from == to => true
+
+      // Numeric
       // NOTE: Cast.canUpCast rejects decimal to float/double as lossy, but rounding is monotonic
       //       and every decimal fits within float range. Spark's type coercion inserts this cast
       //       when a decimal column is compared with a float/double (for ex, `price > 99.5D`)
@@ -74,13 +67,28 @@ object CastRule extends RangeRule {
       //       This is conservative (for ex, double to float rounds monotonically but is
       //       rejected), which only costs pruning opportunity, never correctness
       case (fromNum: NumericType, toNum: NumericType) => Cast.canUpCast(fromNum, toNum)
+      // NOTE: false < true maps to 0 < 1. Decimal targets are excluded since, for ex,
+      //       DECIMAL(1, 1) cannot hold 1 and overflows into NULL
+      case (BooleanType, ByteType | ShortType | IntegerType | LongType | FloatType | DoubleType) => true
+
+      // Date and time
       // NOTE: Timestamps cast to numbers through their epoch seconds, which only fit bigint and
       //       floating-point targets; narrower integral targets wrap around and decimals overflow
       //       into NULL in non-ANSI mode
       case (TimestampType, LongType | FloatType | DoubleType) => true
-      case (TimestampType, _: NumericType) => false
+      // NOTE: A date maps to the start of that day, which increases with the date
+      case (DateType, TimestampType | TimestampNTZType) => true
+      // NOTE: Truncating to the (local) date is non-decreasing, also across a DST fall-back since
+      //       the date does not repeat
+      case (TimestampType | TimestampNTZType, DateType) => true
 
-      case _ => true
+      // Binary and strings
+      // NOTE: The default (UTF8_BINARY) string compares by its bytes, same as binary. Matching the
+      //       StringType companion excludes collated strings on Spark 4
+      case (StringType, BinaryType) => true
+      case (BinaryType, StringType) => true
+
+      case _ => false
     }
 
   override def steps(term: Expression): Seq[Step] = term match {

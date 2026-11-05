@@ -138,7 +138,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
   }
 
   @Test
-  def testTimestampToStringCastAcrossDstFallBack(): Unit = {
+  def testTimestampCastsAcrossDstFallBack(): Unit = {
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "America/New_York")
     try {
       // 05:30Z formats as 01:30 EDT but the later 06:10Z formats as 01:10 EST, so the string max
@@ -152,6 +152,14 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
       val resolvedFilterExpr = resolveExpr(spark, "CAST(C AS STRING) > '2026-11-01 01:20:00'", sourceTableSchema)
 
       assertEquals(Seq("file_1"), applyFilterExpr(resolvedFilterExpr, input))
+
+      // Converting to timestamp_ntz takes the same local wall-clock time, so it re-orders the same way
+      if (HoodieSparkUtils.gteqSpark3_4) {
+        val ntzFilterExpr = resolveExpr(spark,
+          "CAST(C AS TIMESTAMP_NTZ) > TIMESTAMP_NTZ '2026-11-01 01:20:00'", sourceTableSchema)
+
+        assertEquals(Seq("file_1"), applyFilterExpr(ntzFilterExpr, input))
+      }
     } finally {
       spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
     }
