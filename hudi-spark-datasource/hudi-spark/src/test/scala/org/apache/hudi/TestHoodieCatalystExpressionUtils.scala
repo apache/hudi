@@ -41,6 +41,9 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val tsAttr = AttributeReference("ts", TimestampType)()
   private val boolAttr = AttributeReference("b", BooleanType)()
   private val binAttr = AttributeReference("bin", BinaryType)()
+  // TimestampNTZType is private[spark] on Spark 3.3, where TIMESTAMP_NTZ is unsupported, so it is
+  // parsed from DDL and only built on Spark 3.4+.
+  private lazy val ntzAttr = AttributeReference("ntz", DataType.fromDDL("timestamp_ntz"))()
 
   /**
    * The column `expr` is ranged through, found by the production range walk ([[TermRange.derive]])
@@ -202,6 +205,34 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(strAttr), matched(Cast(strAttr, BinaryType)))
     // A collation-preserving cast keeps the ordering.
     assertEquals(Some(collatedAttr), matched(Cast(collatedAttr, lcase)))
+  }
+
+  @Test
+  def testCastsOutsideTheAllowlistDoNotPreserveOrdering(): Unit = {
+    // Dates and booleans only cast to the explicitly allowed targets; DECIMAL(1, 1) cannot hold true.
+    assertEquals(None, matched(Cast(dateAttr, StringType)))
+    assertEquals(None, matched(Cast(dateAttr, IntegerType)))
+    assertEquals(None, matched(Cast(boolAttr, DecimalType(1, 1))))
+    // A date maps to the start of its day, and truncating a timestamp to its date is non-decreasing.
+    assertEquals(Some(dateAttr), matched(Cast(dateAttr, TimestampType)))
+    assertEquals(Some(tsAttr), matched(Cast(tsAttr, DateType)))
+    // The default string and binary both compare by bytes.
+    assertEquals(Some(binAttr), matched(Cast(binAttr, StringType)))
+    // Boolean to bigint keeps false < true as 0 < 1, and an identity cast is always allowed.
+    assertEquals(Some(boolAttr), matched(Cast(boolAttr, LongType)))
+    assertEquals(Some(intAttr), matched(Cast(intAttr, IntegerType)))
+    // Unpadded strings sort differently from what they parse to ("2022-1-5" > "2022-01-10").
+    assertEquals(None, matched(Cast(strAttr, DateType)))
+    assertEquals(None, matched(Cast(strAttr, TimestampType)))
+    if (HoodieSparkUtils.gteqSpark3_4) {
+      // Converting between timestamp and timestamp_ntz shifts local times in the DST spring-forward gap.
+      assertEquals(None, matched(Cast(tsAttr, ntzAttr.dataType)))
+      assertEquals(None, matched(Cast(ntzAttr, TimestampType)))
+      assertEquals(None, matched(Cast(strAttr, ntzAttr.dataType)))
+      // Dates map to the start of the day and back without a time zone shift.
+      assertEquals(Some(dateAttr), matched(Cast(dateAttr, ntzAttr.dataType)))
+      assertEquals(Some(ntzAttr), matched(Cast(ntzAttr, DateType)))
+    }
   }
 
   @Test
