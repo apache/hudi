@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
@@ -43,7 +44,6 @@ import org.apache.spark.sql.Row;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * Clustering execution strategy specifically for consistent hashing index
@@ -67,9 +67,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
                                                                    boolean shouldPreserveHoodieMetadata,
                                                                    Map<String, String> extraMetadata) {
     log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
-    Properties props = getWriteConfig().getProps();
-
-    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
+    HoodieWriteConfig newConfig = getGroupWriteConfig(Option.empty());
 
     Pair<String, List<ConsistentHashingNode>> childNodesPair = extractChildNodes(extraMetadata);
     ConsistentBucketIndexBulkInsertPartitionerWithRows partitioner = new ConsistentBucketIndexBulkInsertPartitionerWithRows(getHoodieTable(), strategyParams, shouldPreserveHoodieMetadata,
@@ -78,7 +76,8 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
     Dataset<Row> repartitionedRecords = partitioner.repartitionRecords(inputRecords, numOutputGroups);
 
     return HoodieDatasetBulkInsertHelper.bulkInsert(repartitionedRecords, instantTime, getHoodieTable(), newConfig,
-        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata);
+        partitioner.arePartitionRecordsSorted(), shouldPreserveHoodieMetadata,
+        getGroupWriterSchema(repartitionedRecords.schema(), newConfig));
   }
 
   @Override
@@ -87,8 +86,7 @@ public class SparkConsistentBucketClusteringExecutionStrategy<T extends HoodieRe
                                                                  boolean preserveHoodieMetadata, Map<String, String> extraMetadata) {
 
     log.info("Starting clustering for a group, parallelism:{} commit:{}", numOutputGroups, instantTime);
-    Properties props = getWriteConfig().getProps();
-    HoodieWriteConfig newConfig = HoodieWriteConfig.newBuilder().withProps(props).build();
+    HoodieWriteConfig newConfig = getGroupWriteConfig(Option.empty());
 
     Pair<String, List<ConsistentHashingNode>> childNodesPair = extractChildNodes(extraMetadata);
     RDDConsistentBucketBulkInsertPartitioner<T> partitioner = new RDDConsistentBucketBulkInsertPartitioner<>(getHoodieTable(), strategyParams, preserveHoodieMetadata,
