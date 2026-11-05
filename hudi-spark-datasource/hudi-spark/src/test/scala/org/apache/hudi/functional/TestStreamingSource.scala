@@ -699,10 +699,11 @@ class TestStreamingSource extends StreamTest {
             reader.getBatch(Some(saved), beforeResetEnd)
           }
           assert(concurrentResetError.getMessage.contains("logical reset"))
-          val sessionReader = withSQLConf(
+          var sessionReader: org.apache.spark.sql.execution.streaming.Source = null
+          withSQLConf(
             "spark.hoodie.datasource.read.streaming.fail.on.data.loss" -> "true") {
             assert(source(enabled = Some(false)).getBatch(Some(saved), resetEnd).isStreaming)
-            source(enabled = None)
+            sessionReader = source(enabled = None)
           }
           val sessionError = intercept[org.apache.hudi.exception.HoodieException] {
             sessionReader.getBatch(Some(saved), resetEnd)
@@ -747,12 +748,21 @@ class TestStreamingSource extends StreamTest {
         addData(tablePath, Seq(("1", "old", "10", "001")))
         val reader = new org.apache.spark.sql.hudi.streaming.HoodieStreamSourceV2(spark.sqlContext,
           metaClient, s"${dir.getCanonicalPath}/checkpoint", None,
-          commonOptions + (DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.key() -> "true"),
+          commonOptions ++ Map("path" -> tablePath,
+            DataSourceReadOptions.STREAMING_READ_FAIL_ON_DATA_LOSS.key() -> "true"),
           org.apache.spark.sql.hudi.streaming.HoodieEarliestOffsetRangeLimit, HoodieTableVersion.current())
         val saved = reader.getOffset.get
         addData(tablePath, Seq(("1", "new", "20", "002")))
         val end = reader.getOffset.get
         val timeline = metaClient.reloadActiveTimeline()
+        // An old clean with no readable metadata must not be opened for a newer checkpoint.
+        val oldClean = metaClient.getInstantGenerator.createNewInstant(
+          org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED,
+          HoodieTimeline.CLEAN_ACTION, "20000101000000000", "20000101000000001")
+        val oldCleanPath = new Path(metaClient.getTimelinePath.toString,
+          metaClient.getInstantFileNameGenerator.getFileName(oldClean))
+        oldCleanPath.getFileSystem(spark.sessionState.newHadoopConf()).create(oldCleanPath).close()
+        assert(reader.getBatch(Some(saved), end).isStreaming)
         val retained = timeline.getCommitsTimeline.lastInstant().get().requestedTime()
         val cleanTime = "20990101000000000"
         val clean = metaClient.getInstantGenerator.createNewInstant(
