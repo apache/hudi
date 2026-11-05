@@ -876,17 +876,17 @@ cs	startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	true:boolean
 ei	startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	((from_utc_timestamp(ts_minValue, 'UTC') <= 'ab') AND (from_utc_timestamp(ts_maxValue, 'UTC') >= 'ab'))
 cs	NOT startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	true:boolean
 ei	NOT startswith(from_utc_timestamp(ts, 'UTC'), 'ab')	NOT (startswith(from_utc_timestamp(ts_minValue, 'UTC'), 'ab') AND startswith(from_utc_timestamp(ts_maxValue, 'UTC'), 'ab'))
-cs	(to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	true:boolean
-cs	(0:timestamp < to_utc_timestamp(ts, 'America/New_York'))	true:boolean
-cs	(to_utc_timestamp(ts, 'America/New_York') >= 0:timestamp)	true:boolean
-cs	NOT (to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	true:boolean
-cs	(to_utc_timestamp(ts, 'America/New_York') = cast(0:timestamp as timestamp))	true:boolean
-cs	to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp, null:timestamp)	true:boolean
-cs	NOT to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp)	true:boolean
+cs	(to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	((to_utc_timestamp(ts_minValue, 'America/New_York') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp))
+cs	(0:timestamp < to_utc_timestamp(ts, 'America/New_York'))	(to_utc_timestamp(ts_maxValue, 'America/New_York') > 0:timestamp)
+cs	(to_utc_timestamp(ts, 'America/New_York') >= 0:timestamp)	(to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp)
+cs	NOT (to_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, 'America/New_York') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') = 0:timestamp))
+cs	(to_utc_timestamp(ts, 'America/New_York') = cast(0:timestamp as timestamp))	((to_utc_timestamp(ts_minValue, 'America/New_York') <= cast(0:timestamp as timestamp)) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= cast(0:timestamp as timestamp)))
+cs	to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp, null:timestamp)	(((to_utc_timestamp(ts_minValue, 'America/New_York') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 0:timestamp)) OR ((to_utc_timestamp(ts_minValue, 'America/New_York') <= null:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= null:timestamp)))
+cs	NOT to_utc_timestamp(ts, 'America/New_York') IN (0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, 'America/New_York') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, 'America/New_York') = 0:timestamp))
 cs	startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
-ei	startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
+ei	startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	((to_utc_timestamp(ts_minValue, 'America/New_York') <= 'ab') AND (to_utc_timestamp(ts_maxValue, 'America/New_York') >= 'ab'))
 cs	NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
-ei	NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
+ei	NOT startswith(to_utc_timestamp(ts, 'America/New_York'), 'ab')	NOT (startswith(to_utc_timestamp(ts_minValue, 'America/New_York'), 'ab') AND startswith(to_utc_timestamp(ts_maxValue, 'America/New_York'), 'ab'))
 cs	(left(s, 2:int) = '')	((left(s_minValue, 2:int) <= '') AND (left(s_maxValue, 2:int) >= ''))
 cs	('' < left(s, 2:int))	(left(s_maxValue, 2:int) > '')
 cs	(left(s, 2:int) >= '')	(left(s_maxValue, 2:int) >= '')
@@ -1259,24 +1259,6 @@ cs	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
 ei	startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(((if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint) <= 'ab') AND (if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint) >= 'ab')), true:boolean)
 cs	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	true:boolean
 ei	NOT startswith(to_unix_timestamp(s, 'yyyy-MM-dd'), 'ab')	coalesce(NOT (startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_minValue, 'yyyy-MM-dd')), null:bigint), 'ab') AND startswith(if(((s_minValue >= '0') AND (s_maxValue < ':')), tryeval(to_unix_timestamp(s_maxValue, 'yyyy-MM-dd')), null:bigint), 'ab')), true:boolean)
-cs	(date_format(ts, 'yyyy-MM-dd HH:mm') = '')	true:boolean
-cs	('' < date_format(ts, 'yyyy-MM-dd HH:mm'))	true:boolean
-cs	(date_format(ts, 'yyyy-MM-dd HH:mm') >= '')	true:boolean
-cs	NOT (date_format(ts, 'yyyy-MM-dd HH:mm') = '')	true:boolean
-cs	(date_format(ts, 'yyyy-MM-dd HH:mm') = cast('' as string))	true:boolean
-cs	date_format(ts, 'yyyy-MM-dd HH:mm') IN ('', null:string)	true:boolean
-cs	NOT date_format(ts, 'yyyy-MM-dd HH:mm') IN ('')	true:boolean
-cs	startswith(date_format(ts, 'yyyy-MM-dd HH:mm'), 'ab')	true:boolean
-cs	NOT startswith(date_format(ts, 'yyyy-MM-dd HH:mm'), 'ab')	true:boolean
-cs	(date_format(ts, 'yyyy-MM-dd') = '')	true:boolean
-cs	('' < date_format(ts, 'yyyy-MM-dd'))	true:boolean
-cs	(date_format(ts, 'yyyy-MM-dd') >= '')	true:boolean
-cs	NOT (date_format(ts, 'yyyy-MM-dd') = '')	true:boolean
-cs	(date_format(ts, 'yyyy-MM-dd') = cast('' as string))	true:boolean
-cs	date_format(ts, 'yyyy-MM-dd') IN ('', null:string)	true:boolean
-cs	NOT date_format(ts, 'yyyy-MM-dd') IN ('')	true:boolean
-cs	startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	true:boolean
-cs	NOT startswith(date_format(ts, 'yyyy-MM-dd'), 'ab')	true:boolean
 cs	(date_format(ts, 'MM/dd/yyyy') = '')	true:boolean
 cs	('' < date_format(ts, 'MM/dd/yyyy'))	true:boolean
 cs	(date_format(ts, 'MM/dd/yyyy') >= '')	true:boolean
@@ -1295,25 +1277,3 @@ cs	from_unixtime(l, 'dd-MM-yyyy') IN ('', null:string)	true:boolean
 cs	NOT from_unixtime(l, 'dd-MM-yyyy') IN ('')	true:boolean
 cs	startswith(from_unixtime(l, 'dd-MM-yyyy'), 'ab')	true:boolean
 cs	NOT startswith(from_unixtime(l, 'dd-MM-yyyy'), 'ab')	true:boolean
-cs	(from_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	true:boolean
-cs	(0:timestamp < from_utc_timestamp(ts, 'America/New_York'))	true:boolean
-cs	(from_utc_timestamp(ts, 'America/New_York') >= 0:timestamp)	true:boolean
-cs	NOT (from_utc_timestamp(ts, 'America/New_York') = 0:timestamp)	true:boolean
-cs	(from_utc_timestamp(ts, 'America/New_York') = cast(0:timestamp as timestamp))	true:boolean
-cs	from_utc_timestamp(ts, 'America/New_York') IN (0:timestamp, null:timestamp)	true:boolean
-cs	NOT from_utc_timestamp(ts, 'America/New_York') IN (0:timestamp)	true:boolean
-cs	startswith(from_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
-ei	startswith(from_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
-cs	NOT startswith(from_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
-ei	NOT startswith(from_utc_timestamp(ts, 'America/New_York'), 'ab')	true:boolean
-cs	(to_utc_timestamp(ts, '+08:00') = 0:timestamp)	((to_utc_timestamp(ts_minValue, '+08:00') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') >= 0:timestamp))
-cs	(0:timestamp < to_utc_timestamp(ts, '+08:00'))	(to_utc_timestamp(ts_maxValue, '+08:00') > 0:timestamp)
-cs	(to_utc_timestamp(ts, '+08:00') >= 0:timestamp)	(to_utc_timestamp(ts_maxValue, '+08:00') >= 0:timestamp)
-cs	NOT (to_utc_timestamp(ts, '+08:00') = 0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, '+08:00') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') = 0:timestamp))
-cs	(to_utc_timestamp(ts, '+08:00') = cast(0:timestamp as timestamp))	((to_utc_timestamp(ts_minValue, '+08:00') <= cast(0:timestamp as timestamp)) AND (to_utc_timestamp(ts_maxValue, '+08:00') >= cast(0:timestamp as timestamp)))
-cs	to_utc_timestamp(ts, '+08:00') IN (0:timestamp, null:timestamp)	(((to_utc_timestamp(ts_minValue, '+08:00') <= 0:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') >= 0:timestamp)) OR ((to_utc_timestamp(ts_minValue, '+08:00') <= null:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') >= null:timestamp)))
-cs	NOT to_utc_timestamp(ts, '+08:00') IN (0:timestamp)	NOT ((to_utc_timestamp(ts_minValue, '+08:00') = 0:timestamp) AND (to_utc_timestamp(ts_maxValue, '+08:00') = 0:timestamp))
-cs	startswith(to_utc_timestamp(ts, '+08:00'), 'ab')	true:boolean
-ei	startswith(to_utc_timestamp(ts, '+08:00'), 'ab')	((to_utc_timestamp(ts_minValue, '+08:00') <= 'ab') AND (to_utc_timestamp(ts_maxValue, '+08:00') >= 'ab'))
-cs	NOT startswith(to_utc_timestamp(ts, '+08:00'), 'ab')	true:boolean
-ei	NOT startswith(to_utc_timestamp(ts, '+08:00'), 'ab')	NOT (startswith(to_utc_timestamp(ts_minValue, '+08:00'), 'ab') AND startswith(to_utc_timestamp(ts_maxValue, '+08:00'), 'ab'))

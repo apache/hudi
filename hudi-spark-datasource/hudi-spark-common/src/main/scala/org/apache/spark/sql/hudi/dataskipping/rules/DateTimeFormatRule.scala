@@ -30,9 +30,10 @@ import scala.util.Try
  * Date/time formatting and parsing: `DateFormatClass`, `FromUnixTime`, `ToUnixTimestamp`,
  * `UnixTimestamp` and `GetTimestamp`.
  *
- * Shared guard: [[DateTimeOrdering]] (allowlisted literal format, non-LEGACY parser policy, a time
- * zone whose transitions do not reorder), plus a per-file guard on the values the format or parse
- * is sound for. No step without a time zone: the analyzer sets one on every resolved expression.
+ * Shared guard: [[DateTimeOrdering]] (allowlisted literal format, non-LEGACY parser policy, and for a
+ * time-of-day parse a fixed-offset time zone), plus a per-file guard on the values the format or
+ * parse is sound for. No parsing step without a time zone: the analyzer sets one on every resolved
+ * expression.
  *
  *  - Formatting (`DateFormatClass`, `FromUnixTime`): the instant lies in years 0001 to 9999 (see
  *    [[formattableInstants]]).
@@ -50,11 +51,11 @@ import scala.util.Try
 object DateTimeFormatRule extends RangeRule {
 
   override def steps(term: Expression): Seq[Step] = term match {
-    case DateFormatClass(timestamp, format, timeZoneId)
-      if dataTypeOf(timestamp).contains(TimestampType) && DateTimeOrdering.formatPreservesOrder(format, timeZoneId) =>
+    case DateFormatClass(timestamp, format, _)
+      if dataTypeOf(timestamp).contains(TimestampType) && DateTimeOrdering.formatPreservesOrder(format) =>
       Seq(Step(term, timestamp, Increasing, fileGuard = Some(formattableInstants), partial = false))
-    case FromUnixTime(seconds, format, timeZoneId)
-      if dataTypeOf(seconds).contains(LongType) && DateTimeOrdering.formatPreservesOrder(format, timeZoneId) =>
+    case FromUnixTime(seconds, format, _)
+      if dataTypeOf(seconds).contains(LongType) && DateTimeOrdering.formatPreservesOrder(format) =>
       Seq(Step(term, seconds, Increasing, fileGuard = Some(formattableSeconds), partial = false))
 
     // NOTE: `to_unix_timestamp` and `unix_timestamp` evaluate the same way, and take the same guards

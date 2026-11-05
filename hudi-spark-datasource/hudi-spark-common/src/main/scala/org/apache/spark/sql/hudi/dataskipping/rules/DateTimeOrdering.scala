@@ -23,16 +23,11 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.unsafe.types.UTF8String
 
-import java.time.zone.ZoneOffsetTransition
-import java.util.concurrent.ConcurrentHashMap
-
-import scala.collection.JavaConverters._
 import scala.util.Try
 
 /**
- * Shared guards of [[DateTimeFormatRule]] and [[TimeZoneShiftRule]]: when does turning a timestamp
- * into local wall-clock text (formatting) or local wall-clock text into a timestamp (parsing) preserve
- * ordering? All of the following must hold:
+ * Shared guards of [[DateTimeFormatRule]]: when does turning a timestamp into text (formatting) or
+ * text into a timestamp (parsing) preserve ordering?
  *
  *  - Pattern: the format is a literal on the allowlist below. Every allowlisted pattern is year-first
  *    and fixed-width, so the lexicographic order of the strings is the chronological order of the
@@ -40,17 +35,13 @@ import scala.util.Try
  *  - Policy: `spark.sql.legacy.timeParserPolicy` is not LEGACY. LEGACY parses with SimpleDateFormat,
  *    which is lenient (for ex, '2022-3-6', '2022-03-06x' and ' 2022-03-06' all parse with
  *    'yyyy-MM-dd'), so parseable strings are no longer fixed-width.
- *  - Zone: the wall clock of the time zone never goes back (overlap) or jumps (gap) in a way that
- *    reorders values. Formatting needs no overlap with a time-of-day pattern (01:50 is followed by
- *    01:10 across a fall-back), and no overlap that turns the local date back with a date-only
- *    pattern (for ex, America/Goose_Bay fell back from 00:01 to 23:01 the day before). Parsing needs
- *    no gap with a time-of-day pattern (02:30 is shifted past 03:05 across a spring-forward), and
- *    nothing with a date-only pattern (a gap shifts a start of day by at most a day). A parsed time in
- *    an overlap resolves to its earlier instant, which preserves ordering.
+ *  - Zone, parsing only: a time-of-day pattern parsed in the session time zone needs a fixed-offset
+ *    zone. Across a spring-forward gap, a wall clock inside the gap is shifted forward past later ones
+ *    (for ex, in America/Los_Angeles '2022-03-13 02:30:00' parses after '2022-03-13 03:05:00'). A
+ *    date-only parse is monotone in every zone (a gap shifts a start of day by less than a day).
  *
- * Zones are judged from java.time's rules, the ones Spark formats and parses with: every historical
- * transition and the recurring rules still in force. A zone that ever had DST is refused, however
- * long ago it ended (for ex, Asia/Shanghai); fixed offsets and UTC pass.
+ * NOTE: The zone side of formatting is guarded elsewhere: a time-of-day pattern in a DST session
+ *       zone by #20521, a local date that runs backwards at a fall-back across midnight by #20526
  */
 object DateTimeOrdering {
 
@@ -102,11 +93,9 @@ object DateTimeOrdering {
   def isLegacyTimeParserPolicy: Boolean =
     "LEGACY".equalsIgnoreCase(SQLConf.get.getConf(SQLConf.LEGACY_TIME_PARSER_POLICY))
 
-  /** Whether formatting with `format` in `timeZoneId` preserves ordering (see the object scaladoc). */
-  def formatPreservesOrder(format: Expression, timeZoneId: Option[String]): Boolean =
-    !isLegacyTimeParserPolicy && pattern(format).exists { p =>
-      zoneTraits(timeZoneId).exists(zone => if (p.hasTimeOfDay) !zone.hasOverlap else !zone.hasDateTurningBackOverlap)
-    }
+  /** Whether formatting with `format` preserves ordering (see the object scaladoc). */
+  def formatPreservesOrder(format: Expression): Boolean =
+    !isLegacyTimeParserPolicy && pattern(format).isDefined
 
   /**
    * Whether parsing with `format` in `timeZoneId` preserves ordering (see the object scaladoc).
@@ -115,53 +104,12 @@ object DateTimeOrdering {
    *                      TIMESTAMP_NTZ), which skips the zone guard. A time zone is still required
    */
   def parsePreservesOrder(format: Expression, timeZoneId: Option[String], zoneDependent: Boolean): Boolean =
-    !isLegacyTimeParserPolicy && pattern(format).exists { p =>
-      zoneTraits(timeZoneId).exists(zone => !zoneDependent || !p.hasTimeOfDay || !zone.hasGap)
+    !isLegacyTimeParserPolicy && timeZoneId.isDefined && pattern(format).exists { p =>
+      !zoneDependent || !p.hasTimeOfDay || timeZoneId.exists(isFixedOffsetZone)
     }
 
-  /** Whether `zone` is a literal time zone whose wall clock never goes back. */
-  def isZoneWithoutOverlap(zone: Expression): Boolean = zoneTraits(literalZone(zone)).exists(!_.hasOverlap)
-
-  /** Whether `zone` is a literal time zone whose wall clock never jumps forward. */
-  def isZoneWithoutGap(zone: Expression): Boolean = zoneTraits(literalZone(zone)).exists(!_.hasGap)
-
-  private def literalZone(zone: Expression): Option[String] = zone match {
-    case Literal(value: UTF8String, _: StringType) => Some(value.toString)
-    case _ => None
-  }
-
-  /**
-   * The transitions a zone ever had or will have.
-   *
-   * @param hasDateTurningBackOverlap an overlap starts on a later local date than the instant before it
-   */
-  private case class ZoneTraits(hasGap: Boolean, hasOverlap: Boolean, hasDateTurningBackOverlap: Boolean)
-
-  // NOTE: None caches an unknown zone id, which no rule accepts
-  private val zoneTraitsCache = new ConcurrentHashMap[String, Option[ZoneTraits]]()
-
-  /** None for a missing or unknown zone id. */
-  private def zoneTraits(timeZoneId: Option[String]): Option[ZoneTraits] =
-    timeZoneId.flatMap(id => zoneTraitsCache.computeIfAbsent(id, classify(_)))
-
-  private def classify(timeZoneId: String): Option[ZoneTraits] =
-    Try(DateTimeUtils.getZoneId(timeZoneId)).toOption.map { zoneId =>
-      val rules = zoneId.getRules
-      // NOTE: A recurring rule shifts at the same local time and by the same offsets every year, so one
-      //       year stands for all of them
-      val transitions: Seq[ZoneOffsetTransition] =
-        rules.getTransitions.asScala.toSeq ++ rules.getTransitionRules.asScala.map(_.createTransition(2000))
-      ZoneTraits(
-        hasGap = transitions.exists(_.isGap),
-        hasOverlap = transitions.exists(_.isOverlap),
-        hasDateTurningBackOverlap = transitions.exists(turnsDateBack))
-    }
-
-  /**
-   * Whether the local date goes back at an overlap. Just before the transition the wall clock reads
-   * a moment before `dateTimeBefore`; from it on, `dateTimeAfter`. A fall-back from exactly 00:00 to
-   * 23:00 does not turn the date back: the clock read 23:59:59 of the same day before.
-   */
-  private def turnsDateBack(t: ZoneOffsetTransition): Boolean =
-    t.isOverlap && t.getDateTimeAfter.toLocalDate.isBefore(t.getDateTimeBefore.minusNanos(1).toLocalDate)
+  // Whether the zone, resolved the way Spark evaluates it, never changes its offset. An unknown zone is
+  // not fixed
+  private def isFixedOffsetZone(timeZoneId: String): Boolean =
+    Try(DateTimeUtils.getZoneId(timeZoneId).getRules.isFixedOffset).getOrElse(false)
 }

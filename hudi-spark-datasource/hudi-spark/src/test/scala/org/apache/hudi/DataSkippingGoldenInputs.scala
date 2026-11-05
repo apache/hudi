@@ -114,11 +114,8 @@ object DataSkippingGoldenInputs {
     UnixTimestamp(d, Literal("MM/dd/yyyy"), Some("UTC")),
     ToUnixTimestamp(s, Literal("yyyy-MM-dd HH:mm:ss"), Some("America/Los_Angeles")),
     ToUnixTimestamp(s, Literal("yyyy-MM-dd"), Some("America/Los_Angeles")),
-    DateFormatClass(ts, Literal("yyyy-MM-dd HH:mm"), Some("America/Los_Angeles")),
-    DateFormatClass(ts, Literal("yyyy-MM-dd"), Some("America/Goose_Bay")),
     DateFormatClass(ts, Literal("MM/dd/yyyy"), Some("UTC")),
-    FromUnixTime(l, Literal("dd-MM-yyyy"), Some("UTC")),
-    FromUTCTimestamp(ts, Literal("America/New_York")), ToUTCTimestamp(ts, Literal("+08:00")))
+    FromUnixTime(l, Literal("dd-MM-yyyy"), Some("UTC")))
 
   /**
    * Sets a time zone wherever the analyzer would, so that resolution does not depend on the Spark

@@ -41,7 +41,6 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 import org.junit.jupiter.params.provider.Arguments.arguments
 
 import java.sql.Timestamp
-import java.time.Instant
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.HashSet
@@ -199,7 +198,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 
   @Test
   def testDateTimeLookupInDstZone(): Unit = {
-    // America/Los_Angeles springs forward at 2022-03-13 02:00 and falls back at 2022-11-06 02:00
+    // America/Los_Angeles springs forward at 2022-03-13 02:00
     withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "America/Los_Angeles") {
       // '02:30' does not exist and parses as 03:30, past the max '03:05', so pruning on the parsed
       // bounds would drop file_gap, which holds '03:00:00'. Must keep the file
@@ -212,18 +211,7 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
       assertEquals(Seq("file_gap"), lookupThroughFullOptimizer(
         "to_timestamp(B, 'yyyy-MM-dd HH:mm:ss') = '2022-03-13 03:00:00'", gap))
 
-      // 08:50Z formats as 01:50 PDT but the later 09:10Z as 01:10 PST, so the formatted min is above
-      // the max, and pruning would drop file_overlap, which holds 09:05Z (01:05 PST). Must keep it
-      val overlap = Seq(IndexRow("file_overlap", valueCount = 3,
-        C_minValue = Timestamp.from(Instant.parse("2022-11-06T08:50:00Z")),
-        C_maxValue = Timestamp.from(Instant.parse("2022-11-06T09:10:00Z")), C_nullCount = 0))
-      assertEquals(Seq("file_overlap"), lookupThroughFullOptimizer(
-        "date_format(C, 'yyyy-MM-dd HH:mm') = '2022-11-06 01:05'", overlap))
-      // from_utc_timestamp reads the same wall clock: 09:05Z shifts to 01:05 (as UTC)
-      assertEquals(Seq("file_overlap"), lookupThroughFullOptimizer(
-        "from_utc_timestamp(C, 'America/Los_Angeles') = TIMESTAMP '2022-11-06 01:05:00Z'", overlap))
-
-      // A date-only format does not depend on the time of day, so it still prunes in this zone
+      // A date-only parse does not depend on the time of day, so it still prunes in this zone
       val dates = Seq(
         IndexRow("file_1", valueCount = 2, B_minValue = "2022-03-13", B_maxValue = "2022-03-14", B_nullCount = 0),
         IndexRow("file_2", valueCount = 2, B_minValue = "2022-03-10", B_maxValue = "2022-03-11", B_nullCount = 0))

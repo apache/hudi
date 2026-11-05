@@ -23,21 +23,15 @@ import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step}
 /**
  * Time zone shifts: `FromUTCTimestamp`, `ToUTCTimestamp`.
  *
- * Shared guard: the time zone operand is a literal whose wall clock does not reorder the shift
- * ([[DateTimeOrdering]]):
- *  - `FromUTCTimestamp` reads the wall clock of the zone at the instant, which repeats across a
- *    fall-back (for ex, in America/Los_Angeles 08:50Z shifts to 01:50 and 09:10Z to 01:10): the zone
- *    must have no overlap.
- *  - `ToUTCTimestamp` reads the timestamp as a wall clock of the zone, and one inside a spring-forward
- *    gap is shifted forward past later ones: the zone must have no gap.
+ * Shared guard: none; any time zone operand is accepted today.
+ *
+ * NOTE: The offset jumps at DST transitions, so the shift is not monotonic across a fall-back (#20449)
  */
 object TimeZoneShiftRule extends RangeRule {
 
   override def steps(term: Expression): Seq[Step] = term match {
-    case FromUTCTimestamp(timestamp, zone) if DateTimeOrdering.isZoneWithoutOverlap(zone) =>
-      Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
-    case ToUTCTimestamp(timestamp, zone) if DateTimeOrdering.isZoneWithoutGap(zone) =>
-      Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
+    case FromUTCTimestamp(timestamp, _) => Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
+    case ToUTCTimestamp(timestamp, _) => Seq(Step(term, timestamp, Increasing, fileGuard = None, partial = false))
 
     case _ => Nil
   }

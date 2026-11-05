@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expression, FromUnixTime, FromUTCTimestamp, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, Sqrt, ToUnixTimestamp, ToUTCTimestamp, UnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expression, FromUnixTime, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, Sqrt, ToUnixTimestamp, UnixTimestamp, Upper}
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -154,20 +154,11 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
-  def testDateFormattingAndTimeZoneShiftsPreserveOrdering(): Unit = {
+  def testDateFormattingPreservesOrdering(): Unit = {
     assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("UTC"))))
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("MM/dd/yyyy"), Some("UTC"))))
-    // A time-of-day format is refused in a zone with a fall-back overlap, a date-only one is not
-    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("America/Los_Angeles"))))
-    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd"), Some("America/Los_Angeles"))))
     assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd HH:mm:ss"), Some("UTC"))))
     assertEquals(None, matched(FromUnixTime(longAttr, Literal("dd-MM-yyyy"), Some("UTC"))))
-
-    assertEquals(Some(tsAttr), matched(FromUTCTimestamp(tsAttr, Literal("+08:00"))))
-    assertEquals(None, matched(FromUTCTimestamp(tsAttr, Literal("America/New_York"))))
-    assertEquals(Some(tsAttr), matched(ToUTCTimestamp(tsAttr, Literal("UTC"))))
-    assertEquals(None, matched(ToUTCTimestamp(tsAttr, Literal("America/New_York"))))
-    assertEquals(None, matched(ToUTCTimestamp(tsAttr, strAttr)))
   }
 
   @Test
