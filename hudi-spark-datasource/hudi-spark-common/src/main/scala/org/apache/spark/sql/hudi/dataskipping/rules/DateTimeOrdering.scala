@@ -18,12 +18,10 @@
 package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
+import org.apache.spark.sql.hudi.dataskipping.TimeZones
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.unsafe.types.UTF8String
-
-import scala.util.Try
 
 /**
  * Shared guards of [[DateTimeFormatRule]]: when does turning a timestamp into text (formatting) or
@@ -38,13 +36,16 @@ import scala.util.Try
  *  - Policy: `spark.sql.legacy.timeParserPolicy` is not LEGACY. LEGACY parses with SimpleDateFormat,
  *    which is lenient (for ex, '2022-3-6', '2022-03-06x' and ' 2022-03-06' all parse with
  *    'yyyy-MM-dd'), so parseable strings are no longer fixed-width.
- *  - Zone, parsing only: a time-of-day pattern parsed in the session time zone needs a fixed-offset
- *    zone. Across a spring-forward gap, a wall clock inside the gap is shifted forward past later ones
+ *  - Zone: a time-of-day pattern needs a fixed-offset session time zone, both to format and to parse.
+ *    Across a fall-back, local time runs backwards, so a later instant can format before an earlier
+ *    one (for ex, in America/New_York 05:30Z formats as '01:30' EDT, but the later 06:10Z as '01:10'
+ *    EST). Across a spring-forward gap, a wall clock inside the gap is shifted forward past later ones
  *    (for ex, in America/Los_Angeles '2022-03-13 02:30:00' parses after '2022-03-13 03:05:00'). A
  *    date-only parse is monotone in every zone (a gap shifts a start of day by less than a day).
  *
- * NOTE: The zone side of formatting is guarded elsewhere: a time-of-day pattern in a DST session
- *       zone by #20521, a local date that runs backwards at a fall-back across midnight by #20526
+ * NOTE: A date-only format is assumed monotone in every zone: the local date only runs backwards where
+ *       the clocks fall back across midnight, which tzdb last records in 2010 (America/St_Johns at
+ *       00:01; see #20525)
  */
 object DateTimeOrdering {
 
@@ -105,9 +106,9 @@ object DateTimeOrdering {
     // NOTE: An enum conf from Spark 4.1 on, a string conf before, so it is compared as a string
     "LEGACY".equalsIgnoreCase(SQLConf.get.getConf(SQLConf.LEGACY_TIME_PARSER_POLICY).toString)
 
-  /** Whether formatting with `format` preserves ordering (see the object scaladoc). */
-  def formatPreservesOrder(format: Expression): Boolean =
-    !isLegacyTimeParserPolicy && pattern(format).isDefined
+  /** Whether formatting with `format` in `timeZoneId` preserves ordering (see the object scaladoc). */
+  def formatPreservesOrder(format: Expression, timeZoneId: Option[String]): Boolean =
+    !isLegacyTimeParserPolicy && pattern(format).exists(isZoneSafe(_, timeZoneId))
 
   /**
    * Whether parsing with `format` in `timeZoneId` preserves ordering (see the object scaladoc).
@@ -117,11 +118,11 @@ object DateTimeOrdering {
    */
   def parsePreservesOrder(format: Expression, timeZoneId: Option[String], zoneDependent: Boolean): Boolean =
     !isLegacyTimeParserPolicy && timeZoneId.isDefined && pattern(format).exists { p =>
-      !p.hasLetterLiteral && (!zoneDependent || !p.hasTimeOfDay || timeZoneId.exists(isFixedOffsetZone))
+      !p.hasLetterLiteral && (!zoneDependent || isZoneSafe(p, timeZoneId))
     }
 
-  // Whether the zone, resolved the way Spark evaluates it, never changes its offset. An unknown zone is
-  // not fixed
-  private def isFixedOffsetZone(timeZoneId: String): Boolean =
-    Try(DateTimeUtils.getZoneId(timeZoneId).getRules.isFixedOffset).getOrElse(false)
+  // Whether the session time zone cannot reorder what `p` formats or parses: `p` has no time of day, or
+  // the zone never changes its offset (an unknown zone is not fixed)
+  private def isZoneSafe(p: Pattern, timeZoneId: Option[String]): Boolean =
+    !p.hasTimeOfDay || timeZoneId.exists(TimeZones.isFixedOffsetZone)
 }

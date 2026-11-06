@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{And, DateFormatClass, Expression, FromUnixTime, GetTimestamp, GreaterThanOrEqual, LessThan, Literal, ToUnixTimestamp, UnixTimestamp}
-import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange, TimeZones}
+import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange}
 import org.apache.spark.sql.types.{DataType, DateType, LongType, StringType, TimestampNTZType, TimestampType}
 
 import java.time.{LocalDate, ZoneOffset}
@@ -31,9 +31,9 @@ import scala.util.Try
  * `UnixTimestamp` and `GetTimestamp`.
  *
  * Shared guard: [[DateTimeOrdering]] (allowlisted literal format, non-LEGACY parser policy, and for a
- * time-of-day parse a fixed-offset time zone), formatting also [[isZoneSafePattern]], plus a per-file
- * guard on the values the format or parse is sound for. No parsing step without a time zone: the
- * analyzer sets one on every resolved expression.
+ * time-of-day pattern a fixed-offset time zone), plus a per-file guard on the values the format or
+ * parse is sound for. No parsing step without a time zone: the analyzer sets one on every resolved
+ * expression.
  *
  *  - Formatting (`DateFormatClass`, `FromUnixTime`): the instant lies in years 0001 to 9999 (see
  *    [[formattableInstants]]).
@@ -51,19 +51,11 @@ import scala.util.Try
 object DateTimeFormatRule extends RangeRule {
 
   override def steps(term: Expression): Seq[Step] = term match {
-    // NOTE: date_format and from_unixtime render the time in the session time zone, so a pattern field that
-    //       depends on the time of day or on the offset (for ex, HH, mm or XXX) only keeps the ordering when the
-    //       zone's offset never changes: local time runs backwards across a DST fall-back (for ex, 05:30Z is
-    //       01:30 EDT but the later 06:10Z is 01:10 EST). A date-only pattern is assumed unaffected: the local
-    //       date only runs backwards where the clocks fall back across midnight, which tzdb last records in 2010
-    //       (America/St_Johns at 00:01; see #20525)
     case DateFormatClass(timestamp, format, timeZoneId)
-      if dataTypeOf(timestamp).contains(TimestampType) && DateTimeOrdering.formatPreservesOrder(format) &&
-        isZoneSafePattern(format, timeZoneId) =>
+      if dataTypeOf(timestamp).contains(TimestampType) && DateTimeOrdering.formatPreservesOrder(format, timeZoneId) =>
       Seq(Step(term, timestamp, Increasing, fileGuard = Some(formattableInstants), partial = false))
     case FromUnixTime(seconds, format, timeZoneId)
-      if dataTypeOf(seconds).contains(LongType) && DateTimeOrdering.formatPreservesOrder(format) &&
-        isZoneSafePattern(format, timeZoneId) =>
+      if dataTypeOf(seconds).contains(LongType) && DateTimeOrdering.formatPreservesOrder(format, timeZoneId) =>
       Seq(Step(term, seconds, Increasing, fileGuard = Some(formattableSeconds), partial = false))
 
     // NOTE: `to_unix_timestamp` and `unix_timestamp` evaluate the same way, and take the same guards
@@ -140,20 +132,4 @@ object DateTimeFormatRule extends RangeRule {
    */
   private def digitFirstStrings(r: TermRange): Expression =
     And(GreaterThanOrEqual(r.lo, Literal("0")), LessThan(r.hi, Literal(":")))
-
-  // Pattern letters that only render the local date: era, year, quarter, month, week and day
-  private val DATE_ONLY_PATTERN_LETTERS: Set[Char] = "GuyYQqMLwWDdFEec".toSet
-
-  // Whether the session time zone cannot reorder what the pattern renders: either the pattern only renders the
-  // local date, or the zone's offset never changes. Only a literal pattern is recognized as date-only, since the
-  // optimizer folds a constant one to a literal before data skipping runs, and neither quoted text nor a
-  // non-ASCII character is a field. An unresolved session zone is not fixed
-  private def isZoneSafePattern(pattern: Expression, timeZoneId: Option[String]): Boolean = {
-    val isDateOnly = pattern match {
-      case Literal(value, _) if value != null =>
-        value.toString.replaceAll("'[^']*'", "").forall(c => !(c < 128 && c.isLetter) || DATE_ONLY_PATTERN_LETTERS.contains(c))
-      case _ => false
-    }
-    isDateOnly || timeZoneId.exists(TimeZones.isFixedOffsetZone)
-  }
 }

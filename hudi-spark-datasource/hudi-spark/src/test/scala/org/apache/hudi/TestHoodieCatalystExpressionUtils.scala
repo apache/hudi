@@ -187,26 +187,20 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   @Test
   def testTimeOfDayPatternsRequireFixedOffsetSessionZone(): Unit = {
     val newYork = Some("America/New_York")
-    // A time-of-day or offset field reorders values across a DST fall-back of the session zone.
-    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), newYork)))
-    assertEquals(None, matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd HH:mm:ss"), newYork)))
-    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd XXX"), newYork)))
-    // So does every pattern letter that is not a date field, each on its own: hours, am-pm, day period, minutes,
-    // seconds, fractions, zone names and offsets.
-    "aBhKkHmsSAnNVvzOXxZ".foreach { letter =>
-      assertEquals(None, matched(DateFormatClass(tsAttr, Literal(s"yyyy-MM-dd $letter"), newYork)), s"letter $letter")
+    // Every allowlisted time-of-day pattern renders the local time, which runs backwards across a DST fall-back of
+    // the session zone, and keeps the ordering in a session zone whose offset never changes.
+    Seq("yyyy-MM-dd HH", "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSS", "yyyy-MM-dd'T'HH:mm:ss",
+      "yyyy-MM-dd'T'HH:mm:ss.SSS", "yyyyMMddHHmmss", "yyyy/MM/dd HH:mm:ss").foreach { pattern =>
+      assertEquals(None, matched(DateFormatClass(tsAttr, Literal(pattern), newYork)), pattern)
+      assertEquals(None, matched(FromUnixTime(longAttr, Literal(pattern), newYork)), pattern)
+      assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal(pattern), Some("UTC"))), pattern)
+      assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal(pattern), Some("+08:00"))), pattern)
     }
-    // A field outside the quotes or after an escaped quote is still a field.
-    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd 'at' HH 'h'"), newYork)))
-    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy''HH"), newYork)))
-    // A date-only pattern renders the local date, which never runs backwards in New York; neither quoted text nor
-    // a non-ASCII character is a field.
-    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd"), newYork)))
-    assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd 'at' 'H'"), newYork)))
-    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy\u5e74MM\u6708dd\u65e5"), newYork)))
-    // Any pattern keeps the ordering in a session zone whose offset never changes.
-    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("UTC"))))
-    assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd HH:mm:ss"), Some("+08:00"))))
+    // Every allowlisted date-only pattern renders the local date, which never runs backwards in New York.
+    Seq("yyyy", "yyyy-MM", "yyyy-MM-dd", "yyyyMMdd", "yyyy/MM/dd").foreach { pattern =>
+      assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal(pattern), newYork)), pattern)
+      assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal(pattern), newYork)), pattern)
+    }
     // PST resolves to America/Los_Angeles; Kolkata has no DST but historical offset changes.
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("PST"))))
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("Asia/Kolkata"))))

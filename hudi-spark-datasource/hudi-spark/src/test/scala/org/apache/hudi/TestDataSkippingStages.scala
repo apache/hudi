@@ -335,9 +335,10 @@ class TestDataSkippingStages {
 
   @Test
   def testDateTimeZoneGuards(): Unit = {
-    // UTC and fixed offsets never shift, so a time-of-day parse is accepted
+    // UTC and fixed offsets never shift, so a time-of-day parse or format is accepted
     Seq("UTC", "+08:00", "-05:30", "GMT+8").foreach { zone =>
       assertTrue(DateTimeOrdering.parsePreservesOrder(timeOfDay, Some(zone), zoneDependent = true), zone)
+      assertTrue(DateTimeOrdering.formatPreservesOrder(timeOfDay, Some(zone)), zone)
     }
 
     // America/Los_Angeles skips 02:00 to 03:00 when springing forward, so a time-of-day parse is
@@ -348,17 +349,21 @@ class TestDataSkippingStages {
     assertTrue(DateTimeOrdering.parsePreservesOrder(timeOfDay, losAngeles, zoneDependent = false))
     // ... while a date-only parse is monotone in every zone
     assertTrue(DateTimeOrdering.parsePreservesOrder(dateOnly, losAngeles, zoneDependent = true))
+    // It falls back from 02:00 to 01:00, so a time-of-day format is refused too, and a date-only one is not
+    assertFalse(DateTimeOrdering.formatPreservesOrder(timeOfDay, losAngeles))
+    assertTrue(DateTimeOrdering.formatPreservesOrder(dateOnly, losAngeles))
     // Asia/Kolkata has had no DST since 1945, but its offset changed, so it is not fixed
     assertFalse(DateTimeOrdering.parsePreservesOrder(timeOfDay, Some("Asia/Kolkata"), zoneDependent = true))
+    assertFalse(DateTimeOrdering.formatPreservesOrder(timeOfDay, Some("Asia/Kolkata")))
 
     // No time zone (not analyzed) or an unknown one
     assertFalse(DateTimeOrdering.parsePreservesOrder(dateOnly, None, zoneDependent = false))
     assertFalse(DateTimeOrdering.parsePreservesOrder(timeOfDay, Some("Not/A_Zone"), zoneDependent = true))
+    assertFalse(DateTimeOrdering.formatPreservesOrder(timeOfDay, None))
+    assertFalse(DateTimeOrdering.formatPreservesOrder(timeOfDay, Some("Not/A_Zone")))
     // A pattern off the allowlist, in any zone
-    assertFalse(DateTimeOrdering.formatPreservesOrder(Literal("MM/dd/yyyy")))
+    assertFalse(DateTimeOrdering.formatPreservesOrder(Literal("MM/dd/yyyy"), Some("UTC")))
     assertFalse(DateTimeOrdering.parsePreservesOrder(Literal("yyyy-M-d"), Some("UTC"), zoneDependent = true))
-    // Formatting takes no zone guard here (#20521, #20526)
-    assertTrue(DateTimeOrdering.formatPreservesOrder(timeOfDay))
   }
 
   @Test
@@ -367,7 +372,7 @@ class TestDataSkippingStages {
     // '2022-03-05T23:00:00'. Formatting always writes 'T'
     assertFalse(DateTimeOrdering.parsePreservesOrder(isoTimeOfDay, Some("UTC"), zoneDependent = true))
     assertFalse(DateTimeOrdering.parsePreservesOrder(Literal("yyyy-MM-dd'T'HH:mm:ss.SSS"), Some("UTC"), zoneDependent = false))
-    assertTrue(DateTimeOrdering.formatPreservesOrder(isoTimeOfDay))
+    assertTrue(DateTimeOrdering.formatPreservesOrder(isoTimeOfDay, Some("UTC")))
   }
 
   @Test
@@ -379,12 +384,12 @@ class TestDataSkippingStages {
     }
     // SimpleDateFormat parses leniently (for ex, '2022-3-6' with 'yyyy-MM-dd')
     withPolicy("LEGACY") {
-      assertFalse(DateTimeOrdering.formatPreservesOrder(dateOnly))
+      assertFalse(DateTimeOrdering.formatPreservesOrder(dateOnly, Some("UTC")))
       assertFalse(DateTimeOrdering.parsePreservesOrder(dateOnly, Some("UTC"), zoneDependent = true))
     }
     Seq("CORRECTED", "EXCEPTION").foreach { policy =>
       withPolicy(policy) {
-        assertTrue(DateTimeOrdering.formatPreservesOrder(dateOnly), policy)
+        assertTrue(DateTimeOrdering.formatPreservesOrder(dateOnly, Some("UTC")), policy)
         assertTrue(DateTimeOrdering.parsePreservesOrder(dateOnly, Some("UTC"), zoneDependent = true), policy)
       }
     }

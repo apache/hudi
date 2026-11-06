@@ -22,8 +22,8 @@ import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import scala.util.Try
 
 /**
- * Time zone checks shared by the rules whose ordering depends on a zone's offset: `TimeZoneShiftRule` and
- * `DateTimeFormatRule`.
+ * Time zone checks shared by the rules whose ordering depends on a zone's offset: `TimeZoneShiftRule`, and
+ * `DateTimeFormatRule` through `DateTimeOrdering`.
  */
 object TimeZones {
 
