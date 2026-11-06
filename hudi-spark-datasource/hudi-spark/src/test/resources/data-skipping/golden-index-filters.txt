@@ -311,17 +311,17 @@ cs	startswith((x * Infinity:double), 'ab')	true:boolean
 ei	startswith((x * Infinity:double), 'ab')	true:boolean
 cs	NOT startswith((x * Infinity:double), 'ab')	true:boolean
 ei	NOT startswith((x * Infinity:double), 'ab')	true:boolean
-cs	((dec * 1.5:decimal(2,1)) = 0.000:decimal(13,3))	true:boolean
-cs	(0.000:decimal(13,3) < (dec * 1.5:decimal(2,1)))	true:boolean
-cs	((dec * 1.5:decimal(2,1)) >= 0.000:decimal(13,3))	true:boolean
-cs	NOT ((dec * 1.5:decimal(2,1)) = 0.000:decimal(13,3))	true:boolean
-cs	((dec * 1.5:decimal(2,1)) = cast(0.000:decimal(13,3) as decimal(13,3)))	true:boolean
-cs	(dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3), null:decimal(13,3))	true:boolean
-cs	NOT (dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3))	true:boolean
+cs	((dec * 1.5:decimal(2,1)) = 0.000:decimal(13,3))	coalesce(((tryeval((dec_minValue * 1.5:decimal(2,1))) <= 0.000:decimal(13,3)) AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) >= 0.000:decimal(13,3))), true:boolean)
+cs	(0.000:decimal(13,3) < (dec * 1.5:decimal(2,1)))	coalesce((tryeval((dec_maxValue * 1.5:decimal(2,1))) > 0.000:decimal(13,3)), true:boolean)
+cs	((dec * 1.5:decimal(2,1)) >= 0.000:decimal(13,3))	coalesce((tryeval((dec_maxValue * 1.5:decimal(2,1))) >= 0.000:decimal(13,3)), true:boolean)
+cs	NOT ((dec * 1.5:decimal(2,1)) = 0.000:decimal(13,3))	coalesce(NOT ((tryeval((dec_minValue * 1.5:decimal(2,1))) = 0.000:decimal(13,3)) AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) = 0.000:decimal(13,3))), true:boolean)
+cs	((dec * 1.5:decimal(2,1)) = cast(0.000:decimal(13,3) as decimal(13,3)))	coalesce(((tryeval((dec_minValue * 1.5:decimal(2,1))) <= cast(0.000:decimal(13,3) as decimal(13,3))) AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) >= cast(0.000:decimal(13,3) as decimal(13,3)))), true:boolean)
+cs	(dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3), null:decimal(13,3))	coalesce((((tryeval((dec_minValue * 1.5:decimal(2,1))) <= 0.000:decimal(13,3)) AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) >= 0.000:decimal(13,3))) OR ((tryeval((dec_minValue * 1.5:decimal(2,1))) <= null:decimal(13,3)) AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) >= null:decimal(13,3)))), true:boolean)
+cs	NOT (dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3))	coalesce(NOT ((tryeval((dec_minValue * 1.5:decimal(2,1))) = 0.000:decimal(13,3)) AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) = 0.000:decimal(13,3))), true:boolean)
 cs	startswith((dec * 1.5:decimal(2,1)), 'ab')	true:boolean
-ei	startswith((dec * 1.5:decimal(2,1)), 'ab')	true:boolean
+ei	startswith((dec * 1.5:decimal(2,1)), 'ab')	coalesce(((tryeval((dec_minValue * 1.5:decimal(2,1))) <= 'ab') AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) >= 'ab')), true:boolean)
 cs	NOT startswith((dec * 1.5:decimal(2,1)), 'ab')	true:boolean
-ei	NOT startswith((dec * 1.5:decimal(2,1)), 'ab')	true:boolean
+ei	NOT startswith((dec * 1.5:decimal(2,1)), 'ab')	coalesce(NOT (startswith(tryeval((dec_minValue * 1.5:decimal(2,1))), 'ab') AND startswith(tryeval((dec_maxValue * 1.5:decimal(2,1))), 'ab')), true:boolean)
 cs	((x / 2.0:double) = 0.0:double)	(((x_minValue / 2.0:double) <= 0.0:double) AND ((x_maxValue / 2.0:double) >= 0.0:double))
 cs	(0.0:double < (x / 2.0:double))	((x_maxValue / 2.0:double) > 0.0:double)
 cs	((x / 2.0:double) >= 0.0:double)	((x_maxValue / 2.0:double) >= 0.0:double)
@@ -1093,7 +1093,7 @@ ei	NOT (NOT (NOT ((date_add(d, 1:int) = 0:date) AND NOT startswith(LOG1P(x), 'ab
 cs	(((((x / -2.0:double) >= 0.0:double) AND NOT to_unix_timestamp(ts, 'yyyy-MM-dd') IN (0:bigint)) AND (NOT left(s, 2:int) IN ('') OR (to_timestamp(s, 'yyyy-MM-dd') >= 0:timestamp))) OR (((EXP(x) = 0.0:double) AND NOT x IN (0.0:double)) OR NOT NOT startswith(shiftleft(a, 1:int), 'ab')))	true:boolean
 ei	(((((x / -2.0:double) >= 0.0:double) AND NOT to_unix_timestamp(ts, 'yyyy-MM-dd') IN (0:bigint)) AND (NOT left(s, 2:int) IN ('') OR (to_timestamp(s, 'yyyy-MM-dd') >= 0:timestamp))) OR (((EXP(x) = 0.0:double) AND NOT x IN (0.0:double)) OR NOT NOT startswith(shiftleft(a, 1:int), 'ab')))	true:boolean
 cs	NOT ((0:int < shiftleft(a, 1:int)) OR (false:boolean < cast(a as boolean)))	true:boolean
-cs	(dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3), null:decimal(13,3))	true:boolean
+cs	(dec * 1.5:decimal(2,1)) IN (0.000:decimal(13,3), null:decimal(13,3))	coalesce((((tryeval((dec_minValue * 1.5:decimal(2,1))) <= 0.000:decimal(13,3)) AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) >= 0.000:decimal(13,3))) OR ((tryeval((dec_minValue * 1.5:decimal(2,1))) <= null:decimal(13,3)) AND (tryeval((dec_maxValue * 1.5:decimal(2,1))) >= null:decimal(13,3)))), true:boolean)
 cs	((NOT (0:int < shiftright(8:int, a)) AND (cast(a as string) = cast('' as string))) OR NOT to_unix_timestamp(ts, 'yyyy-MM-dd') IN (0:bigint))	true:boolean
 cs	NOT (NOT ((cast(to_date(s) as timestamp) >= 0:timestamp) OR NOT (((0:int * a) = 0:int) OR ((a * a) = cast(0:int as int)))) OR NOT s IS NULL)	true:boolean
 cs	((a + 1:int) = cast(0:int as int))	coalesce(((if((a_maxValue <= 2147483646:int), (a_minValue + 1:int), null:int) <= cast(0:int as int)) AND (if((a_maxValue <= 2147483646:int), (a_maxValue + 1:int), null:int) >= cast(0:int as int))), true:boolean)
@@ -1277,3 +1277,58 @@ cs	from_unixtime(l, 'dd-MM-yyyy') IN ('', null:string)	true:boolean
 cs	NOT from_unixtime(l, 'dd-MM-yyyy') IN ('')	true:boolean
 cs	startswith(from_unixtime(l, 'dd-MM-yyyy'), 'ab')	true:boolean
 cs	NOT startswith(from_unixtime(l, 'dd-MM-yyyy'), 'ab')	true:boolean
+cs	(shiftleft(a, 33:int) = 0:int)	coalesce(((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_minValue, 33:int), null:int) <= 0:int) AND (if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) >= 0:int)), true:boolean)
+cs	(0:int < shiftleft(a, 33:int))	coalesce((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) > 0:int), true:boolean)
+cs	(shiftleft(a, 33:int) >= 0:int)	coalesce((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) >= 0:int), true:boolean)
+cs	NOT (shiftleft(a, 33:int) = 0:int)	coalesce(NOT ((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_minValue, 33:int), null:int) = 0:int) AND (if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) = 0:int)), true:boolean)
+cs	(shiftleft(a, 33:int) = cast(0:int as int))	coalesce(((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_minValue, 33:int), null:int) <= cast(0:int as int)) AND (if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) >= cast(0:int as int))), true:boolean)
+cs	shiftleft(a, 33:int) IN (0:int, null:int)	coalesce((((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_minValue, 33:int), null:int) <= 0:int) AND (if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) >= 0:int)) OR ((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_minValue, 33:int), null:int) <= null:int) AND (if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) >= null:int))), true:boolean)
+cs	NOT shiftleft(a, 33:int) IN (0:int)	coalesce(NOT ((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_minValue, 33:int), null:int) = 0:int) AND (if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) = 0:int)), true:boolean)
+cs	startswith(shiftleft(a, 33:int), 'ab')	true:boolean
+ei	startswith(shiftleft(a, 33:int), 'ab')	coalesce(((if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_minValue, 33:int), null:int) <= 'ab') AND (if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int) >= 'ab')), true:boolean)
+cs	NOT startswith(shiftleft(a, 33:int), 'ab')	true:boolean
+ei	NOT startswith(shiftleft(a, 33:int), 'ab')	coalesce(NOT (startswith(if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_minValue, 33:int), null:int), 'ab') AND startswith(if(((a_minValue >= -1073741824:int) AND (a_maxValue <= 1073741823:int)), shiftleft(a_maxValue, 33:int), null:int), 'ab')), true:boolean)
+cs	((sm + 1:smallint) = 0:smallint)	coalesce(((if((sm_maxValue <= 32766:smallint), (sm_minValue + 1:smallint), null:smallint) <= 0:smallint) AND (if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) >= 0:smallint)), true:boolean)
+cs	(0:smallint < (sm + 1:smallint))	coalesce((if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) > 0:smallint), true:boolean)
+cs	((sm + 1:smallint) >= 0:smallint)	coalesce((if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) >= 0:smallint), true:boolean)
+cs	NOT ((sm + 1:smallint) = 0:smallint)	coalesce(NOT ((if((sm_maxValue <= 32766:smallint), (sm_minValue + 1:smallint), null:smallint) = 0:smallint) AND (if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) = 0:smallint)), true:boolean)
+cs	((sm + 1:smallint) = cast(0:smallint as smallint))	coalesce(((if((sm_maxValue <= 32766:smallint), (sm_minValue + 1:smallint), null:smallint) <= cast(0:smallint as smallint)) AND (if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) >= cast(0:smallint as smallint))), true:boolean)
+cs	(sm + 1:smallint) IN (0:smallint, null:smallint)	coalesce((((if((sm_maxValue <= 32766:smallint), (sm_minValue + 1:smallint), null:smallint) <= 0:smallint) AND (if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) >= 0:smallint)) OR ((if((sm_maxValue <= 32766:smallint), (sm_minValue + 1:smallint), null:smallint) <= null:smallint) AND (if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) >= null:smallint))), true:boolean)
+cs	NOT (sm + 1:smallint) IN (0:smallint)	coalesce(NOT ((if((sm_maxValue <= 32766:smallint), (sm_minValue + 1:smallint), null:smallint) = 0:smallint) AND (if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) = 0:smallint)), true:boolean)
+cs	startswith((sm + 1:smallint), 'ab')	true:boolean
+ei	startswith((sm + 1:smallint), 'ab')	coalesce(((if((sm_maxValue <= 32766:smallint), (sm_minValue + 1:smallint), null:smallint) <= 'ab') AND (if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint) >= 'ab')), true:boolean)
+cs	NOT startswith((sm + 1:smallint), 'ab')	true:boolean
+ei	NOT startswith((sm + 1:smallint), 'ab')	coalesce(NOT (startswith(if((sm_maxValue <= 32766:smallint), (sm_minValue + 1:smallint), null:smallint), 'ab') AND startswith(if((sm_maxValue <= 32766:smallint), (sm_maxValue + 1:smallint), null:smallint), 'ab')), true:boolean)
+cs	((tn * 3:tinyint) = 0:tinyint)	coalesce(((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_minValue * 3:tinyint), null:tinyint) <= 0:tinyint) AND (if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) >= 0:tinyint)), true:boolean)
+cs	(0:tinyint < (tn * 3:tinyint))	coalesce((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) > 0:tinyint), true:boolean)
+cs	((tn * 3:tinyint) >= 0:tinyint)	coalesce((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) >= 0:tinyint), true:boolean)
+cs	NOT ((tn * 3:tinyint) = 0:tinyint)	coalesce(NOT ((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_minValue * 3:tinyint), null:tinyint) = 0:tinyint) AND (if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) = 0:tinyint)), true:boolean)
+cs	((tn * 3:tinyint) = cast(0:tinyint as tinyint))	coalesce(((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_minValue * 3:tinyint), null:tinyint) <= cast(0:tinyint as tinyint)) AND (if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) >= cast(0:tinyint as tinyint))), true:boolean)
+cs	(tn * 3:tinyint) IN (0:tinyint, null:tinyint)	coalesce((((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_minValue * 3:tinyint), null:tinyint) <= 0:tinyint) AND (if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) >= 0:tinyint)) OR ((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_minValue * 3:tinyint), null:tinyint) <= null:tinyint) AND (if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) >= null:tinyint))), true:boolean)
+cs	NOT (tn * 3:tinyint) IN (0:tinyint)	coalesce(NOT ((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_minValue * 3:tinyint), null:tinyint) = 0:tinyint) AND (if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) = 0:tinyint)), true:boolean)
+cs	startswith((tn * 3:tinyint), 'ab')	true:boolean
+ei	startswith((tn * 3:tinyint), 'ab')	coalesce(((if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_minValue * 3:tinyint), null:tinyint) <= 'ab') AND (if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint) >= 'ab')), true:boolean)
+cs	NOT startswith((tn * 3:tinyint), 'ab')	true:boolean
+ei	NOT startswith((tn * 3:tinyint), 'ab')	coalesce(NOT (startswith(if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_minValue * 3:tinyint), null:tinyint), 'ab') AND startswith(if(((tn_minValue >= -42:tinyint) AND (tn_maxValue <= 42:tinyint)), (tn_maxValue * 3:tinyint), null:tinyint), 'ab')), true:boolean)
+cs	((dec + 1:decimal(10,2)) = 0.00:decimal(11,2))	coalesce(((tryeval((dec_minValue + 1:decimal(10,2))) <= 0.00:decimal(11,2)) AND (tryeval((dec_maxValue + 1:decimal(10,2))) >= 0.00:decimal(11,2))), true:boolean)
+cs	(0.00:decimal(11,2) < (dec + 1:decimal(10,2)))	coalesce((tryeval((dec_maxValue + 1:decimal(10,2))) > 0.00:decimal(11,2)), true:boolean)
+cs	((dec + 1:decimal(10,2)) >= 0.00:decimal(11,2))	coalesce((tryeval((dec_maxValue + 1:decimal(10,2))) >= 0.00:decimal(11,2)), true:boolean)
+cs	NOT ((dec + 1:decimal(10,2)) = 0.00:decimal(11,2))	coalesce(NOT ((tryeval((dec_minValue + 1:decimal(10,2))) = 0.00:decimal(11,2)) AND (tryeval((dec_maxValue + 1:decimal(10,2))) = 0.00:decimal(11,2))), true:boolean)
+cs	((dec + 1:decimal(10,2)) = cast(0.00:decimal(11,2) as decimal(11,2)))	coalesce(((tryeval((dec_minValue + 1:decimal(10,2))) <= cast(0.00:decimal(11,2) as decimal(11,2))) AND (tryeval((dec_maxValue + 1:decimal(10,2))) >= cast(0.00:decimal(11,2) as decimal(11,2)))), true:boolean)
+cs	(dec + 1:decimal(10,2)) IN (0.00:decimal(11,2), null:decimal(11,2))	coalesce((((tryeval((dec_minValue + 1:decimal(10,2))) <= 0.00:decimal(11,2)) AND (tryeval((dec_maxValue + 1:decimal(10,2))) >= 0.00:decimal(11,2))) OR ((tryeval((dec_minValue + 1:decimal(10,2))) <= null:decimal(11,2)) AND (tryeval((dec_maxValue + 1:decimal(10,2))) >= null:decimal(11,2)))), true:boolean)
+cs	NOT (dec + 1:decimal(10,2)) IN (0.00:decimal(11,2))	coalesce(NOT ((tryeval((dec_minValue + 1:decimal(10,2))) = 0.00:decimal(11,2)) AND (tryeval((dec_maxValue + 1:decimal(10,2))) = 0.00:decimal(11,2))), true:boolean)
+cs	startswith((dec + 1:decimal(10,2)), 'ab')	true:boolean
+ei	startswith((dec + 1:decimal(10,2)), 'ab')	coalesce(((tryeval((dec_minValue + 1:decimal(10,2))) <= 'ab') AND (tryeval((dec_maxValue + 1:decimal(10,2))) >= 'ab')), true:boolean)
+cs	NOT startswith((dec + 1:decimal(10,2)), 'ab')	true:boolean
+ei	NOT startswith((dec + 1:decimal(10,2)), 'ab')	coalesce(NOT (startswith(tryeval((dec_minValue + 1:decimal(10,2))), 'ab') AND startswith(tryeval((dec_maxValue + 1:decimal(10,2))), 'ab')), true:boolean)
+cs	((dec / 2:decimal(10,2)) = 0E-13:decimal(23,13))	coalesce(((tryeval((dec_minValue / 2:decimal(10,2))) <= 0E-13:decimal(23,13)) AND (tryeval((dec_maxValue / 2:decimal(10,2))) >= 0E-13:decimal(23,13))), true:boolean)
+cs	(0E-13:decimal(23,13) < (dec / 2:decimal(10,2)))	coalesce((tryeval((dec_maxValue / 2:decimal(10,2))) > 0E-13:decimal(23,13)), true:boolean)
+cs	((dec / 2:decimal(10,2)) >= 0E-13:decimal(23,13))	coalesce((tryeval((dec_maxValue / 2:decimal(10,2))) >= 0E-13:decimal(23,13)), true:boolean)
+cs	NOT ((dec / 2:decimal(10,2)) = 0E-13:decimal(23,13))	coalesce(NOT ((tryeval((dec_minValue / 2:decimal(10,2))) = 0E-13:decimal(23,13)) AND (tryeval((dec_maxValue / 2:decimal(10,2))) = 0E-13:decimal(23,13))), true:boolean)
+cs	((dec / 2:decimal(10,2)) = cast(0E-13:decimal(23,13) as decimal(23,13)))	coalesce(((tryeval((dec_minValue / 2:decimal(10,2))) <= cast(0E-13:decimal(23,13) as decimal(23,13))) AND (tryeval((dec_maxValue / 2:decimal(10,2))) >= cast(0E-13:decimal(23,13) as decimal(23,13)))), true:boolean)
+cs	(dec / 2:decimal(10,2)) IN (0E-13:decimal(23,13), null:decimal(23,13))	coalesce((((tryeval((dec_minValue / 2:decimal(10,2))) <= 0E-13:decimal(23,13)) AND (tryeval((dec_maxValue / 2:decimal(10,2))) >= 0E-13:decimal(23,13))) OR ((tryeval((dec_minValue / 2:decimal(10,2))) <= null:decimal(23,13)) AND (tryeval((dec_maxValue / 2:decimal(10,2))) >= null:decimal(23,13)))), true:boolean)
+cs	NOT (dec / 2:decimal(10,2)) IN (0E-13:decimal(23,13))	coalesce(NOT ((tryeval((dec_minValue / 2:decimal(10,2))) = 0E-13:decimal(23,13)) AND (tryeval((dec_maxValue / 2:decimal(10,2))) = 0E-13:decimal(23,13))), true:boolean)
+cs	startswith((dec / 2:decimal(10,2)), 'ab')	true:boolean
+ei	startswith((dec / 2:decimal(10,2)), 'ab')	coalesce(((tryeval((dec_minValue / 2:decimal(10,2))) <= 'ab') AND (tryeval((dec_maxValue / 2:decimal(10,2))) >= 'ab')), true:boolean)
+cs	NOT startswith((dec / 2:decimal(10,2)), 'ab')	true:boolean
+ei	NOT startswith((dec / 2:decimal(10,2)), 'ab')	coalesce(NOT (startswith(tryeval((dec_minValue / 2:decimal(10,2))), 'ab') AND startswith(tryeval((dec_maxValue / 2:decimal(10,2))), 'ab')), true:boolean)

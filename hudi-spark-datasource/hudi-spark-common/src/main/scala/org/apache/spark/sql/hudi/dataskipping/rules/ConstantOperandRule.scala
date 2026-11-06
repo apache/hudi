@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{Add, And, BitwiseOr, DateAdd, DateDiff, DateSub, Divide, Expression, GreaterThanOrEqual, LessThanOrEqual, Literal, Multiply, ShiftLeft, ShiftRight}
 import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange}
-import org.apache.spark.sql.types.{ByteType, DataType, Decimal, DoubleType, FloatType, IntegerType, LongType, ShortType}
+import org.apache.spark.sql.types.{ByteType, DataType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType}
 
 import scala.util.Try
 
@@ -28,10 +28,13 @@ import scala.util.Try
  * `Add`, `Multiply`, `Divide`, `DateAdd`, `DateSub`, `DateDiff`, `ShiftLeft`, `ShiftRight`, `BitwiseOr`.
  *
  * Shared guard: the other operand is constant. Today that is enforced per function:
- *  - `Add`: float / double result and a finite constant, or integral result and a constant (either side)
- *  - `Multiply`: float / double or integral result, and the other side is a positive numeric literal
+ *  - `Add`: float / double result and a finite constant, or decimal or integral result and a constant
  *    (either side)
+ *  - `Multiply`: float / double, decimal or integral result, and the other side is a positive numeric
+ *    literal (either side)
  *  - `Divide`: the divisor is a positive numeric literal (column as dividend only)
+ *  - Decimal `Add`, `Multiply` and `Divide` steps are `partial`: an overflowing bound is NULL and the
+ *    file is kept
  *  - `ShiftLeft`: the shift amount is constant
  *  - `DateAdd`, `DateSub`, `DateDiff` (end only), `ShiftRight`, `BitwiseOr`: ANY second operand is
  *    accepted today, constant or not
@@ -39,11 +42,13 @@ import scala.util.Try
  * NOTE: A column-referencing other operand could reverse the ordering (for ex, A + A * -2 = -A), and a
  *       non-deterministic one is re-evaluated against the min/max bounds (for ex, A + rand())
  *
- * NOTE: Integral `Add`, `Multiply` and `ShiftLeft` wrap around on overflow in non-ANSI mode, so the
- *       max can map below the min (for ex, Long.MaxValue * 2 = -2), and throw in ANSI mode. Their
- *       steps carry a file guard that the file's range does not overflow (see [[IntegralType]]).
- *       Float / double results round monotonically and saturate to infinity instead. Decimal results
- *       overflow into NULL and are not matched (#20460)
+ * NOTE: Integral `Add`, `Multiply` and `ShiftLeft` wrap around on overflow, so the max can map below
+ *       the min (for ex, Long.MaxValue * 2 = -2). `Add` and `Multiply` throw instead in ANSI mode, while
+ *       `ShiftLeft` wraps around in either mode. Their steps carry a file guard that the file's range
+ *       does not overflow (see [[IntegralLimits]]). Float / double results round monotonically and
+ *       saturate to infinity instead. Decimal results round HALF_UP, which is monotonic, and overflow
+ *       into NULL (or throw in ANSI mode): their steps are `partial`, so an overflowing bound is NULL
+ *       and the file is kept. If neither the min nor the max overflows, no value in between does (#20460)
  */
 object ConstantOperandRule extends RangeRule {
 
@@ -59,8 +64,13 @@ object ConstantOperandRule extends RangeRule {
         when(isFiniteConstant(right))(Step(term, left, Increasing, fileGuard = None, partial = false)),
         when(isFiniteConstant(left))(Step(term, right, Increasing, fileGuard = None, partial = false))
       ).flatten
+    case Add(left, right, _) if hasDecimalResult(term) =>
+      Seq(
+        when(right.foldable)(Step(term, left, Increasing, fileGuard = None, partial = true)),
+        when(left.foldable)(Step(term, right, Increasing, fileGuard = None, partial = true))
+      ).flatten
     case Add(left, right, _) =>
-      IntegralType.of(term).toSeq.flatMap { t =>
+      IntegralLimits.of(term).toSeq.flatMap { t =>
         Seq(
           integralConstant(right).filter(t.holds).map(c => guardedStep(term, left, t.addFits(c))),
           integralConstant(left).filter(t.holds).map(c => guardedStep(term, right, t.addFits(c)))
@@ -72,16 +82,24 @@ object ConstantOperandRule extends RangeRule {
         when(isPositiveNumericLiteral(right))(Step(term, left, Increasing, fileGuard = None, partial = false)),
         when(isPositiveNumericLiteral(left))(Step(term, right, Increasing, fileGuard = None, partial = false))
       ).flatten
+    case Multiply(left, right, _) if hasDecimalResult(term) =>
+      Seq(
+        when(isPositiveNumericLiteral(right))(Step(term, left, Increasing, fileGuard = None, partial = true)),
+        when(isPositiveNumericLiteral(left))(Step(term, right, Increasing, fileGuard = None, partial = true))
+      ).flatten
     case Multiply(left, right, _) =>
-      IntegralType.of(term).toSeq.flatMap { t =>
+      IntegralLimits.of(term).toSeq.flatMap { t =>
         Seq(
           positiveIntegralLiteral(right).filter(t.holds).map(c => guardedStep(term, left, t.multiplyFits(c))),
           positiveIntegralLiteral(left).filter(t.holds).map(c => guardedStep(term, right, t.multiplyFits(c)))
         ).flatten
       }
 
+    // NOTE: A decimal quotient can overflow into NULL (for ex, a decimal(38, 0) column divided by a
+    //       literal has a decimal(38, 6) result, which leaves 32 integer digits), so its step is
+    //       `partial` and an overflowing bound keeps the file. Float / double quotients saturate instead
     case Divide(dividend, divisor, _) if isPositiveNumericLiteral(divisor) =>
-      Seq(Step(term, dividend, Increasing, fileGuard = None, partial = false))
+      Seq(Step(term, dividend, Increasing, fileGuard = None, partial = hasDecimalResult(term)))
 
     // NOTE: BitwiseOr is not monotonic (for ex, 1 < 2 but 1 | 2 = 3 > 2 | 2 = 2), #20449
     case BitwiseOr(left, right) =>
@@ -91,7 +109,7 @@ object ConstantOperandRule extends RangeRule {
 
     // NOTE: Spark only shifts int and bigint values, by an int amount
     case ShiftLeft(value, amount) =>
-      IntegralType.of(term).filter(t => t.dataType == IntegerType || t.dataType == LongType).toSeq.flatMap { t =>
+      IntegralLimits.of(term).filter(t => t.dataType == IntegerType || t.dataType == LongType).toSeq.flatMap { t =>
         integralConstant(amount).map(n => guardedStep(term, value, t.shiftLeftFits(n)))
       }
     case ShiftRight(value, _) => Seq(Step(term, value, Increasing, fileGuard = None, partial = false))
@@ -107,6 +125,12 @@ object ConstantOperandRule extends RangeRule {
   // NOTE: Expression indexes skip the resolution check, and some unresolved terms throw on `dataType`
   private def hasFloatingPointResult(term: Expression): Boolean = Try(term.dataType).toOption.exists {
     case FloatType | DoubleType => true
+    case _ => false
+  }
+
+  // NOTE: Expression indexes skip the resolution check, and some unresolved terms throw on `dataType`
+  private def hasDecimalResult(term: Expression): Boolean = Try(term.dataType).toOption.exists {
+    case _: DecimalType => true
     case _ => false
   }
 
@@ -138,13 +162,13 @@ object ConstantOperandRule extends RangeRule {
   }
 
   /**
-   * An integral result type and its limits. Past them, integral arithmetic wraps around in non-ANSI
-   * mode and throws in ANSI mode. Each guard holds when no value of the file's range goes past them:
-   * the step is increasing, so checking the min and the max covers every value in between. A file
-   * that may overflow gets a NULL bound and is kept, and a file that holds the guard never evaluates
-   * an overflowing bound, so ANSI does not throw.
+   * The limits of an integral result type. Past them, integral arithmetic wraps around, except that
+   * `Add` and `Multiply` throw instead in ANSI mode. Each guard holds when no value of the file's range
+   * goes past them: the step is increasing, so checking the min and the max covers every value in
+   * between. A file that may overflow gets a NULL bound and is kept, and a file that holds the guard
+   * never evaluates an overflowing bound, so ANSI `Add` and `Multiply` do not throw.
    */
-  private case class IntegralType(dataType: DataType, min: Long, max: Long, bits: Int) {
+  private case class IntegralLimits(dataType: DataType, min: Long, max: Long, bits: Int) {
 
     /**
      * Whether `c` is a value of this type. Resolved operands always are; unresolved ones (expression
@@ -185,13 +209,13 @@ object ConstantOperandRule extends RangeRule {
     }
   }
 
-  private object IntegralType {
+  private object IntegralLimits {
     // NOTE: Expression indexes skip the resolution check, and some unresolved terms throw on `dataType`
-    def of(term: Expression): Option[IntegralType] = Try(term.dataType).toOption.collect {
-      case ByteType => IntegralType(ByteType, Byte.MinValue, Byte.MaxValue, 8)
-      case ShortType => IntegralType(ShortType, Short.MinValue, Short.MaxValue, 16)
-      case IntegerType => IntegralType(IntegerType, Int.MinValue, Int.MaxValue, 32)
-      case LongType => IntegralType(LongType, Long.MinValue, Long.MaxValue, 64)
+    def of(term: Expression): Option[IntegralLimits] = Try(term.dataType).toOption.collect {
+      case ByteType => IntegralLimits(ByteType, Byte.MinValue, Byte.MaxValue, 8)
+      case ShortType => IntegralLimits(ShortType, Short.MinValue, Short.MaxValue, 16)
+      case IntegerType => IntegralLimits(IntegerType, Int.MinValue, Int.MaxValue, 32)
+      case LongType => IntegralLimits(LongType, Long.MinValue, Long.MaxValue, 64)
     }
   }
 

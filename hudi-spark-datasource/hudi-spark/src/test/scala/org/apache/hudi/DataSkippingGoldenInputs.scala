@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedFunction}
 import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, BinaryOperator, BitwiseOr, Cast, Coalesce, Concat, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, EqualNullSafe, EqualTo, Exp, Expm1, Expression, FromUnixTime, FromUTCTimestamp, GreaterThanOrEqual, In, InSet, IsNotNull, IsNull, LessThan, Literal, Log, Log10, Log1p, Log2, Lower, Multiply, Not, Or, ParseToDate, ParseToTimestamp, ShiftLeft, ShiftRight, StartsWith, Substring, TimeZoneAwareExpression, ToUnixTimestamp, ToUTCTimestamp, UnixTimestamp, Upper}
 import org.apache.spark.sql.catalyst.util.ArrayData
-import org.apache.spark.sql.types.{ArrayType, BooleanType, DataType, DateType, Decimal, DecimalType, DoubleType, IntegerType, LongType, ShortType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{ArrayType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, IntegerType, LongType, ShortType, StringType, StructField, StructType, TimestampType}
 
 import java.time.LocalDate
 
@@ -37,7 +37,7 @@ import scala.util.{Random, Try}
  */
 object DataSkippingGoldenInputs {
 
-  val indexedCols: Seq[String] = Seq("a", "l", "d", "ts", "s", "x", "dec")
+  val indexedCols: Seq[String] = Seq("a", "l", "d", "ts", "s", "x", "dec", "sm", "tn")
 
   private val a = AttributeReference("a", IntegerType)()
   // Not indexed
@@ -48,6 +48,9 @@ object DataSkippingGoldenInputs {
   private val s = AttributeReference("s", StringType)()
   private val x = AttributeReference("x", DoubleType)()
   private val dec = AttributeReference("dec", DecimalType(10, 2))()
+  // Only in [[overflowTerms]], so not in [[columns]]
+  private val sm = AttributeReference("sm", ShortType)()
+  private val tn = AttributeReference("tn", ByteType)()
 
   private val columns: Seq[Expression] = Seq(a, b, l, d, ts, s, x, dec)
 
@@ -118,6 +121,21 @@ object DataSkippingGoldenInputs {
     FromUnixTime(l, Literal("dd-MM-yyyy"), Some("UTC")))
 
   /**
+   * Overflowing arithmetic terms (#20460) added after the golden file was first generated, kept out
+   * of [[terms]] for the same reason as [[dateTimeTerms]].
+   *
+   * An int shifts by the low 5 bits of the amount, which 33 pins (a 6-bit mask would shift by 33).
+   * The smallint and tinyint terms take a literal of their own type, as an int literal would widen
+   * the result to int. Decimal results overflow into NULL instead, so their ranges are partial.
+   */
+  private val overflowTerms: Seq[Expression] = Seq(
+    ShiftLeft(a, Literal(33)),
+    Add(sm, Literal(1.toShort)),
+    Multiply(tn, Literal(3.toByte)),
+    Add(dec, Literal(Decimal(1), DecimalType(10, 2))),
+    Divide(dec, Literal(Decimal(2), DecimalType(10, 2))))
+
+  /**
    * Sets a time zone wherever the analyzer would, so that resolution does not depend on the Spark
    * version (for ex, `cast(s as date)` needs a time zone on Spark 3.5 but not on Spark 4). Inputs
    * meant to be unresolved are unresolved for another reason.
@@ -148,7 +166,7 @@ object DataSkippingGoldenInputs {
 
   /**
    * Every input, in golden file order: the leaves, a seeded sample of AND / OR / NOT trees, the
-   * struct and array leaves, then the leaves of [[dateTimeTerms]].
+   * struct and array leaves, the leaves of [[dateTimeTerms]], then the leaves of [[overflowTerms]].
    */
   def inputs: Seq[Expression] = {
     val allLeaves = terms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
@@ -166,7 +184,8 @@ object DataSkippingGoldenInputs {
         }
       }
     allLeaves ++ (1 to 60).map(_ => tree(3)) ++ nestedLeaves ++
-      dateTimeTerms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
+      dateTimeTerms.map(withTimeZone).flatMap(leaves).map(withTimeZone) ++
+      overflowTerms.map(withTimeZone).flatMap(leaves).map(withTimeZone)
   }
 
   /**

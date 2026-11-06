@@ -96,9 +96,12 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // An unresolved constant outside the result type has no limits within it.
     assertEquals(None, guarded(Add(intAttr, Literal(Long.MaxValue)), intAttr))
     assertEquals(None, guarded(Multiply(intAttr, Literal(Long.MaxValue)), intAttr))
-    // Decimal results overflow into NULL, and are not ranged.
-    assertEquals(None, matched(Add(decAttr, Literal(Decimal(1), DecimalType(10, 2)))))
-    assertEquals(None, matched(Multiply(decAttr, Literal(Decimal(2), DecimalType(10, 2)))))
+    // Decimal results overflow into NULL (or throw in ANSI mode), so the range is partial: a NULL
+    // bound is unknown and keeps the file. A float / double quotient saturates instead.
+    assertEquals(Some(true), guarded(Add(decAttr, Literal(Decimal(1), DecimalType(10, 2))), decAttr))
+    assertEquals(Some(true), guarded(Multiply(decAttr, Literal(Decimal(2), DecimalType(10, 2))), decAttr))
+    assertEquals(Some(true), guarded(Divide(decAttr, Literal(Decimal(2), DecimalType(10, 2))), decAttr))
+    assertEquals(Some(false), guarded(Divide(dblAttr, Literal(2.0d)), dblAttr))
     // Float and double results saturate to infinity instead, keeping the ordering without a guard.
     assertEquals(Some(false), guarded(Add(fltAttr, Literal(1.0f)), fltAttr))
     assertEquals(Some(false), guarded(Multiply(Literal(2.0f), fltAttr), fltAttr))

@@ -195,9 +195,9 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     // is consistent with the fixtures
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
 
-    // ANSI flips the parse expressions to throw on unparseable input, and integral arithmetic to
-    // throw on overflow (ANSI is the default on Spark 4): the outcome must be the same either way,
-    // and the lookup must not throw
+    // ANSI flips the parse expressions to throw on unparseable input, and integral and decimal
+    // arithmetic to throw on overflow, except `shiftleft`, which wraps around in either mode (ANSI is
+    // the default on Spark 4): the outcome must be the same either way, and the lookup must not throw
     Seq("false", "true").foreach { ansi =>
       withSqlConf(ANSI_ENABLED.key -> ansi) {
         assertEquals(expectedOutput, lookupThroughFullOptimizer(sourceFilterExprStr, input), s"ANSI $ansi")
@@ -1226,12 +1226,13 @@ object TestDataSkippingUtils {
           IndexRow("file_2", valueCount = 2, A_minValue = Long.MinValue / 3 - 1, A_maxValue = -1, A_nullCount = 0)
         ),
         Seq("file_2")),
-      // A bigint shifts by the low 6 bits of the amount, so 65 shifts by 1
+      // A bigint shifts by the low 6 bits of the amount, and 33 pins that width: a 5-bit mask would
+      // shift by 1. One past the limit (file_2), 2^30 << 33 wraps around to Long.MinValue < 0
       arguments(
-        "shiftleft(A, 65) < 0",
+        "shiftleft(A, 33) < 0",
         Seq(
-          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue >> 1, A_nullCount = 0),
-          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = (Long.MaxValue >> 1) + 1, A_nullCount = 0)
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue >> 33, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = (Long.MaxValue >> 33) + 1, A_nullCount = 0)
         ),
         Seq("file_2")),
       // Floating-point addition saturates to infinity instead, so it still translates and prunes
@@ -1241,7 +1242,32 @@ object TestDataSkippingUtils {
           IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
           IndexRow("file_2", valueCount = 2, A_minValue = 101, A_maxValue = 200, A_nullCount = 0)
         ),
-        Seq("file_2"))
+        Seq("file_2")),
+      // Decimal arithmetic overflows into NULL instead (and throws in ANSI mode, which TryEval turns
+      // into NULL), so its steps are partial: an overflowing bound is NULL and keeps the file. The
+      // quotient below is decimal(38, 6), with 32 integer digits: the min maps to 1e18 and fits, the
+      // max (about 9.2e36) overflows, and dropping the file would lose the matching row 1
+      arguments(
+        "CAST(A AS DECIMAL(38,0)) / 0.000000000000000001BD > 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // A file whose bounds fit still prunes (file_1, max maps to 1e20 <= 1e21), while file_2 overflows
+      arguments(
+        "CAST(A AS DECIMAL(38,0)) / 0.000000000000000001BD > 1000000000000000000000BD",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 100, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // The product is bounded to decimal(38, 0), so the max (about 9.2e38) overflows
+      arguments(
+        "CAST(A AS DECIMAL(38,0)) * 100000000000000000000BD > 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_1"))
     )
   }
 }
