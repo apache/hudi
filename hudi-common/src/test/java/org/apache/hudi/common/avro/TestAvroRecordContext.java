@@ -19,10 +19,16 @@
 
 package org.apache.hudi.common.avro;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -31,7 +37,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -60,6 +68,38 @@ class TestAvroRecordContext {
           + "{\"name\":\"int_array\",\"type\":[\"null\",{\"type\":\"array\",\"items\":\"int\"}],\"default\":null},"
           + "{\"name\":\"rec_map\",\"type\":[\"null\",{\"type\":\"map\",\"values\":{\"type\":\"record\","
           + "\"name\":\"inner\",\"fields\":[{\"name\":\"x\",\"type\":\"int\"}]}}],\"default\":null}]}");
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testOrderingValuesMatchIncomingRecord(boolean consistentTimestamp) {
+    Schema schema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"ordering\",\"fields\":["
+        + "{\"name\":\"ts\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+        + "{\"name\":\"date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
+        + "{\"name\":\"decimal\",\"type\":{\"type\":\"fixed\",\"name\":\"fixed_decimal\",\"size\":5,"
+        + "\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}},"
+        + "{\"name\":\"nested\",\"type\":{\"type\":\"record\",\"name\":\"inner_date\",\"fields\":["
+        + "{\"name\":\"date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}}]}}]}");
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("ts", 1790812800000000L);
+    record.put("date", 20727);
+    Schema decimalSchema = schema.getField("decimal").schema();
+    record.put("decimal", new Conversions.DecimalConversion().toFixed(new BigDecimal("1.50"), decimalSchema, LogicalTypes.decimal(10, 2)));
+    GenericRecord nested = new GenericData.Record(schema.getField("nested").schema());
+    nested.put("date", 20727);
+    record.put("nested", nested);
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
+    TypedProperties props = new TypedProperties();
+    props.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), String.valueOf(consistentTimestamp));
+    AvroRecordContext context = new AvroRecordContext(new HoodieTableConfig(), null, props);
+
+    for (String field : Arrays.asList("ts", "date", "decimal", "nested.date")) {
+      Comparable incoming = new HoodieAvroIndexedRecord(record).getOrderingValue(hoodieSchema, props, new String[] {field});
+      assertEquals(incoming, context.getOrderingValue(record, hoodieSchema, new String[] {field}), field);
+      assertEquals(incoming, context.getOrderingValue(record, hoodieSchema, Arrays.asList(field)), field);
+    }
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(record, hoodieSchema, new String[] {"missing"}));
+    assertNull(new HoodieAvroIndexedRecord(record).getOrderingValue(hoodieSchema, props, new String[] {"missing"}));
+  }
 
   private static Stream<Arguments> testConvertValueToEngineType() {
     return Stream.of(

@@ -62,6 +62,7 @@ class TestHoodieAvroReaderContext {
   @BeforeEach
   void setup() {
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
   }
 
   @Test
