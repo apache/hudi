@@ -59,6 +59,7 @@ import scala.collection.JavaConverters;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_BLOOM_FILTER;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS;
 import static org.apache.hudi.common.config.HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.TIME_ZONE_OPTION;
 import static org.apache.hudi.index.HoodieIndexUtils.indexExists;
 import static org.apache.hudi.index.HoodieIndexUtils.register;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
@@ -149,9 +150,23 @@ public class HoodieSparkIndexClient extends BaseHoodieIndexClient {
     register(metaClient, indexDefinition);
   }
 
+  /**
+   * An expression index records the session time zone it is created in, unless the user set one: its values are
+   * computed in that zone, and a query in another zone does not use the index.
+   */
+  private Map<String, String> withSessionTimeZone(String indexType, Map<String, String> options) {
+    if (indexType.equals(PARTITION_NAME_SECONDARY_INDEX) || options.containsKey(TIME_ZONE_OPTION) || !sparkSessionOpt.isPresent()) {
+      return options;
+    }
+    Map<String, String> withTimeZone = new HashMap<>(options);
+    withTimeZone.put(TIME_ZONE_OPTION, sparkSessionOpt.get().sessionState().conf().sessionLocalTimeZone());
+    return withTimeZone;
+  }
+
   private void createExpressionOrSecondaryIndex(HoodieTableMetaClient metaClient, String userIndexName, String indexType,
                                                 Map<String, Map<String, String>> columns, Map<String, String> options, Map<String, String> tableProperties) throws Exception {
-    HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(metaClient, userIndexName, indexType, columns, options, tableProperties);
+    HoodieIndexDefinition indexDefinition = HoodieIndexUtils.getSecondaryOrExpressionIndexDefinition(
+        metaClient, userIndexName, indexType, columns, withSessionTimeZone(indexType, options), tableProperties);
     if (!metaClient.getTableConfig().getRelativeIndexDefinitionPath().isPresent()
         || !metaClient.getIndexForMetadataPartition(indexDefinition.getIndexName()).isPresent()) {
       log.info("Index definition is not present. Registering index: {} of type: {}", indexDefinition.getIndexName(), indexDefinition.getIndexType());
