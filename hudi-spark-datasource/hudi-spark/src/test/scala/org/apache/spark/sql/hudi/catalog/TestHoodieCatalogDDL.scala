@@ -25,7 +25,7 @@ import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog, TableChange}
 import org.apache.spark.sql.connector.catalog.TableCapability.{ACCEPT_ANY_SCHEMA, BATCH_READ, OVERWRITE_BY_FILTER, TRUNCATE, V1_BATCH_WRITE}
-import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.connector.expressions.{Expressions, Transform}
 import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.ShowHoodieCreateTableCommand
@@ -106,6 +106,46 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       assertFalse(catalog.tableExists(renamed))
       // HoodieCatalog.dropTable passes purge = false, so the external location survives the drop.
       assertTrue(existsPath(tablePath))
+    }
+  }
+
+  test("createTable rejects missing partition fields before creating Hudi metadata") {
+    withTempDir { tmp =>
+      val name = generateTableName
+      val ident = Identifier.of(Array("default"), name)
+      val path = s"${tmp.getCanonicalPath}/$name"
+      val error = intercept[HoodieAnalysisException] {
+        hoodieCatalog.createTable(ident, StructType(Seq(StructField("id", IntegerType))),
+          Array[Transform](Expressions.identity("missing_partition")),
+          Map("provider" -> "hudi", "primaryKey" -> "id", "location" -> path).asJava)
+      }
+      assertTrue(error.getMessage.contains("missing_partition"), error.getMessage)
+      assertFalse(hoodieCatalog.tableExists(ident))
+      assertFalse(new File(s"$path/.hoodie/hoodie.properties").exists())
+    }
+  }
+
+  test("createTable normalizes partition field spelling using the resolver") {
+    withSQLConf("spark.sql.caseSensitive" -> "false") {
+      withTempDir { tmp =>
+        val name = generateTableName
+        val ident = Identifier.of(Array("default"), name)
+        val path = s"${tmp.getCanonicalPath}/$name"
+        hoodieCatalog.createTable(ident,
+          StructType(Seq(StructField("id", IntegerType), StructField("part", StringType))),
+          Array[Transform](Expressions.identity("PART")),
+          Map("provider" -> "hudi", "primaryKey" -> "id", "location" -> path).asJava)
+        try {
+          spark.sql(s"INSERT INTO $name VALUES (1, 'a')")
+          checkAnswer(s"SELECT id, part FROM $name")(Seq(1, "a"))
+          val props = new java.util.Properties()
+          val stream = new java.io.FileInputStream(s"$path/.hoodie/hoodie.properties")
+          try props.load(stream) finally stream.close()
+          assertEquals("part", props.getProperty("hoodie.table.partition.fields"))
+        } finally {
+          hoodieCatalog.dropTable(ident)
+        }
+      }
     }
   }
 
