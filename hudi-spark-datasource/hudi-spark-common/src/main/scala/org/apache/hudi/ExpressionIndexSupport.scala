@@ -381,12 +381,11 @@ class ExpressionIndexSupport(spark: SparkSession,
 
   /**
    * Each expression index some query conjunct reads, with those conjuncts. A conjunct reads an index when one of its
-   * terms is the index's `f(col)` ([[IndexedExpression.matches]]).
-   *
-   * Only `=` and `IN` conjuncts read an expression index for now, as before; ranges follow with #20537.
+   * terms is the index's `f(col)` ([[IndexedExpression.matches]]). The stats filter compiler decides what each
+   * conjunct can prune: comparisons, IN, AND / OR / NOT, as for column stats.
    */
   private def findIndexUses(queryFilters: Seq[Expression]): Seq[IndexUse] = {
-    val conjuncts = queryFilters.flatMap(SparkBaseIndexSupport.splitConjuncts).filter(isEqualityOrIn)
+    val conjuncts = queryFilters.flatMap(SparkBaseIndexSupport.splitConjuncts)
     metaClient.getIndexMetadata.get().getIndexDefinitions.values().asScala.toSeq
       .filter(definition => MetadataPartitionType.fromPartitionPath(definition.getIndexName).equals(MetadataPartitionType.EXPRESSION_INDEX))
       .flatMap { definition =>
@@ -396,18 +395,19 @@ class ExpressionIndexSupport(spark: SparkSession,
       }
   }
 
-  private def isEqualityOrIn(conjunct: Expression): Boolean = Leaf.parse(conjunct).exists(_.op match {
+  /** A bloom filter answers only membership: `=` and `IN`. */
+  private def isEqualityOrIn(op: Op): Boolean = op match {
     case Op.Eq | Op.In | Op.InSet(_) => true
     case _ => false
-  })
+  }
 
   /**
    * Bloom filter keys: the values of `f(col) = v` and `f(col) IN (...)`, as strings like the writer added them. A file
-   * passes if it may hold any key, which is conservative across conjuncts. A conjunct with a value that is not a
-   * non-null literal gives no keys, and is skipped.
+   * passes if it may hold any key, which is conservative across conjuncts. Any other conjunct, such as a range, or
+   * one with a value that is not a non-null literal, gives no keys and is skipped.
    */
   private def bloomFilterKeys(use: IndexUse): List[String] =
-    use.conjuncts.flatMap(Leaf.parse).filter(leaf => use.indexed.matches(leaf.term)).flatMap { leaf =>
+    use.conjuncts.flatMap(Leaf.parse).filter(leaf => isEqualityOrIn(leaf.op) && use.indexed.matches(leaf.term)).flatMap { leaf =>
       val values: Seq[Any] = leaf.op match {
         case Op.InSet(set) => set.toSeq
         case _ => leaf.values.map {

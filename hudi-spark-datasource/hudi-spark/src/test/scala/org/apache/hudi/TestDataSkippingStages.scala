@@ -322,6 +322,8 @@ class TestDataSkippingStages {
         And(LessThanOrEqual(stats.lo, sixteen), GreaterThanOrEqual(stats.hi, sixteen)),
         And(LessThanOrEqual(stats.lo, Literal(19)), GreaterThanOrEqual(stats.hi, Literal(19)))),
       compile(In(hourOfTs, Seq(sixteen, Literal(19)))))
+    assertEquals(GreaterThan(stats.hi, Literal(12)), compile(GreaterThan(hourOfTs, Literal(12))))
+    assertEquals(LessThan(stats.lo, Literal(5)), compile(LessThan(hourOfTs, Literal(5))))
     // A rule step can still reach the indexed expression, for ex the cast Spark adds to compare with a BIGINT
     assertFalse(compile(EqualTo(Cast(hourOfTs, LongType), Literal(16L))).equals(TrueLiteral))
     // Another function of the column, or the bare column: every file is kept
