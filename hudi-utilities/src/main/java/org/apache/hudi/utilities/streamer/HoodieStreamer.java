@@ -256,7 +256,7 @@ public class HoodieStreamer implements Serializable {
 
     @Parameter(names = {"--target-base-path"},
         description = "base path for the target hoodie table. "
-            + "(Will be created if did not exist first time around. If exists, expected to be a hoodie table)",
+            + "(Will be created if did not exist first time around. If exists, expected to be a hoodie table or an empty directory.)",
         required = true)
     public String targetBasePath;
 

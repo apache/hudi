@@ -493,11 +493,11 @@ public abstract class HoodieStorage implements Closeable {
    * Out-of-Memory (OOM) errors in large directories.
    * </p>
    *
-   * @param pathPattern The {@link StoragePath} to check.
+   * @param path The {@link StoragePath} to check.
    * @return {@code true} if the path does not exist or contains no files/directories;
    *         {@code false} otherwise.
    * @throws IOException If any storage system I/O error occurs.
    */
   @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
-  public abstract boolean isEmpty(StoragePath pathPattern) throws IOException;
+  public abstract boolean isEmpty(StoragePath path) throws IOException;
 }
