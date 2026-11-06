@@ -35,6 +35,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   private val intAttr = AttributeReference("i", IntegerType)()
   private val strAttr = AttributeReference("s", StringType)()
   private val dblAttr = AttributeReference("d", DoubleType)()
+  private val fltAttr = AttributeReference("f", FloatType)()
   private val dateAttr = AttributeReference("dt", DateType)()
   private val longAttr = AttributeReference("l", LongType)()
   private val decAttr = AttributeReference("dec", DecimalType(10, 2))()
@@ -53,6 +54,13 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     expr.collect { case attrRef: AttributeReference => attrRef }.distinct
       .find(attrRef => TermRange.derive(expr, ColumnStatsSource(Seq(attrRef.name))).isDefined)
 
+  /**
+   * Whether the range of `expr` over `attr` is guarded, i.e. a NULL bound means unknown and keeps the
+   * file; `None` if it has no range.
+   */
+  private def guarded(expr: Expression, attr: AttributeReference): Option[Boolean] =
+    TermRange.derive(expr, ColumnStatsSource(Seq(attr.name))).map(_.nullBoundIsUnknown)
+
   @Test
   def testIdentityAttributeMatches(): Unit = {
     assertEquals(Some(intAttr), matched(intAttr))
@@ -60,24 +68,54 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testArithmeticTransformationsPreserveOrdering(): Unit = {
-    assertEquals(Some(intAttr), matched(Add(intAttr, Literal(1))))
-    assertEquals(Some(intAttr), matched(Add(Literal(1), intAttr)))
-    assertEquals(Some(intAttr), matched(Multiply(intAttr, Literal(2))))
-    assertEquals(Some(intAttr), matched(Multiply(Literal(2), intAttr)))
+    assertEquals(Some(dblAttr), matched(Add(dblAttr, Literal(1.0d))))
+    assertEquals(Some(dblAttr), matched(Add(Literal(1.0d), dblAttr)))
+    assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.0d))))
+    assertEquals(Some(dblAttr), matched(Multiply(Literal(2.0d), dblAttr)))
     assertEquals(Some(intAttr), matched(Divide(intAttr, Literal(2))))
     assertEquals(Some(intAttr), matched(BitwiseOr(intAttr, Literal(1))))
     assertEquals(Some(intAttr), matched(BitwiseOr(Literal(1), intAttr)))
-    assertEquals(Some(intAttr), matched(ShiftLeft(intAttr, Literal(1))))
+  }
+
+  @Test
+  def testOverflowingArithmeticIsGuarded(): Unit = {
+    // Integral results wrap around on overflow in non-ANSI mode (for ex, Long.MaxValue * 2 = -2), so
+    // the range is guarded per file on not overflowing.
+    assertEquals(Some(true), guarded(Add(intAttr, Literal(1)), intAttr))
+    assertEquals(Some(true), guarded(Add(Literal(-1), intAttr), intAttr))
+    assertEquals(Some(true), guarded(Add(longAttr, Literal(1L)), longAttr))
+    assertEquals(Some(true), guarded(Multiply(intAttr, Literal(2)), intAttr))
+    assertEquals(Some(true), guarded(Multiply(Literal(2L), longAttr), longAttr))
+    assertEquals(Some(true), guarded(ShiftLeft(intAttr, Literal(1)), intAttr))
+    assertEquals(Some(true), guarded(ShiftLeft(longAttr, Literal(65)), longAttr))
+    // The other operand must still be constant, and an integral factor positive.
+    assertEquals(None, guarded(Add(intAttr, Rand(Literal(0L))), intAttr))
+    assertEquals(None, guarded(Multiply(intAttr, Literal(-2)), intAttr))
+    assertEquals(None, guarded(Multiply(intAttr, Literal(0)), intAttr))
+    assertEquals(None, guarded(ShiftLeft(intAttr, intAttr), intAttr))
+    // An unresolved constant outside the result type has no limits within it.
+    assertEquals(None, guarded(Add(intAttr, Literal(Long.MaxValue)), intAttr))
+    assertEquals(None, guarded(Multiply(intAttr, Literal(Long.MaxValue)), intAttr))
+    // Decimal results overflow into NULL (or throw in ANSI mode), so the range is partial: a NULL
+    // bound is unknown and keeps the file. A float / double quotient saturates instead.
+    assertEquals(Some(true), guarded(Add(decAttr, Literal(Decimal(1), DecimalType(10, 2))), decAttr))
+    assertEquals(Some(true), guarded(Multiply(decAttr, Literal(Decimal(2), DecimalType(10, 2))), decAttr))
+    assertEquals(Some(true), guarded(Divide(decAttr, Literal(Decimal(2), DecimalType(10, 2))), decAttr))
+    assertEquals(Some(false), guarded(Divide(dblAttr, Literal(2.0d)), dblAttr))
+    // Float and double results saturate to infinity instead, keeping the ordering without a guard.
+    assertEquals(Some(false), guarded(Add(fltAttr, Literal(1.0f)), fltAttr))
+    assertEquals(Some(false), guarded(Multiply(Literal(2.0f), fltAttr), fltAttr))
+    assertEquals(Some(false), guarded(Add(Cast(longAttr, DoubleType), Literal(1.0d)), longAttr))
   }
 
   @Test
   def testMultiplyDivideRequirePositiveLiteralFactor(): Unit = {
     // Negative factors reverse ordering.
     assertEquals(None, matched(Multiply(dblAttr, Literal(-1.0d))))
-    assertEquals(None, matched(Multiply(Literal(-1), intAttr)))
+    assertEquals(None, matched(Multiply(Literal(-1.0d), dblAttr)))
     assertEquals(None, matched(Divide(dblAttr, Literal(Decimal(-2), DecimalType(1, 0)))))
     // Zero collapses ordering and makes division undefined.
-    assertEquals(None, matched(Multiply(intAttr, Literal(0L))))
+    assertEquals(None, matched(Multiply(dblAttr, Literal(0.0d))))
     assertEquals(None, matched(Divide(dblAttr, Literal(0.0d))))
     // NaN fails the positive check; typed null literals carry a null value.
     assertEquals(None, matched(Multiply(dblAttr, Literal(Double.NaN))))
@@ -85,13 +123,13 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(None, matched(Multiply(dblAttr, Literal(Double.PositiveInfinity))))
     assertEquals(None, matched(Multiply(Literal(Float.PositiveInfinity), dblAttr)))
     assertEquals(None, matched(Divide(dblAttr, Literal(Double.PositiveInfinity))))
-    assertEquals(None, matched(Multiply(intAttr, Literal(null, IntegerType))))
+    assertEquals(None, matched(Multiply(dblAttr, Literal(null, DoubleType))))
     // Non-literal factors are not matched, even when reference-free or the column itself.
-    assertEquals(None, matched(Multiply(intAttr, Add(Literal(1), Literal(1)))))
-    assertEquals(None, matched(Multiply(intAttr, intAttr)))
+    assertEquals(None, matched(Multiply(dblAttr, Add(Literal(1.0d), Literal(1.0d)))))
+    assertEquals(None, matched(Multiply(dblAttr, dblAttr)))
     // Strictly positive literals of any numeric type match in the supported operand positions.
     assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.5d))))
-    assertEquals(Some(longAttr), matched(Multiply(Literal(3L), longAttr)))
+    assertEquals(Some(fltAttr), matched(Multiply(Literal(3.0f), fltAttr)))
     assertEquals(Some(dblAttr), matched(Divide(dblAttr, Literal(Decimal(2), DecimalType(1, 0)))))
   }
 
@@ -100,10 +138,18 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     // A + A * -2 = -A reverses ordering, so an operand referencing the column must not match.
     assertEquals(None, matched(Add(dblAttr, Multiply(dblAttr, Literal(-2.0d)))))
     assertEquals(None, matched(Add(Multiply(dblAttr, Literal(-2.0d)), dblAttr)))
-    assertEquals(None, matched(Add(intAttr, intAttr)))
+    assertEquals(None, matched(Add(dblAttr, dblAttr)))
     // Data skipping re-evaluates the operand against the min/max bounds, so it must be a constant.
     assertEquals(None, matched(Add(dblAttr, Rand(Literal(0L)))))
     assertEquals(None, matched(Add(Rand(Literal(0L)), dblAttr)))
+    // An infinite addend maps the opposite infinity to NaN (-Infinity + Infinity), which sorts above
+    // every number; a NaN or null addend is not finite either.
+    assertEquals(None, matched(Add(dblAttr, Literal(Double.PositiveInfinity))))
+    assertEquals(None, matched(Add(Literal(Float.NegativeInfinity), fltAttr)))
+    assertEquals(None, matched(Add(dblAttr, Literal(Double.NaN))))
+    assertEquals(None, matched(Add(dblAttr, Literal(null, DoubleType))))
+    // A foldable addend is evaluated, as the optimizer would fold it into a literal.
+    assertEquals(Some(dblAttr), matched(Add(dblAttr, Add(Literal(1.0d), Literal(2.0d)))))
   }
 
   @Test
@@ -320,7 +366,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
 
   @Test
   def testNestedComposition(): Unit = {
-    assertEquals(Some(intAttr), matched(Add(Multiply(intAttr, Literal(2)), Literal(3))))
+    assertEquals(Some(dblAttr), matched(Add(Multiply(dblAttr, Literal(2.0d)), Literal(3.0d))))
   }
 
   @Test
