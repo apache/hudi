@@ -254,6 +254,63 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Data skipping retains old files after adding a column") {
+    Seq("cow", "mor").foreach { tableType =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.metadata.index.partition.stats.enable" -> "true",
+          "hoodie.parquet.small.file.limit" -> "0",
+          "hoodie.enable.data.skipping" -> "false",
+          "hoodie.fileIndex.dataSkippingFailureMode" -> "strict"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (id int, age int, ts long, dt string) using hudi
+               | tblproperties (primaryKey = 'id', orderingFields = 'ts', type = '$tableType')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+          spark.sql(s"insert into $tableName values (1, 25, 1, 'par1')")
+          spark.sql(s"alter table $tableName add columns (name string)")
+          // Keep the old file live alongside a new file written with the evolved schema.
+          spark.sql(s"insert into $tableName values (2, 30, 2, 'bob', 'par1')")
+          assert(spark.sql(s"select input_file_name() from $tableName").collect().map(_.getString(0)).toSet.size == 2)
+
+          val metaClient = createMetaClient(spark, tmp.getCanonicalPath)
+          val indexedColumns = metaClient.getIndexMetadata.get().getIndexDefinitions.get("column_stats").getSourceFields
+          assert(indexedColumns.contains("age") && indexedColumns.contains("name"), indexedColumns.toString)
+          val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
+          val hoodieSchema = new TableSchemaResolver(metaClient).getTableSchema
+          val index = new ColumnStatsIndexSupport(spark, spark.table(tableName).schema, hoodieSchema, metadataConfig, metaClient)
+          val fileStats = index.loadColumnStatsIndexRecords(Seq("age", "name"), shouldReadInMemory = true).collectAsList().asScala
+          assert(fileStats.groupBy(_.getFileName).values.map(_.map(_.getColumnName).toSet).toSet ==
+            Set(Set("age"), Set("age", "name")), fileStats.toString)
+          val partitions = new PartitionStatsIndexSupport(spark, spark.table(tableName).schema, hoodieSchema, metadataConfig, metaClient)
+          val partitionStats = partitions.loadColumnStatsIndexRecords(Seq("age", "name"), shouldReadInMemory = true)
+            .collectAsList().asScala.filterNot(_.getIsDeleted)
+          assert(partitionStats.map(_.getColumnName).toSet == Set("age"), partitionStats.toString)
+          assert(partitionStats.head.getValueCount == 2)
+
+          def checkQueries(): Unit = {
+            checkAnswer(s"select id, age, name from $tableName where name is null")(Seq(1, 25, null))
+            checkAnswer(s"select id, age, name from $tableName where name = 'bob'")(Seq(2, 30, "bob"))
+            checkAnswer(s"select id, age, name from $tableName where age >= 0 and (name is null or name = 'bob')")(
+              Seq(1, 25, null), Seq(2, 30, "bob"))
+          }
+          checkQueries()
+          withSQLConf("hoodie.enable.data.skipping" -> "true") {
+            spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
+            spark.catalog.refreshTable(tableName)
+            checkQueries()
+          }
+        }
+      }
+    }
+  }
+
   test("Data skipping retains MOR log files with missing column statistics") {
     Seq(false, true).foreach { partitionStats =>
       withTempDir { tmp =>
