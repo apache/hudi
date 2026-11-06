@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dataskipping
 
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, If, Literal, TryEval}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, If, LeafExpression, Literal, TryEval}
 import org.apache.spark.sql.hudi.dataskipping.rules.{CastRule, ConstantOperandRule, DateTimeFormatRule, MonotonicFunctionRule, PrefixRule, TimeZoneShiftRule}
 
 /**
@@ -61,7 +61,8 @@ case object Decreasing extends Direction
  * @param child     the operand whose range is pushed through, for ex `x`
  * @param direction whether `term` grows or shrinks with `child`
  * @param fileGuard per-file condition under which the mapping holds (for ex, no overflow); outside it
- *                  the bounds become NULL, i.e. unknown, and [[StatsFilterCompiler]] keeps the file
+ *                  the bounds become NULL, i.e. unknown, and [[StatsFilterCompiler]] keeps the file. It
+ *                  reads a bound of `child` that fails to evaluate as NULL
  * @param partial   whether `term` can be undefined for a non-NULL `child` (for ex, `log` of a negative,
  *                  or a parse of an unparseable string). Spark reports that as NULL or, depending on
  *                  the session (for ex, ANSI), as an exception; the rebuilt bounds are wrapped in
@@ -89,8 +90,18 @@ case class Step(term: Expression,
 
   // NOTE: Uses `term.dataType` (same as the rebuilt bound's) since stats-table bounds are unresolved here
   private def guarded(bound: Expression, r: TermRange): Expression = fileGuard match {
-    case Some(guard) => If(guard(r), bound, Literal(null, term.dataType))
+    case Some(guard) =>
+      val input = r.copy(lo = readInGuard(r.lo), hi = readInGuard(r.hi))
+      If(guard(input), bound, Literal(null, term.dataType))
     case None => bound
+  }
+
+  // NOTE: The guard reads both bounds, while a one-sided verdict (for ex, `<`) reads one, so a derived bound
+  //       that fails to evaluate (for ex, from_utc_timestamp of the largest timestamp) is NULL there, which
+  //       keeps the file. A leaf (a stats column or a literal) cannot fail, so it is read as is
+  private def readInGuard(bound: Expression): Expression = bound match {
+    case leaf: LeafExpression => leaf
+    case _ => TryEval(bound)
   }
 
   // NOTE: TryEval is in every supported Spark version, so no version-specific shape (for ex, a

@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Cast, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, If, In, InSet, IsNull, LeafExpression, LessThan, LessThanOrEqual, Literal, Log, Not, Or, StartsWith, TryEval, UnaryMinus}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, Increasing, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, Verdict}
+import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, Increasing, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, TimeZones, Verdict}
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering.Pattern
 import org.apache.spark.sql.internal.SQLConf
@@ -30,7 +30,7 @@ import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
-import java.time.{DayOfWeek, Instant, LocalDate, LocalTime, Month, ZoneId, ZoneOffset}
+import java.time.{DayOfWeek, Duration, Instant, LocalDate, LocalTime, Month, ZoneId, ZoneOffset}
 import java.time.zone.{ZoneOffsetTransition, ZoneOffsetTransitionRule, ZoneRules}
 import java.time.zone.ZoneOffsetTransitionRule.TimeDefinition
 import java.util.Collections
@@ -381,7 +381,7 @@ class TestDataSkippingStages {
 
   @Test
   def testLocalDateReversals(): Unit = {
-    def reversals(zoneId: String): Option[Seq[Instant]] = DateTimeOrdering.localDateReversals(ZoneId.of(zoneId).getRules)
+    def reversals(zoneId: String): Option[Seq[Instant]] = TimeZones.localDateReversals(ZoneId.of(zoneId).getRules)
 
     // America/St_Johns fell back across midnight every year from 1987 to 2010
     val stJohns = reversals("America/St_Johns").get
@@ -401,14 +401,37 @@ class TestDataSkippingStages {
           standard, standard, summer),
         ZoneOffsetTransitionRule.of(Month.NOVEMBER, 1, DayOfWeek.SUNDAY, LocalTime.of(0, 30), false, TimeDefinition.WALL,
           standard, summer, standard)).asJava)
-    assertEquals(None, DateTimeOrdering.localDateReversals(rules))
+    assertEquals(None, TimeZones.localDateReversals(rules))
 
     // By zone id, resolved the way Spark evaluates it: the short id CNT is America/St_Johns
-    assertEquals(Some(stJohns), DateTimeOrdering.localDateReversals(Some("CNT")))
-    assertEquals(Some(Seq.empty), DateTimeOrdering.localDateReversals(Some("UTC")))
+    assertEquals(Some(stJohns), TimeZones.localDateReversals(Some("CNT")))
+    assertEquals(Some(Seq.empty), TimeZones.localDateReversals(Some("UTC")))
     // No time zone (not analyzed) or an unknown one: no step
-    assertEquals(None, DateTimeOrdering.localDateReversals(None))
-    assertEquals(None, DateTimeOrdering.localDateReversals(Some("Not/A_Zone")))
+    assertEquals(None, TimeZones.localDateReversals(None))
+    assertEquals(None, TimeZones.localDateReversals(Some("Not/A_Zone")))
+  }
+
+  @Test
+  def testNoLocalDateReversalGuard(): Unit = {
+    // America/Phoenix ran its date backwards at 06:01Z on 1944-01-01 and on 1944-10-01
+    val (first, last) = (Instant.parse("1944-01-01T06:01:00Z"), Instant.parse("1944-10-01T06:01:00Z"))
+    val guard = DateTimeOrdering.noLocalDateReversal(Seq(first, last), DateTimeOrdering.asTimestamp).get
+    // A bound of the file, None standing for one that failed to evaluate
+    def bound(instant: Option[Instant]): Expression =
+      instant.map(DateTimeOrdering.asTimestamp).getOrElse(Literal(null, TimestampType))
+    def overFile(lo: Option[Instant], hi: Option[Instant]): Any =
+      guard(TermRange(bound(lo), bound(hi), None, None, nullBoundIsUnknown = false)).eval()
+    val minute = Duration.ofMinutes(1)
+
+    // A file ending at an instant spans it, and one starting at it does not
+    assertEquals(false, overFile(Some(first.minus(minute)), Some(first)))
+    assertEquals(false, overFile(Some(last.minus(minute)), Some(last)))
+    assertEquals(true, overFile(Some(last), Some(last.plus(minute))))
+    assertEquals(true, overFile(Some(first), Some(last.minus(minute))))
+    // Without one bound, the file is known to span none only if the other bound alone rules them all out
+    assertEquals(true, overFile(None, Some(first.minus(minute))))
+    assertEquals(true, overFile(Some(last), None))
+    assertEquals(null, overFile(Some(first.minus(minute)), None))
   }
 
   @Test

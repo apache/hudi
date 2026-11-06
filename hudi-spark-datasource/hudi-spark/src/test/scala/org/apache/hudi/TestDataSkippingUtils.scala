@@ -359,17 +359,41 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 
   @Test
   def testLocalDateGuardToleratesFailingBounds(): Unit = {
+    // America/Phoenix ran its date backwards twice in 1944, so the cast to the local date is guarded there, and the
+    // guard reads both bounds of the cast's input, while "<" only needs the min. The max of each file overflows,
+    // which must not fail the lookup. Without its max, file_1 may span the first instant, so it is kept: its min
+    // renders as 1944-01-01, but a row 30 seconds later renders as 1943-12-31. The min of file_2 is past both
+    // instants, which settles the guard without the max, so file_2 is still pruned
     withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "America/Phoenix") {
-      // America/Phoenix ran its date backwards in 1944, so the guard reads both bounds of the cast's input, while "<"
-      // only needs the min. Shifting the max, the largest timestamp, by from_utc_timestamp overflows, which must not
-      // fail the lookup: file_1 is kept, as its min 1900-01-01 matches
-      val input = Seq(IndexRow("file_1", valueCount = 2,
-        C_minValue = new Timestamp(-2208988800000L), // 1900-01-01 00:00Z
-        C_maxValue = new Timestamp(Long.MaxValue / 1000), // in year 294247
-        C_nullCount = 0))
       assertEquals(Seq("file_1"), applyFilterExpr(
-        resolveExpr(spark, "CAST(from_utc_timestamp(C, '+08:00') AS DATE) < DATE'2000-01-01'", sourceTableSchema), input))
+        resolveExpr(spark, "CAST(from_utc_timestamp(C, '+08:00') AS DATE) < DATE'1944-01-01'", sourceTableSchema),
+        filesWithFailingMax))
     }
+  }
+
+  @Test
+  def testFormatGuardToleratesFailingBounds(): Unit = {
+    // Formatting is guarded in every zone, to years 0001 to 9999, and that guard reads both bounds too. The lookup
+    // must not fail; as the guard needs the max, both files are kept
+    withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "UTC") {
+      assertEquals(Seq("file_1", "file_2"), applyFilterExpr(
+        resolveExpr(spark, "date_format(from_utc_timestamp(C, '+08:00'), 'yyyy-MM-dd') < '2000-01-01'", sourceTableSchema),
+        filesWithFailingMax))
+    }
+  }
+
+  // Shifting the max of these files, the largest timestamp, by from_utc_timestamp overflows
+  private def filesWithFailingMax: Seq[IndexRow] = {
+    val failingMax = new Timestamp(Long.MaxValue / 1000) // in year 294247
+    Seq(
+      IndexRow("file_1", valueCount = 2,
+        C_minValue = new Timestamp(-820547970000L), // 1943-12-31 22:00:30Z, shifted to 06:00:30Z on 1944-01-01
+        C_maxValue = failingMax,
+        C_nullCount = 0),
+      IndexRow("file_2", valueCount = 2,
+        C_minValue = new Timestamp(978307200000L), // 2001-01-01 00:00Z
+        C_maxValue = failingMax,
+        C_nullCount = 0))
   }
 
   @ParameterizedTest

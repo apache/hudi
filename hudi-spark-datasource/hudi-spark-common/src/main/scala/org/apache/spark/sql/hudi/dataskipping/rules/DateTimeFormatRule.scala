@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{And, DateFormatClass, Expression, FromUnixTime, GetTimestamp, GreaterThanOrEqual, LessThan, Literal, ToUnixTimestamp, UnixTimestamp}
-import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange}
+import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange, TimeZones}
 import org.apache.spark.sql.types.{DataType, DateType, LongType, StringType, TimestampNTZType, TimestampType}
 
 import java.time.{LocalDate, ZoneOffset}
@@ -54,13 +54,13 @@ object DateTimeFormatRule extends RangeRule {
   override def steps(term: Expression): Seq[Step] = term match {
     case DateFormatClass(timestamp, format, timeZoneId)
       if dataTypeOf(timestamp).contains(TimestampType) && DateTimeOrdering.formatPreservesOrder(format, timeZoneId) =>
-      DateTimeOrdering.localDateReversals(timeZoneId).toSeq.map { instants =>
+      TimeZones.localDateReversals(timeZoneId).toSeq.map { instants =>
         Step(term, timestamp, Increasing, fileGuard = Step.andGuards(Some(formattableInstants),
           DateTimeOrdering.noLocalDateReversal(instants, DateTimeOrdering.asTimestamp)), partial = false)
       }
     case FromUnixTime(seconds, format, timeZoneId)
       if dataTypeOf(seconds).contains(LongType) && DateTimeOrdering.formatPreservesOrder(format, timeZoneId) =>
-      DateTimeOrdering.localDateReversals(timeZoneId).toSeq.map { instants =>
+      TimeZones.localDateReversals(timeZoneId).toSeq.map { instants =>
         Step(term, seconds, Increasing, fileGuard = Step.andGuards(Some(formattableSeconds),
           DateTimeOrdering.noLocalDateReversal(instants, DateTimeOrdering.asEpochSeconds)), partial = false)
       }
