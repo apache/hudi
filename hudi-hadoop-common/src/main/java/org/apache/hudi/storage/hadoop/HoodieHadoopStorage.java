@@ -250,15 +250,12 @@ public class HoodieHadoopStorage extends HoodieStorage {
   }
 
   @Override
-  public boolean isEmpty(StoragePath pathPattern) throws IOException {
-    Path hadoopPath = convertToHadoopPath(pathPattern);
+  public boolean isEmpty(StoragePath path) throws IOException {
+    Path hadoopPath = convertToHadoopPath(path);
     if (!fs.exists(hadoopPath)) {
       return true;
     }
     RemoteIterator<LocatedFileStatus> iterator = fs.listLocatedStatus(hadoopPath);
-    if (iterator == null) {
-      return true;
-    }
     return !iterator.hasNext();
   }
 
