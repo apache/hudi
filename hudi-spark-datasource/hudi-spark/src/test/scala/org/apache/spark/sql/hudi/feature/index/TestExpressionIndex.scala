@@ -48,7 +48,7 @@ import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.{functions, Column, SaveMode}
+import org.apache.spark.sql.{functions, Column, DataFrame, SaveMode}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, UnresolvedAttribute}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -1959,6 +1959,58 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
+  test("Test Expression Index Is Read Only In The Time Zone It Was Computed In") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      withSQLConf("spark.sql.session.timeZone" -> "UTC") {
+        spark.sql(
+          s"""CREATE TABLE $tableName (
+             |  ts TIMESTAMP, uuid STRING, rider STRING, driver STRING, fare DOUBLE, city STRING
+             |) USING HUDI
+             |PARTITIONED BY (city)
+             |LOCATION '${tmp.getCanonicalPath}/$tableName'
+             |TBLPROPERTIES (primaryKey = 'uuid', preCombineField = 'ts')
+             |""".stripMargin)
+        spark.sql(
+          s"""INSERT INTO $tableName VALUES
+             |(TIMESTAMP'2023-09-19 23:40:49','334e26e9-8355-45cc-97c6-c31daf0df330','rider-A','driver-K',19.10,'san_francisco'),
+             |(TIMESTAMP'2023-09-18 21:45:54','e96c4396-3fad-413a-a942-4cb36106d721','rider-C','driver-M',27.70,'san_francisco'),
+             |(TIMESTAMP'2023-09-18 19:14:22','9909a8b1-2d15-4d3d-8ec9-efc48c536a00','rider-D','driver-L',33.90,'san_francisco'),
+             |(TIMESTAMP'2023-09-21 16:34:26','1dced545-862b-4ceb-8b43-d2a568f6616b','rider-E','driver-O',93.50,'san_francisco'),
+             |(TIMESTAMP'2023-09-23 09:42:17','e3cf430c-889d-4015-bc98-59bdce1e530c','rider-F','driver-P',34.15,'sao_paulo'),
+             |(TIMESTAMP'2023-09-22 09:53:40','7a84095f-737f-40bc-b62f-6b69664712d2','rider-G','driver-Q',43.40,'sao_paulo'),
+             |(TIMESTAMP'2023-09-19 02:38:07','3eeb61f7-c2b0-4636-99bd-5d7a5a1d2c04','rider-I','driver-S',41.06,'chennai'),
+             |(TIMESTAMP'2023-09-19 01:33:19','c8abbe79-8d89-47ea-b4ce-4d224bae5bfa','rider-J','driver-T',17.85,'chennai')
+             |""".stripMargin)
+        spark.sql(s"CREATE INDEX ts_hour ON $tableName USING column_stats(ts) options(expr='hour')")
+        spark.sql(s"CREATE INDEX ts_day ON $tableName USING column_stats(ts) options(expr='date_format', format='yyyy-MM-dd')")
+      }
+      val definitions = createMetaClient(spark, s"${tmp.getCanonicalPath}/$tableName").getIndexMetadata.get.getIndexDefinitions
+      assertEquals("UTC", definitions.get("expr_index_ts_hour").getIndexOptions.get(HoodieExpressionIndex.TIME_ZONE_OPTION))
+
+      withSQLConf("spark.sql.session.timeZone" -> "America/Los_Angeles") {
+        // Written from another zone: 2023-09-19 05:00 in Los Angeles is 12:00 UTC, and the index stores 12
+        spark.sql(s"INSERT INTO $tableName VALUES (TIMESTAMP'2023-09-19 05:00:00', " +
+          s"'0b1d3e5f-7a9c-4b2d-8e6f-1a3c5e7b9d0f', 'rider-H', 'driver-R', 25.00, 'sao_paulo')")
+      }
+
+      withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+        "spark.sql.adaptive.enabled" -> "false") {
+        withSQLConf("spark.sql.session.timeZone" -> "UTC") {
+          assertScan(tableName, "hour(ts) = 12", Seq("rider-H"), expectedFiles = 1)
+          assertScan(tableName, "hour(ts) = 1", Seq("rider-J"), expectedFiles = 1)
+        }
+        // Queried from another zone, the index is not read: hours and dates differ from the stored ones
+        withSQLConf("spark.sql.session.timeZone" -> "America/Los_Angeles") {
+          val allFiles = scannedFiles(tableName, "true")
+          assertScan(tableName, "hour(ts) = 18", Seq("rider-J"), allFiles)
+          assertScan(tableName, "hour(ts) = 2", Seq("rider-F", "rider-G"), allFiles)
+          assertScan(tableName, "date_format(ts, 'yyyy-MM-dd') = '2023-09-18'", Seq("rider-C", "rider-D", "rider-I", "rider-J"), allFiles)
+        }
+      }
+    }
+  }
+
   test("Test bloom filters index pruning") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
@@ -2454,12 +2506,20 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
   }
 
   /** The riders the query returns, and the number of files its scan read. */
-  private def assertScan(tableName: String, predicate: String, expectedRiders: Seq[String], expectedFiles: Int): Unit = {
+  private def assertScan(tableName: String, predicate: String, expectedRiders: Seq[String], expectedFiles: Long): Unit = {
     val df = spark.sql(s"SELECT rider FROM $tableName WHERE $predicate")
     assertEquals(expectedRiders, df.collect().map(_.getString(0)).sorted.toSeq, predicate)
-    val scannedFiles = df.queryExecution.executedPlan.collect { case scan: FileSourceScanExec => scan.metrics("numFiles").value }.sum
-    assertEquals(expectedFiles, scannedFiles, predicate)
+    assertEquals(expectedFiles, numFiles(df), predicate)
   }
+
+  private def scannedFiles(tableName: String, predicate: String): Long = {
+    val df = spark.sql(s"SELECT rider FROM $tableName WHERE $predicate")
+    df.collect()
+    numFiles(df)
+  }
+
+  private def numFiles(df: DataFrame): Long =
+    df.queryExecution.executedPlan.collect { case scan: FileSourceScanExec => scan.metrics("numFiles").value }.sum
 
   private def verifyFilePruning(opts: Map[String, String], dataFilter: Expression, metaClient: HoodieTableMetaClient,
                                 isDataSkippingExpected: Boolean = false, isNoScanExpected: Boolean = false): Unit = {

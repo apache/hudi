@@ -287,7 +287,7 @@ class TestDataSkippingStages {
   private val ts = AttributeReference("ts", StringType)()
   // hour(ts) over a STRING ts, as Spark resolves it: the column is cast to a timestamp first
   private val hourOfTs = Hour(Cast(ts, TimestampType, Some("UTC")), Some("UTC"))
-  private val hourIndex = ExpressionIndexSource(IndexedExpression("hour", "ts", Map("expr" -> "hour")))
+  private val hourIndex = ExpressionIndexSource(IndexedExpression("hour", "ts", Map("expr" -> "hour", "timeZone" -> "UTC")))
 
   @Test
   def testExpressionIndexHoldsOnlyItsOwnExpression(): Unit = {
@@ -301,13 +301,13 @@ class TestDataSkippingStages {
 
   @Test
   def testIndexedExpressionMatchesFunctionAndOptions(): Unit = {
-    val formatIndex = IndexedExpression("date_format", "ts", Map("format" -> "yyyy-MM-dd"))
+    val formatIndex = IndexedExpression("date_format", "ts", Map("format" -> "yyyy-MM-dd", "timeZone" -> "UTC"))
     val tsAsTimestamp = Cast(ts, TimestampType, Some("UTC"))
     assertTrue(formatIndex.matches(DateFormatClass(tsAsTimestamp, Literal("yyyy-MM-dd"), Some("UTC"))))
     assertFalse(formatIndex.matches(DateFormatClass(tsAsTimestamp, Literal("yyyy"), Some("UTC"))))
     // Without a format option, from_unixtime is the default pattern
     val seconds = AttributeReference("seconds", LongType)()
-    val fromUnixTimeIndex = IndexedExpression("from_unixtime", "seconds", Map.empty)
+    val fromUnixTimeIndex = IndexedExpression("from_unixtime", "seconds", Map("timeZone" -> "UTC"))
     assertTrue(fromUnixTimeIndex.matches(FromUnixTime(seconds, Literal("yyyy-MM-dd HH:mm:ss"), Some("UTC"))))
     assertFalse(fromUnixTimeIndex.matches(FromUnixTime(seconds, Literal("yyyy-MM-dd"), Some("UTC"))))
     // An identity index holds the bare column only
@@ -330,15 +330,15 @@ class TestDataSkippingStages {
 
     val instant = AttributeReference("ts", TimestampType)()
     val defaultFormat = Literal("yyyy-MM-dd HH:mm:ss")
-    val unixTimestampIndex = IndexedExpression("unix_timestamp", "ts", Map.empty)
+    val unixTimestampIndex = IndexedExpression("unix_timestamp", "ts", Map("timeZone" -> "UTC"))
     assertTrue(unixTimestampIndex.matches(UnixTimestamp(instant, defaultFormat, Some("UTC"))))
     assertFalse(unixTimestampIndex.matches(UnixTimestamp(Cast(instant, DateType, Some("UTC")), defaultFormat, Some("UTC"))))
   }
 
   @Test
   def testIndexedExpressionMatchesTheCastAFormatLessParseBecomes(): Unit = {
-    val toDateIndex = IndexedExpression("to_date", "ts", Map.empty)
-    val toTimestampIndex = IndexedExpression("to_timestamp", "ts", Map.empty)
+    val toDateIndex = IndexedExpression("to_date", "ts", Map("timeZone" -> "UTC"))
+    val toTimestampIndex = IndexedExpression("to_timestamp", "ts", Map("timeZone" -> "UTC"))
     val asDate = Cast(ts, DateType, Some("UTC"))
     val asTimestamp = Cast(ts, TimestampType, Some("UTC"))
     assertTrue(toDateIndex.matches(asDate))
@@ -346,8 +346,24 @@ class TestDataSkippingStages {
     assertFalse(toDateIndex.matches(asTimestamp))
     assertFalse(toTimestampIndex.matches(asDate))
     // An index with a format holds the parse with that format, which is not this cast
-    assertFalse(IndexedExpression("to_date", "ts", Map("format" -> "yyyy-MM-dd")).matches(asDate))
+    assertFalse(IndexedExpression("to_date", "ts", Map("format" -> "yyyy-MM-dd", "timeZone" -> "UTC")).matches(asDate))
     assertFalse(toDateIndex.matches(Cast(AttributeReference("other", StringType)(), DateType, Some("UTC"))))
+  }
+
+  @Test
+  def testIndexedExpressionMatchesOnlyInItsTimeZone(): Unit = {
+    def hourIn(zone: String): Expression = Hour(Cast(ts, TimestampType, Some(zone)), Some(zone))
+    val utcIndex = IndexedExpression("hour", "ts", Map("timeZone" -> "UTC"))
+    assertTrue(utcIndex.matches(hourIn("UTC")))
+    // Resolved the way Spark resolves zones
+    assertTrue(utcIndex.matches(hourIn("Etc/UTC")))
+    assertTrue(utcIndex.matches(hourIn("+00:00")))
+    assertFalse(utcIndex.matches(hourIn("America/Los_Angeles")))
+    // The cast Spark adds to parse the string is evaluated in a zone too
+    assertFalse(utcIndex.matches(Hour(Cast(ts, TimestampType, Some("America/Los_Angeles")), Some("UTC"))))
+    // An index with no recorded zone matches no zone dependent term, and still matches the others
+    assertFalse(IndexedExpression("hour", "ts", Map.empty).matches(hourIn("UTC")))
+    assertTrue(IndexedExpression("upper", "ts", Map.empty).matches(Upper(ts)))
   }
 
   @Test
