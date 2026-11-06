@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{Cast, Expression}
-import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step}
+import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TimeZones}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, DecimalType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StringType, TimestampNTZType, TimestampType}
 
 import scala.util.Try
@@ -98,7 +98,7 @@ object CastRule extends RangeRule {
     // NOTE: The allowlist rejects this cast: a file spanning an instant at which the local date runs
     //       backwards takes no bounds, and a zone whose current rules keep doing it takes no step
     case Cast(child, DateType, timeZoneId, _) if hasDataType(child) && child.dataType == TimestampType =>
-      DateTimeOrdering.localDateReversals(timeZoneId).toSeq.map { instants =>
+      TimeZones.localDateReversals(timeZoneId).toSeq.map { instants =>
         Step(term, child, Increasing,
           fileGuard = DateTimeOrdering.noLocalDateReversal(instants, DateTimeOrdering.asTimestamp), partial = false)
       }
