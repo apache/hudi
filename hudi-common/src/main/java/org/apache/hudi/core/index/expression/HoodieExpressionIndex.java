@@ -52,6 +52,11 @@ public interface HoodieExpressionIndex<S, T> extends Serializable {
   String DAYS_OPTION = "days";
   String FORMAT_OPTION = "format";
   String IDENTITY_TRANSFORM = "identity";
+  /**
+   * Session time zone the index values are computed in, for functions whose result depends on it (for ex, hour or
+   * date_format over a timestamp). Recorded when the index is created; a query in another zone does not use the index.
+   */
+  String TIME_ZONE_OPTION = "timeZone";
   // Bloom filter options
   String BLOOM_FILTER_TYPE = "filtertype";
   String BLOOM_FILTER_NUM_ENTRIES = "numentries";
