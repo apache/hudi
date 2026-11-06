@@ -92,6 +92,7 @@ def main():
             print(f'Client write result: {outcome}', flush=True)
             deadline = time.monotonic() + args.wait
             uri = f'spark://127.0.0.1:{args.port}?api=connect&auth_type=none&tls=false'
+            last_pending_timeline = None
             while time.monotonic() < deadline:
                 try:
                     count, total = readback(uri, args.driver, table, deadline)
@@ -123,8 +124,11 @@ def main():
                             print(f'OBSERVED: write instant {instant} rolled back; 0 rows visible. '
                                   'Server-side work may still be running; preserve test data', flush=True)
                             return 0
-                        print(f'OBSERVED: no visible rows; timeline={timeline} '
-                              '(write outcome remains inconclusive)', flush=True)
+                        pending_timeline = frozenset(tuple(row) for row in timeline)
+                        if pending_timeline != last_pending_timeline:
+                            print(f'PENDING: no visible rows; timeline={timeline} '
+                                  '(write outcome remains inconclusive)', flush=True)
+                            last_pending_timeline = pending_timeline
                 time.sleep(min(2, max(0, deadline - time.monotonic())))
             print('INCONCLUSIVE: complete commit was not observed; outcome may still change', flush=True)
             return 2
