@@ -187,16 +187,17 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
 
 
   @ParameterizedTest
-  @MethodSource(Array("testDateTimeFilterExpressionsSource"))
-  def testDateTimeLookupThroughFullOptimizer(sourceFilterExprStr: String,
-                                             input: Seq[IndexRow],
-                                             expectedOutput: Seq[String]): Unit = {
+  @MethodSource(Array("testDateTimeFilterExpressionsSource", "testIntegralOverflowSource"))
+  def testLookupThroughFullOptimizer(sourceFilterExprStr: String,
+                                     input: Seq[IndexRow],
+                                     expectedOutput: Seq[String]): Unit = {
     // We have to fix the timezone to make sure all date-bound utilities output
     // is consistent with the fixtures
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
 
-    // ANSI flips the parse expressions to throw on unparseable input (ANSI is the default on
-    // Spark 4): the outcome must be the same either way, and the lookup must not throw
+    // ANSI flips the parse expressions to throw on unparseable input, and integral arithmetic to
+    // throw on overflow (ANSI is the default on Spark 4): the outcome must be the same either way,
+    // and the lookup must not throw
     Seq("false", "true").foreach { ansi =>
       withSqlConf(ANSI_ENABLED.key -> ansi) {
         assertEquals(expectedOutput, lookupThroughFullOptimizer(sourceFilterExprStr, input), s"ANSI $ansi")
@@ -1165,11 +1166,16 @@ object TestDataSkippingUtils {
             C_maxValue = new Timestamp(1793494800000L), // 2026-11-01 01:00Z
             C_nullCount = 0)
         ),
-        Seq("file_1")),
+        Seq("file_1"))
+    )
+  }
+
+  def testIntegralOverflowSource(): java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
       // Issue #20460 repros: integral arithmetic wraps around on overflow in non-ANSI mode, so
       // re-applying it over min/max stats maps the max below the min and would wrongly prune
-      // file_1, whose first row matches (51 * 2 = 102, 0 + 1 = 1, 1 << 1 = 2). Must fall back to
-      // always-true, keeping the file
+      // file_1, whose first row matches (51 * 2 = 102, 0 + 1 = 1, 1 << 1 = 2). The file may
+      // overflow, so its bounds are unknown and it is kept
       arguments(
         "A * 2L > 100",
         Seq(
@@ -1188,6 +1194,46 @@ object TestDataSkippingUtils {
           IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue, A_nullCount = 0)
         ),
         Seq("file_1")),
+      // Integral arithmetic still prunes files that cannot overflow. At the limit (file_1) the
+      // bounds are exact and prune; one past it (file_2) a row wraps around in non-ANSI mode and
+      // matches (for ex, Long.MaxValue + 1 = Long.MinValue < 0), so the file is kept
+      arguments(
+        "A + 1 < 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = Long.MaxValue - 10, A_maxValue = Long.MaxValue - 1, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = Long.MaxValue - 10, A_maxValue = Long.MaxValue, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      arguments(
+        "A + -1 > 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = Long.MinValue + 1, A_maxValue = Long.MinValue + 10, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = Long.MinValue, A_maxValue = Long.MinValue + 10, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // Long.MinValue / 3 does not divide evenly, so the min limit rounds towards zero
+      arguments(
+        "A * 3L < 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue / 3, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue / 3 + 1, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      arguments(
+        "A * 3L > 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = Long.MinValue / 3, A_maxValue = -1, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = Long.MinValue / 3 - 1, A_maxValue = -1, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      // A bigint shifts by the low 6 bits of the amount, so 65 shifts by 1
+      arguments(
+        "shiftleft(A, 65) < 0",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue >> 1, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 1, A_maxValue = (Long.MaxValue >> 1) + 1, A_nullCount = 0)
+        ),
+        Seq("file_2")),
       // Floating-point addition saturates to infinity instead, so it still translates and prunes
       arguments(
         "CAST(A AS DOUBLE) + 1.0D > 101.0D",

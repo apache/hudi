@@ -54,6 +54,13 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     expr.collect { case attrRef: AttributeReference => attrRef }.distinct
       .find(attrRef => TermRange.derive(expr, ColumnStatsSource(Seq(attrRef.name))).isDefined)
 
+  /**
+   * Whether the range of `expr` over `attr` is guarded, i.e. a NULL bound means unknown and keeps the
+   * file; `None` if it has no range.
+   */
+  private def guarded(expr: Expression, attr: AttributeReference): Option[Boolean] =
+    TermRange.derive(expr, ColumnStatsSource(Seq(attr.name))).map(_.nullBoundIsUnknown)
+
   @Test
   def testIdentityAttributeMatches(): Unit = {
     assertEquals(Some(intAttr), matched(intAttr))
@@ -71,23 +78,31 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
-  def testOverflowingArithmeticDoesNotPreserveOrdering(): Unit = {
-    // Integral results wrap around on overflow in non-ANSI mode (for ex, Long.MaxValue * 2 = -2).
-    assertEquals(None, matched(Add(intAttr, Literal(1))))
-    assertEquals(None, matched(Add(Literal(1), intAttr)))
-    assertEquals(None, matched(Add(longAttr, Literal(1L))))
-    assertEquals(None, matched(Multiply(intAttr, Literal(2))))
-    assertEquals(None, matched(Multiply(Literal(2L), longAttr)))
-    // Decimal results overflow into NULL.
+  def testOverflowingArithmeticIsGuarded(): Unit = {
+    // Integral results wrap around on overflow in non-ANSI mode (for ex, Long.MaxValue * 2 = -2), so
+    // the range is guarded per file on not overflowing.
+    assertEquals(Some(true), guarded(Add(intAttr, Literal(1)), intAttr))
+    assertEquals(Some(true), guarded(Add(Literal(-1), intAttr), intAttr))
+    assertEquals(Some(true), guarded(Add(longAttr, Literal(1L)), longAttr))
+    assertEquals(Some(true), guarded(Multiply(intAttr, Literal(2)), intAttr))
+    assertEquals(Some(true), guarded(Multiply(Literal(2L), longAttr), longAttr))
+    assertEquals(Some(true), guarded(ShiftLeft(intAttr, Literal(1)), intAttr))
+    assertEquals(Some(true), guarded(ShiftLeft(longAttr, Literal(65)), longAttr))
+    // The other operand must still be constant, and an integral factor positive.
+    assertEquals(None, guarded(Add(intAttr, Rand(Literal(0L))), intAttr))
+    assertEquals(None, guarded(Multiply(intAttr, Literal(-2)), intAttr))
+    assertEquals(None, guarded(Multiply(intAttr, Literal(0)), intAttr))
+    assertEquals(None, guarded(ShiftLeft(intAttr, intAttr), intAttr))
+    // An unresolved constant outside the result type has no limits within it.
+    assertEquals(None, guarded(Add(intAttr, Literal(Long.MaxValue)), intAttr))
+    assertEquals(None, guarded(Multiply(intAttr, Literal(Long.MaxValue)), intAttr))
+    // Decimal results overflow into NULL, and are not ranged.
     assertEquals(None, matched(Add(decAttr, Literal(Decimal(1), DecimalType(10, 2)))))
     assertEquals(None, matched(Multiply(decAttr, Literal(Decimal(2), DecimalType(10, 2)))))
-    // ShiftLeft only takes integral values, so it always can wrap.
-    assertEquals(None, matched(ShiftLeft(intAttr, Literal(1))))
-    assertEquals(None, matched(ShiftLeft(longAttr, Literal(1))))
-    // Float and double results saturate to infinity instead, keeping the ordering.
-    assertEquals(Some(fltAttr), matched(Add(fltAttr, Literal(1.0f))))
-    assertEquals(Some(fltAttr), matched(Multiply(Literal(2.0f), fltAttr)))
-    assertEquals(Some(longAttr), matched(Add(Cast(longAttr, DoubleType), Literal(1.0d))))
+    // Float and double results saturate to infinity instead, keeping the ordering without a guard.
+    assertEquals(Some(false), guarded(Add(fltAttr, Literal(1.0f)), fltAttr))
+    assertEquals(Some(false), guarded(Multiply(Literal(2.0f), fltAttr), fltAttr))
+    assertEquals(Some(false), guarded(Add(Cast(longAttr, DoubleType), Literal(1.0d)), longAttr))
   }
 
   @Test
