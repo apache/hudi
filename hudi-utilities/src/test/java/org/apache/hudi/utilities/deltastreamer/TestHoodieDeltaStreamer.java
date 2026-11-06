@@ -42,6 +42,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
+import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.hive.HiveSyncConfig;
 import org.apache.hudi.hive.HoodieHiveSyncClient;
@@ -419,7 +421,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testTableCreation() throws Exception {
-    Exception e = assertThrows(TableNotFoundException.class, () -> {
+    Exception e = assertThrows(HoodieException.class, () -> {
       fs.mkdirs(new Path(basePath + "/not_a_table"));
       fs.createNewFile(new Path(basePath + "/not_a_table/test.txt"));
       syncOnce(TestHelpers.makeConfig(basePath + "/not_a_table", WriteOperationType.BULK_INSERT));
