@@ -409,7 +409,7 @@ public class ExpressionEvaluators {
 
     @Override
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
-      if (Arrays.stream(vals).noneMatch(Objects::nonNull)) {
+      if (Arrays.stream(vals).allMatch(Objects::isNull)) {
         return false;
       }
       ColumnStats columnStats = getColumnStats(columnStatsMap);
