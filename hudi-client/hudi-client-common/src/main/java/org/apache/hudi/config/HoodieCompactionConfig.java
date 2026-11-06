@@ -93,6 +93,26 @@ public class HoodieCompactionConfig extends HoodieConfig {
           + "This config takes effect only for the compaction triggering strategy based on the number of commits, "
           + "i.e., NUM_COMMITS, NUM_COMMITS_AFTER_LAST_REQUEST, NUM_AND_TIME, and NUM_OR_TIME.");
 
+  public static final ConfigProperty<String> INLINE_COMPACT_IGNORE_EMPTY_COMMITS = ConfigProperty
+      .key("hoodie.compact.inline.ignore.empty.commits")
+      .defaultValue("false")
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, delta commits that wrote no files (e.g. a streamer commit that only advances its "
+          + "checkpoint) are not counted towards " + INLINE_COMPACT_NUM_DELTA_COMMITS.key() + ". On the metadata table, a delta "
+          + "commit is empty when its data table commit wrote no files. Takes effect only for the compaction triggering "
+          + "strategies based on the number of commits.");
+
+  public static final ConfigProperty<String> INLINE_COMPACT_MAX_TOTAL_DELTA_COMMITS = ConfigProperty
+      .key("hoodie.compact.inline.max.total.delta.commits")
+      .defaultValue("-1")
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Used only when " + INLINE_COMPACT_IGNORE_EMPTY_COMMITS.key() + " is enabled: compaction is "
+          + "triggered once this many delta commits, empty ones included, accumulate since the last compaction, which bounds "
+          + "the number of log files and the length of the active timeline. A value <= 0 means 5 x "
+          + INLINE_COMPACT_NUM_DELTA_COMMITS.key() + ".");
+
   public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.seconds")
       .defaultValue(String.valueOf(60 * 60))
@@ -440,6 +460,16 @@ public class HoodieCompactionConfig extends HoodieConfig {
 
     public Builder withTargetIOPerCompactionInMB(long targetIOPerCompactionInMB) {
       compactionConfig.setValue(TARGET_IO_PER_COMPACTION_IN_MB, String.valueOf(targetIOPerCompactionInMB));
+      return this;
+    }
+
+    public Builder withCompactionIgnoreEmptyCommits(boolean ignoreEmptyCommits) {
+      compactionConfig.setValue(INLINE_COMPACT_IGNORE_EMPTY_COMMITS, String.valueOf(ignoreEmptyCommits));
+      return this;
+    }
+
+    public Builder withMaxTotalDeltaCommitsBeforeCompaction(int maxTotalDeltaCommits) {
+      compactionConfig.setValue(INLINE_COMPACT_MAX_TOTAL_DELTA_COMMITS, String.valueOf(maxTotalDeltaCommits));
       return this;
     }
 

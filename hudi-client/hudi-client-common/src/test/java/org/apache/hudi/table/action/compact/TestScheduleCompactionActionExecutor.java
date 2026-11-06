@@ -22,9 +22,14 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -45,6 +50,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,6 +74,54 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
         context, config, table, "001", Option.empty(), WriteOperationType.COMPACT
     ));
     Assertions.assertEquals(1, TestCompactionPlanGenerator.getCount());
+  }
+
+  @Test
+  void testEmptyDeltaCommitsAreNotCountedTowardsTheTrigger() throws Exception {
+    // 3 delta commits wrote files and 7 were empty: with max.delta.commits = 10, compaction must wait.
+    assertEquals(3, newExecutorOnDeltaCommits(3, 7, 50).countDeltaCommitsForTrigger(completedDeltaCommits()));
+  }
+
+  @Test
+  void testEmptyDeltaCommitsCountOnceTheTotalReachesTheCap() throws Exception {
+    assertEquals(10, newExecutorOnDeltaCommits(3, 7, 10).countDeltaCommitsForTrigger(completedDeltaCommits()));
+  }
+
+  private ScheduleCompactionActionExecutor newExecutorOnDeltaCommits(int nonEmpty, int empty, int maxTotalDeltaCommits) throws Exception {
+    initMetaClient();
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    int instant = 1;
+    for (int i = 0; i < nonEmpty; i++) {
+      testTable.addDeltaCommit(String.format("%03d", instant++), commitMetadataWithWrites());
+    }
+    for (int i = 0; i < empty; i++) {
+      testTable.addDeltaCommit(String.format("%03d", instant++), new HoodieCommitMetadata());
+    }
+    metaClient.reloadActiveTimeline();
+    when(config.getProps()).thenReturn(new TypedProperties());
+    when(config.getCompactionStrategy()).thenReturn(new LogFileNumBasedCompactionStrategy());
+    when(config.getInlineCompactMaxTotalDeltaCommits()).thenReturn(maxTotalDeltaCommits);
+    lenient().when(table.getMetaClient()).thenReturn(metaClient);
+    return new ScheduleCompactionActionExecutor(context, config, table, "100", Option.empty(), WriteOperationType.COMPACT);
+  }
+
+  private HoodieTimeline completedDeltaCommits() {
+    return metaClient.getActiveTimeline().getDeltaCommitTimeline().filterCompletedInstants();
+  }
+
+  private static HoodieCommitMetadata commitMetadataWithWrites() {
+    HoodieWriteStat stat = new HoodieWriteStat();
+    stat.setPartitionPath("p1");
+    stat.setFileId("f1");
+    stat.setNumWrites(10);
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.addWriteStat("p1", stat);
+    return metadata;
+  }
+
+  @Override
+  protected HoodieTableType getTableType() {
+    return HoodieTableType.MERGE_ON_READ;
   }
 
   @Test

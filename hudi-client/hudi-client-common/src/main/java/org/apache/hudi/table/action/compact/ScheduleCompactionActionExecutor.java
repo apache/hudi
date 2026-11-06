@@ -194,6 +194,25 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     return Option.empty();
   }
 
+  /**
+   * Number of delta commits the trigger counts when empty delta commits are ignored. Once the total, empty ones included,
+   * reaches {@link HoodieWriteConfig#getInlineCompactMaxTotalDeltaCommits()}, every delta commit counts again so that log
+   * files and the active timeline stay bounded.
+   */
+  @VisibleForTesting
+  int countDeltaCommitsForTrigger(HoodieTimeline deltaCommits) {
+    int totalDeltaCommits = deltaCommits.countInstants();
+    if (totalDeltaCommits >= config.getInlineCompactMaxTotalDeltaCommits()) {
+      log.info("{} delta commits since the last compaction reached the cap of {}; counting empty delta commits too.",
+          totalDeltaCommits, config.getInlineCompactMaxTotalDeltaCommits());
+      return totalDeltaCommits;
+    }
+    int nonEmptyDeltaCommits = CompactionUtils.filterOutEmptyDeltaCommits(table.getMetaClient(), deltaCommits).countInstants();
+    log.info("{} of {} delta commits since the last compaction wrote files; empty delta commits are not counted.",
+        nonEmptyDeltaCommits, totalDeltaCommits);
+    return nonEmptyDeltaCommits;
+  }
+
   private boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
     boolean compactable;
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
@@ -204,6 +223,11 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     Pair<Integer, String> latestDeltaCommitInfoSinceCompact = latestDeltaCommitInfoSinceCompactOption.get();
     if (WriteOperationType.LOG_COMPACT.equals(operationType)) {
       return needLogCompact(latestDeltaCommitInfoSinceCompact);
+    }
+    if (config.isCompactionIgnoreEmptyCommits()) {
+      latestDeltaCommitInfoSinceCompact = Pair.of(
+          countDeltaCommitsForTrigger(CompactionUtils.getCompletedDeltaCommitsSinceLatestCompaction(table.getActiveTimeline()).get().getLeft()),
+          latestDeltaCommitInfoSinceCompact.getRight());
     }
     int inlineCompactDeltaCommitMax = config.getInlineCompactDeltaCommitMax();
     int inlineCompactDeltaSecondsMax = config.getInlineCompactDeltaSecondsMax();
@@ -221,6 +245,11 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
           return false;
         }
         latestDeltaCommitInfoSinceCompact = latestDeltaCommitInfoSinceCompactOption.get();
+        if (config.isCompactionIgnoreEmptyCommits()) {
+          latestDeltaCommitInfoSinceCompact = Pair.of(
+              countDeltaCommitsForTrigger(CompactionUtils.getDeltaCommitsSinceLatestCompactionRequest(table.getActiveTimeline()).get().getLeft()),
+              latestDeltaCommitInfoSinceCompact.getRight());
+        }
         compactable = inlineCompactDeltaCommitMax <= latestDeltaCommitInfoSinceCompact.getLeft();
         if (compactable) {
           log.info("The delta commits >= {} since the last compaction request, trigger compaction scheduler.", inlineCompactDeltaCommitMax);

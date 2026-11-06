@@ -154,6 +154,24 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .sinceVersion("0.7.0")
       .withDocumentation("Controls how often the metadata table is compacted.");
 
+  public static final ConfigProperty<Boolean> COMPACT_IGNORE_EMPTY_COMMITS = ConfigProperty
+      .key(METADATA_PREFIX + ".compact.ignore.empty.commits")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled, metadata table delta commits whose data table commit wrote no files are not counted "
+          + "towards " + METADATA_PREFIX + ".compact.max.delta.commits. Streaming writers that commit on every sync, even when "
+          + "there is no new data, otherwise compact the metadata table far more often than their data volume needs.");
+
+  public static final ConfigProperty<Integer> COMPACT_MAX_TOTAL_DELTA_COMMITS = ConfigProperty
+      .key(METADATA_PREFIX + ".compact.max.total.delta.commits")
+      .defaultValue(-1)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Used only when " + METADATA_PREFIX + ".compact.ignore.empty.commits is enabled: the metadata table "
+          + "is compacted once this many delta commits, empty ones included, accumulate since the last compaction. "
+          + "A value <= 0 means 5 x " + METADATA_PREFIX + ".compact.max.delta.commits.");
+
   // Max number of seconds before compaction occurs
   public static final ConfigProperty<String> COMPACT_TIME_DELTA_SECONDS = ConfigProperty
       .key(METADATA_PREFIX + ".compact.max.delta.seconds")
