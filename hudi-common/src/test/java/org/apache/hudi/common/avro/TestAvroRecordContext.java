@@ -19,10 +19,13 @@
 
 package org.apache.hudi.common.avro;
 
+import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 
+import org.apache.avro.Conversions;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -31,16 +34,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.avro.AvroRecordContext.getFieldValueFromIndexedRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestAvroRecordContext {
 
@@ -184,5 +193,59 @@ class TestAvroRecordContext {
     }
     assertEquals(getFieldValueFromIndexedRecord(record, "id"), getFieldValueFromIndexedRecord(recordWithCopy, "id"));
     assertEquals(getFieldValueFromIndexedRecord(record, "address.city"), getFieldValueFromIndexedRecord(recordWithCopy, "address.city"));
+  }
+
+  private static final Schema LOGICAL_TYPES_SCHEMA = new Schema.Parser().parse(
+      "{\"type\":\"record\",\"name\":\"logical\",\"fields\":["
+          + "{\"name\":\"id\",\"type\":\"int\"},"
+          + "{\"name\":\"dt\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
+          + "{\"name\":\"ts\",\"type\":[\"null\",{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}],\"default\":null},"
+          + "{\"name\":\"dec\",\"type\":[\"null\",{\"type\":\"fixed\",\"name\":\"dec_fixed\",\"size\":5,"
+          + "\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}],\"default\":null},"
+          + "{\"name\":\"nested\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"nested\",\"fields\":["
+          + "{\"name\":\"dt\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}}]}],\"default\":null}]}");
+
+  private static GenericRecord buildLogicalTypesRecord(boolean javaTimeForm) {
+    LocalDate date = LocalDate.of(2026, 10, 1);
+    Instant instant = Instant.parse("2026-10-01T00:00:00Z");
+    long micros = instant.getEpochSecond() * 1_000_000L;
+    Schema decimalSchema = LOGICAL_TYPES_SCHEMA.getField("dec").schema().getTypes().get(1);
+    GenericRecord nested = new GenericData.Record(LOGICAL_TYPES_SCHEMA.getField("nested").schema().getTypes().get(1));
+    // An Avro reader materializes date / timestamp values either as the primitive (Avro 1.11, or
+    // with the fast reader off) or as java.time values (Avro 1.12.1 with the fast reader on).
+    nested.put("dt", javaTimeForm ? date : (int) date.toEpochDay());
+    GenericRecord record = new GenericData.Record(LOGICAL_TYPES_SCHEMA);
+    record.put("id", 1);
+    record.put("dt", javaTimeForm ? date : (int) date.toEpochDay());
+    record.put("ts", javaTimeForm ? instant : micros);
+    record.put("dec", new Conversions.DecimalConversion().toFixed(new BigDecimal("1.50"), decimalSchema, LogicalTypes.decimal(10, 2)));
+    record.put("nested", nested);
+    return record;
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testOrderingValueOfLogicalTypesAlignsWithHoodieRecord(boolean javaTimeForm) {
+    // The file group reader compares the ordering value of an engine record, e.g. read from a base file,
+    // with the ordering value of an incoming HoodieRecord on the write path, so both must be in the same form.
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(LOGICAL_TYPES_SCHEMA);
+    AvroRecordContext recordContext = AvroRecordContext.getFieldAccessorInstance();
+    for (String field : Arrays.asList("dt", "ts", "dec", "nested.dt")) {
+      String[] orderingFields = new String[] {field};
+      GenericRecord engineRecord = buildLogicalTypesRecord(javaTimeForm);
+      Comparable engineOrderingValue = recordContext.getOrderingValue(engineRecord, schema, orderingFields);
+      Comparable incomingOrderingValue = new HoodieAvroIndexedRecord(buildLogicalTypesRecord(false))
+          .getOrderingValue(schema, new Properties(), orderingFields);
+      assertEquals(incomingOrderingValue, engineOrderingValue, "ordering field " + field);
+      assertEquals(0, incomingOrderingValue.compareTo(engineOrderingValue), "ordering field " + field);
+      assertEquals(0, engineOrderingValue.compareTo(incomingOrderingValue), "ordering field " + field);
+    }
+    GenericRecord engineRecord = buildLogicalTypesRecord(javaTimeForm);
+    assertEquals(LocalDate.of(2026, 10, 1), recordContext.getOrderingValue(engineRecord, schema, new String[] {"dt"}));
+    assertEquals(Instant.parse("2026-10-01T00:00:00Z").getEpochSecond() * 1_000_000L,
+        recordContext.getOrderingValue(engineRecord, schema, new String[] {"ts"}));
+    assertEquals(new BigDecimal("1.50"), recordContext.getOrderingValue(engineRecord, schema, new String[] {"dec"}));
+    // the raw value accessor is unchanged
+    assertTrue(getFieldValueFromIndexedRecord(buildLogicalTypesRecord(false), "dt") instanceof Integer);
   }
 }

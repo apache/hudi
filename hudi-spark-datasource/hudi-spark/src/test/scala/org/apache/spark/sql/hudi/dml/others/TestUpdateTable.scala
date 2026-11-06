@@ -631,4 +631,97 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
       )
     }
   }
+
+  // (ordering field type, older literal, newer literal, older value as string, newer value as string)
+  private val logicalTypeOrderingCases = Seq(
+    ("timestamp", "timestamp'2026-10-01 00:00:00'", "timestamp'2026-10-02 00:00:00'",
+      "2026-10-01 00:00:00", "2026-10-02 00:00:00"),
+    ("date", "date'2026-10-01'", "date'2026-10-02'", "2026-10-01", "2026-10-02"),
+    ("decimal(10,2)", "cast(1.50 as decimal(10,2))", "cast(2.50 as decimal(10,2))", "1.50", "2.50"))
+
+  logicalTypeOrderingCases.foreach { case (orderingType, oldLiteral, newLiteral, oldStr, newStr) =>
+    test(s"Test Update Table With ${orderingType.toUpperCase} Ordering Field") {
+      // The ordering value of a record read from the base file and the ordering value of the incoming
+      // UPDATE record have to be comparable, whatever logical type the ordering field has.
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          Seq(true, false).foreach { partitioned =>
+            Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+              val tableName = generateTableName
+              val partitionClause = if (partitioned) "partitioned by (dt)" else ""
+              spark.sql(
+                s"""
+                   |create table $tableName (
+                   |  id int,
+                   |  v int,
+                   |  ts $orderingType,
+                   |  dt string
+                   |) using hudi
+                   | location '${tmp.getCanonicalPath}/$tableName'
+                   | tblproperties (
+                   |  type = '$tableType',
+                   |  primaryKey = 'id',
+                   |  preCombineField = 'ts'
+                   | )
+                   | $partitionClause
+                 """.stripMargin)
+              spark.sql(s"insert into $tableName values (1, 1, $oldLiteral, 'p1'), (2, 2, $oldLiteral, 'p1')")
+
+              withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+                // update without touching the ordering field
+                spark.sql(s"update $tableName set v = v * 10 where id = 1")
+                checkAnswer(s"select id, v, cast(ts as string), dt from $tableName order by id")(
+                  Seq(1, 10, oldStr, "p1"),
+                  Seq(2, 2, oldStr, "p1")
+                )
+
+                // update the ordering field to a later value
+                spark.sql(s"update $tableName set v = v + 1, ts = $newLiteral where id = 2")
+                checkAnswer(s"select id, v, cast(ts as string), dt from $tableName order by id")(
+                  Seq(1, 10, oldStr, "p1"),
+                  Seq(2, 3, newStr, "p1")
+                )
+              }
+            }
+          }
+        }
+      }
+    }
+
+    test(s"Test Merge Into Table With ${orderingType.toUpperCase} Ordering Field") {
+      withTempDir { tmp =>
+        Seq("cow", "mor").foreach { tableType =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  v int,
+               |  ts $orderingType
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  type = '$tableType',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 1, $oldLiteral), (2, 2, $oldLiteral)")
+
+          spark.sql(
+            s"""
+               |merge into $tableName t
+               |using (select 1 as id, 10 as v, $oldLiteral as ts
+               |       union all select 2 as id, 20 as v, $newLiteral as ts) s
+               |on t.id = s.id
+               |when matched then update set *
+             """.stripMargin)
+          checkAnswer(s"select id, v, cast(ts as string) from $tableName order by id")(
+            Seq(1, 10, oldStr),
+            Seq(2, 20, newStr)
+          )
+        }
+      }
+    }
+  }
 }
