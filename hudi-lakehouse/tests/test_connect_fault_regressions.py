@@ -58,6 +58,33 @@ def mock_readback(cursor):
 
 
 class FaultFailureTest(unittest.TestCase):
+    def test_cancel_logs_pending_only_when_timeline_changes(self):
+        module = load('connect_cancel')
+        observer, writer = MagicMock(), MagicMock()
+        writer.execute.side_effect = RuntimeError('cancelled')
+        thread = MagicMock()
+        thread.is_alive.return_value = True
+        thread.join.side_effect = lambda timeout: setattr(thread.is_alive, 'return_value', False)
+
+        def make_thread(target, daemon):
+            thread.start.side_effect = target
+            return thread
+
+        pending = [('100', 'commit', 'INFLIGHT')]
+        changed = [('101', 'rollback', 'INFLIGHT')]
+        with patch.object(module, 'connect', side_effect=[connection_with_cursor(observer), connection_with_cursor(writer)]), \
+             patch.object(module, 'readback', return_value=(0, None)), \
+             patch.object(module, 'read_timeline', side_effect=[(pending, []), (pending, []), (changed, [])]), \
+             patch.object(module.threading, 'Thread', side_effect=make_thread), \
+             patch.object(module.time, 'monotonic', side_effect=[0, 0, 0, 1, 1, 2, 2, 3]), \
+             patch.object(module.time, 'sleep'), \
+             patch.object(sys, 'argv', ['test', '--port', '15002', '--wait', '3']), \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(module.main(), 2)
+        self.assertEqual(output.getvalue().count('PENDING: no visible rows'), 2)
+        self.assertIn('INCONCLUSIVE: complete commit was not observed', output.getvalue())
+        self.assertNotIn('OBSERVED: no visible rows', output.getvalue())
+
     def test_cancel_reports_completed_rollback_without_cleaning_table(self):
         module = load('connect_cancel')
         observer, writer = MagicMock(), MagicMock()
