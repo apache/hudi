@@ -185,6 +185,33 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
   }
 
   @Test
+  def testTimeOfDayPatternsRequireFixedOffsetSessionZone(): Unit = {
+    val newYork = Some("America/New_York")
+    // Every allowlisted time-of-day pattern renders the local time, which runs backwards across a DST fall-back of
+    // the session zone, and keeps the ordering in a session zone whose offset never changes.
+    Seq("yyyy-MM-dd HH", "yyyy-MM-dd HH:mm", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd HH:mm:ss.SSS", "yyyy-MM-dd'T'HH:mm:ss",
+      "yyyy-MM-dd'T'HH:mm:ss.SSS", "yyyyMMddHHmmss", "yyyy/MM/dd HH:mm:ss").foreach { pattern =>
+      assertEquals(None, matched(DateFormatClass(tsAttr, Literal(pattern), newYork)), pattern)
+      assertEquals(None, matched(FromUnixTime(longAttr, Literal(pattern), newYork)), pattern)
+      assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal(pattern), Some("UTC"))), pattern)
+      assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal(pattern), Some("+08:00"))), pattern)
+    }
+    // Every allowlisted date-only pattern renders the local date, which never runs backwards in New York.
+    Seq("yyyy", "yyyy-MM", "yyyy-MM-dd", "yyyyMMdd", "yyyy/MM/dd").foreach { pattern =>
+      assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal(pattern), newYork)), pattern)
+      assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal(pattern), newYork)), pattern)
+    }
+    // PST resolves to America/Los_Angeles; Kolkata has no DST but historical offset changes.
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("PST"))))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("Asia/Kolkata"))))
+    // A non-literal or null pattern, an unknown zone or an unresolved session zone is not matched.
+    assertEquals(None, matched(DateFormatClass(tsAttr, strAttr, newYork)))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal(null, StringType), newYork)))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("Not/AZone"))))
+    assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), None)))
+  }
+
+  @Test
   def testUpCastPreservesOrderingButNumericToStringDoesNot(): Unit = {
     // Widening a numeric column preserves ordering, so the source attribute is recovered.
     assertEquals(Some(intAttr), matched(Cast(intAttr, LongType)))

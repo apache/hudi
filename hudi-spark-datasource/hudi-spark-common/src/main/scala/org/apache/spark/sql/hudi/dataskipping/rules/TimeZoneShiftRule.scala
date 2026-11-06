@@ -18,10 +18,7 @@
 package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{Expression, FromUTCTimestamp, Literal, ToUTCTimestamp}
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step}
-
-import scala.util.Try
+import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TimeZones}
 
 /**
  * Time zone shifts: `FromUTCTimestamp`, `ToUTCTimestamp`.
@@ -45,11 +42,9 @@ object TimeZoneShiftRule extends RangeRule {
   }
 
   // Only a literal zone is matched, since the optimizer folds a constant zone to a literal before data
-  // skipping runs. It is resolved the way Spark evaluates it, so for ex +8:00 is +08:00 and the short
-  // ID PST is America/Los_Angeles; an unknown zone is not matched
+  // skipping runs; `TimeZones.isFixedOffsetZone` resolves it the way Spark evaluates it
   private def isFixedOffsetTimeZone(expr: Expression): Boolean = expr match {
-    case Literal(timeZone, _) if timeZone != null =>
-      Try(DateTimeUtils.getZoneId(timeZone.toString).getRules.isFixedOffset).getOrElse(false)
+    case Literal(timeZone, _) if timeZone != null => TimeZones.isFixedOffsetZone(timeZone.toString)
     case _ => false
   }
 }
