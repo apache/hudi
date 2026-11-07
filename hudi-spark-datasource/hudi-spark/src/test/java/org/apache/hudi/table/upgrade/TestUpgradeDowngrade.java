@@ -60,6 +60,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -386,6 +387,38 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
         toVersion.versionCode());
     assertEquals(expectedMessage, exception.getMessage(),
         "Exception message should match expected blocked downgrade format");
+  }
+
+  /**
+   * Below version 9 a table records its ordering field under the deprecated precombine key, which Hudi 1.0.x and 0.x
+   * read as a single field name, so a table ordered on several fields cannot be downgraded below version 9. The
+   * refusal comes before the rollback, the compaction and the metadata table downgrade, which leaves the table as it was.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "SIX"})
+  public void testDowngradeBelowNineRefusesSeveralOrderingFields(HoodieTableVersion toVersion) throws Exception {
+    HoodieTableMetaClient fixtureMetaClient = loadFixtureTable(HoodieTableVersion.NINE, "-mor");
+    Properties severalOrderingFields = new Properties();
+    severalOrderingFields.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "ts,name");
+    HoodieTableConfig.update(fixtureMetaClient.getStorage(), fixtureMetaClient.getMetaPath(), severalOrderingFields);
+    HoodieTableMetaClient originalMetaClient = HoodieTableMetaClient.reload(fixtureMetaClient);
+    List<HoodieInstant> originalInstants = originalMetaClient.getActiveTimeline().getInstants();
+    validateLogFilesCount(originalMetaClient, "downgrade", true);
+
+    HoodieWriteConfig config = createWriteConfig(originalMetaClient, true);
+    HoodieUpgradeDowngradeException exception = assertThrows(HoodieUpgradeDowngradeException.class,
+        () -> new UpgradeDowngrade(originalMetaClient, config, context(), SparkUpgradeDowngradeHelper.getInstance()).run(toVersion, null));
+    assertTrue(exception.getMessage().startsWith(String.format(
+        "Cannot downgrade to table version %d: hoodie.table.ordering.fields=ts,name orders records on several fields", toVersion.versionCode())),
+        exception.getMessage());
+
+    HoodieTableMetaClient resultMetaClient = HoodieTableMetaClient.reload(originalMetaClient);
+    assertTrue(isMetadataTablePresent(resultMetaClient));
+    assertTableVersionOnDataAndMetadataTable(resultMetaClient, HoodieTableVersion.NINE);
+    assertEquals("ts,name", resultMetaClient.getTableConfig().getProps().getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertFalse(resultMetaClient.getTableConfig().getProps().containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key()));
+    assertEquals(originalInstants, resultMetaClient.getActiveTimeline().getInstants(), "the timeline is unchanged, so nothing was compacted");
+    validateLogFilesCount(resultMetaClient, "downgrade", true);
   }
 
   private static Stream<Arguments> testComplexKeygenValidationDuringUpgradeDowngrade() {
