@@ -113,7 +113,7 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
     assertUnsupported(() -> table.scheduleIndexing(context, "001", Collections.emptyList(), Collections.emptyList()));
     assertUnsupported(() -> table.index(context, "001"));
     assertUnsupported(() -> table.savepoint(context, "001", "user", "comment"));
-    assertUnsupported(() -> table.scheduleRestore(context, "002", "001"));
+    assertUnsupported(() -> table.scheduleRestore(context, "002", "001", Option.empty()));
     assertUnsupported(() -> table.restore(context, "002", "001"));
   }
 
@@ -144,7 +144,7 @@ class TestHoodieFlinkTableActionRouting extends HoodieFlinkClientTestHarness {
     Option<HoodieRollbackPlan> rollbackPlan = Option.of(mock(HoodieRollbackPlan.class));
     assertResultPropagated(BaseRollbackPlanActionExecutor.class, rollbackPlan,
         () -> table.scheduleRollback(
-            context, "003", mock(HoodieInstant.class), false, false, false));
+            context, "003", mock(HoodieInstant.class), false, false, false, Option.empty()));
   }
 
   @Test

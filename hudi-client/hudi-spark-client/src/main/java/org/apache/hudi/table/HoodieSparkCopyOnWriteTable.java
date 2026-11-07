@@ -206,7 +206,7 @@ public class HoodieSparkCopyOnWriteTable<T>
     } catch (HoodieMetadataException e) {
       throw new HoodieException("Failed to delete metadata table.", e);
     }
-    new RestorePlanActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
+    new RestorePlanActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS, Option.empty()).execute();
     new CopyOnWriteRestoreActionExecutor<>(context, config, this, instantTime, HoodieTimeline.INIT_INSTANT_TS).execute();
   }
 
@@ -219,9 +219,9 @@ public class HoodieSparkCopyOnWriteTable<T>
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context,
                                                      String instantTime,
                                                      HoodieInstant instantToRollback, boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers,
-                                                     boolean isRestore) {
+                                                     boolean isRestore, Option<Map<String, String>> extraMetadata) {
     return new BaseRollbackPlanActionExecutor<>(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-        shouldRollbackUsingMarkers, isRestore).execute();
+        shouldRollbackUsingMarkers, isRestore, extraMetadata).execute();
   }
 
   /**
@@ -310,8 +310,9 @@ public class HoodieSparkCopyOnWriteTable<T>
   }
 
   @Override
-  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp) {
-    return new RestorePlanActionExecutor<>(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp).execute();
+  public Option<HoodieRestorePlan> scheduleRestore(HoodieEngineContext context, String restoreInstantTimestamp, String savepointToRestoreTimestamp,
+                                                    Option<Map<String, String>> extraMetadata) {
+    return new RestorePlanActionExecutor<>(context, config, this, restoreInstantTimestamp, savepointToRestoreTimestamp, extraMetadata).execute();
   }
 
 }

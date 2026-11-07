@@ -154,9 +154,10 @@ public class HoodieFlinkMergeOnReadTable<T>
 
   @Override
   public Option<HoodieRollbackPlan> scheduleRollback(HoodieEngineContext context, String instantTime, HoodieInstant instantToRollback,
-                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore) {
+                                                     boolean skipTimelinePublish, boolean shouldRollbackUsingMarkers, boolean isRestore,
+                                                     Option<Map<String, String>> extraMetadata) {
     return new BaseRollbackPlanActionExecutor(context, config, this, instantTime, instantToRollback, skipTimelinePublish,
-        shouldRollbackUsingMarkers, isRestore).execute();
+        shouldRollbackUsingMarkers, isRestore, extraMetadata).execute();
   }
 
   @Override
