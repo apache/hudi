@@ -303,12 +303,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     writeClient.rollback(metaClient.getActiveTimeline.lastInstant().get().requestedTime())
     writeClient.close()
     val metadata = metadataWriter(writeConfig).getTableMetadata
-    try {
-      val partition0Locations = readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition0"))
-      fail("rollback happened, so partition should be deleted")
-    } catch {
-      case t: Throwable => assertTrue(t.isInstanceOf[ArithmeticException])
-    }
+    assertTrue(readRecordIndex(metadata, holder.bulkRecordKeys, HOption.of("partition0")).isEmpty)
   }
 
   @ParameterizedTest
@@ -698,14 +693,7 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
                                     recordKeys: java.util.List[String],
                                     partitionPaths: Seq[String]): Map[String, HoodieRecordGlobalLocation] = {
     partitionPaths
-      .flatMap(partition => {
-        try {
-          readRecordIndex(metadata, recordKeys, HOption.of(partition))
-        } catch {
-          // Partitioned RLI can throw when a partition is skipped from metadata bootstrap.
-          case _: ArithmeticException => Map.empty[String, HoodieRecordGlobalLocation]
-        }
-      })
+      .flatMap(partition => readRecordIndex(metadata, recordKeys, HOption.of(partition)))
       .toMap
   }
 
