@@ -19,7 +19,7 @@
 package org.apache.spark
 
 import org.apache.hudi.client.model.HoodieInternalRow
-import org.apache.hudi.common.model.{HoodieKey, HoodieSparkRecord}
+import org.apache.hudi.common.model.{BaseAvroPayload, HoodieKey, HoodieSparkRecord}
 import org.apache.hudi.common.util.HoodieCommonKryoRegistrar
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.io.HoodieKeyLookupResult
@@ -59,6 +59,10 @@ class HoodieSparkKryoRegistrar extends HoodieCommonKryoRegistrar with KryoRegist
     // NOTE: DO NOT REORDER REGISTRATIONS
     ///////////////////////////////////////////////////////////////////////////
     super[HoodieCommonKryoRegistrar].registerClasses(kryo)
+
+    // Spark supplies the schema to payload readers. Preserve its compact shuffle format instead
+    // of repeating the writer schema in every record. Standalone Kryo users remain self-contained.
+    BaseAvroPayload.useLegacyKryoFormat(kryo)
 
     kryo.register(classOf[HoodieKey], new HoodieKeySerializer)
 
