@@ -256,4 +256,45 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <profiles>
+      <!-- Experiment: runs this module's tests with Apache DataFusion Comet as the Spark plugin.
+           Sets comet.test.jvm.args (appended to the surefire/scalatest argLine by the root pom) and
+           puts the Hudi-built Comet artifact on the test class path. Requires -Dcomet.hudi.build and
+           -Ddatafusion.comet.version naming that artifact. -->
+      <profile>
+        <id>comet-hudi-tests</id>
+        <activation>
+          <property>
+            <name>comet.hudi.tests</name>
+          </property>
+        </activation>
+        <properties>
+          <comet.test.jvm.args>${comet.hudi.test.spark.flags}</comet.test.jvm.args>
+        </properties>
+        <dependencies>
+          <dependency>
+            <groupId>org.apache.datafusion</groupId>
+            <artifactId>comet-spark-spark${sparkbundle.version}_${scala.binary.version}</artifactId>
+            <version>${datafusion.comet.version}</version>
+            <scope>test</scope>
+          </dependency>
+          <!-- Comet's jar keeps its own copy of org.apache.arrow.c, compiled against its shaded
+               allocator, and the stock arrow-c-data (via lance-core) sits ahead of it on the class
+               path. Declaring arrow-c-data here, after the Comet jar, moves it behind. The Lance
+               reader tests lose their C data interface as a result. -->
+          <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-c-data</artifactId>
+            <version>${arrow.version}</version>
+            <scope>test</scope>
+          </dependency>
+          <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-spark-comet_${scala.binary.version}</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+          </dependency>
+        </dependencies>
+      </profile>
+    </profiles>
 </project>
