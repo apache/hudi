@@ -1,0 +1,245 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1460" height="1120" viewBox="0 0 1460 1120" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#555"/>
+    </marker>
+  </defs>
+  <rect width="1460" height="1120" fill="#ffffff"/>
+
+  <text x="730" y="34" text-anchor="middle" font-size="20" font-weight="bold" fill="#222">RFC-100 blob cleaner: v2 (on PR #18359) vs trimmed proposal</text>
+
+  <!-- legend -->
+  <g font-size="12">
+    <rect x="40" y="50" width="14" height="14" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/><text x="60" y="62">keep (unchanged kernel)</text>
+    <rect x="230" y="50" width="14" height="14" fill="#ffebee" stroke="#c62828" stroke-width="2" stroke-dasharray="4 3"/><text x="250" y="62">cut</text>
+    <rect x="300" y="50" width="14" height="14" fill="#fff3e0" stroke="#ef6c00" stroke-width="2"/><text x="320" y="62">defect in v2 / moved in proposal</text>
+    <rect x="545" y="50" width="14" height="14" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/><text x="565" y="62">new in proposal</text>
+    <rect x="680" y="50" width="14" height="14" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/><text x="700" y="62">optional later phase</text>
+  </g>
+
+  <!-- column headers -->
+  <rect x="40" y="80" width="660" height="30" fill="#eceff1"/>
+  <text x="370" y="100" text-anchor="middle" font-size="15" font-weight="bold">v2 as written: 6 mechanisms</text>
+  <rect x="760" y="80" width="660" height="30" fill="#eceff1"/>
+  <text x="1090" y="100" text-anchor="middle" font-size="15" font-weight="bold">Proposal: 3 mechanisms (registry, plan-time verify, veto)</text>
+
+  <!-- lane separators and labels -->
+  <g stroke="#cfd8dc" stroke-width="1">
+    <line x1="40" y1="330" x2="1420" y2="330"/>
+    <line x1="40" y1="600" x2="1420" y2="600"/>
+    <line x1="40" y1="730" x2="1420" y2="730"/>
+    <line x1="40" y1="950" x2="1420" y2="950"/>
+  </g>
+  <g font-size="12" font-weight="bold" fill="#607d8b">
+    <text x="40" y="128">LANE 1: every commit (write path)</text>
+    <text x="760" y="128">LANE 1: every commit (write path)</text>
+    <text x="40" y="348">LANE 2: clean planning</text>
+    <text x="760" y="348">LANE 2: clean planning (createCleanerPlan + scheduleCleaning lock; the blob check inside it is NEW locked work)</text>
+    <text x="40" y="618">LANE 3: clean execution</text>
+    <text x="760" y="618">LANE 3: clean execution</text>
+    <text x="40" y="748">LANE 4: later clean, drain (age >= 24h grace)</text>
+    <text x="760" y="748">LANE 4: registry garbage collection</text>
+    <text x="40" y="968">LANE 5: concurrent writer</text>
+    <text x="760" y="968">LANE 5: concurrent writer</text>
+  </g>
+
+  <!-- ================= LEFT: v2 ================= -->
+  <!-- lane 1 -->
+  <g>
+    <rect x="40" y="140" width="310" height="80" rx="6" fill="#ffebee" stroke="#c62828" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="52" y="160" font-weight="bold" fill="#c62828">CUT: per-file manifests</text>
+    <text x="52" y="178">Parquet footer key + NEW log-block</text>
+    <text x="52" y="194">HeaderMetadataType (on-disk format change),</text>
+    <text x="52" y="210">inline list + 128KB bloom, per base format</text>
+
+    <rect x="390" y="140" width="310" height="80" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="402" y="160" font-weight="bold" fill="#2e7d32">KEEP: registry records</text>
+    <text x="402" y="178">MDT partition blob_refs, key =</text>
+    <text x="402" y="194">path $ partition $ file, same MDT delta</text>
+    <text x="402" y="210">commit as the data commit</text>
+
+    <rect x="390" y="235" width="310" height="70" rx="6" fill="#fff3e0" stroke="#ef6c00" stroke-width="2"/>
+    <text x="402" y="255" font-weight="bold" fill="#ef6c00">DEFECT: carrier = HoodieWriteStat</text>
+    <text x="402" y="273">path sets land on the driver and in commit</text>
+    <text x="402" y="289">metadata (the C10 anti-pattern)</text>
+  </g>
+
+  <!-- lane 2 -->
+  <g>
+    <rect x="40" y="360" width="310" height="66" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="52" y="380" font-weight="bold" fill="#2e7d32">KEEP: enumerate expired files</text>
+    <text x="52" y="398">inline manifest, else blob-column read</text>
+    <text x="52" y="414">(column read is the common case anyway)</text>
+
+    <rect x="390" y="360" width="310" height="66" rx="6" fill="#ffebee" stroke="#c62828" stroke-width="2" stroke-dasharray="4 3"/>
+    <text x="402" y="380" font-weight="bold" fill="#c62828">CUT: hygiene sidecar</text>
+    <text x="402" y="398">.aux/clean/&lt;instant&gt;.blob_refs.parquet</text>
+    <text x="402" y="414">ALL (path, file) of ALL expired files</text>
+
+    <rect x="40" y="445" width="310" height="66" rx="6" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/>
+    <text x="52" y="465" font-weight="bold" fill="#616161">OPTIONAL: pending-deletes queue</text>
+    <text x="52" y="483">copy-on-write snapshots, 24h grace,</text>
+    <text x="52" y="499">drained by a LATER clean</text>
+
+    <rect x="390" y="445" width="310" height="66" rx="6" fill="#fff3e0" stroke="#ef6c00" stroke-width="2"/>
+    <text x="402" y="465" font-weight="bold" fill="#ef6c00">DEFECT: enumeration failure</text>
+    <text x="402" y="483">"proceed and flag" never enqueues the file's</text>
+    <text x="402" y="499">paths; sweep reclaims entries, not blobs</text>
+
+    <text x="52" y="545" fill="#555">Nothing is verified or deleted in this cycle.</text>
+    <text x="52" y="561" fill="#555">Candidates wait in the queue for the grace window.</text>
+  </g>
+
+  <!-- lane 3 -->
+  <g>
+    <rect x="40" y="630" width="200" height="70" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="52" y="650" font-weight="bold" fill="#2e7d32">KEEP: delete slices</text>
+    <text x="52" y="668">existing cleaner, unchanged</text>
+
+    <line x1="240" y1="665" x2="275" y2="665" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="280" y="630" width="420" height="70" rx="6" fill="#fff3e0" stroke="#ef6c00" stroke-width="2"/>
+    <text x="292" y="650" font-weight="bold" fill="#ef6c00">DEFECT + CUT: registry tombstones UNDER THE CLEAN LOCK</text>
+    <text x="292" y="668">read sidecar, emit one tombstone per (path, file) = O(rows)</text>
+    <text x="292" y="684">for row-level-distinct blobs; writers blocked (C6/R4)</text>
+  </g>
+
+  <!-- lane 4 -->
+  <g>
+    <rect x="40" y="760" width="200" height="66" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="52" y="780" font-weight="bold" fill="#2e7d32">KEEP: Step A (unlocked)</text>
+    <text x="52" y="798">registry prefix scan per path</text>
+    <text x="52" y="814">at snapshot T0</text>
+
+    <line x1="240" y1="793" x2="275" y2="793" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="280" y="760" width="230" height="66" rx="6" fill="#fff3e0" stroke="#ef6c00" stroke-width="2"/>
+    <text x="292" y="780" font-weight="bold" fill="#ef6c00">MOVED: Step B (locked)</text>
+    <text x="292" y="798">NEW lock scope around</text>
+    <text x="292" y="814">REQUESTED-&gt;INFLIGHT in executor</text>
+
+    <line x1="510" y1="793" x2="545" y2="793" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="550" y="760" width="150" height="66" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="562" y="780" font-weight="bold" fill="#2e7d32">KEEP: classify</text>
+    <text x="562" y="798">delete / defer / annul</text>
+    <text x="562" y="814">(defer is required)</text>
+
+    <rect x="40" y="845" width="660" height="40" rx="6" fill="#fff3e0" stroke="#ef6c00" stroke-width="2"/>
+    <text x="52" y="862" font-weight="bold" fill="#ef6c00">DEFECTS: delta must be completed-set difference (not requestedTime &gt; T0);</text>
+    <text x="52" y="878">queue append vs drain snapshot has no concurrency protocol; standalone cleaner has no real lock</text>
+    <text x="52" y="912" fill="#555">Reconciliation sweep (10K entries/cycle) is the only cleanup for leaked entries.</text>
+  </g>
+
+  <!-- lane 5 -->
+  <g>
+    <rect x="40" y="980" width="660" height="60" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="52" y="1000" font-weight="bold" fill="#2e7d32">KEEP: preCommit veto</text>
+    <text x="52" y="1018">writer aborts if it references a path in the sidecar of an INFLIGHT (draining) clean, or a clean</text>
+    <text x="52" y="1034">completed inside its window. Writers referencing merely-queued paths proceed.</text>
+  </g>
+
+  <!-- ================= RIGHT: proposal ================= -->
+  <!-- lane 1 -->
+  <g>
+    <rect x="760" y="140" width="310" height="80" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="772" y="160" font-weight="bold" fill="#2e7d32">data files unchanged</text>
+    <text x="772" y="178">no footer key, no log-header change,</text>
+    <text x="772" y="194">no per-format manifest work for</text>
+    <text x="772" y="210">Parquet / Lance / Vortex</text>
+
+    <rect x="1110" y="140" width="310" height="80" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="1122" y="160" font-weight="bold" fill="#2e7d32">registry records (same as v2)</text>
+    <text x="1122" y="178">blob_refs, path-first key, born at commit</text>
+    <text x="1122" y="194">in the same MDT delta commit.</text>
+    <text x="1122" y="210">NEVER tombstoned by the clean.</text>
+
+    <rect x="1110" y="235" width="310" height="70" rx="6" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/>
+    <text x="1122" y="255" font-weight="bold" fill="#1565c0">NEW: carrier = WriteStatus</text>
+    <text x="1122" y="273">distinct path set built at file close on the</text>
+    <text x="1122" y="289">executor; records generated distributed (RLI)</text>
+  </g>
+
+  <!-- lane 2 -->
+  <g>
+    <rect x="760" y="360" width="310" height="66" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="772" y="380" font-weight="bold" fill="#2e7d32">enumerate expired files</text>
+    <text x="772" y="398">blob-column read; only type == OUT_OF_LINE;</text>
+    <text x="772" y="414">never a path that is a Hudi base/log file</text>
+
+    <line x1="1070" y1="393" x2="1105" y2="393" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="1110" y="360" width="310" height="66" rx="6" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/>
+    <text x="1122" y="380" font-weight="bold" fill="#1565c0">NEW: Step A here (unlocked)</text>
+    <text x="1122" y="398">registry prefix scan AND FILES membership,</text>
+    <text x="1122" y="414">both read at the same MDT snapshot T0</text>
+
+    <line x1="1265" y1="426" x2="1265" y2="441" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="760" y="445" width="660" height="80" rx="6" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/>
+    <text x="772" y="465" font-weight="bold" fill="#1565c0">NEW: Step B inside the scheduleCleaning lock (before saveToCleanRequested), kept tiny</text>
+    <text x="772" y="483">reload timeline; if any commit completed since T0 carries the blobRefsWritten boolean, release the lock and</text>
+    <text x="772" y="499">re-verify unlocked at a fresh T0 (bounded retries, last resort = exact lookup under lock); then persist the plan sidecar.</text>
+    <text x="772" y="515">Plan replay (empty completed file) keeps the old list and re-verifies it; pending plans run unchanged.</text>
+
+    <rect x="760" y="540" width="660" height="40" rx="6" fill="#f5f5f5" stroke="#9e9e9e" stroke-width="2"/>
+    <text x="772" y="557" font-weight="bold" fill="#616161">OPTIONAL later phase: grace window + durable queue</text>
+    <text x="772" y="573">not needed for R1/R2; only buys restore-SLA recovery and C2 friendliness</text>
+  </g>
+
+  <!-- lane 3 -->
+  <g>
+    <rect x="760" y="630" width="310" height="70" rx="6" fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+    <text x="772" y="650" font-weight="bold" fill="#2e7d32">delete slices (existing)</text>
+    <text x="772" y="668">unchanged executor, unchanged lock scope</text>
+
+    <line x1="1070" y1="665" x2="1105" y2="665" stroke="#555" stroke-width="1.5" marker-end="url(#arr)"/>
+
+    <rect x="1110" y="630" width="310" height="70" rx="6" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/>
+    <text x="1122" y="650" font-weight="bold" fill="#1565c0">NEW: delete verified blobs here</text>
+    <text x="1122" y="668">from the plan sidecar; idempotent</text>
+    <text x="1122" y="684">(FileNotFound = success). No MDT tombstones.</text>
+  </g>
+
+  <!-- lane 4 -->
+  <g>
+    <rect x="760" y="760" width="660" height="80" rx="6" fill="#e3f2fd" stroke="#1565c0" stroke-width="2"/>
+    <text x="772" y="780" font-weight="bold" fill="#1565c0">NEW: GC as a filter INSIDE MDT compaction of blob_refs (never a free-standing sweep)</text>
+    <text x="772" y="798">drop entries whose file is in the deleted-file set of cleans completed since the previous compaction.</text>
+    <text x="772" y="814">Stale entries are harmless meanwhile: liveness = "entry exists AND its file is in FILES", so a</text>
+    <text x="772" y="830">dead entry can only over-retain, never authorize a delete. Replaces sidecar + tombstones + sweep.</text>
+
+    <text x="772" y="870" fill="#555">Cost moved: O(rows) tombstone volume goes from the clean's locked MDT write to a background</text>
+    <text x="772" y="886">compaction filter on one partition. Prefix scans routed to one file group (hash on escape(P)).</text>
+    <text x="772" y="912" fill="#555">Lock requirement stated plainly: multi-writer mode, or blob deletes run in the writer's post-commit path.</text>
+  </g>
+
+  <!-- lane 5 -->
+  <g>
+    <rect x="760" y="980" width="660" height="60" rx="6" fill="#fff3e0" stroke="#ef6c00" stroke-width="2"/>
+    <text x="772" y="1000" font-weight="bold" fill="#ef6c00">MOVED: preCommit veto covers REQUESTED + INFLIGHT cleans + cleans completed after the writer's instant</text>
+    <text x="772" y="1018">Sidecar sorted + bloom filter; probe distributed before the lock, re-check only newly REQUESTED cleans under it.</text>
+    <text x="772" y="1034">Trade-off: a clean stuck in REQUESTED for hours aborts writers that re-reference a verified path.</text>
+  </g>
+
+  <!-- bottom summary -->
+  <rect x="40" y="1060" width="1380" height="44" rx="6" fill="#fafafa" stroke="#bdbdbd"/>
+  <text x="52" y="1078" font-size="12" fill="#333">Same correctness kernel in both: file-granular registry born at commit; candidates durable at plan time before any slice is deleted; only a check under a real lock authorizes a delete.</text>
+  <text x="52" y="1095" font-size="12" fill="#333">Removed by the proposal: manifests (2 on-disk formats), hygiene sidecar, O(rows) tombstones under the clean lock, new executor lock scope, reconciliation sweep. Added: FILES check at T0, compaction GC filter.</text>
+</svg>
