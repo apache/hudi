@@ -21,7 +21,12 @@ package org.apache.hudi.adapter;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.ReadableConfig;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
+import org.apache.flink.runtime.jobgraph.OperatorID;
+import org.apache.flink.runtime.jobgraph.tasks.TaskOperatorEventGateway;
 import org.apache.flink.runtime.memory.MemoryManager;
+import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
+import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
+import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.streaming.api.operators.Output;
@@ -38,13 +43,28 @@ import org.apache.flink.table.runtime.generated.RecordComparator;
 import org.apache.flink.table.runtime.operators.sort.BinaryExternalSorter;
 import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.BinaryRowDataSerializer;
+import org.apache.flink.util.FatalExitExceptionHandler;
+import org.apache.flink.util.SerializedValue;
 
 import java.util.Collections;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Adapter utils.
  */
 public class Utils {
+  public static CompletableFuture<CoordinationResponse> sendRequestToCoordinator(TaskOperatorEventGateway gateway, OperatorID operatorId, SerializedValue<CoordinationRequest> request) {
+    return gateway.sendRequestToCoordinator(operatorId, request);
+  }
+
+  public static long getRestoredCheckpointId(FunctionInitializationContext context) {
+    return context.getRestoredCheckpointId().orElse(-1);
+  }
+
+  public static Thread.UncaughtExceptionHandler createFatalExitExceptionHandler() {
+    return FatalExitExceptionHandler.INSTANCE;
+  }
+
   public static <O> SourceFunction.SourceContext<O> getSourceContext(
       TimeCharacteristic timeCharacteristic,
       ProcessingTimeService processingTimeService,

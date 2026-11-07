@@ -33,6 +33,8 @@ import org.apache.parquet.io.OutputFile;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.unsafe.types.UTF8String;
 
+import static org.apache.hudi.common.util.FileIOUtils.closeQuietly;
+
 public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, AutoCloseable {
   private final ParquetWriter<InternalRow> writer;
   private final HoodieRowParquetWriteSupport writeSupport;
@@ -40,16 +42,21 @@ public class HoodieSparkParquetStreamWriter implements HoodieSparkFileWriter, Au
   public HoodieSparkParquetStreamWriter(FSDataOutputStream outputStream,
       HoodieRowParquetConfig parquetConfig) throws IOException {
     this.writeSupport = parquetConfig.getWriteSupport();
-    this.writer = new Builder<>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
-        .withWriteMode(ParquetFileWriter.Mode.CREATE)
-        .withCompressionCodec(parquetConfig.getCompressionCodecName())
-        .withRowGroupSize(parquetConfig.getBlockSize())
-        .withPageSize(parquetConfig.getPageSize())
-        .withDictionaryPageSize(parquetConfig.getPageSize())
-        .withDictionaryEncoding(parquetConfig.dictionaryEnabled())
-        .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
-        .withConf(parquetConfig.getHadoopConf())
-        .build();
+    try {
+      this.writer = new Builder<>(new OutputStreamBackedOutputFile(outputStream), writeSupport)
+          .withWriteMode(ParquetFileWriter.Mode.CREATE)
+          .withCompressionCodec(parquetConfig.getCompressionCodecName())
+          .withRowGroupSize(parquetConfig.getBlockSize())
+          .withPageSize(parquetConfig.getPageSize())
+          .withDictionaryPageSize(parquetConfig.getPageSize())
+          .withDictionaryEncoding(parquetConfig.dictionaryEnabled())
+          .withWriterVersion(ParquetWriter.DEFAULT_WRITER_VERSION)
+          .withConf(parquetConfig.getHadoopConf())
+          .build();
+    } catch (IOException | RuntimeException e) {
+      closeQuietly(outputStream);
+      throw e;
+    }
   }
 
   @Override

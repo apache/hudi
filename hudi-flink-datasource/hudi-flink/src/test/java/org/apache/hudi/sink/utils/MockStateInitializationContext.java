@@ -19,10 +19,13 @@ package org.apache.hudi.sink.utils;
 
 import org.apache.hudi.adapter.StateInitializationContextAdapter;
 
-import org.apache.flink.api.common.state.KeyedStateStore;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
 import org.apache.flink.runtime.state.KeyGroupStatePartitionStreamProvider;
 import org.apache.flink.runtime.state.StatePartitionStreamProvider;
+
+import java.util.OptionalLong;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * A {@link FunctionInitializationContext} for testing purpose.
@@ -30,14 +33,13 @@ import org.apache.flink.runtime.state.StatePartitionStreamProvider;
 public class MockStateInitializationContext implements StateInitializationContextAdapter {
 
   private final MockOperatorStateStore operatorStateStore;
+  private final MockKeyedStateStore keyedStateStore;
+  private long lastCheckpointId;
 
   public MockStateInitializationContext() {
     operatorStateStore = new MockOperatorStateStore();
-  }
-
-  @Override
-  public boolean isRestored() {
-    return operatorStateStore.isRestored();
+    keyedStateStore = new MockKeyedStateStore();
+    lastCheckpointId = -1;
   }
 
   @Override
@@ -46,8 +48,8 @@ public class MockStateInitializationContext implements StateInitializationContex
   }
 
   @Override
-  public KeyedStateStore getKeyedStateStore() {
-    return operatorStateStore;
+  public MockKeyedStateStore getKeyedStateStore() {
+    return keyedStateStore;
   }
 
   @Override
@@ -58,5 +60,32 @@ public class MockStateInitializationContext implements StateInitializationContex
   @Override
   public Iterable<KeyGroupStatePartitionStreamProvider> getRawKeyedStateInputs() {
     return null;
+  }
+
+  /**
+   * Override function to avoid different implementations in different Flink versions.
+   * @return true if the state is restored from a checkpoint, false otherwise
+   */
+  @Override
+  public boolean isRestored() {
+    return getRestoredCheckpointId().isPresent();
+  }
+
+  public OptionalLong getRestoredCheckpointId() {
+    return this.lastCheckpointId >= 0 ? OptionalLong.of(this.lastCheckpointId) : OptionalLong.empty();
+  }
+
+  public void checkpointBegin(long checkpointId) throws Exception {
+    assertTrue(checkpointId >= 0, "Checkpoint ID must be non-negative, but was: " + checkpointId);
+    getOperatorStateStore().checkpointBegin(checkpointId);
+    getKeyedStateStore().checkpointBegin(checkpointId);
+    this.lastCheckpointId = checkpointId;
+  }
+
+  public void checkpointSuccess(long checkpointId) {
+    assertTrue(checkpointId >= 0, "Checkpoint ID must be non-negative, but was: " + checkpointId);
+    getOperatorStateStore().checkpointSuccess(checkpointId);
+    getKeyedStateStore().checkpointSuccess(checkpointId);
+    this.lastCheckpointId = checkpointId;
   }
 }

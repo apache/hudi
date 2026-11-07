@@ -61,14 +61,17 @@ object SparkHelpers {
     parquetConfig.getHadoopConf().setClassLoader(Thread.currentThread.getContextClassLoader)
 
     val writer = new HoodieAvroParquetWriter(destinationFile, parquetConfig, instantTime, new SparkTaskContextSupplier(), true)
-    for (rec <- sourceRecords) {
-      val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
-      if (!keysToSkip.contains(key)) {
+    try {
+      for (rec <- sourceRecords) {
+        val key: String = rec.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).toString
+        if (!keysToSkip.contains(key)) {
 
-        writer.writeAvro(key, rec)
+          writer.writeAvro(key, rec)
+        }
       }
+    } finally {
+      writer.close()
     }
-    writer.close
   }
 }
 

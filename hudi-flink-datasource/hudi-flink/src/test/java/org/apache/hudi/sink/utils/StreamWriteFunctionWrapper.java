@@ -26,6 +26,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.sink.StreamWriteFunction;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.bootstrap.BootstrapOperator;
+import org.apache.hudi.sink.common.AbstractWriteFunction;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
 import org.apache.hudi.sink.partitioner.BucketAssignFunction;
 import org.apache.hudi.sink.transform.RowDataToHoodieFunction;
@@ -56,6 +57,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -71,8 +73,9 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   private final MockStreamingRuntimeContext runtimeContext;
   private final MockOperatorEventGateway gateway;
   private final MockOperatorCoordinatorContext coordinatorContext;
-  private final StreamWriteOperatorCoordinator coordinator;
+  private StreamWriteOperatorCoordinator coordinator;
   private final MockStateInitializationContext stateInitializationContext;
+  private final TreeMap<Long, byte[]> coordinatorStateStore;
 
   /**
    * Function that converts row data to HoodieRecord.
@@ -123,6 +126,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
     this.bucketAssignFunctionContext = new MockBucketAssignFunctionContext();
     this.stateInitializationContext = new MockStateInitializationContext();
+    this.coordinatorStateStore = new TreeMap<>();
     this.asyncCompaction = OptionsResolver.needsAsyncCompaction(conf);
     this.streamConfig = new StreamConfig(conf);
     streamConfig.setOperatorID(new OperatorID());
@@ -134,6 +138,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void openFunction() throws Exception {
+    resetCoordinatorToCheckpoint();
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
     toHoodieFunction = new RowDataToHoodieFunction<>(rowType, conf);
@@ -153,14 +158,13 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
       Collector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
       for (HoodieRecord<?> bootstrapRecord : output.getRecords()) {
+        stateInitializationContext.getKeyedStateStore().setCurrentKey(bootstrapRecord.getRecordKey());
         bucketAssignerFunction.processElement(bootstrapRecord, null, collector);
         bucketAssignFunctionContext.setCurrentKey(bootstrapRecord.getRecordKey());
       }
     }
 
     setupWriteFunction();
-    // handle the bootstrap event
-    coordinator.handleEventFromOperator(0, getNextEvent());
 
     if (asyncCompaction) {
       compactFunctionWrapper.openFunction();
@@ -169,6 +173,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void invoke(I record) throws Exception {
     HoodieRecord<?> hoodieRecord = toHoodieFunction.map((RowData) record);
+    stateInitializationContext.getKeyedStateStore().setCurrentKey(hoodieRecord.getRecordKey());
     ScalaCollector<HoodieRecord<?>> collector = ScalaCollector.getInstance();
     bucketAssignerFunction.processElement(hoodieRecord, null, collector);
     bucketAssignFunctionContext.setCurrentKey(hoodieRecord.getRecordKey());
@@ -177,6 +182,11 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public WriteMetadataEvent[] getEventBuffer() {
     return this.coordinator.getEventBuffer();
+  }
+
+  @Override
+  public WriteMetadataEvent[] getEventBuffer(long checkpointId) {
+    return this.coordinator.getEventBuffer(checkpointId);
   }
 
   public OperatorEvent getNextEvent() {
@@ -189,14 +199,29 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void checkpointFunction(long checkpointId) throws Exception {
     // checkpoint the coordinator first
-    this.coordinator.checkpointCoordinator(checkpointId, new CompletableFuture<>());
+    checkpointCoordinator(checkpointId);
     if (conf.getBoolean(FlinkOptions.INDEX_BOOTSTRAP_ENABLED)) {
       bootstrapOperator.snapshotState(null);
     }
     bucketAssignerFunction.snapshotState(null);
 
     writeFunction.snapshotState(new MockFunctionSnapshotContext(checkpointId));
-    stateInitializationContext.getOperatorStateStore().checkpointBegin(checkpointId);
+    stateInitializationContext.checkpointBegin(checkpointId);
+  }
+
+  private void checkpointCoordinator(long checkpointId) throws Exception {
+    CompletableFuture<byte[]> completableFuture = new CompletableFuture<>();
+    // checkpoint the coordinator first
+    this.coordinator.checkpointCoordinator(checkpointId, completableFuture);
+    this.coordinatorStateStore.put(checkpointId, completableFuture.get());
+  }
+
+  private void resetCoordinatorToCheckpoint() {
+    if (coordinatorStateStore.isEmpty()) {
+      return;
+    }
+    Map.Entry<Long, byte[]> latestState = this.coordinatorStateStore.lastEntry();
+    this.coordinator.resetToCheckpoint(latestState.getKey(), latestState.getValue());
   }
 
   public void endInput() {
@@ -204,7 +229,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
   }
 
   public void checkpointComplete(long checkpointId) {
-    stateInitializationContext.getOperatorStateStore().checkpointSuccess(checkpointId);
+    stateInitializationContext.checkpointSuccess(checkpointId);
     coordinator.notifyCheckpointComplete(checkpointId);
     this.bucketAssignerFunction.notifyCheckpointComplete(checkpointId);
     if (asyncCompaction) {
@@ -223,6 +248,15 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
 
   public void coordinatorFails() throws Exception {
     this.coordinator.close();
+    resetCoordinatorToCheckpoint();
+    this.coordinator.start();
+    this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+  }
+
+  public void restartCoordinator() throws Exception {
+    this.coordinator.close();
+    this.coordinator = new StreamWriteOperatorCoordinator(conf, this.coordinatorContext);
+    resetCoordinatorToCheckpoint();
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
   }
@@ -252,16 +286,17 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     return coordinator;
   }
 
+  @Override
+  public AbstractWriteFunction getWriteFunction() {
+    return this.writeFunction;
+  }
+
   public MockOperatorCoordinatorContext getCoordinatorContext() {
     return coordinatorContext;
   }
 
   public boolean isKeyInState(HoodieKey hoodieKey) {
     return this.bucketAssignFunctionContext.isKeyInState(hoodieKey.getRecordKey());
-  }
-
-  public boolean isConforming() {
-    return this.writeFunction.isConfirming();
   }
 
   public boolean isAlreadyBootstrap() throws Exception {
@@ -278,6 +313,7 @@ public class StreamWriteFunctionWrapper<I> implements TestFunctionWrapper<I> {
     writeFunction.setOperatorEventGateway(gateway);
     writeFunction.initializeState(this.stateInitializationContext);
     writeFunction.open(conf);
+    writeFunction.setCorrespondent(new MockCorrespondent(this.coordinator));
   }
 
   // -------------------------------------------------------------------------

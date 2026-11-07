@@ -33,7 +33,7 @@ public class MockCoordinatorExecutor extends NonThrownExecutor {
   private static final Logger LOG = LoggerFactory.getLogger(MockCoordinatorExecutor.class);
 
   public MockCoordinatorExecutor(OperatorCoordinator.Context context) {
-    super(LOG, (errMsg, t) -> context.failJob(new HoodieException(errMsg, t)), true);
+    super(LOG, null, (errMsg, t) -> context.failJob(new HoodieException(errMsg, t)), true);
   }
 
   @Override

@@ -1288,7 +1288,7 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    * </ul>
    */
   public final HoodieTable initTable(WriteOperationType operationType, Option<String> instantTime) {
-    HoodieTableMetaClient metaClient = createMetaClient(true);
+    HoodieTableMetaClient metaClient = createMetaClient(loadActiveTimelineOnTableInit());
     // Setup write schemas for deletes
     if (WriteOperationType.isDelete(operationType)) {
       setWriteSchemaForDeletes(metaClient);
@@ -1320,6 +1320,10 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     return table;
+  }
+
+  protected boolean loadActiveTimelineOnTableInit() {
+    return true;
   }
 
   /**
