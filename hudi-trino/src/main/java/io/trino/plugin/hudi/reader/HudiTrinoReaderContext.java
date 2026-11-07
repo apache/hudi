@@ -42,7 +42,6 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
-import org.apache.hudi.storage.inline.InLineFSUtils;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -68,7 +67,8 @@ public class HudiTrinoReaderContext
     private final Set<String> baseProjectionNames;
 
     /**
-     * Factory for building a Trino parquet page source over a native (RFC-103) delta-log file on demand.
+     * Factory for building a Trino parquet page source over a native (RFC-103) delta-log file, or a parquet data
+     * block of a classic log file, on demand.
      * Kept as an injected interface so this reader context stays free of Trino-parquet/session types.
      */
     @FunctionalInterface
@@ -125,10 +125,10 @@ public class HudiTrinoReaderContext
     }
 
     /**
-     * Reads the given file and projects {@code requiredSchema}. For a native (RFC-103) delta-log parquet file a
-     * fresh page source is built on demand with predicate pushdown disabled so every log record is read and
-     * merged; for the base file the pre-built base page source is reused. Classic Avro log blocks never reach
-     * here (they deserialize inline).
+     * Reads the given file and projects {@code requiredSchema}. For a native (RFC-103) delta-log parquet file, or
+     * a parquet data block of a classic log file (an {@code inlinefs://} path), a fresh page source is built on
+     * demand with predicate pushdown disabled so every log record is read and merged; for the base file the
+     * pre-built base page source is reused. Avro log blocks never reach here (they deserialize inline).
      * <p>
      * Both paths emit records that CARRY {@code requiredSchema}: the file-group reader tracks that schema for
      * every buffered record, and payload-based merging round-trips records through Avro binary with it
@@ -142,10 +142,6 @@ public class HudiTrinoReaderContext
             HoodieSchema requiredSchema)
     {
         if (FSUtils.isLogFile(path)) {
-            // Inline parquet log blocks (inlinefs:// scheme) need a separate inline-aware reader; out of scope here.
-            if (InLineFSUtils.SCHEME.equals(path.toUri().getScheme())) {
-                throw new UnsupportedOperationException("Inline log blocks are not supported by the Hudi Trino connector: " + path);
-            }
             List<HiveColumnHandle> logProjection = buildRequiredColumnHandles(requiredSchema);
             ConnectorPageSource logSource = logPageSourceFactory.create(path.toString(), start, length, logProjection);
             HudiAvroSerializer logSerializer = new HudiAvroSerializer(logProjection, prefilledColumnValues, requiredSchema.toAvroSchema());
