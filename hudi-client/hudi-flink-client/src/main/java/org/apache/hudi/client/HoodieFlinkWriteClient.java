@@ -404,14 +404,13 @@ public class HoodieFlinkWriteClient<T> extends
   }
 
   /**
-   * Upgrade downgrade the Hoodie table.
+   * Try upgrade the Hoodie table.
    *
    * <p>This action should only be executed once for each commit.
    * The modification of the table properties is not thread safe.
    */
-  public void upgradeDowngrade(String instantTime, HoodieTableMetaClient metaClient) {
-    new UpgradeDowngrade(metaClient, config, context, FlinkUpgradeDowngradeHelper.getInstance())
-        .run(HoodieTableVersion.current(), instantTime);
+  public void tryUpgrade(String instantTime, HoodieTableMetaClient metaClient) {
+    tryUpgrade(metaClient, Option.ofNullable(instantTime));
   }
 
   /**
