@@ -19,6 +19,8 @@
 package org.apache.hudi.core.read;
 
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.MockHoodieTimeline;
@@ -32,6 +34,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -45,6 +48,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class BaseHoodieTableFileIndexTest {
+
+  /**
+   * A realistic absolute table base path. Listing never produces a relative one, and the difference matters to the
+   * weigher: it charges per character of the full file path.
+   */
+  private static final String TABLE_BASE_PATH = "file:/tmp/junit-6913148002031446690/dataset";
 
   /**
    * Regression test for the empty-partition NPE that surfaces in {@code getInputFileSlices}
@@ -103,6 +112,105 @@ public class BaseHoodieTableFileIndexTest {
         "Empty partition's file slice list must be present and empty (not null, not missing)");
     assertTrue(result.get(anotherEmpty).isEmpty(),
         "Empty partition's file slice list must be present and empty (not null, not missing)");
+  }
+
+  /**
+   * {@code cachedAllInputFileSlices} is budgeted in bytes rather than in partitions, because a partition's file-slice
+   * list scales with the number of file groups (and, for MOR, log files) the partition holds. Measured with Hudi's own
+   * ObjectSizeCalculator, 10000 partitions hold 16 MiB at one file group each and 1205 MiB at a hundred -- so no single
+   * partition count can be a sane heap budget for both shapes. This pins that the weight of an entry actually tracks
+   * how much the entry holds, along both axes it varies along: file groups, and log files per file group.
+   */
+  @Test
+  public void testFileSliceCacheWeightGrowsWithTheEntryContents() {
+    PartitionPath partition = new PartitionPath("dt=2026-01-01", new Object[]{"2026-01-01"});
+    List<FileSlice> empty = Collections.emptyList();
+    List<FileSlice> one = fileSlices(partition, 1, 0);
+    List<FileSlice> many = fileSlices(partition, 50, 0);
+    List<FileSlice> oneWithLogs = fileSlices(partition, 1, 10);
+
+    int weightOfEmpty = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, empty);
+    int weightOfOne = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, one);
+    int weightOfMany = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, many);
+    int weightOfOneWithLogs = BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, oneWithLogs);
+
+    assertTrue(weightOfEmpty > 0, "Even an empty entry must have a positive weight");
+    assertTrue(weightOfOne > weightOfEmpty, "An entry holding a file slice must outweigh an empty one");
+    assertTrue(weightOfMany > weightOfOne * 10,
+        "50 file slices (" + weightOfMany + " bytes) must weigh far more than one (" + weightOfOne + " bytes)");
+    // MOR: one file group with a stack of log files holds (and must be charged for) far more than a bare one
+    assertTrue(weightOfOneWithLogs > weightOfOne * 5,
+        "A file slice with 10 log files (" + weightOfOneWithLogs + " bytes) must weigh far more than a bare one ("
+            + weightOfOne + " bytes)");
+  }
+
+  /**
+   * The weigher runs on every single insertion into a cache that lazy listing populates one partition at a time, so it
+   * has to be cheap: walking the entry's object graph with {@code ObjectSizeCalculator} measured about 90us per
+   * partition at 20 file groups once warm (380us on the first call) and 0.5-0.9ms at 140 file slices, against 0.4us
+   * and 0.8us for counting structure -- which is tens of seconds of driver CPU for one cold plan of a wide table.
+   * The absolute figures are machine- and load-dependent; the three-orders-of-magnitude ratio is not.
+   * This pins that the weigher's cost does not grow with what the entry describes beyond the one unavoidable pass over
+   * the file-slice list: the per-slice work must be O(1), which rules out re-walking each slice's files.
+   */
+  @Test
+  public void testFileSliceCacheWeightIsLinearInSliceCountAndFreeOfLogFileCount() {
+    PartitionPath partition = new PartitionPath("dt=2026-01-01", new Object[]{"2026-01-01"});
+    // Same slice count, 100x the log files: an O(files) weigher would take ~100x longer, an O(slices) one the same
+    long fewLogs = timeWeigh(partition, fileSlices(partition, 200, 1));
+    long manyLogs = timeWeigh(partition, fileSlices(partition, 200, 100));
+
+    assertTrue(manyLogs < Math.max(fewLogs, 1_000L) * 20,
+        "Weighing 200 slices took " + fewLogs + "ns with 1 log file each and " + manyLogs
+            + "ns with 100, so the weigher is walking the files rather than counting them");
+  }
+
+  private static long timeWeigh(PartitionPath partition, List<FileSlice> slices) {
+    for (int i = 0; i < 1000; i++) {
+      BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, slices);
+    }
+    long start = System.nanoTime();
+    for (int i = 0; i < 1000; i++) {
+      BaseHoodieTableFileIndex.estimateFileSliceCacheWeight(partition, slices);
+    }
+    return (System.nanoTime() - start) / 1000;
+  }
+
+  /**
+   * Listing hands the index file slices whose paths are <em>absolute</em> -- the table base path, then the partition
+   * path, then the file name -- and the weigher is calibrated on that. An earlier version of this helper built paths
+   * as {@code partition.getPath() + "/" + name}, i.e. relative ones, which for a {@code dt=0} partition is 12
+   * characters standing in for a real 117, and calibrating against that shape is exactly how the weigher came to
+   * under-charge every object-store table by around 1.5x. Build them the way listing does.
+   */
+  private static List<FileSlice> fileSlices(PartitionPath partition, int count, int logFilesPerSlice) {
+    List<FileSlice> slices = new ArrayList<>();
+    String partitionDir = TABLE_BASE_PATH + "/" + partition.getPath();
+    for (int i = 0; i < count; i++) {
+      FileSlice slice = new FileSlice(partition.getPath(), "20260101000000001", "file-" + i);
+      slice.setBaseFile(new HoodieBaseFile(pathInfo(
+          partitionDir + "/file-" + i + "_0-1-2_20260101000000001.parquet")));
+      for (int l = 0; l < logFilesPerSlice; l++) {
+        slice.addLogFile(new HoodieLogFile(pathInfo(
+            partitionDir + "/.file-" + i + "_20260101000000001.log." + (l + 1) + "_0-1-2")));
+      }
+      slices.add(slice);
+    }
+    return slices;
+  }
+
+  /**
+   * Materialises what listing materialises -- the {@code URI}'s parsed components, the cached {@code toString} and
+   * the cached parent -- so that an {@code ObjectSizeCalculator} run over these slices sees the same graph a listed
+   * entry has.
+   */
+  private static StoragePathInfo pathInfo(String path) {
+    StoragePath storagePath = new StoragePath(path);
+    storagePath.toUri().getPath();
+    storagePath.toString();
+    storagePath.getName();
+    storagePath.getParent();
+    return new StoragePathInfo(storagePath, 1024L, false, (short) 1, 1024L, 1700000000000L);
   }
 
   /**
