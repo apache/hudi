@@ -160,6 +160,122 @@ public class TestPostgresDebeziumAvroPayload {
   }
 
   @Test
+  public void testMergeWithConfiguredOrderingFieldStoredRecordWins() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    // Incoming has a HIGHER LSN but a LOWER configured ordering value -> stored record must win,
+    // proving the configured field (not the hardcoded LSN) decides.
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, 200L, 50L), 50L);
+    GenericRecord existing = createRecordWithOrdering(schema, 1, Operation.INSERT, 100L, 99L);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.INSERT, DebeziumConstants.FLATTENED_LSN_COL_NAME, 100L, 99L);
+  }
+
+  @Test
+  public void testMergeWithConfiguredOrderingFieldIncomingRecordWins() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    // Incoming has a LOWER LSN but a HIGHER configured ordering value -> incoming wins.
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, 90L, 120L), 120L);
+    GenericRecord existing = createRecordWithOrdering(schema, 1, Operation.INSERT, 100L, 99L);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.UPDATE, DebeziumConstants.FLATTENED_LSN_COL_NAME, 90L, 120L);
+  }
+
+  @Test
+  public void testMergeWithConfiguredOrderingFieldTieGoesToIncoming() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    // Tie on the configured ordering value -> incoming wins (mirrors legacy LSN tie semantics).
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, 90L, 99L), 99L);
+    GenericRecord existing = createRecordWithOrdering(schema, 1, Operation.INSERT, 100L, 99L);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.UPDATE, DebeziumConstants.FLATTENED_LSN_COL_NAME, 90L, 99L);
+  }
+
+  @Test
+  public void testMergeWithConfiguredOrderingFieldNullPersistedTakesIncoming() throws IOException {
+    Schema schema = createSchemaWithOrderingField();
+    // Stored record has a null ordering value (e.g. bootstrapped rows) -> incoming wins.
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(createRecordWithOrdering(schema, 1, Operation.UPDATE, 90L, 10L), 10L);
+    GenericRecord bootstrapped = createRecordWithOrdering(schema, 1, null, null, null);
+    Option<IndexedRecord> merged = payload.combineAndGetUpdateValue(bootstrapped, schema, orderingProps("event_ts"));
+    DebeziumOrderingTestFixtures.validateOrderingRecord(merged, 1, Operation.UPDATE, DebeziumConstants.FLATTENED_LSN_COL_NAME, 90L, 10L);
+  }
+
+  @Test
+  public void testMergeWithConfiguredOrderingFieldNullIncomingThrows() {
+    Schema schema = createSchemaWithOrderingField();
+    GenericRecord incoming = createRecordWithOrdering(schema, 2, Operation.UPDATE, 200L, null);
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(incoming, 0L);
+    GenericRecord existing = createRecordWithOrdering(schema, 2, Operation.INSERT, 100L, 99L);
+    assertThrows(HoodieDebeziumAvroPayloadException.class,
+        () -> payload.combineAndGetUpdateValue(existing, schema, orderingProps("event_ts")),
+        "null configured ordering value in the incoming record must fail loudly, not NPE");
+  }
+
+  @Test
+  public void testMergeWithoutOrderingFieldLateRecordLosesOnLsn() throws IOException {
+    // Properties present but no ordering field configured -> legacy hardcoded LSN comparison.
+    GenericRecord lateRecord = createRecord(3, Operation.UPDATE, 98L);
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(lateRecord, 98L);
+    GenericRecord existingRecord = createRecord(3, Operation.INSERT, 99L);
+    Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema, new Properties());
+    validateRecord(mergedRecord, 3, Operation.INSERT, 99L);
+  }
+
+  @Test
+  public void testMergeWithoutOrderingFieldFreshRecordWinsOnLsn() throws IOException {
+    GenericRecord freshRecord = createRecord(3, Operation.UPDATE, 100L);
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(freshRecord, 100L);
+    GenericRecord existingRecord = createRecord(3, Operation.INSERT, 99L);
+    Option<IndexedRecord> mergedRecord = payload.combineAndGetUpdateValue(existingRecord, avroSchema, new Properties());
+    validateRecord(mergedRecord, 3, Operation.UPDATE, 100L);
+  }
+
+  @Test
+  public void testMergeWithToastedValuesUnderConfiguredOrdering() throws IOException {
+    // Toast-column merging must keep working when the ordering decision goes through the
+    // configured ordering field instead of the hardcoded LSN.
+    Schema schema = SchemaBuilder.builder()
+        .record("test_toast_ordering")
+        .namespace("test_namespace")
+        .fields()
+        .name(DebeziumConstants.FLATTENED_LSN_COL_NAME).type().longType().noDefault()
+        .name("event_ts").type().longType().noDefault()
+        .name("string_col").type().stringType().noDefault()
+        .endRecord();
+
+    GenericRecord oldVal = new GenericData.Record(schema);
+    oldVal.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, 100L);
+    oldVal.put("event_ts", 1L);
+    oldVal.put("string_col", "valid string value");
+
+    // Incoming loses on LSN but wins on the configured ordering field, and carries a toasted column
+    GenericRecord newVal = new GenericData.Record(schema);
+    newVal.put(DebeziumConstants.FLATTENED_LSN_COL_NAME, 90L);
+    newVal.put("event_ts", 2L);
+    newVal.put("string_col", PostgresDebeziumAvroPayload.DEBEZIUM_TOASTED_VALUE);
+
+    PostgresDebeziumAvroPayload payload = new PostgresDebeziumAvroPayload(Option.of(newVal));
+    GenericRecord merged = (GenericRecord) payload
+        .combineAndGetUpdateValue(oldVal, schema, orderingProps("event_ts")).get();
+
+    assertEquals(2L, (long) merged.get("event_ts"));
+    assertEquals("valid string value", merged.get("string_col"));
+  }
+
+  private Schema createSchemaWithOrderingField() {
+    return DebeziumOrderingTestFixtures.schemaWithOrderingField(DebeziumConstants.FLATTENED_LSN_COL_NAME, Schema.Type.LONG);
+  }
+
+  private GenericRecord createRecordWithOrdering(Schema schema, int primaryKeyValue, @Nullable Operation op,
+                                                 @Nullable Long lsnValue, @Nullable Long orderingValue) {
+    return DebeziumOrderingTestFixtures.recordWithOrdering(schema, primaryKeyValue, op, DebeziumConstants.FLATTENED_LSN_COL_NAME, lsnValue, orderingValue);
+  }
+
+  private Properties orderingProps(String orderingField) {
+    return DebeziumOrderingTestFixtures.orderingProps(orderingField);
+  }
+
+  @Test
   public void testMergeWithToastedValues() throws IOException {
     Schema avroSchema = SchemaBuilder.builder()
         .record("test_schema")
