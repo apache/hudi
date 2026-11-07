@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.hudi.HoodieDatasetBulkInsertHelper;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
@@ -25,6 +26,7 @@ import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -45,8 +47,10 @@ import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SortUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.CloseableIteratorListener;
@@ -81,6 +85,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
@@ -97,8 +103,54 @@ import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_C
 public abstract class MultipleSparkJobExecutionStrategy<T>
     extends ClusteringExecutionStrategy<T, HoodieData<HoodieRecord<T>>, HoodieData<HoodieKey>, HoodieData<WriteStatus>> {
 
+  /*
+   * Clustering builds one RDD per group and unions them into a single write stage, so Spark ships the lineage of
+   * every group to every task of that stage. Java serialization writes an instance once per stream however many
+   * closures reference it, but writes each distinct instance in full: an object built per group is deserialized
+   * once per group by every task, and held by every running task. Whatever does not depend on the group (table
+   * schema, reader context factory, reader properties, write config, writer schema) is therefore built once per run
+   * and shared by all groups: see ClusteringRunInvariants.
+   */
+  private transient volatile ClusteringRunInvariants runInvariants;
+
   public MultipleSparkJobExecutionStrategy(HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
     super(table, engineContext, writeConfig);
+  }
+
+  /**
+   * The write config for a group's bulk insert: this strategy's write config, with the max Parquet file size
+   * overridden when one is given. Every group of a run gets the same instance (see above); a
+   * {@link HoodieWriteConfig} holds a full copy of the write properties for itself and for each of its sub-configs.
+   * The returned config must not be mutated. Called outside {@link #performClustering}, it builds a new config.
+   *
+   * <p>Bulk-insert parallelism is deliberately not set: the clustering write paths pass the number of output groups
+   * to the partitioner and to the bulk-insert helper explicitly, and nothing on them reads
+   * {@link HoodieWriteConfig#BULKINSERT_PARALLELISM_VALUE}.
+   */
+  protected HoodieWriteConfig getGroupWriteConfig(Option<Long> parquetMaxFileSize) {
+    ClusteringRunInvariants run = runInvariants;
+    return run != null
+        ? run.groupWriteConfigs.computeIfAbsent(parquetMaxFileSize, this::newGroupWriteConfig)
+        : newGroupWriteConfig(parquetMaxFileSize);
+  }
+
+  private HoodieWriteConfig newGroupWriteConfig(Option<Long> parquetMaxFileSize) {
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withProps(getWriteConfig().getProps()).build();
+    parquetMaxFileSize.ifPresent(bytes -> config.setValue(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE, String.valueOf(bytes)));
+    return config;
+  }
+
+  /**
+   * The schema a group's bulk-insert writers use, as {@link HoodieDatasetBulkInsertHelper#writerSchema} derives it.
+   * Every group with an equal dataset schema and the same table schema gets the same instance (see above);
+   * {@link StructType} is immutable. Called outside {@link #performClustering}, it derives a new schema.
+   */
+  protected StructType getGroupWriterSchema(StructType datasetSchema, HoodieWriteConfig config) {
+    ClusteringRunInvariants run = runInvariants;
+    return run != null
+        ? run.groupWriterSchemas.computeIfAbsent(Pair.of(datasetSchema, config.getSchema()),
+            key -> HoodieDatasetBulkInsertHelper.writerSchema(datasetSchema, config))
+        : HoodieDatasetBulkInsertHelper.writerSchema(datasetSchema, config);
   }
 
   @Override
@@ -110,23 +162,18 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
         new CustomizedThreadFactory("clustering-job-group", true));
     try {
       boolean canUseRowWriter = getWriteConfig().getBooleanOrDefault("hoodie.datasource.write.row.writer.enable", true);
+      Map<String, String> strategyParams = clusteringPlan.getStrategy().getStrategyParams();
+      // Before any group is submitted, and after a subclass has settled the write config
+      // (SparkBinaryCopyClusteringExecutionStrategy replaces it before calling this method).
+      runInvariants = canUseRowWriter ? newRowWriterRunInvariants() : newRecordsRunInvariants();
       // execute clustering for each group async and collect WriteStatus
       Stream<HoodieData<WriteStatus>> writeStatusesStream = FutureUtils.allOf(
               clusteringPlan.getInputGroups().stream()
-                  .map(inputGroup -> {
-                    if (canUseRowWriter) {
-                      return runClusteringForGroupAsyncAsRow(inputGroup,
-                          clusteringPlan.getStrategy().getStrategyParams(),
-                          shouldPreserveMetadata,
-                          instantTime,
-                          clusteringExecutorService);
-                    }
-                    return runClusteringForGroupAsync(inputGroup,
-                        clusteringPlan.getStrategy().getStrategyParams(),
-                        shouldPreserveMetadata,
-                        instantTime,
-                        clusteringExecutorService);
-                  })
+                  .map(inputGroup -> canUseRowWriter
+                      ? runClusteringForGroupAsyncAsRow(inputGroup, strategyParams, shouldPreserveMetadata, instantTime,
+                          clusteringExecutorService)
+                      : runClusteringForGroupAsync(inputGroup, strategyParams, shouldPreserveMetadata, instantTime,
+                          clusteringExecutorService))
                   .collect(Collectors.toList()))
           .join()
           .stream();
@@ -137,8 +184,65 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       writeMetadata.setWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
       return writeMetadata;
     } finally {
+      // Every group has been submitted and joined: the groups' RDDs hold what they need from the run invariants.
+      runInvariants = null;
       clusteringExecutorService.shutdown();
     }
+  }
+
+  /**
+   * What every group of one {@link #performClustering} run shares (see the class comment), fixed for the run: built on
+   * the driver before the groups are submitted, dropped when they have all been submitted. The caches only memoize:
+   * each derives its value from the key and the run's write config, so a key's value never changes within the run.
+   * Never serialized: groups capture its values, not the holder.
+   */
+  private static final class ClusteringRunInvariants {
+    /** The schema the groups' records have, with meta fields, as handed to performClusteringWithRecords*. */
+    private final HoodieSchema readerSchema;
+    private final ReaderContextFactory<?> readerContextFactory;
+    /** Row writer only: {@link #readerSchema} as Spark types. */
+    private final StructType sparkReaderSchema;
+    /** Row writer only: the file group readers' properties. */
+    private final TypedProperties readerProperties;
+    /** Groups run concurrently, on the clustering thread pool. */
+    private final ConcurrentMap<Option<Long>, HoodieWriteConfig> groupWriteConfigs = new ConcurrentHashMap<>();
+    /** Keyed by dataset schema and table schema: groups may read different schemas. */
+    private final ConcurrentMap<Pair<StructType, String>, StructType> groupWriterSchemas = new ConcurrentHashMap<>();
+
+    private ClusteringRunInvariants(HoodieSchema readerSchema, ReaderContextFactory<?> readerContextFactory,
+                               StructType sparkReaderSchema, TypedProperties readerProperties) {
+      this.readerSchema = readerSchema;
+      this.readerContextFactory = readerContextFactory;
+      this.sparkReaderSchema = sparkReaderSchema;
+      this.readerProperties = readerProperties;
+    }
+
+    @SuppressWarnings("unchecked")
+    private <R> ReaderContextFactory<R> readerContextFactory() {
+      return (ReaderContextFactory<R>) readerContextFactory;
+    }
+  }
+
+  /** The invariants of the {@link #performClustering} run that is submitting groups. */
+  private ClusteringRunInvariants currentRunInvariants() {
+    ClusteringRunInvariants run = runInvariants;
+    ValidationUtils.checkState(run != null, "Clustering groups are submitted by performClustering");
+    return run;
+  }
+
+  /** The row writer reads with the table schema resolved from the timeline: see getTableSchemaWithMetaFields. */
+  private ClusteringRunInvariants newRowWriterRunInvariants() {
+    HoodieSchema tableSchemaWithMetaFields = getTableSchemaWithMetaFields();
+    return new ClusteringRunInvariants(tableSchemaWithMetaFields,
+        getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient()),
+        HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchemaWithMetaFields),
+        getReaderProperties(MergeUtils.getMaxMemoryPerCompaction(getEngineContext().getTaskContextSupplier(), writeConfig)));
+  }
+
+  /** The records path reads with the write schema; its tasks size their own merge memory. */
+  private ClusteringRunInvariants newRecordsRunInvariants() {
+    return new ClusteringRunInvariants(HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(getWriteConfig().getSchema())),
+        getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient()), null, null);
   }
 
   /**
@@ -241,10 +345,11 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   protected CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsync(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
                                                                                   boolean preserveHoodieMetadata, String instantTime,
                                                                                   ExecutorService clusteringExecutorService) {
+    ClusteringRunInvariants run = currentRunInvariants();
+    HoodieSchema readerSchema = run.readerSchema;
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
-      HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime);
-      HoodieSchema readerSchema = HoodieSchemaUtils.addMetadataFields(HoodieSchema.parse(getWriteConfig().getSchema()));
+      HoodieData<HoodieRecord<T>> inputRecords = readRecordsForGroup(jsc, clusteringGroup, instantTime, run.readerContextFactory());
       // NOTE: Record have to be cloned here to make sure if it holds low-level engine-specific
       //       payload pointing into a shared, mutable (underlying) buffer we get a clean copy of
       //       it since these records will be shuffled later.
@@ -264,16 +369,12 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                                        boolean shouldPreserveHoodieMetadata,
                                                                                        String instantTime,
                                                                                        ExecutorService clusteringExecutorService) {
+    ClusteringRunInvariants run = currentRunInvariants();
+    HoodieSchema tableSchemaWithMetaFields = run.readerSchema;
     return CompletableFuture.supplyAsync(() -> {
-      JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());      // incase of MIT, config.getSchema may not contain the full table schema
-      HoodieSchema tableSchemaWithMetaFields = null;
-      try {
-        tableSchemaWithMetaFields = HoodieSchemaUtils.addMetadataFields(new TableSchemaResolver(getHoodieTable().getMetaClient()).getTableSchema(false),
-            getWriteConfig().allowOperationMetadataField());
-      } catch (Exception e) {
-        throw new HoodieException("Failed to get table schema during clustering", e);
-      }
-      Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, instantTime, tableSchemaWithMetaFields);
+      JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
+      Dataset<Row> inputRecords = readRecordsForGroupAsRow(jsc, clusteringGroup, instantTime, tableSchemaWithMetaFields,
+          run.sparkReaderSchema, run.readerContextFactory(), run.readerProperties);
 
       List<HoodieFileGroupId> inputFileIds = clusteringGroup.getSlices().stream()
           .map(info -> new HoodieFileGroupId(info.getPartitionPath(), info.getFileId()))
@@ -284,12 +385,25 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   }
 
   /**
+   * The table schema with meta fields, resolved from the timeline: in case of MIT, config.getSchema may not contain
+   * the full table schema.
+   */
+  private HoodieSchema getTableSchemaWithMetaFields() {
+    try {
+      return HoodieSchemaUtils.addMetadataFields(new TableSchemaResolver(getHoodieTable().getMetaClient()).getTableSchema(false),
+          getWriteConfig().allowOperationMetadataField());
+    } catch (Exception e) {
+      throw new HoodieException("Failed to get table schema during clustering", e);
+    }
+  }
+
+  /**
    * Get RDD of all records for the group. This includes all records from file slice (Apply updates from log files, if any).
    */
-  private HoodieData<HoodieRecord<T>> readRecordsForGroup(JavaSparkContext jsc, HoodieClusteringGroup clusteringGroup, String instantTime) {
+  private HoodieData<HoodieRecord<T>> readRecordsForGroup(JavaSparkContext jsc, HoodieClusteringGroup clusteringGroup, String instantTime,
+                                                          ReaderContextFactory<T> readerContextFactory) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream().map(ClusteringOperation::create).collect(Collectors.toList());
     int readParallelism = Math.min(writeConfig.getClusteringGroupReadParallelism(), clusteringOps.size());
-    ReaderContextFactory<T> readerContextFactory = getEngineContext().getReaderContextFactory(getHoodieTable().getMetaClient());
     return HoodieJavaRDD.of(jsc.parallelize(clusteringOps, readParallelism).mapPartitions(clusteringOpsPartition -> {
       List<Supplier<ClosableIterator<HoodieRecord<T>>>> suppliers = new ArrayList<>();
       long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(new SparkTaskContextSupplier(), getWriteConfig());
@@ -308,20 +422,16 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   private Dataset<Row> readRecordsForGroupAsRow(JavaSparkContext jsc,
                                                 HoodieClusteringGroup clusteringGroup,
                                                 String instantTime,
-                                                HoodieSchema tableSchemaWithMetaFields) {
+                                                HoodieSchema tableSchemaWithMetaFields,
+                                                StructType sparkSchemaWithMetaFields,
+                                                ReaderContextFactory<InternalRow> readerContextFactory,
+                                                TypedProperties readerProperties) {
     List<ClusteringOperation> clusteringOps = clusteringGroup.getSlices().stream()
         .map(ClusteringOperation::create).collect(Collectors.toList());
     String basePath = getWriteConfig().getBasePath();
-    // construct supporting cast that executors might need
-    long maxMemoryPerCompaction = MergeUtils.getMaxMemoryPerCompaction(getEngineContext().getTaskContextSupplier(), writeConfig);
-    TypedProperties readerProperties = getReaderProperties(maxMemoryPerCompaction);
     final boolean usePosition = getWriteConfig().getBooleanOrDefault(MERGE_USE_RECORD_POSITIONS);
     String internalSchemaStr = getWriteConfig().getInternalSchema();
-
-    // broadcast reader context.
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
-    ReaderContextFactory<InternalRow> readerContextFactory = getEngineContext().getReaderContextFactory(metaClient);
-    StructType sparkSchemaWithMetaFields = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(tableSchemaWithMetaFields);
 
     RDD<InternalRow> internalRowRDD = jsc.parallelize(clusteringOps, clusteringOps.size()).flatMap(new FlatMapFunction<ClusteringOperation, InternalRow>() {
       @Override

@@ -35,7 +35,7 @@ import scala.reflect.ClassTag
  * @param conf the `SQLConf` to apply to the execution of the SQL plan
  */
 class SQLConfInjectingRDD[T: ClassTag](var sqlRDD: RDD[T], @transient conf: SQLConf) extends RDD[T](sqlRDD) {
-  private val sqlConfigs = conf.getAllConfs
+  private val sqlConfigs = SQLConfInjectingRDD.sharedConfigs(conf)
   private lazy val sqlConfExecutorSide = {
     val newConf = new SQLConf()
     sqlConfigs.foreach { case (k, v) => newConf.setConfString(k, v) }
@@ -56,6 +56,32 @@ class SQLConfInjectingRDD[T: ClassTag](var sqlRDD: RDD[T], @transient conf: SQLC
       }
     } else {
       firstParent[T].iterator(split, context)
+    }
+  }
+}
+
+object SQLConfInjectingRDD {
+
+  /** The last config map captured; driver-side only, guarded by this object. See [[sharedConfigs]]. */
+  private var lastConfigs: Map[String, String] = Map.empty
+
+  /**
+   * The configs of `conf`, as the same map instance for every RDD that captures equal configs.
+   *
+   * Clustering wraps every group's RDD in its own [[SQLConfInjectingRDD]] and unions all groups into one stage, so
+   * every task deserializes every group's RDD. Java serialization writes an instance shared by several objects once
+   * per stream, so a shared map costs one copy per task, where a map built per RDD costs one copy per group in every
+   * task. Keyed by content: a changed conf yields a new map, never a stale one. Clustering creates the groups' RDDs
+   * concurrently, so the compare-and-set is synchronized: otherwise concurrent callers that all miss would each keep
+   * their own map.
+   */
+  private[execution] def sharedConfigs(conf: SQLConf): Map[String, String] = {
+    val current = conf.getAllConfs
+    synchronized {
+      if (lastConfigs != current) {
+        lastConfigs = current
+      }
+      lastConfigs
     }
   }
 }
