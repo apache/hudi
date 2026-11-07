@@ -579,7 +579,7 @@ public class TestHoodieWriteConfig {
         HoodieFailedWritesCleaningPolicy.valueOf(HoodieCleanConfig.FAILED_WRITES_CLEANER_POLICY.defaultValue()),
         null);
 
-    // 2. async table service, lock provider expected to be overriden
+    // 2. async table service, lock provider expected to be overridden
     verifyConcurrencyControlRelatedConfigs(createWriteConfig(new HashMap<String, String>() {
           {
             put(HoodieTableConfig.TYPE.key(), tableType.name());
