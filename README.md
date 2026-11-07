@@ -80,7 +80,7 @@ mvn clean javadoc:aggregate -Pjavadocs
 
 ### Build with different Spark versions
 
-The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version, corresponding to `spark3` profile is 3.3.1.
+The default Spark 2.x version supported is 2.4.4. The default Spark 3.x version, corresponding to `spark3` profile is 3.3.4.
 Refer to the table below for building with different Spark and Scala versions.
 
 | Maven build options       | Expected Spark bundle jar name               | Notes                                            |

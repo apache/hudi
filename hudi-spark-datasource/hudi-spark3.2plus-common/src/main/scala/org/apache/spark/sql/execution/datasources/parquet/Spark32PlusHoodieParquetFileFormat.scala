@@ -95,6 +95,8 @@ class Spark32PlusHoodieParquetFileFormat(private val shouldAppendPartitionValues
     hadoopConf.setBoolean(
       SQLConf.PARQUET_INT96_AS_TIMESTAMP.key,
       sparkSession.sessionState.conf.isParquetINT96AsTimestamp)
+    // Starting from Spark 3.2.4 and 3.3.2, the following config is required by `ParquetToSparkSchemaConverter`
+    hadoopConf.setBoolean("spark.sql.legacy.parquet.nanosAsLong", false)
 
     val internalSchemaStr = hadoopConf.get(SparkInternalSchemaConverter.HOODIE_QUERY_SCHEMA)
     // For Spark DataSource v1, there's no Physical Plan projection/schema pruning w/in Spark itself,
