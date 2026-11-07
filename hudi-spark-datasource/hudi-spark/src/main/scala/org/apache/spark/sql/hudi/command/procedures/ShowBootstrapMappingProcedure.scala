@@ -96,12 +96,11 @@ class ShowBootstrapMappingProcedure extends BaseProcedure with ProcedureBuilder 
 
     val df = spark.createDataFrame(rows, OUTPUT_TYPE)
 
-    val results = if (desc) {
-      df.orderBy(df(sortBy).desc).limit(limit).collect()
-    } else {
-      df.orderBy(df(sortBy).asc).limit(limit).collect()
-    }
-    applyFilter(results, filter, outputType)
+    val ordered = if (desc) df.orderBy(df(sortBy).desc) else df.orderBy(df(sortBy).asc)
+    // The bound has to come after the filter; limiting the DataFrame first would show the filter only
+    // the first `limit` rows of the ordering.
+    val results = if (hasFilter(filter)) ordered.collect() else ordered.limit(limit).collect()
+    applyFilterAndLimit(results.toSeq, filter, outputType, limit)
   }
 
   private def createBootstrapIndexReader(metaClient: HoodieTableMetaClient) = {

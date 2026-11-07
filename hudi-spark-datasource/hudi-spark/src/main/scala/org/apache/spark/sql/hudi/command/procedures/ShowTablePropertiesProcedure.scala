@@ -57,8 +57,8 @@ class ShowTablePropertiesProcedure() extends BaseProcedure with ProcedureBuilder
 
     val rows = new util.ArrayList[Row]
     tableProps.asScala.foreach(p => rows.add(Row(p._1, p._2)))
-    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
-    applyFilter(results, filter, outputType)
+    val results = rows.asScala.toList
+    applyFilterAndLimit(results, filter, outputType, limit)
   }
 
   override def build: Procedure = new ShowTablePropertiesProcedure()

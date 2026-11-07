@@ -260,8 +260,8 @@ class ShowFileSystemViewProcedure(showLatest: Boolean) extends BaseProcedure wit
     } else {
       showAllFileSlices(fsView)
     }
-    val results = rows.stream().limit(limit).toArray().map(r => r.asInstanceOf[Row]).toList
-    applyFilter(results, filter, outputType)
+    val results = rows.asScala.toList
+    applyFilterAndLimit(results, filter, outputType, limit)
   }
 
   override def build: Procedure = new ShowFileSystemViewProcedure(showLatest)
