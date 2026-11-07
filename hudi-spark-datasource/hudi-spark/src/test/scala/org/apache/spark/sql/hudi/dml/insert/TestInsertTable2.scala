@@ -823,9 +823,23 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
             Seq(2, "a2", 20.0)
           )
 
-          // The deduced INSERT_OVERWRITE_TABLE is covered off the row writer, since the row-writer
-          // variant recreates the table before the check (#15984): the RDD-side
-          // SparkInsertOverwriteTableCommitActionExecutor override must reject as well.
+          // Row-writer INSERT_OVERWRITE_TABLE should also preserve the existing table and
+          // reach the pending-clustering overlap check.
+          checkExceptionContain(s"insert overwrite table $tableName values(3, 'b1', 30)")(
+            "Not allowed to update the clustering file group")
+          checkAnswer(s"select id, name, price from $tableName order by id")(
+            Seq(1, "a1", 10.0),
+            Seq(2, "a2", 20.0)
+          )
+          assertResult(1)(
+            createMetaClient(spark, tablePath)
+              .getActiveTimeline
+              .filterPendingClusteringTimeline()
+              .countInstants()
+          )
+
+          // Also verify the non-row-writer path rejects the overwrite through
+          // SparkInsertOverwriteTableCommitActionExecutor.
           withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.INSERT.value()) {
             checkExceptionContain(s"insert overwrite table $tableName values(3, 'b1', 30)")(
               "Not allowed to update the clustering file group")
@@ -846,6 +860,47 @@ class TestInsertTable2 extends HoodieSparkSqlTestBase {
             Seq(3, "b1", 30.0)
           )
           assertResult(1)(createMetaClient(spark, tablePath).getActiveTimeline.filterPendingClusteringTimeline().countInstants())
+        }
+      }
+    }
+  }
+
+  test("Test bulk insert overwrite table with row writer disabled") {
+    withSQLConf(
+      SPARK_SQL_INSERT_INTO_OPERATION.key -> WriteOperationType.BULK_INSERT.value(),
+      ENABLE_ROW_WRITER.key -> "false") {
+      withTempDir { tmp =>
+        withTable(generateTableName) { tableName =>
+          val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  name string,
+               |  price double
+               |) using hudi
+               | tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id'
+               | )
+               | location '$tablePath'
+               """.stripMargin)
+
+          spark.sql(s"insert into $tableName values(1, 'a1', 10)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 20)")
+
+          checkAnswer(s"select id, name, price from $tableName order by id")(
+            Seq(1, "a1", 10.0),
+            Seq(2, "a2", 20.0)
+          )
+
+          spark.sql(s"insert overwrite table $tableName values(3, 'b1', 30)")
+
+          // Overwrite must replace existing records, not append to them.
+          checkAnswer(s"select id, name, price from $tableName order by id")(
+            Seq(3, "b1", 30.0)
+          )
         }
       }
     }
