@@ -38,6 +38,8 @@ import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.io.ColumnStatsStreamingTracker;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.ColumnStatsCollector;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -76,6 +78,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   private final HoodieTable table;
   private final HoodieWriteConfig writeConfig;
   protected final HoodieRowDataFileWriter fileWriter;
+  private final Option<ColumnStatsCollector> columnStatsCollector;
   private final String partitionPath;
   private final Path path;
   private final String fileId;
@@ -130,6 +133,8 @@ public class HoodieRowDataCreateHandle implements Serializable {
       partitionMetadata.trySave(partitionPath);
       createMarkerFile(partitionPath, FSUtils.makeBaseFileName(this.instantTime, getWriteToken(), this.fileId, table.getBaseFileExtension()));
       this.fileWriter = createNewFileWriter(path, table, writeConfig, this.instantTime);
+      this.columnStatsCollector = ColumnStatsStreamingTracker.createCollector(fileWriter, writeConfig, table.getMetaClient(),
+          () -> writerSchema, path.getName(), HoodieRecord.HoodieRecordType.FLINK);
     } catch (IOException e) {
       throw new HoodieInsertException("Failed to initialize file writer for path " + path, e);
     }
@@ -260,6 +265,7 @@ public class HoodieRowDataCreateHandle implements Serializable {
   public WriteStatus close() throws IOException {
     fileWriter.close();
     HoodieWriteStat stat = writeStatus.getStat();
+    columnStatsCollector.ifPresent(collector -> stat.setRecordsStats(collector.getColumnStats()));
     stat.setPartitionPath(partitionPath);
     stat.setNumWrites(writeStatus.getTotalRecords());
     stat.setNumDeletes(0);

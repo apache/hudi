@@ -244,6 +244,7 @@ public abstract class BaseCreateHandle<T, I, K, O> extends HoodieWriteHandle<T, 
    * @throws IOException if error occurs
    */
   protected void setupWriteStatus() throws IOException {
+    updateColumnStats();
     HoodieWriteStat stat = writeStatus.getStat();
     stat.setPartitionPath(writeStatus.getPartitionPath());
     stat.setNumWrites(recordsWritten);

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.io.storage;
 
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.client.SparkTaskContextSupplier;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.bloom.BloomFilterFactory;
@@ -28,12 +29,17 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.LanceUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.io.memory.HoodieArrowAllocator;
+import org.apache.hudi.metadata.HoodieIndexVersion;
+import org.apache.hudi.metadata.HoodieTableMetadataUtil.ColumnStatsCollector;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
@@ -62,6 +68,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.lance.file.LanceFileReader;
 
@@ -73,6 +80,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY;
 import static org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER;
@@ -122,6 +130,47 @@ public class TestHoodieSparkLanceWriter {
   public void tearDown() throws Exception {
     if (storage != null) {
       storage.close();
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieIndexVersion.class)
+  public void testColumnStatsIncludePopulatedMetadata(HoodieIndexVersion version) throws Exception {
+    StructType schema = createSchemaWithMetaFields();
+    HoodieSchema recordSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(schema, "record", "", false);
+    List<String> columns = Arrays.asList(RECORD_KEY_METADATA_FIELD.getFieldName(), FILENAME_METADATA_FIELD.getFieldName(), "id", "name", "age");
+    StoragePath path = new StoragePath(tempDir.getAbsolutePath() + "/stats.lance");
+    ColumnStatsCollector collector = new ColumnStatsCollector(columns.stream()
+        .map(column -> Pair.of(column, recordSchema.getField(column).get())).collect(Collectors.toList()),
+        path.getName(), recordSchema, storage.getConf(), version);
+    try (HoodieSparkLanceWriter writer = HoodieSparkLanceWriter.builder()
+        .file(path).sparkSchema(schema).instantTime(instantTime).taskContextSupplier(taskContextSupplier)
+        .storage(storage).populateMetaFields(true).build()) {
+      assertTrue(writer.setColumnStatsCollector(collector::collect));
+      for (int i = 0; i < 3; i++) {
+        writer.writeRowWithMetadata(new HoodieKey("key" + i, "partition1"),
+            createRowWithMetaFields(i, i == 1 ? null : "User" + i, 20L + i));
+      }
+    }
+    Map<String, HoodieColumnRangeMetadata<Comparable>> stats = collector.getColumnStats();
+    assertEquals(0, stats.get("id").getMinValue());
+    assertEquals(2, stats.get("id").getMaxValue());
+    assertEquals(3, stats.get("id").getValueCount());
+    assertEquals(1, stats.get("name").getNullCount());
+    assertEquals("key0", stats.get(RECORD_KEY_METADATA_FIELD.getFieldName()).getMinValue().toString());
+    assertEquals("key2", stats.get(RECORD_KEY_METADATA_FIELD.getFieldName()).getMaxValue().toString());
+    assertEquals(0, stats.get(RECORD_KEY_METADATA_FIELD.getFieldName()).getNullCount());
+    assertEquals(path.getName(), stats.get(FILENAME_METADATA_FIELD.getFieldName()).getMinValue().toString());
+
+    List<HoodieColumnRangeMetadata<Comparable>> readStats = new LanceUtils().readColumnStatsFromMetadata(
+        storage, path, Arrays.asList("id", "name", "age", "missing"), version);
+    assertEquals(3, readStats.size());
+    for (HoodieColumnRangeMetadata<Comparable> readStat : readStats) {
+      HoodieColumnRangeMetadata<Comparable> written = stats.get(readStat.getColumnName());
+      assertEquals(written.getMinValue(), readStat.getMinValue());
+      assertEquals(written.getMaxValue(), readStat.getMaxValue());
+      assertEquals(written.getNullCount(), readStat.getNullCount());
+      assertEquals(written.getValueCount(), readStat.getValueCount());
     }
   }
 
