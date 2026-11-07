@@ -89,6 +89,7 @@ public class HoodieMetrics {
   public static final String POST_COMMIT_STR = "postCommit";
   public static final String SUCCESS_EXTENSION = ".success";
   public static final String FAILURE_EXTENSION = ".failure";
+  public static final String TABLE_VERSION_STR = "tableVersion";
 
   public static final String TIMER_METRIC = "timer";
   public static final String COUNTER_METRIC = "counter";
@@ -270,6 +271,21 @@ public class HoodieMetrics {
       conflictResolutionTimer = createTimer(conflictResolutionTimerName);
     }
     return conflictResolutionTimer == null ? null : conflictResolutionTimer.time();
+  }
+
+  /**
+   * Emits the current Hudi table version as a gauge metric. Intended to be called once at
+   * client init time so observability backends can alert when a table version drifts (for
+   * example when a deployment that intends to stay pinned at an older table version is
+   * accidentally promoted by an auto-upgrade path).
+   *
+   * @param versionCode integer version code from {@code HoodieTableVersion.versionCode()}
+   */
+  public void emitTableVersionMetric(int versionCode) {
+    if (!config.isMetricsOn()) {
+      return;
+    }
+    metrics.registerGauge(getMetricsName("table", TABLE_VERSION_STR), versionCode);
   }
 
   public void updateMetricsForEmptyData(String actionType) {
