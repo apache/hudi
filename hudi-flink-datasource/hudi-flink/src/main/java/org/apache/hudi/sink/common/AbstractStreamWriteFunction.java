@@ -27,6 +27,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.sink.StreamWriteOperatorCoordinator;
 import org.apache.hudi.sink.event.CommitAckEvent;
 import org.apache.hudi.sink.event.WriteMetadataEvent;
+import org.apache.hudi.sink.event.WriteMetadataStateSerializer;
 import org.apache.hudi.sink.meta.CkpMetadata;
 import org.apache.hudi.sink.utils.TimeWait;
 import org.apache.hudi.util.FlinkWriteClients;
@@ -35,8 +36,10 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.common.state.ListState;
 import org.apache.flink.api.common.state.ListStateDescriptor;
+import org.apache.flink.api.common.typeinfo.PrimitiveArrayTypeInfo;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.core.io.SimpleVersionedSerialization;
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -112,6 +115,11 @@ public abstract class AbstractStreamWriteFunction<I>
   private transient ListState<WriteMetadataEvent> writeMetadataState;
 
   /**
+   * Versioned binary list state of the write metadata events.
+   */
+  private transient ListState<byte[]> writeMetadataStateV2;
+
+  /**
    * Write status list for the current checkpoint.
    */
   protected List<WriteStatus> writeStatuses;
@@ -146,6 +154,11 @@ public abstract class AbstractStreamWriteFunction<I>
         new ListStateDescriptor<>(
             "write-metadata-state",
             TypeInformation.of(WriteMetadataEvent.class)
+        ));
+    this.writeMetadataStateV2 = context.getOperatorStateStore().getListState(
+        new ListStateDescriptor<>(
+            WriteMetadataStateSerializer.STATE_NAME,
+            PrimitiveArrayTypeInfo.BYTE_PRIMITIVE_ARRAY_TYPE_INFO
         ));
 
     this.ckpMetadata = CkpMetadata.getInstance(this.metaClient, this.config.getString(FlinkOptions.WRITE_CLIENT_ID));
@@ -195,7 +208,8 @@ public abstract class AbstractStreamWriteFunction<I>
   private void restoreWriteMetadata() throws Exception {
     boolean eventSent = false;
     HoodieTimeline pendingTimeline = this.metaClient.getActiveTimeline().filterPendingExcludingCompaction();
-    for (WriteMetadataEvent event : this.writeMetadataState.get()) {
+    Iterable<WriteMetadataEvent> events = restoreWriteMetadataEvents();
+    for (WriteMetadataEvent event : events) {
       // Must filter out the completed instants in case it is a partial failover,
       // the write status should not be accumulated in such case.
       if (pendingTimeline.containsInstant(event.getInstantTime())) {
@@ -213,6 +227,20 @@ public abstract class AbstractStreamWriteFunction<I>
     }
   }
 
+  private Iterable<WriteMetadataEvent> restoreWriteMetadataEvents() throws Exception {
+    List<WriteMetadataEvent> events = new ArrayList<>();
+    for (byte[] bytes : this.writeMetadataStateV2.get()) {
+      events.add(SimpleVersionedSerialization.readVersionAndDeSerialize(WriteMetadataStateSerializer.INSTANCE, bytes));
+    }
+    if (!events.isEmpty()) {
+      return events;
+    }
+    for (WriteMetadataEvent event : this.writeMetadataState.get()) {
+      events.add(event);
+    }
+    return events;
+  }
+
   protected void sendBootstrapEvent() {
     this.eventGateway.sendEventToCoordinator(WriteMetadataEvent.emptyBootstrap(taskID));
     LOG.info("Send bootstrap write metadata event to coordinator, task[{}].", taskID);
@@ -223,13 +251,14 @@ public abstract class AbstractStreamWriteFunction<I>
    */
   private void reloadWriteMetaState() throws Exception {
     this.writeMetadataState.clear();
+    this.writeMetadataStateV2.clear();
     WriteMetadataEvent event = WriteMetadataEvent.builder()
         .taskID(taskID)
         .instantTime(currentInstant)
         .writeStatus(new ArrayList<>(writeStatuses))
         .bootstrap(true)
         .build();
-    this.writeMetadataState.add(event);
+    this.writeMetadataStateV2.add(SimpleVersionedSerialization.writeVersionAndSerialize(WriteMetadataStateSerializer.INSTANCE, event));
     writeStatuses.clear();
   }
 
