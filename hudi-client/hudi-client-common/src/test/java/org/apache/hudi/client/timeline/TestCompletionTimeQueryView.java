@@ -34,6 +34,7 @@ import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -48,6 +49,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
@@ -101,6 +103,27 @@ public class TestCompletionTimeQueryView {
   }
 
   @Test
+  void testReadCompletionTimeWithCornerCase() throws Exception {
+    String tableName = "testTable";
+    String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.init(
+        HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
+    prepareTimeline(tablePath, metaClient, (lsmTimelineWriter, activeActions) -> {
+      // archive [1, 2], [3, 6] specifically to create corner cases
+      lsmTimelineWriter.write(activeActions.subList(0, 2), Option.empty(), Option.empty());
+      lsmTimelineWriter.write(activeActions.subList(2, 6), Option.empty(), Option.empty());
+    });
+    try (CompletionTimeQueryView view =
+             metaClient.getTimelineLayout().getTimelineFactory().createCompletionTimeQueryView(metaClient)) {
+      // 1. first time, we try to load archived instant from 5, so the cursor will move forward from 7 to 5
+      assertThat(view.getCompletionTime(String.format("%08d", 5)).orElse(""), is(String.format("%08d", 1005)));
+
+      // 2. then we try to load archived instant from 4, it should get the completion time correctly
+      assertThat(view.getCompletionTime(String.format("%08d", 4)).orElse(""), is(String.format("%08d", 1004)));
+    }
+  }
+
+  @Test
   void testReadStartTime() throws Exception {
     String tableName = "testTable";
     String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
@@ -148,7 +171,17 @@ public class TestCompletionTimeQueryView {
         .stream().sorted().collect(Collectors.joining(","));
   }
 
-  private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient) throws Exception {
+  private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient, List<Pair<String, String>> instantRequestedAndCompletionTime, String requestedInstantTime) throws Exception {
+    prepareTimeline(tablePath, metaClient, instantRequestedAndCompletionTime, requestedInstantTime, (writer, activeActions) -> {
+      // archive [1,2], [3,4], [5,6] separately
+      writer.write(activeActions.subList(0, 2), Option.empty(), Option.empty());
+      writer.write(activeActions.subList(2, 4), Option.empty(), Option.empty());
+      writer.write(activeActions.subList(4, 6), Option.empty(), Option.empty());
+    });
+  }
+
+  private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient, List<Pair<String, String>> instantRequestedAndCompletionTime, String requestedInstantTime,
+                               BiConsumer<LSMTimelineWriter, List<ActiveAction>> timelineWriterListBiConsumer) throws Exception {
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath(tablePath)
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
         .withMarkersType("DIRECT")
@@ -168,10 +201,7 @@ public class TestCompletionTimeQueryView {
     testTable.addRequestedCommit(String.format("%08d", 11));
     List<HoodieInstant> instants = TIMELINE_FACTORY.createActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
     LSMTimelineWriter writer = LSMTimelineWriter.getInstance(writeConfig, getMockHoodieTable(metaClient));
-    // archive [1,2], [3,4], [5,6] separately
-    writer.write(activeActions.subList(0, 2), Option.empty(), Option.empty());
-    writer.write(activeActions.subList(2, 4), Option.empty(), Option.empty());
-    writer.write(activeActions.subList(4, 6), Option.empty(), Option.empty());
+    timelineWriterListBiConsumer.accept(writer, activeActions);
     // reconcile the active timeline
     instants.subList(0, 3 * 6).forEach(
         instant -> TimelineUtils.deleteInstantFile(metaClient.getStorage(),
@@ -179,6 +209,26 @@ public class TestCompletionTimeQueryView {
     ValidationUtils.checkState(
         metaClient.reloadActiveTimeline().filterCompletedInstants().countInstants() == 4,
         "should archive 6 instants with 4 as active");
+  }
+
+  private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient) throws Exception {
+    List<Pair<String, String>> instantRequestedAndCompletionTime = new ArrayList<>();
+    for (int i = 1; i < 11; i++) {
+      String instantTime = String.format("%08d", i);
+      String completionTime = String.format("%08d", i + 1000);
+      instantRequestedAndCompletionTime.add(Pair.of(instantTime, completionTime));
+    }
+    prepareTimeline(tablePath, metaClient, instantRequestedAndCompletionTime, String.format("%08d", 11));
+  }
+
+  private void prepareTimeline(String tablePath, HoodieTableMetaClient metaClient, BiConsumer<LSMTimelineWriter, List<ActiveAction>> timelineWriterListBiConsumer) throws Exception {
+    List<Pair<String, String>> instantRequestedAndCompletionTime = new ArrayList<>();
+    for (int i = 1; i < 11; i++) {
+      String instantTime = String.format("%08d", i);
+      String completionTime = String.format("%08d", i + 1000);
+      instantRequestedAndCompletionTime.add(Pair.of(instantTime, completionTime));
+    }
+    prepareTimeline(tablePath, metaClient, instantRequestedAndCompletionTime, String.format("%08d", 11), timelineWriterListBiConsumer);
   }
 
   @SuppressWarnings("rawtypes")
