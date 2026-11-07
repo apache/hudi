@@ -18,6 +18,8 @@
 
 package org.apache.hudi.common.testutils.minicluster;
 
+import org.apache.hudi.common.testutils.NetworkTestUtils;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
@@ -32,6 +34,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.Reader;
+import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -65,7 +68,7 @@ public class ZookeeperTestService {
   @Getter
   private Configuration hadoopConf;
   private String workDir;
-  private Integer clientPort = 2828;
+  private Integer clientPort;
   private String bindIP = "127.0.0.1";
   private Boolean clean = false;
   private int tickTime = 0;
@@ -97,12 +100,25 @@ public class ZookeeperTestService {
       tickTimeToUse = TICK_TIME;
     }
     this.zooKeeperServer = new ZooKeeperServer(dir, dir, tickTimeToUse);
-    standaloneServerFactory = new NIOServerCnxnFactory();
 
-    // NOTE: Changed from the original, where InetSocketAddress was
-    // originally created to bind to the wildcard IP, we now configure it.
-    log.info("Zookeeper force binding to: {}", this.bindIP);
-    standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
+    int loop = 0;
+    while (true) {
+      try {
+        clientPort = NetworkTestUtils.nextFreePort();
+        standaloneServerFactory = new NIOServerCnxnFactory();
+
+        // NOTE: Changed from the original, where InetSocketAddress was
+        // originally created to bind to the wildcard IP, we now configure it.
+        log.info("Zookeeper force binding to: {}", this.bindIP);
+        standaloneServerFactory.configure(new InetSocketAddress(bindIP, clientPort), 1000);
+        break;
+      } catch (BindException ex) {
+        ++loop;
+        if (loop >= 5) {
+          throw ex;
+        }
+      }
+    }
 
     // Start up this ZK server
     standaloneServerFactory.startup(zooKeeperServer);
@@ -234,5 +250,12 @@ public class ZookeeperTestService {
 
   public String connectString() {
     return bindIP + ":" + clientPort;
+  }
+
+  /**
+   * Returns the client port this service instance is bound to.
+   */
+  public int clientPort() {
+    return clientPort;
   }
 }

@@ -54,7 +54,6 @@ import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createMetaClient;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_URL;
-import static org.apache.hudi.hive.testutils.HiveTestService.HS2_JDBC_URL;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_DATABASE_NAME;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_PARTITION_FIELDS;
 import static org.apache.hudi.sync.common.HoodieSyncConfig.META_SYNC_TABLE_NAME;
@@ -180,7 +179,7 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     // Make path selection test suite specific
     props.setProperty("hoodie.deltastreamer.source.input.selector", DFSTestSuitePathSelector.class.getName());
     // Hive Configs
-    props.setProperty(HIVE_URL.key(), HS2_JDBC_URL);
+    props.setProperty(HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
     props.setProperty(META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(META_SYNC_TABLE_NAME.key(), "table1");
     props.setProperty(META_SYNC_PARTITION_FIELDS.key(), "datestr");
@@ -189,8 +188,10 @@ public class TestHoodieTestSuiteJob extends UtilitiesTestBase {
     props.setProperty("hoodie.write.lock.provider", "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider");
     props.setProperty("hoodie.write.lock.hivemetastore.database", "testdb1");
     props.setProperty("hoodie.write.lock.hivemetastore.table", "table1");
-    props.setProperty("hoodie.write.lock.zookeeper.url", "127.0.0.1");
-    props.setProperty("hoodie.write.lock.zookeeper.port", "2828");
+    props.setProperty(
+        "hoodie.write.lock.zookeeper.url",
+        zookeeperTestService.connectString());
+    props.setProperty("hoodie.write.lock.zookeeper.port", String.valueOf(zookeeperTestService.clientPort()));
     props.setProperty("hoodie.write.lock.wait_time_ms", "1200000");
     props.setProperty("hoodie.write.lock.num_retries", "10");
     props.setProperty("hoodie.write.lock.zookeeper.lock_key", "test_table");
