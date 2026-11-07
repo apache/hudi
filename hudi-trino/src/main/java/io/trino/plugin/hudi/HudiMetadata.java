@@ -17,16 +17,20 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import io.airlift.log.Logger;
+import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
 import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.metastore.Column;
+import io.trino.metastore.Database;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.Table;
 import io.trino.metastore.TableInfo;
+import io.trino.metastore.cache.CachingHiveMetastore;
 import io.trino.plugin.base.classloader.ClassLoaderSafeSystemTable;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.stats.HudiTableStatistics;
 import io.trino.plugin.hudi.stats.TableStatisticsReader;
+import io.trino.plugin.hudi.util.HudiSchemaConverter;
 import io.trino.plugin.hudi.util.HudiTableTypeUtils;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
@@ -40,6 +44,8 @@ import io.trino.spi.connector.Constraint;
 import io.trino.spi.connector.ConstraintApplicationResult;
 import io.trino.spi.connector.LimitApplicationResult;
 import io.trino.spi.connector.RelationColumnsMetadata;
+import io.trino.spi.connector.SaveMode;
+import io.trino.spi.connector.SchemaNotFoundException;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SchemaTablePrefix;
 import io.trino.spi.connector.SystemTable;
@@ -59,6 +65,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.common.util.Lazy;
 
+import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -74,12 +82,18 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static com.google.common.base.Throwables.getCausalChain;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
+import static io.trino.filesystem.Locations.appendPath;
+import static io.trino.metastore.PrincipalPrivileges.NO_PRIVILEGES;
 import static io.trino.metastore.Table.TABLE_COMMENT;
+import static io.trino.plugin.hive.HiveMetadata.TRINO_QUERY_ID_NAME;
 import static io.trino.plugin.hive.HiveTimestampPrecision.NANOSECONDS;
+import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
 import static io.trino.plugin.hive.util.HiveUtil.columnMetadataGetter;
+import static io.trino.plugin.hive.util.HiveUtil.escapeTableName;
 import static io.trino.plugin.hive.util.HiveUtil.getPartitionKeyColumnHandles;
 import static io.trino.plugin.hive.util.HiveUtil.hiveColumnHandles;
 import static io.trino.plugin.hive.util.HiveUtil.isHiveSystemSchema;
@@ -89,17 +103,23 @@ import static io.trino.plugin.hudi.HudiSessionProperties.isHudiMetadataTableEnab
 import static io.trino.plugin.hudi.HudiSessionProperties.isQueryPartitionFilterRequired;
 import static io.trino.plugin.hudi.HudiSessionProperties.isResolveColumnNameCasingEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.isTableStatisticsEnabled;
+import static io.trino.plugin.hudi.HudiErrorCode.HUDI_FILESYSTEM_ERROR;
 import static io.trino.plugin.hudi.HudiTableProperties.LOCATION_PROPERTY;
 import static io.trino.plugin.hudi.HudiTableProperties.PARTITIONED_BY_PROPERTY;
+import static io.trino.plugin.hudi.HudiTableProperties.getPartitionedBy;
+import static io.trino.plugin.hudi.HudiTableProperties.getTableLocation;
+import static io.trino.plugin.hudi.HudiTableProperties.getTableType;
 import static io.trino.plugin.hudi.HudiUtil.buildTableMetaClient;
 import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
 import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
 import static io.trino.plugin.hudi.HudiUtil.getMergeRequiredColumnHandles;
+import static io.trino.spi.StandardErrorCode.ALREADY_EXISTS;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.trino.spi.StandardErrorCode.QUERY_REJECTED;
 import static io.trino.spi.StandardErrorCode.UNSUPPORTED_TABLE_TYPE;
 import static io.trino.spi.connector.SchemaTableName.schemaTableName;
 import static java.lang.String.format;
+import static org.apache.hudi.common.table.HoodieTableMetaClient.METAFOLDER_NAME;
 import static java.util.Collections.singletonList;
 import static java.util.Objects.requireNonNull;
 import static java.util.function.Function.identity;
@@ -109,11 +129,13 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.DELTA_COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.INDEXING_ACTION;
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
+import static org.apache.hudi.common.util.ConfigUtils.IS_QUERY_AS_RO_TABLE;
 
 public class HudiMetadata
         implements ConnectorMetadata
 {
     private static final Logger log = Logger.get(HudiMetadata.class);
+    static final String TRINO_MANAGED_TABLE_PARAMETER = "hudi.trino.managed";
     private static final Map<TableStatisticsCacheKey, HudiTableStatistics> tableStatisticsCache = new ConcurrentHashMap<>();
     private static final Set<TableStatisticsCacheKey> refreshingKeysInProgress = ConcurrentHashMap.newKeySet();
     private final HiveMetastore metastore;
@@ -302,6 +324,233 @@ public class HudiMetadata
     {
         HudiTableHandle table = (HudiTableHandle) tableHandle;
         return Optional.of(new HudiTableInfo(table.getSchemaTableName(), table.getTableType().name(), table.getBasePath()));
+    }
+
+    /**
+     * Creates an empty table: its {@code .hoodie} directory on storage and its catalog entry.
+     * <p>
+     * This is the single-call path only. {@code beginCreateTable}/{@code finishCreateTable} and a
+     * page sink are deliberately absent, so {@code CREATE TABLE AS} and {@code INSERT} still fail as
+     * unsupported; no rows are written here.
+     * <p>
+     * An explicit {@code location} makes the table external, matching Hudi's Spark SQL behaviour. An
+     * omitted one makes it managed, at {@code <schemaLocation>/<tableName>}, which is what decides
+     * whether {@code DROP TABLE} later deletes the data.
+     * <p>
+     * Concurrent creates at the same S3 location are not safe: the emptiness check does not reserve
+     * the location, and Hudi can overwrite {@code hoodie.properties} before the metastore rejects
+     * the competing create. Until storage initialization has an exclusive claim, callers must
+     * serialize creates targeting the same location.
+     */
+    @Override
+    public void createTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, SaveMode saveMode)
+    {
+        SchemaTableName schemaTableName = tableMetadata.getTable();
+        if (saveMode == SaveMode.REPLACE) {
+            // Replacing a table means deciding what happens to the rows already in it, which is the
+            // write path this connector does not yet have.
+            throw new TrinoException(NOT_SUPPORTED, "This connector does not support replacing tables");
+        }
+        Database database = metastore.getDatabase(schemaTableName.getSchemaName())
+                .orElseThrow(() -> new SchemaNotFoundException(schemaTableName.getSchemaName()));
+        if (metastore.getTable(schemaTableName.getSchemaName(), schemaTableName.getTableName()).isPresent()) {
+            if (saveMode == SaveMode.IGNORE) {
+                return;
+            }
+            throw new TrinoException(ALREADY_EXISTS, "Table already exists: " + schemaTableName);
+        }
+
+        // Everything that can be rejected is rejected before storage is touched, so a bad statement
+        // leaves nothing behind.
+        HudiTableValidation.validateCreateTable(tableMetadata);
+
+        Map<String, Object> properties = tableMetadata.getProperties();
+        Optional<String> explicitLocation = getTableLocation(properties);
+        boolean external = explicitLocation.isPresent();
+        String basePath = explicitLocation.orElseGet(() -> defaultTableLocation(database, schemaTableName));
+
+        TrinoFileSystem fileSystem = fileSystemFactory.create(session);
+        checkLocationIsEmpty(fileSystem, basePath);
+
+        // One schema object produces both hoodie.table.create.schema and the metastore column list,
+        // so the two cannot disagree (HUDI-9435).
+        HoodieSchema tableSchema = HudiSchemaConverter.toTableSchema(
+                tableMetadata.getColumns(), schemaTableName.getTableName());
+        Table table = Table.builder(HudiMetastoreTables.buildTable(
+                        schemaTableName,
+                        basePath,
+                        getTableType(properties),
+                        tableSchema,
+                        getPartitionedBy(properties),
+                        external,
+                        Optional.of(session.getUser()),
+                        tableMetadata.getComment()))
+                .setParameter(TRINO_QUERY_ID_NAME, session.getQueryId())
+                .setParameter(TRINO_MANAGED_TABLE_PARAMETER, Boolean.toString(!external))
+                .build();
+        try {
+            HudiTableInitializer.initializeTable(fileSystem, basePath, tableMetadata, tableSchema);
+            metastore.createTable(table, NO_PRIVILEGES);
+        }
+        catch (RuntimeException e) {
+            Optional<Table> registeredTable;
+            try {
+                if (metastore instanceof CachingHiveMetastore cachingHiveMetastore) {
+                    // Initialization can fail before createTable invalidates the cached miss above.
+                    cachingHiveMetastore.invalidateTable(schemaTableName.getSchemaName(), schemaTableName.getTableName());
+                }
+                registeredTable = metastore.getTable(schemaTableName.getSchemaName(), schemaTableName.getTableName());
+            }
+            catch (RuntimeException lookupFailure) {
+                // An orphan is recoverable, but deleting metadata owned by a committed table is not.
+                e.addSuppressed(lookupFailure);
+                throw e;
+            }
+            if (registeredTable.isPresent()) {
+                // The metastore may commit the table and then report a transient failure. A matching
+                // query ID identifies that ambiguous result as this CREATE having succeeded. Any
+                // other registered table owns the name, so preserve storage but report the conflict.
+                if (session.getQueryId().equals(registeredTable.get().getParameters().get(TRINO_QUERY_ID_NAME))) {
+                    return;
+                }
+                throw e;
+            }
+            if (getCausalChain(e).stream().anyMatch(FileAlreadyExistsException.class::isInstance)) {
+                // A concurrent initializer can create hoodie.properties after the emptiness check
+                // but before it registers the table. The existing metadata belongs to that CREATE.
+                throw e;
+            }
+
+            // The metastore confirmed that no table owns the initialized metadata. Remove only
+            // .hoodie so a retry is not rejected as non-empty; never remove the base path itself.
+            cleanupTableMetadata(fileSystem, basePath, e);
+            throw e;
+        }
+    }
+
+    private static void cleanupTableMetadata(TrinoFileSystem fileSystem, String basePath, RuntimeException failure)
+    {
+        try {
+            fileSystem.deleteDirectory(Location.of(appendPath(basePath, METAFOLDER_NAME)));
+        }
+        catch (IOException | RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
+        }
+    }
+
+    /**
+     * Drops the catalog entry, and the data only when this connector can establish storage ownership.
+     * <p>
+     * A table registered with an explicit location is external and its data outlives the catalog
+     * entry; {@code register_table} always produces such a table. Trino's {@code DROP TABLE} has no
+     * {@code PURGE} clause, so there is no way to ask for an external table's data to be deleted.
+     * Other engines can register managed aliases for the same physical table, so an unmarked managed
+     * catalog entry also retains its storage when dropped.
+     */
+    @Override
+    public void dropTable(ConnectorSession session, ConnectorTableHandle tableHandle)
+    {
+        SchemaTableName schemaTableName = ((HudiTableHandle) tableHandle).getSchemaTableName();
+        Table table = metastore.getTable(schemaTableName.getSchemaName(), schemaTableName.getTableName())
+                .orElseThrow(() -> new TableNotFoundException(schemaTableName));
+        boolean deleteData = ownsManagedTableStorage(session, schemaTableName, table);
+        Optional<String> location = table.getStorage().getOptionalLocation();
+
+        metastore.dropTable(schemaTableName.getSchemaName(), schemaTableName.getTableName(), deleteData);
+
+        if (deleteData && location.isPresent()) {
+            // Done explicitly as well as through the metastore's deleteData flag, as the Delta Lake
+            // connector does: whether a metastore acts on that flag varies by implementation, and a
+            // managed table that keeps its data behind is a table whose name cannot be reused.
+            try {
+                fileSystemFactory.create(session).deleteDirectory(Location.of(location.get()));
+            }
+            catch (IOException e) {
+                throw new TrinoException(HUDI_FILESYSTEM_ERROR, format(
+                        "Failed to delete directory %s of the dropped table %s", location.get(), schemaTableName), e);
+            }
+        }
+    }
+
+    private boolean ownsManagedTableStorage(ConnectorSession session, SchemaTableName tableName, Table table)
+    {
+        if (isExternalTable(table) || !Boolean.parseBoolean(table.getParameters().get(TRINO_MANAGED_TABLE_PARAMETER))
+                || Boolean.parseBoolean(table.getStorage().getSerdeParameters().get(IS_QUERY_AS_RO_TABLE))) {
+            return false;
+        }
+
+        Optional<String> location = table.getStorage().getOptionalLocation();
+        if (location.isEmpty()) {
+            return false;
+        }
+        try {
+            HoodieTableMetaClient metaClient = buildTableMetaClient(
+                    fileSystemFactory.create(session), tableName.toString(), location.get());
+            return tableName.getTableName().equals(metaClient.getTableConfig().getTableName());
+        }
+        catch (RuntimeException e) {
+            // Without the physical table identity, storage ownership cannot be established.
+            log.warn(e, "Preserving storage for %s because its Hudi table identity could not be read", tableName);
+            return false;
+        }
+    }
+
+    /**
+     * Whether the metastore considers this table external, erring towards yes.
+     * <p>
+     * Hive records this twice, as the table type and as the {@code EXTERNAL} parameter, and they can
+     * disagree -- a table created by another tool may set only one. Treating either signal as
+     * decisive keeps {@code DROP TABLE} from deleting data it does not own; the opposite mistake is
+     * unrecoverable.
+     */
+    private static boolean isExternalTable(Table table)
+    {
+        return EXTERNAL_TABLE.name().equals(table.getTableType())
+                || "TRUE".equalsIgnoreCase(table.getParameters().getOrDefault("EXTERNAL", ""));
+    }
+
+    /**
+     * Where a managed table's data goes: {@code <schemaLocation>/<tableName>}, as the Delta Lake
+     * connector derives it.
+     * <p>
+     * A schema with no location of its own has nowhere to put a managed table, and the error says so
+     * rather than reporting a null path further down. Schemas imported from external metastores can
+     * legitimately omit a location.
+     */
+    private static String defaultTableLocation(Database database, SchemaTableName schemaTableName)
+    {
+        String schemaLocation = database.getLocation()
+                .filter(location -> !location.isEmpty())
+                .orElseThrow(() -> new TrinoException(NOT_SUPPORTED, format(
+                        "Schema '%s' has no location, so a managed table cannot be created in it: set the '%s' table property, or give the schema a location",
+                        schemaTableName.getSchemaName(), LOCATION_PROPERTY)));
+        return appendPath(schemaLocation, escapeTableName(schemaTableName.getTableName()));
+    }
+
+    /**
+     * Requires the target location to hold no files, for managed and external tables alike.
+     * <p>
+     * {@code initTable} writes {@code hoodie.properties}, which would overwrite the metadata of a
+     * Hudi table that already lives here; {@code register_table} is the way to adopt existing data.
+     * It also makes the rollback in {@link #createTable} exactly correct, since the location held
+     * nothing that this connector did not write.
+     * <p>
+     * This is a prefix listing, not a directory check, so it means the same thing on object storage
+     * -- where no directory exists to be inspected -- as it does on HDFS.
+     */
+    private static void checkLocationIsEmpty(TrinoFileSystem fileSystem, String basePath)
+    {
+        Location location = Location.of(basePath);
+        try {
+            if (fileSystem.listFiles(location).hasNext()) {
+                throw new TrinoException(NOT_SUPPORTED, format(
+                        "Cannot create a table at %s because it already contains files. Use the register_table procedure to add an existing Hudi table to the catalog.",
+                        basePath));
+            }
+        }
+        catch (IOException e) {
+            throw new TrinoException(HUDI_FILESYSTEM_ERROR, "Failed to check whether " + basePath + " is empty", e);
+        }
     }
 
     @Override
