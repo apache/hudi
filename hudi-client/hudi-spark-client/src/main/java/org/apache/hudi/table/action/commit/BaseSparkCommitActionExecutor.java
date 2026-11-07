@@ -22,6 +22,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.client.utils.ConnectionPoolShutdownExecutorHalter;
 import org.apache.hudi.client.utils.SparkPartitionUtils;
 import org.apache.hudi.client.utils.SparkValidatorUtils;
 import org.apache.hudi.common.data.HoodieData;
@@ -413,6 +414,9 @@ public abstract class BaseSparkCommitActionExecutor<T> extends
     } catch (Throwable t) {
       String msg = "Error upserting bucketType " + btype + " for partition :" + partition;
       log.error(msg, t);
+      if (config.shouldHaltExecutorOnConnectionPoolShutdown()) {
+        ConnectionPoolShutdownExecutorHalter.DEFAULT.haltIfConnectionPoolShutDown(t);
+      }
       throw new HoodieUpsertException(msg, t);
     }
   }
