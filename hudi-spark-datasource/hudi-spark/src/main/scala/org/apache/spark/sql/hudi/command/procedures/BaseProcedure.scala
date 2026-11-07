@@ -27,6 +27,7 @@ import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.types._
 
 abstract class BaseProcedure extends Procedure {
@@ -106,6 +107,14 @@ abstract class BaseProcedure extends Procedure {
       .getOrElse(
         tablePath.map(p => p.asInstanceOf[String]).getOrElse(
           throw new HoodieException("Table name or table path must be given one"))
+      )
+  }
+
+  protected def getHoodieCatalogTable(tableName: Option[Any]): HoodieCatalogTable = {
+    tableName.map(
+        t => HoodieCLIUtils.getHoodieCatalogTable(sparkSession, t.asInstanceOf[String]))
+      .getOrElse(
+        throw new HoodieException("Table does not exist.")
       )
   }
 
