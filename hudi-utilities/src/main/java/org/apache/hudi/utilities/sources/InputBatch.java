@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.checkpoint.Checkpoint;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
@@ -29,6 +30,9 @@ import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import org.apache.spark.api.java.JavaSparkContext;
+
+import java.util.Collections;
+import java.util.Map;
 
 @AllArgsConstructor
 @Getter
@@ -38,6 +42,19 @@ public class InputBatch<T> {
   private final Checkpoint checkpointForNextBatch;
   @Getter(AccessLevel.NONE)
   private final SchemaProvider schemaProvider;
+  /**
+   * Per-partition (min, max) event time propagated from upstream Hudi commits when the source
+   * supports it and the user opts in via
+   * {@code hoodie.write.track.event.time.propagate.from.upstream}. Empty otherwise.
+   *
+   * <p>Folded into the downstream commit's per-partition write stats by the streamer before
+   * commit; see {@code StreamSync#buildUpstreamWatermarkPreCommitFunc}.
+   */
+  private final Map<String, Pair<Long, Long>> upstreamEventTimeWatermarks;
+
+  public InputBatch(Option<T> batch, Checkpoint checkpointForNextBatch, SchemaProvider schemaProvider) {
+    this(batch, checkpointForNextBatch, schemaProvider, Collections.emptyMap());
+  }
 
   public InputBatch(Option<T> batch, Checkpoint checkpointForNextBatch) {
     this(batch, checkpointForNextBatch, null);
