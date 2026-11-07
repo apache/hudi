@@ -651,6 +651,163 @@ class TestStreamingSource extends StreamTest {
     )
   }
 
+  Seq(COPY_ON_WRITE, MERGE_ON_READ).foreach { tableType =>
+    Seq(false, true).foreach { completionTime =>
+      test(s"guarded source rejects resets and recreation: $tableType completionTime=$completionTime") {
+        withTempDir { dir =>
+          val tablePath = s"${dir.getCanonicalPath}/guarded"
+          val conf = HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())
+          def initialize(): HoodieTableMetaClient = HoodieTableMetaClient.newTableBuilder()
+            .setTableType(tableType).setTableName("guarded").setRecordKeyFields("id")
+            .setOrderingFields("ts").initTable(conf, tablePath)
+          val metaClient = initialize()
+          addData(tablePath, Seq(("1", "old", "10", "001")))
+          def source(strategy: Option[String] = None): org.apache.spark.sql.execution.streaming.Source = {
+            val options = commonOptions + ("path" -> tablePath) ++ strategy.map { value =>
+              DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> value
+            }
+            val checkpoint = s"${dir.getCanonicalPath}/checkpoint"
+            if (completionTime) {
+              new org.apache.spark.sql.hudi.streaming.HoodieStreamSourceV2(spark.sqlContext,
+                metaClient, checkpoint, None, options,
+                org.apache.spark.sql.hudi.streaming.HoodieEarliestOffsetRangeLimit,
+                HoodieTableVersion.current())
+            } else {
+              new org.apache.spark.sql.hudi.streaming.HoodieStreamSourceV1(spark.sqlContext,
+                metaClient, checkpoint, None, options,
+                org.apache.spark.sql.hudi.streaming.HoodieEarliestOffsetRangeLimit,
+                HoodieTableVersion.current())
+            }
+          }
+          val reader = source()
+          val saved = reader.getOffset.get
+          addData(tablePath, Seq(("2", "new", "20", "002")), enableInlineCluster = true)
+          assert(reader.getBatch(Some(saved), reader.getOffset.get).isStreaming)
+          assert(metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.countInstants() > 0)
+          val beforeResetEnd = reader.getOffset.get
+          Seq(("3", "replacement", "30", "003")).toDF(columns: _*).write.format("hudi")
+            .options(commonOptions).option(TBL_NAME.key, "guarded")
+            .option("hoodie.datasource.write.operation", "insert_overwrite_table")
+            .mode(SaveMode.Append).save(tablePath)
+          val resetEnd = reader.getOffset.get
+          val resetError = intercept[org.apache.hudi.exception.HoodieException] {
+            reader.getBatch(Some(saved), resetEnd)
+          }
+          assert(resetError.getMessage.contains("rebuild required"))
+          assert(resetError.getMessage.contains("logical reset"))
+          val concurrentResetError = intercept[org.apache.hudi.exception.HoodieException] {
+            reader.getBatch(Some(saved), beforeResetEnd)
+          }
+          assert(concurrentResetError.getMessage.contains("logical reset"))
+          var sessionReader: org.apache.spark.sql.execution.streaming.Source = null
+          withSQLConf(
+            "spark.hoodie.datasource.read.streaming.recovery.strategy" -> "FAIL") {
+            assert(source(strategy = Some("READ_LATEST")).getBatch(Some(saved), resetEnd).isStreaming)
+            sessionReader = source(strategy = None)
+          }
+          val sessionError = intercept[org.apache.hudi.exception.HoodieException] {
+            sessionReader.getBatch(Some(saved), resetEnd)
+          }
+          assert(sessionError.getMessage.contains("logical reset"))
+          def batchIds(batch: org.apache.spark.sql.DataFrame): Seq[String] = {
+            val idIndex = batch.schema.fieldIndex("id")
+            batch.queryExecution.logical.collectFirst {
+              case relation: org.apache.spark.sql.execution.datasources.LogicalRelation =>
+                spark.sqlContext.baseRelationToDataFrame(relation.relation).select("id")
+                  .collect().map(_.getString(0)).toSeq.sorted
+              case relation: org.apache.spark.sql.execution.LogicalRDD =>
+                relation.rdd.collect().map(_.getUTF8String(idIndex).toString).toSeq.sorted
+            }.get
+          }
+          val snapshotReader = source(Some("READ_UPTO_LATEST_COMMIT"))
+          assert(batchIds(snapshotReader.getBatch(Some(saved), resetEnd)) == Seq("3"))
+          addData(tablePath, Seq(("5", "after-recovery", "50", "005")))
+          // Recovery must remain bounded by Spark's end even if another commit has arrived.
+          assert(batchIds(snapshotReader.getBatch(Some(saved), resetEnd)) == Seq("3"))
+          assert(batchIds(snapshotReader.getBatch(Some(resetEnd), snapshotReader.getOffset.get)) == Seq("5"))
+          val skipped = source(Some("READ_LATEST")).getBatch(Some(saved), resetEnd)
+          assert(skipped.queryExecution.logical.collectFirst {
+            case relation: org.apache.spark.sql.execution.LogicalRDD => relation.rdd.count()
+          }.contains(0L))
+          intercept[IllegalArgumentException] { source(Some("invalid")) }
+          // A fresh checkpoint rebuilds from the current snapshot instead of rejecting old resets.
+          assert(source().getBatch(None, resetEnd).isStreaming)
+
+          val fs = new Path(tablePath).getFileSystem(spark.sessionState.newHadoopConf())
+          val savedTime = org.apache.spark.sql.hudi.streaming.HoodieSourceOffset(resetEnd).offsetCommitTime
+          val completedReset = metaClient.reloadActiveTimeline().filterCompletedInstants().getInstantsAsStream
+            .filter(i => (if (completionTime) i.getCompletionTime else i.requestedTime()) == savedTime)
+            .findFirst().get()
+          val resetFile = new Path(metaClient.getTimelinePath.toString,
+            metaClient.getInstantFileNameGenerator.getFileName(completedReset))
+          assert(fs.delete(resetFile, false))
+          val expiredError = intercept[org.apache.hudi.exception.HoodieException] {
+            source().getBatch(Some(resetEnd), resetEnd)
+          }
+          assert(expiredError.getMessage.contains("history expired"))
+          fs.delete(new Path(tablePath), true)
+          initialize()
+          addData(tablePath, Seq(("4", "recreated", "40", "004")))
+          val recreationError = intercept[org.apache.hudi.exception.HoodieException] {
+            source().getBatch(Some(saved), source().getOffset.get)
+          }
+          assert(recreationError.getMessage.contains("rebuild required"))
+          assert(recreationError.getMessage.contains("recreated"))
+          val recreatedReader = source(Some("READ_UPTO_LATEST_COMMIT"))
+          assert(batchIds(recreatedReader.getBatch(Some(saved), recreatedReader.getOffset.get)) == Seq("4"))
+        }
+      }
+    }
+  }
+
+  Seq(false, true).foreach { unknownBoundary =>
+    test(s"guarded source rejects cleaned history: unknownBoundary=$unknownBoundary") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/cleaned"
+        val metaClient = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(COPY_ON_WRITE).setTableName("cleaned").setRecordKeyFields("id")
+          .setOrderingFields("ts")
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+        addData(tablePath, Seq(("1", "old", "10", "001")))
+        val reader = new org.apache.spark.sql.hudi.streaming.HoodieStreamSourceV2(spark.sqlContext,
+          metaClient, s"${dir.getCanonicalPath}/checkpoint", None,
+          commonOptions ++ Map("path" -> tablePath,
+            DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> "FAIL"),
+          org.apache.spark.sql.hudi.streaming.HoodieEarliestOffsetRangeLimit, HoodieTableVersion.current())
+        val saved = reader.getOffset.get
+        addData(tablePath, Seq(("1", "new", "20", "002")))
+        val end = reader.getOffset.get
+        val timeline = metaClient.reloadActiveTimeline()
+        // An old clean with no readable metadata must not be opened for a newer checkpoint.
+        val oldClean = metaClient.getInstantGenerator.createNewInstant(
+          org.apache.hudi.common.table.timeline.HoodieInstant.State.COMPLETED,
+          HoodieTimeline.CLEAN_ACTION, "20000101000000000", "20000101000000001")
+        val oldCleanPath = new Path(metaClient.getTimelinePath.toString,
+          metaClient.getInstantFileNameGenerator.getFileName(oldClean))
+        oldCleanPath.getFileSystem(spark.sessionState.newHadoopConf()).create(oldCleanPath).close()
+        assert(reader.getBatch(Some(saved), end).isStreaming)
+        val retained = timeline.getCommitsTimeline.lastInstant().get().requestedTime()
+        val cleanTime = "20990101000000000"
+        val clean = metaClient.getInstantGenerator.createNewInstant(
+          org.apache.hudi.common.table.timeline.HoodieInstant.State.INFLIGHT,
+          HoodieTimeline.CLEAN_ACTION, cleanTime)
+        val metadata = org.apache.hudi.avro.model.HoodieCleanMetadata.newBuilder()
+          .setVersion(1).setTimeTakenInMillis(1).setTotalFilesDeleted(1).setStartCleanTime(cleanTime)
+          .setEarliestCommitToRetain(if (unknownBoundary) "" else retained)
+          .setLastCompletedCommitTimestamp(retained)
+          .setPartitionMetadata(new java.util.HashMap[String, org.apache.hudi.avro.model.HoodieCleanPartitionMetadata]())
+          .build()
+        timeline.createNewInstant(clean)
+        timeline.saveAsComplete(false, clean, org.apache.hudi.common.util.Option.of(metadata))
+        val error = intercept[org.apache.hudi.exception.HoodieException] {
+          reader.getBatch(Some(saved), end)
+        }
+        assert(error.getMessage.contains("rebuild required"))
+        assert(error.getMessage.contains(if (unknownBoundary) "earliest retained commit" else "has been cleaned"))
+      }
+    }
+  }
+
   private def addData(inputPath: String,
                       rows: Seq[(String, String, String, String)],
                       enableInlineCompaction: Boolean = false,
