@@ -424,7 +424,9 @@ public class DeltaSync implements Serializable, Closeable {
     // Retrieve the previous round checkpoints, if any
     Option<String> resumeCheckpointStr = Option.empty();
     if (commitTimelineOpt.isPresent()) {
-      resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt);
+      if (!cfg.disableHoodieTimelineCheckpoint) {
+        resumeCheckpointStr = getCheckpointToResume(commitTimelineOpt);
+      }
     } else {
       // initialize the table for the first time.
       String partitionColumns = SparkKeyGenUtils.getPartitionColumns(keyGenerator, props);
@@ -698,7 +700,7 @@ public class DeltaSync implements Serializable, Closeable {
     boolean hasErrors = totalErrorRecords > 0;
     if (!hasErrors || cfg.commitOnErrors) {
       HashMap<String, String> checkpointCommitMetadata = new HashMap<>();
-      if (checkpointStr != null) {
+      if (!cfg.disableHoodieTimelineCheckpoint && checkpointStr != null) {
         checkpointCommitMetadata.put(CHECKPOINT_KEY, checkpointStr);
       }
       if (cfg.checkpoint != null) {
