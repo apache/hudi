@@ -540,6 +540,65 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertTrue(readRecordIndex(metadata, util.Collections.singletonList(prefixOnlyKey), HOption.of("partition1")).isEmpty)
   }
 
+  @Test
+  def testPartitionedRecordLevelIndexWithDotInHiveStylePartitionColumn(): Unit = {
+    initMetaClient(HoodieTableType.COPY_ON_WRITE)
+    val dataGen = new HoodieTestDataGenerator()
+    val inserts = dataGen.generateInserts("001", 10)
+    val insertDf = toDataset(spark, inserts)
+    // "fare.currency" is a nested field, so the hive-style partition directory carries a dot in the
+    // column name ("fare.currency=USD"). The partitioned record index derives its file id from the
+    // escaped partition path, and the log file name pattern anchors that file id on dots, so an
+    // unescaped dot makes the metadata log file name unparseable (InvalidHoodiePathException) from
+    // the very first write. Only the dotted column name is covered here; dotted partition values and
+    // nested or non-hive-style dotted paths are out of scope of the escaping this exercises.
+    val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "fare.currency",
+      HIVE_STYLE_PARTITIONING.key -> "true",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieIndexConfig.INDEX_TYPE.key() -> RECORD_LEVEL_INDEX.name())
+    insertDf.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    // The data generator always emits USD, so every record lands in a single dotted partition.
+    val partitionPath = "fare.currency=USD"
+    assertEquals(util.Collections.singletonList(partitionPath),
+      spark.read.format("hudi").load(basePath).select("_hoodie_partition_path").distinct().collect()
+        .map(row => row.getString(0)).toList.asJava)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(HoodieRecordIndex.isPartitioned(
+      metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)))
+
+    val writeConfig = getWriteConfig(options)
+    val recordKeys = inserts.asScala.map(record => record.getRecordKey).asJava
+    val locations = readRecordIndex(metadataWriter(writeConfig).getTableMetadata, recordKeys, HOption.of(partitionPath))
+    assertEquals(10, locations.size)
+    validateDFWithLocations(spark.read.format("hudi").load(basePath).collect(), locations, partitionPath)
+
+    // Upserts must keep resolving through the index on the dotted partition.
+    val updates = dataGen.generateUniqueUpdates("002", 4)
+    toDataset(spark, updates).write.format("hudi")
+      .options(options)
+      .option(DataSourceWriteOptions.OPERATION.key(), UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val updatedDf = spark.read.format("hudi").load(basePath)
+    assertEquals(10, updatedDf.count())
+    val locationsAfterUpdate =
+      readRecordIndex(metadataWriter(writeConfig).getTableMetadata, recordKeys, HOption.of(partitionPath))
+    assertEquals(10, locationsAfterUpdate.size)
+    validateDFWithLocations(updatedDf.collect(), locationsAfterUpdate, partitionPath)
+  }
+
   @ParameterizedTest
   @MethodSource(Array("testArgsForPartitionedRecordLevelIndex"))
   def testPartitionedRecordLevelIndexInitializationBasic(testCase: TestPartitionedRecordLevelIndexTestCase): Unit = {
