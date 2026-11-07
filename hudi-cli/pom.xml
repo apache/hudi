@@ -201,6 +201,12 @@
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-utilities_${scala.binary.version}</artifactId>
       <version>${project.version}</version>
+      <exclusions>
+        <exclusion>
+          <artifactId>hudi-gcp</artifactId>
+          <groupId>org.apache.hudi</groupId>
+        </exclusion>
+      </exclusions>
       <scope>test</scope>
       <type>test-jar</type>
     </dependency>
