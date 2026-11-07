@@ -188,6 +188,8 @@ class TestSparkReadExecutorFootprint extends SparkClientFunctionalTestHarness {
     TASK_BUDGETS.put("4.1_2.13", new TaskBudgets(20480, 21504, 13824, 15104));
     // measured: columnar 18778 / 19712, row 12706 / 13812
     TASK_BUDGETS.put("4.2_2.13", new TaskBudgets(20736, 21760, 14080, 15360));
+    // measured: columnar 18442 / 19377, row 12843 / 13950
+    TASK_BUDGETS.put("4.3_2.13", new TaskBudgets(20480, 21504, 14336, 15360));
   }
 
   enum ReadQuery {
