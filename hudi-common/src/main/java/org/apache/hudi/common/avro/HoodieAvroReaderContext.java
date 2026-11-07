@@ -200,7 +200,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
 
   @Override
   public ClosableIterator<IndexedRecord> lookupRecords(
-      StoragePath filePath,
+      StoragePathInfo pathInfo,
       HoodieFileFormat fileFormat,
       HoodieSchema readerSchema,
       HoodieStorage storage,
@@ -208,7 +208,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       boolean fullKey) throws IOException {
     try (HoodieAvroFileReader avroFileReader = (HoodieAvroFileReader) HoodieIOFactory.getIOFactory(storage)
         .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
-        .getFileReader(hoodieReaderConfig, filePath, fileFormat, Option.empty())) {
+        .getFileReader(hoodieReaderConfig, pathInfo, fileFormat, Option.empty())) {
       if (avroFileReader instanceof HoodieSeekingFileReader) {
         HoodieSeekingFileReader<IndexedRecord> seekingFileReader = (HoodieSeekingFileReader<IndexedRecord>) avroFileReader;
         if (fullKey && avroFileReader.supportKeyPredicate()) {
@@ -218,7 +218,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         }
       }
     }
-    return super.lookupRecords(filePath, fileFormat, readerSchema, storage, keys, fullKey);
+    return super.lookupRecords(pathInfo, fileFormat, readerSchema, storage, keys, fullKey);
   }
 
   private HoodieAvroFileReader getOrCreateFileReader(
