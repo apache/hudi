@@ -598,4 +598,65 @@ public class TestSchemaRepair {
     assertEquals(LogicalTypeAnnotation.timestampType(false, LogicalTypeAnnotation.TimeUnit.MILLIS),
         timestampField.getLogicalTypeAnnotation());
   }
+
+  @Test
+  public void testAlignDecimalPhysicalTypesRetypesIntegerBackedDecimals() {
+    MessageType requestedSchema = MessageTypeParser.parseMessageType("message r {\n"
+        + "  required fixed_len_byte_array(4) d32 (DECIMAL(9,2));\n"
+        + "  optional binary d64 (DECIMAL(15,2));\n"
+        + "  optional group nested {\n"
+        + "    optional fixed_len_byte_array(7) inner (DECIMAL(15,2));\n"
+        + "  }\n"
+        + "  optional fixed_len_byte_array(7) flba (DECIMAL(15,2));\n"
+        + "  optional int64 plain;\n"
+        + "}");
+    MessageType fileSchema = MessageTypeParser.parseMessageType("message r {\n"
+        + "  required int32 d32 (DECIMAL(9,2));\n"
+        + "  optional int64 d64 (DECIMAL(15,2));\n"
+        + "  optional group nested {\n"
+        + "    optional int64 inner (DECIMAL(15,2));\n"
+        + "  }\n"
+        + "  optional fixed_len_byte_array(7) flba (DECIMAL(15,2));\n"
+        + "  optional int64 plain;\n"
+        + "}");
+
+    MessageType aligned = SchemaRepair.alignDecimalPhysicalTypes(requestedSchema, fileSchema);
+
+    assertNotSame(requestedSchema, aligned);
+    assertEquals(fileSchema, aligned);
+  }
+
+  @Test
+  public void testAlignDecimalPhysicalTypesKeepsSchemaWithoutIntegerBackedDecimals() {
+    MessageType requestedSchema = MessageTypeParser.parseMessageType("message r {\n"
+        + "  optional fixed_len_byte_array(7) dec (DECIMAL(15,2));\n"
+        + "  optional int64 plain;\n"
+        + "  optional int64 ts (TIMESTAMP(MILLIS,true));\n"
+        + "}");
+
+    assertSame(requestedSchema, SchemaRepair.alignDecimalPhysicalTypes(requestedSchema, requestedSchema));
+  }
+
+  @Test
+  public void testAlignDecimalPhysicalTypesLeavesPlainIntegerProjectionAndKeepsFieldIds() {
+    // a projection that already asks for the integer is untouched; a decimal projection keeps its field id
+    MessageType requestedSchema = MessageTypeParser.parseMessageType("message r {\n"
+        + "  required int32 legacy;\n"
+        + "  optional fixed_len_byte_array(7) dec = 7;\n"
+        + "}");
+    MessageType fileSchema = MessageTypeParser.parseMessageType("message r {\n"
+        + "  required int32 legacy (DECIMAL(9,2));\n"
+        + "  optional int64 dec (DECIMAL(15,2)) = 7;\n"
+        + "}");
+    MessageType requestedWithDecimal = MessageTypeParser.parseMessageType("message r {\n"
+        + "  required int32 legacy;\n"
+        + "  optional fixed_len_byte_array(7) dec (DECIMAL(15,2)) = 7;\n"
+        + "}");
+
+    assertSame(requestedSchema, SchemaRepair.alignDecimalPhysicalTypes(requestedSchema, fileSchema));
+    MessageType aligned = SchemaRepair.alignDecimalPhysicalTypes(requestedWithDecimal, fileSchema);
+    assertEquals(fileSchema.getType("dec"), aligned.getType("dec"));
+    assertEquals(7, aligned.getType("dec").getId().intValue());
+    assertEquals(requestedSchema.getType("legacy"), aligned.getType("legacy"));
+  }
 }

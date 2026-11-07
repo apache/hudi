@@ -140,6 +140,17 @@ public class TestHoodieArrayWritableSchemaUtils {
   }
 
   @Test
+  void testRewriteDecimalToIntegerKeepsUnscaledValue() {
+    // a table schema that recorded an integer-backed parquet decimal as int or long reads the unscaled value
+    Writable oldWritable = new HiveDecimalWritable(HiveDecimal.create("17.00"));
+    HoodieSchema oldSchema = HoodieSchema.createDecimal("price", null, null, 15, 2, 7);
+    assertEquals(new LongWritable(1700L),
+        HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, HoodieSchema.create(HoodieSchemaType.LONG)));
+    assertEquals(new IntWritable(1700),
+        HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, HoodieSchema.create(HoodieSchemaType.INT)));
+  }
+
+  @Test
   void testRewriteIntToLong() throws AvroSerdeException {
     Writable oldWritable = new IntWritable(42);
     HoodieSchema oldSchema = HoodieSchema.create(HoodieSchemaType.INT);
