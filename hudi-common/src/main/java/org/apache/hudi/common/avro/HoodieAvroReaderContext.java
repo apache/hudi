@@ -153,7 +153,8 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
       Map<StoragePath, HoodieAvroFileReader> reusableFileReaders,
       String payloadClassName,
       HoodieConfig hoodieReaderConfig) {
-    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt, new AvroRecordContext(tableConfig, payloadClassName), hoodieReaderConfig);
+    super(storageConfiguration, tableConfig, instantRangeOpt, filterOpt,
+        new AvroRecordContext(tableConfig, payloadClassName, ConfigUtils.getMergeProps(hoodieReaderConfig.getProps(), tableConfig)), hoodieReaderConfig);
     this.reusableFileReaders = reusableFileReaders;
     this.isMultiFormat = tableConfig.isMultipleBaseFileFormatsEnabled();
   }

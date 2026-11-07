@@ -617,6 +617,7 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
       payloadClassName = Option.empty();
     }
     // Configure reader context with custom schema
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
     props.setProperty(ORDERING_FIELDS.key(), "timestamp");
     HoodieAvroReaderContext avroReaderContext = new HoodieAvroReaderContext(storageConfig, tableConfig, Option.empty(), Option.empty());
     avroReaderContext.setHasLogFiles(false);

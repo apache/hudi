@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_INSERT_INTO_OPERATION
 import org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableVersion}
 import org.apache.hudi.common.testutils.HoodieTestUtils
@@ -31,6 +32,34 @@ import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.validateTableConfig
 
 class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
+  Seq(
+    ("date", "date'2026-10-01'", "date'2026-10-02'", false),
+    ("timestamp", "timestamp'2026-10-01 00:00:00'", "timestamp'2026-10-02 00:00:00'", false),
+    ("timestamp", "timestamp'2026-10-01 00:00:00'", "timestamp'2026-10-02 00:00:00'", true),
+    ("decimal(10,2)", "cast(1.50 as decimal(10,2))", "cast(2.50 as decimal(10,2))", false)
+  ).foreach { case (orderingType, oldValue, newValue, consistentTimestamp) =>
+    test(s"COW SQL upsert with $orderingType ordering field (consistentTimestamp=$consistentTimestamp)") {
+      withSQLConf(SPARK_SQL_INSERT_INTO_OPERATION.key -> "upsert",
+        "hoodie.datasource.write.keygenerator.consistent.logical.timestamp.enabled" -> consistentTimestamp.toString) {
+        withRecordType(Seq(HoodieRecordType.AVRO)) {
+          withTempDir { tmp =>
+            val tableName = generateTableName
+            spark.sql(
+              s"""
+                 | create table $tableName (id int, v int, ts $orderingType)
+                 | using hudi
+                 | tblproperties (type = 'cow', primaryKey = 'id', preCombineField = 'ts')
+                 | location '${tmp.getCanonicalPath}'
+               """.stripMargin)
+            spark.sql(s"insert into $tableName values (1, 1, $oldValue)")
+            spark.sql(s"insert into $tableName values (1, 2, $newValue)")
+            checkAnswer(s"select id, v from $tableName")(Seq(1, 2))
+          }
+        }
+      }
+    }
+  }
+
   Seq(
     "cow,current,true",
     "cow,current,false",
