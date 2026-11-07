@@ -62,7 +62,6 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantGenerator;
 import org.apache.hudi.common.table.timeline.TimelineFactory;
-import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
 import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
@@ -83,6 +82,7 @@ import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieInsertException;
+import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.HoodieWriteConflictException;
@@ -91,6 +91,7 @@ import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.keygen.factory.HoodieSparkKeyGeneratorFactory;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieSparkCopyOnWriteTable;
@@ -145,7 +146,6 @@ import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAM
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA_EVOLVED_1;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
-import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.apache.hudi.common.testutils.Transformations.randomSelectAsHoodieKeys;
 import static org.apache.hudi.common.testutils.Transformations.recordsToRecordKeySet;
 import static org.apache.hudi.config.HoodieClusteringConfig.ASYNC_CLUSTERING_ENABLE;
@@ -523,57 +523,35 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     }
   }
 
+  /**
+   * Archival no longer proceeds beyond a savepoint, but a table that did so earlier can still have archived commits
+   * after a savepoint. Restoring to that savepoint would leave their files behind, so it is rejected up front.
+   */
   @Test
-  public void testRestoreWithSavepointBeyondArchival() throws Exception {
-    HoodieWriteConfig config = getConfigBuilder().withRollbackUsingMarkers(true).build();
-    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(EAGER)
-        .withRollbackUsingMarkers(true)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().withArchiveBeyondSavepoint(true).build())
-        .withProps(config.getProps()).build();
+  public void testRestoreRejectedWhenCommitsAfterSavepointAreArchived() throws Exception {
+    HoodieWriteConfig writeConfig = getConfigBuilder(TRIP_EXAMPLE_SCHEMA)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(2, 3).build())
+        .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(1).build())
+        // compact the metadata table every commit, so it does not hold back data table archival
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .build();
+    SparkRDDWriteClient client = getHoodieWriteClient(writeConfig);
+    for (int i = 0; i < 6; i++) {
+      insertCommitWithSchema(client, dataGen, 20, TRIP_EXAMPLE_SCHEMA);
+    }
+    List<HoodieInstant> archivedCommits = createMetaClient().getArchivedTimeline().getCommitsTimeline().getInstants();
+    assertTrue(archivedCommits.size() >= 2, "precondition: at least two commits are archived");
 
-    HoodieTableMetaClient.newTableBuilder()
-        .fromMetaClient(metaClient)
-        .setPopulateMetaFields(config.populateMetaFields())
-        .initTable(metaClient.getStorageConf().newInstance(), metaClient.getBasePath());
+    // a savepoint on the first archived commit leaves the archived commits after it in a hole, as archiving beyond
+    // a savepoint used to
+    String savepointTime = archivedCommits.get(0).requestedTime();
+    HoodieTestTable testTable = HoodieTestTable.of(metaClient);
+    testTable.addSavepoint(savepointTime, testTable.getSavepointMetadata(savepointTime, Collections.emptyMap()));
 
-    SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig);
-
-    // Write 1 (only inserts)
-    String newCommitTime = "001";
-    String initCommitTime = "000";
-    int numRecords = 200;
-    insertFirstBatch(hoodieWriteConfig, client, newCommitTime, initCommitTime, numRecords, SparkRDDWriteClient::insert,
-        false, true, numRecords, config.populateMetaFields(), INSTANT_GENERATOR);
-
-    // Write 2 (updates)
-    String prevCommitTime = newCommitTime;
-    newCommitTime = "004";
-    numRecords = 100;
-    String commitTimeBetweenPrevAndNew = "002";
-    updateBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        Option.of(Arrays.asList(commitTimeBetweenPrevAndNew)), initCommitTime, numRecords, SparkRDDWriteClient::upsert, false, true,
-        numRecords, 200, 2, config.populateMetaFields(), INSTANT_GENERATOR);
-
-    // Delete 1
-    prevCommitTime = newCommitTime;
-    newCommitTime = "005";
-    numRecords = 50;
-
-    deleteBatch(hoodieWriteConfig, client, newCommitTime, prevCommitTime,
-        initCommitTime, numRecords, false, true,
-        0, 150, config.populateMetaFields(), TIMELINE_FACTORY, INSTANT_GENERATOR);
-
-    HoodieWriteConfig newConfig = getConfigBuilder().withProps(config.getProps()).withTimelineLayoutVersion(
-            TimelineLayoutVersion.CURR_VERSION)
-        .withArchivalConfig(HoodieArchivalConfig.newBuilder().withArchiveBeyondSavepoint(true).build()).build();
-    client = getHoodieWriteClient(newConfig);
-
-    client.savepoint("004", "user1", "comment1");
-
-    // verify that restore fails when "hoodie.archive.beyond.savepoint" is enabled.
-    SparkRDDWriteClient finalClient = client;
-    assertThrows(IllegalArgumentException.class, () -> finalClient.restoreToSavepoint("004"),
-            "Restore should not be supported when " + HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key() + " is enabled");
+    HoodieRollbackException exception = assertThrows(HoodieRollbackException.class, () -> client.restoreToSavepoint(savepointTime));
+    assertTrue(exception.getMessage().contains(archivedCommits.get(1).requestedTime()));
+    assertTrue(storage.exists(new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath))),
+        "a rejected restore must not delete the metadata table");
   }
 
   /**
