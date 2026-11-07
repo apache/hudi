@@ -50,6 +50,12 @@
                                 "name": "isDeleted",
                                 "type": "boolean",
                                 "doc": "True if this file has been deleted"
+                            },
+                            {
+                                "name": "sourcePartitionPath",
+                                "type": ["null", "string"],
+                                "default": null,
+                                "doc": "Absolute path of the directory this file lives in, when the file is not under the table base path. The file name is resolved against it. Null for files the table owns."
                             }
                         ]
                     }
