@@ -36,7 +36,9 @@ import org.apache.spark.sql.types.{DataType, StructType}
 import scala.jdk.CollectionConverters._
 
 class HoodieCommonSqlParser(session: SparkSession, delegate: ParserInterface)
-  extends ParserInterface with Logging with SparkAdapterSupport {
+  extends HoodieCommonSqlParserCompat with Logging with SparkAdapterSupport {
+
+  override protected def delegateParser: ParserInterface = delegate
 
   private lazy val builder = new HoodieSqlCommonAstBuilder(session, delegate)
   private lazy val sparkExtendedParser = sparkAdapter.createExtendedSparkParser(session, delegate)

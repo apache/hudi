@@ -138,6 +138,7 @@ Refer to the table below for building with different Spark and Scala versions.
 | `-Dspark4.0`              | hudi-spark4.0-bundle_2.13                    | hudi-spark4.0-native-bundle_2.13      | For Spark 4.0 and Scala 2.13 (Needs java 17)     |
 | `-Dspark4.1`              | hudi-spark4.1-bundle_2.13                    | hudi-spark4.1-native-bundle_2.13      | For Spark 4.1 and Scala 2.13 (Needs java 17)     |
 | `-Dspark4.2`              | hudi-spark4.2-bundle_2.13                    | none                                  | For Spark 4.2 and Scala 2.13 (Needs java 17)     |
+| `-Dspark4.3`              | hudi-spark4.3-bundle_2.13                    | none                                  | For Spark 4.3 and Scala 2.13 (Needs java 17)     |
 | `-Dspark3`                | hudi-spark3-bundle_2.12 (legacy bundle name) | none                                  | For Spark 3.5.x and Scala 2.12                   |
 
 `hudi-spark-native-bundle` is `hudi-spark-bundle` plus [Apache DataFusion Comet](https://datafusion.apache.org/comet/)

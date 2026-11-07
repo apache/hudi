@@ -196,6 +196,8 @@
     <spark40.version>4.0.2</spark40.version>
     <spark41.version>4.1.1</spark41.version>
     <spark42.version>4.2.0</spark42.version>
+    <spark43.version>4.3.0</spark43.version>
+    <hudi.spark.version.source.dir>src/main/scala-pre-spark4.3</hudi.spark.version.source.dir>
     <datafusion.comet.version>1.1.0</datafusion.comet.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
@@ -569,6 +571,9 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
               <vortex.skip.tests>${vortex.skip.tests}</vortex.skip.tests>
+              <!-- Spark 4.3 compares both analyzers' plans when spark.testing is set, and Hudi's analysis rules
+                   only run in the fixed-point analyzer, which is the only one used unless explicitly enabled. -->
+              <spark.sql.analyzer.singlePassResolver.dualRunWithLegacy>false</spark.sql.analyzer.singlePassResolver.dualRunWithLegacy>
             </systemPropertyVariables>
             <useSystemClassLoader>false</useSystemClassLoader>
             <forkedProcessExitTimeoutInSeconds>30</forkedProcessExitTimeoutInSeconds>
@@ -614,6 +619,9 @@
               <log4j.configurationFile>${surefire-log4j.file}</log4j.configurationFile>
               <lance.skip.tests>${lance.skip.tests}</lance.skip.tests>
               <vortex.skip.tests>${vortex.skip.tests}</vortex.skip.tests>
+              <!-- Spark 4.3 compares both analyzers' plans when spark.testing is set, and Hudi's analysis rules
+                   only run in the fixed-point analyzer, which is the only one used unless explicitly enabled. -->
+              <spark.sql.analyzer.singlePassResolver.dualRunWithLegacy>false</spark.sql.analyzer.singlePassResolver.dualRunWithLegacy>
             </systemProperties>
           </configuration>
           <executions>
@@ -3092,6 +3100,79 @@
       <activation>
         <property>
           <name>spark4.2</name>
+        </property>
+      </activation>
+    </profile>
+    <profile>
+      <id>spark4.3</id>
+      <properties>
+        <spark4.version>${spark43.version}</spark4.version>
+        <spark.version>${spark4.version}</spark.version>
+        <sparkbundle.version>4.3</sparkbundle.version>
+        <scala13.version>2.13.18</scala13.version>
+        <scala.version>${scala13.version}</scala.version>
+        <scala.binary.version>2.13</scala.binary.version>
+        <hudi.spark.module>hudi-spark4.3.x</hudi.spark.module>
+        <hudi.spark.version.source.dir>src/main/scala-spark4.3</hudi.spark.version.source.dir>
+        <!-- This glob has to include hudi-spark4-common -->
+        <hudi.spark.common.module>hudi-spark4-common</hudi.spark.common.module>
+        <scalatest.version>${scalatest.spark4.version}</scalatest.version>
+        <hadoop.version>3.5.0</hadoop.version>
+        <kafka.version>3.9.2</kafka.version>
+        <hive.storage.version>2.8.1</hive.storage.version>
+        <!-- Spark 4.x ships libthrift 0.16.0 alongside the same Hive 2.3.10 client;
+             keep the Spark-selected version instead of the Spark 3 minimum. See #19680. -->
+        <hive.libthrift.version>0.16.0</hive.libthrift.version>
+        <!-- TODO: Enable lance tests on Spark 4.3 -->
+        <lance.spark.artifact>lance-spark-4.0_2.13</lance.spark.artifact>
+        <lance.skip.tests>true</lance.skip.tests>
+        <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
+                   hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
+                   bringing these file-formats as dependencies as well, we need to make sure that versions are
+                   synchronized to avoid classpath ambiguity -->
+        <parquet.version>1.17.0</parquet.version>
+        <orc.spark.version>2.3.0</orc.spark.version>
+        <avro.version>1.12.1</avro.version>
+        <antlr.version>4.13.1</antlr.version>
+        <fasterxml.spark4.version>2.21.2</fasterxml.spark4.version>
+        <fasterxml.version>${fasterxml.spark4.version}</fasterxml.version>
+        <fasterxml.jackson.annotation.version>2.21</fasterxml.jackson.annotation.version>
+        <fasterxml.jackson.databind.version>${fasterxml.spark4.version}</fasterxml.jackson.databind.version>
+        <fasterxml.jackson.module.scala.version>${fasterxml.spark4.version}</fasterxml.jackson.module.scala.version>
+        <fasterxml.jackson.dataformat.yaml.version>${fasterxml.spark4.version}
+        </fasterxml.jackson.dataformat.yaml.version>
+        <pulsar.spark.version>${pulsar.spark.scala13.version}</pulsar.spark.version>
+        <glassfish.version>3.1.11</glassfish.version>
+        <log4j2.version>2.25.4</log4j2.version>
+        <slf4j.version>2.0.17</slf4j.version>
+        <!-- Spark 4.2 relocated lz4-java from org.lz4 to at.yawk.lz4 with a newer version;
+             both provide the same net.jpountz.lz4 package so we must use the Spark-provided one
+             to avoid classpath conflicts (the newer version adds LZ4BlockInputStream.newBuilder()) -->
+        <lz4.groupId>at.yawk.lz4</lz4.groupId>
+        <lz4.version>1.11.0</lz4.version>
+        <skip.hudi-spark2.unit.tests>true</skip.hudi-spark2.unit.tests>
+        <skipITs>true</skipITs>
+      </properties>
+      <modules>
+        <module>hudi-spark-datasource/hudi-spark4.3.x</module>
+        <module>hudi-spark-datasource/hudi-spark4-common</module>
+      </modules>
+      <dependencies>
+        <dependency>
+          <groupId>org.slf4j</groupId>
+          <artifactId>slf4j-log4j12</artifactId>
+          <version>${slf4j.version}</version>
+          <scope>test</scope>
+        </dependency>
+        <dependency>
+          <groupId>${hive.groupid}</groupId>
+          <artifactId>hive-storage-api</artifactId>
+          <version>${hive.storage.version}</version>
+        </dependency>
+      </dependencies>
+      <activation>
+        <property>
+          <name>spark4.3</name>
         </property>
       </activation>
     </profile>

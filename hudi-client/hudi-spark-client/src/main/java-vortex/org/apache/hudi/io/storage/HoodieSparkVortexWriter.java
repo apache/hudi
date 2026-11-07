@@ -34,10 +34,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.types.pojo.Schema;
+import org.apache.spark.sql.HoodieSparkVortexArrowUtils;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.execution.arrow.ArrowWriter$;
 import org.apache.spark.sql.types.StructType;
-import org.apache.spark.sql.util.ArrowUtils$;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.io.IOException;
@@ -152,7 +152,7 @@ public class HoodieSparkVortexWriter extends HoodieBaseVortexWriter<InternalRow,
     super(file, DEFAULT_BATCH_SIZE, allocatorSize, flushByteWatermark,
         bloomFilterOpt.map(HoodieBloomFilterRowWriteSupport::new));
     this.sparkSchema = sparkSchema;
-    this.arrowSchema = ArrowUtils$.MODULE$.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE, false, false);
+    this.arrowSchema = HoodieSparkVortexArrowUtils.toArrowSchema(sparkSchema, DEFAULT_TIMEZONE);
     this.fileName = UTF8String.fromString(file.getName());
     this.instantTime = UTF8String.fromString(instantTime);
     this.populateMetaFields = populateMetaFields;
