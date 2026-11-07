@@ -87,7 +87,9 @@ public class HoodieRowDataParquetWriter extends HoodieBaseParquetWriter<RowData>
     } else {
       rowWithMeta = HoodieRowDataCreation.create(
           metaFieldsMode.isCommitTimePopulated() ? instantTime : null,
-          null, null, null,
+          metaFieldsMode.isCommitSeqnoPopulated() ? seqIdGenerator.apply(getWrittenRecordCount()) : null,
+          null,
+          metaFieldsMode.isPartitionPathPopulated() ? key.getPartitionPath() : null,
           metaFieldsMode.isFileNamePopulated() ? fileName : null,
           row, withOperation, true);
     }
