@@ -53,6 +53,12 @@ public class SparkUpsertDeltaCommitPartitioner<T> extends UpsertPartitioner<T> {
 
   @Override
   protected List<SmallFile> getSmallFiles(String partitionPath) {
+    if (config.shouldWriteUpdatesAsDeletesAndInserts()) {
+      // Small-file handling routes records into existing file groups through merges or log
+      // appends, but this write mode requires updates to append positional deletes and inserts
+      // to land in base files of file groups chosen by the insert partitioner
+      return Collections.emptyList();
+    }
     // Init here since this class (and member variables) might not have been initialized
     HoodieTimeline commitTimeline = table.getCompletedCommitsTimeline();
 
