@@ -440,11 +440,29 @@ public class TestExpressionEvaluators {
     ExpressionEvaluators.Evaluator or = fromExpression(CallExpression.permanent(
         BuiltInFunctionDefinitions.OR, Arrays.asList(equals, greaterThan), DataTypes.BOOLEAN()));
 
-    assertFalse(not.eval(stats));
+    assertTrue(not.eval(stats));
     assertFalse(and.eval(stats));
     assertTrue(or.eval(stats));
     assertEquals(2, ((ExpressionEvaluators.Or) or).getEvaluators().length);
     assertEquals(2, fromExpression(Arrays.<ResolvedExpression>asList(equals, greaterThan)).size());
+  }
+
+  @Test
+  void testNotConservativelyRetainsCandidates() {
+    FieldReferenceExpression ref = new FieldReferenceExpression("f_int", DataTypes.INT(), 2, 2);
+    CallExpression equals = call(BuiltInFunctionDefinitions.EQUALS, ref, new ValueLiteralExpression(12));
+    CallExpression not = CallExpression.permanent(BuiltInFunctionDefinitions.NOT, List.of(equals), DataTypes.BOOLEAN());
+    CallExpression nestedNot = CallExpression.permanent(BuiltInFunctionDefinitions.NOT, List.of(not), DataTypes.BOOLEAN());
+    CallExpression greaterThan = call(BuiltInFunctionDefinitions.GREATER_THAN, ref, new ValueLiteralExpression(20));
+    CallExpression and = CallExpression.permanent(BuiltInFunctionDefinitions.AND, Arrays.asList(not, greaterThan), DataTypes.BOOLEAN());
+    CallExpression or = CallExpression.permanent(BuiltInFunctionDefinitions.OR, Arrays.asList(not, greaterThan), DataTypes.BOOLEAN());
+
+    Map<String, ColumnStats> mixed = convertColumnStats(intIndexRow(12, 13, 0L), queryFields(2));
+    assertTrue(fromExpression(not).eval(mixed));
+    assertTrue(fromExpression(nestedNot).eval(mixed));
+    assertFalse(fromExpression(and).eval(mixed));
+    assertTrue(fromExpression(or).eval(mixed));
+    assertTrue(fromExpression(not).eval(Map.of("f_int", new ColumnStats(null, null, 2))));
   }
 
   @Test

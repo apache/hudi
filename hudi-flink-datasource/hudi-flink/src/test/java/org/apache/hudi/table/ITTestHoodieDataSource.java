@@ -43,6 +43,8 @@ import org.apache.hudi.index.bucket.partition.PartitionBucketIndexUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.sink.buffer.BufferMemoryType;
 import org.apache.hudi.sink.buffer.BufferType;
+import org.apache.hudi.source.prune.ColumnStatsProbe;
+import org.apache.hudi.source.stats.FileStatsIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.catalog.HoodieCatalogTestUtils;
@@ -61,6 +63,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.configuration.JobManagerOptions;
 import org.apache.flink.core.execution.JobClient;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.EnvironmentSettings;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableEnvironment;
@@ -71,6 +74,10 @@ import org.apache.flink.table.api.internal.TableEnvironmentImpl;
 import org.apache.flink.table.catalog.AbstractCatalog;
 import org.apache.flink.table.catalog.ObjectPath;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.expressions.CallExpression;
+import org.apache.flink.table.expressions.FieldReferenceExpression;
+import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.types.Row;
 import org.apache.flink.util.CollectionUtil;
 import org.apache.parquet.avro.AvroParquetReader;
@@ -2986,6 +2993,57 @@ public class ITTestHoodieDataSource {
       assertRowsEquals(execSelectSqlWithExpectedNum(readerEnv, query, 2), expected);
     } else {
       assertRowsEquals(execSelectSql(readerEnv, query), expected);
+    }
+  }
+
+  @Test
+  void testDataSkippingWithNotExpression() throws Exception {
+    TableEnvironment tableEnv = batchTableEnv;
+    tableEnv.executeSql(sql("t1")
+        .option(FlinkOptions.PATH, tempFile.getAbsolutePath())
+        .options(getDefaultKeys())
+        .option(FlinkOptions.TABLE_TYPE, COPY_ON_WRITE)
+        .option(FlinkOptions.WRITE_TASKS, 1)
+        .option(FlinkOptions.METADATA_ENABLED, true)
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), true)
+        .option(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), false)
+        .option(HoodieMetadataConfig.COLUMN_STATS_INDEX_FOR_COLUMNS.key(), "age")
+        .option(FlinkOptions.READ_DATA_SKIPPING_ENABLED, false)
+        .end());
+
+    // One file in par1 has age stats [23, 33], containing both matching and non-matching rows.
+    tableEnv.executeSql("insert into t1 values "
+        + "('id1', 'alice', 23, TIMESTAMP '1970-01-01 00:00:01', 'par1'), "
+        + "('id2', 'bob', 33, TIMESTAMP '1970-01-01 00:00:02', 'par1')").await();
+
+    String query = "select * from t1 where not (age = 23)";
+    String expected = "[+I[id2, bob, 33, 1970-01-01T00:00:02, par1]]";
+    assertRowsEquals(execSelectSql(tableEnv, query), expected);
+
+    tableEnv.executeSql("alter table t1 set ('read.data.skipping.enabled' = 'true')");
+    assertRowsEquals(execSelectSql(tableEnv, query), expected);
+
+    // Flink rewrites the SQL predicate to age <> 23. Exercise the unreduced NOT expression
+    // against the same file statistics so this test covers the NOT evaluator directly.
+    CallExpression equals = CallExpression.permanent(BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(new FieldReferenceExpression("age", DataTypes.INT(), 0, 2), new ValueLiteralExpression(23)),
+        DataTypes.BOOLEAN());
+    CallExpression not = CallExpression.permanent(BuiltInFunctionDefinitions.NOT,
+        Collections.singletonList(equals), DataTypes.BOOLEAN());
+    ColumnStatsProbe probe = ColumnStatsProbe.newInstance(Collections.singletonList(not));
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "false");
+    try (FileStatsIndex index = new FileStatsIndex(tempFile.getAbsolutePath(), TestConfigurations.ROW_TYPE,
+        conf, StreamerUtil.createMetaClient(conf))) {
+      List<RowData> stats = index.readColumnStatsIndexByColumns(new String[] {"age"}, Collections.emptyList());
+      assertEquals(1, stats.size());
+      List<RowData> transposed = index.transposeColumnStatsIndex(stats, new String[] {"age"}).getLeft();
+      assertEquals(23, transposed.get(0).getInt(2));
+      assertEquals(33, transposed.get(0).getInt(3));
+      List<String> files = stats.stream().map(row -> row.getString(0).toString()).collect(Collectors.toList());
+      assertEquals(Collections.singleton(files.get(0)), index.computeCandidateFiles(probe, files, Collections.emptyList()));
     }
   }
 
