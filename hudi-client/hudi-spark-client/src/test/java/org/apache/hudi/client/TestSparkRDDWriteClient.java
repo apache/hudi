@@ -34,6 +34,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.table.HoodieTable;
@@ -68,6 +69,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
@@ -320,6 +323,33 @@ class TestSparkRDDWriteClient extends SparkClientFunctionalTestHarness {
 
     // Reset speculation config after test
     jsc().sc().conf().set("spark.speculation", "false");
+  }
+
+  /**
+   * The speculative-execution guardrail throws after the base constructors have returned, so the
+   * index they created has to be released on that path too.
+   */
+  @Test
+  public void testIndexIsClosedWhenSpeculativeExecutionGuardrailFails() throws IOException {
+    jsc().sc().conf().set("spark.speculation", "true");
+    try {
+      HoodieTableMetaClient metaClient = getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), new Properties());
+      HoodieWriteConfig writeConfig = getConfigBuilder(true)
+          .withPath(metaClient.getBasePath().toString())
+          .build();
+      HoodieIndex index = mock(HoodieIndex.class);
+
+      assertThrows(HoodieException.class, () -> new SparkRDDWriteClient(context(), writeConfig) {
+        @Override
+        protected HoodieIndex createIndex(HoodieWriteConfig config) {
+          return index;
+        }
+      });
+
+      verify(index).close();
+    } finally {
+      jsc().sc().conf().set("spark.speculation", "false");
+    }
   }
 
   @Test
