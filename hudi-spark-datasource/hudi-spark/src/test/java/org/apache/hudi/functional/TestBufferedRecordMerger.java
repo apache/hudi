@@ -357,14 +357,14 @@ class TestBufferedRecordMerger extends SparkClientFunctionalTestHarness {
     BufferedRecord<InternalRow> newBufferedRecord =
         new BufferedRecord<>(RECORD_KEY, ORDERING_VALUE - 1, newRecord, 2, null);
     Option<BufferedRecord<InternalRow>> deltaResult = merger.deltaMerge(newBufferedRecord, oldBufferedRecord);
-    assertTrue(deltaResult.isPresent());
-    BufferedRecord<InternalRow> mergedRecord = deltaResult.get();
     InternalRow expected = createFullRecordForPartial(
         (int) ORDERING_VALUE - 1, "new_id", "New Name", 25, "Old City", 1000L);
     if (mergeMode == COMMIT_TIME_ORDERING) {
-      assertRowEqual(expected, mergedRecord.getRecord(), READER_SCHEMA);
+      assertTrue(deltaResult.isPresent());
+      assertRowEqual(expected, deltaResult.get().getRecord(), READER_SCHEMA);
     } else {
-      assertRowEqual(oldRecord, mergedRecord.getRecord(), READER_SCHEMA);
+      // The buffered full record wins as a whole, so it stays in place.
+      assertFalse(deltaResult.isPresent());
     }
     // Test 2: New record has higher columns ordering value.
     newRecord = createPartialRecord((int) ORDERING_VALUE + 1, "new_id", "New Name");
