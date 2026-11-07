@@ -219,6 +219,8 @@ public class TestHoodieBloomIndex extends TestHoodieMetadataBase {
     testTable.doWriteOperation(commitTime, WriteOperationType.UPSERT, Arrays.asList(partitions.get(2)),
         partitionToFilesNameLengthMap, false, false);
 
+    metaClient.reloadActiveTimeline();
+    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 
