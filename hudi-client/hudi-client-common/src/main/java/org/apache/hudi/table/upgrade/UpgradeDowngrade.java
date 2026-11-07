@@ -26,6 +26,8 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpgradeDowngradeException;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metadata.HoodieMetadataWriteUtils;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
@@ -36,6 +38,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Hashtable;
 import java.util.Map;
+
+import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
 
 /**
  * Helper class to assist in upgrading/downgrading Hoodie when there is a version change.
@@ -134,7 +138,9 @@ public class UpgradeDowngrade {
     // Perform the actual upgrade/downgrade; this has to be idempotent, for now.
     LOG.info("Attempting to move table from version " + fromVersion + " to " + toVersion);
     Map<ConfigProperty, String> tableProps = new Hashtable<>();
-    if (fromVersion.versionCode() < toVersion.versionCode()) {
+    boolean isUpgrade = fromVersion.versionCode() < toVersion.versionCode();
+    resolveComplexKeygenEncoding(tableProps, isUpgrade ? "upgrade" : "downgrade");
+    if (isUpgrade) {
       // upgrade
       while (fromVersion.versionCode() < toVersion.versionCode()) {
         HoodieTableVersion nextVersion = HoodieTableVersion.versionFromCode(fromVersion.versionCode() + 1);
@@ -159,6 +165,22 @@ public class UpgradeDowngrade {
 
     HoodieTableConfig.update(metaClient.getStorage(),
         metaClient.getMetaPath(), metaClient.getTableConfig().getProps());
+  }
+
+  /**
+   * Resolves, before any hop runs, the record key encoding of a single-field complex key generator table that
+   * does not carry {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} yet, and persists it with the version change.
+   */
+  private void resolveComplexKeygenEncoding(Map<ConfigProperty, String> tableProps, String operation) {
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    if (!KeyGenUtils.requireComplexKeyGenEncodingTracked(tableConfig) || tableConfig.getComplexKeyGenEncoding().isPresent()) {
+      return;
+    }
+    ComplexKeyGenEncoding encoding = KeyGenUtils.resolveComplexKeyGenEncodingForWrite(metaClient, config)
+        .orElseThrow(() -> new HoodieUpgradeDowngradeException(getComplexKeygenErrorMessage(operation)));
+    tableProps.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name());
+    LOG.info("Recording complex keygen record key encoding {} on table {} as part of the {}",
+        encoding, metaClient.getBasePath(), operation);
   }
 
   protected Map<ConfigProperty, String> upgrade(HoodieTableVersion fromVersion, HoodieTableVersion toVersion, String instantTime) {

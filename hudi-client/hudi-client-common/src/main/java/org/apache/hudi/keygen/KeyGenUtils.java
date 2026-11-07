@@ -19,31 +19,77 @@
 package org.apache.hudi.keygen;
 
 import org.apache.hudi.avro.HoodieAvroUtils;
+import org.apache.hudi.client.transaction.TransactionManager;
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
+import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
+import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
+import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.PartitionPathEncodeUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.io.storage.HoodieFileReader;
+import org.apache.hudi.io.storage.HoodieIOFactory;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.config.HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING;
+import static org.apache.hudi.config.HoodieWriteConfig.ENABLE_COMPLEX_KEYGEN_VALIDATION;
 
 public class KeyGenUtils {
+
+  /**
+   * How many of the most recent ingesting commits to inspect when deducing the record key encoding from data. Bounded so
+   * that a table whose latest commits wrote no data files does not turn a write into a full timeline scan.
+   */
+  private static final int MAX_INSTANTS_SCANNED_FOR_ENCODING = 20;
+
+  /**
+   * Operations that rewrite records other commits keyed (and stamped), so a record they wrote does not show how the
+   * table's last writer keys records.
+   */
+  private static final Set<WriteOperationType> REWRITING_OPERATIONS = new HashSet<>(Arrays.asList(
+      WriteOperationType.CLUSTER, WriteOperationType.COMPACT, WriteOperationType.LOG_COMPACT));
+  private static final Logger LOG = LoggerFactory.getLogger(KeyGenUtils.class);
 
   protected static final String NULL_RECORDKEY_PLACEHOLDER = "__null__";
   protected static final String EMPTY_RECORDKEY_PLACEHOLDER = "__empty__";
@@ -277,10 +323,29 @@ public class KeyGenUtils {
     // spark-sql sets record key config to empty string for update, and couple of other statements.
   }
 
-  public static boolean isComplexKeyGeneratorWithSingleRecordKeyField(HoodieTableConfig tableConfig) {
-    Option<String[]> recordKeyFields = tableConfig.getRecordKeyFields();
-    return KeyGeneratorType.isComplexKeyGenerator(tableConfig)
-        && recordKeyFields.isPresent() && recordKeyFields.get().length == 1;
+  /**
+   * Guidance for a write that keys records on a tracked table whose encoding has not been recorded yet.
+   */
+  public static String getComplexKeygenEncodingMissingMessage() {
+    return "This table uses the complex key generator with a single record key field, but "
+        + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key() + " is not recorded in hoodie.properties, so the "
+        + "writer cannot tell whether the stored _hoodie_record_key values carry the `<field>:` prefix (HUDI-7001). "
+        + "The Spark datasource, Spark SQL, Hudi Streamer and the Java write client record it from the table's data "
+        + "when ingestion is set up, and so does any table upgrade or downgrade: run one of those first, or set the "
+        + "property to FIELD_PREFIXED or VALUE_ONLY to match the stored keys. See "
+        + "https://hudi.apache.org/docs/deployment#complex-key-generator.";
+  }
+
+  /**
+   * Guidance for a write whose config would key records differently from the encoding the table records.
+   */
+  public static String getComplexKeygenEncodingMismatchMessage(ComplexKeyGenEncoding recorded) {
+    return "This table uses the complex key generator with a single record key field and records "
+        + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key() + "=" + recorded + ", but this writer's config would key "
+        + "records " + (recorded.encodesFieldName() ? "without" : "with") + " the `<field>:` prefix, so its records "
+        + "would not match the stored ones (HUDI-7001). Set " + HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key() + "="
+        + recorded + " (or hoodie.write.complex.keygen.new.encoding=" + !recorded.encodesFieldName()
+        + ") on the writer, or restart a job that planned its keys before the encoding was recorded.";
   }
 
   public static String getComplexKeygenErrorMessage(String operation) {
@@ -295,11 +360,286 @@ public class KeyGenUtils {
         + "`hoodie.write.complex.keygen.validation.enable=false` to skip this validation.";
   }
 
+  /**
+   * Whether a complex key generator with a single record key field prepends the field name to the key.
+   *
+   * <p>{@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} wins whenever it is present in the properties, because
+   * it describes what the table's data carries. Otherwise {@code hoodie.write.complex.keygen.new.encoding} decides.
+   */
   public static boolean encodeSingleKeyFieldNameForComplexKeyGen(TypedProperties props) {
+    String tableEncoding = ConfigUtils.getStringWithAltKeys(props, HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, StringUtils.EMPTY_STRING);
+    if (!StringUtils.isNullOrEmpty(tableEncoding)) {
+      return ComplexKeyGenEncoding.fromString(tableEncoding).encodesFieldName();
+    }
     return !ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING);
   }
 
-  public static boolean mayUseNewEncodingForComplexKeyGen(HoodieTableConfig tableConfig) {
-    return isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig);
+  /**
+   * Whether the table's record key encoding is tracked by {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING}:
+   * a complex key generator with a single record key field and populated meta fields.
+   * Without the meta fields there is no stored key whose encoding could diverge from the key generator's.
+   */
+  public static boolean requireComplexKeyGenEncodingTracked(HoodieTableConfig tableConfig) {
+    return tableConfig.isComplexKeyGenWithSingleRecordKeyField() && tableConfig.populateMetaFields();
   }
+
+  /**
+   * Cheap pre-check on the write config alone, before any table config is loaded: whether the write may target a
+   * table whose encoding is tracked and not yet recorded. A write config that names a built-in key generator other
+   * than the complex one, keys on several fields or does not populate the meta fields cannot need the recording, so
+   * callers skip loading the table config for it. A key generator that is not a built-in one (such as the
+   * wrapper Spark SQL configures) is decided by the table's own key generator class when it is present, and
+   * cannot be ruled out otherwise.
+   */
+  public static boolean mayNeedComplexKeyGenEncodingRecorded(HoodieConfig writeConfig) {
+    // the recorded encoding is a table property: a write option of the same name does not say it is recorded
+    if (!writeConfig.getBooleanOrDefault(HoodieTableConfig.POPULATE_META_FIELDS)) {
+      return false;
+    }
+    // the table's own key generator, merged into the write options for existing tables, is what keyed its data
+    String keyGeneratorClass = writeConfig.getProps().getProperty(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key());
+    if (keyGeneratorClass == null && writeConfig.contains(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME)) {
+      keyGeneratorClass = writeConfig.getString(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME);
+    }
+    if (keyGeneratorClass == null || !keyGeneratorClass.trim().startsWith(BUILT_IN_KEY_GENERATOR_PACKAGE)) {
+      // no key generator named, or a wrapper / custom class: the table config has to decide
+      return true;
+    }
+    if (!isComplexKeyGeneratorClass(keyGeneratorClass.trim())) {
+      return false;
+    }
+    String recordKeyFields = writeConfig.contains(KeyGeneratorOptions.RECORDKEY_FIELD_NAME)
+        ? writeConfig.getString(KeyGeneratorOptions.RECORDKEY_FIELD_NAME)
+        : writeConfig.getString(HoodieTableConfig.RECORDKEY_FIELDS);
+    return recordKeyFields != null && Arrays.stream(recordKeyFields.split(","))
+        .map(String::trim).filter(field -> !field.isEmpty()).count() == 1;
+  }
+
+  private static final String BUILT_IN_KEY_GENERATOR_PACKAGE = "org.apache.hudi.keygen.";
+
+  private static boolean isComplexKeyGeneratorClass(String keyGeneratorClass) {
+    return keyGeneratorClass.equals(ComplexAvroKeyGenerator.class.getName())
+        || keyGeneratorClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator");
+  }
+
+  /**
+   * The record key encoding a new single-field complex key generator table is created with: the explicitly declared
+   * {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING}, otherwise the one {@code hoodie.write.complex.keygen.new.encoding}
+   * makes the writer produce.
+   */
+  public static ComplexKeyGenEncoding getDeclaredComplexKeyGenEncoding(TypedProperties props) {
+    String declared = ConfigUtils.getStringWithAltKeys(props, HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, StringUtils.EMPTY_STRING);
+    return !StringUtils.isNullOrEmpty(declared)
+        ? ComplexKeyGenEncoding.fromString(declared)
+        : ComplexKeyGenEncoding.fromUseNewEncoding(ConfigUtils.getBooleanWithAltKeys(props, COMPLEX_KEYGEN_NEW_ENCODING));
+  }
+
+  /**
+   * Records a missing complex key generator encoding before ingestion starts. Engine entry points call this
+   * once during setup, before creating record keys. Existing data determines the encoding under the table lock.
+   */
+  public static void recordComplexKeygenEncodingIfMissing(HoodieTableMetaClient metaClient, HoodieWriteConfig config) {
+    if (!requireComplexKeyGenEncodingTracked(metaClient.getTableConfig())
+        || metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
+      return;
+    }
+    TransactionManager transactionManager = new TransactionManager(config, metaClient.getStorage());
+    try {
+      transactionManager.beginTransaction(Option.empty(), Option.empty());
+      try {
+        metaClient.reloadTableConfig();
+        if (metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
+          return;
+        }
+        ComplexKeyGenEncoding encoding = resolveComplexKeyGenEncodingForWrite(metaClient, config)
+            .orElseThrow(() -> new HoodieException(getComplexKeygenErrorMessage("ingestion")));
+        Properties props = new Properties();
+        props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
+        HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
+        metaClient.reloadTableConfig();
+        LOG.info("Recorded complex keygen record key encoding {} on table {}", encoding, metaClient.getBasePath());
+      } finally {
+        transactionManager.endTransaction(Option.empty());
+      }
+    } finally {
+      transactionManager.close();
+    }
+  }
+
+  /**
+   * Resolves the record key encoding a writer must use and persist on a table whose encoding is tracked
+   * ({@link #requireComplexKeyGenEncodingTracked}) but not yet recorded: for a table that was never written to,
+   * the encoding the writer's config keys with ({@link #getDeclaredComplexKeyGenEncoding}); otherwise the encoding
+   * deduced from the data,
+   * falling back to the configured one when {@code hoodie.write.complex.keygen.validation.enable} is false.
+   *
+   * @return empty when the encoding cannot be determined and the validation is enabled; the caller fails
+   * the operation with {@link #getComplexKeygenErrorMessage}
+   */
+  public static Option<ComplexKeyGenEncoding> resolveComplexKeyGenEncodingForWrite(HoodieTableMetaClient metaClient,
+                                                                                    HoodieWriteConfig config) {
+    if (!hasCompletedCommits(metaClient)) {
+      // Nothing was ever written, so the keys this writer produces are the ones the table will carry.
+      return Option.of(getDeclaredComplexKeyGenEncoding(config.getProps()));
+    }
+    Option<ComplexKeyGenEncoding> deduced = deduceComplexKeyGenEncodingFromData(metaClient);
+    if (deduced.isPresent() || config.enableComplexKeygenValidation()) {
+      return deduced;
+    }
+    ComplexKeyGenEncoding configured =
+        ComplexKeyGenEncoding.fromUseNewEncoding(config.getBooleanOrDefault(COMPLEX_KEYGEN_NEW_ENCODING));
+    LOG.warn("Could not determine the record key encoding of table {} from its data; recording the configured {} "
+            + "because {} is disabled. If the existing keys are not {}, fix {} and rerun, or the records written "
+            + "from now on will not match the existing ones.",
+        metaClient.getBasePath(), configured, ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), configured,
+        COMPLEX_KEYGEN_NEW_ENCODING.key());
+    return Option.of(configured);
+  }
+
+  /**
+   * Deduces the record key encoding of a single-field complex key generator table from the
+   * {@code _hoodie_record_key} of a record its most recent commit wrote.
+   *
+   * @return {@link ComplexKeyGenEncoding#FIELD_PREFIXED} for a table that was never written to, the encoding of a
+   * record the most recent commit with a readable data file wrote otherwise, or empty when none
+   * of the commits inspected yields a record key
+   */
+  public static Option<ComplexKeyGenEncoding> deduceComplexKeyGenEncodingFromData(HoodieTableMetaClient metaClient) {
+    String expectedPrefix = metaClient.getTableConfig().getRecordKeyFields().get()[0] + DEFAULT_COLUMN_VALUE_SEPARATOR;
+    HoodieTimeline completedTimeline = getCompletedCommitsTimeline(metaClient);
+    if (completedTimeline.empty()) {
+      // Nothing was ever written, so there is no stored key whose encoding could differ from the canonical one.
+      return Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED);
+    }
+    int scanned = 0;
+    for (HoodieInstant instant : completedTimeline.getReverseOrderedInstants().collect(Collectors.toList())) {
+      if (scanned >= MAX_INSTANTS_SCANNED_FOR_ENCODING) {
+        break;
+      }
+      HoodieCommitMetadata commitMetadata = getCommitMetadata(instant, completedTimeline);
+      if (REWRITING_OPERATIONS.contains(commitMetadata.getOperationType())) {
+        // clustering and compaction rewrite records other commits keyed, so they say nothing about the last writer
+        continue;
+      }
+      scanned++;
+      for (HoodieWriteStat writeStat : commitMetadata.getWriteStats()) {
+        if (StringUtils.isNullOrEmpty(writeStat.getPath())) {
+          continue;
+        }
+        StoragePath path = new StoragePath(metaClient.getBasePath(), writeStat.getPath());
+        Option<String> recordKey = readLatestRecordKey(metaClient, path, instant.getTimestamp());
+        if (recordKey.isPresent()) {
+          ComplexKeyGenEncoding encoding =
+              ComplexKeyGenEncoding.fromUseNewEncoding(!recordKey.get().startsWith(expectedPrefix));
+          LOG.info("Deduced complex keygen record key encoding {} of table {} from {}",
+              encoding, metaClient.getBasePath(), path);
+          return Option.of(encoding);
+        }
+      }
+    }
+    LOG.warn("The most recent {} ingesting commit(s) of table {} yielded no data file with a readable record key, so the "
+            + "complex keygen record key encoding cannot be deduced from the data.",
+        scanned, metaClient.getBasePath());
+    return Option.empty();
+  }
+
+  /**
+   * The table's current completed commits, read afresh (the caller may hold the lock and need commits made since its
+   * meta client loaded the timeline) without replacing the timeline the caller's meta client caches.
+   */
+  private static HoodieTimeline getCompletedCommitsTimeline(HoodieTableMetaClient metaClient) {
+    return new HoodieActiveTimeline(metaClient).getCommitsTimeline().filterCompletedInstants();
+  }
+
+  /**
+   * Whether the table has any completed commit, read afresh; a table without one holds no stored key yet.
+   */
+  public static boolean hasCompletedCommits(HoodieTableMetaClient metaClient) {
+    return !getCompletedCommitsTimeline(metaClient).empty();
+  }
+
+  private static HoodieCommitMetadata getCommitMetadata(HoodieInstant instant, HoodieTimeline timeline) {
+    try {
+      return TimelineUtils.getCommitMetadata(instant, timeline);
+    } catch (IOException e) {
+      throw new HoodieIOException("Failed to read the commit metadata of " + instant, e);
+    }
+  }
+
+  /**
+   * Reads the {@code _hoodie_record_key} of the record the given commit wrote, which is keyed the way that commit's
+   * writer keys records: in a base file, the record with the greatest {@code _hoodie_commit_time} (a commit that
+   * rewrites a file, e.g. one packing inserts into a small file, carries the file's older records with the keys
+   * their writers gave them); in a log file, the first record of the data block the commit appended, else of the
+   * newest data block. Empty when the file is missing, holds no record, or cannot be read: a single unreadable file
+   * must not fail the deduction, which reports an undetermined encoding instead.
+   */
+  private static Option<String> readLatestRecordKey(HoodieTableMetaClient metaClient, StoragePath path, String instantTime) {
+    HoodieStorage storage = metaClient.getStorage();
+    try {
+      if (!storage.exists(path)) {
+        return Option.empty();
+      }
+      if (FSUtils.isLogFile(path)) {
+        return readRecordKeyFromLogFile(storage, path, instantTime);
+      }
+      try (HoodieFileReader<IndexedRecord> reader = HoodieIOFactory.getIOFactory(storage)
+          .getReaderFactory(HoodieRecordType.AVRO).getFileReader(new HoodieConfig(), path)) {
+        Schema fileSchema = reader.getSchema();
+        Schema projection = HoodieAvroUtils.generateProjectionSchema(fileSchema,
+            Arrays.asList(HoodieRecord.COMMIT_TIME_METADATA_FIELD, HoodieRecord.RECORD_KEY_METADATA_FIELD));
+        int commitTimePos = projection.getField(HoodieRecord.COMMIT_TIME_METADATA_FIELD).pos();
+        int recordKeyPos = projection.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD).pos();
+        String latestCommitTime = null;
+        String latestRecordKey = null;
+        try (ClosableIterator<HoodieRecord<IndexedRecord>> records = reader.getRecordIterator(fileSchema, projection)) {
+          while (records.hasNext()) {
+            IndexedRecord record = records.next().getData();
+            Object commitTime = record.get(commitTimePos);
+            Object recordKey = record.get(recordKeyPos);
+            if (commitTime == null || recordKey == null) {
+              continue;
+            }
+            if (latestCommitTime == null
+                || HoodieTimeline.compareTimestamps(commitTime.toString(), HoodieTimeline.GREATER_THAN, latestCommitTime)) {
+              latestCommitTime = commitTime.toString();
+              latestRecordKey = recordKey.toString();
+            }
+            if (latestCommitTime.equals(instantTime)) {
+              // nothing in this commit's file is newer than a record the commit itself wrote
+              break;
+            }
+          }
+        }
+        return Option.ofNullable(latestRecordKey);
+      }
+    } catch (Exception e) {
+      LOG.warn("Could not read a record key from {} to deduce the complex keygen record key encoding", path, e);
+      return Option.empty();
+    }
+  }
+
+  private static Option<String> readRecordKeyFromLogFile(HoodieStorage storage, StoragePath path, String instantTime) throws IOException {
+    HoodieDataBlock chosen = null;
+    try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(storage, new HoodieLogFile(path), null)) {
+      while (reader.hasNext()) {
+        HoodieLogBlock block = reader.next();
+        if (block instanceof HoodieDataBlock) {
+          chosen = (HoodieDataBlock) block;
+          if (instantTime.equals(block.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME))) {
+            break;
+          }
+        }
+      }
+      if (chosen == null) {
+        return Option.empty();
+      }
+      try (ClosableIterator<HoodieRecord<Object>> records = chosen.getRecordIterator(HoodieRecordType.AVRO)) {
+        return records.hasNext()
+            ? Option.ofNullable(records.next().getRecordKey(chosen.getSchema(), HoodieRecord.RECORD_KEY_METADATA_FIELD))
+            : Option.empty();
+      }
+    }
+  }
+
 }

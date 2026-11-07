@@ -22,10 +22,14 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.FileIOUtils;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.util.StreamerUtil;
 
 import org.apache.flink.configuration.Configuration;
@@ -77,6 +81,38 @@ public class TestStreamerUtil {
     HoodieTableMetaClient metaClient2 = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
     assertFalse(metaClient2.getTableConfig().getPartitionFields().isPresent());
     assertEquals(metaClient2.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
+  }
+
+  /** A single-field complex keygen job without a recorded encoding defaults to the keys it produces, and a new table records it. */
+  @Test
+  void testComplexKeygenEncodingDefaultsToTheProducedKeys() throws IOException {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
+    StreamerUtil.checkKeygenGenerator(true, conf);
+    assertEquals(ComplexAvroKeyGenerator.class.getName(), conf.get(FlinkOptions.KEYGEN_CLASS_NAME));
+    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED.name(), conf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
+
+    StreamerUtil.initTableIfNotExists(conf);
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
+    assertEquals(Option.of(ComplexKeyGenEncoding.FIELD_PREFIXED), metaClient.getTableConfig().getComplexKeyGenEncoding());
+
+    // new.encoding=true makes the job key bare values; an already set encoding is kept
+    Configuration newEncodingConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    newEncodingConf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+    newEncodingConf.set(FlinkOptions.PARTITION_PATH_FIELD, "partition,ts");
+    newEncodingConf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), "true");
+    StreamerUtil.checkKeygenGenerator(true, newEncodingConf);
+    assertEquals(ComplexKeyGenEncoding.VALUE_ONLY.name(), newEncodingConf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
+    newEncodingConf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), ComplexKeyGenEncoding.FIELD_PREFIXED.name());
+    StreamerUtil.checkKeygenGenerator(true, newEncodingConf);
+    assertEquals(ComplexKeyGenEncoding.FIELD_PREFIXED.name(), newEncodingConf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
+
+    // not a single-field complex key: nothing to track
+    Configuration multiKeyConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    multiKeyConf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid,name");
+    StreamerUtil.checkKeygenGenerator(true, multiKeyConf);
+    assertFalse(multiKeyConf.containsKey(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key()));
   }
 
   @Test

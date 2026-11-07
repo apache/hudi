@@ -18,9 +18,11 @@
 
 package org.apache.hudi.sink.bulk;
 
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieKeyException;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.HoodieTableFactory;
 import org.apache.hudi.utils.TestConfigurations;
@@ -104,6 +106,25 @@ public class TestRowDataKeyGen {
     assertThat(keyGen2.getPartitionPath(rowData1), is(String.format("partition=%s/ts=%s", "par1", "1970-01-01T00:00:00.001")));
     assertThat(keyGen2.getPartitionPath(rowData2), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, DEFAULT_PARTITION_PATH)));
     assertThat(keyGen2.getPartitionPath(rowData3), is(String.format("partition=%s/ts=%s", DEFAULT_PARTITION_PATH, "1970-01-01T00:00:00.001")));
+  }
+
+  /** The table's recorded encoding decides the single record key, whatever new.encoding and the partition count say. */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testSingleKeyFollowsRecordedEncoding(boolean useNewEncoding) {
+    RowData rowData = insertRow(StringData.fromString("id1"), StringData.fromString("Danny"), 23,
+        TimestampData.fromEpochMillis(1), StringData.fromString("par1"));
+    for (String partitionFields : new String[] {"partition", "partition,ts"}) {
+      Configuration conf = TestConfigurations.getDefaultConf("path1");
+      conf.set(FlinkOptions.RECORD_KEY_FIELD, "uuid");
+      conf.set(FlinkOptions.PARTITION_PATH_FIELD, partitionFields);
+      conf.setString(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(), String.valueOf(useNewEncoding));
+
+      conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), ComplexKeyGenEncoding.FIELD_PREFIXED.name());
+      assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("uuid:id1"));
+      conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), ComplexKeyGenEncoding.VALUE_ONLY.name());
+      assertThat(RowDataKeyGen.instance(conf, TestConfigurations.ROW_TYPE).getRecordKey(rowData), is("id1"));
+    }
   }
 
   @Test

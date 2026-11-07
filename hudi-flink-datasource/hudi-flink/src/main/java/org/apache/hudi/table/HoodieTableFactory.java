@@ -142,6 +142,10 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
               && !conf.contains(FlinkOptions.PAYLOAD_CLASS_NAME)) {
             conf.setString(FlinkOptions.PAYLOAD_CLASS_NAME, tableConfig.getString(HoodieTableConfig.PAYLOAD_CLASS_NAME));
           }
+          // the recorded record key encoding describes the table's data, so it replaces a job option of the same name
+          if (tableConfig.contains(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING)) {
+            conf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), tableConfig.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING));
+          }
         });
   }
 
@@ -309,6 +313,8 @@ public class HoodieTableFactory implements DynamicTableSourceFactory, DynamicTab
       if (pks.length <= 1 && DataTypeUtils.isDatetimeType(partitionFieldType)) {
         // timestamp based key gen only supports simple primary key
         setupTimestampKeygenOptions(conf, partitionFieldType);
+        // an explicitly configured complex key generator keeps its class, so its key encoding still needs setting up
+        StreamerUtil.setupComplexKeygenEncodingIfAbsent(conf);
         return;
       }
     }
