@@ -440,6 +440,24 @@ public class TestRecordLevelIndex {
         "Should return composite key with complex record keys");
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testMicrosecondTimestampRecordKeysMatchWriter(boolean logicalTimestamp) {
+    RowType rowType = (RowType) DataTypes.ROW(DataTypes.FIELD("ts", DataTypes.TIMESTAMP(6))).getLogicalType();
+    FieldReferenceExpression field = new FieldReferenceExpression("ts", DataTypes.TIMESTAMP(6), 0, 0);
+    for (String text : Arrays.asList("1970-01-01T00:00:01.000001", "1969-12-31T23:59:59.999999", "1970-01-01T00:00:01")) {
+      LocalDateTime timestamp = LocalDateTime.parse(text);
+      ValueLiteralExpression literal = new ValueLiteralExpression(timestamp);
+      String expected = RowDataKeyGen.getRecordKey(TimestampData.fromLocalDateTime(timestamp), "ts", logicalTimestamp);
+      for (BuiltInFunctionDefinition function : Arrays.asList(BuiltInFunctionDefinitions.EQUALS, BuiltInFunctionDefinitions.IN)) {
+        List<ResolvedExpression> filters = Collections.singletonList(
+            CallExpression.permanent(function, Arrays.asList(field, literal), DataTypes.BOOLEAN()));
+        assertEquals(Collections.singletonList(expected), BaseRecordLevelIndex.computeHoodieKeyFromFilters(
+            ExpressionEvaluators.fromExpression(filters), new String[] {"ts"}, rowType, logicalTimestamp, false));
+      }
+    }
+  }
+
   @Test
   public void testComputeHoodieKeyFromFiltersWithMultipleSimpleKeys() {
     // Setup mock table config with single record key field

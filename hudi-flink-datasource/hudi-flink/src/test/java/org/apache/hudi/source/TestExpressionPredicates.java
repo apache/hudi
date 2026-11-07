@@ -35,8 +35,10 @@ import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ResolvedExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
+import org.apache.flink.table.functions.BuiltInFunctionDefinition;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.types.DataType;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.filter2.predicate.Operators.Eq;
 import org.apache.parquet.filter2.predicate.Operators.Gt;
 import org.apache.parquet.filter2.predicate.Operators.IntColumn;
@@ -45,6 +47,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -61,6 +64,7 @@ import static org.apache.parquet.filter2.predicate.FilterApi.eq;
 import static org.apache.parquet.filter2.predicate.FilterApi.gt;
 import static org.apache.parquet.filter2.predicate.FilterApi.gtEq;
 import static org.apache.parquet.filter2.predicate.FilterApi.intColumn;
+import static org.apache.parquet.filter2.predicate.FilterApi.longColumn;
 import static org.apache.parquet.filter2.predicate.FilterApi.lt;
 import static org.apache.parquet.filter2.predicate.FilterApi.ltEq;
 import static org.apache.parquet.filter2.predicate.FilterApi.not;
@@ -193,6 +197,85 @@ public class TestExpressionPredicates {
     assertNull(And.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
     assertNull(Or.getInstance().bindPredicates(greaterThanPredicate, lessThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
     assertNull(Not.getInstance().bindPredicate(greaterThanPredicate).filter(), "Decimal type push down is unsupported, so we expect null");
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, 1, 2, 4, 5, 7, 8, 9})
+  void testDisableTimestampPredicatePushDown(int precision) {
+    FieldReferenceExpression field = new FieldReferenceExpression("ts", DataTypes.TIMESTAMP(precision), 0, 0);
+    ValueLiteralExpression literal = new ValueLiteralExpression(LocalDateTime.parse("1970-01-01T00:00:01.000001"));
+    BuiltInFunctionDefinition[] functions = {
+        BuiltInFunctionDefinitions.EQUALS, BuiltInFunctionDefinitions.NOT_EQUALS,
+        BuiltInFunctionDefinitions.LESS_THAN, BuiltInFunctionDefinitions.GREATER_THAN,
+        BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL, BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL
+    };
+    for (BuiltInFunctionDefinition function : functions) {
+      assertNull(fromExpression(CallExpression.permanent(function, Arrays.asList(field, literal), DataTypes.BOOLEAN())).filter());
+      assertNull(fromExpression(CallExpression.permanent(function, Arrays.asList(literal, field), DataTypes.BOOLEAN())).filter());
+    }
+    Predicate timestamp = Equals.getInstance().bindFieldReference(field).bindValueLiteral(literal);
+    assertNull(In.getInstance().bindValueLiterals(Arrays.asList(literal, literal)).bindFieldReference(field).filter());
+    Predicate integer = Equals.getInstance()
+        .bindFieldReference(new FieldReferenceExpression("id", DataTypes.INT(), 0, 1))
+        .bindValueLiteral(new ValueLiteralExpression(1));
+    assertEquals(eq(intColumn("id"), 1), integer.filter());
+    assertNull(And.getInstance().bindPredicates(timestamp, integer).filter());
+    assertNull(Or.getInstance().bindPredicates(integer, timestamp).filter());
+    assertNull(Not.getInstance().bindPredicate(timestamp).filter());
+    assertNull(Not.getInstance().bindPredicate(And.getInstance().bindPredicates(timestamp, integer)).filter());
+  }
+
+  @ParameterizedTest
+  @MethodSource("timestampLiterals")
+  void testTimestampPredicatePushDown(int precision, String text, long expected) {
+    FieldReferenceExpression field = new FieldReferenceExpression("ts", DataTypes.TIMESTAMP(precision), 0, 0);
+    ValueLiteralExpression literal = new ValueLiteralExpression(LocalDateTime.parse(text));
+    BuiltInFunctionDefinition[] functions = {
+        BuiltInFunctionDefinitions.EQUALS, BuiltInFunctionDefinitions.NOT_EQUALS,
+        BuiltInFunctionDefinitions.LESS_THAN, BuiltInFunctionDefinitions.GREATER_THAN,
+        BuiltInFunctionDefinitions.LESS_THAN_OR_EQUAL, BuiltInFunctionDefinitions.GREATER_THAN_OR_EQUAL
+    };
+    FilterPredicate[] filters = {
+        eq(longColumn("ts"), expected), notEq(longColumn("ts"), expected),
+        lt(longColumn("ts"), expected), gt(longColumn("ts"), expected),
+        ltEq(longColumn("ts"), expected), gtEq(longColumn("ts"), expected)
+    };
+    for (int i = 0; i < functions.length; i++) {
+      assertEquals(filters[i], fromExpression(CallExpression.permanent(
+          functions[i], Arrays.asList(field, literal), DataTypes.BOOLEAN())).filter());
+    }
+    assertEquals(gt(longColumn("ts"), expected), fromExpression(CallExpression.permanent(
+        BuiltInFunctionDefinitions.LESS_THAN, Arrays.asList(literal, field), DataTypes.BOOLEAN())).filter());
+    Predicate equals = Equals.getInstance().bindFieldReference(field).bindValueLiteral(literal);
+    assertEquals(or(filters[0], filters[0]), In.getInstance()
+        .bindValueLiterals(Arrays.asList(literal, literal)).bindFieldReference(field).filter());
+    assertEquals(not(filters[0]), Not.getInstance().bindPredicate(equals).filter());
+    assertEquals(and(filters[0], filters[0]), And.getInstance().bindPredicates(equals, equals).filter());
+    assertEquals(or(filters[0], filters[0]), Or.getInstance().bindPredicates(equals, equals).filter());
+  }
+
+  static Stream<Arguments> timestampLiterals() {
+    return Stream.of(
+        Arguments.of(3, "1970-01-01T00:00:01", 1000L),
+        Arguments.of(3, "1970-01-01T00:00:01.001", 1001L),
+        Arguments.of(6, "1970-01-01T00:00:01", 1000000L),
+        Arguments.of(6, "1970-01-01T00:00:01.000001", 1000001L),
+        Arguments.of(6, "1969-12-31T23:59:59.999999", -1L));
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {3, 6})
+  void testTimestampPushDownRejectsInexactOrOverflowingLiterals(int precision) {
+    FieldReferenceExpression field = new FieldReferenceExpression("ts", DataTypes.TIMESTAMP(precision), 0, 0);
+    ValueLiteralExpression literal = new ValueLiteralExpression(LocalDateTime.parse("1970-01-01T00:00:01"));
+    ValueLiteralExpression finer = new ValueLiteralExpression(LocalDateTime.parse(precision == 3
+        ? "1970-01-01T00:00:01.000001" : "1970-01-01T00:00:01.000000001"));
+    Predicate unsupported = LessThan.getInstance().bindFieldReference(field).bindValueLiteral(finer);
+    assertNull(unsupported.filter());
+    assertNull(Not.getInstance().bindPredicate(unsupported).filter());
+    assertNull(In.getInstance().bindValueLiterals(Arrays.asList(literal, finer)).bindFieldReference(field).filter());
+    assertNull(Equals.getInstance().bindFieldReference(field)
+        .bindValueLiteral(new ValueLiteralExpression(LocalDateTime.MAX.withNano(0))).filter());
   }
 
   public static Stream<Arguments> testColumnPredicateLiteralTypeConversionParams() {
