@@ -18,6 +18,7 @@
 
 package org.apache.hudi.hive.testutils;
 
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.StoragePath;
@@ -63,7 +64,7 @@ import java.util.concurrent.Executors;
 public class HiveTestService {
   private static final int CONNECTION_TIMEOUT_MS = 30000;
   private static final String BIND_HOST = "127.0.0.1";
-  private static final int HS2_THRIFT_PORT = 9999;
+  private static final int HS2_THRIFT_PORT = HoodieTestUtils.toForkUniquePort(9999);
   public static final String HS2_JDBC_URL = String.format("jdbc:hive2://%s:%s/", BIND_HOST, HS2_THRIFT_PORT);
 
   private final Configuration hadoopConf;

@@ -106,7 +106,10 @@ public class HFileReaderFactory {
         // Download the whole file if the file size is below a configured threshold
         StoragePath path = fileSource.asLeft();
         byte[] buffer;
-        try (SeekableDataInputStream stream = storage.openSeekable(path, false)) {
+        // readFully into a file-sized array bypasses the stream buffer, so keep it small instead of
+        // the default block size (32MB on the local file system), which is allocated on every open.
+        int bufferSize = (int) Math.max(1L, Math.min(fileSize, storage.getDefaultBufferSize()));
+        try (SeekableDataInputStream stream = storage.openSeekable(path, bufferSize, false)) {
           buffer = new byte[(int) fileSize];
           stream.readFully(buffer);
         }

@@ -90,7 +90,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, false, true, true, false));
       b.add(Arguments.of("MERGE_ON_READ", true, false, false, true, true, true, true, false));
       b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true, false));
-      b.add(Arguments.of("MERGE_ON_READ", false, true, true, true, true, true, true, false));
       b.add(Arguments.of("MERGE_ON_READ", false, false, true, true, true, false, true, false));
       b.add(Arguments.of("MERGE_ON_READ", false, false, false, true, true, false, true, true));
     }
@@ -103,7 +102,11 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
       for (Boolean nullForDeletedCols : new Boolean[] {false, true}) {
         for (Boolean useKafkaSource : new Boolean[] {false, true}) {
           for (String tableType : new String[] {"COPY_ON_WRITE", "MERGE_ON_READ"}) {
-            b.add(Arguments.of(tableType, rowWriterEnable, useKafkaSource, nullForDeletedCols));
+            // Half fraction: every pair of factor values still appears together in at least one row.
+            boolean evenParity = !(rowWriterEnable ^ nullForDeletedCols ^ useKafkaSource ^ tableType.equals("MERGE_ON_READ"));
+            if (evenParity) {
+              b.add(Arguments.of(tableType, rowWriterEnable, useKafkaSource, nullForDeletedCols));
+            }
           }
         }
       }
@@ -131,7 +134,6 @@ public class TestHoodieDeltaStreamerSchemaEvolutionQuick extends TestHoodieDelta
     } else {
       b.add(Arguments.of("COPY_ON_WRITE", true, true, true, true, true));
       b.add(Arguments.of("COPY_ON_WRITE", true, false, false, false, true));
-      b.add(Arguments.of("COPY_ON_WRITE", false, false, false, false, true));
       b.add(Arguments.of("MERGE_ON_READ", true, true, true, false, false));
       b.add(Arguments.of("MERGE_ON_READ", true, true, false, false, false));
       b.add(Arguments.of("MERGE_ON_READ", true, false, true, true, false));

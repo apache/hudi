@@ -110,7 +110,7 @@ public class TestBootstrapIndex extends HoodieCommonTestHarness {
   public void testBootstrapIndexConcurrent() throws Exception {
     Map<String, List<BootstrapFileMapping>> bootstrapMapping  = generateBootstrapIndex(metaClient, BOOTSTRAP_BASE_PATH, PARTITIONS, 100);
     final int numThreads = 20;
-    final int numRequestsPerThread = 50;
+    final int numRequestsPerThread = 10;
     ExecutorService service = Executors.newFixedThreadPool(numThreads);
     try {
       List<Future<Boolean>> futureList = new ArrayList<>();

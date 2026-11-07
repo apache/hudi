@@ -26,14 +26,15 @@ import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
 import org.apache.hudi.common.table.timeline.{HoodieInstant, MetadataConversionUtils}
+import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.functional.ColumnStatIndexTestBase.{ColumnStatsTestCase, ColumnStatsTestParams}
 import org.apache.hudi.index.HoodieIndex.IndexType.INMEMORY
 import org.apache.hudi.io.util.FileIOUtils
-import org.apache.hudi.metadata.HoodieBackedTableMetadata
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.util.JavaConversions
 
 import org.apache.spark.sql._
@@ -42,17 +43,133 @@ import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Bitwi
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.DataSkippingUtils
 import org.apache.spark.sql.types.StringType
-import org.junit.jupiter.api.{Tag, Test}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.extension.{AfterAllCallback, ExtendWith, ExtensionContext}
+import org.junit.jupiter.api.parallel.{Execution, ExecutionMode}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.io.File
+import java.lang.ref.WeakReference
+import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 @Tag("functional-b")
+@ExtendWith(Array(classOf[TestColumnStatsIndexWithSQL.SharedTablesCleanup]))
+// the shared table cache in the companion object is not thread-safe
+@Execution(ExecutionMode.SAME_THREAD)
 class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
+  import TestColumnStatsIndexWithSQL._
+
+  // Shared tables this test reads or copies; each one is checked for changes after the test.
+  private var sharedTablesInUse: Seq[SharedTable] = Seq()
+  private var initialSqlConf: Map[String, String] = Map()
+
+  @BeforeEach
+  override def setUp(): Unit = {
+    super.setUp()
+    sharedTablesInUse = Seq()
+    // Every test must start from a fresh SparkSession: no SQL conf, temp views or cached plans
+    // left over from a previous test that read the same shared table.
+    assertTrue(lastSparkSession.get() ne spark, "SparkSession reused across tests")
+    lastSparkSession = new WeakReference(spark)
+    assertFalse(spark.catalog.tableExists("tbl"))
+    initialSqlConf = spark.conf.getAll
+  }
+
+  @AfterEach
+  override def tearDown(): Unit = {
+    try {
+      if (spark != null) {
+        spark.catalog.dropTempView("tbl")
+        spark.catalog.clearCache()
+        val sqlConf = spark.sessionState.conf
+        val currentConf = sqlConf.getAllConfs
+        (currentConf.keySet -- initialSqlConf.keySet).foreach(sqlConf.unsetConf)
+        initialSqlConf.foreach { case (k, v) => if (!currentConf.get(k).contains(v)) sqlConf.setConfString(k, v) }
+      }
+      // A test must never change a shared table (data files, timeline or metadata table timeline);
+      // tests that write work on their own copy.
+      sharedTablesInUse.foreach { table =>
+        val state = captureTableState(table.path)
+        if (state != table.state) {
+          // evict it so that later tests rebuild a clean table and only this test fails
+          sharedTables.retain((_, cached) => cached ne table)
+        }
+        assertEquals(table.state, state, s"Shared table ${table.path} was modified by the test")
+      }
+    } finally {
+      super.tearDown()
+    }
+  }
+
+  /**
+   * Points the test at a table built by `build`, building it only the first time a test asks for it.
+   * Tables are keyed by `recipe` plus the exact write options, so parameter cases that write the
+   * same data with the same options (e.g. ones that only differ in how the index is read) share one table.
+   * `recipe` must name every other input of `build` that affects the table or its validation.
+   * With `copy = true` the test gets a private copy it may write to.
+   */
+  private def useSharedTable(recipe: String, writeOpts: Map[String, String], copy: Boolean)(build: => Unit): Unit = {
+    val key = recipe + writeOpts.toSeq.sorted.mkString("[", ",", "]")
+    val table = sharedTables.getOrElse(key, {
+      basePath = Files.createTempDirectory(sharedTablesRoot, "table-").toString
+      // same starting point as a per-test table: an empty table initialized by the harness, which the first
+      // Overwrite write then replaces
+      try {
+        initMetaClient()
+        build
+      } catch {
+        case e: Throwable =>
+          FileIOUtils.deleteDirectory(new File(basePath))
+          throw e
+      }
+      val built = SharedTable(basePath, captureTableState(basePath))
+      sharedTables.put(key, built)
+      built
+    })
+    sharedTablesInUse = sharedTablesInUse :+ table
+    basePath = if (copy) {
+      val target = Files.createTempDirectory(tempDir, "shared-table-copy-")
+      copyDirectory(Paths.get(table.path), target)
+      target.toString
+    } else {
+      table.path
+    }
+    metaClient = HoodieTableMetaClient.builder().setBasePath(basePath).setConf(storageConf).build()
+    assertEquals(table.state, captureTableState(basePath))
+  }
+
+  /**
+   * Write options that create the table at `testCase.tableVersion`: v6 tables use timeline layout 1, later
+   * versions layout 2. Being write options, they also separate the shared tables of different versions.
+   */
+  private def tableVersionOpts(testCase: ColumnStatsTestCase): Map[String, String] = Map(
+    HoodieWriteConfig.WRITE_TABLE_VERSION.key -> testCase.tableVersion.toString,
+    HoodieTableConfig.VERSION.key -> testCase.tableVersion.toString,
+    HoodieTableConfig.TIMELINE_LAYOUT_VERSION.key -> (if (testCase.tableVersion == HoodieTableVersion.SIX.versionCode()) {
+      TimelineLayoutVersion.LAYOUT_VERSION_1
+    } else {
+      TimelineLayoutVersion.LAYOUT_VERSION_2
+    }).getVersion.toString
+  )
+
+  private def captureTableState(tablePath: String): TableState = {
+    def completedInstants(path: String): Seq[String] = HoodieTableMetaClient.builder()
+      .setBasePath(path).setConf(storageConf).build()
+      .getActiveTimeline.filterCompletedInstants().getInstants.asScala
+      .map(i => s"${i.requestedTime}:${i.getAction}:${i.getCompletionTime}").toSeq
+    val root = Paths.get(tablePath)
+    // size and modification time catch both new/removed files and in-place rewrites
+    val files = walk(root)(_.filter(Files.isRegularFile(_))
+      .map(f => root.relativize(f).toString -> ((Files.size(f), Files.getLastModifiedTime(f).toMillis))).toMap)
+    val mdtPath = HoodieTableMetadata.getMetadataTableBasePath(tablePath)
+    val mdtInstants = if (Files.exists(Paths.get(mdtPath))) completedInstants(mdtPath) else Seq()
+    TableState(completedInstants(tablePath), mdtInstants, files)
+  }
 
   @ParameterizedTest
   @MethodSource(Array("testMetadataColumnStatsIndexParams"))
@@ -72,8 +189,10 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
-    ) ++ metadataOpts
-    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true)
+    ) ++ metadataOpts ++ tableVersionOpts(testCase)
+    useSharedTable("setupTable(shouldValidate = true)", commonOpts, copy = false) {
+      setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true)
+    }
     verifyFileIndexAndSQLQueries(commonOpts)
   }
 
@@ -96,10 +215,12 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       HoodieTableConfig.POPULATE_META_FIELDS.key -> "true",
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL
-    ) ++ metadataOpts
-    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true, useShortSchema = true,
-      validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
-      "c2_minValue", "c3_maxValue", "c3_minValue"))
+    ) ++ metadataOpts ++ tableVersionOpts(testCase)
+    useSharedTable("setupTable(shouldValidate = true, useShortSchema = true)", commonOpts, copy = false) {
+      setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true, useShortSchema = true,
+        validationSortColumns = Seq("c1_maxValue", "c1_minValue", "c2_maxValue",
+        "c2_minValue", "c3_maxValue", "c3_minValue"))
+    }
 
     // predicate with c2. should prune based on col stats lookup
     var dataFilter: Expression = EqualTo(attribute("c2"), literal("619sdc"))
@@ -334,14 +455,16 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
       HoodieIndexConfig.INDEX_TYPE.key() -> INMEMORY.name()
-    ) ++ metadataOpts
+    ) ++ metadataOpts ++ tableVersionOpts(testCase)
 
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
-      dataSourcePath = "index/colstats/input-table-json",
-      expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
-      operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
-      saveMode = SaveMode.Overwrite,
-      shouldValidateColStats = false))
+    useSharedTable("insert", commonOpts, copy = false) {
+      doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+        dataSourcePath = "index/colstats/input-table-json",
+        expectedColStatsSourcePath = "index/colstats/column-stats-index-table.json",
+        operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
+        saveMode = SaveMode.Overwrite,
+        shouldValidateColStats = false))
+    }
 
     assertEquals(4, getLatestDataFilesCount(commonOpts))
     assertEquals(0, getLatestDataFilesCount(commonOpts, includeLogFiles = false))
@@ -370,9 +493,13 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
       HoodieWriteConfig.RECORD_MERGE_MODE.key -> "COMMIT_TIME_ORDERING"
-    ) ++ metadataOpts
-    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true)
-    val lastDf = dfList.last
+    ) ++ metadataOpts ++ tableVersionOpts(testCase)
+    useSharedTable("setupTable(shouldValidate = true)", commonOpts, copy = true) {
+      setupTable(testCase, metadataOpts, commonOpts, shouldValidate = true)
+    }
+    // the last batch written by setupTable
+    val lastDf = spark.read.schema(sourceTableSchema)
+      .json(getClass.getClassLoader.getResource("index/colstats/update-input-table-json").toString)
 
     lastDf.write.format("org.apache.hudi")
       .options(commonOpts)
@@ -411,8 +538,10 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
       HoodieCompactionConfig.INLINE_COMPACT.key -> "true",
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key -> "1"
-    ) ++ metadataOpts
-    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
+    ) ++ metadataOpts ++ tableVersionOpts(testCase)
+    useSharedTable("setupTable(shouldValidate = false)", commonOpts, copy = false) {
+      setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
+    }
 
     assertFalse(hasLogFiles())
     verifyFileIndexAndSQLQueries(commonOpts)
@@ -437,8 +566,10 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1"
-    ) ++ metadataOpts
-    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
+    ) ++ metadataOpts ++ tableVersionOpts(testCase)
+    useSharedTable("setupTable(shouldValidate = false)", commonOpts, copy = true) {
+      setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
+    }
 
     val writeClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), getWriteConfig(commonOpts))
     writeClient.scheduleCompaction(org.apache.hudi.common.util.Option.empty())
@@ -472,8 +603,10 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true",
       DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
       HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "20"
-    ) ++ metadataOpts
-    setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
+    ) ++ metadataOpts ++ tableVersionOpts(testCase)
+    useSharedTable("setupTable(shouldValidate = false)", commonOpts, copy = true) {
+      setupTable(testCase, metadataOpts, commonOpts, shouldValidate = false)
+    }
 
     doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
@@ -571,7 +704,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
     } else {
       ""
     }
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+    writeAndValidateBothReadModes(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/input-table-json",
       expectedColStatsSourcePath = s"index/colstats/column-stats-index-table${filePostfix}.json",
       operation = DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL,
@@ -579,7 +712,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       saveMode = SaveMode.Overwrite,
       validationSortColumns = validationSortColumns))
 
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+    writeAndValidateBothReadModes(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/another-input-table-json",
       expectedColStatsSourcePath = s"index/colstats/updated-column-stats-index-table${filePostfix}.json",
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -595,7 +728,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       s"index/colstats/mor-updated2-column-stats-index-table${filePostfix}.json"
     }
 
-    doWriteAndValidateColumnStats(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
+    writeAndValidateBothReadModes(ColumnStatsTestParams(testCase, metadataOpts, commonOpts,
       dataSourcePath = "index/colstats/update-input-table-json",
       expectedColStatsSourcePath = expectedColStatsSourcePath,
       operation = DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL,
@@ -603,6 +736,20 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
       shouldValidate,
       shouldValidateManually = !useShortSchema,
       validationSortColumns = validationSortColumns))
+  }
+
+  /**
+   * Writes like [[doWriteAndValidateColumnStats]] but validates the column stats with both the
+   * in-memory and the Spark-based index read, since the table may be shared by test cases of either mode.
+   */
+  private def writeAndValidateBothReadModes(params: ColumnStatsTestParams): Unit = {
+    doWriteAndValidateColumnStats(params)
+    if (params.shouldValidateColStats) {
+      val validateManually = (params.testCase.tableType == HoodieTableType.COPY_ON_WRITE ||
+        params.operation.equals(DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)) && params.shouldValidateManually
+      validateColumnStatsIndex(params.testCase.copy(shouldReadInMemory = !params.testCase.shouldReadInMemory),
+        params.metadataOpts, params.expectedColStatsSourcePath, validateManually, params.validationSortColumns)
+    }
   }
 
   def verifyFileIndexAndSQLQueries(opts: Map[String, String], isTableDataSameAsAfterSecondInstant: Boolean = false, verifyFileCount: Boolean = true): Unit = {
@@ -776,5 +923,52 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
         .map(c => c.getOperationType == WriteOperationType.COMPACT)
         .get))
       .lastInstant()
+  }
+}
+
+object TestColumnStatsIndexWithSQL {
+
+  case class TableState(completedInstants: Seq[String], mdtCompletedInstants: Seq[String], files: Map[String, (Long, Long)])
+
+  case class SharedTable(path: String, state: TableState)
+
+  private val sharedTables = mutable.Map[String, SharedTable]()
+  private var sharedTablesRootDir: Path = _
+  private var lastSparkSession: WeakReference[SparkSession] = new WeakReference(null)
+
+  private def sharedTablesRoot: Path = {
+    if (sharedTablesRootDir == null) {
+      sharedTablesRootDir = Files.createTempDirectory("hudi-colstats-sql-shared-")
+    }
+    sharedTablesRootDir
+  }
+
+  private def walk[T](root: Path)(f: Iterator[Path] => T): T = {
+    val stream = Files.walk(root)
+    try {
+      f(stream.iterator().asScala)
+    } finally {
+      stream.close()
+    }
+  }
+
+  private def copyDirectory(source: Path, target: Path): Unit = walk(source)(_.foreach { src =>
+    val dst = target.resolve(source.relativize(src).toString)
+    if (Files.isDirectory(src)) {
+      Files.createDirectories(dst)
+    } else {
+      Files.copy(src, dst, StandardCopyOption.COPY_ATTRIBUTES)
+    }
+  })
+
+  class SharedTablesCleanup extends AfterAllCallback {
+    override def afterAll(context: ExtensionContext): Unit = {
+      sharedTables.clear()
+      lastSparkSession = new WeakReference(null)
+      if (sharedTablesRootDir != null) {
+        FileIOUtils.deleteDirectory(sharedTablesRootDir.toFile)
+        sharedTablesRootDir = null
+      }
+    }
   }
 }

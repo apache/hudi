@@ -21,7 +21,7 @@ import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig
 import org.apache.hudi.config.HoodieIndexConfig
-import org.apache.hudi.metrics.{MetricsReporterType, RecordIndexLookupMetrics}
+import org.apache.hudi.metrics.{Metrics, MetricsReporterType, RecordIndexLookupMetrics}
 import org.apache.hudi.testutils.CapturingMetricsReporter
 
 import scala.collection.JavaConverters._
@@ -90,9 +90,16 @@ abstract class RliLookupMetricsTestBase extends RecordLevelIndexTestBase {
         name.substring(name.indexOf(marker) + marker.length) -> value.toString }
   }
 
-  /** The reporter is process-wide, so each test starts from a clean slate. */
+  /**
+   * The reporter is process-wide, so each test starts from a clean slate. Writes that never shut their
+   * metrics down (e.g. Spark SQL) leave a reporter attached, and `captured()` would re-read its gauges from
+   * an earlier test's table, so stop every live metrics instance before clearing.
+   */
   @org.junit.jupiter.api.BeforeEach
-  def resetCapturedMetrics(): Unit = CapturingMetricsReporter.reset()
+  def resetCapturedMetrics(): Unit = {
+    Metrics.shutdownAllMetrics()
+    CapturingMetricsReporter.reset()
+  }
 
 
   /** Asserts the core invariant and returns the looked-up count. */

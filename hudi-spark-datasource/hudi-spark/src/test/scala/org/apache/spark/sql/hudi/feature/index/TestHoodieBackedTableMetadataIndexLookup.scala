@@ -209,7 +209,7 @@ abstract class HoodieBackedTableMetadataIndexLookupTestBase extends HoodieSparkS
     withSQLConf(
       "hoodie.write.table.version" -> getTableVersion,
       "hoodie.metadata.global.record.level.index.min.filegroup.count" -> getNumFileIndexGroup,
-      "set hoodie.metadata.global.record.level.index.max.filegroup.count" -> getNumFileIndexGroup
+      "hoodie.metadata.global.record.level.index.max.filegroup.count" -> getNumFileIndexGroup
     ) {
       spark.sql(s"create index idx_name on $tableName (name)")
       spark.sql(s"create index idx_price on $tableName (price)")

@@ -25,11 +25,14 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +43,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -47,6 +53,7 @@ import scala.Tuple2;
 public class KafkaTestUtils {
   private static final Logger LOG = LoggerFactory.getLogger(KafkaTestUtils.class);
   private static final DockerImageName KAFKA_IMAGE = DockerImageName.parse("confluentinc/cp-kafka:7.7.1");
+  private static final long TOPIC_READY_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(60);
   private final List<String> createdTopics = new ArrayList<>();
   private ConfluentKafkaContainer kafkaContainer;
 
@@ -78,6 +85,7 @@ public class KafkaTestUtils {
       createdTopics.add(topic);
       NewTopic newTopic = new NewTopic(topic, numPartitions, (short) 1);
       adminClient.createTopics(Collections.singleton(newTopic)).all().get();
+      waitForPartitionLeaders(adminClient, topic, numPartitions);
       if (properties != null) {
         adminClient.alterConfigs(
             Collections.singletonMap(new ConfigResource(ConfigResource.Type.TOPIC, topic),
@@ -89,10 +97,41 @@ public class KafkaTestUtils {
         ).all().get();
       }
     } catch (Exception e) {
+      if (e instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
       if (e.getCause() instanceof TopicExistsException) {
         throw (TopicExistsException) e.getCause();
       }
       throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * Topic creation returns before the broker has elected partition leaders. Producing in that window
+   * gets NOT_LEADER_OR_FOLLOWER, and the idempotent producer's retries can end in
+   * OUT_OF_ORDER_SEQUENCE_NUMBER, which drops records. Wait until every partition has a leader.
+   */
+  private static void waitForPartitionLeaders(AdminClient adminClient, String topic, int numPartitions)
+      throws ExecutionException, InterruptedException {
+    long deadline = System.nanoTime() + TOPIC_READY_TIMEOUT_NANOS;
+    while (true) {
+      try {
+        TopicDescription description =
+            adminClient.describeTopics(Collections.singleton(topic)).values().get(topic).get();
+        if (description.partitions().size() == numPartitions
+            && description.partitions().stream().allMatch(p -> p.leader() != null && !p.leader().isEmpty())) {
+          return;
+        }
+      } catch (ExecutionException e) {
+        if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
+          throw e;
+        }
+      }
+      if (System.nanoTime() - deadline > 0) {
+        throw new IllegalStateException("Timed out waiting for partition leaders of topic " + topic);
+      }
+      Thread.sleep(100);
     }
   }
 
@@ -116,19 +155,36 @@ public class KafkaTestUtils {
 
   public void sendMessages(String topic, String[] messages) {
     try (KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProps())) {
+      List<Future<RecordMetadata>> acks = new ArrayList<>(messages.length);
       for (String message : messages) {
-        producer.send(new ProducerRecord<>(topic, message));
+        acks.add(producer.send(new ProducerRecord<>(topic, message)));
       }
       producer.flush();
+      awaitAcks(topic, acks);
     }
   }
 
   public void sendMessages(String topic, Tuple2<String, String>[] keyValuePairs) {
     try (KafkaProducer<String, String> producer = new KafkaProducer<>(getProducerProps())) {
+      List<Future<RecordMetadata>> acks = new ArrayList<>(keyValuePairs.length);
       for (Tuple2<String, String> kv : keyValuePairs) {
-        producer.send(new ProducerRecord<>(topic, kv._1, kv._2));
+        acks.add(producer.send(new ProducerRecord<>(topic, kv._1, kv._2)));
       }
       producer.flush();
+      awaitAcks(topic, acks);
+    }
+  }
+
+  private static void awaitAcks(String topic, List<Future<RecordMetadata>> acks) {
+    for (Future<RecordMetadata> ack : acks) {
+      try {
+        ack.get();
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        throw new IllegalStateException("Interrupted while sending records to Kafka topic " + topic, e);
+      } catch (ExecutionException e) {
+        throw new IllegalStateException("Failed to send a record to Kafka topic " + topic, e.getCause());
+      }
     }
   }
 
