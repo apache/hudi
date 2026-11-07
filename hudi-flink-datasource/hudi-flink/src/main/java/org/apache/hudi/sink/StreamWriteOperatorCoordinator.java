@@ -28,6 +28,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SerializationUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -181,8 +182,10 @@ public class StreamWriteOperatorCoordinator
     // setup classloader for APIs that use reflection without taking ClassLoader param
     // reference: https://stackoverflow.com/questions/1771679/difference-between-threads-context-class-loader-and-normal-classloader
     Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
-    // initialize event buffer
-    reset();
+    // initialize event buffer only if not restored from checkpoint
+    if (this.eventBuffer == null) {
+      reset();
+    }
     this.gateways = new SubtaskGateway[this.parallelism];
     // init table, create if not exists.
     this.metaClient = initTableIfNotExists(this.conf);
@@ -203,6 +206,7 @@ public class StreamWriteOperatorCoordinator
     if (OptionsResolver.isOptimisticConcurrencyControl(conf)) {
       initClientIds(conf);
     }
+    restoreEvents();
   }
 
   @Override
@@ -233,7 +237,8 @@ public class StreamWriteOperatorCoordinator
     executor.execute(
         () -> {
           try {
-            result.complete(new byte[0]);
+            byte[] eventBytes = SerializationUtils.serialize(this.eventBuffer);
+            result.complete(eventBytes);
           } catch (Throwable throwable) {
             // when a checkpoint fails, throws directly.
             result.completeExceptionally(
@@ -271,7 +276,9 @@ public class StreamWriteOperatorCoordinator
 
   @Override
   public void resetToCheckpoint(long checkpointID, byte[] checkpointData) {
-    // no operation
+    if (checkpointData != null && checkpointData.length > 0) {
+      this.eventBuffer = SerializationUtils.deserialize(checkpointData);
+    }
   }
 
   @Override
@@ -315,6 +322,30 @@ public class StreamWriteOperatorCoordinator
   // -------------------------------------------------------------------------
   //  Utilities
   // -------------------------------------------------------------------------
+
+  private void restoreEvents() {
+    if (this.eventBuffer == null || Arrays.stream(this.eventBuffer).noneMatch(Objects::nonNull)) {
+      return;
+    }
+    String restoreInstant = Arrays.stream(this.eventBuffer)
+        .filter(Objects::nonNull)
+        .filter(e -> e.getWriteStatuses().size() > 0)
+        .findFirst()
+        .map(WriteMetadataEvent::getInstantTime)
+        .orElse(null);
+    if (restoreInstant == null) {
+      return;
+    }
+    HoodieTimeline completedTimeline = this.metaClient.getActiveTimeline().filterCompletedInstants();
+    if (!completedTimeline.containsInstant(restoreInstant)) {
+      LOG.info("Recommit instant {} from restored coordinator state", restoreInstant);
+      if (writeClient.getConfig().getFailedWritesCleanPolicy().isLazy()) {
+        writeClient.getHeartbeatClient().start(restoreInstant);
+      }
+      commitInstant(restoreInstant);
+    }
+    this.metaClient.reloadActiveTimeline();
+  }
 
   private void initHiveSync() {
     this.hiveSyncExecutor = NonThrownExecutor.builder(LOG).waitForTasksFinish(true).build();
