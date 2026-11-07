@@ -60,6 +60,7 @@ public class CloudDataFetcher implements Serializable {
   private transient JavaSparkContext sparkContext;
   private transient SparkSession sparkSession;
   private transient CloudObjectsSelectorCommon cloudObjectsSelectorCommon;
+  private final CloudObjectMaterializer materializer;
 
   private static final long serialVersionUID = 1L;
 
@@ -70,11 +71,18 @@ public class CloudDataFetcher implements Serializable {
   }
 
   public CloudDataFetcher(TypedProperties props, JavaSparkContext jsc, SparkSession sparkSession, HoodieIngestionMetrics metrics, CloudObjectsSelectorCommon cloudObjectsSelectorCommon) {
+    this(props, jsc, sparkSession, metrics, cloudObjectsSelectorCommon,
+        new ColumnarFileMaterializer(props, cloudObjectsSelectorCommon));
+  }
+
+  public CloudDataFetcher(TypedProperties props, JavaSparkContext jsc, SparkSession sparkSession, HoodieIngestionMetrics metrics,
+                          CloudObjectsSelectorCommon cloudObjectsSelectorCommon, CloudObjectMaterializer materializer) {
     this.props = props;
     this.sparkContext = jsc;
     this.sparkSession = sparkSession;
     this.metrics = metrics;
     this.cloudObjectsSelectorCommon = cloudObjectsSelectorCommon;
+    this.materializer = materializer;
   }
 
   public static String getFileFormat(TypedProperties props) {
@@ -99,7 +107,7 @@ public class CloudDataFetcher implements Serializable {
     }
 
     QueryInfo queryInfo = queryInfoDatasetPair.getLeft();
-    String filter = CloudObjectsSelectorCommon.generateFilter(cloudType, props);
+    String filter = CloudObjectsSelectorCommon.generateFilter(cloudType, props, materializer);
     log.info("Adding filter string to Dataset: {}", filter);
     Dataset<Row> filteredSourceData = queryInfoDatasetPair.getRight().filter(filter);
 
@@ -144,15 +152,9 @@ public class CloudDataFetcher implements Serializable {
     for (CloudObjectMetadata o : cloudObjectMetadata) {
       totalSize += o.getSize();
     }
-    // inflate 10% for potential hoodie meta fields
-    double totalSizeWithHoodieMetaFields = totalSize * 1.1;
     metrics.updateStreamerSourceBytesToBeIngestedInSyncRound(totalSize);
-    int numPartitions = (int) Math.max(Math.ceil(totalSizeWithHoodieMetaFields / bytesPerPartition), 1);
-    // If the number of source partitions is configured to be greater, then use it instead.
-    if (numPartitions < numSourcePartitions) {
-      numPartitions = numSourcePartitions;
-    }
+    int numPartitions = materializer.partitionCount(cloudObjectMetadata, bytesPerPartition, numSourcePartitions);
     metrics.updateStreamerSourceParallelism(numPartitions);
-    return cloudObjectsSelectorCommon.loadAsDataset(sparkSession, cloudObjectMetadata, getFileFormat(props), schemaProviderOption, numPartitions);
+    return materializer.materialize(sparkSession, cloudObjectMetadata, schemaProviderOption, numPartitions);
   }
 }
