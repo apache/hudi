@@ -1592,7 +1592,7 @@ public class HoodieTableMetaClient implements Serializable {
         // Below table version 10, also record the deprecated boolean for unpatched readers. From v10
         // the mode alone is sufficient, including after upgrading from v9.
         tableConfig.setValue(HoodieTableConfig.POPULATE_META_FIELDS,
-            Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
+            Boolean.toString(metaFieldsMode.toPersistedPopulateMetaFields()));
       }
       if (null != keyGeneratorClassProp) {
         KeyGeneratorType type = KeyGeneratorType.fromClassName(keyGeneratorClassProp);

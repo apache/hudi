@@ -127,6 +127,45 @@ class TestMetaFieldsMode {
   }
 
   @Test
+  void toPersistedPopulateMetaFieldsIsFalseOnlyForNone() {
+    // The on-disk projection is deliberately wider than the runtime one: a writer that predates
+    // hoodie.meta.fields.mode compares this property against its own `true` default and refuses
+    // the table on a mismatch without opening a file, so a mode that does populate meta columns
+    // must not advertise itself as populating none.
+    assertFalse(NONE.toPersistedPopulateMetaFields());
+    assertTrue(ALL.toPersistedPopulateMetaFields());
+    assertTrue(COMMIT_TIME_ONLY.toPersistedPopulateMetaFields());
+    assertTrue(FILE_NAME_ONLY.toPersistedPopulateMetaFields());
+    assertTrue(COMMIT_TIME_AND_FILE_NAME.toPersistedPopulateMetaFields());
+  }
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void persistedBooleanAgreesWithWhetherAnyMetaColumnIsPopulated(MetaFieldsMode mode) {
+    assertEquals(mode.isCommitTimePopulated() || mode.isFileNamePopulated(),
+        mode.toPersistedPopulateMetaFields());
+  }
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void persistedBooleanIsNeverNarrowerThanTheRuntimeOne(MetaFieldsMode mode) {
+    // Persisted may over-claim relative to runtime -- that is the compatibility shim. It must
+    // never under-claim, or a legacy writer is refused a table the runtime happily writes.
+    if (mode.toLegacyPopulateMetaFields()) {
+      assertTrue(mode.toPersistedPopulateMetaFields());
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void runtimeBooleanImpliesTheRecordKeyIsReadableFromTheMetaColumn(MetaFieldsMode mode) {
+    // Callers such as HoodieSparkCopyOnWriteTable.getUpdateHandle build a key generator only when
+    // this is false; when true they read _hoodie_record_key directly. It must therefore never be
+    // true for a mode that leaves that column null on disk.
+    assertEquals(mode.isRecordKeyPopulated(), mode.toLegacyPopulateMetaFields());
+  }
+
+  @Test
   void recordKeyIsPopulatedOnlyByAll() {
     assertTrue(ALL.isRecordKeyPopulated());
     assertFalse(COMMIT_TIME_AND_FILE_NAME.isRecordKeyPopulated());
