@@ -578,6 +578,40 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
           )
         }
       }
+
+      // A complex key generator keys the records as `id:<value>`, while the rows of a table without the record
+      // key meta field are keyed by the bare value on read, so the update could not match them and fails instead
+      val complexKeyTableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $complexKeyTableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$complexKeyTableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  hoodie.populate.meta.fields = 'false',
+           |  hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.ComplexKeyGenerator'
+           | )
+           | partitioned by (dt)
+           |""".stripMargin)
+      spark.sql(s"insert into $complexKeyTableName values (1, 'a1', 10.0, 1000, '2021-01-05'), (2, 'a2', 20.0, 1000, '2021-01-05')")
+      Seq("true", "false").foreach { optimizedWrites =>
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> optimizedWrites) {
+          checkExceptionContain(s"update $complexKeyTableName set price = 11.0 where id = 1")(
+            "UPDATE is not supported on table")
+        }
+      }
+      checkAnswer(s"select id, name, price, ts, dt from $complexKeyTableName order by id")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 1000, "2021-01-05")
+      )
     })
   }
 

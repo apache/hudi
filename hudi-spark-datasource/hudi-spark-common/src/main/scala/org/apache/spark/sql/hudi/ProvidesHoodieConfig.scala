@@ -28,11 +28,12 @@ import org.apache.hudi.common.table.HoodieTableConfig.DATABASE_NAME
 import org.apache.hudi.common.util.{ConfigUtils, HoodieTableConfigUtils, ReflectionUtils, StringUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieInternalConfig, HoodieWriteConfig}
 import org.apache.hudi.config.HoodieWriteConfig.TBL_NAME
+import org.apache.hudi.exception.HoodieNotSupportedException
 import org.apache.hudi.hive.{HiveSyncConfig, HiveSyncConfigHolder, NonPartitionedExtractor}
 import org.apache.hudi.hive.ddl.HiveSyncMode
 import org.apache.hudi.index.HoodieIndex
 import org.apache.hudi.index.HoodieIndex.BucketIndexEngineType
-import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator}
+import org.apache.hudi.keygen.{ComplexKeyGenerator, CustomAvroKeyGenerator, CustomKeyGenerator, KeyGenUtils}
 import org.apache.hudi.sql.InsertMode
 import org.apache.hudi.sync.common.HoodieSyncConfig
 
@@ -582,6 +583,30 @@ object ProvidesHoodieConfig {
     sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key(),
       SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true" &&
       hoodieCatalogTable.tableConfig.getMetaFieldsMode.isRecordKeyPopulated
+
+  /**
+   * Fails a Spark SQL UPDATE or DELETE that could not match the existing records of a table without the
+   * record key meta field. The keys of such a table's stored rows are regenerated on read, as the bare field
+   * value when the table has a single record key field and at most one partition field, while a complex key
+   * generator that encodes the field name keys the written records as `<field>:<value>`. The write would then
+   * add a second copy of each updated record and leave each deleted one in place.
+   */
+  def validateSqlWriteMatchesStoredKeys(hoodieCatalogTable: HoodieCatalogTable,
+                                        writeConfig: Map[String, String],
+                                        operation: String): Unit = {
+    val tableConfig = hoodieCatalogTable.tableConfig
+    val partitionFields = tableConfig.getPartitionFields
+    val numPartitionFields = if (partitionFields.isPresent) partitionFields.get.length else 0
+    if (!tableConfig.isRecordKeyPopulated &&
+      tableConfig.isComplexKeyGenWithSingleRecordKeyField &&
+      numPartitionFields <= 1 &&
+      KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(toProperties(writeConfig))) {
+      throw new HoodieNotSupportedException(s"$operation is not supported on table "
+        + s"${hoodieCatalogTable.table.qualifiedName}: the table does not store the record key meta field, and its "
+        + "complex key generator keys records as '<field>:<value>' while the keys of the stored rows are "
+        + s"regenerated as the bare field value, so the $operation would not match the existing records.")
+    }
+  }
 
   private def filterNullValues(opts: Map[String, String]): Map[String, String] =
     opts.filter { case (_, v) => v != null }

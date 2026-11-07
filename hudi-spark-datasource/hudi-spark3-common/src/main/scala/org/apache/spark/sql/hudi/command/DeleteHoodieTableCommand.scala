@@ -77,6 +77,7 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
     } else {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession)
     }
+    ProvidesHoodieConfig.validateSqlWriteMatchesStoredKeys(catalogTable, config, "DELETE")
 
     val recordKeysStr = config.getOrElse(HoodieTableConfig.RECORDKEY_FIELDS.key(), "")
     val recordKeys = KeyGenUtils.getRecordKeyFields(recordKeysStr).asScala.toSeq

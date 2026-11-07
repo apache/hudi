@@ -61,6 +61,7 @@ case class UpdateHoodieTableCommand(ut: UpdateTable, query: LogicalPlan) extends
     } else {
       buildHoodieConfig(catalogTable)
     }
+    ProvidesHoodieConfig.validateSqlWriteMatchesStoredKeys(catalogTable, config, "UPDATE")
 
     val enrichedSchema = HoodieSchemaConversionUtils.alignSchemaWithCatalog(
       plan.schema,
