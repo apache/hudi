@@ -48,7 +48,7 @@ import java.util.stream.Collectors;
 public class SparkInsertOverwriteCommitActionExecutor<T>
     extends BaseSparkCommitActionExecutor<T> {
 
-  private final HoodieData<HoodieRecord<T>> inputRecordsRDD;
+  private final transient HoodieData<HoodieRecord<T>> inputRecordsRDD;
 
   public SparkInsertOverwriteCommitActionExecutor(HoodieEngineContext context,
                                                   HoodieWriteConfig config, HoodieTable table,
