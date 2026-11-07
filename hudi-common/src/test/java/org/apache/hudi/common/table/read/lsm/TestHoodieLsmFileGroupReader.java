@@ -51,10 +51,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -150,6 +153,18 @@ class TestHoodieLsmFileGroupReader {
     }
     first.close();
     reader.close();
+  }
+
+  @Test
+  void testLogRecordsMapIndexesTheLogRecordsByKey() throws IOException {
+    try (HoodieLsmFileGroupReader<IndexedRecord> reader =
+             reader(Arrays.asList(record("a", "one", 1), record("b", "two", 2)), false)) {
+      Map<Serializable, BufferedRecord<IndexedRecord>> logRecords = reader.getLogRecordsMap();
+      assertEquals(new HashSet<>(Arrays.asList("a", "b")), logRecords.keySet());
+      assertEquals("one", logRecords.get("a").getRecord().get(1).toString());
+      assertEquals("two", logRecords.get("b").getRecord().get(1).toString());
+      logRecords.forEach((key, record) -> assertEquals(key, record.getRecordKey()));
+    }
   }
 
   @Test
