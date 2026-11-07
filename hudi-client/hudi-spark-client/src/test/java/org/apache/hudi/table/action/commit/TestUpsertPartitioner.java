@@ -55,12 +55,15 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import scala.Tuple2;
 
@@ -467,13 +470,12 @@ public class TestUpsertPartitioner extends HoodieClientTestBase {
     SparkUpsertDeltaCommitPartitioner<?> partitioner = new SparkUpsertDeltaCommitPartitioner<>(profile, context, table, config);
 
     assertEquals(3, partitioner.numPartitions());
-    assertEquals(
-        Arrays.asList(
-            new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath),
-            new BucketInfo(BucketType.UPDATE, "fg-2", partitionPath),
-            new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath)
-        ),
-        partitioner.getBucketInfos());
+    Set<BucketInfo> expectedBuckets = Stream.of(
+        new BucketInfo(BucketType.UPDATE, "fg-1", partitionPath),
+        new BucketInfo(BucketType.UPDATE, "fg-2", partitionPath),
+        new BucketInfo(BucketType.UPDATE, "fg-3", partitionPath)
+    ).collect(Collectors.toSet());
+    assertEquals(expectedBuckets, new HashSet<>(partitioner.getBucketInfos()));
   }
 
   private HoodieWriteConfig.Builder makeHoodieClientConfigBuilder() {

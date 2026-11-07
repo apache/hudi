@@ -151,7 +151,7 @@ public class HoodieTestTable {
   }
 
   protected HoodieTestTable(String basePath, FileSystem fs, HoodieTableMetaClient metaClient, Option<HoodieEngineContext> context) {
-    ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePath()));
+    ValidationUtils.checkArgument(Objects.equals(basePath, metaClient.getBasePathV2().toUri().getPath()));
     ValidationUtils.checkArgument(Objects.equals(fs, metaClient.getRawFs()));
     this.basePath = basePath;
     this.fs = fs;
@@ -162,7 +162,7 @@ public class HoodieTestTable {
 
   public static HoodieTestTable of(HoodieTableMetaClient metaClient) {
     testTableState = HoodieTestTableState.of();
-    return new HoodieTestTable(metaClient.getBasePath(), metaClient.getRawFs(), metaClient);
+    return new HoodieTestTable(metaClient.getBasePathV2().toUri().getPath(), metaClient.getRawFs(), metaClient);
   }
 
   public void setNonPartitioned() {

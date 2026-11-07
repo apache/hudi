@@ -57,6 +57,15 @@
             ]
         },
         {
+            "name": "basePathForPartition",
+            "type": [
+                "null",
+                "string"
+            ],
+            "default": null,
+            "doc": "Refers to the base path for the partition of interest when filesystemMetadata is set. This is an optional field"
+        },
+        {
             "doc": "Metadata Index of bloom filters for all data files in the user table",
             "name": "BloomFilterMetadata",
             "type": [

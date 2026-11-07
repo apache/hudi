@@ -220,6 +220,21 @@ public class TestFSUtils extends HoodieCommonTestHarness {
   }
 
   @Test
+  void testGetRelativePartitionPath_MultipleCases() {
+    Path fullPath = new Path("/table/base/path/p1/p2/");
+
+    // numPartitionPathLevels = 0 → empty
+    assertEquals("p1/p2",
+        FSUtils.getRelativePartitionPath(fullPath, 2),
+        "0 levels should return empty string");
+
+    // numPartitionPathLevels = 1 → return just last directory (p2)
+    assertEquals("p2",
+        FSUtils.getRelativePartitionPath(fullPath, 1),
+        "1 level should return only the last partition");
+  }
+
+  @Test
   public void testOldLogFileName() {
     // Check if old log file names are still parsable by FSUtils method
     String partitionPath = "2019/01/01/";

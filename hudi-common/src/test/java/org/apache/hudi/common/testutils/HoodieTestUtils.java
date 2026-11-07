@@ -53,6 +53,8 @@ public class HoodieTestUtils {
 
   public static final String HOODIE_DATABASE = "test_incremental";
   public static final String RAW_TRIPS_TEST_NAME = "raw_trips";
+  public static final String RAW_TRIPS_TEST_NAME_SOURCE1 = "raw_trips_source1";
+  public static final String RAW_TRIPS_TEST_NAME_SOURCE2 = "raw_trips_source2";
   public static final String DEFAULT_WRITE_TOKEN = "1-0-1";
   public static final int DEFAULT_LOG_VERSION = 1;
   public static final String[] DEFAULT_PARTITION_PATHS = {"2016/03/15", "2015/03/16", "2015/03/17"};

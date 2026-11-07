@@ -813,6 +813,8 @@ public class HoodieTableMetaClient implements Serializable {
     private String metadataPartitions;
     private String inflightMetadataPartitions;
     private String secondaryIndexesMetadata;
+    private Boolean allowBasePathOverridesWithMetadata;
+    private Integer numPartitionPathLevels;
 
     /**
      * Persist the configs that is written at the first time, and should not be changed.
@@ -964,6 +966,16 @@ public class HoodieTableMetaClient implements Serializable {
 
     public PropertyBuilder setSecondaryIndexesMetadata(String secondaryIndexesMetadata) {
       this.secondaryIndexesMetadata = secondaryIndexesMetadata;
+      return this;
+    }
+
+    public PropertyBuilder setAllowBasePathOverrides(boolean allowBasePathOverridesWithMetadata) {
+      this.allowBasePathOverridesWithMetadata = allowBasePathOverridesWithMetadata;
+      return this;
+    }
+
+    public PropertyBuilder setNumPartitionPathLevels(int numPartitionPathLevels) {
+      this.numPartitionPathLevels = numPartitionPathLevels;
       return this;
     }
 
@@ -1187,6 +1199,7 @@ public class HoodieTableMetaClient implements Serializable {
       if (null != secondaryIndexesMetadata) {
         tableConfig.setValue(HoodieTableConfig.SECONDARY_INDEXES_METADATA, secondaryIndexesMetadata);
       }
+
       return tableConfig.getProps();
     }
 

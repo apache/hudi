@@ -172,8 +172,8 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
    * Create a file system view, as of the given timeline, with the provided file statuses.
    */
   public HoodieTableFileSystemView(HoodieTableMetaClient metaClient, HoodieTimeline visibleActiveTimeline,
-      FileStatus[] fileStatuses) {
-    this(metaClient, visibleActiveTimeline);
+                                   FileStatus[] fileStatuses) {
+    this(metaClient, visibleActiveTimeline, false);
     addFilesToView(fileStatuses);
   }
 

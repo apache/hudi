@@ -20,6 +20,7 @@ package org.apache.hudi.common.model;
 
 import org.apache.hudi.common.util.ExternalFilePathUtil;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.hadoop.CachingPath;
 
 import org.apache.hadoop.fs.FileStatus;
@@ -35,8 +36,10 @@ public class HoodieBaseFile extends BaseFile {
   private static final long serialVersionUID = 1L;
   private static final char UNDERSCORE = '_';
   private static final char DOT = '.';
+  private static final String UNIFIED_VIEW_SUFFIX = "uv";
   private final String fileId;
   private final String commitTime;
+  private final Option<Integer> numPartitionLevels;
 
   private Option<BaseFile> bootstrapBaseFile;
 
@@ -45,6 +48,7 @@ public class HoodieBaseFile extends BaseFile {
     this.bootstrapBaseFile = dataFile.bootstrapBaseFile;
     this.fileId = dataFile.getFileId();
     this.commitTime = dataFile.getCommitTime();
+    this.numPartitionLevels = dataFile.getNumPartitionLevels();
   }
 
   public HoodieBaseFile(FileStatus fileStatus) {
@@ -52,7 +56,7 @@ public class HoodieBaseFile extends BaseFile {
   }
 
   public HoodieBaseFile(FileStatus fileStatus, BaseFile bootstrapBaseFile) {
-    this(fileStatus, getFileIdAndCommitTimeFromFileName(fileStatus.getPath().getName()), bootstrapBaseFile);
+    this(fileStatus, getInfoFromFileName(fileStatus.getPath().getName()), bootstrapBaseFile);
   }
 
   public HoodieBaseFile(String filePath) {
@@ -62,9 +66,11 @@ public class HoodieBaseFile extends BaseFile {
   public HoodieBaseFile(String filePath, BaseFile bootstrapBaseFile) {
     super(filePath);
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
-    String[] fileIdAndCommitTime = getFileIdAndCommitTimeFromFileName(getFileName());
-    this.fileId = fileIdAndCommitTime[0];
-    this.commitTime = fileIdAndCommitTime[1];
+    String[] fileInfo = getInfoFromFileName(getFileName());
+    this.fileId = fileInfo[0];
+    this.commitTime = fileInfo[1];
+    this.numPartitionLevels = StringUtils.isNullOrEmpty(fileInfo[3])
+        ? Option.empty() : Option.ofNullable(parseSafe(fileInfo[3]));
   }
 
   public HoodieBaseFile(String filePath, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
@@ -72,17 +78,36 @@ public class HoodieBaseFile extends BaseFile {
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
+    this.numPartitionLevels = Option.empty();
   }
 
   private HoodieBaseFile(FileStatus fileStatus, String[] fileIdAndCommitTime, BaseFile bootstrapBaseFile) {
-    this(fileStatus, fileIdAndCommitTime[0], fileIdAndCommitTime[1], bootstrapBaseFile);
+    this(fileStatus, fileIdAndCommitTime[0], fileIdAndCommitTime[1], fileIdAndCommitTime[2], fileIdAndCommitTime[3], bootstrapBaseFile);
   }
 
   public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, BaseFile bootstrapBaseFile) {
-    super(maybeHandleExternallyGeneratedFileName(fileStatus, fileId));
+    this(fileStatus, fileId, commitTime, fileId, bootstrapBaseFile);
+  }
+
+  public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, String originalFileName, BaseFile bootstrapBaseFile) {
+    this(fileStatus, fileId, commitTime, originalFileName, "", bootstrapBaseFile);
+  }
+
+  public HoodieBaseFile(FileStatus fileStatus, String fileId, String commitTime, String originalFileName, String numPartitionLevels, BaseFile bootstrapBaseFile) {
+    super(maybeHandleExternallyGeneratedFileName(fileStatus, originalFileName));
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
     this.fileId = fileId;
     this.commitTime = commitTime;
+    this.numPartitionLevels = StringUtils.isNullOrEmpty(numPartitionLevels)
+        ? Option.empty() : Option.ofNullable(parseSafe(numPartitionLevels));
+  }
+
+  private static Integer parseSafe(String s) {
+    try {
+      return Integer.parseInt(s);
+    } catch (Exception e) {
+      return null;
+    }
   }
 
   /**
@@ -90,12 +115,12 @@ public class HoodieBaseFile extends BaseFile {
    * @param fileName Name of the file
    * @return String array of size 2 with fileId as the first and commitTime as the second element.
    */
-  private static String[] getFileIdAndCommitTimeFromFileName(String fileName) {
+  private static String[] getInfoFromFileName(String fileName) {
     return ExternalFilePathUtil.isExternallyCreatedFile(fileName) ? handleExternallyGeneratedFile(fileName) : handleHudiGeneratedFile(fileName);
   }
 
   private static String[] handleHudiGeneratedFile(String fileName) {
-    String[] values = new String[2];
+    String[] values = new String[4];
     short underscoreCount = 0;
     short lastUnderscoreIndex = 0;
     for (int i = 0; i < fileName.length(); i++) {
@@ -115,16 +140,32 @@ public class HoodieBaseFile extends BaseFile {
     }
     // case where there is no '.' in file name (no file suffix like .parquet)
     values[1] = fileName.substring(lastUnderscoreIndex + 1);
+    values[2] = fileName;
     return values;
   }
 
   private static String[] handleExternallyGeneratedFile(String fileName) {
-    String[] values = new String[2];
-    // file name has format <originalFileName>_<commitTime>_hudiext and originalFileName is used as fileId
+    String[] values = new String[4];
     int lastUnderscore = fileName.lastIndexOf(UNDERSCORE);
     int secondToLastUnderscore = fileName.lastIndexOf(UNDERSCORE, lastUnderscore - 1);
-    values[0] = fileName.substring(0, secondToLastUnderscore);
-    values[1] = fileName.substring(secondToLastUnderscore + 1, lastUnderscore);
+    if (fileName.substring(secondToLastUnderscore + 1, lastUnderscore).equals(UNIFIED_VIEW_SUFFIX)) {
+      // This external is generated by Unified View Table
+      // file name has format <originalFileName>_<commitTime>_<numPartitionLevels>_uv_hudiext and originalFileName is used as fileId
+      // originalFileName has format <fileId>_suffix
+      int thirdUnderscoreFromLast = fileName.lastIndexOf(UNDERSCORE, secondToLastUnderscore - 1);
+      int fourthUnderscoreFromLast = fileName.lastIndexOf(UNDERSCORE, thirdUnderscoreFromLast - 1);
+      String numPartitionLevels = fileName.substring(thirdUnderscoreFromLast + 1, secondToLastUnderscore);
+      int firstUnderscore = fileName.indexOf(UNDERSCORE);
+      values[0] = fileName.substring(0, firstUnderscore); // file id
+      values[1] = fileName.substring(fourthUnderscoreFromLast + 1, thirdUnderscoreFromLast); // commit time
+      values[2] = fileName.substring(0, fourthUnderscoreFromLast);
+      values[3] = numPartitionLevels;
+    } else {
+      // file name has format <originalFileName>_<commitTime>_hudiext and originalFileName is used as fileId
+      values[0] = fileName.substring(0, secondToLastUnderscore);
+      values[1] = fileName.substring(secondToLastUnderscore + 1, lastUnderscore);
+      values[2] = fileName.substring(0, secondToLastUnderscore);
+    }
     return values;
   }
 
@@ -132,10 +173,10 @@ public class HoodieBaseFile extends BaseFile {
    * If the file was created externally, the original file path will have a '_[commitTime]_hudiext' suffix when stored in the metadata table. That suffix needs to be removed from the FileStatus so
    * that the actual file can be found and read.
    * @param fileStatus an input file status that may require updating
-   * @param fileId the fileId for the file
+   * @param fileName the fileId for the file
    * @return the original file status if it was not externally created, or a new FileStatus with the original file name if it was externally created
    */
-  private static FileStatus maybeHandleExternallyGeneratedFileName(FileStatus fileStatus, String fileId) {
+  private static FileStatus maybeHandleExternallyGeneratedFileName(FileStatus fileStatus, String fileName) {
     if (fileStatus == null) {
       return null;
     }
@@ -145,7 +186,7 @@ public class HoodieBaseFile extends BaseFile {
       return new FileStatus(fileStatus.getLen(), fileStatus.isDirectory(), fileStatus.getReplication(),
           fileStatus.getBlockSize(), fileStatus.getModificationTime(), fileStatus.getAccessTime(),
           fileStatus.getPermission(), fileStatus.getOwner(), fileStatus.getGroup(),
-          new CachingPath(parent, createRelativePathUnsafe(fileId)));
+          new CachingPath(parent, createRelativePathUnsafe(fileName)));
     } else {
       return fileStatus;
     }
@@ -165,6 +206,10 @@ public class HoodieBaseFile extends BaseFile {
 
   public void setBootstrapBaseFile(BaseFile bootstrapBaseFile) {
     this.bootstrapBaseFile = Option.ofNullable(bootstrapBaseFile);
+  }
+
+  public Option<Integer> getNumPartitionLevels() {
+    return numPartitionLevels;
   }
 
   @Override

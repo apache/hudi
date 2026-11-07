@@ -119,6 +119,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   public static final String SCHEMA_FIELD_ID_COLUMN_STATS = "ColumnStatsMetadata";
   public static final String SCHEMA_FIELD_ID_BLOOM_FILTER = "BloomFilterMetadata";
   public static final String SCHEMA_FIELD_ID_RECORD_INDEX = "recordIndexMetadata";
+  public static final String SCHEMA_FIELD_ID_BASEPATH_PARTITION = "basePathForPartition";
 
   /**
    * HoodieMetadata bloom filter payload field ids
@@ -184,6 +185,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   private HoodieMetadataColumnStats columnStatMetadata = null;
   private HoodieRecordIndexInfo recordIndexMetadata;
   private boolean isDeletedRecord = false;
+  private Option<String> basePathOverrideOpt = Option.empty();
 
   public HoodieMetadataPayload(@Nullable GenericRecord record, Comparable<?> orderingVal) {
     this(Option.ofNullable(record));
@@ -209,6 +211,10 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
             GenericRecord v = filesystemMetadata.get(k);
             filesystemMetadata.put(k, new HoodieMetadataFileInfo((Long) v.get("size"), (Boolean) v.get("isDeleted")));
           });
+        }
+        if (record.hasField(SCHEMA_FIELD_ID_BASEPATH_PARTITION) && record.get(SCHEMA_FIELD_ID_BASEPATH_PARTITION) != null) {
+          String basePathOverride = record.get(SCHEMA_FIELD_ID_BASEPATH_PARTITION).toString();
+          basePathOverrideOpt = basePathOverride.isEmpty() ? Option.empty() : Option.of(basePathOverride);
         }
       } else if (type == METADATA_TYPE_BLOOM_FILTER) {
         GenericRecord bloomFilterRecord = getNestedFieldValue(record, SCHEMA_FIELD_ID_BLOOM_FILTER);
@@ -266,32 +272,44 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   }
 
   private HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata) {
-    this(key, type, filesystemMetadata, null, null, null);
+    this(key, type, filesystemMetadata,
+        Option.empty(), null, null, null);
+  }
+
+  private HoodieMetadataPayload(String key, int type, Map<String, HoodieMetadataFileInfo> filesystemMetadata, Option<String> basePathForPartitionOpt) {
+
+    this(key, type, filesystemMetadata, basePathForPartitionOpt, null, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieMetadataBloomFilter metadataBloomFilter) {
-    this(key, METADATA_TYPE_BLOOM_FILTER, null, metadataBloomFilter, null, null);
+    this(key, METADATA_TYPE_BLOOM_FILTER, null, Option.empty(),  metadataBloomFilter, null, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieMetadataColumnStats columnStats) {
-    this(key, METADATA_TYPE_COLUMN_STATS, null, null, columnStats, null);
+    this(key, METADATA_TYPE_COLUMN_STATS, null, Option.empty(), null, columnStats, null);
   }
 
   private HoodieMetadataPayload(String key, HoodieRecordIndexInfo recordIndexMetadata) {
-    this(key, METADATA_TYPE_RECORD_INDEX, null, null, null, recordIndexMetadata);
+    this(key, METADATA_TYPE_RECORD_INDEX, null, Option.empty(), null, null, recordIndexMetadata);
   }
 
   protected HoodieMetadataPayload(String key, int type,
       Map<String, HoodieMetadataFileInfo> filesystemMetadata,
+      Option<String> basePathForPartitionOpt,
       HoodieMetadataBloomFilter metadataBloomFilter,
       HoodieMetadataColumnStats columnStats,
       HoodieRecordIndexInfo recordIndexMetadata) {
     this.key = key;
     this.type = type;
     this.filesystemMetadata = filesystemMetadata;
+    basePathOverrideOpt = basePathForPartitionOpt;
     this.bloomFilterMetadata = metadataBloomFilter;
     this.columnStatMetadata = columnStats;
     this.recordIndexMetadata = recordIndexMetadata;
+  }
+
+  public Option<String> getBasePathOverrideOpt() {
+    return basePathOverrideOpt;
   }
 
   /**
@@ -309,12 +327,16 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param partitions The list of partitions
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions, boolean isDeleted) {
+    return createPartitionListRecord(partitions, isDeleted, Option.empty());
+  }
+
+  public static HoodieRecord<HoodieMetadataPayload> createPartitionListRecord(List<String> partitions, boolean isDeleted, Option<String> tableBasePathOpt) {
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>();
     partitions.forEach(partition -> fileInfo.put(getPartitionIdentifier(partition), new HoodieMetadataFileInfo(0L, isDeleted)));
 
     HoodieKey key = new HoodieKey(RECORDKEY_PARTITION_LIST, MetadataPartitionType.FILES.getPartitionPath());
     HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_PARTITION_LIST,
-        fileInfo);
+        fileInfo, tableBasePathOpt);
     return new HoodieAvroRecord<>(key, payload);
   }
 
@@ -324,10 +346,14 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
    * @param partition    The name of the partition
    * @param filesAdded   Mapping of files to their sizes for files which have been added to this partition
    * @param filesDeleted List of files which have been deleted from this partition
+   * @param enableBasePathOverride true when base path for partition has to be added to FILES partition in MDT.
+   * @param basePathOverride base path of the table.
    */
   public static HoodieRecord<HoodieMetadataPayload> createPartitionFilesRecord(String partition,
                                                                                Map<String, Long> filesAdded,
-                                                                               List<String> filesDeleted) {
+                                                                               List<String> filesDeleted,
+                                                                               boolean enableBasePathOverride,
+                                                                               Option<String> basePathOverride) {
     int size = filesAdded.size() + filesDeleted.size();
     Map<String, HoodieMetadataFileInfo> fileInfo = new HashMap<>(size, 1);
     filesAdded.forEach((fileName, fileSize) -> {
@@ -340,7 +366,8 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     filesDeleted.forEach(fileName -> fileInfo.put(fileName, DELETE_FILE_METADATA));
 
     HoodieKey key = new HoodieKey(partition, MetadataPartitionType.FILES.getPartitionPath());
-    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo);
+    HoodieMetadataPayload payload = new HoodieMetadataPayload(key.getRecordKey(), METADATA_TYPE_FILE_LIST, fileInfo,
+        enableBasePathOverride ? basePathOverride : Option.empty());
     return new HoodieAvroRecord<>(key, payload);
   }
 
@@ -394,7 +421,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       case METADATA_TYPE_PARTITION_LIST:
       case METADATA_TYPE_FILE_LIST:
         Map<String, HoodieMetadataFileInfo> combinedFileInfo = combineFileSystemMetadata(previousRecord);
-        return new HoodieMetadataPayload(key, type, combinedFileInfo);
+        return new HoodieMetadataPayload(key, type, combinedFileInfo, basePathOverrideOpt);
       case METADATA_TYPE_BLOOM_FILTER:
         HoodieMetadataBloomFilter combineBloomFilterMetadata = combineBloomFilterMetadata(previousRecord);
         return new HoodieMetadataPayload(key, combineBloomFilterMetadata);
@@ -446,7 +473,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
       return Option.empty();
     }
 
-    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
+    HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, basePathOverrideOpt.orElse(""), bloomFilterMetadata,
         columnStatMetadata, recordIndexMetadata);
     return Option.of(record);
   }

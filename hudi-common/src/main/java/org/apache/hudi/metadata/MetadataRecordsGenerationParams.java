@@ -20,6 +20,7 @@
 package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 
 import java.io.Serializable;
 import java.util.List;
@@ -42,9 +43,12 @@ public class MetadataRecordsGenerationParams implements Serializable {
   private final int columnStatsIndexParallelism;
   private final List<String> targetColumnsForColumnStatsIndex;
   private final List<String> targetColumnsForBloomFilterIndex;
+  private final boolean enableBasePathOverride;
+  private final Option<String> basePathOverride;
 
   MetadataRecordsGenerationParams(HoodieTableMetaClient dataMetaClient, List<MetadataPartitionType> enabledPartitionTypes, String bloomFilterType, int bloomIndexParallelism,
-                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex) {
+                                  boolean isColumnStatsIndexEnabled, int columnStatsIndexParallelism, List<String> targetColumnsForColumnStatsIndex, List<String> targetColumnsForBloomFilterIndex,
+                                  boolean enableBasePathOverride, String basePathOverride) {
     this.dataMetaClient = dataMetaClient;
     this.enabledPartitionTypes = enabledPartitionTypes;
     this.bloomFilterType = bloomFilterType;
@@ -53,6 +57,8 @@ public class MetadataRecordsGenerationParams implements Serializable {
     this.columnStatsIndexParallelism = columnStatsIndexParallelism;
     this.targetColumnsForColumnStatsIndex = targetColumnsForColumnStatsIndex;
     this.targetColumnsForBloomFilterIndex = targetColumnsForBloomFilterIndex;
+    this.enableBasePathOverride = enableBasePathOverride;
+    this.basePathOverride = Option.of(basePathOverride);
   }
 
   public HoodieTableMetaClient getDataMetaClient() {
@@ -85,5 +91,13 @@ public class MetadataRecordsGenerationParams implements Serializable {
 
   public List<String> getSecondaryKeysForBloomFilterIndex() {
     return targetColumnsForBloomFilterIndex;
+  }
+
+  public boolean shouldEnableBasePathOverride() {
+    return enableBasePathOverride;
+  }
+
+  public Option<String> getBasePathOverride() {
+    return basePathOverride;
   }
 }

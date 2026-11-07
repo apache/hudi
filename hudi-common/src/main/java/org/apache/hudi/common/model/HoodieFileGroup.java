@@ -61,22 +61,34 @@ public class HoodieFileGroup implements Serializable {
    */
   private final Option<HoodieInstant> lastInstant;
 
+  private final Option<String> tableBasePathOpt;
+
   public HoodieFileGroup(HoodieFileGroup fileGroup) {
     this.timeline = fileGroup.timeline;
     this.fileGroupId = fileGroup.fileGroupId;
     this.fileSlices = new TreeMap<>(fileGroup.fileSlices);
     this.lastInstant = fileGroup.lastInstant;
+    this.tableBasePathOpt = Option.empty();
   }
 
   public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
     this(new HoodieFileGroupId(partitionPath, id), timeline);
   }
 
+  public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline, Option<String> tableBasePathOpt) {
+    this(new HoodieFileGroupId(partitionPath, id), timeline, tableBasePathOpt);
+  }
+
   public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline) {
+    this(fileGroupId, timeline, Option.empty());
+  }
+
+  public HoodieFileGroup(HoodieFileGroupId fileGroupId, HoodieTimeline timeline, Option<String> tableBasePathOpt) {
     this.fileGroupId = fileGroupId;
     this.fileSlices = new TreeMap<>(HoodieFileGroup.getReverseCommitTimeComparator());
     this.timeline = timeline;
     this.lastInstant = timeline.lastInstant();
+    this.tableBasePathOpt = tableBasePathOpt;
   }
 
   /**
@@ -111,6 +123,10 @@ public class HoodieFileGroup implements Serializable {
 
   public String getPartitionPath() {
     return fileGroupId.getPartitionPath();
+  }
+
+  public Option<String> getTableBasePathOpt() {
+    return tableBasePathOpt;
   }
 
   public HoodieFileGroupId getFileGroupId() {
