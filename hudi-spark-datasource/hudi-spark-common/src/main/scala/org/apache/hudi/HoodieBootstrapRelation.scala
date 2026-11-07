@@ -64,6 +64,8 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
 
   private lazy val skeletonSchema = HoodieSparkUtils.getMetaSchema
 
+  private lazy val bootstrapBasePath = new Path(metaClient.getTableConfig.getBootstrapBasePath.get)
+
   override val mandatoryFields: Seq[String] = Seq.empty
 
   protected override def collectFileSplits(partitionFilters: Seq[Expression], dataFilters: Seq[Expression]): Seq[FileSplit] = {
@@ -73,8 +75,8 @@ case class HoodieBootstrapRelation(override val sqlContext: SQLContext,
       val baseFile = fileSlice.getBaseFile.get()
 
       if (baseFile.getBootstrapBaseFile.isPresent) {
-        val partitionValues =
-          getPartitionColumnsAsInternalRowInternal(baseFile.getFileStatus, extractPartitionValuesFromPartitionPath = isPartitioned)
+        val partitionValues = getPartitionColumnsAsInternalRowInternal(baseFile.getBootstrapBaseFile.get.getFileStatus,
+          bootstrapBasePath, extractPartitionValuesFromPartitionPath = isPartitioned)
         val dataFile = PartitionedFile(partitionValues, baseFile.getBootstrapBaseFile.get().getPath, 0, baseFile.getBootstrapBaseFile.get().getFileLen)
         val skeletonFile = Option(PartitionedFile(InternalRow.empty, baseFile.getPath, 0, baseFile.getFileLen))
 

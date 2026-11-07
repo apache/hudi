@@ -18,7 +18,6 @@
 
 package org.apache.hudi.cli.integ;
 
-import org.apache.hadoop.fs.Path;
 import org.apache.hudi.cli.HoodieCLI;
 import org.apache.hudi.cli.HoodiePrintHelper;
 import org.apache.hudi.cli.commands.TableCommand;
@@ -26,7 +25,9 @@ import org.apache.hudi.cli.testutils.HoodieCLIIntegrationTestBase;
 import org.apache.hudi.cli.testutils.ShellEvaluationResultUtil;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.timeline.versioning.TimelineLayoutVersion;
-import org.apache.hudi.functional.TestBootstrap;
+import org.apache.hudi.functional.TestBootstrapBase;
+
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,7 +72,7 @@ public class ITTestBootstrapCommand extends HoodieCLIIntegrationTestBase {
     partitions = Arrays.asList("2018", "2019", "2020");
     long timestamp = Instant.now().toEpochMilli();
     for (int i = 0; i < partitions.size(); i++) {
-      Dataset<Row> df = TestBootstrap.generateTestRawTripDataset(timestamp,
+      Dataset<Row> df = TestBootstrapBase.generateTestRawTripDataset(timestamp,
           i * NUM_OF_RECORDS, i * NUM_OF_RECORDS + NUM_OF_RECORDS, null, jsc, sqlContext);
       df.write().parquet(sourcePath + Path.SEPARATOR + PARTITION_FIELD + "=" + partitions.get(i));
     }
