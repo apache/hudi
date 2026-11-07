@@ -207,13 +207,16 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
           totalDeltaCommits, config.getInlineCompactMaxTotalDeltaCommits());
       return totalDeltaCommits;
     }
-    int nonEmptyDeltaCommits = CompactionUtils.filterOutEmptyDeltaCommits(table.getMetaClient(), deltaCommits).countInstants();
-    log.info("{} of {} delta commits since the last compaction wrote files; empty delta commits are not counted.",
-        nonEmptyDeltaCommits, totalDeltaCommits);
+    // The trigger only compares against max.delta.commits, so stop reading commit metadata once that many are found.
+    int nonEmptyDeltaCommits = CompactionUtils.countNonEmptyDeltaCommits(
+        table.getMetaClient(), deltaCommits, config.getInlineCompactDeltaCommitMax());
+    log.info("{} of {} delta commits since the last compaction wrote files (counted up to {}); empty delta commits are not counted.",
+        nonEmptyDeltaCommits, totalDeltaCommits, config.getInlineCompactDeltaCommitMax());
     return nonEmptyDeltaCommits;
   }
 
-  private boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
+  @VisibleForTesting
+  boolean needCompact(CompactionTriggerStrategy compactionTriggerStrategy) {
     boolean compactable;
     // get deltaCommitsSinceLastCompaction and lastCompactionTs
     Option<Pair<Integer, String>> latestDeltaCommitInfoSinceCompactOption = getLatestDeltaCommitInfoSinceCompaction();

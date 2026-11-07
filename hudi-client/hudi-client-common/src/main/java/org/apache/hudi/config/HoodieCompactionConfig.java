@@ -111,7 +111,7 @@ public class HoodieCompactionConfig extends HoodieConfig {
       .withDocumentation("Used only when " + INLINE_COMPACT_IGNORE_EMPTY_COMMITS.key() + " is enabled: compaction is "
           + "triggered once this many delta commits, empty ones included, accumulate since the last compaction, which bounds "
           + "the number of log files and the length of the active timeline. A value <= 0 means 5 x "
-          + INLINE_COMPACT_NUM_DELTA_COMMITS.key() + ".");
+          + INLINE_COMPACT_NUM_DELTA_COMMITS.key() + "; a value below " + INLINE_COMPACT_NUM_DELTA_COMMITS.key() + " is raised to it.");
 
   public static final ConfigProperty<String> INLINE_COMPACT_TIME_DELTA_SECONDS = ConfigProperty
       .key("hoodie.compact.inline.max.delta.seconds")

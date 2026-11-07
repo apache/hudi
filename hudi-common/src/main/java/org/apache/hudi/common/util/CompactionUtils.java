@@ -34,6 +34,7 @@ import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV1M
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.slf4j.Logger;
@@ -483,10 +484,39 @@ public class CompactionUtils {
    * <p>A delta commit whose source commit cannot be found or read is kept, so the trigger errs towards compacting.
    *
    * @param metaClient   meta client of the table being compacted.
-   * @param deltaCommits completed delta commits since the latest compaction.
+   * @param deltaCommits delta commits since the latest compaction.
    * @return the delta commits that are not empty.
    */
   public static HoodieTimeline filterOutEmptyDeltaCommits(HoodieTableMetaClient metaClient, HoodieTimeline deltaCommits) {
+    Pair<HoodieTimeline, Map<String, HoodieInstant>> sourceCommits = getSourceWriteCommits(metaClient, deltaCommits);
+    return deltaCommits.filter(instant -> !isEmptyWriteCommit(sourceCommits.getLeft(), sourceCommits.getRight().get(instant.requestedTime())));
+  }
+
+  /**
+   * Counts the non-empty delta commits as {@link #filterOutEmptyDeltaCommits} defines them, reading commit metadata
+   * oldest first and stopping once {@code limit} is reached, since a count-based trigger only needs to know that.
+   *
+   * @return the number of non-empty delta commits, at most {@code limit}.
+   */
+  public static int countNonEmptyDeltaCommits(HoodieTableMetaClient metaClient, HoodieTimeline deltaCommits, int limit) {
+    Pair<HoodieTimeline, Map<String, HoodieInstant>> sourceCommits = getSourceWriteCommits(metaClient, deltaCommits);
+    int count = 0;
+    for (HoodieInstant instant : (Iterable<HoodieInstant>) deltaCommits.getInstantsAsStream()::iterator) {
+      if (count >= limit) {
+        break;
+      }
+      if (!isEmptyWriteCommit(sourceCommits.getLeft(), sourceCommits.getRight().get(instant.requestedTime()))) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * The timeline that decides whether each delta commit is empty, with its completed commits and delta commits keyed by
+   * instant time: the delta commits themselves for a data table, the data table's commits for the metadata table.
+   */
+  private static Pair<HoodieTimeline, Map<String, HoodieInstant>> getSourceWriteCommits(HoodieTableMetaClient metaClient, HoodieTimeline deltaCommits) {
     final HoodieTimeline sourceTimeline;
     if (metaClient.isMetadataTable()) {
       HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
@@ -497,22 +527,20 @@ public class CompactionUtils {
     } else {
       sourceTimeline = deltaCommits.filterCompletedInstants();
     }
-    return deltaCommits.filter(instant -> !isEmptyWriteCommit(sourceTimeline, instant.requestedTime()));
+    return Pair.of(sourceTimeline, sourceTimeline.getInstantsAsStream()
+        .filter(instant -> HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()) || HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .collect(Collectors.toMap(HoodieInstant::requestedTime, Function.identity(), (first, second) -> first)));
   }
 
-  private static boolean isEmptyWriteCommit(HoodieTimeline sourceTimeline, String requestedTime) {
-    Option<HoodieInstant> sourceInstant = Option.fromJavaOptional(sourceTimeline.getInstantsAsStream()
-        .filter(instant -> instant.requestedTime().equals(requestedTime)
-            && (HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()) || HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction())))
-        .findFirst());
-    if (!sourceInstant.isPresent()) {
+  private static boolean isEmptyWriteCommit(HoodieTimeline sourceTimeline, HoodieInstant sourceInstant) {
+    if (sourceInstant == null) {
       return false;
     }
     try {
-      HoodieCommitMetadata commitMetadata = sourceTimeline.readCommitMetadata(sourceInstant.get());
+      HoodieCommitMetadata commitMetadata = sourceTimeline.readCommitMetadata(sourceInstant);
       return commitMetadata.getPartitionToWriteStats().values().stream().allMatch(List::isEmpty);
-    } catch (IOException | RuntimeException e) {
-      LOG.warn("Could not read commit metadata of {}; counting it as a non-empty delta commit", sourceInstant.get(), e);
+    } catch (IOException | HoodieIOException e) {
+      LOG.warn("Could not read commit metadata of {}; counting it as a non-empty delta commit", sourceInstant, e);
       return false;
     }
   }

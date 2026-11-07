@@ -30,6 +30,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -51,6 +52,8 @@ import java.util.Map;
 
 import static org.apache.hudi.hadoop.fs.HadoopFSUtils.getStorageConf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
@@ -79,16 +82,36 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
   @Test
   void testEmptyDeltaCommitsAreNotCountedTowardsTheTrigger() throws Exception {
     // 3 delta commits wrote files and 7 were empty: with max.delta.commits = 10, compaction must wait.
-    assertEquals(3, newExecutorOnDeltaCommits(3, 7, 50).countDeltaCommitsForTrigger(completedDeltaCommits()));
+    assertEquals(3, newExecutorOnDeltaCommits(3, 7, 10, 50).countDeltaCommitsForTrigger(completedDeltaCommits()));
   }
 
   @Test
   void testEmptyDeltaCommitsCountOnceTheTotalReachesTheCap() throws Exception {
-    assertEquals(10, newExecutorOnDeltaCommits(3, 7, 10).countDeltaCommitsForTrigger(completedDeltaCommits()));
+    assertEquals(10, newExecutorOnDeltaCommits(3, 7, 10, 10).countDeltaCommitsForTrigger(completedDeltaCommits()));
   }
 
-  private ScheduleCompactionActionExecutor newExecutorOnDeltaCommits(int nonEmpty, int empty, int maxTotalDeltaCommits) throws Exception {
-    initMetaClient();
+  @Test
+  void testNonEmptyDeltaCommitsAreCountedUpToMaxDeltaCommits() throws Exception {
+    assertEquals(3, newExecutorOnDeltaCommits(5, 2, 3, 50).countDeltaCommitsForTrigger(completedDeltaCommits()));
+  }
+
+  @Test
+  void testNumCommitsAfterLastRequestIgnoresEmptyDeltaCommits() throws Exception {
+    when(config.isCompactionIgnoreEmptyCommits()).thenReturn(true);
+    ScheduleCompactionActionExecutor executor = newExecutorOnDeltaCommits(2, 5, 3, 50);
+    when(table.getActiveTimeline()).thenReturn(metaClient.getActiveTimeline());
+    assertFalse(executor.needCompact(CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST));
+
+    HoodieTestTable.of(metaClient).addDeltaCommit("100", commitMetadataWithWrites());
+    metaClient.reloadActiveTimeline();
+    when(table.getActiveTimeline()).thenReturn(metaClient.getActiveTimeline());
+    assertTrue(executor.needCompact(CompactionTriggerStrategy.NUM_COMMITS_AFTER_LAST_REQUEST));
+  }
+
+  private ScheduleCompactionActionExecutor newExecutorOnDeltaCommits(int nonEmpty, int empty, int maxDeltaCommits,
+                                                                     int maxTotalDeltaCommits) throws Exception {
+    initPath();
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
     int instant = 1;
     for (int i = 0; i < nonEmpty; i++) {
@@ -100,9 +123,10 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
     metaClient.reloadActiveTimeline();
     when(config.getProps()).thenReturn(new TypedProperties());
     when(config.getCompactionStrategy()).thenReturn(new LogFileNumBasedCompactionStrategy());
-    when(config.getInlineCompactMaxTotalDeltaCommits()).thenReturn(maxTotalDeltaCommits);
+    lenient().when(config.getInlineCompactDeltaCommitMax()).thenReturn(maxDeltaCommits);
+    lenient().when(config.getInlineCompactMaxTotalDeltaCommits()).thenReturn(maxTotalDeltaCommits);
     lenient().when(table.getMetaClient()).thenReturn(metaClient);
-    return new ScheduleCompactionActionExecutor(context, config, table, "100", Option.empty(), WriteOperationType.COMPACT);
+    return new ScheduleCompactionActionExecutor(context, config, table, "200", Option.empty(), WriteOperationType.COMPACT);
   }
 
   private HoodieTimeline completedDeltaCommits() {
@@ -117,11 +141,6 @@ class TestScheduleCompactionActionExecutor extends HoodieCommonTestHarness {
     HoodieCommitMetadata metadata = new HoodieCommitMetadata();
     metadata.addWriteStat("p1", stat);
     return metadata;
-  }
-
-  @Override
-  protected HoodieTableType getTableType() {
-    return HoodieTableType.MERGE_ON_READ;
   }
 
   @Test

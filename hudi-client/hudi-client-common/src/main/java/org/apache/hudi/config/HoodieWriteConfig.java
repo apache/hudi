@@ -2041,7 +2041,10 @@ public class HoodieWriteConfig extends HoodieConfig {
    */
   public int getInlineCompactMaxTotalDeltaCommits() {
     int maxTotalDeltaCommits = getIntOrDefault(HoodieCompactionConfig.INLINE_COMPACT_MAX_TOTAL_DELTA_COMMITS);
-    return maxTotalDeltaCommits > 0 ? maxTotalDeltaCommits : 5 * getInlineCompactDeltaCommitMax();
+    // A cap below max.delta.commits could never trigger earlier than the normal count, so it is raised to it.
+    return maxTotalDeltaCommits > 0
+        ? Math.max(maxTotalDeltaCommits, getInlineCompactDeltaCommitMax())
+        : 5 * getInlineCompactDeltaCommitMax();
   }
 
   public int getInlineCompactDeltaSecondsMax() {
