@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
@@ -161,6 +162,15 @@ public class TestHoodieFlinkEngineContext {
       rootCause = rootCause.getCause();
     }
     Assertions.assertSame(originalFailure, rootCause);
+  }
+
+  @Test
+  void testBroadcast() {
+    List<String> value = Arrays.asList("a", "b", "c");
+    HoodieBroadcast<List<String>> broadcast = context.broadcast(value);
+
+    Assertions.assertSame(value, broadcast.value());
+    Assertions.assertEquals(value, context.map(Arrays.asList(0, 1, 2), i -> broadcast.value().get(i), 2));
   }
 
   private static void recordExecutingPool(Set<ForkJoinPool> executingPools,
