@@ -703,6 +703,12 @@ public class HoodieTableConfig extends HoodieConfig {
       }
       getMissingKeyGeneratorClass(hoodieConfig).ifPresent(
           keyGeneratorClass -> hoodieConfig.setValue(KEY_GENERATOR_CLASS_NAME, keyGeneratorClass));
+      List<String> orderingFields = StringUtils.split(hoodieConfig.getProps().getProperty(ORDERING_FIELDS.key()), ",");
+      if (orderingFields.size() == 1 && tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+        // readers of tables below version 9 only know the deprecated precombine key, which the 9 to 8 downgrade writes too,
+        // and take its value as one field name
+        hoodieConfig.setValue(PRECOMBINE_FIELD, orderingFields.get(0));
+      }
 
       dropInvalidConfigs(hoodieConfig);
       storeProperties(hoodieConfig.getProps(), outputStream, propertyPath);

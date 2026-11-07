@@ -23,6 +23,7 @@ import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.model.debezium.MySqlDebeziumAvroPayload;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieArchivedTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -45,6 +46,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.ByteArrayInputStream;
@@ -352,6 +355,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
       configs.put("hoodie.record.merge.mode", "EVENT_TIME_ORDERING");
     }
     if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.table.precombine.field", "ts");
       configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.DefaultHoodieRecordPayload");
       configs.put("hoodie.record.merge.strategy.id", "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5");
     }
@@ -560,6 +564,91 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .setPartitionFields("dt")
         .setKeyGeneratorType(KeyGeneratorType.COMPLEX.name())
         .setComplexKeyGenEncoding(encoding);
+  }
+
+  /**
+   * Readers of a table below version 9 know only the deprecated {@code hoodie.table.precombine.field}: 0.x for
+   * version 6 and 1.0.x for version 8. Such a table records its ordering field under that key too, the key the
+   * 9 to 8 downgrade writes, while a table at version 9 or above records it only under
+   * {@code hoodie.table.ordering.fields}.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testOrderingFieldsKeysFollowTableVersion(HoodieTableVersion version) throws IOException {
+    HoodieTableMetaClient created = orderingFieldsTableBuilder(version)
+        .setOrderingFields("ts")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "ordering-v" + version.versionCode());
+    assertOrderingFieldsKeys(version, created.getTableConfig());
+  }
+
+  /**
+   * Readers of a table below version 9 take the deprecated precombine key as one field name, so a table ordered on
+   * several fields records them only under {@code hoodie.table.ordering.fields}.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  void testMultipleOrderingFieldsStayOffLegacyKey(HoodieTableVersion version) throws IOException {
+    Properties props = orderingFieldsTableBuilder(version)
+        .setOrderingFields("ts,seq")
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "multi-ordering-v" + version.versionCode())
+        .getTableConfig().getProps();
+    assertEquals("ts,seq", props.getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertFalse(props.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key()), "precombine key at version " + version.versionCode());
+  }
+
+  /**
+   * The deprecated precombine key repeats a single declared ordering field whatever the payload: 0.x and 1.0.x Spark
+   * writers dedup a {@link MySqlDebeziumAvroPayload} batch on the field it names, the same field 1.x uses.
+   */
+  @ParameterizedTest
+  @CsvSource(delimiter = '|', nullValues = "null", value = {
+      "SIX|_event_seq|_event_seq", "EIGHT|_event_seq|_event_seq", "SIX|ts|ts", "EIGHT|ts|ts",
+      "SIX|_event_bin_file,_event_pos|null", "EIGHT|_event_bin_file,_event_pos|null", "SIX|null|null", "EIGHT|null|null"})
+  void testMySqlDebeziumPayloadLegacyKeyFollowsDeclaredOrderingField(HoodieTableVersion version, String orderingFields, String legacyOrderingField) throws IOException {
+    Properties props = orderingFieldsTableBuilder(version)
+        .setPayloadClass(MySqlDebeziumAvroPayload.class)
+        .setOrderingFields(orderingFields)
+        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "mysql-debezium-v" + version.versionCode())
+        .getTableConfig().getProps();
+    assertEquals(orderingFields, props.getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals(legacyOrderingField, props.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key()), "precombine key at version " + version.versionCode());
+  }
+
+  /**
+   * ALTER TABLE RENAME re-creates the table from its own properties. A table below version 9 that records its
+   * ordering fields only under the deprecated precombine key, as 0.x, 1.0.x and the 9 to 8 downgrade write them,
+   * must keep that key.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  void testReInitFromPropertiesKeepsLegacyOrderingFieldsKey(HoodieTableVersion version) throws IOException {
+    String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "legacy-ordering-v" + version.versionCode();
+    HoodieTableMetaClient created = orderingFieldsTableBuilder(version).initTable(this.metaClient.getStorageConf(), path);
+    Properties legacyOrderingFields = new Properties();
+    legacyOrderingFields.setProperty(HoodieTableConfig.PRECOMBINE_FIELD.key(), "ts");
+    HoodieTableConfig.update(created.getStorage(), created.getMetaPath(), legacyOrderingFields);
+    created.reloadTableConfig();
+    assertFalse(created.getTableConfig().getProps().containsKey(HoodieTableConfig.ORDERING_FIELDS.key()));
+
+    HoodieTableMetaClient reInitialised = HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(created.getTableConfig().getProps())
+        .initTable(this.metaClient.getStorageConf(), path);
+    assertOrderingFieldsKeys(version, reInitialised.getTableConfig());
+  }
+
+  private static HoodieTableMetaClient.TableBuilder orderingFieldsTableBuilder(HoodieTableVersion version) {
+    return HoodieTableMetaClient.newTableBuilder()
+        .setTableType(HoodieTableType.MERGE_ON_READ.name())
+        .setTableName("table")
+        .setTableVersion(version)
+        .setRecordKeyFields("id");
+  }
+
+  private static void assertOrderingFieldsKeys(HoodieTableVersion version, HoodieTableConfig tableConfig) {
+    assertEquals("ts", tableConfig.getProps().getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+    assertEquals(version.lesserThan(HoodieTableVersion.NINE) ? "ts" : null,
+        tableConfig.getProps().getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key()),
+        "precombine key at version " + version.versionCode());
   }
 
   @Test
