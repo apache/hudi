@@ -241,6 +241,21 @@ public abstract class RecordContext<T> implements Serializable {
   }
 
   /**
+   * Initializes ordering conversion for the context's schema and ordering fields.
+   */
+  public void initOrderingValueConverter(HoodieSchema schema, List<String> orderingFields) {
+    // No initialization is needed for Java ordering values.
+  }
+
+  /**
+   * Converts an engine ordering value to Java types for inline delete block serialization.
+   * The value used for comparisons is left unchanged.
+   */
+  public Comparable convertOrderingValueToJava(Comparable value) {
+    return value;
+  }
+
+  /**
    * Converts an Avro record, e.g., serialized in the log files, to an engine-specific record.
    *
    * @param avroRecord The Avro record.
