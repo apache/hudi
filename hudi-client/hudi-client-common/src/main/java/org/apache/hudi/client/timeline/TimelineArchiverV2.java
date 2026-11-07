@@ -221,7 +221,7 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
             && (config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_COMMITS
             || config.getInlineCompactTriggerStrategy() == CompactionTriggerStrategy.NUM_AND_TIME))
             ? CompactionUtils.getEarliestInstantToRetainForCompaction(
-            table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax())
+            table.getActiveTimeline(), config.getInlineCompactDeltaCommitMax(), config.isCompactionIgnoreEmptyCommits())
             : Option.empty();
     earliestInstantToRetainCandidates.add(earliestInstantToRetainForCompaction);
 

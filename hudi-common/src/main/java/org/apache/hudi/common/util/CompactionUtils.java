@@ -23,6 +23,7 @@ import org.apache.hudi.avro.model.HoodieCompactionPlan;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.CompactionOperation;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -33,6 +34,8 @@ import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV1M
 import org.apache.hudi.common.table.timeline.versioning.compaction.CompactionV2MigrationHandler;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -442,8 +445,21 @@ public class CompactionUtils {
    */
   public static Option<HoodieInstant> getEarliestInstantToRetainForCompaction(
       HoodieActiveTimeline activeTimeline, int maxDeltaCommits) {
+    return getEarliestInstantToRetainForCompaction(activeTimeline, maxDeltaCommits, false);
+  }
+
+  /**
+   * Same as {@link #getEarliestInstantToRetainForCompaction(HoodieActiveTimeline, int)}, but when empty delta commits are
+   * ignored by the compaction trigger, every delta commit since the latest compaction is retained: archiving the older ones
+   * would shrink the count of non-empty delta commits and keep postponing the compaction.
+   */
+  public static Option<HoodieInstant> getEarliestInstantToRetainForCompaction(
+      HoodieActiveTimeline activeTimeline, int maxDeltaCommits, boolean ignoreEmptyDeltaCommits) {
     Option<Pair<HoodieTimeline, HoodieInstant>> deltaCommitsInfoOption =
         CompactionUtils.getDeltaCommitsSinceLatestCompaction(activeTimeline);
+    if (deltaCommitsInfoOption.isPresent() && ignoreEmptyDeltaCommits) {
+      return Option.of(deltaCommitsInfoOption.get().getRight());
+    }
     if (deltaCommitsInfoOption.isPresent()) {
       Pair<HoodieTimeline, HoodieInstant> deltaCommitsInfo = deltaCommitsInfoOption.get();
       HoodieTimeline deltaCommitTimeline = deltaCommitsInfo.getLeft();
@@ -458,5 +474,74 @@ public class CompactionUtils {
       }
     }
     return Option.empty();
+  }
+
+  /**
+   * Returns the delta commits that wrote files, dropping the empty ones (e.g. a streamer commit that only advances its
+   * checkpoint). For the metadata table, a delta commit is empty when the data table commit at the same instant time wrote
+   * no files: such a commit still lands a record in the files partition, so its own write stats cannot tell.
+   *
+   * <p>A delta commit whose source commit cannot be found or read is kept, so the trigger errs towards compacting.
+   *
+   * @param metaClient   meta client of the table being compacted.
+   * @param deltaCommits delta commits since the latest compaction.
+   * @return the delta commits that are not empty.
+   */
+  public static HoodieTimeline filterOutEmptyDeltaCommits(HoodieTableMetaClient metaClient, HoodieTimeline deltaCommits) {
+    Pair<HoodieTimeline, Map<String, HoodieInstant>> sourceCommits = getSourceWriteCommits(metaClient, deltaCommits);
+    return deltaCommits.filter(instant -> !isEmptyWriteCommit(sourceCommits.getLeft(), sourceCommits.getRight().get(instant.requestedTime())));
+  }
+
+  /**
+   * Counts the non-empty delta commits as {@link #filterOutEmptyDeltaCommits} defines them, reading commit metadata
+   * oldest first and stopping once {@code limit} is reached, since a count-based trigger only needs to know that.
+   *
+   * @return the number of non-empty delta commits, at most {@code limit}.
+   */
+  public static int countNonEmptyDeltaCommits(HoodieTableMetaClient metaClient, HoodieTimeline deltaCommits, int limit) {
+    Pair<HoodieTimeline, Map<String, HoodieInstant>> sourceCommits = getSourceWriteCommits(metaClient, deltaCommits);
+    int count = 0;
+    for (HoodieInstant instant : (Iterable<HoodieInstant>) deltaCommits.getInstantsAsStream()::iterator) {
+      if (count >= limit) {
+        break;
+      }
+      if (!isEmptyWriteCommit(sourceCommits.getLeft(), sourceCommits.getRight().get(instant.requestedTime()))) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * The timeline that decides whether each delta commit is empty, with its completed commits and delta commits keyed by
+   * instant time: the delta commits themselves for a data table, the data table's commits for the metadata table.
+   */
+  private static Pair<HoodieTimeline, Map<String, HoodieInstant>> getSourceWriteCommits(HoodieTableMetaClient metaClient, HoodieTimeline deltaCommits) {
+    final HoodieTimeline sourceTimeline;
+    if (metaClient.isMetadataTable()) {
+      HoodieTableMetaClient dataMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(HoodieTableMetadata.getDatasetBasePath(metaClient.getBasePath().toString()))
+          .setConf(metaClient.getStorageConf().newInstance())
+          .build();
+      sourceTimeline = dataMetaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants();
+    } else {
+      sourceTimeline = deltaCommits.filterCompletedInstants();
+    }
+    return Pair.of(sourceTimeline, sourceTimeline.getInstantsAsStream()
+        .filter(instant -> HoodieTimeline.COMMIT_ACTION.equals(instant.getAction()) || HoodieTimeline.DELTA_COMMIT_ACTION.equals(instant.getAction()))
+        .collect(Collectors.toMap(HoodieInstant::requestedTime, Function.identity(), (first, second) -> first)));
+  }
+
+  private static boolean isEmptyWriteCommit(HoodieTimeline sourceTimeline, HoodieInstant sourceInstant) {
+    if (sourceInstant == null) {
+      return false;
+    }
+    try {
+      HoodieCommitMetadata commitMetadata = sourceTimeline.readCommitMetadata(sourceInstant);
+      return commitMetadata.getPartitionToWriteStats().values().stream().allMatch(List::isEmpty);
+    } catch (IOException | HoodieIOException e) {
+      LOG.warn("Could not read commit metadata of {}; counting it as a non-empty delta commit", sourceInstant, e);
+      return false;
+    }
   }
 }

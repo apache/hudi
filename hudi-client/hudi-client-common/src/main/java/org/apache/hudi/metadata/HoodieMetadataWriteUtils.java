@@ -296,6 +296,8 @@ public class HoodieMetadataWriteUtils {
         .withCompactionConfig(HoodieCompactionConfig.newBuilder()
             .withInlineCompaction(false)
             .withMaxNumDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactDeltaCommitMax())
+            .withCompactionIgnoreEmptyCommits(writeConfig.isMetadataCompactionIgnoreEmptyCommits())
+            .withMaxTotalDeltaCommitsBeforeCompaction(writeConfig.getMetadataCompactMaxTotalDeltaCommits())
             // Compaction on metadata table is used as a barrier for archiving on main dataset and for validating the
             // deltacommits having corresponding completed commits. Therefore, we need to compact all fileslices of all
             // partitions together requiring UnBoundedCompactionStrategy.
