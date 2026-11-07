@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.ddl
 
-import org.apache.hudi.HoodieCLIUtils
+import org.apache.hudi.{HoodieCLIUtils, HoodieSparkUtils}
 import org.apache.hudi.common.model.{HoodieCommitMetadata, HoodieRecord, WriteOperationType}
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.hudi.common.table.timeline.HoodieInstant.State
@@ -73,6 +73,17 @@ class TestAlterTable extends HoodieSparkSqlTestBase {
         assertResult("name column") (
           catalogTable.schema(catalogTable.schema.fieldIndex("name")).getComment().get
         )
+        if (HoodieSparkUtils.gteqSpark4_3) {
+          spark.sql(s"comment on column $tableName.name is null")
+          spark.sessionState.catalog.refreshTable(new TableIdentifier(tableName))
+          catalogTable = spark.sessionState.catalog.getTableMetadata(new TableIdentifier(tableName))
+          assertResult(None) (
+            catalogTable.schema(catalogTable.schema.fieldIndex("name")).getComment()
+          )
+          assertResult("primary id") (
+            catalogTable.schema(catalogTable.schema.fieldIndex("id")).getComment().get
+          )
+        }
         validateTableSchema(tablePath)
 
         // alter table name.

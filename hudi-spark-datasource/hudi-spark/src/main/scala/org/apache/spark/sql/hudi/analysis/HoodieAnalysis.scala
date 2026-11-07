@@ -60,7 +60,9 @@ object HoodieAnalysis extends SparkAdapterSupport {
     val adaptIngestionTargetLogicalRelations: RuleBuilder = session => AdaptIngestionTargetLogicalRelations(session)
 
     rules += adaptIngestionTargetLogicalRelations
-    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_2) {
+    val dataSourceV2ToV1FallbackClass = if (HoodieSparkUtils.isSpark4_3) {
+      "org.apache.spark.sql.hudi.analysis.HoodieSpark43DataSourceV2ToV1Fallback"
+    } else if (HoodieSparkUtils.isSpark4_2) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark42DataSourceV2ToV1Fallback"
     } else if (HoodieSparkUtils.isSpark4_1) {
       "org.apache.spark.sql.hudi.analysis.HoodieSpark41DataSourceV2ToV1Fallback"
@@ -88,7 +90,10 @@ object HoodieAnalysis extends SparkAdapterSupport {
     // leading to all relations resolving as V2 instead of current expectation of them being resolved as V1)
     rules ++= Seq(dataSourceV2ToV1Fallback, resolveReferences)
 
-    if (HoodieSparkUtils.isSpark4_2) {
+    if (HoodieSparkUtils.isSpark4_3) {
+      rules += (_ => instantiateKlass(
+        "org.apache.spark.sql.hudi.analysis.HoodieSpark43ResolveColumnsForInsertInto"))
+    } else if (HoodieSparkUtils.isSpark4_2) {
       rules += (_ => instantiateKlass(
         "org.apache.spark.sql.hudi.analysis.HoodieSpark42ResolveColumnsForInsertInto"))
     } else if (HoodieSparkUtils.isSpark4_1) {
@@ -650,9 +655,9 @@ case class HoodiePostAnalysisRule(sparkSession: SparkSession) extends Rule[Logic
         if !isView && sparkAdapter.isHoodieTable(oldName, sparkSession) =>
           AlterHoodieTableRenameCommand(oldName, newName, isView)
       // Rewrite the AlterTableChangeColumnCommand to AlterHoodieTableChangeColumnCommand
-      case AlterTableChangeColumnCommand(tableName, columnName, newColumn)
-        if sparkAdapter.isHoodieTable(tableName, sparkSession) =>
-          AlterHoodieTableChangeColumnCommand(tableName, columnName, newColumn)
+      case c: AlterTableChangeColumnCommand
+        if sparkAdapter.isHoodieTable(c.tableName, sparkSession) =>
+          AlterHoodieTableChangeColumnCommand(c.tableName, c.columnName, c.newColumn)
       // SPARK-34238: the definition of ShowPartitionsCommand has been changed in Spark3.2.
       // Match the class type instead of call the `unapply` method.
       case s: ShowPartitionsCommand

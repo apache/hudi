@@ -64,6 +64,12 @@ declare -a ALL_VERSION_OPTS=(
 # hudi-spark4.2.x_2.13
 # hudi-spark4.2-bundle_2.13
 "-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.2 -pl hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.2.x,packaging/hudi-spark-bundle -am"
+# For Spark 4.3, Scala 2.13:
+# (no hudi-spark4.3-native-bundle: Comet publishes no artifact for Spark 4.3)
+# hudi-spark4-common
+# hudi-spark4.3.x_2.13
+# hudi-spark4.3-bundle_2.13
+"-T 1C -Djava17 -Djava.version=17 -Dscala-2.13 -Dspark4.3 -pl hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.3.x,packaging/hudi-spark-bundle -am"
 )
 printf -v joined "'%s'\n" "${ALL_VERSION_OPTS[@]}"
 
