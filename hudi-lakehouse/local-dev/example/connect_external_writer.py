@@ -49,7 +49,7 @@ def write(database, action):
         spark.stop()
 
 
-def writer_pod(template, name, database, action):
+def writer_pod(template, name, database, action, image=None):
     """Reuse only connection config; never reuse the endpoint's labels/probes."""
     container = next(c for c in template["containers"] if c["name"] == "spark-connect")
     env = [e for e in container["env"] if e["name"] == "HUDI_CONF_DIR" or e["name"].startswith("AWS_")]
@@ -63,7 +63,7 @@ def writer_pod(template, name, database, action):
             "securityContext": template["securityContext"],
             "imagePullSecrets": template.get("imagePullSecrets", []),
             "containers": [{
-                "name": "writer", "image": container["image"],
+                "name": "writer", "image": image or container["image"],
                 "imagePullPolicy": container["imagePullPolicy"],
                 "securityContext": container["securityContext"],
                 "env": env,
@@ -98,7 +98,7 @@ def launch(database, action):
         # create, not apply: a name collision must not authorize deleting others' resources.
         kubectl("create", "configmap", name, f"--from-file=connect_external_writer.py={Path(__file__).resolve()}")
         config_created = True
-        kubectl("create", "-f", "-", input=json.dumps(writer_pod(template, name, database, action)))
+        kubectl("create", "-f", "-", input=json.dumps(writer_pod(template, name, database, action, os.environ.get("EXTERNAL_WRITER_IMAGE"))))
         pod_created = True
         deadline = time.monotonic() + 390
         while time.monotonic() < deadline:
