@@ -42,6 +42,8 @@ import com.azure.storage.blob.options.BlobParallelUploadOptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -210,7 +212,7 @@ public class TestAzureStorageLockClient {
   }
 
   @Test
-  void testTryUpsertLockFile_serverError_returnsUnknownError() {
+  void testTryUpsertLockFile_serverError_returnsTransientError() {
     StorageLockData lockData = new StorageLockData(false, 999L, "owner");
     BlobStorageException ex = mock(BlobStorageException.class);
     when(ex.getStatusCode()).thenReturn(503);
@@ -218,9 +220,26 @@ public class TestAzureStorageLockClient {
 
     Pair<LockUpsertResult, Option<StorageLockFile>> result = lockClient.tryUpsertLockFile(lockData, Option.empty());
 
-    assertEquals(LockUpsertResult.UNKNOWN_ERROR, result.getLeft());
+    // A 5xx is retriable, not an indeterminate state: the write's precondition means the caller
+    // may safely retry the identical write, and reconciles a retry that finds its own write landed.
+    assertEquals(LockUpsertResult.TRANSIENT_ERROR, result.getLeft());
     assertTrue(result.getRight().isEmpty());
     verify(mockLogger).warn(contains("Azure returned internal server error code"), eq(OWNER_ID), eq(LOCK_FILE_URI), eq(ex));
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {500, 502, 503, 504})
+  void testTryUpsertLockFile_allServerErrorsAreTransient(int statusCode) {
+    // The whole 5xx range must map to TRANSIENT_ERROR, not just the 503 seen in production.
+    StorageLockData lockData = new StorageLockData(false, 999L, "owner");
+    BlobStorageException ex = mock(BlobStorageException.class);
+    when(ex.getStatusCode()).thenReturn(statusCode);
+    when(mockBlobClient.uploadWithResponse(any(BlobParallelUploadOptions.class), isNull(), eq(Context.NONE))).thenThrow(ex);
+
+    Pair<LockUpsertResult, Option<StorageLockFile>> result = lockClient.tryUpsertLockFile(lockData, Option.empty());
+
+    assertEquals(LockUpsertResult.TRANSIENT_ERROR, result.getLeft());
+    assertTrue(result.getRight().isEmpty());
   }
 
   @Test
