@@ -17,9 +17,14 @@
 
 package org.apache.spark.sql.hudi.command.procedures
 
+import org.apache.hudi.HoodieSparkUtils
+
+import org.apache.spark.{SparkException, SparkThrowable}
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
-import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, IntegralDivide, Unevaluable}
+import org.apache.spark.sql.catalyst.FunctionIdentifier
+import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, TypeCoercionBase, UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, IntegralDivide, RuntimeReplaceable, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DecimalType, DoubleType, IntegerType, LongType, NullType, NumericType, ShortType, StructType}
@@ -41,7 +46,7 @@ import scala.util.{Failure, Success, Try}
  * - Complex types: Array, Map, Struct (Row)
  * - Nested combinations of all above types
  */
-object HoodieProcedureFilterUtils {
+object HoodieProcedureFilterUtils extends Logging {
 
   /**
    * Evaluates a SQL filter expression against a sequence of rows.
@@ -62,13 +67,15 @@ object HoodieProcedureFilterUtils {
 
         // Binding and resolution depend only on the schema, so run the three passes once for the
         // whole batch instead of per row.
-        val boundExpr = bindAndResolveExpression(parsedExpr, schema)
+        val boundExpr = bindAndResolveExpression(parsedExpr, schema, sparkSession)
         rows.filter(row => evaluateExpressionOnRow(boundExpr, row, schema))
       } match {
         case Success(filteredRows) => filteredRows
         // Surface an overflowing ANSI cast or arithmetic, or an ANSI cast of a malformed string,
         // with Spark's own exception rather than restating it as a filter-expression problem: the
-        // expression is fine, the data does not fit.
+        // expression is fine, the data does not fit. A registry-resolved function's own runtime
+        // error is rethrown the same way from evaluateExpressionOnRow and lands in the generic
+        // Failure branch below.
         case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException)) => throw e
         case Failure(exception) =>
           throw new IllegalArgumentException(
@@ -79,7 +86,7 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  private def bindAndResolveExpression(expression: Expression, schema: StructType): Expression = {
+  private def bindAndResolveExpression(expression: Expression, schema: StructType, sparkSession: SparkSession): Expression = {
     // First pass: bind attributes
     val attributeBound = expression.transform {
         case attr: org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute =>
@@ -92,10 +99,13 @@ object HoodieProcedureFilterUtils {
           }
       }
 
-    // Second pass: resolve functions
-    val functionResolved = attributeBound.transform {
+    // Second pass: resolve functions. transformUp so a nested call's arguments (e.g. upper(name)
+    // inside instr(upper(name), 'A')) are already resolved by the time the outer function's case
+    // runs - otherwise resolved/checkInputDataTypes below would see an unresolved child and
+    // reject a call that's actually fine.
+    val functionResolved = attributeBound.transformUp {
         case unresolvedFunc: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
-          unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
+          val hardcodedResolved = unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
             case "upper" =>
               if (unresolvedFunc.arguments.length == 1) {
                 org.apache.spark.sql.catalyst.expressions.Upper(unresolvedFunc.arguments.head)
@@ -357,10 +367,27 @@ object HoodieProcedureFilterUtils {
               }
             case _ => unresolvedFunc
           }
+          resolveOrFallback(hardcodedResolved, unresolvedFunc, sparkSession)
     }
 
-    // Third pass: handle type coercion for numeric comparisons
-    functionResolved.transformUp {
+    // Third pass: unwrap any RuntimeReplaceable the parser emitted directly (ILIKE parses straight
+    // to ILike, never through an UnresolvedFunction the second pass would route through the
+    // registry), then widen numeric comparison operands.
+    unwrapAndWiden(functionResolved)
+  }
+
+  // Whatever the hardcoded table produced - a real expression, or nothing at all (wrong arity, or
+  // a name not in the table) - still an UnresolvedFunction? Try the registry before giving up.
+  private def resolveOrFallback(firstAttempt: Expression, original: UnresolvedFunction, sparkSession: SparkSession): Expression =
+    firstAttempt match {
+      case _: UnresolvedFunction => resolveViaFunctionRegistry(original, sparkSession)
+      case resolved => resolved
+    }
+
+  // Widens numeric comparison/arithmetic operands to a common type - see the coercion helpers
+  // below for the rules each case follows.
+  private def applyHudiWideningRules(expression: Expression): Expression = {
+    expression.transformUp {
       case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
         applyTypeCoercion(eq)
       case gt: org.apache.spark.sql.catalyst.expressions.GreaterThan =>
@@ -389,6 +416,146 @@ object HoodieProcedureFilterUtils {
     }
   }
 
+  // Resolves a function not covered by the hardcoded table above via Spark's own FunctionRegistry,
+  // then checks the result is actually usable outside a real query plan - both steps a plain
+  // lookupFunction call skips or can't tell on its own. Anything that isn't falls through to the
+  // existing rejection path instead of letting eval() throw silently.
+  private def resolveViaFunctionRegistry(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression = {
+    Try {
+      val castedResolved = applySparkAnalyzerCoercionRules(lookupBuiltin(unresolvedFunc, sparkSession))
+      // Checked here, on the raw wrapper, before unwrapping: a RuntimeReplaceable wrapper's own
+      // declared input-type contract (nvl needing matching operand types, split_part needing
+      // string/string/int) is otherwise discarded once unwrapped to a form with a weaker or
+      // absent contract of its own.
+      if (!castedResolved.checkInputDataTypes().isSuccess) {
+        unresolvedFunc
+      } else {
+        val finalized = unwrapAndWiden(castedResolved)
+        if (isUsableOutsideQueryPlan(finalized)) finalized else unresolvedFunc
+      }
+    } match {
+      case Success(resolved) => resolved
+      // Catch-all on purpose - what a version throws for an unknown name isn't a stable contract,
+      // and an unsupported name still has to reach the rejection path. Logged to stay diagnosable.
+      case Failure(exception) =>
+        logDebug(s"Falling back to the rejection path for ${unresolvedFunc.nameParts.mkString(".")}", exception)
+        unresolvedFunc
+    }
+  }
+
+  // Runs a handful of the analyzer's own coercion rules on a single expression, the same rules
+  // lookupFunction skips: ImplicitTypeCasts for nodes declaring a real input-type contract,
+  // FunctionArgumentConversion/ConcatCoercion/IfCoercion for the builtins whose argument types get
+  // unified before the type check even sees them (concat(id, 'x') casts the Int to String via
+  // ConcatCoercion in a real query; without it Concat.checkInputDataTypes just fails). Order
+  // mirrors TypeCoercion's own rule list - ImplicitTypeCasts last, as a catch-all. Anything not
+  // covered by one of these four passes through unchanged.
+  private def applySparkAnalyzerCoercionRules(expression: Expression): Expression = {
+    val engine: TypeCoercionBase = if (SQLConf.get.ansiEnabled) AnsiTypeCoercion else TypeCoercion
+    Seq(engine.FunctionArgumentConversion, engine.ConcatCoercion, engine.IfCoercion, engine.ImplicitTypeCasts)
+      .foldLeft(expression) { (expr, rule) => rule.transform.applyOrElse(expr, identity[Expression]) }
+  }
+
+  // Only plain builtins: a qualified name would mean guessing which part is the function, risking
+  // an unrelated match, so those stay unresolved. Arguments are widened before the lookup, not
+  // just the result after - in sqrt(ts + 1) the argument is still an unresolved Add here, and the
+  // wrapper's checkInputDataTypes runs before pass three would have widened it.
+  private def lookupBuiltin(unresolvedFunc: UnresolvedFunction, sparkSession: SparkSession): Expression =
+    unresolvedFunc.nameParts match {
+      case Seq(funcName) =>
+        val widenedArguments = unresolvedFunc.arguments.map(applyHudiWideningRules)
+        sparkSession.sessionState.functionRegistry
+          .lookupFunction(builtinFunctionIdentifier(funcName), widenedArguments)
+      case _ => unresolvedFunc
+    }
+
+  // A session's function registry is a clone of FunctionRegistry.builtin, keyed the same way
+  // builtins are actually registered - a bare name pre-4.2, but the fully qualified
+  // system.builtin.<name> from 4.2 onward, where a session-level clone (unlike the builtin
+  // singleton itself) stops auto-qualifying a bare name it's given and asserts instead.
+  private def builtinFunctionIdentifier(funcName: String): FunctionIdentifier =
+    if (HoodieSparkUtils.gteqSpark4_2) {
+      // FunctionIdentifier only gained the catalog parameter in 3.4 and this file still compiles
+      // against 3.3, so the 3-arg constructor is reached reflectively rather than called directly.
+      classOf[FunctionIdentifier]
+        .getConstructor(classOf[String], classOf[Option[_]], classOf[Option[_]])
+        .newInstance(funcName, Some("builtin"), Some("system"))
+        .asInstanceOf[FunctionIdentifier]
+    } else {
+      FunctionIdentifier(funcName)
+    }
+
+  // Shared by the registry path and the whole-tree third pass: nvl(ts, 0) unwraps to
+  // Coalesce(ts, 0), which needs the same widening the hardcoded coalesce(ts, 0) already gets.
+  private def unwrapAndWiden(expression: Expression): Expression =
+    applyHudiWideningRules(unwrapRuntimeReplaceable(expression))
+
+  // Substitution the analyzer normally performs, which both lookupFunction and the parser skip -
+  // left unwrapped, RuntimeReplaceable's final eval() throws. A replacement can be another
+  // RuntimeReplaceable (regexp_substr -> NullIf) or a 4.0+ With wrapper, so this runs to a fixed
+  // point, over the whole tree rather than registry results alone: ILIKE parses straight to ILike.
+  private def unwrapRuntimeReplaceable(expression: Expression): Expression = {
+    val next = expression.transformUp {
+      case r: RuntimeReplaceable => r.replacement
+      case withExpr if isWithNode(withExpr) => inlineCommonExpressions(withExpr)
+    }
+    if (next.fastEquals(expression)) next else unwrapRuntimeReplaceable(next)
+  }
+
+  // With/CommonExpressionDef/CommonExpressionRef don't exist before Spark 4.0, so these go by
+  // reflection rather than a direct import to keep this file compiling across the same 3.3-4.2
+  // range as the rest of it - the fully qualified name avoids matching an unrelated same-named
+  // class elsewhere on the classpath.
+  private def isWithNode(expression: Expression): Boolean =
+    isCatalystClass(expression, "org.apache.spark.sql.catalyst.expressions.With")
+
+  private def inlineCommonExpressions(withExpr: Expression): Expression = {
+    val defsById = invokeAccessor(withExpr, "defs").asInstanceOf[Seq[Expression]]
+      .map { commonExprDef =>
+        invokeAccessor(commonExprDef, "id") -> invokeAccessor(commonExprDef, "child").asInstanceOf[Expression]
+      }.toMap
+    val child = invokeAccessor(withExpr, "child").asInstanceOf[Expression]
+    child.transformUp {
+      case ref if isCommonExpressionRef(ref) => defsById(invokeAccessor(ref, "id"))
+    }
+  }
+
+  private def isCommonExpressionRef(expression: Expression): Boolean =
+    isCatalystClass(expression, "org.apache.spark.sql.catalyst.expressions.CommonExpressionRef")
+
+  private def isCatalystClass(expression: Expression, fullyQualifiedName: String): Boolean =
+    expression.getClass.getName == fullyQualifiedName
+
+  private def invokeAccessor(target: AnyRef, name: String): AnyRef = target.getClass.getMethod(name).invoke(target)
+
+  // A resolved expression still isn't usable one row at a time if it's an aggregate (percentile,
+  // collect_list - only make sense across real aggregation), a generator (explode, inline - only
+  // work inside a projection), still Unevaluable somewhere in it (current_user, lag, lead, ... -
+  // only valid in their normal analyzer context), or non-deterministic (rand, uuid,
+  // spark_partition_id - expect per-partition initialization this evaluator never does).
+  //
+  // Unevaluable alone doesn't cover the whole family on every Spark version (see the
+  // current_timestamp test below), so a foldable result also gets a real eval() probe against
+  // EmptyRow rather than only a trait check; only a bare SparkException - the marker
+  // Unevaluable.eval() itself throws - counts as "structurally unusable", so a genuine data error
+  // (regexp_replace('a', '[', 'x')) still raises normally instead of being silently rejected.
+  private def isUsableOutsideQueryPlan(expression: Expression): Boolean = {
+    !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.aggregate.AggregateFunction] &&
+      !expression.isInstanceOf[org.apache.spark.sql.catalyst.expressions.Generator] &&
+      !expression.exists(_.isInstanceOf[Unevaluable]) &&
+      expression.deterministic &&
+      expression.resolved &&
+      expression.checkInputDataTypes().isSuccess &&
+      (!expression.foldable || evalsOnItsOwn(expression))
+  }
+
+  private def evalsOnItsOwn(expression: Expression): Boolean =
+    Try(expression.eval(org.apache.spark.sql.catalyst.expressions.EmptyRow)) match {
+      case Success(_) => true
+      case Failure(_: SparkException) => false
+      case Failure(_) => true
+    }
+
   private def evaluateExpressionOnRow(boundExpr: Expression, row: Row, schema: StructType): Boolean = {
 
     val internalRow = convertRowToInternalRow(row, schema)
@@ -411,8 +578,17 @@ object HoodieProcedureFilterUtils {
       // Spark raises SparkArithmeticException for an overflowing ANSI cast or arithmetic, and
       // SparkNumberFormatException or SparkDateTimeException for an ANSI cast of a malformed
       // string; each extends the matching JDK type. Swallowing one would silently drop a row the
-      // same query keeps, so let it out and let the caller fail the way the equivalent query does.
+      // same query keeps, so let it out unconditionally, exactly as before the registry fallback.
       case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException)) => throw e
+      // SparkThrowable covers the equivalent runtime errors from registry-resolved functions
+      // (to_number/bit_get out-of-range, ...), and IllegalArgumentException covers a bad regex
+      // pattern - both newly reachable through the registry fallback, so this guard only applies
+      // to these two: a caller that skips validateFilterExpression and evaluates a genuinely
+      // unsupported function directly still no-matches instead of hitting the same
+      // SparkThrowable-family INTERNAL_ERROR that Unevaluable.eval() raises for an unrelated
+      // reason, so this method stays safe to call on its own.
+      case Failure(e @ (_: SparkThrowable | _: IllegalArgumentException)) if !boundExpr.exists(_.isInstanceOf[Unevaluable]) =>
+        throw e
       case Failure(_) => false
     }
   }
@@ -500,7 +676,7 @@ object HoodieProcedureFilterUtils {
         val columnNames = schema.fieldNames.toSet
         val referencedColumns = extractColumnReferences(parsedExpr)
         val invalidColumns = referencedColumns -- columnNames
-        val resolvedExpr = bindAndResolveExpression(parsedExpr, schema)
+        val resolvedExpr = bindAndResolveExpression(parsedExpr, schema, sparkSession)
         val unsupportedFunctions = extractFunctionReferences(resolvedExpr)
         val unsupportedExpressions = resolvedExpr.collect {
           case expression: Unevaluable
@@ -554,14 +730,12 @@ object HoodieProcedureFilterUtils {
       // Spark can replace an integral/decimal-literal inequality with an integral comparison,
       // avoiding a lossy cast of the column. It also gives integral literals minimum decimal
       // precision before finding the common comparison type.
-      val promoted = DecimalPrecision.transform.applyOrElse(original, identity[Expression])
+      val promoted = applyDecimalPrecisionRule(original)
       // Mixed decimal/integral promotion creates two decimal operands. Apply the decimal-pair
       // rule next, just as a subsequent analyzer iteration would.
-      val comparison = DecimalPrecision.transform.applyOrElse(promoted, identity[Expression])
+      val comparison = applyDecimalPrecisionRule(promoted)
       comparison match {
-        case binary: BinaryComparison =>
-          widenOperands(Seq(binary.left, binary.right))
-            .map(binary.withNewChildren).getOrElse(binary)
+        case binary: BinaryComparison => widenChildrenOf(binary)
         case other => other
       }
     }
@@ -591,23 +765,17 @@ object HoodieProcedureFilterUtils {
       arith
     } else {
       val decimalOperands = operands.exists(_.dataType.isInstanceOf[DecimalType])
-      val promoted = if (decimalOperands) {
-        DecimalPrecision.transform.applyOrElse(arith, identity[Expression])
-      } else {
-        arith
-      }
+      val promoted = if (decimalOperands) applyDecimalPrecisionRule(arith) else arith
       promoted match {
         case binary: BinaryArithmetic =>
-          val children = Seq(binary.left, binary.right)
-          val widened = if (children.forall(_.dataType.isInstanceOf[DecimalType])) {
+          val widened = if (binary.children.forall(_.dataType.isInstanceOf[DecimalType])) {
             binary
           } else {
-            widenOperands(children)
-              .map(binary.withNewChildren).getOrElse(binary)
+            widenChildrenOf(binary)
           }
           // Spark 3.3 wraps decimal arithmetic in CheckOverflow after operand promotion.
           // Later versions calculate the result precision within BinaryArithmetic itself.
-          if (decimalOperands) DecimalPrecision.transform.applyOrElse(widened, identity[Expression]) else widened
+          if (decimalOperands) applyDecimalPrecisionRule(widened) else widened
         case other => other
       }
     }
@@ -663,6 +831,14 @@ object HoodieProcedureFilterUtils {
   /** Spark's own guard for the numeric coercion rules, which admit a null literal. */
   private def isNumericOrNull(dataType: DataType): Boolean =
     dataType.isInstanceOf[NumericType] || dataType.isInstanceOf[NullType]
+
+  /** Applies Spark's decimal precision rule to this node alone, leaving a non-matching one as is. */
+  private def applyDecimalPrecisionRule(expression: Expression): Expression =
+    DecimalPrecision.transform.applyOrElse(expression, identity[Expression])
+
+  /** Widens a binary node's two operands together, keeping the node untouched if they cannot be. */
+  private def widenChildrenOf(binary: Expression): Expression =
+    widenOperands(binary.children).map(binary.withNewChildren).getOrElse(binary)
 
   private def applyCoalesceTypeCoercion(coalesce: Coalesce): Expression = {
     widenOperands(coalesce.children) match {
@@ -726,8 +902,8 @@ object HoodieProcedureFilterUtils {
    *
    * Decimal pairs go through Spark's own precision rules, which likewise only moved between the
    * majors: 3.5.5 analysis/DecimalPrecision.scala, 4.1.1 analysis/DecimalPrecisionTypeCoercion
-   * .scala. Parity for a comparison whose common precision would exceed 38 is not settled here;
-   * see HUDI #19860.
+   * .scala. A comparison whose common precision would exceed 38 is a known, unhandled gap here -
+   * Spark's own rule caps it at DECIMAL(38, ...), which this method does not yet replicate.
    */
   private def findWiderNumericType(types: Seq[DataType]): Option[DataType] = {
     if (SQLConf.get.ansiEnabled) {
