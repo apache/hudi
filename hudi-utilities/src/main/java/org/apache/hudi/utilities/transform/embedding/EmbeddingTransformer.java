@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.collection.LazyIterableIterator;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.spark.TaskContext;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -39,6 +40,7 @@ import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.MetadataBuilder;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
+import org.apache.spark.util.TaskCompletionListener;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -194,9 +196,7 @@ public class EmbeddingTransformer implements Transformer {
 
     @Override
     protected void end() {
-      if (executor != null) {
-        executor.shutdownNow();
-      }
+      shutdownExecutor();
     }
 
     /**
@@ -262,12 +262,27 @@ public class EmbeddingTransformer implements Transformer {
       }
     }
 
-    private ExecutorService executor() {
+    private synchronized ExecutorService executor() {
       if (executor == null) {
         executor = Executors.newFixedThreadPool(maxInflight,
             new CustomizedThreadFactory("embedding-transformer", true));
+        // end() runs only once the input drains normally. A task killed by an embeddings
+        // failure would otherwise strand maxInflight threads on an executor JVM that Spark
+        // goes on reusing, so release them on task completion however the task ends.
+        TaskContext taskContext = TaskContext.get();
+        if (taskContext != null) {
+          taskContext.addTaskCompletionListener(
+              (TaskCompletionListener) context -> shutdownExecutor());
+        }
       }
       return executor;
+    }
+
+    private synchronized void shutdownExecutor() {
+      if (executor != null) {
+        executor.shutdownNow();
+        executor = null;
+      }
     }
 
     private List<float[]> embed(List<String> texts) {
