@@ -19,13 +19,13 @@ package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, If, In, InSet, IsNull, LeafExpression, LessThan, LessThanOrEqual, Literal, Log, Not, Or, StartsWith, TryEval, UnaryMinus}
+import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Cast, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, FromUnixTime, GreaterThan, GreaterThanOrEqual, Hour, If, In, InSet, IsNull, LeafExpression, Length, LessThan, LessThanOrEqual, Literal, Log, Minute, Not, Or, StartsWith, TryEval, UnaryMinus, Upper}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, Increasing, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, Verdict}
+import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, ExpressionIndexSource, Increasing, IndexedExpression, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, Verdict}
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering.Pattern
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, DoubleType, IntegerType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{DataType, DoubleType, IntegerType, LongType, StringType, StructField, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -272,6 +272,70 @@ class TestDataSkippingStages {
     // No production rule is decreasing yet
     assertEquals(None, TermRange.derive(UnaryMinus(x), source))
     assertEquals(None, TermRange.derive(Add(AttributeReference("i", IntegerType)(), Literal(1)), source))
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Expression index as a range source
+  // ---------------------------------------------------------------------------------------------
+
+  private val ts = AttributeReference("ts", StringType)()
+  // hour(ts) over a STRING ts, as Spark resolves it: the column is cast to a timestamp first
+  private val hourOfTs = Hour(Cast(ts, TimestampType, Some("UTC")), Some("UTC"))
+  private val hourIndex = ExpressionIndexSource(IndexedExpression("hour", "ts", Map("expr" -> "hour")))
+
+  @Test
+  def testExpressionIndexHoldsOnlyItsOwnExpression(): Unit = {
+    // The stats sit under the source column's name, like a column stats index on ts
+    assertEquals(ColumnStatsSource(Seq("ts")).rangeOf(ts), hourIndex.rangeOf(hourOfTs))
+    // The bare column, another function of it, or the function over another column
+    assertEquals(None, hourIndex.rangeOf(ts))
+    assertEquals(None, hourIndex.rangeOf(Minute(Cast(ts, TimestampType, Some("UTC")), Some("UTC"))))
+    assertEquals(None, hourIndex.rangeOf(Hour(Cast(AttributeReference("other", StringType)(), TimestampType, Some("UTC")), Some("UTC"))))
+  }
+
+  @Test
+  def testIndexedExpressionMatchesFunctionAndOptions(): Unit = {
+    val formatIndex = IndexedExpression("date_format", "ts", Map("format" -> "yyyy-MM-dd"))
+    val tsAsTimestamp = Cast(ts, TimestampType, Some("UTC"))
+    assertTrue(formatIndex.matches(DateFormatClass(tsAsTimestamp, Literal("yyyy-MM-dd"), Some("UTC"))))
+    assertFalse(formatIndex.matches(DateFormatClass(tsAsTimestamp, Literal("yyyy"), Some("UTC"))))
+    // Without a format option, from_unixtime is the default pattern
+    val seconds = AttributeReference("seconds", LongType)()
+    val fromUnixTimeIndex = IndexedExpression("from_unixtime", "seconds", Map.empty)
+    assertTrue(fromUnixTimeIndex.matches(FromUnixTime(seconds, Literal("yyyy-MM-dd HH:mm:ss"), Some("UTC"))))
+    assertFalse(fromUnixTimeIndex.matches(FromUnixTime(seconds, Literal("yyyy-MM-dd"), Some("UTC"))))
+    // An identity index holds the bare column only
+    val identityIndex = IndexedExpression("identity", "ts", Map.empty)
+    assertTrue(identityIndex.matches(ts))
+    assertFalse(identityIndex.matches(Upper(ts)))
+    assertFalse(identityIndex.matches(UnresolvedAttribute("ts")))
+  }
+
+  @Test
+  def testExpressionIndexFilterReadsOnlyTheIndexedExpression(): Unit = {
+    def compile(filter: Expression): Expression = StatsFilterCompiler.compile(filter, hourIndex, strictResolution = true)
+    val stats = hourIndex.rangeOf(hourOfTs).get
+    val sixteen = Literal(16)
+    assertEquals(And(LessThanOrEqual(stats.lo, sixteen), GreaterThanOrEqual(stats.hi, sixteen)), compile(EqualTo(hourOfTs, sixteen)))
+    assertEquals(
+      Or(
+        And(LessThanOrEqual(stats.lo, sixteen), GreaterThanOrEqual(stats.hi, sixteen)),
+        And(LessThanOrEqual(stats.lo, Literal(19)), GreaterThanOrEqual(stats.hi, Literal(19)))),
+      compile(In(hourOfTs, Seq(sixteen, Literal(19)))))
+    assertEquals(GreaterThan(stats.hi, Literal(12)), compile(GreaterThan(hourOfTs, Literal(12))))
+    assertEquals(LessThan(stats.lo, Literal(5)), compile(LessThan(hourOfTs, Literal(5))))
+    // A rule step can still reach the indexed expression, for ex the cast Spark adds to compare with a BIGINT
+    assertFalse(compile(EqualTo(Cast(hourOfTs, LongType), Literal(16L))).equals(TrueLiteral))
+    // Another function of the column, or the bare column: every file is kept
+    assertEquals(TrueLiteral, compile(EqualTo(Minute(Cast(ts, TimestampType, Some("UTC")), Some("UTC")), sixteen)))
+    assertEquals(TrueLiteral, compile(EqualTo(ts, Literal("2023-09-21 16:34:26"))))
+  }
+
+  @Test
+  def testDeriveGivesNoRangeWhenTheSourceHasNoStatsForAnOffChainReference(): Unit = {
+    // length(ts) is off the chain and can only be re-bound to stats of ts, which an hour index does not hold
+    assertEquals(None, TermRange.derive(Add(hourOfTs, Length(ts)), hourIndex, stubRules))
+    assertTrue(TermRange.derive(Add(hourOfTs, Literal(1)), hourIndex, stubRules).isDefined)
   }
 
   // ---------------------------------------------------------------------------------------------
