@@ -43,6 +43,10 @@ public class HoodieHFileUtils {
   // value. We use true here.
   private static final boolean USE_PRIMARY_REPLICA_READER = true;
 
+  public static HFile.Reader createHFileReader(FileSystem fs, Path path, Configuration configuration) {
+    return createHFileReader(fs, path, new CacheConfig(configuration), configuration);
+  }
+
   /**
    * Creates HFile reader for a file with default `primaryReplicaReader` as true.
    *

@@ -21,6 +21,8 @@ package org.apache.hudi.common.fs.inline;
 import org.apache.hadoop.fs.Path;
 
 import java.io.File;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.apache.hudi.common.util.ValidationUtils.checkArgument;
 
@@ -37,6 +39,11 @@ public class InLineFSUtils {
   private static final String SCHEME_SEPARATOR = ":";
   private static final String EQUALS_STR = "=";
   private static final String LOCAL_FILESYSTEM_SCHEME = "file";
+
+  // Regex pattern to find the start offset from inline filesystem paths
+  private static final Pattern START_OFFSET_PATTERN = Pattern.compile("\\?start_offset=(\\d+)");
+  // Regex pattern to find the length from inline filesystem paths
+  private static final Pattern LENGTH_PATTERN = Pattern.compile("&length=(\\d+)");
 
   /**
    * Get the InlineFS Path for a given schema and its Path.
@@ -98,8 +105,9 @@ public class InLineFSUtils {
   public static long startOffset(Path inlineFSPath) {
     assertInlineFSPath(inlineFSPath);
 
-    String[] slices = inlineFSPath.toString().split("[?&=]");
-    return Long.parseLong(slices[slices.length - 3]);
+    final Matcher matcher = START_OFFSET_PATTERN.matcher(inlineFSPath.toString());
+    matcher.find();
+    return Long.parseLong(matcher.group(1));
   }
 
   /**
@@ -111,8 +119,9 @@ public class InLineFSUtils {
   public static long length(Path inlinePath) {
     assertInlineFSPath(inlinePath);
 
-    String[] slices = inlinePath.toString().split("[?&=]");
-    return Long.parseLong(slices[slices.length - 1]);
+    final Matcher matcher = LENGTH_PATTERN.matcher(inlinePath.toString());
+    matcher.find();
+    return Long.parseLong(matcher.group(1));
   }
 
   private static void assertInlineFSPath(Path inlinePath) {

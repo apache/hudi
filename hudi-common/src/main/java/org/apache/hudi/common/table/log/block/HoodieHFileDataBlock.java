@@ -24,8 +24,10 @@ import org.apache.hudi.common.fs.inline.InLineFSUtils;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
+import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.io.storage.HoodieAvroHFileReader;
@@ -176,7 +178,7 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
     Configuration hadoopConf = FSUtils.buildInlineConf(getBlockContentLocation().get().getHadoopConf());
     FileSystem fs = FSUtils.getFs(pathForReader.toString(), hadoopConf);
     // Read the content
-    try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader, new CacheConfig(hadoopConf),
+    try (HoodieAvroHFileReader reader = new HoodieAvroHFileReader(hadoopConf, pathForReader,
                                                              fs, content, Option.of(getSchemaFromHeader()))) {
       return unsafeCast(reader.getRecordIterator(readerSchema));
     }
@@ -197,9 +199,15 @@ public class HoodieHFileDataBlock extends HoodieDataBlock {
         blockContentLoc.getContentPositionInLogFile(),
         blockContentLoc.getBlockSize());
 
+    // HFile BlockCache key is based on the name of the file. The inlinefs path has the format
+    // inlinefs://<path_to_outer_file>/<outer_file_scheme>/?start_offset=start_offset>&length=<length> whose filename
+    // component is parsed as "?start_offset=start_offset>&length=<length>" ignoring the actual outer file itself.
+    // To keep this unique (as cache keys should be unique for each file), we add a hash which is calculated from the
+    // entire filename. So the cache key would now be ?start_offset=start_offset>&length=<length>&pathHash=<hash>
+    final String pathHash = StringUtils.toHexString(HashID.hash(inlinePath.toString(), HashID.Size.BITS_128));
+    Path cachableInlinePath = new Path(inlinePath.toString() + "&pathHash=" + pathHash);
     try (final HoodieAvroHFileReader reader =
-             new HoodieAvroHFileReader(inlineConf, inlinePath, new CacheConfig(inlineConf), inlinePath.getFileSystem(inlineConf),
-             Option.of(getSchemaFromHeader()))) {
+             new HoodieAvroHFileReader(inlineConf, cachableInlinePath, inlinePath.getFileSystem(inlineConf), Option.of(getSchemaFromHeader()))) {
       // Get writer's schema from the header
       final ClosableIterator<HoodieRecord<IndexedRecord>> recordIterator =
           fullKey ? reader.getRecordsByKeysIterator(sortedKeys, readerSchema) : reader.getRecordsByKeyPrefixIterator(sortedKeys, readerSchema);
