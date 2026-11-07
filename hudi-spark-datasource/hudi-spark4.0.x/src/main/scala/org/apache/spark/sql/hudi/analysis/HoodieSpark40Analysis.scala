@@ -65,7 +65,7 @@ case class HoodieSpark40DataSourceV2ToV1Fallback(sparkSession: SparkSession) ext
     val output = rv2.output
     val catalogTable = v2Table.catalogTable.map(_ => v2Table.v1Table)
     val relation = new DefaultSource().createRelation(sparkSession.sqlContext,
-      buildHoodieConfig(v2Table.hoodieCatalogTable), v2Table.hoodieCatalogTable.tableSchema)
+      buildHoodieConfig(v2Table.hoodieCatalogTable) ++ v2Table.catalogIdentityOptions, v2Table.hoodieCatalogTable.tableSchema)
 
     LogicalRelation(relation, output, catalogTable, isStreaming = false, Option.empty)
   }
