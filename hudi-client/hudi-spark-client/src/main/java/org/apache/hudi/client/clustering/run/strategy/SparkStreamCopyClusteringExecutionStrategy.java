@@ -55,6 +55,11 @@ public class SparkStreamCopyClusteringExecutionStrategy<T>
   @Override
   public boolean supportBinaryStreamCopy(List<ClusteringGroupInfo> inputGroups, 
                                         Map<String, String> strategyParams) {
+    if (getHoodieTable().getMetaClient().getTableConfig().isLSMTreeStorageLayout()) {
+      log.warn("SparkStreamCopyClusteringExecutionStrategy does not preserve the sorted-run invariant required by LSM tables. "
+          + "Will fall back to common clustering execution strategy.");
+      return false;
+    }
     // Check if table type is Copy-on-Write
     if (getHoodieTable().getMetaClient().getTableType() != COPY_ON_WRITE) {
       log.warn("SparkStreamCopyClusteringExecutionStrategy is only supported for COW tables. Will fall back to common clustering execution strategy.");
