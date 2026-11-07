@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.avro.generic.IndexedRecord;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Scans a set of log files to extract metadata about the log blocks. It does not read the actual records.
@@ -36,10 +37,18 @@ public class HoodieLogBlockMetadataScanner extends BaseHoodieLogRecordReader<Ind
 
   public HoodieLogBlockMetadataScanner(HoodieTableMetaClient metaClient, List<HoodieLogFile> logFiles,
                                        int bufferSize, String maxInstantTime, Option<InstantRange> instantRange) {
-    super(getReaderContext(metaClient, maxInstantTime), TableState.fromMetaClient(metaClient), metaClient.getStorage(), logFiles,
+    super(getReaderContext(metaClient, maxInstantTime), TableState.fromMetaClient(metaClient), metaClient.getStorage(), withoutCdcLogFiles(logFiles),
         false, bufferSize, instantRange, false, false, Option.empty(),
         Option.empty(), null, false);
     scanInternal(Option.empty(), true);
+  }
+
+  /**
+   * CDC log files only carry supplemental change data and are never merged into the base file, so the other log scanners skip them.
+   * They cannot be scanned here either, since this scanner has no reader schema to read a CDC block with.
+   */
+  private static List<HoodieLogFile> withoutCdcLogFiles(List<HoodieLogFile> logFiles) {
+    return logFiles.stream().filter(logFile -> !logFile.isCDC()).collect(Collectors.toList());
   }
 
   private static HoodieReaderContext<IndexedRecord> getReaderContext(HoodieTableMetaClient metaClient, String maxInstantTime) {
