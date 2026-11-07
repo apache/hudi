@@ -710,6 +710,7 @@ public class StreamSync implements Serializable, Closeable {
     InputBatch inputBatchForWriter = null; // row writer
     boolean reconcileSchema = props.getBoolean(DataSourceWriteOptions.RECONCILE_SCHEMA().key());
     if (transformer.isPresent()) {
+      hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Transforming source batch: " + cfg.targetTableName);
       // Transformation is needed. Fetch New rows in Row Format, apply transformation and then convert them
       // to generic records for writing
       InputBatch<Dataset<Row>> dataAndCheckpoint =
@@ -1099,6 +1100,7 @@ public class StreamSync implements Serializable, Closeable {
       metaClient = HoodieTableMetaClient.reload(metaClient);
       TypedProperties mergeProps = ConfigUtils.getMergeProps(props, metaClient.getTableConfig());
       HoodieRecordType recordType = createRecordMerger(mergeProps).getRecordType();
+      hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Creating Hudi records: " + cfg.targetTableName);
       Option<JavaRDD<HoodieRecord>> recordsOption = HoodieStreamerUtils.createHoodieRecords(cfg, mergeProps, inputBatch.getBatch(), inputBatch.getSchemaProvider(),
           recordType, autoGenerateRecordKeys, instantTime, errorTableWriter, metaClient.getTableConfig());
       JavaRDD<HoodieRecord> records = recordsOption.orElseGet(() -> hoodieSparkContext.emptyRDD());
