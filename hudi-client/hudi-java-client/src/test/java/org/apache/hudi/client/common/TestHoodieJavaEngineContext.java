@@ -18,6 +18,7 @@
 
 package org.apache.hudi.client.common;
 
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 
@@ -82,5 +83,14 @@ public class TestHoodieJavaEngineContext {
     }, 2);
 
     Assertions.assertNotNull(resultMap.get("hudi"));
+  }
+
+  @Test
+  void testBroadcast() {
+    List<String> value = Arrays.asList("hudi_flink", "hudi_spark", "hudi_java");
+    HoodieBroadcast<List<String>> broadcast = context.broadcast(value);
+
+    Assertions.assertSame(value, broadcast.value());
+    Assertions.assertEquals(value, context.map(Arrays.asList(0, 1, 2), i -> broadcast.value().get(i), 2));
   }
 }
