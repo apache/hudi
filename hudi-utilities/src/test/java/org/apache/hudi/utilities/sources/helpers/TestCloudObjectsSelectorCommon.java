@@ -66,6 +66,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -293,6 +294,57 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat("avro"));
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(""));
     assertFalse(CloudObjectsSelectorCommon.isParquetOrOrcFileFormat(null));
+  }
+
+  @Test
+  void extensionFilterKeepsASinglePredicateForOneExtension() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "json");
+    assertEquals("s3.object.size > 0 and s3.object.key like '%json'",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
+  }
+
+  @Test
+  void extensionFilterMatchesAnyOneOfSeveralExtensions() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "pdf,docx,html");
+    assertEquals("s3.object.size > 0 and (s3.object.key like '%pdf' or s3.object.key like '%docx'"
+            + " or s3.object.key like '%html')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
+  }
+
+  @Test
+  void extensionFilterTrimsBlanksAndDropsEmptyEntries() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), " pdf , ,docx, ");
+    assertEquals("s3.object.size > 0 and (s3.object.key like '%pdf' or s3.object.key like '%docx')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
+  }
+
+  @Test
+  void extensionFilterFallsBackToTheDataFileFormat() {
+    // pins long-standing behaviour: with nothing configured the filter selects parquet only
+    assertEquals("s3.object.size > 0 and s3.object.key like '%parquet'",
+        CloudObjectsSelectorCommon.generateFilter(
+            CloudObjectsSelectorCommon.Type.S3, new TypedProperties()));
+  }
+
+  @Test
+  void extensionFilterUsesTheGcsObjectKeyAndSizeColumns() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "pdf,png");
+    assertEquals("size > 0 and (name like '%pdf' or name like '%png')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.GCS, props));
+  }
+
+  @Test
+  void extensionFilterComposesWithThePathPrefixFilter() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX.key(), "docs/");
+    props.setProperty(CloudSourceConfig.CLOUD_DATAFILE_EXTENSION.key(), "pdf,docx");
+    assertEquals("s3.object.size > 0 and s3.object.key like 'docs/%'"
+            + " and (s3.object.key like '%pdf' or s3.object.key like '%docx')",
+        CloudObjectsSelectorCommon.generateFilter(CloudObjectsSelectorCommon.Type.S3, props));
   }
 
   @Test
