@@ -35,6 +35,19 @@ public abstract class TimelineFactory implements Serializable {
 
   public abstract HoodieArchivedTimeline createArchivedTimeline(HoodieTableMetaClient metaClient, boolean shouldLoadInstants);
 
+  /**
+   * Creates an archived timeline holding the completed instants within [startTs, endTs], both bounds
+   * inclusive. The range is pushed down into the load, so instants outside it are never materialized.
+   * <p>
+   * Only completed instants are returned, matching {@link #createArchivedTimeline(HoodieTableMetaClient, String)}.
+   * An instant archived without ever completing is a failed write rather than a committed one, so callers
+   * asking whether an instant was committed must not see it here.
+   *
+   * @param startTs the earliest instant time to load, inclusive.
+   * @param endTs   the latest instant time to load, inclusive.
+   */
+  public abstract HoodieArchivedTimeline createArchivedTimeline(HoodieTableMetaClient metaClient, String startTs, String endTs);
+
   public abstract ArchivedTimelineLoader createArchivedTimelineLoader();
 
   public abstract HoodieActiveTimeline createActiveTimeline(HoodieTableMetaClient metaClient);
