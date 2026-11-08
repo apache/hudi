@@ -20,6 +20,7 @@
 package org.apache.hudi.table.action.restore;
 
 import org.apache.hudi.avro.model.HoodieRollbackMetadata;
+import org.apache.hudi.client.CommitMetadataProperties;
 import org.apache.hudi.client.transaction.TransactionManager;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
@@ -53,7 +54,8 @@ public class CopyOnWriteRestoreActionExecutor<T, I, K, O>
       transactionManager.beginStateChange(Option.empty(), Option.empty());
       try {
         newInstantTime = table.getMetaClient().createNewInstantTime(false);
-        table.scheduleRollback(context, newInstantTime, instantToRollback, false, false, true);
+        table.scheduleRollback(context, newInstantTime, instantToRollback, false, false, true,
+            CommitMetadataProperties.enrich(Option.empty(), config, context));
       } finally {
         transactionManager.endStateChange(Option.empty());
       }

@@ -35,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Base rollback plan action executor to assist in scheduling rollback requests. This phase serialized {@link HoodieRollbackPlan}
@@ -47,6 +48,7 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
   private final boolean skipTimelinePublish;
   private final boolean shouldRollbackUsingMarkers;
   protected final Boolean isRestore;
+  private final Option<Map<String, String>> extraMetadata;
 
   public static final Integer ROLLBACK_PLAN_VERSION_1 = 1;
   public static final Integer LATEST_ROLLBACK_PLAN_VERSION = ROLLBACK_PLAN_VERSION_1;
@@ -58,12 +60,14 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
                                         HoodieInstant instantToRollback,
                                         boolean skipTimelinePublish,
                                         boolean shouldRollbackUsingMarkers,
-                                        boolean isRestore) {
+                                        boolean isRestore,
+                                        Option<Map<String, String>> extraMetadata) {
     super(context, config, table, instantTime);
     this.instantToRollback = instantToRollback;
     this.skipTimelinePublish = skipTimelinePublish;
     this.shouldRollbackUsingMarkers = shouldRollbackUsingMarkers && !instantToRollback.isCompleted();
     this.isRestore = isRestore;
+    this.extraMetadata = extraMetadata;
   }
 
   /**
@@ -107,7 +111,7 @@ public class BaseRollbackPlanActionExecutor<T, I, K, O> extends BaseActionExecut
         rollbackRequests.addAll(getRollbackStrategy().getRollbackRequests(instantToRollback));
       }
       HoodieRollbackPlan rollbackPlan = new HoodieRollbackPlan(new HoodieInstantInfo(instantToRollback.requestedTime(),
-          instantToRollback.getAction()), rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION);
+          instantToRollback.getAction()), rollbackRequests, LATEST_ROLLBACK_PLAN_VERSION, extraMetadata.orElse(null));
       if (!skipTimelinePublish) {
         if (table.getRollbackTimeline().filterInflightsAndRequested().containsInstant(rollbackInstant.requestedTime())) {
           log.info("Request Rollback found with instant time {}, hence skipping scheduling rollback", rollbackInstant);
