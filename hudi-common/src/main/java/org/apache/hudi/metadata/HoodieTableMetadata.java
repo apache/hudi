@@ -334,6 +334,17 @@ public interface HoodieTableMetadata extends Serializable, AutoCloseable {
   Map<String, List<FileSlice>> getBucketizedFileGroupsForPartitionedRLI(MetadataPartitionType partition);
 
   /**
+   * Returns a serializable reader over the latest file slices of a metadata table partition, for key lookups
+   * that run in distributed tasks. The reader is a snapshot of this table metadata: it does not see commits
+   * made after the table metadata was created or last reset.
+   *
+   * @param partitionName the metadata table partition
+   */
+  default MetadataPartitionReader getPartitionReader(String partitionName) {
+    throw new HoodieMetadataException("Unsupported operation: getPartitionReader");
+  }
+
+  /**
    * @param partitionPathList A list of pairs of the relative and absolute paths of the partitions.
    * @return all the files from the partitions.
    * @throws IOException upon error.

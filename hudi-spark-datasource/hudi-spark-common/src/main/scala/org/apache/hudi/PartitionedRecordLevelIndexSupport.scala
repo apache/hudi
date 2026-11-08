@@ -19,9 +19,10 @@ package org.apache.hudi
 
 import org.apache.hudi.RecordLevelIndexSupport.MAX_PARTITIONS
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.metrics.Registry
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.common.util.{Option => HOption, ValidationUtils}
 import org.apache.hudi.common.util.collection.Pair
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
 import org.apache.hudi.index.PartitionedRecordIndexFileGroupLookupFunction
@@ -102,15 +103,21 @@ class PartitionedRecordLevelIndexSupport(spark: SparkSession,
         .map(_._2)
         .toJavaRDD()
       ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions <= numFileGroups)
-      // Read path: no write-side registry to report into, so lookups here are not instrumented.
-      val fileIdToPartitionMap = partitionedKeyRDD.mapPartitionsToPair(new PartitionedRecordIndexFileGroupLookupFunction(metadataTable))
-        .collect()
-        .asScala
-        .foldLeft(mutable.Map.empty[String, String]) { (acc, location) =>
-          acc.put(location._2.getFileId, location._2.getPartitionPath)
-          acc
-        }
-      Some(fileIdToPartitionMap)
+      val recordIndexReader = engineCtx.broadcast(metadataTable.getPartitionReader(MetadataPartitionType.RECORD_INDEX.getPartitionPath))
+      try {
+        // Read path: no write-side registry to report into, so lookups here are not instrumented.
+        val fileIdToPartitionMap = partitionedKeyRDD.mapPartitionsToPair(
+            new PartitionedRecordIndexFileGroupLookupFunction(recordIndexReader, HOption.empty[Registry]()))
+          .collect()
+          .asScala
+          .foldLeft(mutable.Map.empty[String, String]) { (acc, location) =>
+            acc.put(location._2.getFileId, location._2.getPartitionPath)
+            acc
+          }
+        Some(fileIdToPartitionMap)
+      } finally {
+        recordIndexReader.destroy()
+      }
     }
   }
 }
