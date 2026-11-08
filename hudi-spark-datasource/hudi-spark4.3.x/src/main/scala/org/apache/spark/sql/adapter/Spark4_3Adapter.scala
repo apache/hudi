@@ -41,7 +41,7 @@ import org.apache.spark.sql.catalyst.util.{METADATA_COL_ATTR_KEY, RebaseDateTime
 import org.apache.spark.sql.connector.catalog.{V1Table, V2TableWithV1Fallback}
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.lance.SparkLanceReaderBase
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark43LegacyHoodieParquetFileFormat, Spark43ParquetReader}
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, Spark41PlusLegacyHoodieParquetFileFormat, Spark41PlusParquetReader}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.execution.datasources.vortex.SparkVortexReaderBase
 import org.apache.spark.sql.execution.streaming.runtime.MemoryStream
@@ -90,11 +90,11 @@ class Spark4_3Adapter extends BaseSpark4Adapter {
       .putBoolean(METADATA_COL_ATTR_KEY, value = true)
       .build()
 
-  override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark43CatalystExpressionUtils
+  override def getCatalystExpressionUtils: HoodieCatalystExpressionUtils = HoodieSpark41PlusCatalystExpressionUtils
 
-  override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark43CatalystPlanUtils
+  override def getCatalystPlanUtils: HoodieCatalystPlansUtils = HoodieSpark41PlusCatalystPlanUtils
 
-  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark43SchemaUtils
+  override def getSchemaUtils: HoodieSchemaUtils = HoodieSpark41PlusSchemaUtils
 
   override def newParseException(command: Option[String],
                                  exception: AnalysisException,
@@ -106,16 +106,16 @@ class Spark4_3Adapter extends BaseSpark4Adapter {
 
 
   override def createAvroSerializer(rootCatalystType: DataType, rootType: HoodieSchema, nullable: Boolean): HoodieAvroSerializer =
-    new HoodieSpark4_3AvroSerializer(rootCatalystType, rootType.toAvroSchema, nullable)
+    new HoodieSpark41PlusAvroSerializer(rootCatalystType, rootType.toAvroSchema, nullable)
 
   override def createAvroDeserializer(rootType: HoodieSchema, rootCatalystType: DataType): HoodieAvroDeserializer =
-    new HoodieSpark4_3AvroDeserializer(rootType.toAvroSchema, rootCatalystType)
+    new HoodieSpark41PlusAvroDeserializer(rootType.toAvroSchema, rootCatalystType)
 
   override def createExtendedSparkParser(spark: SparkSession, delegate: ParserInterface): HoodieExtendedParserInterface =
     new HoodieSpark4_3ExtendedSqlParser(spark, delegate)
 
   override def createLegacyHoodieParquetFileFormat(appendPartitionValues: Boolean): Option[ParquetFileFormat] = {
-    Some(new Spark43LegacyHoodieParquetFileFormat(appendPartitionValues))
+    Some(new Spark41PlusLegacyHoodieParquetFileFormat(appendPartitionValues))
   }
 
   override def createInternalRow(metaFields: Array[UTF8String],
@@ -185,7 +185,7 @@ class Spark4_3Adapter extends BaseSpark4Adapter {
                                        sqlConf: SQLConf,
                                        options: Map[String, String],
                                        hadoopConf: Configuration): SparkColumnarFileReader = {
-    Spark43ParquetReader.build(vectorized, sqlConf, options, hadoopConf)
+    Spark41PlusParquetReader.build(vectorized, sqlConf, options, hadoopConf)
   }
 
   override def createLanceFileReader(vectorized: Boolean,

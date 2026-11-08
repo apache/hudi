@@ -40,15 +40,12 @@ public final class VariantShreddingRuntime {
   };
 
   /**
-   * Inferrer candidates, one per Spark version module that ships one (inference exists only in
-   * Spark 4.1+, SPARK-53659), most recent first. Each spark4.x profile builds only its own
-   * version module, so every version that should infer needs its own entry here: a runtime whose
-   * module is missing from this list silently writes unshredded.
+   * Inferrer candidates (inference exists only in Spark 4.1+, SPARK-53659). The 4.1+ inferrer is
+   * compiled into each 4.1+ version module from a shared source root; a runtime whose module does
+   * not ship a listed class silently writes unshredded.
    */
   private static final String[] INFERRER_CANDIDATES = {
-      "org.apache.hudi.variant.Spark43VariantShreddingSchemaInferrer",
-      "org.apache.hudi.variant.Spark42VariantShreddingSchemaInferrer",
-      "org.apache.hudi.variant.Spark41VariantShreddingSchemaInferrer"
+      "org.apache.hudi.variant.Spark41PlusVariantShreddingSchemaInferrer"
   };
 
   private static final Option<String> PROVIDER_CLASS = probe(PROVIDER_CANDIDATES);
