@@ -150,6 +150,52 @@ public class TestMetadataWriterCommit extends BaseTestHandle {
   }
 
   @Test
+  public void testStreamingWriteSkipsRecordIndexLeftToAsyncIndexer() throws IOException {
+    // init config and table
+    HoodieWriteConfig config = getConfigBuilder(basePath)
+        .withFileSystemViewConfig(FileSystemViewStorageConfig.newBuilder().withRemoteServerPort(timelineServicePort).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withAsyncIndex(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withMetadataIndexColumnStats(false)
+            .withSecondaryIndexEnabled(false)
+            .withStreamingWriteEnabled(true)
+            .build())
+        .build();
+
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    String partitionPath = HoodieTestDataGenerator.DEFAULT_PARTITION_PATHS[0];
+    String fileId = UUID.randomUUID().toString();
+    String instantTime = InProcessTimeGenerator.createNewInstantTime();
+
+    // create a parquet file and obtain corresponding write status
+    config.setSchema(TRIP_EXAMPLE_SCHEMA);
+    HoodieTestDataGenerator dataGenerator = new HoodieTestDataGenerator(new String[] {partitionPath});
+    WriteStatus writeStatus = createParquetFile(config, table, partitionPath, fileId, instantTime, dataGenerator).getLeft();
+    HoodieCommitMetadata commitMetadata = createCommitMetadata(writeStatus.getStat(), partitionPath);
+
+    // create mdt writer, record index is left to the async indexer so only FILES is bootstrapped
+    HoodieBackedTableMetadataWriter mdtWriter = (HoodieBackedTableMetadataWriter) SparkMetadataWriterFactory.createWithStreamingWrites(storageConf, config,
+        HoodieFailedWritesCleaningPolicy.LAZY, context, Option.empty());
+    HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder().setBasePath(metaClient.getMetaPath() + "/metadata").setConf(storageConf).build();
+    assertEquals(1, mdtMetaClient.getActiveTimeline().filterCompletedInstants().countInstants());
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertEquals(Collections.singleton(FILES.getPartitionPath()), metaClient.getTableConfig().getMetadataPartitions());
+
+    // Create commit in MDT
+    mdtWriter.startCommit(instantTime);
+    HoodieData<WriteStatus> mdtWriteStatus = mdtWriter.streamWriteToMetadataPartitions(HoodieJavaRDD.of(Collections.singletonList(writeStatus), context, 1), instantTime);
+    List<HoodieWriteStat> mdtWriteStats = mdtWriteStatus.collectAsList().stream().map(WriteStatus::getStat).collect(Collectors.toList());
+    mdtWriter.completeStreamingCommit(instantTime, context, mdtWriteStats, commitMetadata);
+    assertEquals(2, mdtMetaClient.reloadActiveTimeline().filterCompletedInstants().countInstants());
+
+    // only FILES should be seen in the commit metadata
+    HoodieCommitMetadata mdtCommitMetadata = mdtMetaClient.getActiveTimeline().readCommitMetadata(mdtMetaClient.getActiveTimeline().lastInstant().get());
+    assertEquals(Collections.singleton(FILES.getPartitionPath()), mdtCommitMetadata.getPartitionToWriteStats().keySet());
+  }
+
+  @Test
   public void testCreateHandleSIStats() throws IOException {
     // init config and table
     HoodieWriteConfig config = getConfigBuilder(basePath)

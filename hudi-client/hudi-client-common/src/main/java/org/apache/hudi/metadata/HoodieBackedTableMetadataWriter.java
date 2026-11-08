@@ -931,7 +931,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private Pair<List<MetadataPartitionType>, Set<String>> getStreamingMetadataPartitionsToUpdate() {
     Set<MetadataPartitionType> mdtPartitionsToTag = new HashSet<>();
     // Add record index
-    if (enabledIndexerMap.containsKey(RECORD_INDEX)) {
+    if (enabledIndexerMap.containsKey(RECORD_INDEX) && getMetadataPartitionsToUpdate().contains(RECORD_INDEX.getPartitionPath())) {
       mdtPartitionsToTag.add(RECORD_INDEX);
     }
     // Add secondary indexes
@@ -1002,8 +1002,11 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   private Set<String> getNonStreamingMetadataPartitionsToUpdate() {
     Set<String> toReturn = new HashSet<>();
     Set<MetadataPartitionType> streamingMDTPartitions = new HashSet<>(getStreamingMetadataPartitionsToUpdate().getLeft());
+    Set<MetadataPartitionType> partitionTypesToUpdate = getMetadataPartitionsToUpdate().stream()
+        .map(MetadataPartitionType::fromPartitionPath)
+        .collect(Collectors.toSet());
     for (MetadataPartitionType partitionType: enabledIndexerMap.keySet()) {
-      if (!streamingMDTPartitions.contains(partitionType)) {
+      if (!streamingMDTPartitions.contains(partitionType) && partitionTypesToUpdate.contains(partitionType)) {
         toReturn.add(partitionType.getPartitionPath());
       }
     }
