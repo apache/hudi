@@ -645,6 +645,21 @@ class TestShowTimelineTableProcedure extends HoodieSparkSqlTestBase {
       val expectedArchived = filterInstantsByTimeRange(archivedInstants, Some(startTime), Some(endTime))
       verifyResults(results, expectedActive, expectedArchived, None, "Test 12: Start and end in archived, archived enabled")
     }
+
+    // Test Case 13: a fully specified time range ignores `limit`, so a small limit must not truncate it
+    {
+      val startTime = startTimeInArchived
+      val endTime = endTimeInActive
+      val expectedActive = filterInstantsByTimeRange(activeInstants, Some(startTime), Some(endTime))
+      val expectedArchived = filterInstantsByTimeRange(archivedInstants, Some(startTime), Some(endTime))
+      val rangeSize = expectedActive.length + expectedArchived.length
+      assert(rangeSize > 1, "Test 13: the range needs more than one instant for this to mean anything")
+      val results = spark.sql(
+        s"call show_timeline(table => '$tableName', showArchived => true, startTime => '$startTime', " +
+          s"endTime => '$endTime', limit => 1)").collect()
+      assert(results.length == rangeSize,
+        s"Test 13: a fully specified range must not be truncated by limit, expected $rangeSize got ${results.length}")
+    }
   }
 
   test("Test show_timeline with various parameters - V2 MOR") {

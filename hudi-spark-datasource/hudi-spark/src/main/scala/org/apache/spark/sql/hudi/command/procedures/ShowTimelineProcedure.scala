@@ -137,9 +137,15 @@ class ShowTimelineProcedure extends BaseProcedure with ProcedureBuilder with Spa
     val basePath: String = getBasePath(tableName, tablePath)
     val metaClient = createMetaClient(jsc, basePath)
 
-    val timelineEntries = getTimelineEntries(metaClient, limit, showArchived, startTime, endTime)
+    // getTimelineEntries applies `limit` while collecting, so with a filter it has to be lifted here and
+    // reapplied to the matching rows; otherwise the filter only ever sees the first `limit` instants.
+    val scanLimit = if (hasFilter(filter)) Int.MaxValue else limit
+    val timelineEntries = getTimelineEntries(metaClient, scanLimit, showArchived, startTime, endTime)
 
-    applyFilter(timelineEntries, filter, outputType)
+    // getTimelineEntries deliberately ignores `limit` when the time range is fully specified, so the
+    // reapplied bound has to honour that too rather than truncating the range the caller asked for.
+    val outerLimit = if (startTime.trim.nonEmpty && endTime.trim.nonEmpty) Int.MaxValue else limit
+    applyFilterAndLimit(timelineEntries, filter, outputType, outerLimit)
   }
 
   override def build: Procedure = new ShowTimelineProcedure()

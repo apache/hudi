@@ -412,6 +412,59 @@ class TestShowCleansProcedures extends HoodieSparkProcedureTestBase {
     }
   }
 
+  test("Test show_cleans applies the filter before the limit") {
+    withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        val extraConf = if (HoodieSparkUtils.gteqSpark3_4) {
+          Map("spark.sql.defaultColumn.enabled" -> "false")
+        } else {
+          Map.empty[String, String]
+        }
+        withSQLConf(extraConf.toSeq: _*) {
+          spark.sql(
+            s"""
+               |create table $tableName (
+               | id int,
+               | name string,
+               | price double,
+               | ts long
+               | ) using hudi
+               | location '${tmp.getCanonicalPath}'
+               | tblproperties (
+               |   primaryKey = 'id',
+               |   type = 'cow',
+               |   preCombineField = 'ts'
+               | )
+               |""".stripMargin)
+
+          spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+          spark.sql(s"insert into $tableName values(2, 'a2', 20, 2000)")
+          spark.sql(s"update $tableName set price = 11 where id = 1")
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+          spark.sql(s"update $tableName set price = 12 where id = 1")
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+          spark.sql(s"update $tableName set price = 13 where id = 1")
+          spark.sql(s"call run_clean(table => '$tableName', retain_commits => 1)").collect()
+
+          val allCleans = spark.sql(s"call show_cleans(table => '$tableName')").collect()
+          assert(allCleans.length > 1, "the table needs more than one clean for this to mean anything")
+          // cleans come back newest first, so the oldest one sits past a limit of 1
+          val oldestCleanTime = allCleans.last.getAs[String]("clean_time")
+
+          val matched = spark.sql(
+            s"""call show_cleans(table => '$tableName', limit => 1, filter => "clean_time = '$oldestCleanTime'")"""
+          ).collect()
+
+          assert(matched.length == 1,
+            "limit must bound the rows the filter matched, not the rows the filter was shown; " +
+              s"got ${matched.length} rows for clean_time = $oldestCleanTime")
+          assert(matched.head.getAs[String]("clean_time") == oldestCleanTime)
+        }
+      }
+    }
+  }
+
   test("Test filter expressions with various data types") {
     withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.parquet.max.file.size" -> "10000") {
       withTempDir { tmp =>
