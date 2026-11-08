@@ -29,9 +29,11 @@ import org.apache.hudi.common.schema.internal.convert.InternalSchemaConverter;
 import org.apache.hudi.common.schema.internal.utils.AvroSchemaEvolutionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNullSchemaTypeException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.exception.SchemaBackwardsCompatibilityException;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -408,6 +410,35 @@ public class TestHoodieSchemaUtils {
 
   private static HoodieSchema deduceWriterSchema(HoodieSchema incomingSchema, HoodieSchema latestTableSchema) {
     return deduceWriterSchema(incomingSchema, latestTableSchema, false);
+  }
+
+  @Test
+  void testDeduceWriterSchemaWithAbsentIncomingSchema() {
+    HoodieSchema tableSchema = createRecord("simple", createPrimitiveField("f", HoodieSchemaType.INT));
+    HoodieSchema emptyTableSchema = createRecord("empty");
+
+    assertEquals(tableSchema, deduceWriterSchema(null, tableSchema, true));
+    assertEquals(emptyTableSchema, deduceWriterSchema(null, emptyTableSchema, true));
+    assertEquals(HoodieSchemaType.NULL, deduceWriterSchema(null, null, true).getType());
+
+    // schema reconciliation takes the schema-on-read branch, which also has to tolerate an absent incoming schema
+    TypedProperties reconcileProps = new TypedProperties();
+    reconcileProps.setProperty(DataSourceWriteOptions.RECONCILE_SCHEMA().key(), "true");
+    for (HoodieSchema incoming : new HoodieSchema[] {null, HoodieSchema.create(HoodieSchemaType.NULL)}) {
+      for (HoodieSchema table : new HoodieSchema[] {tableSchema, emptyTableSchema}) {
+        assertEquals(table, HoodieSchemaUtils.deduceWriterSchema(incoming, Option.of(table),
+            Option.of(InternalSchemaConverter.convert(table)), reconcileProps));
+      }
+    }
+
+    // with no internal schema the reconcile branch falls back to the legacy check; an absent incoming schema
+    // must surface as the incompatibility it is, not fail while the error message is built
+    TypedProperties legacyReconcileProps = new TypedProperties();
+    legacyReconcileProps.setProperty(DataSourceWriteOptions.RECONCILE_SCHEMA().key(), "true");
+    legacyReconcileProps.setProperty(HoodieSparkSqlWriter.CANONICALIZE_SCHEMA().key(), "false");
+    legacyReconcileProps.setProperty(HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE.key(), "true");
+    assertThrows(SchemaCompatibilityException.class,
+        () -> HoodieSchemaUtils.deduceWriterSchema(null, Option.of(tableSchema), Option.empty(), legacyReconcileProps));
   }
 
   private static final TypedProperties TYPED_PROPERTIES = new TypedProperties();
