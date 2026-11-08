@@ -32,6 +32,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.data.HoodieJavaRDD;
@@ -80,9 +81,18 @@ public class SparkRDDWriteClient<T> extends
   public SparkRDDWriteClient(HoodieEngineContext context, HoodieWriteConfig writeConfig,
                              Option<EmbeddedTimelineService> timelineService) {
     super(context, writeConfig, timelineService, SparkUpgradeDowngradeHelper.getInstance());
-    DistributedRegistryUtil.createWrapperFileSystemRegistries(context, writeConfig);
-    this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
-    checkSpeculativeExecution();
+    try {
+      DistributedRegistryUtil.createWrapperFileSystemRegistries(context, writeConfig);
+      this.tableServiceClient = new SparkRDDTableServiceClient<T>(context, writeConfig, getTimelineServer());
+      // The speculative-execution guardrail throws from here, after the base client is fully built.
+      checkSpeculativeExecution();
+    } catch (RuntimeException | Error e) {
+      if (this.tableServiceClient != null) {
+        CloseableUtils.closeSuppressing(this.tableServiceClient, e);
+      }
+      releaseAfterFailedInit(getIndex(), e);
+      throw e;
+    }
   }
 
   @Override
