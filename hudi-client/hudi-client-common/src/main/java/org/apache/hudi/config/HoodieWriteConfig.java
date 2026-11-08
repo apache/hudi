@@ -103,6 +103,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -1432,6 +1433,11 @@ public class HoodieWriteConfig extends HoodieConfig {
     this.timeGeneratorConfig = HoodieTimeGeneratorConfig.newBuilder().fromProperties(props)
         .withDefaultLockProvider(!isLockRequired()).build();
     this.indexingConfig = HoodieIndexingConfig.newBuilder().fromProperties(props).build();
+  }
+
+  private void writeObject(ObjectOutputStream out) throws IOException {
+    // Nested configs are built from copies of these props, so they are written as differences from them.
+    defaultWriteObjectSharingProps(out);
   }
 
   public static HoodieWriteConfig.Builder newBuilder() {
