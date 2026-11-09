@@ -74,7 +74,8 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
                                                   long numUpdates,
                                                   Iterator<HoodieRecord<T>> recordItr) throws IOException {
     log.info("Merging updates for commit {} for file {}", instantTime, fileId);
-    if (!table.getIndex().canIndexLogFiles() && partitioner != null
+    if (!table.getIndex().canIndexLogFiles() && !config.shouldWriteUpdatesAsDeletesAndInserts()
+        && partitioner != null
         && partitioner.getSmallFileIds().contains(fileId)) {
       log.info("Small file corrections for updates for commit {} for file {}", instantTime, fileId);
       return super.handleUpdate(partitionPath, fileId, numUpdates, recordItr);
