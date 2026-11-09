@@ -19,15 +19,25 @@
 package org.apache.hudi
 
 import org.apache.hudi.common.config.RecordMergeMode
-import org.apache.hudi.common.model.WriteOperationType
+import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, WriteOperationType}
+import org.apache.hudi.common.schema.{HoodieSchemaUtils => HoodieCommonSchemaUtils}
+import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.config.HoodieWriteConfig
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 
+import org.apache.avro.Schema
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.{AfterAll, BeforeAll, Test}
-import org.junit.jupiter.api.Assertions.{assertNotNull, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
+
+import java.util.{Collections, IdentityHashMap}
+
+import scala.collection.JavaConverters._
 
 /**
  * Test cases for {@link HoodieCreateRecordUtils}.
@@ -258,6 +268,57 @@ class TestHoodieCreateRecordUtils {
       .format("hudi")
       .load(TestHoodieCreateRecordUtils.tempDir + "/test_null_precombine_commit_time")
     assertTrue(result.count() > 0, "Data should have been written successfully with null precombine using COMMIT_TIME_ORDERING")
+  }
+
+  /**
+   * Prepped writes feed rows carrying the meta columns; every record of a partition must be rewritten
+   * into one shared meta-field-free schema rather than a schema built per record.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = Array("preppedSparkSqlWrites", "preppedSparkSqlMergeInto", "preppedWriteOperation"))
+  def testPreppedAvroRecordsShareOneSchemaPerPartition(preppedFlag: String): Unit = {
+    val spark = TestHoodieCreateRecordUtils.spark
+    val basePath = TestHoodieCreateRecordUtils.tempDir + "/test_prepped_schema_" + preppedFlag
+    val numRecords = 20
+    val parameters = createParametersWithoutPrecombine()
+    createTestDataFrame((0 until numRecords).map(i => Row(s"id$i", s"name$i", i, i.toLong, "par1")): _*).write
+      .format("hudi")
+      .options(parameters)
+      .option(DataSourceWriteOptions.TABLE_NAME.key(), TEST_TABLE_NAME)
+      .option("hoodie.table.name", TEST_TABLE_NAME)
+      .mode("overwrite")
+      .save(basePath)
+
+    val preppedDf = spark.read.format("hudi").load(basePath).coalesce(1)
+    val writerSchema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(preppedDf.schema, RECORD_NAME, RECORD_NAMESPACE)
+    val metaClient = HoodieTableMetaClient.builder().setBasePath(basePath)
+      .setConf(HadoopFSUtils.getStorageConfWithCopy(spark.sparkContext.hadoopConfiguration)).build()
+    val writeConfig = HoodieWriteConfig.newBuilder().withPath(basePath).forTable(TEST_TABLE_NAME)
+      .withProps(parameters.asJava).build()
+    val records = HoodieCreateRecordUtils.createHoodieRecordRdd(HoodieCreateRecordUtils.createHoodieRecordRddArgs(
+      preppedDf, writeConfig, parameters, RECORD_NAME, RECORD_NAMESPACE, writerSchema, writerSchema,
+      WriteOperationType.UPSERT, INSTANT_TIME,
+      preppedSparkSqlWrites = preppedFlag == "preppedSparkSqlWrites",
+      preppedSparkSqlMergeInto = preppedFlag == "preppedSparkSqlMergeInto",
+      preppedWriteOperation = preppedFlag == "preppedWriteOperation",
+      metaClient.getTableConfig))
+
+    // Inspect schema instances on the executor, before any serialization breaks object identity.
+    val partitionStats = records.rdd.mapPartitions(it => {
+      val schemas = Collections.newSetFromMap(new IdentityHashMap[Schema, java.lang.Boolean]())
+      val values = it.map(record => {
+        val avroRecord = record.asInstanceOf[HoodieAvroIndexedRecord].getData
+        schemas.add(avroRecord.getSchema)
+        (record.getRecordKey, avroRecord.get(avroRecord.getSchema.getField("name").pos()).toString)
+      }).toList
+      Iterator((schemas.size(), values, schemas.asScala.head.toString))
+    }).collect()
+
+    assertEquals(1, partitionStats.length)
+    val (numSchemaInstances, values, schemaStr) = partitionStats.head
+    assertEquals(1, numSchemaInstances, "All records of a partition should share one schema instance")
+    assertEquals((0 until numRecords).map(i => (s"id$i", s"name$i")).toSet, values.toSet)
+    assertEquals(HoodieCommonSchemaUtils.removeMetadataFields(writerSchema).toAvroSchema, new Schema.Parser().parse(schemaStr))
   }
 }
 
