@@ -37,7 +37,12 @@ public enum HoodiePreWriteCleanerPolicy {
   CLEAN,
 
   @EnumFieldDescription("Only perform rollback of failed writes before starting the write.")
-  ROLLBACK_FAILED_WRITES;
+  ROLLBACK_FAILED_WRITES,
+
+  @EnumFieldDescription("Perform rollback of failed writes on a background thread instead of inline before the write. "
+      + "The pre-write hook becomes a no-op so starting a commit never blocks on rollback; the engine is responsible "
+      + "for driving the rollback asynchronously. Falls back to no rollback at all on engines that do not support it.")
+  ASYNC_ROLLBACK_FAILED_WRITES;
 
   public boolean isNone() {
     return this == NONE;
@@ -51,9 +56,14 @@ public enum HoodiePreWriteCleanerPolicy {
     return this == ROLLBACK_FAILED_WRITES;
   }
 
+  public boolean isAsyncRollbackFailedWrites() {
+    return this == ASYNC_ROLLBACK_FAILED_WRITES;
+  }
+
   /**
-   * Parses the config value into an enum. Supports enum names (NONE, CLEAN, ROLLBACK_FAILED_WRITES)
-   * and legacy string values ("clean", "rollback_failed_writes", empty/null for NONE).
+   * Parses the config value into an enum. Supports enum names (NONE, CLEAN, ROLLBACK_FAILED_WRITES,
+   * ASYNC_ROLLBACK_FAILED_WRITES) and legacy string values ("clean", "rollback_failed_writes",
+   * empty/null for NONE).
    */
   public static HoodiePreWriteCleanerPolicy fromString(String value) {
     if (value == null || value.isEmpty()) {
@@ -62,6 +72,9 @@ public enum HoodiePreWriteCleanerPolicy {
     String normalized = value.trim();
     if (normalized.isEmpty()) {
       return NONE;
+    }
+    if ("async_rollback_failed_writes".equalsIgnoreCase(normalized)) {
+      return ASYNC_ROLLBACK_FAILED_WRITES;
     }
     if ("rollback_failed_writes".equalsIgnoreCase(normalized)) {
       return ROLLBACK_FAILED_WRITES;
