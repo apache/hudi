@@ -291,7 +291,7 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
       // If there is no commit on the dataset yet, use the SOLO_COMMIT_TIMESTAMP as the instant time for initial commit
       // Otherwise, we use the timestamp of the latest completed action.
-      String dataTableInstantTime = dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
+      String dataTableInstantTime = getLatestCompletedDataInstantTime();
       if (!initializeFromFilesystem(dataTableInstantTime, indexerMapForPartitionsToInit, inflightInstantTimestamp)) {
         LOG.error("Failed to initialize MDT from filesystem");
         return false;
@@ -397,14 +397,17 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     indexerMapForPartitionsToInit.keySet().removeIf(
         metadataPartition -> dataMetaClient.getTableConfig().isMetadataPartitionAvailable(metadataPartition));
 
-    // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT
+    // Get a complete list of files and partitions from the file system or from already initialized FILES partition of MDT.
+    // The listing is bounded by the latest completed instant rather than the instant of an indexing action,
+    // since the catchup of the indexing action skips the instants already committed to the metadata table.
+    String latestCompletedInstantTime = getLatestCompletedDataInstantTime();
     List<DirectoryInfo> partitionInfoList;
     if (filesPartitionAvailable) {
-      partitionInfoList = listAllPartitionsFromMDT(dataTableInstantTime, pendingDataInstants);
+      partitionInfoList = listAllPartitionsFromMDT(latestCompletedInstantTime, pendingDataInstants);
     } else {
       // if auto initialization is enabled, then we need to list all partitions from the file system
       if (dataWriteConfig.getMetadataConfig().shouldAutoInitialize()) {
-        partitionInfoList = listAllPartitionsFromFilesystem(dataTableInstantTime, pendingDataInstants,
+        partitionInfoList = listAllPartitionsFromFilesystem(latestCompletedInstantTime, pendingDataInstants,
             dataWriteConfig.getMetadataConfig().shouldSkipZeroSizeFilesOnInitialize());
       } else {
         // if auto initialization is disabled, we can return an empty list
@@ -540,6 +543,10 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
         throw new HoodieIOException("Cannot get the latest merged file slices", e);
       }
     });
+  }
+
+  private String getLatestCompletedDataInstantTime() {
+    return dataMetaClient.getActiveTimeline().filterCompletedInstants().lastInstant().map(HoodieInstant::requestedTime).orElse(SOLO_COMMIT_TIMESTAMP);
   }
 
   private Set<String> getPendingDataInstants(HoodieTableMetaClient dataMetaClient) {
