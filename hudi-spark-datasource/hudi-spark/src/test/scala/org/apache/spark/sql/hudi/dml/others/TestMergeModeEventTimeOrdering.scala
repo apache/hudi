@@ -54,6 +54,8 @@ class TestMergeModeEventTimeOrdering extends HoodieSparkSqlTestBase {
             spark.sql(s"insert into $tableName values (1, 1, $oldValue)")
             spark.sql(s"insert into $tableName values (1, 2, $newValue)")
             checkAnswer(s"select id, v from $tableName")(Seq(1, 2))
+            spark.sql(s"insert into $tableName values (1, 3, $oldValue)")
+            checkAnswer(s"select id, v from $tableName")(Seq(1, 2))
           }
         }
       }

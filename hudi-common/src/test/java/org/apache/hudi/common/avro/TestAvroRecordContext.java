@@ -20,11 +20,16 @@
 package org.apache.hudi.common.avro;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.common.util.collection.ArrayComparable;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.Conversions;
@@ -39,9 +44,24 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -99,6 +119,144 @@ class TestAvroRecordContext {
     }
     assertEquals(OrderingValues.getDefault(), context.getOrderingValue(record, hoodieSchema, new String[] {"missing"}));
     assertNull(new HoodieAvroIndexedRecord(record).getOrderingValue(hoodieSchema, props, new String[] {"missing"}));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testDeleteOrderingValuesMatchData(boolean consistentTimestamp) throws IOException, ClassNotFoundException {
+    Schema schema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"delete_ordering\",\"fields\":["
+        + "{\"name\":\"date\",\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}],\"default\":null},"
+        + "{\"name\":\"ts_millis\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-millis\"}},"
+        + "{\"name\":\"ts_micros\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}},"
+        + "{\"name\":\"decimal_fixed\",\"type\":{\"type\":\"fixed\",\"name\":\"decimal\",\"size\":5,"
+        + "\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}},"
+        + "{\"name\":\"decimal_bytes\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":10,\"scale\":2}},"
+        + "{\"name\":\"plain_int\",\"type\":\"int\"},{\"name\":\"plain_long\",\"type\":\"long\"},"
+        + "{\"name\":\"text\",\"type\":\"string\"},"
+        + "{\"name\":\"nested\",\"type\":{\"type\":\"record\",\"name\":\"nested_ordering\",\"fields\":["
+        + "{\"name\":\"date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}}]}}]}");
+    Map<String, Comparable> deleteValues = new LinkedHashMap<>();
+    deleteValues.put("date", 20727);
+    deleteValues.put("ts_millis", 1790812800123L);
+    deleteValues.put("ts_micros", 1790812800123456L);
+    deleteValues.put("decimal_fixed", new BigDecimal("1.50"));
+    deleteValues.put("decimal_bytes", new BigDecimal("2.50"));
+    deleteValues.put("plain_int", 20727);
+    deleteValues.put("plain_long", 1790812800123456L);
+    deleteValues.put("text", "value");
+    GenericRecord record = new GenericData.Record(schema);
+    deleteValues.forEach(record::put);
+    record.put("text", new Utf8("value"));
+    Schema fixedSchema = schema.getField("decimal_fixed").schema();
+    Schema bytesSchema = schema.getField("decimal_bytes").schema();
+    record.put("decimal_fixed", new Conversions.DecimalConversion().toFixed(
+        (BigDecimal) deleteValues.get("decimal_fixed"), fixedSchema, fixedSchema.getLogicalType()));
+    record.put("decimal_bytes", new Conversions.DecimalConversion().toBytes(
+        (BigDecimal) deleteValues.get("decimal_bytes"), bytesSchema, bytesSchema.getLogicalType()));
+    GenericRecord nested = new GenericData.Record(schema.getField("nested").schema());
+    nested.put("date", 20727);
+    record.put("nested", nested);
+    deleteValues.put("nested.date", 20727);
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
+    TypedProperties props = new TypedProperties();
+    props.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), String.valueOf(consistentTimestamp));
+    AvroRecordContext context = new AvroRecordContext(new HoodieTableConfig(), null, props);
+
+    for (Map.Entry<String, Comparable> entry : deleteValues.entrySet()) {
+      List<String> fields = Collections.singletonList(entry.getKey());
+      context.initOrderingValueConverter(hoodieSchema, fields);
+      Comparable dataOrdering = context.getOrderingValue(record, hoodieSchema, fields);
+      Comparable deleteOrdering = context.getOrderingValue(roundTripDelete(entry.getValue()));
+      assertEquals(0, dataOrdering.compareTo(deleteOrdering), entry.getKey());
+      assertEquals(deleteOrdering, context.convertOrderingValueToEngineType(deleteOrdering), entry.getKey());
+    }
+
+    // SQL date/timestamp wrappers decode to different Java representations than primitive wrappers.
+    context.initOrderingValueConverter(hoodieSchema, Collections.singletonList("date"));
+    LocalDate date = LocalDate.ofEpochDay(20727);
+    assertEquals(date, context.getOrderingValue(roundTripDelete(Date.valueOf(date))));
+    assertEquals(date, context.convertOrderingValueToEngineType(date));
+    for (String field : Arrays.asList("ts_millis", "ts_micros")) {
+      List<String> fields = Collections.singletonList(field);
+      context.initOrderingValueConverter(hoodieSchema, fields);
+      long rawValue = (long) deleteValues.get(field);
+      Instant instant = field.equals("ts_millis") ? Instant.ofEpochMilli(rawValue)
+          : Instant.ofEpochSecond(rawValue / 1_000_000, (rawValue % 1_000_000) * 1_000);
+      Comparable dataOrdering = context.getOrderingValue(record, hoodieSchema, fields);
+      assertEquals(0, dataOrdering.compareTo(context.getOrderingValue(roundTripDelete(Timestamp.from(instant)))));
+      assertEquals(0, dataOrdering.compareTo(context.convertOrderingValueToEngineType(instant)));
+    }
+
+    for (String field : Arrays.asList("decimal_fixed", "decimal_bytes")) {
+      context.initOrderingValueConverter(hoodieSchema, Collections.singletonList(field));
+      assertEquals(deleteValues.get(field), context.convertOrderingValueToEngineType((Comparable) record.get(field)));
+    }
+
+    List<String> fields = new ArrayList<>(deleteValues.keySet());
+    context.initOrderingValueConverter(hoodieSchema, fields);
+    Comparable multipleValues = OrderingValues.create(deleteValues.values().toArray(new Comparable[0]));
+    Comparable decodedValues = roundTripDelete(multipleValues).getOrderingValue();
+    Comparable dataOrdering = context.getOrderingValue(record, hoodieSchema, fields);
+    assertEquals(0, dataOrdering.compareTo(context.convertOrderingValueToEngineType(decodedValues)));
+    ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+    try (ObjectOutputStream output = new ObjectOutputStream(bytes)) {
+      output.writeObject(AvroOrderingValueConverter.create(hoodieSchema, fields, consistentTimestamp));
+    }
+    try (ObjectInputStream input = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+      AvroOrderingValueConverter converter = (AvroOrderingValueConverter) input.readObject();
+      assertEquals(0, dataOrdering.compareTo(converter.convert(decodedValues)));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"local-timestamp-millis", "local-timestamp-micros"})
+  void testLocalTimestampDeleteOrdering(String logicalType) throws IOException {
+    Schema schema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"local_timestamp\",\"fields\":["
+        + "{\"name\":\"ts\",\"type\":{\"type\":\"long\",\"logicalType\":\"" + logicalType + "\"}}]}");
+    HoodieSchema hoodieSchema = HoodieSchema.fromAvroSchema(schema);
+    Instant instant = Instant.parse("2026-10-01T00:00:00.123456Z");
+    LocalDateTime localTime = LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
+    long rawValue = logicalType.equals("local-timestamp-millis") ? instant.toEpochMilli()
+        : instant.getEpochSecond() * 1_000_000 + instant.getNano() / 1_000;
+    GenericRecord record = new GenericData.Record(schema);
+    record.put("ts", rawValue);
+    TypedProperties props = new TypedProperties();
+    props.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    AvroRecordContext context = new AvroRecordContext(new HoodieTableConfig(), null, props);
+    List<String> fields = Collections.singletonList("ts");
+    context.initOrderingValueConverter(hoodieSchema, fields);
+    Comparable expected = context.getOrderingValue(record, hoodieSchema, fields);
+    assertEquals(expected, context.getOrderingValue(roundTripDelete(rawValue)));
+    assertEquals(expected, context.convertOrderingValueToEngineType(localTime));
+    assertEquals(expected, context.getOrderingValue(roundTripDelete(Timestamp.valueOf(localTime))));
+  }
+
+  @Test
+  void testDeleteOrderingPreservesSentinelsAndUnknownFields() {
+    HoodieSchema schema = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"sentinels\",\"fields\":["
+            + "{\"name\":\"date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},"
+            + "{\"name\":\"ts\",\"type\":{\"type\":\"long\",\"logicalType\":\"timestamp-micros\"}}]}"));
+    AvroRecordContext context = new AvroRecordContext();
+    context.initOrderingValueConverter(schema, Arrays.asList("date", "ts"));
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(DeleteRecord.create("key", "", null)));
+    assertEquals(OrderingValues.getDefault(), context.getOrderingValue(DeleteRecord.create("key", "", OrderingValues.getDefault())));
+    ArrayComparable values = new ArrayComparable(new Comparable[] {OrderingValues.getDefault(), null});
+    assertEquals(values, context.getOrderingValue(DeleteRecord.create("key", "", values)));
+
+    context.initOrderingValueConverter(schema, Collections.singletonList("missing"));
+    assertEquals(20727, context.getOrderingValue(DeleteRecord.create("key", "", 20727)));
+    assertEquals(new Utf8("value"), context.getOrderingValue(DeleteRecord.create("key", "", "value")));
+    context.initOrderingValueConverter(schema, Collections.emptyList());
+    assertEquals(new Utf8("value"), context.getOrderingValue(DeleteRecord.create("key", "", "value")));
+  }
+
+  private static DeleteRecord roundTripDelete(Comparable value) throws IOException {
+    HoodieDeleteBlock written = new HoodieDeleteBlock(
+        Collections.singletonList(Pair.of(DeleteRecord.create("key", "", value), -1L)), Collections.emptyMap());
+    HoodieDeleteBlock read = new HoodieDeleteBlock(Option.of(written.getContentBytes(null).toByteArray()),
+        null, false, Option.empty(), Collections.emptyMap(), Collections.emptyMap());
+    return read.getRecordsToDelete()[0];
   }
 
   private static Stream<Arguments> testConvertValueToEngineType() {

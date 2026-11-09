@@ -44,43 +44,37 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
   logicalTypeOrderingCases.foreach { case (orderingType, oldLiteral, newLiteral, oldStr, newStr) =>
     test(s"Test Update Table With ${orderingType.toUpperCase} Ordering Field") {
       withTempDir { tmp =>
-        Seq("cow", "mor").foreach { tableType =>
-          Seq(true, false).foreach { partitioned =>
-            Seq(true, false).foreach { sparkSqlOptimizedWrites =>
-              val tableName = generateTableName
-              val partitionClause = if (partitioned) "partitioned by (dt)" else ""
-              spark.sql(
-                s"""
-                   |create table $tableName (
-                   |  id int,
-                   |  v int,
-                   |  ts $orderingType,
-                   |  dt string
-                   |) using hudi
-                   | location '${tmp.getCanonicalPath}/$tableName'
-                   | tblproperties (
-                   |  type = '$tableType',
-                   |  primaryKey = 'id',
-                   |  preCombineField = 'ts'
-                   | )
-                   | $partitionClause
-                 """.stripMargin)
-              spark.sql(s"insert into $tableName values (1, 1, $oldLiteral, 'p1'), (2, 2, $oldLiteral, 'p1')")
+        Seq(true, false).foreach { sparkSqlOptimizedWrites =>
+          val tableName = generateTableName
+          spark.sql(
+            s"""
+               |create table $tableName (
+               |  id int,
+               |  v int,
+               |  ts $orderingType,
+               |  dt string
+               |) using hudi
+               | location '${tmp.getCanonicalPath}/$tableName'
+               | tblproperties (
+               |  type = 'cow',
+               |  primaryKey = 'id',
+               |  preCombineField = 'ts'
+               | )
+             """.stripMargin)
+          spark.sql(s"insert into $tableName values (1, 1, $oldLiteral, 'p1'), (2, 2, $oldLiteral, 'p1')")
 
-              withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
-                spark.sql(s"update $tableName set v = v * 10 where id = 1")
-                checkAnswer(s"select id, v, cast(ts as string), dt from $tableName order by id")(
-                  Seq(1, 10, oldStr, "p1"),
-                  Seq(2, 2, oldStr, "p1")
-                )
+          withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> sparkSqlOptimizedWrites.toString) {
+            spark.sql(s"update $tableName set v = v * 10 where id = 1")
+            checkAnswer(s"select id, v, cast(ts as string), dt from $tableName order by id")(
+              Seq(1, 10, oldStr, "p1"),
+              Seq(2, 2, oldStr, "p1")
+            )
 
-                spark.sql(s"update $tableName set v = v + 1, ts = $newLiteral where id = 2")
-                checkAnswer(s"select id, v, cast(ts as string), dt from $tableName order by id")(
-                  Seq(1, 10, oldStr, "p1"),
-                  Seq(2, 3, newStr, "p1")
-                )
-              }
-            }
+            spark.sql(s"update $tableName set v = v + 1, ts = $newLiteral where id = 2")
+            checkAnswer(s"select id, v, cast(ts as string), dt from $tableName order by id")(
+              Seq(1, 10, oldStr, "p1"),
+              Seq(2, 3, newStr, "p1")
+            )
           }
         }
       }

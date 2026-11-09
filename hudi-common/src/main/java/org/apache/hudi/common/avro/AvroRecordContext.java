@@ -62,6 +62,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   private final String payloadClass;
   private final boolean consistentLogicalTimestampEnabled;
+  private AvroOrderingValueConverter orderingValueConverter;
 
   public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass) {
     this(tableConfig, payloadClass, new TypedProperties());
@@ -242,6 +243,18 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public UnaryOperator<IndexedRecord> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
     return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to.toAvroSchema(), renamedColumns);
+  }
+
+  /**
+   * Initializes schema-aware conversion so delete values use the same logical types as data records.
+   */
+  void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
+    orderingValueConverter = AvroOrderingValueConverter.create(dataSchema, orderingFieldNames, consistentLogicalTimestampEnabled);
+  }
+
+  @Override
+  public Comparable convertOrderingValueToEngineType(Comparable value) {
+    return orderingValueConverter == null ? super.convertOrderingValueToEngineType(value) : orderingValueConverter.convert(value);
   }
 
   @Override

@@ -21,21 +21,32 @@ package org.apache.hudi.common.table.read.buffer;
 
 import org.apache.hudi.common.avro.HoodieAvroReaderContext;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieAvroRecordMerger;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -47,6 +58,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -152,6 +164,71 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     assertEquals(0, readStats.getNumInserts());
     assertEquals(1, readStats.getNumDeletes());
     assertEquals(2, readStats.getNumUpdates());
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "9, false, false",
+      "9, true, false",
+      "10, false, true",
+      "10, true, false",
+      "11, false, true",
+      "11, true, true"
+  })
+  void readWithDateOrderingAndSerializedDeleteBlock(int deleteEpochDay, boolean deleteFirst, boolean expectDeleted) throws IOException {
+    HoodieSchema dateSchema = HoodieSchema.createRecord("date_record", "namespace", null,
+        Arrays.asList(
+            HoodieSchemaField.of("record_key", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.DATE))));
+    GenericRecord record = new GenericData.Record(dateSchema.toAvroSchema());
+    record.put("record_key", "1");
+    record.put("ts", 10);
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty(HoodieTableConfig.ORDERING_FIELDS.key(), "ts");
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
+    when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
+    when(tableConfig.getOrderingFields()).thenReturn(Collections.singletonList("ts"));
+    HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
+        mock(StorageConfiguration.class), tableConfig, Option.empty(), Option.empty(), props);
+    FileGroupReaderSchemaHandler<IndexedRecord> schemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    when(schemaHandler.getRequiredSchema()).thenReturn(dateSchema);
+    when(schemaHandler.getSchemaForUpdates()).thenReturn(dateSchema);
+    when(schemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
+    when(schemaHandler.getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
+    when(schemaHandler.getDeleteContext()).thenReturn(new DeleteContext(props, dateSchema));
+    readerContext.setSchemaHandler(schemaHandler);
+
+    HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+    when(dataBlock.getSchema()).thenReturn(dateSchema);
+    when(dataBlock.getEngineRecordIterator(readerContext))
+        .thenReturn(ClosableIterator.wrap(Collections.<IndexedRecord>singletonList(record).iterator()));
+    // Inline delete blocks retain the physical integer even though Avro DATE ordering is a LocalDate.
+    HoodieDeleteBlock writtenDeleteBlock = new HoodieDeleteBlock(
+        Collections.singletonList(Pair.of(DeleteRecord.create("1", "", deleteEpochDay), -1L)), Collections.emptyMap());
+    HoodieDeleteBlock deleteBlock = new HoodieDeleteBlock(Option.of(writtenDeleteBlock.getContentBytes(null).toByteArray()),
+        null, false, Option.empty(), Collections.emptyMap(), Collections.emptyMap());
+    assertEquals(Integer.valueOf(deleteEpochDay), deleteBlock.getRecordsToDelete()[0].getOrderingValue());
+
+    KeyBasedFileGroupRecordBuffer<IndexedRecord> buffer = buildKeyBasedFileGroupRecordBuffer(
+        readerContext, tableConfig, new HoodieReadStats(), null, RecordMergeMode.EVENT_TIME_ORDERING,
+        Collections.singletonList("ts"), props, Option.empty());
+    try {
+      buffer.setBaseFileIterator(ClosableIterator.wrap(Collections.<IndexedRecord>emptyList().iterator()));
+      if (deleteFirst) {
+        buffer.processDeleteBlock(deleteBlock);
+        buffer.processDataBlock(dataBlock, Option.empty());
+      } else {
+        buffer.processDataBlock(dataBlock, Option.empty());
+        buffer.processDeleteBlock(deleteBlock);
+      }
+      // An older delete loses and a newer delete wins in either order; equal event times keep the last arrival.
+      assertEquals(expectDeleted ? Collections.emptyList() : Collections.singletonList(record), getActualRecords(buffer));
+    } finally {
+      buffer.close();
+    }
   }
 
   @Test

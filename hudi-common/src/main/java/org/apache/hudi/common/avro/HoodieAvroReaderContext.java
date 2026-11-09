@@ -39,6 +39,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
@@ -157,6 +158,13 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
         new AvroRecordContext(tableConfig, payloadClassName, ConfigUtils.getMergeProps(hoodieReaderConfig.getProps(), tableConfig)), hoodieReaderConfig);
     this.reusableFileReaders = reusableFileReaders;
     this.isMultiFormat = tableConfig.isMultipleBaseFileFormatsEnabled();
+  }
+
+  @Override
+  public void setSchemaHandler(FileGroupReaderSchemaHandler<IndexedRecord> schemaHandler) {
+    super.setSchemaHandler(schemaHandler);
+    List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
+    ((AvroRecordContext) recordContext).initOrderingValueConverter(schemaHandler.getRequiredSchema(), orderingFieldNames);
   }
 
   @Override
