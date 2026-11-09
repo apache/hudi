@@ -26,6 +26,7 @@ import org.apache.hudi.client.embedded.EmbeddedTimelineService;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -41,8 +42,10 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
@@ -64,6 +67,7 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -424,6 +428,55 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
 
     assertFalse(instants.contains(oldClusteringTime),
         "Clustering instants should NOT be rolled back when config is disabled");
+  }
+
+  @Test
+  void completeCompactionAbortsWhenHeartbeatExpired() throws Exception {
+    initMetaClient();
+    HoodieTable<String, String, String, String> table = mockTableForCompactionCommit();
+    TestTableServiceClient client = new TestTableServiceClient(buildLazyConfigWithShortHeartbeat(), Collections.singletonList(table).iterator(),
+        Option.empty(), Collections.emptyMap(), Collections.emptyIterator());
+    String compactionTime = InProcessTimeGenerator.createNewInstantTime();
+
+    // the job executing the compaction stops heartbeating (e.g. infra issue) until the heartbeat expires,
+    // at which point a concurrent writer may roll the compaction back
+    client.getHeartbeatClient().start(compactionTime);
+    client.getHeartbeatClient().stopHeartbeatTimers();
+    Thread.sleep(1500);
+    assertTrue(client.getHeartbeatClient().isHeartbeatExpired(compactionTime));
+
+    HoodieException e = assertThrows(HoodieException.class,
+        () -> client.completeCompaction(mock(HoodieCommitMetadata.class), table, compactionTime, Collections.emptyList()));
+    assertTrue(e.getMessage().contains("Heartbeat for instant " + compactionTime + " has expired"), e.getMessage());
+  }
+
+  @Test
+  void completeCompactionWithoutHeartbeatSucceeds() throws Exception {
+    initMetaClient();
+    HoodieTable<String, String, String, String> table = mockTableForCompactionCommit();
+    TestTableServiceClient client = new TestTableServiceClient(buildLazyConfigWithShortHeartbeat(), Collections.singletonList(table).iterator(),
+        Option.empty(), Collections.emptyMap(), Collections.emptyIterator());
+
+    // no heartbeat was started by this client for the instant, so there is nothing to check
+    client.completeCompaction(mock(HoodieCommitMetadata.class), table, InProcessTimeGenerator.createNewInstantTime(), Collections.emptyList());
+  }
+
+  private HoodieTable<String, String, String, String> mockTableForCompactionCommit() {
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class, RETURNS_DEEP_STUBS);
+    when(table.getMetaClient().getBasePath()).thenReturn(new StoragePath(basePath));
+    when(table.getMetaClient().getMarkerFolderPath(any())).thenReturn(basePath + "/.hoodie/.temp/marker");
+    return table;
+  }
+
+  private HoodieWriteConfig buildLazyConfigWithShortHeartbeat() {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .withHeartbeatIntervalInMs(1000)
+        .withHeartbeatTolerableMisses(1)
+        .build();
   }
 
   private void createClusteringInstant(String instantTime, String clusteringAction) {
