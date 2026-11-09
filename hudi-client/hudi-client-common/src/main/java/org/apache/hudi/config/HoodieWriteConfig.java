@@ -1976,10 +1976,6 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getLong(HoodieCleanConfig.INTERVAL_TO_CREATE_EMPTY_CLEAN_HOURS);
   }
 
-  public boolean shouldArchiveBeyondSavepoint() {
-    return getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT);
-  }
-
   public boolean isAutoArchive() {
     return getBoolean(HoodieArchivalConfig.AUTO_ARCHIVE);
   }
@@ -3997,6 +3993,11 @@ public class HoodieWriteConfig extends HoodieConfig {
             writeConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ) && (isMetadataTable || writeConfig.isSimpleBucketIndex()),
             "Non-blocking concurrency control requires the MOR table with simple bucket index or it has to be Metadata table");
       }
+
+      checkArgument(!writeConfig.getBooleanOrDefault(HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT),
+          HoodieArchivalConfig.ARCHIVE_BEYOND_SAVEPOINT.key() + " is no longer supported: archiving beyond a savepoint "
+              + "leaves holes in the active timeline that readers and table services do not handle. Remove the config "
+              + "or set it to false; archival stops at the earliest savepoint commit.");
 
       HoodieCleaningPolicy cleaningPolicy = HoodieCleaningPolicy.valueOf(writeConfig.getString(CLEANER_POLICY));
       if (cleaningPolicy == HoodieCleaningPolicy.KEEP_LATEST_COMMITS) {

@@ -54,7 +54,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -263,12 +262,10 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
           .setConf(metaClient.getStorageConf().newInstance())
           .build();
       Option<HoodieInstant> qualifiedEarliestInstant =
-          TimelineUtils.getEarliestInstantForMetadataArchival(
-              dataMetaClient.getActiveTimeline(), config.shouldArchiveBeyondSavepoint());
+          TimelineUtils.getEarliestInstantForMetadataArchival(dataMetaClient.getActiveTimeline());
 
       // Do not archive the instants after the earliest commit (COMMIT, DELTA_COMMIT, and
-      // REPLACE_COMMIT only, considering non-savepoint commit only if enabling archive
-      // beyond savepoint) and the earliest inflight instant (all actions).
+      // REPLACE_COMMIT only) and the earliest inflight instant (all actions).
       // This is required by metadata table, see HoodieTableMetadataUtil#processRollbackMetadata
       // for details.
       // Note that we cannot blindly use the earliest instant of all actions, because CLEAN and
@@ -289,22 +286,13 @@ public class TimelineArchiverV2<T extends HoodieAvroPayload, I, K, O> implements
         .map(Option::get)
         .min(InstantComparatorV2.REQUESTED_TIME_BASED_COMPARATOR);
 
-    // Step2: We cannot archive any commits which are made after the first savepoint present,
-    // unless HoodieArchivalConfig#ARCHIVE_BEYOND_SAVEPOINT is enabled.
+    // Step2: We cannot archive any commits which are made after the first savepoint present.
     Option<HoodieInstant> firstSavepoint = table.getCompletedSavepointTimeline().firstInstant();
-    Set<String> savepointTimestamps = table.getSavepointTimestamps();
 
     Stream<HoodieInstant> instantToArchiveStream = completedCommitsTimeline.getInstantsAsStream()
-        .filter(s -> {
-          if (config.shouldArchiveBeyondSavepoint()) {
-            // skip savepoint commits and proceed further
-            return !savepointTimestamps.contains(s.requestedTime());
-          } else {
-            // if no savepoint present, then don't filter
-            // stop at first savepoint commit
-            return !firstSavepoint.isPresent() || compareTimestamps(s.requestedTime(), LESSER_THAN, firstSavepoint.get().requestedTime());
-          }
-        }).filter(s -> earliestInstantToRetain
+        // if no savepoint present, then don't filter; otherwise stop at the first savepoint commit
+        .filter(s -> !firstSavepoint.isPresent() || compareTimestamps(s.requestedTime(), LESSER_THAN, firstSavepoint.get().requestedTime()))
+        .filter(s -> earliestInstantToRetain
             .map(instant -> compareTimestamps(s.requestedTime(), LESSER_THAN, instant.requestedTime()))
             .orElse(true));
     return instantToArchiveStream.limit(completedCommitsTimeline.countInstants() - minInstantsToKeep)

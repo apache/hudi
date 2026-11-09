@@ -103,13 +103,21 @@ public class HoodieArchivalConfig extends HoodieConfig {
       .markAdvanced()
       .withDocumentation("The number of small files to compact at once.");
 
+  /**
+   * @deprecated archiving beyond a savepoint leaves holes in the active timeline, which readers and table services
+   * do not handle. Archival always stops at the earliest savepoint commit, and setting this to true fails the write.
+   */
+  @Deprecated
   public static final ConfigProperty<Boolean> ARCHIVE_BEYOND_SAVEPOINT = ConfigProperty
       .key("hoodie.archive.beyond.savepoint")
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("0.12.0")
-      .withDocumentation("If enabled, archival will proceed beyond savepoint, skipping savepoint commits."
-          + " If disabled, archival will stop at the earliest savepoint commit.");
+      .deprecatedAfter("1.3.0")
+      .withDocumentation("No longer supported: setting it to true fails the write. Archival always stops at the "
+          + "earliest savepoint commit. Archiving beyond a savepoint left holes in the active timeline that "
+          + "readers, the cleaner and the index did not handle, so data written by commits in the hole could be "
+          + "missed by queries and upserts.");
 
   public static final ConfigProperty<Long> TIMELINE_COMPACTION_TARGET_FILE_MAX_BYTES = ConfigProperty
         .key("hoodie.timeline.compaction.target.file.max.bytes")
@@ -225,6 +233,10 @@ public class HoodieArchivalConfig extends HoodieConfig {
       return this;
     }
 
+    /**
+     * @deprecated archiving beyond a savepoint is no longer supported, see {@link #ARCHIVE_BEYOND_SAVEPOINT}.
+     */
+    @Deprecated
     public Builder withArchiveBeyondSavepoint(boolean archiveBeyondSavepoint) {
       archivalConfig.setValue(ARCHIVE_BEYOND_SAVEPOINT, String.valueOf(archiveBeyondSavepoint));
       return this;
