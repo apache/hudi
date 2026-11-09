@@ -66,6 +66,7 @@ import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -226,6 +227,48 @@ public class TestHoodieArrayWritableSchemaUtils {
     Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, decimalSchema);
     assertEquals(input, ((HiveDecimalWritable) result).getHiveDecimal().bigDecimalValue());
     validateRewriteWithAvro(oldWritable, oldSchema, result, decimalSchema);
+  }
+
+  @Test
+  void testRewriteRecordWithUnionTargetKeepsMemberGroup() {
+    HoodieSchema oldSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":{\"type\":\"record\",\"name\":\"Cu\",\"fields\":["
+        + "{\"name\":\"member0\",\"type\":[\"null\",\"int\"]},"
+        + "{\"name\":\"member1\",\"type\":[\"null\",\"string\"]}]}}]}");
+    HoodieSchema newSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":[\"null\",\"int\",\"string\"]}]}");
+
+    ArrayWritable memberGroup = new ArrayWritable(Writable.class, new Writable[] {new IntWritable(1), null});
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[] {memberGroup});
+
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap());
+
+    ArrayWritable resultGroup = (ArrayWritable) result.get()[0];
+    assertEquals(new IntWritable(1), resultGroup.get()[0]);
+    assertNull(resultGroup.get()[1]);
+  }
+
+  @Test
+  void testRewriteArrayOfUnionTargetKeepsMemberGroups() {
+    HoodieSchema oldSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"uas\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Ua\",\"fields\":["
+        + "{\"name\":\"member0\",\"type\":[\"null\",\"int\"]},"
+        + "{\"name\":\"member1\",\"type\":[\"null\",\"boolean\"]}]}}}]}");
+    HoodieSchema newSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"uas\",\"type\":{\"type\":\"array\",\"items\":[\"int\",\"boolean\"]}}]}");
+
+    ArrayWritable memberGroup = new ArrayWritable(Writable.class, new Writable[] {new IntWritable(7), null});
+    ArrayWritable array = new ArrayWritable(Writable.class, new Writable[] {memberGroup});
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[] {array});
+
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap());
+
+    ArrayWritable resultArray = (ArrayWritable) result.get()[0];
+    ArrayWritable resultGroup = (ArrayWritable) resultArray.get()[0];
+    assertEquals(new IntWritable(7), resultGroup.get()[0]);
+    assertNull(resultGroup.get()[1]);
   }
 
   @Test

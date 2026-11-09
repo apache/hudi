@@ -147,6 +147,12 @@ public class HoodieArrayWritableSchemaUtils {
         return map;
 
       case UNION:
+        // Avro/Parquet stores a union column on disk as a record of optional member0..memberN
+        // fields, which is also the shape Hive expects for the column. When the file schema
+        // (oldSchema) is that record, the writable already has the required representation.
+        if (oldSchema.getType() == HoodieSchemaType.RECORD && writable instanceof ArrayWritable) {
+          return writable;
+        }
         throw new IllegalArgumentException("should not be here?");
 
       default:
