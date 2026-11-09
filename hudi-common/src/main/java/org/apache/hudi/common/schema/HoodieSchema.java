@@ -1664,7 +1664,7 @@ public class HoodieSchema implements Serializable {
 
   @Override
   public int hashCode() {
-    return Objects.hash(avroSchema);
+    return avroSchema.hashCode();
   }
 
   /**
