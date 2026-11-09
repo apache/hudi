@@ -26,12 +26,14 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
+import org.apache.hudi.common.testutils.CountingHoodieStorage;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.HFileUtils;
 import org.apache.hudi.common.util.Option;
@@ -40,6 +42,7 @@ import org.apache.hudi.core.io.storage.HFileReaderFactory;
 import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.core.io.storage.HoodieNativeAvroHFileReader;
 import org.apache.hudi.exception.MetadataNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -50,6 +53,7 @@ import org.apache.hudi.io.storage.hadoop.HoodieAvroHFileWriter;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -91,6 +95,7 @@ import static org.apache.hudi.common.testutils.FileSystemTestUtils.RANDOM;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getHoodieSchemaFromResource;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.apache.hudi.common.util.CollectionUtils.toStream;
+import static org.apache.hudi.common.util.ConfigUtils.DEFAULT_HUDI_CONFIG_FOR_READER;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_META_BLOCK;
 import static org.apache.hudi.core.io.storage.HoodieAvroHFileReaderImplBase.KEY_BLOOM_FILTER_TYPE_CODE;
@@ -401,6 +406,38 @@ public class TestHoodieHFileReaderWriter extends TestHoodieReaderWriterBase {
           getHoodieSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
       assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
       verifySimpleRecords(hfileReader.getRecordIterator(schema));
+    }
+  }
+
+  @Test
+  void testReaderDownloadsFileOnce() throws Exception {
+    writeFileWithSimpleSchema();
+    HoodieStorage storage = new CountingHoodieStorage(getFilePath(), HoodieTestUtils.getDefaultStorageConf());
+    StoragePathInfo pathInfo = storage.getPathInfo(getFilePath());
+    HoodieSchema schema = getHoodieSchemaFromResource(TestHoodieReaderWriterBase.class, "/exampleSchema.avsc");
+    CountingHoodieStorage.resetCounts();
+    try (HoodieAvroHFileReaderImplBase hfileReader = (HoodieAvroHFileReaderImplBase) HoodieIOFactory.getIOFactory(storage)
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(DEFAULT_HUDI_CONFIG_FOR_READER, pathInfo, HoodieFileFormat.HFILE, Option.empty())) {
+      assertEquals(schema, hfileReader.getSchema());
+      assertEquals(NUM_RECORDS, hfileReader.getTotalRecords());
+      verifySimpleRecords(hfileReader.getRecordIterator(schema));
+      assertEquals(1, countAndClose(hfileReader.getIndexedRecordsByKeysIterator(Collections.singletonList("key07"), schema)));
+      assertEquals(10, countAndClose(hfileReader.getIndexedRecordsByKeyPrefixIterator(Collections.singletonList("key1"), schema)));
+      assertEquals(1, hfileReader.filterRowKeys(Collections.singleton("key07")).size());
+      assertEquals(1, CountingHoodieStorage.getOpenCount(getFilePath()));
+      assertEquals(0, CountingHoodieStorage.getPathInfoCount(getFilePath()));
+    }
+  }
+
+  private static int countAndClose(ClosableIterator<IndexedRecord> iterator) {
+    try (ClosableIterator<IndexedRecord> it = iterator) {
+      int count = 0;
+      while (it.hasNext()) {
+        it.next();
+        count++;
+      }
+      return count;
     }
   }
 

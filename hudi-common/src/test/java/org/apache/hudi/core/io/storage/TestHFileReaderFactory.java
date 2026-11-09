@@ -36,6 +36,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -129,6 +134,56 @@ class TestHFileReaderFactory {
     verify(mockStorage, times(1)).getPathInfo(mockPath); // Only once for size determination
     verify(mockStorage, times(1)).openSeekable(mockPath, false); // For creating input stream directly
     verify(mockInputStream, never()).readFully(any(byte[].class)); // Content not downloaded
+  }
+
+  @Test
+  void testCreateHFileReader_FileSizeBelowThreshold_ShouldDownloadOnceForAllReaders() throws Exception {
+    when(mockStorage.openSeekable(mockPath, false)).thenReturn(mockInputStream);
+    HFileReaderFactory factory = HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withPath(mockPath)
+        .withFileSize(testContent.length)
+        .build();
+
+    ExecutorService executor = Executors.newFixedThreadPool(4);
+    try {
+      List<Future<HFileReader>> readers = new ArrayList<>();
+      for (int i = 0; i < 8; i++) {
+        readers.add(executor.submit(factory::createHFileReader));
+      }
+      for (Future<HFileReader> reader : readers) {
+        assertNotNull(reader.get());
+      }
+    } finally {
+      executor.shutdownNow();
+    }
+    verify(mockStorage, never()).getPathInfo(any());
+    verify(mockStorage, times(1)).openSeekable(mockPath, false);
+    verify(mockInputStream, times(1)).readFully(any(byte[].class));
+
+    // Releasing the content makes the next reader download the file again
+    factory.releaseDownloadedContent();
+    assertNotNull(factory.createHFileReader());
+    verify(mockStorage, times(2)).openSeekable(mockPath, false);
+  }
+
+  @Test
+  void testCreateHFileReader_FileSizeAboveThreshold_ShouldOpenStreamPerReader() throws IOException {
+    properties.setProperty(HoodieMetadataConfig.METADATA_FILE_CACHE_MAX_SIZE_MB.key(), "1");
+    when(mockStorage.openSeekable(mockPath, false)).thenReturn(mockInputStream);
+    HFileReaderFactory factory = HFileReaderFactory.builder()
+        .withStorage(mockStorage)
+        .withProps(properties)
+        .withPath(mockPath)
+        .withFileSize(2L * 1024L * 1024L)
+        .build();
+
+    assertNotNull(factory.createHFileReader());
+    assertNotNull(factory.createHFileReader());
+    verify(mockStorage, never()).getPathInfo(any());
+    verify(mockStorage, times(2)).openSeekable(mockPath, false);
+    verify(mockInputStream, never()).readFully(any(byte[].class));
   }
 
   @Test
