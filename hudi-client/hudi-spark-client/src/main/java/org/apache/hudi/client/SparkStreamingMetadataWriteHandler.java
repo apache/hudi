@@ -39,6 +39,8 @@ public class SparkStreamingMetadataWriteHandler extends StreamingMetadataWriteHa
   @Override
   public HoodieData<WriteStatus> streamWriteToMetadataTable(HoodieTable table, HoodieData<WriteStatus> dataTableWriteStatuses, String instantTime,
                                                            int coalesceDivisorForDataTableWrites) {
+    table.getContext().setJobStatus(this.getClass().getSimpleName(),
+        "Streaming write to metadata table: " + table.getConfig().getTableName());
     Option<HoodieTableMetadataWriter> metadataWriterOpt = getMetadataWriter(instantTime, table);
     ValidationUtils.checkState(metadataWriterOpt.isPresent(),
         "Cannot instantiate metadata writer for the table of interest " + table.getMetaClient().getBasePath());
