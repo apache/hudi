@@ -30,6 +30,10 @@ import java.util.Iterator;
 public class LazyCastingIterator extends LazyIterableIterator<GenericRecord,GenericRecord> {
 
   private final Schema targetSchema;
+  // Source records usually share one schema instance, so the deep schema comparison is done once per instance.
+  private Schema lastSourceSchema;
+  private boolean lastSourceSchemaEqualsTarget;
+
   public LazyCastingIterator(Iterator<GenericRecord> in, String serializedTargetSchema) {
     super(in);
     this.targetSchema = new Schema.Parser().parse(serializedTargetSchema);
@@ -37,6 +41,12 @@ public class LazyCastingIterator extends LazyIterableIterator<GenericRecord,Gene
 
   @Override
   protected GenericRecord computeNext() {
-    return HoodieAvroUtils.rewriteRecordDeep(inputItr.next(), targetSchema);
+    GenericRecord record = inputItr.next();
+    Schema sourceSchema = record.getSchema();
+    if (sourceSchema != lastSourceSchema) {
+      lastSourceSchema = sourceSchema;
+      lastSourceSchemaEqualsTarget = sourceSchema.equals(targetSchema);
+    }
+    return lastSourceSchemaEqualsTarget ? record : HoodieAvroUtils.rewriteRecordDeep(record, targetSchema);
   }
 }
