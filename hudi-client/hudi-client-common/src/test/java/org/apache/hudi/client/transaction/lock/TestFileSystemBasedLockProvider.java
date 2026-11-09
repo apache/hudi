@@ -193,6 +193,76 @@ public class TestFileSystemBasedLockProvider {
     }
   }
 
+  @Test
+  public void testNonHolderUnlockAndCloseKeepHoldersLock() {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    LockConfiguration config = lockConfiguration(lockDir("nonholder"), 0);
+    FileSystemBasedLockProvider holder = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider contender = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider observer = new FileSystemBasedLockProvider(config, storageConf);
+    try {
+      assertTrue(holder.tryLock(1, TimeUnit.SECONDS));
+      assertFalse(contender.tryLock(1, TimeUnit.SECONDS));
+      // A caller that failed to acquire still runs its release and close paths.
+      contender.unlock();
+      contender.close();
+      assertFalse(observer.tryLock(1, TimeUnit.SECONDS), "the holder's lock must survive a non-holder's unlock and close");
+
+      holder.unlock();
+      assertTrue(observer.tryLock(1, TimeUnit.SECONDS), "the holder's own unlock releases the lock");
+    } finally {
+      holder.close();
+      observer.close();
+    }
+  }
+
+  @Test
+  public void testOwnerReleasesLockFileLeftWithPartialContent() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    String dir = lockDir("partial");
+    LockConfiguration config = lockConfiguration(dir, 0);
+    FileSystemBasedLockProvider holder = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider observer = new FileSystemBasedLockProvider(config, storageConf);
+    StoragePath lockFile = new StoragePath(dir + StoragePath.SEPARATOR + "lock");
+    HoodieStorage storage = HoodieStorageUtils.getStorage(lockFile.toString(), storageConf);
+    try {
+      assertTrue(holder.tryLock(1, TimeUnit.SECONDS));
+      // As if the write after the exclusive create had been interrupted: the file holds a prefix (here empty).
+      storage.create(lockFile, true).close();
+      holder.unlock();
+      assertTrue(observer.tryLock(1, TimeUnit.SECONDS), "the owner must release its lock file even with partial content");
+    } finally {
+      holder.close();
+      observer.close();
+    }
+  }
+
+  @Test
+  public void testUnlockDoesNotDeleteLockTakenOverByAnotherOwner() throws Exception {
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    String dir = lockDir("takenover");
+    LockConfiguration config = lockConfiguration(dir, 0);
+    FileSystemBasedLockProvider formerHolder = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider newHolder = new FileSystemBasedLockProvider(config, storageConf);
+    FileSystemBasedLockProvider observer = new FileSystemBasedLockProvider(config, storageConf);
+    StoragePath lockFile = new StoragePath(dir + StoragePath.SEPARATOR + "lock");
+    HoodieStorage storage = HoodieStorageUtils.getStorage(lockFile.toString(), storageConf);
+    try {
+      assertTrue(formerHolder.tryLock(1, TimeUnit.SECONDS));
+      // The former holder's lock goes away without it releasing (as with an expired lock), and another owner acquires.
+      storage.deleteFile(lockFile);
+      assertTrue(newHolder.tryLock(1, TimeUnit.SECONDS));
+
+      formerHolder.unlock();
+      formerHolder.close();
+      assertFalse(observer.tryLock(1, TimeUnit.SECONDS), "the former holder must not delete the new owner's lock");
+    } finally {
+      newHolder.unlock();
+      newHolder.close();
+      observer.close();
+    }
+  }
+
   /**
    * {@code storage.create(path, false)} in {@code acquireLock} is the provider's entire cross-process
    * mutual exclusion; the in-JVM monitor cannot serialize two processes, and {@code tryLock} returns
