@@ -341,9 +341,12 @@ public class TableCommand {
 
     // Persist both properties, always, and derive the legacy boolean from the mode rather than
     // letting the caller supply it — the same invariant HoodieTableMetaClient.TableBuilder enforces
-    // at creation. hoodie.properties can then never contradict itself, which is what lets a
-    // pre-1.3.0 reader (which sees only the boolean) treat a selective table as NONE instead of
-    // assuming meta columns that are physically null.
+    // at creation. hoodie.properties can then never contradict itself.
+    //
+    // The boolean is the persisted (wider) projection: false only for NONE. A pre-1.3.0 writer
+    // sees only the boolean and compares it against its own `true` default as a plain property
+    // check, so persisting `false` for a mode that does populate meta columns locks that writer
+    // out of a table it could write.
     //
     // The mode is written even for ALL and NONE rather than deleted. Deleting it would leave the
     // table resolving through the legacy fallback, which is indistinguishable from a table that
@@ -353,7 +356,7 @@ public class TableCommand {
     Properties toUpdate = new Properties();
     toUpdate.setProperty(HoodieTableConfig.META_FIELDS_MODE.key(), targetMode.name());
     toUpdate.setProperty(HoodieTableConfig.POPULATE_META_FIELDS.key(),
-        String.valueOf(targetMode.toLegacyPopulateMetaFields()));
+        String.valueOf(targetMode.toPersistedPopulateMetaFields()));
     HoodieTableConfig.update(client.getStorage(), client.getMetaPath(), toUpdate);
 
     HoodieCLI.refreshTableMetadata();

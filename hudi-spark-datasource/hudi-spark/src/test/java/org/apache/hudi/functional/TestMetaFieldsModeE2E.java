@@ -348,9 +348,11 @@ class TestMetaFieldsModeE2E extends SparkClientFunctionalTestHarness {
     assertEquals(mode.name(), tc.getString(HoodieTableConfig.META_FIELDS_MODE),
         "the mode must be persisted at table version " + version.versionCode());
     if (version.lesserThan(HoodieTableVersion.TEN)) {
-      assertEquals(Boolean.toString(mode.toLegacyPopulateMetaFields()),
+      assertEquals(Boolean.toString(mode.toPersistedPopulateMetaFields()),
           tc.getProps().getProperty(HoodieTableConfig.POPULATE_META_FIELDS.key()),
-          "a table below v10 must persist the derived legacy boolean for unpatched readers");
+          "a table below v10 must persist the wide legacy boolean for unpatched readers");
+      assertEquals(mode.toLegacyPopulateMetaFields(), tc.populateMetaFields(),
+          "the accessor resolves through the mode, so the wide persisted value must not leak in");
     } else {
       assertFalse(tc.getProps().containsKey(HoodieTableConfig.POPULATE_META_FIELDS.key()),
           "a table at v10 must record the mode alone");
