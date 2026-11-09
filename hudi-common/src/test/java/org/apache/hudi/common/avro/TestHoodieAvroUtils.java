@@ -1438,4 +1438,22 @@ public class TestHoodieAvroUtils {
       assertTrue(e.getMessage().contains("Only UNION of a null type and a non-null type"), e.getMessage());
     }
   }
+
+  @Test
+  public void testRewriteDecimalToIntegerKeepsUnscaledValue() {
+    // a table schema that recorded an integer-backed parquet decimal as int or long reads the unscaled value
+    Schema decimal = LogicalTypes.decimal(15, 2).addToSchema(Schema.createFixed("price", null, null, 7));
+    Schema decimalRecord = Schema.createRecord("r", null, null, false,
+        Collections.singletonList(new Schema.Field("price", decimal, null, null)));
+    GenericRecord record = new GenericData.Record(decimalRecord);
+    record.put("price", HoodieAvroUtils.DECIMAL_CONVERSION.toFixed(new BigDecimal("17.00"), decimal, decimal.getLogicalType()));
+
+    Schema longRecord = Schema.createRecord("r", null, null, false,
+        Collections.singletonList(new Schema.Field("price", Schema.create(Schema.Type.LONG), null, null)));
+    assertEquals(1700L, HoodieAvroUtils.rewriteRecordWithNewSchema(record, longRecord, Collections.emptyMap()).get("price"));
+
+    Schema intRecord = Schema.createRecord("r", null, null, false,
+        Collections.singletonList(new Schema.Field("price", Schema.create(Schema.Type.INT), null, null)));
+    assertEquals(1700, HoodieAvroUtils.rewriteRecordWithNewSchema(record, intRecord, Collections.emptyMap()).get("price"));
+  }
 }

@@ -656,6 +656,18 @@ public class HoodieSchema implements Serializable {
    * @param scale     the scale of the decimal value
    * @return a new HoodieSchema representing a decimal type
    */
+  /**
+   * Minimum number of bytes a two's-complement unscaled value needs for a decimal of the given precision;
+   * the width Spark and parquet-mr use for a fixed-length decimal.
+   */
+  public static int minBytesForDecimalPrecision(int precision) {
+    int numBytes = 1;
+    while (Math.pow(2.0, 8 * numBytes - 1) < Math.pow(10.0, precision)) {
+      numBytes += 1;
+    }
+    return numBytes;
+  }
+
   public static HoodieSchema createDecimal(int precision, int scale) {
     ValidationUtils.checkArgument(precision > 0, () -> "Decimal precision must be positive: " + precision);
     ValidationUtils.checkArgument(scale >= 0, () -> "Decimal scale cannot be negative: " + scale);
