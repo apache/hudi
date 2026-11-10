@@ -46,8 +46,8 @@ class TestDataSkippingGoldenFilters {
     } finally {
       source.close()
     }
-    val actual = DataSkippingGoldenInputs.goldenLines((filter, isExpressionIndex) =>
-      DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(filter, isExpressionIndex, DataSkippingGoldenInputs.indexedCols))
+    val actual = DataSkippingGoldenInputs.goldenLines(filter =>
+      DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(filter, DataSkippingGoldenInputs.indexedCols))
 
     if (actual != expected) {
       val actualFile = Paths.get("target", "golden-index-filters.actual.txt").toAbsolutePath

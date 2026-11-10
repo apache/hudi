@@ -189,18 +189,14 @@ object DataSkippingGoldenInputs {
   }
 
   /**
-   * One golden line per input and mode: `cs` (column stats, strict resolution) for every input,
-   * `ei` (expression index) only for unresolved inputs, the only ones the mode changes.
+   * One golden line per input, in the `cs` (column stats, strict resolution) mode.
    */
-  def goldenLines(translate: (Expression, Boolean) => Expression): Seq[String] =
-    inputs.flatMap { e =>
-      val modes = if (e.resolved) Seq(false) else Seq(false, true)
-      modes.map { isExpressionIndex =>
-        val output = Try(render(translate(e, isExpressionIndex))).recover {
-          case t => s"!${t.getClass.getName}"
-        }.get
-        s"${if (isExpressionIndex) "ei" else "cs"}\t${render(e)}\t$output"
-      }
+  def goldenLines(translate: Expression => Expression): Seq[String] =
+    inputs.map { e =>
+      val output = Try(render(translate(e))).recover {
+        case t => s"!${t.getClass.getName}"
+      }.get
+      s"cs\t${render(e)}\t$output"
     }
 
   /**

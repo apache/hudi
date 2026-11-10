@@ -38,28 +38,27 @@ import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 object StatsFilterCompiler {
 
   /**
-   * @param strictResolution when true, an unresolved node (at any level, AND / OR included) compiles
-   *                         to TRUE. False for expression indexes
+   * An unresolved node, at any level, AND / OR included, compiles to TRUE.
    */
-  def compile(filter: Expression, source: RangeSource, strictResolution: Boolean): Expression = filter match {
-    case e if strictResolution && !e.resolved => TrueLiteral
+  def compile(filter: Expression, source: RangeSource): Expression = filter match {
+    case e if !e.resolved => TrueLiteral
 
     // Stage 1 (Shape). An OR keeps a file if either side may hold a match, so one unknown side makes
     // the whole OR unknown
     case Or(left, right) =>
-      val l = compile(left, source, strictResolution)
-      val r = compile(right, source, strictResolution)
+      val l = compile(left, source)
+      val r = compile(right, source)
       if (l.equals(TrueLiteral) || r.equals(TrueLiteral)) TrueLiteral else Or(l, r)
 
     // An AND keeps a file only if both sides may; an unknown side is dropped
     case And(left, right) =>
-      val l = compile(left, source, strictResolution)
-      val r = compile(right, source, strictResolution)
+      val l = compile(left, source)
+      val r = compile(right, source)
       if (l.equals(TrueLiteral)) r else if (r.equals(TrueLiteral)) l else And(l, r)
 
     // De Morgan, so that NOT reaches the leaves
-    case Not(And(left, right)) => compile(Or(Not(left), Not(right)), source, strictResolution)
-    case Not(Or(left, right)) => compile(And(Not(left), Not(right)), source, strictResolution)
+    case Not(And(left, right)) => compile(Or(Not(left), Not(right)), source)
+    case Not(Or(left, right)) => compile(And(Not(left), Not(right)), source)
 
     case leaf => compileLeaf(leaf, source)
   }
