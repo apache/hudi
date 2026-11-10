@@ -134,13 +134,23 @@ public class TypeConverters {
       }
 
       case DECIMAL: {
-        if (from == INTEGER || from == BIGINT || from == DOUBLE) {
+        if (from == INTEGER || from == BIGINT) {
           return new TypeConverter() {
             private static final long serialVersionUID = 1L;
 
             @Override
             public Object convert(Object val) {
-              return toDecimalData((Number) val, toType);
+              return toDecimalData(BigDecimal.valueOf(((Number) val).longValue()), toType);
+            }
+          };
+        }
+        if (from == DOUBLE) {
+          return new TypeConverter() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Object convert(Object val) {
+              return toDecimalData(BigDecimal.valueOf(((Number) val).doubleValue()), toType);
             }
           };
         }
@@ -150,7 +160,7 @@ public class TypeConverters {
 
             @Override
             public Object convert(Object val) {
-              return toDecimalData(Double.parseDouble(val.toString()), toType);
+              return toDecimalData(BigDecimal.valueOf(Double.parseDouble(val.toString())), toType);
             }
           };
         }
@@ -368,20 +378,6 @@ public class TypeConverters {
     // not-null constraints will be ignored when TypeRoot is used
     boolean isComplex = fromType.equals(ARRAY) || fromType.equals(MAP) || fromType.equals(ROW);
     return !isComplex && fromType.equals(toType);
-  }
-
-  /**
-   * Helper function to convert a Number object to Flink's DecimalData format.
-   *
-   * @param val         Number object to be converted
-   * @param decimalType DecimalType containing the output decimal's precision and scale specifications
-   * @return Converted decimal that is wrapped in Flink's DecimalData object.
-   */
-  private static DecimalData toDecimalData(Number val, LogicalType decimalType) {
-    BigDecimal valAsDecimal = val instanceof Integer || val instanceof Long
-        ? BigDecimal.valueOf(val.longValue())
-        : BigDecimal.valueOf(val.doubleValue());
-    return toDecimalData(valAsDecimal, decimalType);
   }
 
   /**
