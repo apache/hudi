@@ -31,8 +31,12 @@ val basePath = "file:///tmp/hudi-bundles/tests/" + tableName
 val dataGen = new DataGenerator
 val inserts = convertToStringList(dataGen.generateInserts(expected)).asScala.toSeq
 val df = spark.read.json(spark.sparkContext.parallelize(inserts, 2))
+// Hive 3.1.3 uses Hadoop's native ZSTD codec to read Parquet files, but the Alpine-based
+// bundle-validation environment cannot load the native Hadoop library. Keep this Spark-to-Hive
+// compatibility test on GZIP; engine-specific ZSTD defaults are validated separately.
 df.write.format("hudi").
   options(getQuickstartWriteConfigs).
+  option("hoodie.parquet.compression.codec", "gzip").
   option(PRECOMBINE_FIELD_OPT_KEY, "ts").
   option(RECORDKEY_FIELD_OPT_KEY, "uuid").
   option(PARTITIONPATH_FIELD_OPT_KEY, "partitionpath").

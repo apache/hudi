@@ -20,13 +20,17 @@
 package org.apache.hudi.blob
 
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
+import org.apache.hudi.hadoop.fs.NonLocalSchemeLocalFileSystem
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 import java.io.File
+import java.net.URI
 import java.nio.file.{Files, Path}
 
 object BlobTestHelpers {
@@ -69,6 +73,37 @@ object BlobTestHelpers {
         lit(false).as(HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED)
       ).as(HoodieSchema.Blob.EXTERNAL_REFERENCE)
     ).as(name, blobMetadata)
+  }
+
+  /**
+   * Exposes the local filesystem under the given non-local schemes, so a test can tell apart storage
+   * resolved from a path and storage resolved from a default file:/// URI without a remote object
+   * store.
+   *
+   * Hadoop caches filesystems statically, keyed by scheme and authority rather than by
+   * configuration, so a borrowed impl would outlive the test for the whole fork and the next test to
+   * use that scheme would silently read local files. Both the configuration and the cache are put
+   * back afterwards.
+   */
+  def withBorrowedSchemes[T](hadoopConf: Configuration, authorities: Seq[String], schemes: String*)(body: => T): T = {
+    val previous = schemes.map(scheme => scheme -> Option(hadoopConf.get(s"fs.$scheme.impl"))).toMap
+    schemes.foreach(scheme =>
+      hadoopConf.setClass(s"fs.$scheme.impl", classOf[NonLocalSchemeLocalFileSystem], classOf[FileSystem]))
+    try {
+      body
+    } finally {
+      for (scheme <- schemes; authority <- authorities) {
+        // FileSystem.close removes the instance from the static cache.
+        try FileSystem.get(new URI(s"$scheme://$authority"), hadoopConf).close()
+        catch { case _: Exception => }
+      }
+      schemes.foreach { scheme =>
+        previous(scheme) match {
+          case Some(impl) => hadoopConf.set(s"fs.$scheme.impl", impl)
+          case None => hadoopConf.unset(s"fs.$scheme.impl")
+        }
+      }
+    }
   }
 
   def createTestFile(tempDir: Path, name: String, size: Int): String = {

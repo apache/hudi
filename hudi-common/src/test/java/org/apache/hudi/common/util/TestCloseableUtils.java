@@ -19,22 +19,54 @@
 package org.apache.hudi.common.util;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestCloseableUtils {
 
+  static Stream<Throwable> closeFailures() {
+    return Stream.of(new IOException("IO failure"), new IllegalStateException("runtime failure"),
+        new Exception("checked failure"), new AssertionError("error"));
+  }
+
   @Test
-  void testCloseSuppressing() {
-    IOException primary = new IOException("primary");
-    IOException closeError = new IOException("close");
+  void testNullAndSuccessfulClose() {
+    IOException failure = new IOException("write failed");
+    assertDoesNotThrow(() -> CloseableUtils.closeSuppressing(null, failure));
+    AtomicBoolean closed = new AtomicBoolean();
+    CloseableUtils.closeSuppressing(() -> closed.set(true), failure);
+    assertTrue(closed.get());
+    assertArrayEquals(new Throwable[0], failure.getSuppressed());
+  }
 
-    CloseableUtils.closeSuppressing(() -> {
-      throw closeError;
-    }, primary);
+  @ParameterizedTest
+  @MethodSource("closeFailures")
+  void testPreservesOriginalFailure(Throwable closeFailure) {
+    IOException failure = new IOException("write failed");
+    AutoCloseable closeable = () -> {
+      if (closeFailure instanceof Error) {
+        throw (Error) closeFailure;
+      }
+      throw (Exception) closeFailure;
+    };
+    assertDoesNotThrow(() -> CloseableUtils.closeSuppressing(closeable, failure));
+    assertArrayEquals(new Throwable[] {closeFailure}, failure.getSuppressed());
+  }
 
-    assertArrayEquals(new Throwable[] {closeError}, primary.getSuppressed());
+  @Test
+  void testDoesNotSuppressFailureOnItself() {
+    IOException failure = new IOException("write failed");
+    assertDoesNotThrow(() -> CloseableUtils.closeSuppressing(() -> {
+      throw failure;
+    }, failure));
+    assertArrayEquals(new Throwable[0], failure.getSuppressed());
   }
 }

@@ -491,7 +491,7 @@ simple-deltastreamer.yaml: simple 1 round dag for COW table.
 simple-deltastreamer.yaml: simple 1 round dag for MOR table.
 cow-clustering-example.yaml : dag with 3 rounds, in which inline clustering will trigger during 2nd iteration. 
 cow-long-running-example.yaml : long running dag with 50 iterations. only 1 partition is used. 
-cow-long-running-multi-partitions.yaml: long running dag wit 50 iterations with multiple partitions.
+cow-long-running-multi-partitions.yaml: long running dag with 50 iterations with multiple partitions.
 ```
 
 To run test suite jobs for MOR table, pretty much any of these dags can be used as is. Only change is with the 

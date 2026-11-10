@@ -33,6 +33,13 @@ function clean_up(){
   fi
 }
 
+# mvn versions:set does not reach docker/trino/shim/pom.xml (outside the reactor,
+# parent is trino-root), so bump its dep.hudi.version default by hand.
+function set_trino_shim_hudi_version(){
+  sed -i.bak "s#<dep.hudi.version>[^<]*</dep.hudi.version>#<dep.hudi.version>$1</dep.hudi.version>#" docker/trino/shim/pom.xml
+  rm docker/trino/shim/pom.xml.bak
+}
+
 if [[ $# -eq 1 && $1 = "-h" ]]; then
 	echo "This script will update apache hudi master branch with next release version and cut release branch for current development version."
 	echo "There are 3 params required:"
@@ -100,6 +107,7 @@ echo "==============================================================="
 
 # Update master branch
 mvn versions:set -DnewVersion=${NEXT_VERSION_IN_BASE_BRANCH}-SNAPSHOT
+set_trino_shim_hudi_version ${NEXT_VERSION_IN_BASE_BRANCH}-SNAPSHOT
 
 echo "===========Update next-version branch as following============="
 git diff
@@ -122,6 +130,7 @@ read confirmation
 # Checkout and update release branch
 git checkout ${RELEASE_BRANCH}
 mvn versions:set -DnewVersion=${RELEASE}-rc${RC_NUM}
+set_trino_shim_hudi_version ${RELEASE}-rc${RC_NUM}
 
 echo "==================Current working branch======================="
 echo ${RELEASE_BRANCH}

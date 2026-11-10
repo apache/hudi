@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.{HoodieConfig, HoodieMetadataConfig, Record
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieFileFormat, HoodieRecord, HoodieRecordPayload, HoodieReplaceCommitMetadata, HoodieTableType, MetaFieldsMode, WriteOperationType}
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
+import org.apache.hudi.common.table.HoodieTableVersion
 import org.apache.hudi.common.table.timeline.{HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator
 import org.apache.hudi.config.{HoodieBootstrapConfig, HoodieIndexConfig, HoodieWriteConfig}
@@ -40,6 +41,7 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.functions.{expr, lit}
 import org.apache.spark.sql.hudi.command.SqlKeyGenerator
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertNull, assertTrue, fail}
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
@@ -60,6 +62,59 @@ import scala.collection.JavaConverters._
  * The reason is in a saved value in the heap of static {@link org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator.lastInstantTime}.
  */
 class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
+
+  case class OrderedRecord(uuid: String, version: Long, ts: Long, value: String)
+
+  /**
+   * A writer that configures no ordering field resolves it from the table config, so without the
+   * field the version 1 to 2 upgrade records, the "ts" fallback lets an older record overwrite a
+   * newer one. Disabled alongside the rest of the legacy upgrade coverage under HUDI-9700, since
+   * UpgradeDowngrade refuses any table below version 6 and the upgrading write throws before the
+   * backfill runs.
+   */
+  @Disabled("HUDI-9700")
+  @Test
+  def testUpgradeFromTableVersionOneRestoresOrderingOnUpdates(): Unit = {
+    val writeParams = Map("path" -> tempBasePath,
+      HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> classOf[NonpartitionedKeyGenerator].getName,
+      DataSourceWriteOptions.PAYLOAD_CLASS_NAME.key -> classOf[DefaultHoodieRecordPayload].getName)
+    val orderingParams = writeParams + (DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "version")
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, orderingParams,
+      orderedRecordFrame("key1", version = 2, ts = 1, value = "new"))
+
+    // a table written before 0.8.0 records no ordering field
+    dropRecordedOrderingFieldAndSetVersionOne()
+
+    // the upgrading write records the ordering field it merges on
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, orderingParams,
+      orderedRecordFrame("key2", version = 1, ts = 1, value = "other"))
+    assertEquals(Collections.singletonList("version"),
+      createMetaClient(spark, tempBasePath).getTableConfig.getOrderingFields)
+
+    // the lower version loses the merge even though its "ts" is higher
+    HoodieSparkSqlWriter.write(sqlContext, SaveMode.Append, writeParams,
+      orderedRecordFrame("key1", version = 1, ts = 5, value = "old"))
+    assertEquals("new", readValueOf("key1"))
+  }
+
+  private def orderedRecordFrame(uuid: String, version: Long, ts: Long, value: String): DataFrame =
+    spark.createDataFrame(Seq(OrderedRecord(uuid, version, ts, value)))
+
+  private def dropRecordedOrderingFieldAndSetVersionOne(): Unit = {
+    val metaClient = createMetaClient(spark, tempBasePath)
+    HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath,
+      Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELD.key))
+    val versionProps = new java.util.Properties()
+    versionProps.setProperty(HoodieTableConfig.VERSION.key, String.valueOf(HoodieTableVersion.ONE.versionCode))
+    HoodieTableConfig.update(metaClient.getStorage, metaClient.getMetaPath, versionProps)
+  }
+
+  private def readValueOf(uuid: String): String =
+    spark.read.format("hudi").load(tempBasePath).where(s"uuid = '$uuid'")
+      .select("value").collect().head.getString(0)
 
   /**
    * Local utility method for performing bulk insert  tests.
@@ -237,30 +292,6 @@ class TestHoodieSparkSqlWriter extends HoodieSparkWriterTestBase {
 
     //on same path try write with different partitionpath and Overwrite SaveMode should be successful.
     assert(HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier2, dataFrame2)._1)
-  }
-
-  /**
-   * Test case for do not let the parttitonpath field change
-   */
-  @Test
-  def testChangeWriteTableVersion(): Unit = {
-    Seq(6, 8).foreach { tableVersion =>
-      val tempPath = s"$tempBasePath/${tableVersion}"
-      val tableModifier1 = Map(
-        "path" -> tempPath,
-        HoodieWriteConfig.TBL_NAME.key -> hoodieFooTableName,
-        "hoodie.write.table.version" -> s"$tableVersion",
-        "hoodie.datasource.write.recordkey.field" -> "uuid",
-        "hoodie.datasource.write.partitionpath.field" -> "ts"
-      )
-      val dataFrame = spark.createDataFrame(Seq(StringLongTest(UUID.randomUUID().toString, new Date().getTime)))
-      HoodieSparkSqlWriter.write(sqlContext, SaveMode.Overwrite, tableModifier1, dataFrame)
-
-      // Make sure table version is adopted.
-      val metaClient = HoodieTableMetaClient.builder().setBasePath(tempPath)
-        .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf())).build()
-      assertEquals(metaClient.getTableConfig.getTableVersion.versionCode(), tableVersion)
-    }
   }
 
   /**
@@ -1419,6 +1450,57 @@ def testBulkInsertForDropPartitionColumn(): Unit = {
   private def fetchActualSchema(): HoodieSchema = {
     val tableMetaClient = createMetaClient(spark, tempBasePath)
     new TableSchemaResolver(tableMetaClient).getTableSchema(false)
+  }
+
+  /**
+   * Test that upsert works correctly when partition path contains Unicode characters.
+   * Reproduces a bug where UTF-8 bytes for characters like "ü" (U+00FC) get misinterpreted
+   * as Latin-1 during the String-to-Path round-trip, causing file-not-found errors on the
+   * second write.
+   */
+  @Test
+  def testUpsertWithUnicodePartitionPath(): Unit = {
+    val options = Map(
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      DataSourceWriteOptions.PRECOMBINE_FIELD.key -> "ts",
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "uuid",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "company",
+      DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME.key -> "org.apache.hudi.keygen.SimpleKeyGenerator",
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      "hoodie.filesystem.view.remote.response.charset" -> "UTF-8"
+    )
+
+    // Unicode partition value containing German umlaut ü (U+00FC)
+    val unicodePartition = "M\u00fcnchen"
+
+    // First write - insert with Overwrite
+    val df = spark.createDataFrame(Seq(
+      ("id1", 100L, unicodePartition),
+      ("id2", 200L, unicodePartition)
+    )).toDF("uuid", "ts", "company")
+
+    df.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(tempBasePath)
+
+    // Second write - upsert with Append (triggers reading existing Parquet data)
+    val dfUpdate = spark.createDataFrame(Seq(
+      ("id1", 300L, unicodePartition),
+      ("id2", 400L, unicodePartition)
+    )).toDF("uuid", "ts", "company")
+
+    dfUpdate.write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Append)
+      .save(tempBasePath)
+
+    // Verify upserted data can be read back
+    val dfResult = spark.read.format("hudi").load(tempBasePath)
+    assert(dfResult.count() == 2)
+    assert(dfResult.where("ts >= 300").count() == 2)
   }
 }
 

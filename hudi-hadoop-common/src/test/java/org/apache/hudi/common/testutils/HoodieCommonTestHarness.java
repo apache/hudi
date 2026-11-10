@@ -75,7 +75,6 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
-import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 
 /**
  * The common hoodie test harness to provide the basic infrastructure.
@@ -413,7 +412,7 @@ public class HoodieCommonTestHarness {
       case HFILE_DATA_BLOCK:
         return new HoodieHFileDataBlock(records, header, HFILE_COMPRESSION_ALGORITHM_NAME.defaultValue(), pathForReader);
       case PARQUET_DATA_BLOCK:
-        return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, PARQUET_COMPRESSION_CODEC_NAME.defaultValue(), 0.1, true);
+        return new HoodieParquetDataBlock(records, header, HoodieRecord.RECORD_KEY_METADATA_FIELD, "zstd", 0.1, true);
       default:
         throw new RuntimeException("Unknown data block type " + dataBlockType);
     }

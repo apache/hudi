@@ -122,7 +122,7 @@ public class HiveDriverPool implements AutoCloseable {
     for (Worker worker : workers) {
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
         for (String sql : setupSqls) {
-          worker.driver.run(sql);
+          HiveStatementExecutor.executeOrThrow(worker.driver, sql);
         }
         return null;
       }, "Skipped after an earlier setup statement failed")));
@@ -153,7 +153,7 @@ public class HiveDriverPool implements AutoCloseable {
       String sql = sqls.get(i);
       Worker worker = workers.get(i % workers.size());
       dispatch.add(worker.executor.submit(dispatch.guard(() -> {
-        worker.driver.run(sql);
+        HiveStatementExecutor.executeOrThrow(worker.driver, sql);
         return null;
       }, "Skipped after an earlier statement failed")));
     }
@@ -209,6 +209,16 @@ public class HiveDriverPool implements AutoCloseable {
               worker.driver.close();
             } catch (Exception e) {
               LOG.warn("Error closing pooled Driver", e);
+            }
+            // close() releases the current query's resources but leaves the shutdown hook
+            // Driver.compile() registered; only destroy() removes it. Without this the
+            // static ShutdownHookManager keeps every pooled Driver -- and the Table and
+            // FieldSchema objects of its last query -- alive for the life of the JVM. This
+            // gets its own try so a failing close() cannot skip the hook removal.
+            try {
+              worker.driver.destroy();
+            } catch (Exception e) {
+              LOG.warn("Error destroying pooled Driver", e);
             }
           }
           if (worker.sessionState != null) {

@@ -34,6 +34,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.serialization.DefaultSerializer;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
 import org.apache.hudi.common.util.HoodieRecordSizeEstimator;
@@ -112,7 +113,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
   // Read from the TABLE config, not the write config -- see the note on BaseCreateHandle. Resolved
   // once rather than per record: writeToFile consults it on the preserve-metadata path, which runs
   // for every record copied forward during a merge.
-  private final MetaFieldsMode metaFieldsMode =
+  protected final MetaFieldsMode metaFieldsMode =
       hoodieTable.getMetaClient().getTableConfig().getMetaFieldsMode();
 
   protected long recordsWritten = 0;
@@ -146,9 +147,9 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
    */
   public HoodieWriteMergeHandle(HoodieWriteConfig config, String instantTime, HoodieTable<T, I, K, O> hoodieTable,
                                 Map<String, HoodieRecord<T>> keyToNewRecords, String partitionPath, String fileId,
-                                HoodieBaseFile dataFileToBeMerged, TaskContextSupplier taskContextSupplier,
+                                HoodieBaseFile baseFile, TaskContextSupplier taskContextSupplier,
                                 Option<BaseKeyGenerator> keyGeneratorOpt) {
-    super(config, instantTime, hoodieTable, MergeContext.create(Collections.emptyIterator()), partitionPath, fileId, taskContextSupplier, dataFileToBeMerged, keyGeneratorOpt,
+    super(config, instantTime, hoodieTable, MergeContext.create(Collections.emptyIterator()), partitionPath, fileId, taskContextSupplier, baseFile, keyGeneratorOpt,
         // preserveMetadata is disabled by default for MDT but enabled otherwise
         !HoodieTableMetadata.isMetadataTable(config.getBasePath()));
     this.keyToNewRecords = keyToNewRecords;
@@ -374,7 +375,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
     HoodieSchema oldSchema = writeSchemaWithMetaFields;
     HoodieSchema newSchema = getNewSchema();
     boolean copyOldRecord = true;
-    String key = oldRecord.getRecordKey(oldSchema, keyGeneratorOpt);
+    String key = getRecordKey(oldRecord, oldSchema);
     TypedProperties props = config.getPayloadConfig().getProps();
     if (keyToNewRecords.containsKey(key)) {
       // If we have duplicate records that we are updating, then the hoodie record will be deflated after
@@ -418,6 +419,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       }
       recordsWritten++;
     }
+  }
+
+  protected String getRecordKey(HoodieRecord<T> record, HoodieSchema schema) {
+    return record.getRecordKey(schema, keyGeneratorOpt);
   }
 
   protected void writeToFile(HoodieKey key, HoodieRecord<T> record, HoodieSchema schema, Properties props, boolean shouldPreserveRecordMetadata) throws IOException {
@@ -469,17 +474,10 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
       }
 
       markClosed();
-      writeIncomingRecords();
-
-      if (keyToNewRecords instanceof Closeable) {
-        ((Closeable) keyToNewRecords).close();
+      try (Closeable records = keyToNewRecords instanceof Closeable ? (Closeable) keyToNewRecords : null) {
+        writeIncomingRecords();
       }
-
-      keyToNewRecords = null;
-      writtenRecordKeys = null;
-
-      fileWriter.close();
-      fileWriter = null;
+      closeFileWriter();
 
       long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();
       HoodieWriteStat stat = writeStatus.getStat();
@@ -502,8 +500,30 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
 
       return Collections.singletonList(writeStatus);
     } catch (IOException e) {
+      closeFileWriterQuietly(e);
       throw new HoodieUpsertException("Failed to close UpdateHandle", e);
+    } catch (RuntimeException e) {
+      closeFileWriterQuietly(e);
+      throw e;
+    } finally {
+      keyToNewRecords = null;
+      writtenRecordKeys = null;
     }
+  }
+
+  private void closeFileWriter() throws IOException {
+    try {
+      if (fileWriter != null) {
+        fileWriter.close();
+      }
+    } finally {
+      fileWriter = null;
+    }
+  }
+
+  protected void closeFileWriterQuietly(Throwable failure) {
+    CloseableUtils.closeSuppressing(fileWriter, failure);
+    fileWriter = null;
   }
 
   public void performMergeDataValidationCheck(WriteStatus writeStatus) {

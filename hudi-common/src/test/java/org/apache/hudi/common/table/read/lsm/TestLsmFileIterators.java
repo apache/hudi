@@ -26,7 +26,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
-import org.apache.hudi.common.schema.HoodieSchemas;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.DeleteContext;
@@ -64,7 +64,7 @@ class TestLsmFileIterators {
     RecordContext<Map<String, Object>> recordContext = mock(RecordContext.class);
     Map<String, Object> record = Collections.emptyMap();
     List<String> orderingFields = Collections.singletonList("ts");
-    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema(), orderingFields);
+    HoodieSchema deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema(), orderingFields);
 
     when(readerContext.getRecordContext()).thenReturn(recordContext);
     when(recordContext.getValue(record, deleteLogSchema, HoodieRecord.RECORD_KEY_METADATA_FIELD)).thenReturn("key1");

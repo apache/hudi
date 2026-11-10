@@ -518,36 +518,19 @@ public class UtilHelpers {
    * @throws Exception
    */
   public static HoodieSchema getJDBCSchema(Map<String, String> options) {
-    Connection conn;
-    String url;
-    String table;
-    boolean tableExists;
-    try {
-      conn = createConnection(options);
-      url = options.get(JDBCOptions.JDBC_URL());
-      table = options.get(JDBCOptions.JDBC_TABLE_NAME());
-      tableExists = tableExists(conn, options);
-    } catch (Exception e) {
-      throw new HoodieSchemaFetchException("Failed to connect to jdbc", e);
-    }
-
-    if (!tableExists) {
-      throw new HoodieSchemaFetchException(String.format("%s table does not exists!", table));
-    }
-
-    try {
+    String url = options.get(JDBCOptions.JDBC_URL());
+    String table = options.get(JDBCOptions.JDBC_TABLE_NAME());
+    try (Connection conn = createConnection(options)) {
+      if (!tableExists(conn, options)) {
+        throw new HoodieSchemaFetchException(String.format("%s table does not exist!", table));
+      }
       JdbcDialect dialect = JdbcDialects.get(url);
       try (PreparedStatement statement = conn.prepareStatement(dialect.getSchemaQuery(table))) {
         statement.setQueryTimeout(Integer.parseInt(options.get("queryTimeout")));
         try (ResultSet rs = statement.executeQuery()) {
-          StructType structType;
-          if (Boolean.parseBoolean(options.get("nullable"))) {
-            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
-                .getSchema(conn, rs, dialect, true, false);
-          } else {
-            structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
-                .getSchema(conn, rs, dialect, false, false);
-          }
+          boolean nullable = Boolean.parseBoolean(options.get("nullable"));
+          StructType structType = SparkAdapterSupport$.MODULE$.sparkAdapter().getSchemaUtils()
+              .getSchema(conn, rs, dialect, nullable, false);
           return HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(structType, table, "hoodie." + table);
         }
       }

@@ -75,6 +75,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieWriteConfig {
 
+  @Test
+  public void testCompactionPlanParallelism() {
+    assertEquals(200, HoodieWriteConfig.newBuilder().withPath("/tmp").build().getCompactionPlanParallelism());
+    assertEquals(8, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withCompactionPlanParallelism(8).build())
+        .build().getCompactionPlanParallelism());
+    assertEquals(16, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withProps(Collections.singletonMap(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key(), "16"))
+        .build().getCompactionPlanParallelism());
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, -1})
+  public void testCompactionPlanParallelismMustBePositive(int parallelism) {
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+        () -> HoodieWriteConfig.newBuilder().withPath("/tmp")
+            .withProps(Collections.singletonMap(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key(), String.valueOf(parallelism)))
+            .build());
+    assertTrue(exception.getMessage().contains(HoodieCompactionConfig.COMPACTION_PLAN_PARALLELISM.key()));
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   public void testPropertyLoading(boolean withAlternative) throws IOException {
@@ -162,6 +183,42 @@ public class TestHoodieWriteConfig {
             EngineType.SPARK, HoodieIndex.IndexType.SIMPLE,
             EngineType.FLINK, HoodieIndex.IndexType.INMEMORY,
             EngineType.JAVA, HoodieIndex.IndexType.SIMPLE));
+  }
+
+  @Test
+  public void testDefaultParquetCompressionCodecAccordingToEngine() {
+    assertEquals("zstd", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.FLINK));
+    assertEquals("gzip", HoodieWriteConfig.getDefaultParquetCompressionCodec(EngineType.JAVA));
+
+    HoodieWriteConfig flinkConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.FLINK)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
+        .build();
+    assertEquals("zstd", flinkConfig.getParquetCompressionCodec());
+
+    HoodieWriteConfig javaConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetWriteLegacyFormat("false").build())
+        .build();
+    assertEquals("gzip", javaConfig.getParquetCompressionCodec());
+
+    javaConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.JAVA)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetCompressionCodec("zstd").build())
+        .build();
+    assertEquals("zstd", javaConfig.getParquetCompressionCodec());
+
+    Properties explicitCodec = new Properties();
+    explicitCodec.setProperty(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME.key(), "gzip");
+    flinkConfig = HoodieWriteConfig.newBuilder()
+        .withEngineType(EngineType.FLINK)
+        .withPath("/tmp")
+        .withStorageConfig(HoodieStorageConfig.newBuilder().fromProperties(explicitCodec).build())
+        .build();
+    assertEquals("gzip", flinkConfig.getParquetCompressionCodec());
   }
 
   @Test

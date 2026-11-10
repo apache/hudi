@@ -21,6 +21,7 @@ package org.apache.hudi.keygen;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieKeyException;
@@ -109,10 +110,16 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
   }
 
   @ParameterizedTest
-  @CsvSource(value = {"false,true,8", "true,false,8", "true,true,8", "false,true,9", "true,false,9", "true,true,9"})
+  @CsvSource(value = {
+      // property absent: the write table version and hoodie.write.complex.keygen.new.encoding decide
+      "false,true,8,", "true,false,8,", "true,true,8,", "false,true,9,", "true,false,9,", "true,true,9,", "false,true,10,", "true,true,10,",
+      // property present (stamped by the 8 -> 9 upgrade): it is authoritative at every version
+      "false,true,9,VALUE_ONLY", "true,false,9,VALUE_ONLY", "true,true,9,FIELD_PREFIXED", "false,true,10,VALUE_ONLY",
+      "true,true,10,FIELD_PREFIXED", "true,true,8,FIELD_PREFIXED", "true,false,8,VALUE_ONLY"})
   void testSingleValueKeyGenerator(boolean setNewEncodingConfig,
                                    boolean encodeSingleKeyFieldValueOnly,
-                                   String tableVersion) {
+                                   String tableVersion,
+                                   String persistedEncoding) {
     String recordKeyFieldName = "_row_key";
     TypedProperties properties = new TypedProperties();
     properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), recordKeyFieldName);
@@ -123,6 +130,9 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
           HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key(),
           String.valueOf(encodeSingleKeyFieldValueOnly));
     }
+    if (persistedEncoding != null && !persistedEncoding.isEmpty()) {
+      properties.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), persistedEncoding);
+    }
     ComplexKeyGenerator compositeKeyGenerator = new ComplexKeyGenerator(properties);
     assertEquals(1, compositeKeyGenerator.getRecordKeyFieldNames().size());
     assertEquals(1, compositeKeyGenerator.getPartitionPathFields().size());
@@ -131,10 +141,12 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
       String rowKey = avroRecord.get(recordKeyFieldName).toString();
       String partitionPath = avroRecord.get("timestamp").toString();
       HoodieKey hoodieKey = compositeKeyGenerator.getKey(avroRecord);
-      // For table version 9, new encoding config should have no effect
       String expectedRecordKey;
-      if ("9".equals(tableVersion)) {
-        // Table version 9 ignores the new encoding config and always uses the old format
+      if (persistedEncoding != null && !persistedEncoding.isEmpty()) {
+        // The persisted table encoding wins over both the version and the config
+        expectedRecordKey = "VALUE_ONLY".equals(persistedEncoding) ? rowKey : recordKeyFieldName + ":" + rowKey;
+      } else if (Integer.parseInt(tableVersion) >= 9) {
+        // Table version 9+ ignores the new encoding config and always uses the field-prefixed format
         expectedRecordKey = recordKeyFieldName + ":" + rowKey;
       } else {
         // Table version 8 may use new encoding config if set
@@ -242,6 +254,24 @@ public class TestComplexKeyGenerator extends KeyGeneratorTestUtilities {
     HoodieKey key = keyGenerator.getKey(avroRecord);
     assertEquals("_row_key:key1", key.getRecordKey());
     assertEquals("2026/01/05", key.getPartitionPath());
+  }
+
+  @Test
+  void testSlashSeparatedDatePartitioningLeavesLeadingDashesAlone() {
+    TypedProperties properties = new TypedProperties();
+    properties.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "timestamp");
+    properties.put(KeyGeneratorOptions.SLASH_SEPARATED_DATE_PARTITIONING.key(), "true");
+    properties.put(KeyGeneratorOptions.HIVE_STYLE_PARTITIONING_ENABLE.key(), "false");
+
+    ComplexKeyGenerator keyGenerator = new ComplexKeyGenerator(properties);
+
+    // This is the only production caller of the multi-field KeyGenUtils#getRecordPartitionPath
+    // overload, so the guard on that line is unexercised without this case
+    GenericRecord avroRecord = KeyGeneratorTestUtilities.getRecord();
+    avroRecord.put("timestamp", "-5");
+
+    assertEquals("-5", keyGenerator.getKey(avroRecord).getPartitionPath());
   }
 
   @Test

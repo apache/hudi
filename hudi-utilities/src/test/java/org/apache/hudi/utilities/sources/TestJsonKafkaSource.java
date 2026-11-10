@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources;
 import org.apache.hudi.HoodieSchemaUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieKey;
@@ -296,7 +297,7 @@ public class TestJsonKafkaSource extends BaseTestKafkaSource {
     double maxVal = Math.pow(10, decSchema.getPrecision() - decSchema.getScale());
     double minVal = maxVal * 0.1;
     for (GenericRecord record : records) {
-      BigDecimal dec = org.apache.hudi.common.schema.HoodieSchemaUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decSchema);
+      BigDecimal dec = HoodieAvroUtils.convertBytesToBigDecimal(((ByteBuffer) record.get(fieldname)).array(), decSchema);
       double doubleValue = dec.doubleValue();
       assertTrue(doubleValue <= maxVal && doubleValue >= minVal);
     }

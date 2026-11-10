@@ -126,6 +126,7 @@ public class BucketStreamWriteFunctionWrapper<I> implements TestFunctionWrapper<
   public void openFunction() throws Exception {
     this.coordinator.start();
     this.coordinator.setExecutor(new MockCoordinatorExecutor(coordinatorContext));
+    this.coordinator.setInstantRequestExecutor(new MockCoordinatorExecutor(coordinatorContext));
     toHoodieFunction = new RowDataToHoodieFunction<>(rowType, conf);
     toHoodieFunction.setRuntimeContext(runtimeContext);
     toHoodieFunction.open(conf);

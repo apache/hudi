@@ -19,6 +19,10 @@
 
 package org.apache.hudi.common.avro;
 
+import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
+
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -81,6 +85,30 @@ class TestAvroRecordContext {
     record.put("name", new Utf8("alice"));
     record.put("address", address);
     return record;
+  }
+
+  @ParameterizedTest
+  @MethodSource("virtualRecordKeyParams")
+  void testVirtualRecordKey(String recordKeyFields, String partitionFields, String expectedKey) {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.META_FIELDS_MODE, MetaFieldsMode.NONE.name());
+    tableConfig.setValue(HoodieTableConfig.RECORDKEY_FIELDS, recordKeyFields);
+    if (partitionFields != null) {
+      tableConfig.setValue(HoodieTableConfig.PARTITION_FIELDS, partitionFields);
+    }
+    AvroRecordContext context = new AvroRecordContext(tableConfig, null);
+    assertEquals(expectedKey, context.getRecordKey(buildRecord(), HoodieSchema.fromAvroSchema(RECORD_SCHEMA)));
+  }
+
+  private static Stream<Arguments> virtualRecordKeyParams() {
+    return Stream.of(
+        Arguments.of("id", null, "1"),
+        Arguments.of("id", "", "1"),
+        Arguments.of("id", "name", "1"),
+        Arguments.of("id", "name,address.city", "id:1"),
+        Arguments.of("id,name", null, "id:1,name:alice"),
+        Arguments.of("id,name", "name", "id:1,name:alice"),
+        Arguments.of("id,name", "name,address.city", "id:1,name:alice"));
   }
 
   @Test

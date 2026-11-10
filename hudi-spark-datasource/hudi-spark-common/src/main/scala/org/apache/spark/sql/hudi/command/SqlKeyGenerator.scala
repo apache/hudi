@@ -99,7 +99,15 @@ class SqlKeyGenerator(props: TypedProperties) extends BuiltinKeyGenerator(props)
 
   override def getPartitionPath(record: GenericRecord): String = {
     val partitionPath = originalKeyGen.map {
-      _.getKey(record).getPartitionPath
+      // Resolve the partition path on its own where the key generator exposes it. Going through
+      // BaseKeyGenerator#getKey would also compute and validate the record key, which a MOR partial
+      // update legitimately leaves unset: the merged record is materialised against
+      // WRITE_PARTIAL_UPDATE_SCHEMA and so carries only the columns named in UPDATE SET. Callers
+      // that want the record key validated still ask for it, via getKey or getRecordKey.
+      case baseKeyGen: BaseKeyGenerator => baseKeyGen.getPartitionPath(record)
+      // SparkKeyGeneratorInterface exposes no Avro-facing accessor beyond getKey, so a generator
+      // that is not a BaseKeyGenerator retains the previous behaviour.
+      case keyGen => keyGen.getKey(record).getPartitionPath
     } getOrElse {
       complexKeyGen.getPartitionPath(record)
     }

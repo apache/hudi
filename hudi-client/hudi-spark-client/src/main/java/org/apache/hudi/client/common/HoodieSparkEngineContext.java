@@ -137,7 +137,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
-    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
+    final Map<String, Registry> registries = getDistributedRegistries();
     return javaSparkContext.parallelize(data, parallelism).map(i -> {
       setRegistries(registries);
       return func.apply(i);
@@ -146,7 +146,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> List<V> mapToPairAndReduceByKey(List<I> data, SerializablePairFunction<I, K, V> mapToPairFunc, SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
-    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
+    final Map<String, Registry> registries = getDistributedRegistries();
     return javaSparkContext.parallelize(data, parallelism).mapToPair(input -> {
       setRegistries(registries);
       Pair<K, V> pair = mapToPairFunc.call(input);
@@ -158,7 +158,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   public <I, K, V> Stream<ImmutablePair<K, V>> mapPartitionsToPairAndReduceByKey(
       Stream<I> data, SerializablePairFlatMapFunction<Iterator<I>, K, V> flatMapToPairFunc,
       SerializableBiFunction<V, V, V> reduceFunc, int parallelism) {
-    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
+    final Map<String, Registry> registries = getDistributedRegistries();
     return javaSparkContext.parallelize(data.collect(Collectors.toList()), parallelism)
         .mapPartitionsToPair((PairFlatMapFunction<Iterator<I>, K, V>) iterator -> {
           setRegistries(registries);
@@ -179,7 +179,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, O> List<O> flatMap(List<I> data, SerializableFunction<I, Stream<O>> func, int parallelism) {
-    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
+    final Map<String, Registry> registries = getDistributedRegistries();
     return javaSparkContext.parallelize(data, parallelism).flatMap(x -> {
       setRegistries(registries);
       return func.apply(x).iterator();
@@ -193,7 +193,7 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
 
   @Override
   public <I, K, V> Map<K, V> mapToPair(List<I> data, SerializablePairFunction<I, K, V> func, Integer parallelism) {
-    final Map<String, Registry> registries = DISTRIBUTED_REGISTRY_MAP;
+    final Map<String, Registry> registries = getDistributedRegistries();
     if (Objects.nonNull(parallelism)) {
       return javaSparkContext.parallelize(data, parallelism).mapToPair(input -> {
         setRegistries(registries);
@@ -281,11 +281,55 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
   @Override
   public Registry getMetricRegistry(String tableName, String registryName) {
     final String prefixedName = tableName.isEmpty() ? registryName : tableName + "." + registryName;
-    return DISTRIBUTED_REGISTRY_MAP.computeIfAbsent(prefixedName, key -> {
-      Registry registry = Registry.getRegistryOfClass(tableName, registryName, DistributedRegistry.class.getName());
-      ((DistributedRegistry) registry).register(javaSparkContext);
+    // Registers on every lookup, not only on first insert, so that an entry cached under a previous
+    // SparkContext is recovered too.
+    return DISTRIBUTED_REGISTRY_MAP.compute(prefixedName, (key, cached) -> {
+      Registry registry = cached != null
+          ? cached : Registry.getRegistryOfClass(tableName, registryName, DistributedRegistry.class.getName());
+      return ((DistributedRegistry) registry).register(javaSparkContext);
+    });
+  }
+
+  /**
+   * Returns the distributed registries to ship to executors, first recovering any entry registered to a
+   * previous SparkContext: the map is static and outlives SparkContext restarts, and an unregistered
+   * accumulator fails task serialization.
+   */
+  private Map<String, Registry> getDistributedRegistries() {
+    DISTRIBUTED_REGISTRY_MAP.replaceAll((key, registry) -> ((DistributedRegistry) registry).register(javaSparkContext));
+    return DISTRIBUTED_REGISTRY_MAP;
+  }
+
+  /**
+   * Accumulator-backed registries owned by this context rather than by the process, keyed by table base
+   * path. Unlike {@link #getMetricRegistry}, these are never published into {@code Registry.REGISTRY_MAP}:
+   * the code that collects into them holds the registry by closure capture and never resolves it by name,
+   * so a process-wide index buys nothing and costs a shared lifetime.
+   *
+   * <p>Ownership is what makes the counters attributable. The entry exists only between the lookup that
+   * created it and the commit that drains it, so its presence is the record that this write looked
+   * something up.
+   */
+  private final Map<String, DistributedRegistry> ownedRegistries = new ConcurrentHashMap<>();
+
+  /**
+   * The registry a write collects into, created and registered with this context's {@code SparkContext}
+   * on first use. Callers drain it with {@link #removeOwnedRegistry}.
+   */
+  public DistributedRegistry getOrCreateOwnedRegistry(String key, String registryName) {
+    return ownedRegistries.computeIfAbsent(key, k -> {
+      DistributedRegistry registry = new DistributedRegistry(registryName);
+      registry.register(javaSparkContext);
       return registry;
     });
+  }
+
+  /**
+   * Removes and returns the registry for a key, or empty when this context never created one. Empty is
+   * how a write that performed no lookup is distinguished from one that did.
+   */
+  public Option<DistributedRegistry> removeOwnedRegistry(String key) {
+    return Option.ofNullable(ownedRegistries.remove(key));
   }
 
   /**

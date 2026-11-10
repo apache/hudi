@@ -24,7 +24,7 @@ import org.apache.hudi.common.schema.internal.InternalSchema
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.{ArrayBasedMapData, ArrayData}
-import org.apache.spark.sql.types.{ArrayType, DataType, DataTypes, MapType, Metadata, StructField, StructType}
+import org.apache.spark.sql.types.{ArrayType, DataType, DataTypes, Decimal, MapType, Metadata, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -114,6 +114,32 @@ class TestInternalRowToJsonStringConverter {
     ))
     val converted = nestedConverter.convert(row)
     assertEquals("""{"id":4,"name":"test_nested","people":[{"name":"Alice","age":30},{"name":"Bob","age":25}]}""", converted.toString)
+  }
+
+  @Test
+  def logicalTypes(): Unit = {
+    val row = InternalRow.fromSeq(Seq(
+      1,
+      Decimal(BigDecimal("9.99"), 7, 2),
+      Decimal(BigDecimal("0.00000012"), 10, 8),
+      20739,
+      1791910800000000L,
+      1791910800123456L,
+      ArrayData.toArrayData(Array(Decimal(BigDecimal("1.20"), 7, 2), Decimal(BigDecimal("3.00"), 7, 2)))
+    ))
+    val converted = new InternalRowToJsonStringConverter(logicalTypesSchema.structTypeSchema).convert(row)
+    assertEquals("""{"id":1,"amount":9.99,"rate":0.00000012,"day":"2026-10-13","ts":"2026-10-13T17:00:00Z","""
+      + """"ts_micros":"2026-10-13T17:00:00.123456Z","amounts":[1.20,3.00]}""", converted.toString)
+  }
+
+  @Test
+  def timestampNtzType(): Unit = {
+    assumeTrue(HoodieSparkUtils.gteqSpark3_4, "TimestampNTZType requires Spark 3.4 or higher")
+    val schema = new StructType(Array[StructField](
+      StructField("id", DataTypes.IntegerType, nullable = false, Metadata.empty),
+      StructField("ts", DataType.fromDDL("timestamp_ntz"), nullable = true, Metadata.empty)))
+    val row = InternalRow.fromSeq(Seq(1, 1791885600000000L))
+    assertEquals("""{"id":1,"ts":"2026-10-13T10:00:00"}""", new InternalRowToJsonStringConverter(schema).convert(row).toString)
   }
 
   @Test
@@ -238,6 +264,29 @@ class TestInternalRowToJsonStringConverter {
         |{"name": "id", "type": "int"},
         |{"name": "v", "type": {"type": "record", "name": "variant", "logicalType": "variant",
         |  "fields": [{"name": "metadata", "type": "bytes"}, {"name": "value", "type": "bytes"}]}}
+        |]}""".stripMargin
+    HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
+  }
+
+  private def logicalTypesSchema: HoodieTableSchema = {
+    val structTypeSchema = new StructType(Array[StructField](
+      StructField("id", DataTypes.IntegerType, nullable = false, Metadata.empty),
+      StructField("amount", DataTypes.createDecimalType(7, 2), nullable = true, Metadata.empty),
+      StructField("rate", DataTypes.createDecimalType(10, 8), nullable = true, Metadata.empty),
+      StructField("day", DataTypes.DateType, nullable = true, Metadata.empty),
+      StructField("ts", DataTypes.TimestampType, nullable = true, Metadata.empty),
+      StructField("ts_micros", DataTypes.TimestampType, nullable = true, Metadata.empty),
+      StructField("amounts", ArrayType(DataTypes.createDecimalType(7, 2)), nullable = true, Metadata.empty)))
+    val avroSchemaStr: String =
+      """{"type": "record", "name": "test", "fields": [
+        |{"name": "id", "type": "int"},
+        |{"name": "amount", "type": {"type": "fixed", "name": "amount", "size": 4, "logicalType": "decimal", "precision": 7, "scale": 2}},
+        |{"name": "rate", "type": {"type": "fixed", "name": "rate", "size": 5, "logicalType": "decimal", "precision": 10, "scale": 8}},
+        |{"name": "day", "type": {"type": "int", "logicalType": "date"}},
+        |{"name": "ts", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+        |{"name": "ts_micros", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+        |{"name": "amounts", "type": {"type": "array", "items": {"type": "fixed", "name": "amounts", "size": 4,
+        |  "logicalType": "decimal", "precision": 7, "scale": 2}}}
         |]}""".stripMargin
     HoodieTableSchema(structTypeSchema, HoodieSchema.parse(avroSchemaStr), Option.empty[InternalSchema])
   }

@@ -32,10 +32,12 @@ import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -52,6 +54,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
+import org.apache.hudi.metadata.EmptyHoodieRecordPayloadWithPartition;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -137,7 +140,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
         // poll into generateRLIMetadataHoodieRecordsForBaseFile to fetch MDT RLI records for inserts and deletes.
         Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
-            writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage(), false);
+            writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage(), false, false);
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
           String key = rliRecord.getRecordKey();
@@ -243,7 +246,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
 
         // poll into generateRLIMetadataHoodieRecordsForBaseFile to fetch MDT RLI records for inserts and deletes.
         Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(),
-            writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage(), writeConfig.isRecordLevelIndexEnabled());
+            writeStatus.getStat(), writeConfig.getWritesFileIdEncoding(), finalCommitTime, metaClient.getStorage(), writeConfig.isRecordLevelIndexEnabled(), false);
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
           String key = rliRecord.getRecordKey();
@@ -297,6 +300,52 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       // no RLI records should be generated for compaction operation.
       assertTrue(convertMetadataToRecordIndexRecords(context, compactionCommitMetadata, writeConfig.getMetadataConfig(),
           metaClient, writeConfig.getWritesFileIdEncoding(), compactionInstantOpt.get()).isEmpty());
+    }
+  }
+
+  /**
+   * A file id is only unique within a partition for files written outside Hudi and for the buckets of a table under
+   * non-blocking concurrency control. The deletes written to log files of two partitions under one file id must each
+   * carry their own partition in a partitioned record index.
+   */
+  @Test
+  public void testRecordIndexRecordsForLogFilesWithTheSameFileIdInDifferentPartitions() throws IOException {
+    cleanupClients();
+    Properties props = new Properties();
+    props.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+    initMetaClient(HoodieTableType.MERGE_ON_READ, props);
+    cleanupTimelineService();
+    initTimelineService();
+
+    HoodieWriteConfig writeConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.EAGER).build();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      String commitTime = client.startCommit();
+      List<HoodieRecord> inserts = dataGen.generateInserts(commitTime, 30);
+      List<WriteStatus> insertStatuses = client.insert(jsc.parallelize(inserts, 1), commitTime).collect();
+      assertNoWriteErrors(insertStatuses);
+      client.commit(commitTime, jsc.parallelize(insertStatuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+      // delete one record in each of two partitions, which writes one log file in each
+      List<HoodieKey> deletedKeys = inserts.stream().map(HoodieRecord::getKey)
+          .collect(Collectors.toMap(HoodieKey::getPartitionPath, key -> key, (first, second) -> first)).values().stream()
+          .limit(2).collect(Collectors.toList());
+      commitTime = client.startCommit();
+      List<WriteStatus> deleteStatuses = client.delete(jsc.parallelize(deletedKeys, 1), commitTime).collect();
+      assertNoWriteErrors(deleteStatuses);
+      client.commit(commitTime, jsc.parallelize(deleteStatuses), Option.empty(), DELTA_COMMIT_ACTION, Collections.emptyMap(), Option.empty());
+
+      // register both log files under one file id
+      List<HoodieWriteStat> writeStats = deleteStatuses.stream().map(WriteStatus::getStat).collect(Collectors.toList());
+      assertEquals(2, writeStats.size());
+      writeStats.forEach(writeStat -> assertTrue(FSUtils.isLogFile(new StoragePath(writeStat.getPath()))));
+      String sharedFileId = writeStats.get(0).getFileId();
+      writeStats.forEach(writeStat -> writeStat.setFileId(sharedFileId));
+
+      HoodieMetadataConfig partitionedRecordIndexConfig = HoodieMetadataConfig.newBuilder().enable(true).withEnableRecordLevelIndex(true).build();
+      Map<String, String> deletedKeyToPartition = convertMetadataToRecordIndexRecords(context, toCommitMetadata(writeStats), partitionedRecordIndexConfig,
+          metaClient, writeConfig.getWritesFileIdEncoding(), commitTime).collectAsList().stream()
+          .collect(Collectors.toMap(HoodieRecord::getRecordKey, record -> ((EmptyHoodieRecordPayloadWithPartition) record.getData()).getPartitionPath()));
+      assertEquals(deletedKeys.stream().collect(Collectors.toMap(HoodieKey::getRecordKey, HoodieKey::getPartitionPath)), deletedKeyToPartition);
     }
   }
 
@@ -370,7 +419,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       List<HoodieWriteStat> allWriteStats = writeStatusList2.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
-          convertWriteStatsToSecondaryIndexRecords(allWriteStats, secondCommitTime, indexDefinition, metadataConfig, metaClient, engineContext, writeConfig).collectAsList();
+          convertWriteStatsToSecondaryIndexRecords(allWriteStats, secondCommitTime, indexDefinition, metadataConfig, metaClient, engineContext, writeConfig,
+              toCommitMetadata(allWriteStats)).collectAsList();
       client.commit(secondCommitTime, jsc.parallelize(writeStatusList2));
 
       // There should be 3 SI records:
@@ -404,7 +454,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       allWriteStats = writeStatusList3.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
-          convertWriteStatsToSecondaryIndexRecords(allWriteStats, thirdCommitTime, indexDefinition, metadataConfig, metaClient, engineContext, writeConfig).collectAsList();
+          convertWriteStatsToSecondaryIndexRecords(allWriteStats, thirdCommitTime, indexDefinition, metadataConfig, metaClient, engineContext, writeConfig,
+              toCommitMetadata(allWriteStats)).collectAsList();
       client.commit(thirdCommitTime, jsc.parallelize(writeStatusList3));
 
       // There should be 1 SI records: 1 delete due to deletes3
@@ -435,7 +486,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       allWriteStats = writeStatusList4.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
-          convertWriteStatsToSecondaryIndexRecords(allWriteStats, fourthCommitTime, indexDefinition, metadataConfig, metaClient, engineContext, writeConfig).collectAsList();
+          convertWriteStatsToSecondaryIndexRecords(allWriteStats, fourthCommitTime, indexDefinition, metadataConfig, metaClient, engineContext, writeConfig,
+              toCommitMetadata(allWriteStats)).collectAsList();
       client.commit(fourthCommitTime, jsc.parallelize(writeStatusList4));
 
       // There should be 1 SI records: 1 insert due to inserts4
@@ -458,7 +510,8 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       allWriteStats = writeStatusList5.stream().map(WriteStatus::getStat).collect(Collectors.toList());
       secondaryIndexRecords =
-          convertWriteStatsToSecondaryIndexRecords(allWriteStats, fifthCommitTime, indexDefinition, metadataConfig, metaClient, engineContext, writeConfig).collectAsList();
+          convertWriteStatsToSecondaryIndexRecords(allWriteStats, fifthCommitTime, indexDefinition, metadataConfig, metaClient, engineContext, writeConfig,
+              toCommitMetadata(allWriteStats)).collectAsList();
       client.commit(fifthCommitTime, jsc.parallelize(writeStatusList5));
 
       // There should be 0 SI records because the secondary key field "rider" value has not changed.
@@ -477,7 +530,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
       metadataView = new HoodieTableFileSystemView(metadata, metaClient, metaClient.getActiveTimeline());
       allWriteStats = compactionCommitMetadata.getWriteStats();
       secondaryIndexRecords = convertWriteStatsToSecondaryIndexRecords(
-          allWriteStats, compactionInstantOpt.get(), indexDefinition, metadataConfig, metaClient, engineContext, writeConfig).collectAsList();
+          allWriteStats, compactionInstantOpt.get(), indexDefinition, metadataConfig, metaClient, engineContext, writeConfig, compactionCommitMetadata).collectAsList();
       // Get valid and deleted secondary index records
       List<HoodieRecord> validSecondaryIndexRecords3 = new ArrayList<>();
       List<HoodieRecord> deletedSecondaryIndexRecords3 = new ArrayList<>();
@@ -655,7 +708,7 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         }
 
         Iterator<HoodieRecord> rliRecordsItr = BaseFileRecordParsingUtils.generateRLIMetadataHoodieRecordsForBaseFile(metaClient.getBasePath().toString(), writeStatus.getStat(),
-            writeConfig.getWritesFileIdEncoding(), commitTime, metaClient.getStorage(), writeConfig.isRecordLevelIndexEnabled());
+            writeConfig.getWritesFileIdEncoding(), commitTime, metaClient.getStorage(), writeConfig.isRecordLevelIndexEnabled(), false);
         while (rliRecordsItr.hasNext()) {
           HoodieRecord rliRecord = rliRecordsItr.next();
           String key = rliRecord.getRecordKey();
@@ -701,6 +754,13 @@ public class TestMetadataUtilRLIandSIRecordGeneration extends HoodieClientTestBa
         }
       }
     });
+  }
+
+  private static HoodieCommitMetadata toCommitMetadata(List<HoodieWriteStat> writeStats) {
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.setOperationType(WriteOperationType.UPSERT);
+    writeStats.forEach(writeStat -> commitMetadata.addWriteStat(writeStat.getPartitionPath(), writeStat));
+    return commitMetadata;
   }
 
   Set<String> getRecordKeys(String partition, String baseInstantTime, String fileId, List<StoragePath> logFilePaths, HoodieTableMetaClient datasetMetaClient,

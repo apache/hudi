@@ -145,8 +145,8 @@ The entire reading process involves a large amount of data merging, but because 
 #### Engine reads pseudo process
 ![process-read](process-read.png)
 
-1) The engine itself delivers the data files that need to be scanned to executor/woker/taskmanger.  
-2) executor/worker/taskmanger calls Hudi’s rowReader interface and passes in column clipping and filter conditions to rowReader.  
+1) The engine itself delivers the data files that need to be scanned to executor/worker/taskmanager.  
+2) executor/worker/taskmanager calls Hudi’s rowReader interface and passes in column clipping and filter conditions to rowReader.  
 3) The Hudi kernel completes the data reading of rowReader and returns complete data. The data format is Avro.  
 4) The engine gets the Avro format data and needs to convert it into the data format it needs. For example, spark needs to be converted into unsaferow, hetu into block, flink into row, and hive into arrayWritable.
 

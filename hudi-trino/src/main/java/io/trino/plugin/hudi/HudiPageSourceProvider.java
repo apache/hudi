@@ -114,6 +114,7 @@ import static io.trino.plugin.hudi.HudiUtil.getLatestTableSchema;
 import static io.trino.plugin.hudi.HudiUtil.prependHudiMetaAndMergeRequiredColumns;
 import static io.trino.plugin.hudi.HudiUtil.resolveMergeModeAndStrategyId;
 import static io.trino.plugin.hudi.HudiUtil.usesNonProjectionCompatibleMerger;
+import static io.trino.plugin.hudi.util.ParquetStatisticsDomains.dropIncomparableDomains;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
@@ -409,9 +410,12 @@ public class HudiPageSourceProvider
 
             Map<List<String>, ColumnDescriptor> descriptorsByPath = getDescriptors(fileSchema, requestedSchema);
 
+            // A domain typed by the metastore cannot be matched against the statistics of a column the file stores
+            // under the type it had before a schema evolution, so those are dropped before the parquet predicate
+            // ever sees them. See ParquetStatisticsDomains.
             TupleDomain<ColumnDescriptor> parquetTupleDomain = options.isIgnoreStatistics() || !enablePredicatePushDown
                     ? TupleDomain.all()
-                    : getParquetTupleDomain(descriptorsByPath, getPushdownPredicate(hudiSplit, dynamicFilter, physicalIndexMap), fileSchema, useColumnNames);
+                    : dropIncomparableDomains(getParquetTupleDomain(descriptorsByPath, getPushdownPredicate(hudiSplit, dynamicFilter, physicalIndexMap), fileSchema, useColumnNames));
 
             TupleDomainParquetPredicate parquetPredicate = buildPredicate(requestedSchema, parquetTupleDomain, descriptorsByPath, timeZone);
 

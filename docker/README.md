@@ -43,6 +43,13 @@ Downstream Dockerfiles (`datanode`, `historyserver`, `hive_base`, `namenode`, `p
 `BASE_IMAGE_TAG` build arg (default `java11`). `build_docker_images.sh` sets it automatically; bare `docker build`
 invocations targeting the Java 17 base must pass `--build-arg BASE_IMAGE_TAG=java17`.
 
+`spark_base` additionally takes `HADOOP_AWS_VERSION`, `AWS_SDK_VERSION` and `ANALYTICS_ACCELERATOR_VERSION` for the
+S3A jars it adds to the Spark classpath. `build_docker_images.sh` derives all three from `--spark-version`, matching
+the Hadoop line each Spark distribution bundles: Spark 4.0.x gets `hadoop-aws` 3.4.1, Spark 4.1.x gets 3.4.2 and
+Spark 4.2.x gets 3.5.0, all with the AWS SDK v2 bundle; Spark 3.x gets 3.3.4 with the SDK v1 bundle. Spark 4.1.x and
+4.2.x also get `analyticsaccelerator-s3` (1.2.1 and 1.3.1), which backs the S3A analytics input stream that
+hadoop-aws 3.5.0 makes the default; an empty `ANALYTICS_ACCELERATOR_VERSION` skips that jar.
+
 ### Docker compose config for the Demo - `/compose`
 
 The `/compose` folder contains the yaml file to compose the Docker environment for running Hudi Demo.
@@ -63,8 +70,8 @@ To build the Docker demo images with `docker` directly, rather than through the 
 `build_local_docker_images.sh` above, run the script from under `<HUDI_REPO_DIR>/docker`:
 
 ```shell
-# With no flags, builds Hadoop 2.8.4 / Spark 3.5.3 / Hive 2.3.10, matching
-# docker-compose_hadoop284_hive2310_spark353_{amd64,arm64}.yml
+# With no flags, builds Hadoop 2.8.4 / Spark 3.5.9 / Hive 2.3.10, matching
+# docker-compose_hadoop284_hive2310_spark359_{amd64,arm64}.yml
 ./build_docker_images.sh
 ```
 
@@ -74,15 +81,15 @@ combinations under `docker/compose`.
 
 ```shell
 # Matches setup_demo.sh and
-# docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml
-./build_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.3 --hive-version 3.1.3
+# docker-compose_hadoop334_hive313_spark359_{amd64,arm64}.yml
+./build_docker_images.sh --hadoop-version 3.3.4 --spark-version 3.5.9 --hive-version 3.1.3
 
 # Another supported combination is
 # docker-compose_hadoop340_hive313_spark401_{amd64,arm64}.yml
 ./build_docker_images.sh --hadoop-version 3.4.0 --spark-version 4.0.1 --hive-version 3.1.3
 ```
 
-`setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark353_{amd64,arm64}.yml`. If you build a
+`setup_demo.sh` currently defaults to `docker-compose_hadoop334_hive313_spark359_{amd64,arm64}.yml`. If you build a
 different image set for the demo flow, update `COMPOSE_FILE_NAME` in `setup_demo.sh` to point to the matching compose
 file before running the script. Run `./setup_demo.sh dev` to use your locally built images; a plain run pulls the
 Docker Hub images over them.
@@ -200,8 +207,10 @@ changes are needed for the current amd64 plus arm64 image set in this repository
 ## Trino E2E image - `/trino`
 
 The Trino E2E stack does not use the `hoodie/hadoop` image tree. `docker/trino/` builds
-`apachehudi/hudi-trino-e2e` directly on top of the official `trinodb/trino` image at the
-root pom's `trino.e2e.version`, baking in a locally-assembled native `trino-hudi` plugin
+`apachehudi/hudi-trino-e2e` on top of a Trino server image built from the pinned
+`trinodb/trino` commit (`trino.sha`, via `docker/trino/build_trino_server_image.sh`; this is
+what CI does) or, for quick local runs, the released `trinodb/trino:<trino.e2e.version>`,
+baking in a locally-assembled native `trino-hudi` plugin
 directory and the E2E catalog config (`connector.name=hudi`, metastore at
 `thrift://hivemetastore:9083`).
 

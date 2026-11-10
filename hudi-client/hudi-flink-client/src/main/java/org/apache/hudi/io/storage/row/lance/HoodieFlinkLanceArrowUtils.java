@@ -18,8 +18,12 @@
 
 package org.apache.hudi.io.storage.row.lance;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.arrow.vector.BigIntVector;
 import org.apache.arrow.vector.BitVector;
@@ -36,6 +40,8 @@ import org.apache.arrow.vector.TinyIntVector;
 import org.apache.arrow.vector.ValueVector;
 import org.apache.arrow.vector.VarBinaryVector;
 import org.apache.arrow.vector.VarCharVector;
+import org.apache.arrow.vector.complex.BaseListVector;
+import org.apache.arrow.vector.complex.FixedSizeListVector;
 import org.apache.arrow.vector.complex.ListVector;
 import org.apache.arrow.vector.complex.StructVector;
 import org.apache.arrow.vector.types.DateUnit;
@@ -72,6 +78,7 @@ import org.apache.flink.table.types.logical.VarCharType;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -88,10 +95,22 @@ public final class HoodieFlinkLanceArrowUtils {
   private HoodieFlinkLanceArrowUtils() {
   }
 
-  public static Schema toArrowSchema(RowType rowType) {
+  /**
+   * Converts a Hoodie write schema to the Arrow schema used by Lance.
+   *
+   * <p>This method distinguishes a Hoodie VECTOR from an ordinary Flink ARRAY and encodes
+   * top-level FLOAT/DOUBLE vectors as Arrow FixedSizeList fields.
+   */
+  public static Schema toArrowSchema(HoodieSchema hoodieSchema) {
+    HoodieSchema recordSchema = hoodieSchema.getNonNullType();
+    RowType rowType = HoodieSchemaConverter.convertToRowType(recordSchema);
+    List<HoodieSchemaField> hoodieFields = recordSchema.getFields();
+
     List<Field> fields = new ArrayList<>(rowType.getFieldCount());
-    for (RowType.RowField field : rowType.getFields()) {
-      fields.add(toArrowField(field.getName(), field.getType()));
+    for (int i = 0; i < rowType.getFieldCount(); i++) {
+      RowType.RowField rowField = rowType.getFields().get(i);
+      fields.add(toArrowField(
+          rowField.getName(), rowField.getType(), hoodieFields.get(i).schema().getNonNullType()));
     }
     return new Schema(fields);
   }
@@ -157,7 +176,7 @@ public final class HoodieFlinkLanceArrowUtils {
       case ROW:
         return readRow((RowType) type, (StructVector) vector, rowId);
       case ARRAY:
-        return readArray((ArrayType) type, (ListVector) vector, rowId);
+        return readArray((ArrayType) type, vector, rowId);
       default:
         throw unsupported(type);
     }
@@ -178,6 +197,39 @@ public final class HoodieFlinkLanceArrowUtils {
         break;
     }
     return new Field(name, new FieldType(type.isNullable(), toArrowType(type), null), children);
+  }
+
+  private static Field toArrowField(String name, LogicalType type, HoodieSchema hoodieSchema) {
+    if (hoodieSchema.getType() != HoodieSchemaType.VECTOR) {
+      return toArrowField(name, type);
+    }
+
+    HoodieSchema.Vector vectorSchema = (HoodieSchema.Vector) hoodieSchema;
+    validateLanceVector(name, vectorSchema);
+    ValidationUtils.checkArgument(type instanceof ArrayType,
+        "VECTOR column '" + name + "' must map to a Flink ARRAY type");
+    ArrayType arrayType = (ArrayType) type;
+    Field elementField = toArrowField("element", arrayType.getElementType());
+    return new Field(
+        name,
+        new FieldType(
+            type.isNullable(),
+            new ArrowType.FixedSizeList(vectorSchema.getDimension()),
+            null),
+        Collections.singletonList(elementField));
+  }
+
+  private static void validateLanceVector(String fieldName, HoodieSchema.Vector vectorSchema) {
+    HoodieSchema.Vector.VectorElementType elementType = vectorSchema.getVectorElementType();
+    // Keep the on-disk encoding aligned with Spark Lance writes. The current lance-spark
+    // VectorUtils.shouldBeFixedSizeList recognizes only Array<Float> and Array<Double>;
+    // an INT8 vector would otherwise be emitted as a variable-size List instead of FixedSizeList.
+    if (elementType != HoodieSchema.Vector.VectorElementType.FLOAT
+        && elementType != HoodieSchema.Vector.VectorElementType.DOUBLE) {
+      throw new HoodieNotSupportedException(
+          "Lance base-file format currently supports FLOAT/DOUBLE VECTOR columns only; "
+              + "got element type " + elementType + " for field '" + fieldName + "'");
+    }
   }
 
   private static ArrowType toArrowType(LogicalType type) {
@@ -272,9 +324,9 @@ public final class HoodieFlinkLanceArrowUtils {
         fields.add(new RowType.RowField(child.getName(), toLogicalType(child, path + "." + child.getName())));
       }
       logicalType = new RowType(field.isNullable(), fields);
-    } else if (arrowType instanceof ArrowType.List) {
+    } else if (arrowType instanceof ArrowType.List || arrowType instanceof ArrowType.FixedSizeList) {
       ValidationUtils.checkArgument(field.getChildren().size() == 1,
-          String.format("Unsupported Arrow schema at '%s': LIST must contain exactly one child field", path));
+          String.format("Unsupported Arrow schema at '%s': list must contain exactly one child field", path));
       Field element = field.getChildren().get(0);
       logicalType = new ArrayType(field.isNullable(), toLogicalType(element, path + "[]"));
     } else {
@@ -291,11 +343,14 @@ public final class HoodieFlinkLanceArrowUtils {
     return row;
   }
 
-  private static ArrayData readArray(ArrayType arrayType, ListVector vector, int rowId) {
-    int startIndex = vector.getElementStartIndex(rowId);
-    int endIndex = vector.getElementEndIndex(rowId);
+  private static ArrayData readArray(ArrayType arrayType, ValueVector vector, int rowId) {
+    BaseListVector listVector = (BaseListVector) vector;
+    FieldVector dataVector = vector instanceof FixedSizeListVector
+        ? ((FixedSizeListVector) vector).getDataVector()
+        : ((ListVector) vector).getDataVector();
+    int startIndex = listVector.getElementStartIndex(rowId);
+    int endIndex = listVector.getElementEndIndex(rowId);
     Object[] values = new Object[endIndex - startIndex];
-    FieldVector dataVector = vector.getDataVector();
     for (int i = 0; i < values.length; i++) {
       values[i] = readValue(arrayType.getElementType(), dataVector, startIndex + i);
     }

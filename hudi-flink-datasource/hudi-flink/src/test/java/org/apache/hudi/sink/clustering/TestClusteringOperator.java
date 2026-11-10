@@ -348,9 +348,70 @@ class TestClusteringOperator {
 
   @Test
   @SuppressWarnings("unchecked")
+  void testSortClusteringRejectsUnsortableColumnInsideTheTask() throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
+    conf.set(FlinkOptions.OPERATION, WriteOperationType.INSERT.value());
+    conf.set(FlinkOptions.CLUSTERING_ASYNC_ENABLED, true);
+    // f_map is a MAP, which the generated comparator cannot order. The rejection has to come out of the
+    // clustering task and not out of open(): this operator sits on the ingestion pipeline, so a throw from
+    // open() would fail the write job on every restart, while a task failure becomes a failed commit event
+    // that rolls the clustering instant back.
+    conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, "f_map");
+    HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
+    HoodieFlinkTable table = mock(HoodieFlinkTable.class);
+    HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);
+    when(writeClient.getHoodieTable()).thenReturn(table);
+    Throwable[] failure = new Throwable[1];
+
+    ClusteringOperator operator = new ClusteringOperator(conf, TestConfigurations.ROW_TYPE_EVOLUTION_BEFORE);
+    try (MockedStatic<FlinkWriteClients> writeClients = mockStatic(FlinkWriteClients.class);
+         // Runs the task inline and hands its failure to the hook, as the real executor does on its thread
+         MockedConstruction<NonThrownExecutor> executors =
+             mockConstruction(NonThrownExecutor.class, (executor, context) ->
+                 doAnswer(invocation -> {
+                   ThrowingRunnable<Throwable> action = invocation.getArgument(0);
+                   NonThrownExecutor.ExceptionHook hook = invocation.getArgument(1);
+                   try {
+                     action.run();
+                   } catch (Throwable t) {
+                     failure[0] = t;
+                     hook.apply("expected failure", t);
+                   }
+                   return null;
+                 }).when(executor).execute(
+                     any(ThrowingRunnable.class),
+                     any(NonThrownExecutor.ExceptionHook.class),
+                     anyString(),
+                     anyString(),
+                     anyInt()));
+         OneInputStreamOperatorTestHarness<ClusteringPlanEvent, ClusteringCommitEvent> harness =
+             new OneInputStreamOperatorTestHarness<>(operator, 1, 1, 0)) {
+      writeClients.when(() -> FlinkWriteClients.getHoodieClientConfig(
+          any(Configuration.class), eq(false), eq(false))).thenReturn(writeConfig);
+      writeClients.when(() -> FlinkWriteClients.createWriteClient(
+          any(Configuration.class), any(RuntimeContext.class))).thenReturn(writeClient);
+
+      // open() succeeds; the plan is what fails, and it fails as a commit event rather than an exception
+      harness.open();
+      harness.processElement(new StreamRecord<>(event("006")));
+
+      StreamRecord<ClusteringCommitEvent> output =
+          (StreamRecord<ClusteringCommitEvent>) harness.getOutput().poll();
+      assertEquals("006", output.getValue().getInstant());
+      assertTrue(output.getValue().isFailed());
+      assertTrue(failure[0] instanceof IllegalArgumentException, "Unexpected failure: " + failure[0]);
+      assertTrue(failure[0].getMessage().contains("'f_map'"),
+          "The error must name the unsortable sort column, got: " + failure[0].getMessage());
+      assertEquals(1, executors.constructed().size());
+    }
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
   void testSortClustering() throws Exception {
     Configuration conf = TestConfigurations.getDefaultConf(tempDir.getAbsolutePath());
-    conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, TestConfigurations.ROW_TYPE.getFieldNames().get(0));
+    // Padded on purpose: the config list is user-written ("a, b"), and the operator trims each name before lookup.
+    conf.set(FlinkOptions.CLUSTERING_SORT_COLUMNS, " " + TestConfigurations.ROW_TYPE.getFieldNames().get(0) + " ");
     HoodieFlinkWriteClient writeClient = mock(HoodieFlinkWriteClient.class);
     HoodieFlinkTable table = mock(HoodieFlinkTable.class);
     HoodieWriteConfig writeConfig = mock(HoodieWriteConfig.class);

@@ -28,6 +28,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.apache.spark.sql.execution.vectorized.WritableColumnVector;
+import org.apache.spark.sql.internal.SQLConf;
 import org.apache.spark.sql.types.ArrayType;
 import org.apache.spark.sql.types.ArrayType$;
 import org.apache.spark.sql.types.BinaryType;
@@ -82,6 +83,9 @@ public class SparkInternalSchemaConverter {
   public static final String HOODIE_QUERY_SCHEMA = "hoodie.schema.internal.querySchema";
   public static final String HOODIE_TABLE_PATH = "hoodie.tablePath";
   public static final String HOODIE_VALID_COMMITS_LIST = "hoodie.valid.commits.list";
+  // Mirrors Spark's VariantMetadata.METADATA_KEY (Spark 4.x only), referenced by literal
+  // because the class does not exist on Spark 3 classpaths.
+  private static final String SPARK_VARIANT_METADATA_KEY = "__VARIANT_METADATA_KEY";
 
   public static Type buildTypeFromStructType(DataType sparkType, Boolean firstVisitRoot, AtomicInteger nextId) {
     if (sparkType instanceof StructType) {
@@ -175,6 +179,12 @@ public class SparkInternalSchemaConverter {
 
   private static void collectColNamesFromStructType(DataType sparkType, Deque<String> fieldNames, List<String> resultSet) {
     if (sparkType instanceof StructType) {
+      if (isVariantRewriteStruct(sparkType)) {
+        // Spark's PushVariantIntoScan (4.x) replaced a variant column with a struct of
+        // ordinal-named extraction fields that exist nowhere in the internal schema, which
+        // models the variant atomically; addFullName prunes at the column itself.
+        return;
+      }
       StructField[] fields = ((StructType) sparkType).fields();
       for (StructField f : fields) {
         fieldNames.push(f.name());
@@ -211,9 +221,31 @@ public class SparkInternalSchemaConverter {
   }
 
   private static void addFullName(DataType sparkType, String name, Deque<String> fieldNames, List<String> resultSet) {
-    if (!(sparkType instanceof StructType) && !(sparkType instanceof ArrayType) && !(sparkType instanceof MapType)) {
+    boolean isLeaf = !(sparkType instanceof StructType) && !(sparkType instanceof ArrayType) && !(sparkType instanceof MapType);
+    if (isLeaf || isVariantRewriteStruct(sparkType)) {
       resultSet.add(InternalSchemaUtils.createFullName(name, fieldNames));
     }
+  }
+
+  /**
+   * Whether Spark's PushVariantIntoScan rewrote a variant column into this struct of requested
+   * extraction fields; every member carries the marker metadata. Shared with the schema-on-read
+   * guard in ParquetSchemaEvolutionUtils so the marker is read in one place.
+   */
+  public static boolean isVariantRewriteStruct(DataType sparkType) {
+    if (!(sparkType instanceof StructType)) {
+      return false;
+    }
+    StructField[] fields = ((StructType) sparkType).fields();
+    if (fields.length == 0) {
+      return false;
+    }
+    for (StructField field : fields) {
+      if (!field.metadata().contains(SPARK_VARIANT_METADATA_KEY)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   public static StructType mergeSchema(InternalSchema fileSchema, InternalSchema querySchema) {
@@ -294,6 +326,22 @@ public class SparkInternalSchemaConverter {
     }
   }
 
+  private static void putDecimalOrNull(
+      WritableColumnVector newV, int rowId, Decimal decimal, DecimalType decimalType) {
+    if (decimal.changePrecision(decimalType.precision(), decimalType.scale())) {
+      newV.putDecimal(rowId, decimal, decimalType.precision());
+    } else if (SQLConf.get().ansiEnabled()) {
+      throw new ArithmeticException(
+          String.format(
+              "%s cannot be represented as Decimal(%d, %d)",
+              decimal,
+              decimalType.precision(),
+              decimalType.scale()));
+    } else {
+      newV.putNull(rowId);
+    }
+  }
+
   /**
    * Convert Int/long type to other Type.
    * Now only support int/long -> long/float/double/string/Decimal
@@ -318,9 +366,9 @@ public class SparkInternalSchemaConverter {
         } else if (newType instanceof StringType) {
           newV.putByteArray(i, getUTF8Bytes((isInt ? oldV.getInt(i) : oldV.getLong(i)) + ""));
         } else if (newType instanceof DecimalType) {
+          DecimalType decimalType = (DecimalType) newType;
           Decimal oldDecimal = Decimal.apply(isInt ? oldV.getInt(i) : oldV.getLong(i));
-          oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
-          newV.putDecimal(i, oldDecimal, ((DecimalType) newType).precision());
+          putDecimalOrNull(newV, i, oldDecimal, decimalType);
         }
       }
       return true;
@@ -346,9 +394,9 @@ public class SparkInternalSchemaConverter {
         } else if (newType instanceof StringType) {
           newV.putByteArray(i, getUTF8Bytes(oldV.getFloat(i) + ""));
         } else if (newType instanceof DecimalType) {
+          DecimalType decimalType = (DecimalType) newType;
           Decimal oldDecimal = Decimal.apply(oldV.getFloat(i));
-          oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
-          newV.putDecimal(i, oldDecimal, ((DecimalType) newType).precision());
+          putDecimalOrNull(newV, i, oldDecimal, decimalType);
         }
       }
       return true;
@@ -370,9 +418,9 @@ public class SparkInternalSchemaConverter {
         }
         // double -> decimal/string
         if (newType instanceof DecimalType) {
+          DecimalType decimalType = (DecimalType) newType;
           Decimal oldDecimal = Decimal.apply(oldV.getDouble(i));
-          oldDecimal.changePrecision(((DecimalType) newType).precision(), ((DecimalType) newType).scale());
-          newV.putDecimal(i, oldDecimal, ((DecimalType) newType).precision());
+          putDecimalOrNull(newV, i, oldDecimal, decimalType);
         } else if (newType instanceof StringType) {
           newV.putByteArray(i, getUTF8Bytes(oldV.getDouble(i) + ""));
         }
@@ -450,8 +498,7 @@ public class SparkInternalSchemaConverter {
           DecimalType decimalType = (DecimalType) newType;
           java.math.BigDecimal bigDecimal = new java.math.BigDecimal(oldV.getUTF8String(i).toString().trim());
           Decimal sparkDecimal = Decimal.apply(bigDecimal);
-          sparkDecimal.changePrecision(decimalType.precision(), decimalType.scale());
-          newV.putDecimal(i, sparkDecimal, decimalType.precision());
+          putDecimalOrNull(newV, i, sparkDecimal, decimalType);
         }
       }
       return true;

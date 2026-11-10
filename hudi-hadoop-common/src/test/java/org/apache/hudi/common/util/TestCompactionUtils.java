@@ -730,8 +730,8 @@ public class TestCompactionUtils extends HoodieCommonTestHarness {
     assertEquals(slice.getBaseInstantTime(), op.getBaseInstantTime(), "Same base-instant");
     assertEquals(slice.getFileId(), op.getFileId(), "Same file-id");
     if (slice.getBaseFile().isPresent()) {
-      HoodieBaseFile df = slice.getBaseFile().get();
-      assertEquals(version == COMPACTION_METADATA_VERSION_1 ? df.getPath() : df.getFileName(),
+      HoodieBaseFile baseFile = slice.getBaseFile().get();
+      assertEquals(version == COMPACTION_METADATA_VERSION_1 ? baseFile.getPath() : baseFile.getFileName(),
           op.getDataFilePath(), "Same data-file");
     }
     List<String> paths = slice.getLogFiles().map(l -> l.getPath().toString()).collect(Collectors.toList());

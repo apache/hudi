@@ -22,6 +22,7 @@ package org.apache.spark.sql.hudi.catalog
 import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
@@ -39,15 +40,16 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable.needFilterProps
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
-import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, UpdateColumnComment, UpdateColumnType}
+import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, DeleteColumn, RemoveProperty, SetProperty, UpdateColumnComment, UpdateColumnNullability, UpdateColumnType}
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.execution.datasources.DataSource
-import org.apache.spark.sql.hudi.{HoodieSqlCommonUtils, ProvidesHoodieConfig}
+import org.apache.spark.sql.hudi.{HoodieOptionConfig, HoodieSqlCommonUtils, ProvidesHoodieConfig}
 import org.apache.spark.sql.hudi.analysis.HoodieSparkBaseAnalysis.HoodieV1OrV2Table
 import org.apache.spark.sql.hudi.catalog.HoodieCatalog.{buildPartitionTransforms, isTablePartitioned}
 import org.apache.spark.sql.hudi.command._
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{StructField, StructType}
+import org.slf4j.LoggerFactory
 
 import java.net.URI
 import java.util
@@ -56,6 +58,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 class HoodieCatalog extends DelegatingCatalogExtension
+  with HoodieCatalogColumnsSupport
   with StagingTableCatalog
   with SparkAdapterSupport
   with ProvidesHoodieConfig {
@@ -223,7 +226,47 @@ class HoodieCatalog extends DelegatingCatalogExtension
     loadTable(ident) match {
       case HoodieV1OrV2Table(table) => {
         val tableIdent = TableIdentifier(ident.name(), ident.namespace().lastOption)
-        changes.groupBy(c => c.getClass).foreach {
+        val (propertyChanges, otherChanges) = changes.partition {
+          case _: SetProperty | _: RemoveProperty => true
+          case _ => false
+        }
+        val catalogPropertyChanges = if (propertyChanges.isEmpty) Seq.empty else catalogPropertyChangesToApply(table, propertyChanges)
+        // SDP reconciles its business schema against the catalog's schema on each refresh.
+        // Hudi owns its metadata columns; deleting them must not change the stored schema.
+        val schemaChanges = otherChanges.filterNot {
+          case delete: DeleteColumn =>
+            delete.fieldNames().length == 1 && HoodieRecord.HOODIE_META_COLUMNS_WITH_OPERATION.contains(delete.fieldNames()(0))
+          // Hudi exposes nullable fields and does not enforce NOT NULL constraints. SDP
+          // re-sends nullability on refresh; retain the stored schema in either direction.
+          case change: UpdateColumnNullability =>
+            val exists = table.schema.findNestedField(change.fieldNames(), includeCollections = true,
+              spark.sessionState.conf.resolver).isDefined
+            if (exists) {
+              LoggerFactory.getLogger(classOf[HoodieCatalog]).warn(
+                s"Ignoring nullability change for ${ident.toString}.${change.fieldNames().mkString(".")}: " +
+                  "Hudi preserves the stored schema and does not enforce NOT NULL constraints.")
+            }
+            exists
+          case _ => false
+        }
+        // Reject unsupported changes before applying any supported change in the same request.
+        schemaChanges.foreach {
+          case change: UpdateColumnType =>
+            val colName = UnresolvedAttribute(change.fieldNames()).name
+            val field = table.schema.findNestedField(change.fieldNames(), includeCollections = true,
+              spark.sessionState.conf.resolver).map(_._2).getOrElse {
+              throw new HoodieAnalysisException(s"Couldn't find column $colName in:\n${table.schema.treeString}")
+            }
+            if (field.dataType != change.newDataType()) {
+              throw new HoodieAnalysisException(
+                "ALTER TABLE CHANGE COLUMN is not supported for changing column " +
+                  s"'${field.name}' with type '${field.dataType}' to '$colName' with type '${change.newDataType()}'")
+            }
+          case _: AddColumn | _: UpdateColumnComment =>
+          case change =>
+            throw new UnsupportedOperationException(s"not supported table change: ${change.getClass.getName}")
+        }
+        schemaChanges.groupBy(c => c.getClass).foreach {
           case (t, newColumns) if t == classOf[AddColumn] =>
             AlterHoodieTableAddColumnsCommand(
               tableIdent,
@@ -253,12 +296,67 @@ class HoodieCatalog extends DelegatingCatalogExtension
                 AlterHoodieTableChangeColumnCommand(tableIdent, colName, field.withComment(newComment)).run(spark)
             }
           case (t, _) =>
-            throw new UnsupportedOperationException(s"not supported table change: ${t.getClass}")
+            throw new UnsupportedOperationException(s"not supported table change: ${t.getName}")
+        }
+        if (catalogPropertyChanges.nonEmpty) {
+          super.alterTable(ident, catalogPropertyChanges: _*)
         }
 
         loadTable(ident)
       }
       case _ => super.alterTable(ident, changes: _*)
+    }
+  }
+
+  /**
+   * Returns the property changes that still have to be applied to the catalog table.
+   *
+   * Callers such as Spark Declarative Pipelines re-send every table property on each run, so changes that keep the
+   * current value are dropped. Properties persisted in hoodie.properties (record key, ordering fields, table type,
+   * ...) can't be changed through the catalog, since the catalog would no longer match the table.
+   */
+  private def catalogPropertyChangesToApply(table: CatalogTable, changes: Seq[TableChange]): Seq[TableChange] = {
+    lazy val tableConfig = HoodieCatalogTable(spark, table).tableConfig
+    val properties = table.properties
+    lazy val sqlProperties = HoodieOptionConfig.makeOptionsCaseInsensitive(properties)
+    def catalogValue(key: String): Option[String] =
+      sqlProperties.get(HoodieOptionConfig.canonicalizeSqlOptionKey(key))
+
+    // Only filter immutable properties here. Spark applies mutable changes in order, including repeated keys.
+    val catalogChanges = changes.filter {
+      case set: SetProperty =>
+        HoodieOptionConfig.mapToTableConfig(set.property, set.value) match {
+          case Some(_) if catalogValue(set.property).contains(set.value) => false
+          case Some((tableConfigKey, value)) =>
+            val persisted = HoodieOptionConfig.getTableConfigValue(tableConfig, tableConfigKey)
+            if (!persisted.contains(value)) {
+              throw new HoodieAnalysisException(s"Can't set ${set.property} to '${set.value}' on Hudi table " +
+                s"${table.identifier}: it is persisted in hoodie.properties as $tableConfigKey " +
+                s"(current value: ${persisted.getOrElse("unset")}) and can't be changed by altering the table.")
+            }
+            false
+          case None => true
+        }
+      case remove: RemoveProperty =>
+        val persisted = HoodieOptionConfig.mapToTableConfig(remove.property, "").isDefined
+        if (persisted && catalogValue(remove.property).isDefined) {
+          throw new HoodieAnalysisException(s"Can't remove ${remove.property} from Hudi table ${table.identifier}: " +
+            "it is persisted in hoodie.properties and can't be changed by altering the table.")
+        }
+        !persisted
+    }
+
+    val updated = CatalogV2Util.applyPropertiesChanges(properties, catalogChanges)
+    if (updated == properties) {
+      Seq.empty
+    } else {
+      val removed = (properties.keySet -- updated.keySet).toSeq.map(TableChange.removeProperty)
+      val set = updated.toSeq.collect {
+        // The session catalog reconstructs the comment from properties, even though Hive stores it separately.
+        case (key, value) if key == TableCatalog.PROP_COMMENT || !properties.get(key).contains(value) =>
+          TableChange.setProperty(key, value)
+      }
+      set ++ removed
     }
   }
 
@@ -293,8 +391,19 @@ class HoodieCatalog extends DelegatingCatalogExtension
                         operation: TableCreationMode): Table = {
 
     val (partitionColumns, maybeBucketSpec) = HoodieCatalog.convertTransforms(partitions)
+    if (schema.nonEmpty) {
+      partitionColumns.foreach { column =>
+        if (!schema.fieldNames.exists(spark.sessionState.conf.resolver(_, column))) {
+          throw new HoodieAnalysisException(s"Partition column '$column' not found in table schema: ${schema.treeString}")
+        }
+      }
+    }
     val newSchema = schema
-    val newPartitionColumns = partitionColumns
+    val newPartitionColumns = if (schema.nonEmpty) {
+      partitionColumns.map(column => schema.fieldNames.find(spark.sessionState.conf.resolver(_, column)).get)
+    } else {
+      partitionColumns
+    }
     val newBucketSpec = maybeBucketSpec
 
     val storage = DataSource.buildStorageFormatFromOptions(writeOptions.--(needFilterProps))

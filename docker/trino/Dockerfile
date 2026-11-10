@@ -15,8 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
+# CI passes TRINO_BASE_IMAGE: a server image built from the pinned trino.sha
+# (build_trino_server_image.sh). The released-image default is for quick local runs and
+# only matches the connector when the pin is a release.
 ARG TRINO_VERSION=483
-FROM trinodb/trino:${TRINO_VERSION}
+ARG TRINO_BASE_IMAGE=trinodb/trino:${TRINO_VERSION}
+FROM ${TRINO_BASE_IMAGE}
 
 USER root
 

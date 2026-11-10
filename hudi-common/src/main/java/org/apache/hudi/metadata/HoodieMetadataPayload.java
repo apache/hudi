@@ -24,7 +24,6 @@ import org.apache.hudi.avro.model.HoodieMetadataFileInfo;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
 import org.apache.hudi.avro.model.HoodieRecordIndexInfo;
 import org.apache.hudi.avro.model.HoodieSecondaryIndexInfo;
-import org.apache.hudi.common.avro.AvroSchemaCache;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.EmptyHoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieAvroRecord;
@@ -109,8 +108,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
   // Note: Variable is unused, but caching is required.
   private static final HoodieSchema HOODIE_METADATA_SCHEMA = HoodieSchemaCache.intern(
       HoodieSchema.fromAvroSchema(HoodieMetadataRecord.getClassSchema()));
-  // Cache the Avro schema reference for O(1) equality checks during Avro.Schema -> HoodieSchema migration
-  private static final Schema HOODIE_METADATA_AVRO_SCHEMA = AvroSchemaCache.intern(HoodieMetadataRecord.getClassSchema());
+  // Held for the reference-equality fast path in getInsertValue: getClassSchema() returns the
+  // generated class's SCHEMA$ singleton, so no interning is needed.
+  private static final Schema HOODIE_METADATA_AVRO_SCHEMA = HoodieMetadataRecord.getClassSchema();
   /**
    * Field offsets when metadata fields are present
    */
@@ -321,7 +321,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     filesAdded.forEach((fileName, fileSize) -> {
       // Assert that the file-size of the file being added is positive, since Hudi
       // should not be creating empty files
-      checkState(fileSize > 0, "File name " + fileName
+      checkState(fileSize > 0, () -> "File name " + fileName
           + ", is a 0 byte file. It does not have any contents");
       fileInfo.put(fileName, new HoodieMetadataFileInfo(fileSize, false));
     });
@@ -360,7 +360,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
                                                                                     String metadataPartitionName) {
     checkArgument(!baseFileName.contains(StoragePath.SEPARATOR)
             && FSUtils.isBaseFile(new StoragePath(baseFileName)),
-        "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
+        () -> "Invalid base file '" + baseFileName + "' for MetaIndexBloomFilter!");
     final String bloomFilterIndexKey = getBloomFilterRecordKey(partitionName, baseFileName);
     HoodieKey key = new HoodieKey(bloomFilterIndexKey, metadataPartitionName);
 
@@ -383,9 +383,9 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
 
     // Validation of record merge scenario. Only records of same type and key can be combined. 
     checkArgument(previousRecord.type == type,
-        "Cannot combine " + previousRecord.type + " with " + type);
+        () -> "Cannot combine " + previousRecord.type + " with " + type);
     checkArgument(previousRecord.key.equals(key),
-        "Cannot combine " + previousRecord.key + " with " + key + " as the keys differ");
+        () -> "Cannot combine " + previousRecord.key + " with " + key + " as the keys differ");
 
     return MetadataPartitionType.get(type).combineMetadataPayloads(previousRecord, this);
   }
@@ -425,7 +425,7 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     // TODO: feature(schema): Swap this over to HOODIE_METADATA_SCHEMA after HoodieRecordPayload implementations are using HoodieSchema
-    // Uses cached Avro schema reference for O(1) equality check.
+    // Reference equality against the generated class's SCHEMA$ singleton held in HOODIE_METADATA_AVRO_SCHEMA.
     if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
       // If the schema is same or none is provided, we can return the record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,

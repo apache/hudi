@@ -41,6 +41,8 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -106,6 +108,80 @@ public class HoodieColumnProjectionUtils {
     return new String[] {};
   }
 
+  /**
+   * The nested column paths Hive configured for this read (see
+   * {@link #READ_NESTED_COLUMN_PATH_CONF_STR}): dotted root-to-leaf paths, trimmed, in the
+   * configured order. Empty when the conf is unset or holds only blanks.
+   */
+  static List<String> getNestedColumnPaths(Configuration conf) {
+    List<String> result = new ArrayList<>();
+    String paths = conf.get(READ_NESTED_COLUMN_PATH_CONF_STR, "");
+    if (paths == null || paths.isEmpty()) {
+      return result;
+    }
+    for (String path : paths.split(",")) {
+      String trimmed = path.trim();
+      if (!trimmed.isEmpty()) {
+        result.add(trimmed);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * The top-level columns among {@code shreddedPaths} whose read actually materializes a shredded
+   * variant group, given Hive's nested column pruning (see
+   * {@link #READ_NESTED_COLUMN_PATH_CONF_STR}). Hive's read column names are top-level only, so a
+   * requested struct column does not imply its whole interior: a column with nested paths
+   * configured is flagged only when one of them overlaps a shredded path, while a column with none
+   * is read whole and is always flagged.
+   *
+   * @param conf          the read's configuration, carrying the nested column paths
+   * @param shreddedPaths lower-cased Hive-form dotted paths, each starting at the top-level column
+   *                      that holds the shredded group ({@code v}, {@code s.inner}, or {@code a}
+   *                      for a variant that is the element of the list column {@code a}: Hive
+   *                      never emits a path through a LIST or MAP, it truncates at the column)
+   * @return the flagged column names, first-seen order; empty when the read reaches none of them
+   */
+  static List<String> columnsReadingShreddedPaths(Configuration conf, List<String> shreddedPaths) {
+    if (shreddedPaths.isEmpty()) {
+      return Collections.emptyList();
+    }
+    // Hive's nested column pruning, keyed by the top-level column each dotted path starts at.
+    Map<String, List<String>> nestedPathsByColumn = new HashMap<>();
+    for (String path : getNestedColumnPaths(conf)) {
+      String lowerPath = path.toLowerCase(Locale.ROOT);
+      nestedPathsByColumn.computeIfAbsent(topLevelColumnOf(lowerPath), k -> new ArrayList<>()).add(lowerPath);
+    }
+    List<String> columns = new ArrayList<>();
+    for (String shreddedPath : shreddedPaths) {
+      String column = topLevelColumnOf(shreddedPath);
+      if (columns.contains(column)) {
+        continue;
+      }
+      List<String> readPaths = nestedPathsByColumn.get(column);
+      // No nested path configured for the column: it is read whole, shredded group included.
+      if (readPaths == null || readPaths.stream().anyMatch(read -> pathsOverlap(read, shreddedPath))) {
+        columns.add(column);
+      }
+    }
+    return columns;
+  }
+
+  /** The top-level column a dotted path starts at. */
+  private static String topLevelColumnOf(String path) {
+    int firstDot = path.indexOf('.');
+    return firstDot < 0 ? path : path.substring(0, firstDot);
+  }
+
+  /**
+   * Whether two dotted paths touch the same data: equal, or one a dotted prefix of the other
+   * ({@code s.inner.x} reads inside {@code s.inner}, and {@code s} reads all of it).
+   */
+  static boolean pathsOverlap(String left, String right) {
+    return left.equals(right) || left.startsWith(right + ".") || right.startsWith(left + ".");
+  }
+
   public static List<String> getIOColumns(Configuration conf) {
     String colNames = conf.get(IOConstants.COLUMNS, "");
     if (colNames != null && !colNames.isEmpty()) {
@@ -126,7 +202,9 @@ public class HoodieColumnProjectionUtils {
   public static List<Pair<String,String>> getIOColumnNameAndTypes(Configuration conf) {
     List<String> names = getIOColumns(conf);
     List<String> types = getIOColumnTypes(conf);
-    ValidationUtils.checkArgument(names.size() == types.size());
+    ValidationUtils.checkArgument(names.size() == types.size(),
+        String.format("Inconsistent Hive IO conf: %s has %d entries but %s has %d",
+            IOConstants.COLUMNS, names.size(), IOConstants.COLUMNS_TYPES, types.size()));
     return IntStream.range(0, names.size()).mapToObj(idx -> Pair.of(names.get(idx), types.get(idx)))
         .collect(Collectors.toList());
   }
@@ -191,7 +269,7 @@ public class HoodieColumnProjectionUtils {
    * column has a sub-field projection.
    */
   public static HoodieProjectionMask buildNestedProjectionMask(Configuration conf, HoodieSchema dataSchema) {
-    String paths = conf.get(READ_NESTED_COLUMN_PATH_CONF_STR, "");
+    List<String> paths = getNestedColumnPaths(conf);
     if (paths.isEmpty()) {
       return HoodieProjectionMask.all();
     }
@@ -199,11 +277,7 @@ public class HoodieColumnProjectionUtils {
     // component, e.g. "blob_data") are ignored here — Hive does not compact at the
     // top level, so canonical positions still apply.
     Map<String, List<List<String>>> pathsByField = new LinkedHashMap<>();
-    for (String path : paths.split(",")) {
-      String trimmed = path.trim();
-      if (trimmed.isEmpty()) {
-        continue;
-      }
+    for (String trimmed : paths) {
       String[] components = trimmed.split("\\.");
       if (components.length < 2) {
         continue;

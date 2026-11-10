@@ -30,7 +30,7 @@ import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
-import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader}
+import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader, TableState}
 import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
 import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.common.util.ValidationUtils.checkState
@@ -86,13 +86,18 @@ private[hudi] case class HoodieMergeOnReadBaseFileReaders(fullSchemaReader: Base
  *
  * @param sc                     spark's context
  * @param config                 hadoop configuration
+ * @param sqlConf                spark SQL configuration
  * @param fileReaders            suite of base file readers
  * @param tableSchema            table's full schema
  * @param requiredSchema         expected (potentially) projected schema
- * @param tableState             table's state
+ * @param targetInstantTime      as-of instant, or last instant in the query timeline
  * @param mergeType              type of merge performed
  * @param fileSplits             target file-splits this RDD will be iterating over
+ * @param optionalFilters        filters to apply while reading records
+ * @param metaClient             table metadata client
+ * @param options                datasource options
  * @param includedInstantTimeSet instant time set used to filter records
+ * @param instantRangeOpt        requested-time range applied before file-group record merging
  */
 class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
                              @transient config: Configuration,
@@ -100,13 +105,14 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
                              fileReaders: HoodieMergeOnReadBaseFileReaders,
                              tableSchema: HoodieTableSchema,
                              requiredSchema: HoodieTableSchema,
-                             tableState: HoodieTableState,
+                             targetInstantTime: Option[String],
                              mergeType: String,
                              @transient fileSplits: Seq[HoodieMergeOnReadFileSplit],
                              optionalFilters: Array[Filter],
                              metaClient: HoodieTableMetaClient,
                              options: Map[String, String] = Map.empty,
-                             includedInstantTimeSet: Option[Set[String]] = Option.empty)
+                             includedInstantTimeSet: Option[Set[String]] = Option.empty,
+                             instantRangeOpt: HOption[InstantRange] = HOption.empty())
   extends RDD[InternalRow](sc, Nil) with HoodieUnsafeRDD with SparkAdapterSupport {
 
   protected val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
@@ -149,19 +155,29 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
     }
   }
 
-  // The plain skip-merging reader cannot read a SHREDDED variant base file: it requests native
-  // VariantType, which clips the shredded group to {metadata, value} and reads value=null (the
-  // #19556 defect family). Such splits take the file-group reader below, whose reader context
-  // requests the full-variant projection shape instead (#19578). Keyed off the adapter building
-  // that shape rather than the mere presence of a variant column: it is None below Spark 4.1,
-  // where the file-group reader would read the same nulls, so re-routing there would cost the
-  // fast path for nothing.
+  // A split whose required schema has a top-level variant column takes the file-group reader
+  // below, whose reader context requests the full-variant projection shape for parquet base
+  // files (#19578), so a SHREDDED base file is read on this legacy path through the same
+  // contract as everywhere else. Without a top-level variant the base-only split stays on
+  // requiredSchemaReaderSkipMerging, whose native VariantType request the Spark 4.1+ parquet
+  // reader reconstructs at any depth - the vectorized one at stock settings, since the legacy
+  // file format inherits ParquetFileFormat.supportBatch and VariantType is atomic; the variant
+  // veto lives in HoodieFileGroupReaderBasedFileFormat only (pinned by TestStreamingSource's
+  // nested-only legacy leg), so this is about one contract, not a null read (#19775). Keyed off
+  // the adapter building that shape
+  // rather than the mere presence of a variant column: it is None below Spark 4.1, where
+  // re-routing would cost the fast path for nothing.
   private val shouldRerouteVariantSplit: Boolean =
     sparkAdapter.buildFullVariantReadSchema(requiredSchema.structTypeSchema).isDefined
 
   // Ordinal each table partition column occupies in the required schema, or -1 when it is not
   // projected. Indexed by the table-config partition-field order, i.e. the very order in which
   // HoodieBaseRelation#getPartitionColumnsAsInternalRow emits the values carried by a split.
+  // Built on the driver, so the tasks carry the table state rather than the meta client.
+  private val tableState: TableState = TableState.snapshotOf(
+    metaClient, true, tableSchema.internalSchema.exists(!_.isEmptySchema))
+  private val isMetadataTable: Boolean = metaClient.isMetadataTable
+
   // Resolved on the driver: only this array is shipped to the executors.
   private val partitionColumnOrdinals: Array[Int] = {
     val caseSensitive = sqlConf.caseSensitiveAnalysis
@@ -194,16 +210,16 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             .orNull)
         val logFiles = partition.split.logFiles.asJava
         val fullPartitionPath = getPartitionPath(partition.split)
-        val partitionPath = FSUtils.getRelativePartitionPath(metaClient.getBasePath, fullPartitionPath)
+        val partitionPath = FSUtils.getRelativePartitionPath(tableState.getBasePath, fullPartitionPath)
 
-        if (metaClient.isMetadataTable) {
+        if (isMetadataTable) {
           val requestedSchema = requiredSchema.schema
           val instantRange = InstantRange.builder().rangeType(RangeType.EXACT_MATCH).explicitInstants(validInstants.value).build()
-          val readerContext = new HoodieAvroReaderContext(storageConf, metaClient.getTableConfig, HOption.of(instantRange), HOption.empty().asInstanceOf[HOption[HPredicate]])
+          val readerContext = new HoodieAvroReaderContext(storageConf, tableState.getTableConfig, HOption.of(instantRange), HOption.empty().asInstanceOf[HOption[HPredicate]])
           val fileGroupReader: HoodieFileGroupReader[IndexedRecord] = HoodieFileGroupReader.builder()
             .withReaderContext(readerContext)
-            .withHoodieTableMetaClient(metaClient)
-            .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
+            .withTableState(tableState)
+            .withLatestCommitTime(targetInstantTime.orNull)
             .withLogFiles(logFiles.stream())
             .withBaseFileOption(baseFileOption)
             .withPartitionPath(partitionPath)
@@ -215,13 +231,13 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
           convertAvroToRowIterator(fileGroupReader.getClosableIterator, requestedSchema)
         } else {
           val readerContext = new SparkFileFormatInternalRowReaderContext(fileGroupBaseFileReader.value, optionalFilters,
-            Seq.empty, storageConf, metaClient.getTableConfig)
+            Seq.empty, storageConf, tableState.getTableConfig, instantRangeOpt = instantRangeOpt)
           val fileGroupReader: HoodieRecordReader[InternalRow] =
-            if (LsmReaderUtils.shouldUseLsmReader(metaClient.getTableConfig, mergeType)) {
+            if (LsmReaderUtils.shouldUseLsmReader(tableState.getTableConfig, mergeType)) {
               HoodieLsmFileGroupReader.builder[InternalRow]()
                 .withReaderContext(readerContext)
-                .withHoodieTableMetaClient(metaClient)
-                .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
+                .withTableState(tableState)
+                .withLatestCommitTime(targetInstantTime.orNull)
                 .withLogFiles(logFiles.stream())
                 .withBaseFileOption(baseFileOption)
                 .withPartitionPath(partitionPath)
@@ -233,8 +249,8 @@ class HoodieMergeOnReadRDDV2(@transient sc: SparkContext,
             } else {
               HoodieFileGroupReader.builder[InternalRow]()
                 .withReaderContext(readerContext)
-                .withHoodieTableMetaClient(metaClient)
-                .withLatestCommitTime(tableState.latestCommitTimestamp.orNull)
+                .withTableState(tableState)
+                .withLatestCommitTime(targetInstantTime.orNull)
                 .withLogFiles(logFiles.stream())
                 .withBaseFileOption(baseFileOption)
                 .withPartitionPath(partitionPath)

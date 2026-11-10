@@ -37,6 +37,7 @@ import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
 import org.apache.hudi.common.table.read.ReaderParameters;
+import org.apache.hudi.common.table.read.TableState;
 import org.apache.hudi.common.table.read.UpdateProcessor;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
@@ -119,6 +120,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
+    when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.EVENT_TIME_ORDERING);
     StorageConfiguration<?> storageConfiguration = mock(StorageConfiguration.class);
@@ -144,7 +146,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     ReaderParameters readerParameters = mock(ReaderParameters.class);
     when(readerParameters.isSortOutputs()).thenReturn(true);
     SortedKeyBasedFileGroupRecordBuffer fileGroupRecordBuffer  = (SortedKeyBasedFileGroupRecordBuffer<IndexedRecord>) recordBufferLoader
-        .getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit, Collections.singletonList("ts"), mockMetaClient, properties,
+        .getRecordBuffer(readerContext, mockMetaClient.getStorage(), inputSplit, Collections.singletonList("ts"), TableState.fromMetaClient(mockMetaClient), properties,
             readerParameters, readStats, Option.empty()).getKey();
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
 
@@ -243,7 +245,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     when(mockReaderContext.getPayloadClasses(any())).thenReturn(Option.empty());
     UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), props);
     return new SortedKeyBasedFileGroupRecordBuffer<>(
-        mockReaderContext, mockMetaClient, recordMergeMode, partialUpdateModeOpt, props, Collections.emptyList(), updateProcessor);
+        mockReaderContext, recordMergeMode, partialUpdateModeOpt, props, Collections.emptyList(), updateProcessor);
   }
 
   private static <T> List<T> getActualRecordsForSortedKeyBased(SortedKeyBasedFileGroupRecordBuffer<T> fileGroupRecordBuffer) throws IOException {

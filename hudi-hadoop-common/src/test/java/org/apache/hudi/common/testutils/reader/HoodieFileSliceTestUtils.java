@@ -37,7 +37,7 @@ import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.schema.HoodieSchema;
-import org.apache.hudi.common.schema.HoodieSchemas;
+import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
@@ -81,7 +81,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.hudi.common.config.HoodieStorageConfig.HFILE_COMPRESSION_ALGORITHM_NAME;
-import static org.apache.hudi.common.config.HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType.BASE_FILE_INSTANT_TIME_OF_RECORD_POSITIONS;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.DELETE_BLOCK;
 import static org.apache.hudi.common.table.log.block.HoodieLogBlock.HoodieLogBlockType.PARQUET_DATA_BLOCK;
@@ -229,7 +228,7 @@ public class HoodieFileSliceTestUtils {
             records,
             header,
             HoodieRecord.RECORD_KEY_METADATA_FIELD,
-            PARQUET_COMPRESSION_CODEC_NAME.defaultValue(),
+            "zstd",
             0.1,
             true);
       default:
@@ -389,7 +388,7 @@ public class HoodieFileSliceTestUtils {
       HoodieSchema tableSchema,
       String logInstantTime
   ) throws IOException {
-    HoodieSchema deleteLogSchema = HoodieSchemas.createDeleteLogSchema(tableSchema, Arrays.asList(TIMESTAMP));
+    HoodieSchema deleteLogSchema = HoodieSchemaUtils.createDeleteLogSchema(tableSchema, Arrays.asList(TIMESTAMP));
     try (HoodieAvroFileWriter writer = createNativeLogWriter(storage, logFilePath, deleteLogSchema, logInstantTime)) {
       for (IndexedRecord record : records) {
         String recordKey = record.get(record.getSchema().getField(ROW_KEY).pos()).toString();

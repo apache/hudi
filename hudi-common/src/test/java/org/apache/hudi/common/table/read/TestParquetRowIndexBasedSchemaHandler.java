@@ -48,6 +48,7 @@ public class TestParquetRowIndexBasedSchemaHandler extends SchemaHandlerTestBase
   @Test
   public void testCowBootstrapWithPositionMerge() {
     when(hoodieTableConfig.populateMetaFields()).thenReturn(true);
+    when(hoodieTableConfig.isRecordKeyPopulated()).thenReturn(true);
     HoodieReaderContext<String> readerContext = createReaderContext(hoodieTableConfig, true, false, true, false, null);
     HoodieSchema requestedSchema = generateProjectionSchema("begin_lat", "tip_history", "_hoodie_record_key", "rider");
     FileGroupReaderSchemaHandler schemaHandler = createSchemaHandler(readerContext, DATA_SCHEMA, requestedSchema, true);

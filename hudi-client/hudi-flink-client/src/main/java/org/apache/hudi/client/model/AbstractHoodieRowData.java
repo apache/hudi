@@ -63,7 +63,7 @@ public abstract class AbstractHoodieRowData implements RowData {
   }
 
   public void updateMetaField(int pos, String value) {
-    ValidationUtils.checkArgument(pos < metaColumnsNum, "Invalid position for metadata field: " + pos);
+    ValidationUtils.checkArgument(pos < metaColumnsNum, () -> "Invalid position for metadata field: " + pos);
     metaColumns[pos] = value;
   }
 

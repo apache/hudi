@@ -80,7 +80,7 @@ class RepairMigratePartitionMetaProcedure extends BaseProcedure with ProcedureBu
           val partitionMetadata: HoodiePartitionMetadata = new HoodiePartitionMetadata(
             metaClient.getStorage, latestCommit,
             basePath, partition, Option.of(getWriteConfig(basePath.toString).getBaseFileFormat))
-          partitionMetadata.trySave()
+          partitionMetadata.trySave(partitionPath)
         }
         // delete it, in case we failed midway last time.
         textFormatFile.ifPresent(

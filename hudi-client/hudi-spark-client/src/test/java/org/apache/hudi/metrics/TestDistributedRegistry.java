@@ -23,12 +23,15 @@ import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.util.AccumulatorContext;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -185,6 +188,107 @@ public class TestDistributedRegistry {
   }
 
   @Test
+  public void testSetOnExecutorIsIgnoredWithoutFailingTheJob() {
+    // Given: a registry registered to the spark context
+    String registryName = REGISTRY_NAME + "_testSetOnExecutor";
+    Registry registry = engineContext.getMetricRegistry("", registryName);
+
+    List<Integer> data = new ArrayList<>();
+    data.add(1);
+
+    // When: set() is invoked from an executor. It is non-commutative under accumulator merges, so the
+    // value must not be recorded -- but the guard runs inside a task, where failing would take the write
+    // down with it, so it is ignored rather than thrown.
+    engineContext.map(data, value -> {
+      registry.set(METRIC_1, value);
+      return null;
+    }, 1);
+
+    // Then: the job succeeded and nothing was recorded.
+    Assertions.assertFalse(registry.getAllCounts().containsKey(METRIC_1),
+        "set() from an executor must not record a value: " + registry.getAllCounts());
+  }
+
+  @Test
+  public void testReleaseOnExecutorIsIgnoredWithoutFailingTheJob() {
+    // Given: a registry holding a known count
+    String registryName = REGISTRY_NAME + "_testReleaseOnExecutor";
+    DistributedRegistry registry = (DistributedRegistry) engineContext.getMetricRegistry("", registryName);
+    registry.add(METRIC_1, 5L);
+
+    List<Integer> data = new ArrayList<>();
+    data.add(1);
+
+    // When: release() is invoked from an executor. Clamping and eviction are order-dependent under
+    // accumulator merges, and this runs after the commit has landed, so it is ignored rather than thrown.
+    engineContext.map(data, value -> {
+      registry.release(Collections.singletonMap(METRIC_1, (long) value));
+      return null;
+    }, 1);
+
+    // Then: the job succeeded and the count was left alone.
+    Assertions.assertEquals(5L, registry.getAllCounts().get(METRIC_1),
+        "release() from an executor must not mutate the counters");
+  }
+
+  @Test
+  public void testSetOnDriverSucceeds() {
+    // set() on the driver (no TaskContext) remains supported.
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testSetOnDriver");
+    registry.set(METRIC_1, 42);
+    Assertions.assertEquals(42, registry.getAllCounts().get(METRIC_1));
+  }
+
+  @Test
+  public void testReleaseEvictsCountersThatReachZero() {
+    // Given: a registry drained of exactly what it holds, as the commit-boundary drain does
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testRelease");
+    registry.add(METRIC_1, 10);
+    registry.add(METRIC_2, 20);
+
+    // When: the full contents are released
+    registry.release(registry.getAllCounts(false));
+
+    // Then: the counters are gone, not left sitting at zero. A zero-valued entry survives
+    // ConcurrentHashMap.merge() and would be republished by every later drain.
+    Assertions.assertTrue(registry.getAllCounts().isEmpty(),
+        "released counters must be evicted, found " + registry.getAllCounts());
+    Assertions.assertTrue(registry.isZero());
+  }
+
+  @Test
+  public void testReleaseKeepsWhatArrivedAfterTheDrain() {
+    // Given: a snapshot taken, and a straggler update folded in before the release lands
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testReleaseStraggler");
+    registry.add(METRIC_1, 10);
+    Map<String, Long> drained = registry.getAllCounts(false);
+    registry.add(METRIC_1, 4);
+
+    // When: the drained counts are released
+    registry.release(drained);
+
+    // Then: only the drained amount is subtracted - the straggler belongs to the next drain
+    Assertions.assertEquals(4L, registry.getAllCounts().get(METRIC_1));
+  }
+
+  @Test
+  public void testReleaseClampsAtZero() {
+    // Given: a registry emptied between the drain and the release. Metrics.shutdown() scrapes every
+    // registry in the process with flush=true, so an unrelated table's write finishing does exactly this.
+    DistributedRegistry registry = new DistributedRegistry(REGISTRY_NAME + "_testReleaseClamp");
+    registry.add(METRIC_1, 10);
+    Map<String, Long> drained = registry.getAllCounts(false);
+    registry.clear();
+
+    // When: the release lands on a registry that no longer holds those counts
+    registry.release(drained);
+
+    // Then: nothing negative is left behind - a negative counter would be stamped into commit metadata
+    Assertions.assertTrue(registry.getAllCounts().isEmpty(),
+        "an unbounded subtraction would have left " + METRIC_1 + " negative, got " + registry.getAllCounts());
+  }
+
+  @Test
   public void testClear() {
     // Given: distributed registry with some metrics
     String registryName = REGISTRY_NAME + "_testClear";
@@ -227,5 +331,105 @@ public class TestDistributedRegistry {
     Assertions.assertEquals(2, countsWithoutPrefix.size());
     Assertions.assertTrue(countsWithoutPrefix.containsKey(METRIC_1));
     Assertions.assertTrue(countsWithoutPrefix.containsKey(METRIC_2));
+  }
+
+  @Test
+  public void testRegisterIdempotent() {
+    // Given: a DistributedRegistry registered to the SparkContext
+    String registryName = REGISTRY_NAME + "_testIdempotent";
+    DistributedRegistry registry = new DistributedRegistry(registryName);
+    registry.add(METRIC_1, 42);
+    DistributedRegistry result = registry.register(jsc);
+
+    // Then: first registration returns the same instance
+    Assertions.assertSame(registry, result);
+    Assertions.assertTrue(registry.isRegistered());
+
+    // When: register() is called again on the same SparkContext
+    DistributedRegistry result2 = registry.register(jsc);
+
+    // Then: it is a no-op, returns same instance
+    Assertions.assertSame(registry, result2);
+  }
+
+  @Test
+  public void testRegisterHandlesStaleAccumulator() {
+    // Given: a registered registry cached in the global REGISTRY_MAP
+    String registryName = REGISTRY_NAME + "_testStale";
+    DistributedRegistry staleRegistry = new DistributedRegistry(registryName);
+    staleRegistry.add(METRIC_1, 100);
+    staleRegistry.add(METRIC_2, 200);
+    String cacheKey = Registry.makeKey("", registryName);
+    Registry.REGISTRY_MAP.put(cacheKey, staleRegistry);
+    try {
+      Assertions.assertSame(staleRegistry, staleRegistry.register(jsc));
+
+      // Given: the accumulator went stale, as after a SparkContext restart once the previous context
+      // dropped it: it is no longer in the AccumulatorContext but can't be registered again
+      makeStale(staleRegistry);
+
+      // When: register() is called
+      DistributedRegistry result = staleRegistry.register(jsc);
+
+      // Then: a registered replacement carrying the counters is returned and cached
+      Assertions.assertNotSame(staleRegistry, result);
+      Assertions.assertTrue(result.isRegistered());
+      Assertions.assertEquals(registryName, result.getName());
+      Map<String, Long> counts = result.getAllCounts();
+      Assertions.assertEquals(100, counts.get(METRIC_1));
+      Assertions.assertEquals(200, counts.get(METRIC_2));
+      Assertions.assertSame(result, Registry.REGISTRY_MAP.get(cacheKey));
+
+      // Then: another holder of the stale instance gets the same replacement
+      Assertions.assertSame(result, staleRegistry.register(jsc));
+
+      // Then: updates through the stale instance are reported by the replacement
+      staleRegistry.add(METRIC_1, 5);
+      Assertions.assertEquals(105, result.getAllCounts().get(METRIC_1));
+
+      // Given: the replacement went stale too, as after another SparkContext restart
+      makeStale(result);
+
+      // When: a holder of the original stale instance calls register()
+      DistributedRegistry result2 = staleRegistry.register(jsc);
+
+      // Then: a new registered replacement sharing the counters is returned and cached
+      Assertions.assertNotSame(result, result2);
+      Assertions.assertTrue(result2.isRegistered());
+      Assertions.assertEquals(105, result2.getAllCounts().get(METRIC_1));
+      Assertions.assertSame(result2, Registry.REGISTRY_MAP.get(cacheKey));
+      Assertions.assertSame(result2, result.register(jsc));
+    } finally {
+      Registry.REGISTRY_MAP.remove(cacheKey);
+    }
+  }
+
+  @Test
+  public void testEngineContextRecoversStaleRegistry() {
+    // Given: a registry obtained through the engine context, which caches it in a static map
+    String registryName = REGISTRY_NAME + "_testEngineStale";
+    DistributedRegistry staleRegistry = (DistributedRegistry) engineContext.getMetricRegistry("", registryName);
+    staleRegistry.add(METRIC_1, 7);
+    try {
+      // Given: the cached accumulator went stale
+      makeStale(staleRegistry);
+
+      // Then: engine operations ship only registered accumulators to executors
+      Assertions.assertEquals(Arrays.asList(2, 4), engineContext.map(Arrays.asList(1, 2), i -> i * 2, 2));
+
+      // Then: lookups return the registered replacement with the counters
+      DistributedRegistry result = (DistributedRegistry) engineContext.getMetricRegistry("", registryName);
+      Assertions.assertNotSame(staleRegistry, result);
+      Assertions.assertTrue(result.isRegistered());
+      Assertions.assertEquals(7, result.getAllCounts().get(METRIC_1));
+      Assertions.assertSame(result, Registry.REGISTRY_MAP.get(Registry.makeKey("", registryName)));
+    } finally {
+      Registry.REGISTRY_MAP.remove(Registry.makeKey("", registryName));
+    }
+  }
+
+  private static void makeStale(DistributedRegistry registry) {
+    AccumulatorContext.remove(registry.id());
+    Assertions.assertFalse(registry.isRegistered());
   }
 }

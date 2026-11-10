@@ -19,11 +19,10 @@
 package org.apache.hudi
 
 import org.apache.hudi.DataSourceWriteOptions.INSERT_DROP_DUPS
-import org.apache.hudi.common.avro.{AvroRecordContext, AvroSchemaCache, HoodieAvroUtils}
+import org.apache.hudi.common.avro.{AvroRecordContext, HoodieAvroUtils}
 import org.apache.hudi.common.config.{RecordMergeMode, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.model.WriteOperationType.isChangingRecords
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaCache}
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.table.read.DeleteContext
@@ -125,7 +124,7 @@ object HoodieCreateRecordUtils {
 
         avroRecords.mapPartitions(it => {
           val sparkPartitionId = TaskContext.getPartitionId()
-          val keyGenProps = TypedProperties.copy(config.getProps)
+          val keyGenProps = KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(config.getProps), args.tableConfig)
           if (autoGenerateRecordKeys) {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(sparkPartitionId))
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)
@@ -135,7 +134,6 @@ object HoodieCreateRecordUtils {
           val consistentLogicalTimestampEnabled = parameters.getOrElse(
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
             DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
-          val requiresPayload = isChangingRecords(operation) && !config.isFileGroupReaderBasedMergeHandle
           val mergeProps = ConfigUtils.getMergeProps(config.getProps, args.tableConfig)
           val deleteContext = new DeleteContext(mergeProps, writerSchema).withReaderSchema(writerSchema);
 
@@ -159,10 +157,10 @@ object HoodieCreateRecordUtils {
               val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
                 consistentLogicalTimestampEnabled, requiresOrderingValue)
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
-                config.getPayloadClass, null, recordLocation, requiresPayload, isDelete)
+                config.getPayloadClass, null, recordLocation, isDelete)
             } else {
               HoodieRecordUtils.createHoodieRecord(processedRecord, hoodieKey,
-                config.getPayloadClass, recordLocation, requiresPayload, isDelete)
+                config.getPayloadClass, recordLocation, isDelete)
             }
             hoodieRecord
           }
@@ -176,7 +174,7 @@ object HoodieCreateRecordUtils {
 
         df.queryExecution.toRdd.mapPartitions { it =>
           val sparkPartitionId = TaskContext.getPartitionId()
-          val keyGenProps = TypedProperties.copy(config.getProps)
+          val keyGenProps = KeyGenUtils.withComplexKeyGenEncoding(TypedProperties.copy(config.getProps), args.tableConfig)
           if (autoGenerateRecordKeys) {
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_PARTITION_ID_CONFIG, String.valueOf(sparkPartitionId))
             keyGenProps.setProperty(KeyGenUtils.RECORD_KEY_GEN_INSTANT_TIME_CONFIG, instantTime)

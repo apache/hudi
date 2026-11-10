@@ -148,4 +148,39 @@ class TestTruncateTable extends HoodieSparkSqlTestBase {
       }
     }
   }
+
+  test("Test Truncate partition for a slash separated date partitioned table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+
+      spark.sql(
+        s"""
+           | create table $tableName (
+           |  id bigint,
+           |  name string,
+           |  ts string,
+           |  dt string
+           | )
+           | using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  hoodie.datasource.write.slash.separated.date.partitioning = 'true'
+           | )
+           | partitioned by (dt)
+           | location '$tablePath'
+           |""".stripMargin)
+
+      spark.sql(s"""insert into $tableName values (1, "z3", "v1", "2026-01-05"), (2, "l4", "v1", "2026-01-06")""")
+
+      // the writer laid these out as 2026/01/05 and 2026/01/06, so TRUNCATE PARTITION has to name
+      // the same directory -- naming the dashed value truncates nothing
+      spark.sql(s"truncate table $tableName partition (dt='2026-01-05')")
+
+      checkAnswer(s"select id, name, ts, dt from $tableName")(
+        Seq(2, "l4", "v1", "2026-01-06")
+      )
+    }
+  }
 }

@@ -27,6 +27,7 @@ import org.apache.hudi.table.format.FilePathUtils;
 import org.apache.hudi.table.format.FormatUtils;
 import org.apache.hudi.table.format.InternalSchemaManager;
 import org.apache.hudi.table.format.RecordIterators;
+import org.apache.hudi.util.DataTypeUtils;
 import org.apache.hudi.util.VectorConversionUtils;
 
 import lombok.extern.slf4j.Slf4j;
@@ -37,8 +38,10 @@ import org.apache.flink.api.common.io.compression.InflaterInputStreamFactory;
 import org.apache.flink.core.fs.FileInputSplit;
 import org.apache.flink.core.fs.Path;
 import org.apache.flink.formats.parquet.utils.SerializableConfiguration;
+import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.DataType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
@@ -76,6 +79,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   private final DataType[] readFieldTypes;
   private final int[] selectedFields;
   private final Map<Integer, HoodieSchema.Vector> vectorColumnInfo;
+  private final HoodieSchema tableSchema;
   private final String partDefaultName;
   private final String partPathField;
   private final boolean hiveStylePartitioning;
@@ -86,6 +90,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
 
   private transient ClosableIterator<RowData> itr;
   private transient long currentReadCount;
+  private transient HoodieSchema requestedSchema;
 
   /**
    * Files filter for determining what files/directories should be included.
@@ -119,6 +124,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     this.readFieldTypes = VectorConversionUtils.getParquetReadFieldTypes(fullFieldNames, fullFieldTypes, tableSchema);
     this.selectedFields = selectedFields;
     this.vectorColumnInfo = VectorConversionUtils.detectVectorColumns(fullFieldNames, selectedFields, tableSchema);
+    this.tableSchema = tableSchema;
     this.conf = new SerializableConfiguration(conf);
     this.utcTimestamp = utcTimestamp;
     this.internalSchemaManager = internalSchemaManager;
@@ -158,8 +164,7 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
   }
 
   private ClosableIterator<RowData> getLanceRecordIterator(Path path) {
-    return FormatUtils.getLanceRecordIterator(
-        path.toString(), Arrays.asList(fullFieldNames), Arrays.asList(fullFieldTypes), selectedFields, conf.conf());
+    return FormatUtils.getLanceRecordIterator(path.toString(), getRequestedSchema(), conf.conf());
   }
 
   @Override
@@ -419,4 +424,15 @@ public class CopyOnWriteInputFormat extends FileInputFormat<RowData> {
     }
   }
 
+  private HoodieSchema getRequestedSchema() {
+    if (requestedSchema == null) {
+      RowType requestedRowType = (RowType) DataTypes.ROW(Arrays.stream(selectedFields)
+              .mapToObj(i -> DataTypes.FIELD(fullFieldNames[i], fullFieldTypes[i]))
+              .toArray(DataTypes.Field[]::new))
+          .notNull()
+          .getLogicalType();
+      requestedSchema = DataTypeUtils.toHoodieSchema(requestedRowType, tableSchema);
+    }
+    return requestedSchema;
+  }
 }

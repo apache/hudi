@@ -26,6 +26,7 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.table.format.FlinkRecordContext;
 
 import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
@@ -38,6 +39,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -47,6 +49,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link HoodieFlinkRecord}.
@@ -190,6 +197,36 @@ public class TestHoodieFlinkRecord {
 
     Comparable<?> orderingValue = record.getOrderingValue(schema, props, orderingFields);
     assertNotEquals(OrderingValues.getDefault(), orderingValue);
+  }
+
+  @Test
+  public void testGetRecordKeyCachesGeneratedKey() {
+    HoodieFlinkRecord record = new HoodieFlinkRecord(GenericRowData.of(StringData.fromString("id1")));
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Collections.singletonList(
+        HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING), null, null)));
+    FlinkRecordContext recordContext = mock(FlinkRecordContext.class);
+    when(recordContext.getRecordKey(record.getData(), schema)).thenReturn("id1");
+
+    assertNull(record.getKey());
+    assertEquals("id1", record.getRecordKey(schema, recordContext));
+    assertEquals("id1", record.getRecordKey(schema, recordContext));
+    verify(recordContext).getRecordKey(record.getData(), schema);
+    verifyNoMoreInteractions(recordContext);
+    assertEquals("id1", record.getRecordKey());
+    assertSame(record.getKey(), record.newInstance().getKey());
+  }
+
+  @Test
+  public void testGetRecordKeyPreservesExistingKey() {
+    HoodieKey key = new HoodieKey("id1", "partition1");
+    HoodieFlinkRecord record = new HoodieFlinkRecord(key, HoodieOperation.INSERT, new GenericRowData(0));
+
+    HoodieSchema schema = HoodieSchema.createRecord("test", null, null, Collections.emptyList());
+    FlinkRecordContext recordContext = mock(FlinkRecordContext.class);
+    assertEquals("id1", record.getRecordKey(schema, recordContext));
+    verifyNoInteractions(recordContext);
+    assertSame(key, record.getKey());
+    assertEquals("partition1", record.getPartitionPath());
   }
 
   @Test

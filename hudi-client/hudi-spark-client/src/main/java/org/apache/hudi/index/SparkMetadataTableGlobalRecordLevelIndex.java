@@ -24,10 +24,13 @@ import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.function.SerializableBiFunction;
+import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.util.Either;
 import org.apache.hudi.common.util.HoodieDataUtils;
+import org.apache.hudi.common.util.HoodieTimer;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieIndexConfig;
@@ -38,6 +41,7 @@ import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.metrics.RecordIndexLookupMetrics;
 import org.apache.hudi.table.HoodieTable;
 
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +53,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import scala.Tuple2;
 
@@ -128,9 +133,10 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
     // keyToLocationPairRDD and records RDD.
     ValidationUtils.checkState(partitionedKeyRDD.getNumPartitions() <= numFileGroups);
 
-    // Lookup the keys in the record index
-
-    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(new RecordIndexFileGroupLookupFunction(hoodieTable)));
+    // Resolved on the driver so the closure carries it to executors.
+    Option<Registry> lookupMetrics = RecordIndexLookupMetrics.resolveRegistry(context, hoodieTable.getConfig());
+    return HoodieJavaPairRDD.of(partitionedKeyRDD.mapPartitionsToPair(
+        new RecordIndexFileGroupLookupFunction(hoodieTable, lookupMetrics)));
   }
 
   protected Either<Integer, Map<String, Integer>> fetchFileGroupSize(HoodieTable hoodieTable) {
@@ -181,9 +187,12 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
    */
   private static class RecordIndexFileGroupLookupFunction implements PairFlatMapFunction<Iterator<String>, String, HoodieRecordGlobalLocation> {
     private final HoodieTable hoodieTable;
+    /** Empty when no counters should be collected; see RecordIndexLookupMetrics#resolveRegistry. */
+    private final Option<Registry> lookupMetrics;
 
-    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable) {
+    public RecordIndexFileGroupLookupFunction(HoodieTable hoodieTable, Option<Registry> lookupMetrics) {
       this.hoodieTable = hoodieTable;
+      this.lookupMetrics = lookupMetrics;
     }
 
     @Override
@@ -191,11 +200,19 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
       List<String> keysToLookup = new ArrayList<>();
       recordKeyIterator.forEachRemaining(keysToLookup::add);
 
+      // Started only when collecting: an unused timer is an allocation per shard on the disabled path.
+      HoodieTimer shardTimer = lookupMetrics.isPresent() ? HoodieTimer.start() : null;
       // recordIndexInfo object only contains records that are present in record_index.
       HoodiePairData<String, HoodieRecordGlobalLocation> recordIndexData =
           hoodieTable.getTableMetadata().readRecordIndexLocationsWithKeys(HoodieListData.eager(keysToLookup));
       try {
         List<Pair<String, HoodieRecordGlobalLocation>> recordIndexInfo = HoodieDataUtils.dedupeAndCollectAsList(recordIndexData);
+        // Guarded rather than checked inside the helper: the found set is O(hits) and Java evaluates it
+        // as an argument first, so an unguarded call would cost every shard that on the disabled path.
+        if (lookupMetrics.isPresent()) {
+          RecordIndexLookupMetrics.recordShardLookup(lookupMetrics.get(), keysToLookup,
+              recordIndexInfo.stream().map(Pair::getKey).collect(Collectors.toSet()), shardTimer.endTimer());
+        }
         return recordIndexInfo.stream()
             .map(e -> new Tuple2<>(e.getKey(), e.getValue())).iterator();
       } finally {

@@ -26,6 +26,8 @@ import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.CloseableMappingIterator;
@@ -44,9 +46,11 @@ import org.apache.arrow.memory.BufferAllocator;
 import org.apache.arrow.vector.FieldVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.apache.arrow.vector.ipc.ArrowReader;
+import org.apache.arrow.vector.types.FloatingPointPrecision;
+import org.apache.arrow.vector.types.pojo.ArrowType;
+import org.apache.arrow.vector.types.pojo.Field;
 import org.apache.arrow.vector.types.pojo.Schema;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.types.DataType;
 import org.apache.flink.table.types.logical.RowType;
 import org.lance.file.LanceFileReader;
 
@@ -54,6 +58,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -142,14 +147,14 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
 
   @Override
   public ClosableIterator<HoodieRecord<RowData>> getRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema) throws IOException {
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(RowDataQueryContexts.fromSchema(requestedSchema).getRowType(), requestedSchema);
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(requestedSchema);
     return new CloseableMappingIterator<>(rowDataItr, HoodieFlinkRecord::new);
   }
 
   @Override
   public ClosableIterator<String> getRecordKeyIterator() throws IOException {
     HoodieSchema schema = HoodieSchemaUtils.getRecordKeySchema();
-    ClosableIterator<RowData> rowDataItr = getRowDataIterator(RowDataQueryContexts.fromSchema(schema).getRowType(), schema);
+    ClosableIterator<RowData> rowDataItr = getRowDataIterator(schema);
     return new CloseableMappingIterator<>(rowDataItr, rowData -> rowData.getString(0).toString());
   }
 
@@ -164,11 +169,13 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
         && !internalSchemaManager.getMergeSchema(path.getName()).isEmptySchema()) {
       throw new HoodieValidationException("Flink Lance base-file support does not support schema evolution.");
     }
-    return getRowDataIterator(RowDataQueryContexts.fromSchema(requiredSchema).getRowType(), requiredSchema);
+    return getRowDataIterator(requiredSchema);
   }
 
-  public ClosableIterator<RowData> getRowDataIterator(DataType dataType, HoodieSchema requestedSchema) {
-    RowType rowType = (RowType) dataType.getLogicalType();
+  public ClosableIterator<RowData> getRowDataIterator(HoodieSchema requestedSchema) {
+    validateRequestedVectors(requestedSchema);
+    RowType rowType = (RowType) RowDataQueryContexts.fromSchema(requestedSchema)
+        .getRowType().getLogicalType();
     List<String> columnNames = new ArrayList<>(rowType.getFieldCount());
     for (RowType.RowField field : rowType.getFields()) {
       columnNames.add(field.getName());
@@ -204,7 +211,64 @@ public class HoodieRowDataLanceReader implements HoodieRowDataFileReader {
   @Override
   public HoodieSchema getSchema() {
     RowType rowType = HoodieFlinkLanceArrowUtils.toRowType(arrowSchema);
-    return HoodieSchemaConverter.convertToSchema(rowType);
+    Map<String, String> metadata = arrowSchema.getCustomMetadata();
+    Set<String> vectorColumnNames = HoodieSchema.parseVectorColumnNames(
+        metadata == null ? null : metadata.get(HoodieSchema.VECTOR_COLUMNS_METADATA_KEY));
+    if (vectorColumnNames.isEmpty()) {
+      return HoodieSchemaConverter.convertToSchema(rowType);
+    }
+    Map<String, Integer> vectorColumns = new LinkedHashMap<>();
+    vectorColumnNames.forEach(name -> vectorColumns.put(
+        name, vectorSchemaFromField(arrowSchema.findField(name)).getDimension()));
+    return HoodieSchemaConverter.convertToSchema(rowType, "record", vectorColumns);
+  }
+
+  private void validateRequestedVectors(HoodieSchema requestedSchema) {
+    for (HoodieSchemaField field : requestedSchema.getNonNullType().getFields()) {
+      HoodieSchema fieldSchema = field.schema().getNonNullType();
+      if (fieldSchema.getType() != HoodieSchemaType.VECTOR) {
+        continue;
+      }
+      HoodieSchema.Vector expected = (HoodieSchema.Vector) fieldSchema;
+      HoodieSchema.Vector actual = vectorSchemaFromField(arrowSchema.findField(field.name()));
+      if (actual.getDimension() != expected.getDimension()
+          || actual.getVectorElementType() != expected.getVectorElementType()) {
+        throw new HoodieValidationException(
+            "Incompatible Lance VECTOR encoding for column '" + field.name()
+                + "': requested " + expected.toTypeDescriptor()
+                + " but file contains " + actual.toTypeDescriptor());
+      }
+    }
+  }
+
+  private static HoodieSchema.Vector vectorSchemaFromField(Field field) {
+    // Spark Lance currently writes VECTOR columns as FixedSizeList only for FLOAT/DOUBLE.
+    // Restrict restoration to the same types so files have one cross-engine VECTOR contract.
+    if (!(field.getType() instanceof ArrowType.FixedSizeList)
+        || field.getChildren().size() != 1
+        || !(field.getChildren().get(0).getType() instanceof ArrowType.FloatingPoint)) {
+      throw new HoodieValidationException(
+          "Invalid Lance VECTOR encoding for column '" + field.getName()
+              + "': expected FixedSizeList<Float32|Float64> but found " + field);
+    }
+
+    ArrowType.FixedSizeList listType = (ArrowType.FixedSizeList) field.getType();
+    FloatingPointPrecision precision =
+        ((ArrowType.FloatingPoint) field.getChildren().get(0).getType()).getPrecision();
+    HoodieSchema.Vector.VectorElementType vectorElementType;
+    switch (precision) {
+      case SINGLE:
+        vectorElementType = HoodieSchema.Vector.VectorElementType.FLOAT;
+        break;
+      case DOUBLE:
+        vectorElementType = HoodieSchema.Vector.VectorElementType.DOUBLE;
+        break;
+      default:
+        throw new HoodieValidationException(
+            "Invalid Lance VECTOR encoding for column '" + field.getName()
+                + "': expected Float32 or Float64 elements but found " + precision);
+    }
+    return HoodieSchema.createVector(listType.getListSize(), vectorElementType);
   }
 
   @Override

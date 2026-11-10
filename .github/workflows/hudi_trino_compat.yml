@@ -25,7 +25,7 @@ env:
 jobs:
   compile-against-trino-master:
     name: Compile hudi-trino against trinodb/trino master
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       issues: write
@@ -149,7 +149,7 @@ jobs:
 
   propose-pin-advance:
     name: Push pin-advance branch
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: compile-against-trino-master
     # The only job with a push credential; it checks out apache/hudi alone and runs no
     # Maven or third-party code. Pin PRs are opened and merged by humans.

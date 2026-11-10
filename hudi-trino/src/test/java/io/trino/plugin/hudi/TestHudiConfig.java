@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static io.airlift.configuration.testing.ConfigAssertions.assertDeprecatedEquivalence;
 import static io.airlift.configuration.testing.ConfigAssertions.assertFullMapping;
 import static io.airlift.configuration.testing.ConfigAssertions.assertRecordedDefaults;
 import static io.airlift.configuration.testing.ConfigAssertions.recordDefaults;
@@ -132,6 +133,16 @@ public class TestHudiConfig
                 .setResolveColumnNameCasingEnabled(true);
 
         assertFullMapping(properties, expected);
+    }
+
+    @Test
+    public void testLegacyMaxSplitSize()
+    {
+        // Trino's built-in Hudi connector names this property hudi.max-split-size
+        assertDeprecatedEquivalence(
+                HudiConfig.class,
+                ImmutableMap.of("hudi.target-split-size", "32MB"),
+                ImmutableMap.of("hudi.max-split-size", "32MB"));
     }
 
     @Test

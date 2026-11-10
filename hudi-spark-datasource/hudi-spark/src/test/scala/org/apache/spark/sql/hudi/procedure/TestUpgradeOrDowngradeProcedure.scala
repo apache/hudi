@@ -17,14 +17,20 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.config.HoodieConfig
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, HoodieTableVersion}
+import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR
-import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, StringUtils}
+import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, Option => HOption, StringUtils}
+import org.apache.hudi.functional.ComplexKeyGenFixtures._
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding
 import org.apache.hudi.metadata.MetadataPartitionType
 import org.apache.hudi.storage.StoragePath
+import org.apache.hudi.table.upgrade.TestUpgradeDowngrade.getFixtureName
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
+import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase.NAME_FORMAT_0_X
 import org.junit.jupiter.api.Assertions.assertTrue
 
@@ -148,6 +154,41 @@ class TestUpgradeOrDowngradeProcedure extends HoodieSparkProcedureTestBase {
       val expectedCheckSum = BinaryUtil.generateChecksum(StringUtils.getUTF8Bytes(tableName))
       assertResult(expectedCheckSum) {
         metaClient.getTableConfig.getLong(HoodieTableConfig.TABLE_CHECKSUM)
+      }
+    }
+  }
+
+  /**
+   * The version 6 complex keygen fixtures predate the encoding property, so `upgrade_table` has to read the
+   * table's data to record it. A table below version 8 is still on the version 1 timeline layout.
+   */
+  test("Test upgrade_table on a version 6 single-field complex keygen table records its key encoding") {
+    Seq((COMPLEX_KEYGEN_FIXTURE_SUFFIX, ComplexKeyGenEncoding.FIELD_PREFIXED),
+      (COMPLEX_KEYGEN_BARE_FIXTURE_SUFFIX, ComplexKeyGenEncoding.VALUE_ONLY)).foreach { case (suffix, expectedEncoding) =>
+      withTempDir { tmp =>
+        val fixtureName = getFixtureName(HoodieTableVersion.SIX, suffix)
+        HoodieTestUtils.extractZipToDirectory(COMPLEX_KEYGEN_FIXTURES_PATH + fixtureName, tmp.toPath, getClass)
+        val fixtureTableName = fixtureName.replace(".zip", "")
+        val tablePath = tmp.toPath.resolve(fixtureTableName).toString
+        val tableName = generateTableName
+        spark.sql(s"create table $tableName using hudi location '$tablePath'")
+        val storedKeys = spark.read.format("hudi").load(tablePath).select("_hoodie_record_key").collect().map(_.getString(0)).sorted
+
+        checkAnswer(s"call upgrade_table(table => '$tableName', to_version => '${HoodieTableVersion.current().name()}')")(Seq(true))
+        val metaClient = createMetaClient(spark, tablePath)
+        assertResult(HoodieTableVersion.current())(metaClient.getTableConfig.getTableVersion)
+        assertResult(HOption.of(expectedEncoding))(metaClient.getTableConfig.getComplexKeyGenEncoding)
+
+        // upserting the existing records must update them in place, with the keys they are stored under
+        val ts = 10000L // above every ordering value the fixture holds
+        fixtureRows(spark, FIXTURE_IDS, ts).write.format("hudi")
+          .options(fixtureWriteOpts(fixtureTableName))
+          .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+          .mode(SaveMode.Append)
+          .save(tablePath)
+        val afterUpsert = spark.read.format("hudi").load(tablePath)
+        assertResult(storedKeys.toSeq)(afterUpsert.select("_hoodie_record_key").collect().map(_.getString(0)).sorted.toSeq)
+        assertResult(FIXTURE_IDS.size)(afterUpsert.filter(s"ts = $ts").count())
       }
     }
   }

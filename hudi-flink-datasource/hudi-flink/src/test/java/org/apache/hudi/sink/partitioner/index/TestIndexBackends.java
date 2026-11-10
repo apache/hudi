@@ -51,6 +51,9 @@ class TestIndexBackends {
 
     assertNull(backend.get("partition", "key"));
     backend.update("partition", "key", "file-id");
+    assertNull(backend.get("partition", "key"));
+    backend.bootstrap("partition", "key", "file-id");
+    assertNull(backend.get("partition", "key"));
     backend.close();
   }
 }

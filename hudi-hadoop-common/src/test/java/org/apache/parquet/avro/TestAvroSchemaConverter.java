@@ -24,6 +24,7 @@ import org.apache.hudi.common.schema.HoodieSchemaCompatibility;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 
+import org.apache.avro.Schema;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
@@ -117,6 +118,28 @@ public class TestAvroSchemaConverter {
     MessageType messageType = avroSchemaConverter.convert(schema);
     MessageType expectedMT = MessageTypeParser.parseMessageType(schemaString);
     assertEquals(expectedMT.toString(), messageType.toString());
+  }
+
+  /**
+   * The VARIANT logical type annotation the converter stamps on variant groups on parquet 1.16+
+   * (Spark 4.1+ profiles), as {@code GroupType.toString()} renders it; empty on older parquet,
+   * where the annotation type does not exist and groups stay plain. {@code MessageTypeParser}
+   * cannot parse the annotation, so variant expectations are compared against the converter's
+   * {@code toString()} directly rather than through {@link #testAvroToParquetConversion}.
+   */
+  private static String variantAnnotation() {
+    // Probes parquet directly, not the converter's own probe: the expectation must be an independent oracle.
+    try {
+      LogicalTypeAnnotation.class.getMethod("variantType", byte.class);
+      return " (VARIANT(1))";
+    } catch (NoSuchMethodException e) {
+      return "";
+    }
+  }
+
+  private void testVariantAvroToParquetConversion(HoodieSchema schema, String expectedMessageType) {
+    MessageType messageType = getAvroSchemaConverter(new Configuration(false)).convert(schema);
+    assertEquals(expectedMessageType, messageType.toString());
   }
 
   private void testParquetToAvroConversion(HoodieSchema schema, String schemaString) throws Exception {
@@ -527,7 +550,7 @@ public class TestAvroSchemaConverter {
     Configuration enableInt96ReadingConfig = new Configuration();
     enableInt96ReadingConfig.setBoolean(AvroReadSupport.READ_INT96_AS_FIXED, true);
 
-    HoodieSchema int96schema = HoodieSchema.createFixed("INT96", "INT96 represented as byte[12]", null, 12);
+    HoodieSchema int96schema = HoodieSchema.createFixed("INT96", null, "INT96 represented as byte[12]", 12);
     HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("int96_field", int96schema, null, null)));
 
@@ -825,6 +848,70 @@ public class TestAvroSchemaConverter {
   }
 
   @Test
+  public void testReuseNamesArrays() throws Exception {
+    HoodieSchema a1 = HoodieSchema.createRecord("array", null, null, false,
+        Collections.singletonList(HoodieSchemaField.of("a4", HoodieSchema.create(HoodieSchemaType.FLOAT))));
+    HoodieSchema a2 = HoodieSchema.createFixed("array", "array2", null, 1);
+    HoodieSchema a3 = HoodieSchema.createFixed("array", "array3", null, 1);
+    HoodieSchema schema = HoodieSchema.createRecord("Message", null, null, false,
+        Arrays.asList(
+            HoodieSchemaField.of("a1", HoodieSchema.createArray(a1)),
+            HoodieSchemaField.of("a2", HoodieSchema.createArray(a2)),
+            HoodieSchemaField.of("a3", HoodieSchema.createArray(a3))));
+
+    String parquetSchema = "message Message {\n"
+        + "  required group a1 (LIST) {\n"
+        + "    repeated group array {\n"
+        + "      required float a4;\n"
+        + "    }\n"
+        + "  }\n"
+        + "  required group a2 (LIST) {\n"
+        + "    repeated fixed_len_byte_array(1) array;\n"
+        + "  }\n"
+        + "  required group a3 (LIST) {\n"
+        + "    repeated fixed_len_byte_array(1) array;\n"
+        + "  }\n"
+        + "}\n";
+
+    testParquetToAvroConversion(schema, parquetSchema);
+    testParquetToAvroConversion(NEW_BEHAVIOR, schema, parquetSchema);
+  }
+
+  @Test
+  public void testReuseNamesOnFixedSurvivesStringRoundTrip() {
+    // Shredded-variant shape (GH-20307): a DECIMAL fixed typed_value nested under a typed_value record,
+    // plus two same-named DECIMAL fixed leaves of different sizes.
+    HoodieSchema schema = getAvroSchemaConverter(new Configuration()).convert(MessageTypeParser.parseMessageType(
+        "message m {\n"
+            + "  optional group payload {\n"
+            + "    required binary metadata;\n"
+            + "    optional binary value;\n"
+            + "    optional group typed_value {\n"
+            + "      required group k10 {\n"
+            + "        optional binary value;\n"
+            + "        optional fixed_len_byte_array(8) typed_value (DECIMAL(18,12));\n"
+            + "      }\n"
+            + "    }\n"
+            + "  }\n"
+            + "  optional group price { optional fixed_len_byte_array(5) amount (DECIMAL(10,2)); }\n"
+            + "  optional group tax { optional fixed_len_byte_array(8) amount (DECIMAL(18,4)); }\n"
+            + "}\n"));
+
+    Schema avroSchema = schema.toAvroSchema();
+    assertEquals(avroSchema, new Schema.Parser().parse(avroSchema.toString()));
+
+    HoodieSchema decimalLeaf = nonNullField(nonNullField(nonNullField(schema, "payload"), "typed_value"), "k10")
+        .getField("typed_value").get().schema().getNonNullType();
+    assertEquals("typed_value2.typed_value", decimalLeaf.getFullName());
+    assertEquals("amount", nonNullField(nonNullField(schema, "price"), "amount").getFullName());
+    assertEquals("amount2.amount", nonNullField(nonNullField(schema, "tax"), "amount").getFullName());
+  }
+
+  private static HoodieSchema nonNullField(HoodieSchema record, String fieldName) {
+    return record.getField(fieldName).get().schema().getNonNullType();
+  }
+
+  @Test
   public void testUUIDType() throws Exception {
     HoodieSchema fromSchema = HoodieSchema.createRecord(
         "myrecord",
@@ -865,10 +952,10 @@ public class TestAvroSchemaConverter {
     HoodieSchema variant = HoodieSchema.createVariant();
     HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("myvariant", variant, null, null)));
-    testAvroToParquetConversion(
+    testVariantAvroToParquetConversion(
         schema,
         "message myrecord {\n"
-            + "  required group myvariant {\n"
+            + "  required group myvariant" + variantAnnotation() + " {\n"
             + "    required binary metadata;\n"
             + "    required binary value;\n"
             + "  }\n"
@@ -880,13 +967,15 @@ public class TestAvroSchemaConverter {
     HoodieSchema variant = HoodieSchema.createVariantShredded(HoodieSchema.create(HoodieSchemaType.INT));
     HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(HoodieSchemaField.of("myvariant", variant, null, null)));
-    testAvroToParquetConversion(
+    testVariantAvroToParquetConversion(
         schema,
         "message myrecord {\n"
-            + "  required group myvariant {\n"
+            + "  required group myvariant" + variantAnnotation() + " {\n"
             + "    required binary metadata;\n"
             + "    optional binary value;\n"
-            + "    required int32 typed_value;\n"
+            // The shredding spec makes typed_value optional: rows that do not match the
+            // shredding schema leave it null and carry everything in the value residual.
+            + "    optional int32 typed_value;\n"
             + "  }\n"
             + "}\n");
   }
@@ -897,10 +986,10 @@ public class TestAvroSchemaConverter {
     HoodieSchema schema = HoodieSchema.createRecord("myrecord", null, null, false,
         Collections.singletonList(
             HoodieSchemaField.of("myvariant", HoodieSchema.createNullable(variant), null, HoodieSchema.NULL_VALUE)));
-    testAvroToParquetConversion(
+    testVariantAvroToParquetConversion(
         schema,
         "message myrecord {\n"
-            + "  optional group myvariant {\n"
+            + "  optional group myvariant" + variantAnnotation() + " {\n"
             + "    required binary metadata;\n"
             + "    required binary value;\n"
             + "  }\n"
@@ -969,23 +1058,6 @@ public class TestAvroSchemaConverter {
         throw e;
       }
     }
-  }
-
-  @Test
-  public void testVariantToParquetConversion() throws Exception {
-    // Create a record with a variant field
-    HoodieSchema variantSchema = HoodieSchema.createRecord("variantRecord", null, null, false,
-        Collections.singletonList(
-            HoodieSchemaField.of("v", HoodieSchema.createVariant(), null, null)));
-
-    String expectedParquet = "message variantRecord {\n"
-        + "  required group v {\n"
-        + "    required binary metadata;\n"
-        + "    required binary value;\n"
-        + "  }\n"
-        + "}\n";
-
-    testAvroToParquetConversion(variantSchema, expectedParquet);
   }
 
   public static Configuration conf(String name, boolean value) {

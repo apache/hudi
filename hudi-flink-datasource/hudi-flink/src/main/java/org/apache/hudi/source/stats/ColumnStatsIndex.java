@@ -31,12 +31,13 @@ public interface ColumnStatsIndex extends FlinkMetadataIndex {
   /**
    * Computes the filtered files with given candidates.
    *
-   * @param columnStatsProbe The utility to filter the column stats metadata.
-   * @param allFile          The file name list of the candidate files.
+   * @param columnStatsProbe    The utility to filter the column stats metadata.
+   * @param allFile             The file name list of the candidate files.
+   * @param candidatePartitions The relative partition paths of the candidate files, or an empty list to read all partitions.
    *
    * @return The set of filtered file names
    */
-  Set<String> computeCandidateFiles(ColumnStatsProbe columnStatsProbe, List<String> allFile);
+  Set<String> computeCandidateFiles(ColumnStatsProbe columnStatsProbe, List<String> allFile, List<String> candidatePartitions);
 
   /**
    * Computes the filtered partition paths with given candidates.

@@ -410,7 +410,7 @@
   <properties>
     <dockerCompose.envFile>${project.basedir}/compose_env</dockerCompose.envFile>
     <dockerCompose.file>
-      ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive2310_spark353_amd64.yml
+      ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive2310_spark359_amd64.yml
     </dockerCompose.file>
     <docker.compose.skip>${skipITs}</docker.compose.skip>
     <main.basedir>${project.parent.basedir}</main.basedir>
@@ -540,7 +540,7 @@
         its own docker-compose demo in the same job, which collides on host ports
         (e.g. zookeeper 2181). Exclude the integ2 package here so only the
         dedicated `integration-tests-hive-sync` stage runs them (via -Dit.test=).
-        That stage is currently parked in .github/workflows/bot.yml to cut CI
+        That stage is currently parked in .github/workflows/java_ci_engines.yml to cut CI
         usage, so nothing runs the integ2 suite until it is restored.
       -->
       <build>
@@ -570,7 +570,7 @@
       <id>m1-mac</id>
       <properties>
         <dockerCompose.file>
-          ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive2310_spark353_arm64.yml
+          ${project.basedir}/../docker/compose/docker-compose_hadoop284_hive2310_spark359_arm64.yml
         </dockerCompose.file>
       </properties>
       <activation>

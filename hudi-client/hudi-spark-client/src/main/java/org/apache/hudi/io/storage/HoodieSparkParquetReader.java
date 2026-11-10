@@ -44,6 +44,8 @@ import org.apache.parquet.filter2.predicate.FilterApi;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.apache.parquet.hadoop.ParquetReader;
+import org.apache.parquet.hadoop.api.ReadSupport;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.SchemaRepair;
 import org.apache.spark.sql.HoodieInternalRowUtils;
@@ -145,7 +147,20 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
    */
   public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, List<Filter> readFilters) throws IOException {
     HoodieSchema nonNullSchema = requestedSchema.getNonNullType();
-    StructType structSchema = HoodieInternalRowUtils.getCachedSchema(nonNullSchema);
+    return getUnsafeRowIterator(nonNullSchema, HoodieInternalRowUtils.getCachedSchema(nonNullSchema), readFilters);
+  }
+
+  /**
+   * Returns an unsafe-row iterator that uses {@code projectedStructSchema} as the Spark read schema
+   * directly, preserving any Spark 4.1 PushVariantIntoScan variant projection (per-field
+   * {@code VariantMetadata}) that {@link HoodieSchema} cannot represent. Using it as the requested
+   * schema makes parquet-mr decode variant columns into the projected struct shape natively
+   * (mirroring the base-file read path) rather than returning the full {@code VariantType}.
+   * {@code requestedSchema} is still used for vector-column detection (orthogonal to variants) and
+   * the timestamp-repair MessageType.
+   */
+  public ClosableIterator<UnsafeRow> getUnsafeRowIterator(HoodieSchema requestedSchema, StructType projectedStructSchema, List<Filter> readFilters) throws IOException {
+    HoodieSchema nonNullSchema = requestedSchema.getNonNullType();
 
     // Detect vector columns: ordinal → Vector schema
     Map<Integer, HoodieSchema.Vector> vectorColumnInfo = HoodieVectorUtils.detectVectorColumns(nonNullSchema);
@@ -153,8 +168,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
     // For vector columns, replace ArrayType(FloatType) with BinaryType in the read schema
     // so SparkBasicSchemaEvolution sees matching types (file has FIXED_LEN_BYTE_ARRAY → BinaryType)
     StructType readStructSchema = vectorColumnInfo.isEmpty()
-        ? structSchema
-        : VectorConversionUtils.replaceVectorColumnsWithBinary(structSchema, vectorColumnInfo);
+        ? projectedStructSchema
+        : VectorConversionUtils.replaceVectorColumnsWithBinary(projectedStructSchema, vectorColumnInfo);
 
     Option<MessageType> messageSchema = Option.of(getAvroSchemaConverter(storage.getConf().unwrapAs(Configuration.class)).convert(nonNullSchema));
     boolean enableTimestampFieldRepair = storage.getConf().getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true);
@@ -196,8 +211,8 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
         Option$.MODULE$.empty(), true, true,
         rebaseDateSpec,
         messageSchema);
-    ParquetReader<InternalRow> reader = ParquetReader.builder(readSupport, new Path(path.toUri()))
-        .withConf(storage.getConf().unwrapAs(Configuration.class))
+    HadoopInputFile inputFile = HadoopInputFile.fromPath(new Path(path.toUri()), storage.getConf().unwrapAs(Configuration.class));
+    ParquetReader<InternalRow> reader = ParquetUtils.withHadoopReadOptions(new InputFileReaderBuilder(readSupport, inputFile), inputFile)
         .build();
     UnsafeProjection projection = evolution.generateUnsafeProjection();
     ParquetReaderIterator<InternalRow> parquetReaderIterator = new ParquetReaderIterator<>(reader);
@@ -205,7 +220,7 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
 
     if (!vectorColumnInfo.isEmpty()) {
       // Post-process: convert binary VECTOR columns back to typed arrays
-      UnsafeProjection vectorProjection = UnsafeProjection.create(structSchema);
+      UnsafeProjection vectorProjection = UnsafeProjection.create(projectedStructSchema);
       Function<InternalRow, InternalRow> mapper =
           VectorConversionUtils.buildRowMapper(readStructSchema, vectorColumnInfo, vectorProjection::apply);
       CloseableMappingIterator<UnsafeRow, UnsafeRow> vectorIterator =
@@ -261,5 +276,25 @@ public class HoodieSparkParquetReader implements HoodieSparkFileReader {
   @Override
   public long getTotalRecords() {
     return parquetUtils.getRowCount(storage, path);
+  }
+
+  /**
+   * Builds the reader from a {@link HadoopInputFile}, whose {@link Configuration} becomes the reader's
+   * configuration (see {@link ParquetUtils#withHadoopReadOptions}). {@code ParquetReader.builder(ReadSupport, Path)}
+   * creates a new {@link Configuration} and loads the Hadoop default resources for every file, even when
+   * {@code withConf} replaces it.
+   */
+  private static class InputFileReaderBuilder extends ParquetReader.Builder<InternalRow> {
+    private final ReadSupport<InternalRow> readSupport;
+
+    InputFileReaderBuilder(ReadSupport<InternalRow> readSupport, HadoopInputFile file) {
+      super(file);
+      this.readSupport = readSupport;
+    }
+
+    @Override
+    protected ReadSupport<InternalRow> getReadSupport() {
+      return readSupport;
+    }
   }
 }

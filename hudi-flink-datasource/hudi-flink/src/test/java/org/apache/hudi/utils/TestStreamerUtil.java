@@ -28,6 +28,7 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.EventTimeAvroPayload;
+import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.PartialUpdateAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -49,9 +50,9 @@ import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
-import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
 import org.apache.hudi.sink.FlinkCheckpointClient;
 import org.apache.hudi.sink.muttley.AthenaIngestionGateway;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.streamer.FlinkStreamerConfig;
@@ -62,19 +63,24 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.mockito.Mockito;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static org.apache.hudi.common.testutils.HoodieTestUtils.assertTableConfigs;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -89,6 +95,20 @@ class TestStreamerUtil {
 
   @TempDir
   File tempFile;
+
+  @ParameterizedTest
+  @EnumSource(MetaFieldsMode.class)
+  void testInitTableMetaFieldsMode(MetaFieldsMode mode) throws IOException {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.TABLE_TYPE, "COPY_ON_WRITE");
+    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.TEN.versionCode());
+    conf.setString(HoodieTableConfig.META_FIELDS_MODE.key(), mode.name());
+    // The explicit mode must win over the legacy default.
+    conf.setString(HoodieTableConfig.POPULATE_META_FIELDS.key(), "true");
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(conf);
+    assertEquals(mode, metaClient.getTableConfig().getMetaFieldsMode());
+    assertEquals(mode.toLegacyPopulateMetaFields(), metaClient.getTableConfig().populateMetaFields());
+  }
 
   @Test
   void testMetadataConfigIncludesMetadataTableBloomFilterSettings() {
@@ -167,26 +187,6 @@ class TestStreamerUtil {
   }
 
   @Test
-  void testInitTableWithSpecificVersion() throws IOException {
-    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
-
-    // Test for partitioned table.
-    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "p0,p1");
-    conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.SIX.versionCode());
-    conf.setString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
-        HoodieTableConfig.TableStorageLayout.DEFAULT.configValue());
-    StreamerUtil.initTableIfNotExists(conf);
-
-    // Validate the partition fields & preCombineField in hoodie.properties.
-    HoodieTableMetaClient metaClient1 = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
-    assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
-    assertNotNull(metaClient1.getTableConfig().getKeyGeneratorClassName());
-    assertEquals(HoodieTableVersion.SIX, metaClient1.getTableConfig().getTableVersion());
-    assertEquals(HoodieTableConfig.TableStorageLayout.DEFAULT.configValue(),
-        conf.getString(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(), null));
-  }
-
-  @Test
   void testInitLsmTreeTable() throws IOException {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.WRITE_TABLE_VERSION, HoodieTableVersion.TEN.versionCode());
@@ -216,32 +216,74 @@ class TestStreamerUtil {
     assertTrue(metaClient.getTableConfig().isLSMTreeStorageLayout());
   }
 
-  @Test
-  void testInitTableIfNotExists() throws IOException {
+  /**
+   * A null version leaves the write table version unset, so the default version is covered as well.
+   */
+  @ParameterizedTest
+  @NullSource
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testInitTableIfNotExists(HoodieTableVersion version) throws IOException {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    if (version != null) {
+      conf.set(FlinkOptions.WRITE_TABLE_VERSION, version.versionCode());
+    }
+    HoodieTableVersion expectedVersion = version == null
+        ? HoodieTableVersion.fromVersionCode(FlinkOptions.WRITE_TABLE_VERSION.defaultValue()) : version;
+    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
 
     // Test for partitioned table.
-    conf.set(FlinkOptions.ORDERING_FIELDS, "ts");
     conf.set(FlinkOptions.PARTITION_PATH_FIELD, "p0,p1");
     StreamerUtil.initTableIfNotExists(conf);
-
-    // Validate the partition fields & preCombineField in hoodie.properties.
-    HoodieTableMetaClient metaClient1 = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
-    assertTrue(metaClient1.getTableConfig().getPartitionFields().isPresent(),
-        "Missing partition columns in the hoodie.properties.");
-    assertArrayEquals(metaClient1.getTableConfig().getPartitionFields().get(), new String[] {"p0", "p1"});
-    assertEquals(metaClient1.getTableConfig().getOrderingFieldsStr().get(), "ts");
-    assertEquals(metaClient1.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
-    assertEquals(HoodieTableVersion.current(), metaClient1.getTableConfig().getTableVersion());
-    assertTrue(metaClient1.getTableConfig().isLSMTreeStorageLayout());
+    HoodieStorage storage = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath()).getStorage();
+    assertTableConfigs(storage, tempFile.getAbsolutePath(), expectedTableConfigs(expectedVersion, true));
 
     // Test for non-partitioned table.
     conf.removeConfig(FlinkOptions.PARTITION_PATH_FIELD);
     FileIOUtils.deleteDirectory(tempFile);
     StreamerUtil.initTableIfNotExists(conf);
-    HoodieTableMetaClient metaClient2 = HoodieTestUtils.createMetaClient(tempFile.getAbsolutePath());
-    assertFalse(metaClient2.getTableConfig().getPartitionFields().isPresent());
-    assertEquals(metaClient2.getTableConfig().getKeyGeneratorClassName(), SimpleAvroKeyGenerator.class.getName());
+    assertTableConfigs(storage, tempFile.getAbsolutePath(), expectedTableConfigs(expectedVersion, false));
+  }
+
+  private static Map<String, String> expectedTableConfigs(HoodieTableVersion version, boolean partitioned) {
+    Map<String, String> configs = new HashMap<>();
+    configs.put("hoodie.table.name", "TestHoodieTable");
+    configs.put("hoodie.table.type", "COPY_ON_WRITE");
+    configs.put("hoodie.table.version", String.valueOf(version.versionCode()));
+    configs.put("hoodie.table.recordkey.fields", "uuid");
+    configs.put("hoodie.table.ordering.fields", "ts");
+    configs.put("hoodie.table.keygenerator.type", "SIMPLE_AVRO");
+    configs.put("hoodie.table.format", "native");
+    configs.put("hoodie.table.cdc.enabled", "false");
+    configs.put("hoodie.meta.fields.mode", "ALL");
+    configs.put("hoodie.datasource.write.drop.partition.columns", "false");
+    configs.put("hoodie.datasource.write.hive_style_partitioning", "false");
+    configs.put("hoodie.datasource.write.partitionpath.urlencode", "false");
+    configs.put("hoodie.archivelog.folder", "history");
+    configs.put("hoodie.timeline.path", "timeline");
+    configs.put("hoodie.timeline.history.path", "history");
+    if (partitioned) {
+      configs.put("hoodie.table.partition.fields", "p0,p1");
+    }
+    if (version.lesserThan(HoodieTableVersion.EIGHT)) {
+      configs.put("hoodie.timeline.layout.version", "1");
+      configs.put("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.SimpleAvroKeyGenerator");
+    } else {
+      configs.put("hoodie.timeline.layout.version", "2");
+      configs.put("hoodie.table.initial.version", String.valueOf(version.versionCode()));
+      configs.put("hoodie.record.merge.mode", "EVENT_TIME_ORDERING");
+    }
+    if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.EventTimeAvroPayload");
+      configs.put("hoodie.record.merge.strategy.id", "eeb8d96f-b1e4-49fd-bbf8-28ac514178e5");
+    } else {
+      configs.put("hoodie.table.legacy.payload.class", "org.apache.hudi.common.model.EventTimeAvroPayload");
+    }
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      configs.put("hoodie.populate.meta.fields", "true");
+    } else {
+      configs.put("hoodie.table.storage.layout", "lsm_tree");
+    }
+    return configs;
   }
 
   @Test
@@ -361,6 +403,26 @@ class TestStreamerUtil {
   }
 
   @Test
+  void testParsePartitionDate() {
+    DateTimeFormatter dayFormatter = DateTimeFormatter.ofPattern(FlinkOptions.PARTITION_FORMAT_DAY);
+    assertEquals(LocalDate.of(2026, 8, 6), StreamerUtil.parsePartitionDate("20260806", dayFormatter, false));
+
+    DateTimeFormatter dashedDayFormatter = DateTimeFormatter.ofPattern(FlinkOptions.PARTITION_FORMAT_DASHED_DAY);
+    assertEquals(LocalDate.of(2026, 8, 6), StreamerUtil.parsePartitionDate("2026-08-06", dashedDayFormatter, false));
+
+    assertEquals(LocalDate.of(2026, 8, 6), StreamerUtil.parsePartitionDate("dt=20260806", dayFormatter, true));
+
+    // hiveStylePartitioning=false must not strip the "dt=" prefix, so parsing fails.
+    assertNull(StreamerUtil.parsePartitionDate("dt=20260806", dayFormatter, false));
+
+    // no '=' present, hive-style parsing falls back to the raw path.
+    assertEquals(LocalDate.of(2026, 8, 6), StreamerUtil.parsePartitionDate("20260806", dayFormatter, true));
+
+    assertNull(StreamerUtil.parsePartitionDate("not-a-date", dayFormatter, false));
+    assertNull(StreamerUtil.parsePartitionDate("2026-08-06", dayFormatter, false));
+  }
+
+  @Test
   void testOrderingFieldAndKeyGeneratorValidation() {
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
     conf.set(FlinkOptions.ORDERING_FIELDS, "missing");
@@ -377,10 +439,15 @@ class TestStreamerUtil {
     StreamerUtil.checkOrderingFields(customPayloadConf, Collections.singletonList("id"));
     assertEquals(FlinkOptions.NO_PRE_COMBINE, customPayloadConf.get(FlinkOptions.ORDERING_FIELDS));
 
-    Configuration keygenConf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    Configuration keygenConf = new Configuration();
     StreamerUtil.checkKeygenGenerator(true, keygenConf);
     assertEquals(ComplexAvroKeyGenerator.class.getName(),
         keygenConf.get(FlinkOptions.KEYGEN_CLASS_NAME));
+    assertEquals("FIELD_PREFIXED", keygenConf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
+
+    keygenConf.setString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), "VALUE_ONLY");
+    StreamerUtil.checkKeygenGenerator(true, keygenConf);
+    assertEquals("VALUE_ONLY", keygenConf.getString(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), null));
   }
 
   @Test

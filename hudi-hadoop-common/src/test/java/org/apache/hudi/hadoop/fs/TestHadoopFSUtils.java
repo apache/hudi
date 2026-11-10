@@ -31,6 +31,7 @@ import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FilterFileSystem;
@@ -178,6 +179,50 @@ public class TestHadoopFSUtils {
         assertEquals(expectedStream, stream.getClass().getName(),
             "the scheme-specific wrapper should be selected from the fallback-resolved scheme");
       }
+    }
+  }
+
+  /**
+   * The buffered stream built for the {@code FSInputStream} branch wraps the inner stream, not the
+   * {@link FSDataInputStream} the filesystem returned, so closing it used to leave that outer object open.
+   * Filesystems that track the streams they hand out - Spark's {@code DebugFilesystem} in tests - reported
+   * every log file read as a leaked stream.
+   */
+  @Test
+  public void testGetFSDataInputStreamClosesTheFileSystemStream(@TempDir java.nio.file.Path tempDir) throws IOException {
+    byte[] contents = new byte[] {7, 8, 9};
+    try (TrackingLocalFileSystem fs = new TrackingLocalFileSystem()) {
+      fs.initialize(URI.create("file:///"), new Configuration());
+      Path file = new Path(tempDir.resolve("tracked.log").toUri());
+      try (FSDataOutputStream out = fs.create(file)) {
+        out.write(contents);
+      }
+
+      FSDataInputStream stream =
+          HadoopFSUtils.getFSDataInputStream(fs, new StoragePath(file.toUri()), 4096, true);
+      assertEquals(7, stream.read());
+      stream.close();
+      assertEquals(1, fs.closeCount.get(),
+          "closing the returned stream must also close the stream the filesystem handed out");
+    }
+  }
+
+  /** A {@link LocalFileSystem} that counts the closes of the streams it hands out. */
+  private static class TrackingLocalFileSystem extends LocalFileSystem {
+    private final AtomicInteger closeCount = new AtomicInteger();
+
+    @Override
+    public FSDataInputStream open(Path f, int bufferSize) throws IOException {
+      return new FSDataInputStream(super.open(f, bufferSize).getWrappedStream()) {
+        @Override
+        public void close() throws IOException {
+          try {
+            super.close();
+          } finally {
+            closeCount.incrementAndGet();
+          }
+        }
+      };
     }
   }
 

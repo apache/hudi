@@ -20,14 +20,22 @@ package org.apache.hudi.metadata;
 
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem;
+import org.apache.hudi.hadoop.fs.RecordingLocalFileSystem.Call;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,8 +47,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests {@link FileSystemBackedTableMetadata}.
@@ -227,6 +239,40 @@ public class TestFileSystemBackedTableMetadata extends HoodieCommonTestHarness {
         fileSystemBackedTableMetadata.listPartitions(partitionPathList);
     Assertions.assertEquals(5, partitionFilesMap.get(partitionPathList.get(0)).size(),
         "Stray files should be filtered out by listPartitions");
+  }
+
+  /**
+   * The meta folder is never a partition, so listing must neither probe it for partition metadata
+   * nor list it as a partition, even when it holds a stray partition metafile.
+   */
+  @Test
+  void testMetaFolderIsNotProbedForPartitionMetadata() throws Exception {
+    hoodieTestTable = hoodieTestTable.addCommit("100");
+    for (String partition : ONE_LEVEL_PARTITIONS) {
+      hoodieTestTable = hoodieTestTable.withPartitionMetaFiles(partition)
+          .withBaseFilesInPartition(partition, IntStream.range(0, 2).toArray());
+    }
+    try (OutputStream out = metaClient.getStorage().create(
+        new StoragePath(metaClient.getMetaPath(), HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX))) {
+      out.write("stray".getBytes());
+    }
+
+    StorageConfiguration<Configuration> conf = HadoopFSUtils.getStorageConfWithCopy(
+        metaClient.getStorageConf().unwrapAs(Configuration.class));
+    RecordingLocalFileSystem.register(conf.unwrap());
+    RecordingLocalFileSystem.reset();
+    HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, conf);
+    FileSystemBackedTableMetadata fileSystemBackedTableMetadata = new FileSystemBackedTableMetadata(
+        new HoodieLocalEngineContext(conf), metaClient.getTableConfig(), storage, basePath);
+    List<String> partitions = fileSystemBackedTableMetadata.getAllPartitionPaths();
+
+    assertEquals(ONE_LEVEL_PARTITIONS, partitions.stream().sorted().collect(Collectors.toList()));
+    Predicate<Call> partitionMetadataProbe = Call.pathContains(HoodiePartitionMetadata.HOODIE_PARTITION_METAFILE_PREFIX);
+    assertTrue(RecordingLocalFileSystem.count(partitionMetadataProbe.and(Call.underMetaFolder().negate())) > 0,
+        "The listing must probe the data partitions through the recording file system");
+    assertEquals(0, RecordingLocalFileSystem.count(partitionMetadataProbe.and(Call.underMetaFolder())),
+        () -> "The meta folder was probed for partition metadata: "
+            + RecordingLocalFileSystem.describe(partitionMetadataProbe.and(Call.underMetaFolder())));
   }
 
   @Test

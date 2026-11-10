@@ -95,6 +95,7 @@ import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -110,6 +111,7 @@ import org.apache.hudi.utilities.UtilHelpers;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
 import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.ingestion.HoodieIngestionException;
+import org.apache.hudi.utilities.ingestion.HoodieIngestionService;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
 import org.apache.hudi.utilities.schema.KafkaOffsetPostProcessor;
 import org.apache.hudi.utilities.schema.SchemaProvider;
@@ -150,7 +152,10 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Encoders;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.SaveMode;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.api.java.UDF4;
 import org.apache.spark.sql.functions;
@@ -166,6 +171,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -187,6 +193,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -199,6 +206,7 @@ import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1.STREA
 import static org.apache.hudi.common.table.checkpoint.StreamerCheckpointV2.STREAMER_CHECKPOINT_KEY_V2;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.assertTableConfigs;
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 import static org.apache.hudi.config.HoodieErrorTableConfig.ERROR_TABLE_PERSIST_SOURCE_RDD;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient;
@@ -218,6 +226,11 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
  */
 @Slf4j
 public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
+
+  // Bounds the stop a failure triggers, so a wedged streamer cannot hang the test it already failed. Kept
+  // well inside what the @Timeout(600) continuous-mode tests have left after the 360s they already spend in
+  // the wait: once that budget blows, JUnit replaces the test's own failure with its timeout.
+  private static final long STREAMER_STOP_TIMEOUT_SECS = 30;
 
   // Per-field verdict for the corrupt logical-repair fixtures: relabel ts_millis to millis and
   // attach the local-timestamp logical types that 0.x dropped. ts_micros is already micros.
@@ -490,6 +503,95 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     assertFalse(extraMetadata.containsKey(STREAMER_CHECKPOINT_KEY_V2));
   }
 
+  /**
+   * The streamer keys its records before the write client's initTable() runs, so it has to resolve the single-field
+   * ComplexKeyGenerator encoding itself: a version 8 table with bare record keys (0.14.1 style) and no encoding property,
+   * upserted by a streamer at the current version, must be upgraded, get the encoding deduced from its data and
+   * persisted, and keep writing bare keys, with the row writer too.
+   */
+  @Test
+  public void testComplexKeyGenSingleFieldUpgradeKeepsBareKeys() throws Exception {
+    // 1. the checked-in 1.0.2 table (version 8): bare record keys, written before the encoding was recorded
+    String fixtureName = "hudi-v8-table-complex-keygen";
+    HoodieTestUtils.extractZipToDirectory("/upgrade-downgrade-fixtures/complex-keygen-tables/" + fixtureName + ".zip",
+        Paths.get(URI.create(basePath)), getClass());
+    String tablePath = basePath + "/" + fixtureName;
+    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    assertEquals(HoodieTableVersion.EIGHT, metaClient.getTableConfig().getTableVersion());
+    assertFalse(metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent());
+    String recordKeyPrefix = metaClient.getTableConfig().getRecordKeyFields().get()[0] + ":";
+    assertComplexKeygenTableState(tablePath, recordKeyPrefix, true);
+    assertEquals(8, sqlContext.read().format("org.apache.hudi").load(tablePath).count());
+
+    // a parquet source in the fixture's schema: every fixture record updated, plus one new record
+    String sourceRoot = basePath + "/complex_keygen_fixture_source";
+    writeFixtureSourceBatch(sourceRoot, 10000L, "id1", "id2", "id3", "id4", "id5", "id6", "id7", "id8", "id9");
+    TypedProperties props = new TypedProperties();
+    props.setProperty("include", "base.properties");
+    props.setProperty("hoodie.embed.timeline.server", "false");
+    props.setProperty(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), ComplexKeyGenerator.class.getName());
+    props.setProperty("hoodie.datasource.write.recordkey.field", "id");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "partition,category");
+    props.setProperty("hoodie.streamer.source.dfs.root", sourceRoot);
+    String propsFile = "test-complex-keygen-fixture-source.properties";
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/" + propsFile);
+
+    // 2. the upgraded streamer with defaults: upserts, upgrades to the current version, records the encoding
+    HoodieDeltaStreamer.Config upgradedCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.UPSERT, ParquetDFSSource.class.getName(),
+        null, propsFile, false, false, 100000, false, null, "MERGE_ON_READ", "ts", null);
+    upgradedCfg.targetTableName = fixtureName + "_table";
+    syncOnce(upgradedCfg);
+    metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
+    assertEquals(HoodieTableVersion.current(), metaClient.getTableConfig().getTableVersion());
+    assertEquals(Option.of(ComplexKeyGenEncoding.VALUE_ONLY), metaClient.getTableConfig().getComplexKeyGenEncoding());
+    assertComplexKeygenTableState(tablePath, recordKeyPrefix, true);
+    Dataset<Row> upgraded = sqlContext.read().format("org.apache.hudi").load(tablePath);
+    assertEquals(9, upgraded.count(), "Every fixture record must be updated in place, plus the new one");
+    assertEquals(9, upgraded.filter("ts = 10000").count(), "Every record must carry the new ordering value");
+
+    // 3. the row writer path builds its key generator from a separate config: it must see the encoding as well
+    writeFixtureSourceBatch(sourceRoot, 20000L, "id10");
+    HoodieDeltaStreamer.Config rowWriterCfg = TestHelpers.makeConfig(tablePath, WriteOperationType.BULK_INSERT, ParquetDFSSource.class.getName(),
+        null, propsFile, false, false, 100000, false, null, "MERGE_ON_READ", "ts", null);
+    rowWriterCfg.targetTableName = fixtureName + "_table";
+    rowWriterCfg.configs.add(DataSourceWriteOptions.ENABLE_ROW_WRITER().key() + "=true");
+    syncOnce(rowWriterCfg);
+    // Bulk insert neither looks up the index nor combines; only the encoding it wrote is of interest here.
+    assertComplexKeygenTableState(tablePath, recordKeyPrefix, false);
+    assertEquals(10, sqlContext.read().format("org.apache.hudi").load(tablePath).count());
+  }
+
+  /** Writes one parquet file of rows in the complex keygen fixture schema (id, name, ts, partition, category). */
+  private void writeFixtureSourceBatch(String sourceRoot, long ts, String... ids) {
+    List<StructField> fields = Arrays.asList(
+        DataTypes.createStructField("id", DataTypes.StringType, false),
+        DataTypes.createStructField("name", DataTypes.StringType, false),
+        DataTypes.createStructField("ts", DataTypes.LongType, false),
+        DataTypes.createStructField("partition", DataTypes.StringType, false),
+        DataTypes.createStructField("category", DataTypes.StringType, false));
+    List<Row> rows = new ArrayList<>();
+    for (String id : ids) {
+      int n = Integer.parseInt(id.substring(2));
+      // the partitions the fixture script placed its records in; new ids land in a partition of their own
+      String partition = n <= 8 ? "2023-01-0" + ((n + 1) / 2) : "2023-01-05";
+      String category = (n == 1 || n == 3 || n == 5 || n == 6 || n > 8) ? "a" : "b";
+      rows.add(RowFactory.create(id, id + "_" + ts, ts, partition, category));
+    }
+    sqlContext.createDataFrame(rows, DataTypes.createStructType(fields)).write().mode(SaveMode.Append).parquet(sourceRoot);
+  }
+
+  /** Every stored record key is bare (no `<field>:` prefix); for operations that key off the index, also unique. */
+  private void assertComplexKeygenTableState(String tablePath, String recordKeyPrefix, boolean expectNoDuplicates) {
+    List<String> recordKeys = sqlContext.read().format("org.apache.hudi").load(tablePath)
+        .select("_hoodie_record_key").as(Encoders.STRING()).collectAsList();
+    assertFalse(recordKeys.isEmpty());
+    assertTrue(recordKeys.stream().noneMatch(k -> k.startsWith(recordKeyPrefix)),
+        "Record keys must stay bare after the upgrade, got e.g. " + recordKeys.get(0));
+    if (expectNoDuplicates) {
+      assertEquals(recordKeys.size(), new HashSet<>(recordKeys).size(), "No duplicated record keys");
+    }
+  }
+
   @Test
   public void testTableCreation() throws Exception {
     Exception e = assertThrows(TableNotFoundException.class, () -> {
@@ -517,20 +619,78 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
     deltaStreamer.shutdownGracefully();
   }
 
+  /**
+   * A null version leaves the write table version unset, so the default version is covered as well.
+   */
   @ParameterizedTest
-  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
-  public void testPartitionKeyFieldsBasedOnVersion(HoodieTableVersion version) throws IOException {
-    String tablePath = basePath + "/partition_key_fields_meta_client" + version.versionCode();
+  @NullSource
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT", "NINE", "TEN"})
+  void testTableConfigsBasedOnVersion(HoodieTableVersion version) throws IOException {
+    HoodieTableVersion expectedVersion = version == null
+        ? HoodieTableVersion.fromVersionCode(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue()) : version;
+    String tablePath = basePath + "/table_configs_v" + (version == null ? "default" : String.valueOf(version.versionCode()));
     HoodieDeltaStreamer.Config cfg = TestHelpers.makeConfig(tablePath, WriteOperationType.INSERT);
-    cfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + version.versionCode());
+    if (version != null) {
+      cfg.configs.add(HoodieWriteConfig.WRITE_TABLE_VERSION.key() + "=" + version.versionCode());
+    }
     cfg.configs.add(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key() + "=" + CustomKeyGenerator.class.getName());
     cfg.configs.add("hoodie.datasource.write.partitionpath.field=partition_path:simple");
     HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.getIngestionService().ingestOnce();
-    HoodieTableMetaClient metaClient = HoodieTestUtils.createMetaClient(context, tablePath);
-    String expectedPartitionFields = version.equals(HoodieTableVersion.SIX) ? "partition_path" : "partition_path:simple";
-    assertEquals(expectedPartitionFields, metaClient.getTableConfig().getString(HoodieTableConfig.PARTITION_FIELDS));
+    assertTableConfigs(storage, tablePath, expectedTableConfigs(expectedVersion));
     deltaStreamer.shutdownGracefully();
+
+    // the next write backfills the key generator class of a table created without it
+    HoodieTableConfig.delete(storage, new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME),
+        Collections.singleton(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
+    deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
+    deltaStreamer.getIngestionService().ingestOnce();
+    assertTableConfigs(storage, tablePath, expectedTableConfigs(expectedVersion));
+    deltaStreamer.shutdownGracefully();
+  }
+
+  private static Map<String, String> expectedTableConfigs(HoodieTableVersion version) {
+    Map<String, String> configs = new HashMap<>();
+    configs.put("hoodie.table.name", "hoodie_trips");
+    configs.put("hoodie.table.type", "COPY_ON_WRITE");
+    configs.put("hoodie.table.version", String.valueOf(version.versionCode()));
+    configs.put("hoodie.table.recordkey.fields", "_row_key");
+    configs.put("hoodie.table.ordering.fields", "timestamp");
+    configs.put("hoodie.table.keygenerator.type", "CUSTOM");
+    configs.put("hoodie.table.base.file.format", "PARQUET");
+    configs.put("hoodie.table.format", "native");
+    configs.put("hoodie.table.cdc.enabled", "false");
+    configs.put("hoodie.table.metadata.partitions.inflight", "");
+    configs.put("hoodie.table.index.defs.path", ".hoodie/.index_defs/index.json");
+    configs.put("hoodie.table.partition_extractor_class", "org.apache.hudi.hive.MultiPartKeysValueExtractor");
+    configs.put("hoodie.meta.fields.mode", "ALL");
+    configs.put("hoodie.partition.metafile.use.base.format", "false");
+    configs.put("hoodie.datasource.write.drop.partition.columns", "false");
+    configs.put("hoodie.datasource.write.hive_style_partitioning", "false");
+    configs.put("hoodie.datasource.write.partitionpath.urlencode", "false");
+    configs.put("hoodie.archivelog.folder", "history");
+    configs.put("hoodie.timeline.path", "timeline");
+    configs.put("hoodie.timeline.history.path", "history");
+    if (version.lesserThan(HoodieTableVersion.EIGHT)) {
+      configs.put("hoodie.table.partition.fields", "partition_path");
+      configs.put("hoodie.table.metadata.partitions", "column_stats,files");
+      configs.put("hoodie.timeline.layout.version", "1");
+      configs.put("hoodie.table.keygenerator.class", "org.apache.hudi.keygen.CustomKeyGenerator");
+    } else {
+      configs.put("hoodie.table.partition.fields", "partition_path:simple");
+      configs.put("hoodie.table.metadata.partitions", "column_stats,files,partition_stats");
+      configs.put("hoodie.timeline.layout.version", "2");
+      configs.put("hoodie.table.initial.version", String.valueOf(version.versionCode()));
+      configs.put("hoodie.record.merge.mode", "COMMIT_TIME_ORDERING");
+    }
+    if (version.lesserThan(HoodieTableVersion.NINE)) {
+      configs.put("hoodie.compaction.payload.class", "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload");
+      configs.put("hoodie.record.merge.strategy.id", "ce9acb64-bde0-424c-9b91-f6ebba25356d");
+    }
+    if (version.lesserThan(HoodieTableVersion.TEN)) {
+      configs.put("hoodie.populate.meta.fields", "true");
+    }
+    return configs;
   }
 
   @ParameterizedTest
@@ -1744,22 +1904,133 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   static void deltaStreamerTestRunner(HoodieDeltaStreamer ds, HoodieDeltaStreamer.Config cfg, Function<Boolean, Boolean> condition, String jobId) throws Exception {
     ExecutorService executor = Executors.newSingleThreadExecutor();
-    Future dsFuture = executor.submit(() -> {
-      try {
-        ds.sync();
-      } catch (Exception ex) {
-        log.warn("DS continuous job failed, hence not proceeding with condition check for {}", jobId);
-        throw new RuntimeException(ex.getMessage(), ex);
+    Future dsFuture = null;
+    boolean stoppedCleanly = false;
+    try {
+      dsFuture = executor.submit(() -> {
+        try {
+          ds.sync();
+        } catch (Exception ex) {
+          log.warn("DS continuous job failed, hence not proceeding with condition check for {}", jobId);
+          throw new RuntimeException(ex.getMessage(), ex);
+        }
+      });
+      TestHelpers.waitTillCondition(condition, dsFuture, 360);
+      if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
+        // If the streamer died, waitTillCondition returns as soon as the future completes. Surface that
+        // failure here rather than letting awaitDeltaStreamerShutdown time out and report the misleading
+        // "Deltastreamer should have shutdown by now" two minutes later.
+        if (dsFuture.isDone()) {
+          dsFuture.get();
+        }
+        awaitDeltaStreamerShutdown(ds);
+      } else {
+        ds.shutdownGracefully();
+        dsFuture.get();
       }
-    });
-    TestHelpers.waitTillCondition(condition, dsFuture, 360);
-    if (cfg != null && !cfg.postWriteTerminationStrategyClass.isEmpty()) {
-      awaitDeltaStreamerShutdown(ds);
-    } else {
-      ds.shutdownGracefully();
-      dsFuture.get();
+      stoppedCleanly = true;
+    } finally {
+      if (!stoppedCleanly) {
+        try {
+          stopLeakedStreamer(ds, dsFuture);
+        } catch (Throwable cleanupFailure) {
+          // Never let the cleanup replace the failure the caller is already propagating.
+          log.warn("Failed to stop the streamer after a failure", cleanupFailure);
+        }
+        // The ingest task has already had its one interrupt from cancel(true). If it swallowed that,
+        // an orderly shutdown() would never reach it and the pool thread would outlive the fork.
+        executor.shutdownNow();
+      } else {
+        executor.shutdown();
+      }
     }
-    executor.shutdown();
+  }
+
+  /**
+   * Stops a streamer that a failure left running, without letting the stop hang the test.
+   * <p>
+   * Surefire runs this module with forkCount=1 and reuseForks=true, so a live streamer reads on into the
+   * next test, whose setup deletes basePath and whose teardown closes the data generators underneath it.
+   * The stop has to be bounded: shutdownGracefully awaits the ingest executor for up to 24 hours, and it
+   * returns immediately without waiting when shutdown was already requested, so neither the wait nor the
+   * absence of one can be relied on here.
+   * <p>
+   * Each of the three waits - the stop itself, the join of the ingest task, and the close that runs on the
+   * stopper thread after the interrupt is swallowed - is bounded by {@code stopTimeoutSecs}, and at most two
+   * of them run in sequence on any one path (a stop that times out skips the join; a stop that returns leaves
+   * nothing for the close-wait), so a wedged streamer holds this for at most twice that.
+   */
+  private static void stopLeakedStreamer(HoodieDeltaStreamer ds, Future dsFuture) {
+    stopLeakedStreamer(ds, dsFuture, STREAMER_STOP_TIMEOUT_SECS);
+  }
+
+  /** The bound is a parameter only so this helper's own tests need not spend the production one. */
+  static void stopLeakedStreamer(HoodieDeltaStreamer ds, Future dsFuture, long stopTimeoutSecs) {
+    ExecutorService stopper = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> stop = stopper.submit(ds::shutdownGracefully);
+      try {
+        stop.get(stopTimeoutSecs, TimeUnit.SECONDS);
+      } catch (ExecutionException stopThrew) {
+        // The stop itself failing does not excuse leaving the ingest task running, so fall through to the join
+        // below rather than take the outer clause, which tolerates only the ingest task's own failure.
+        log.warn("Stopping the streamer threw after a failure", stopThrew);
+      }
+      if (dsFuture != null) {
+        dsFuture.get(stopTimeoutSecs, TimeUnit.SECONDS);
+      }
+    } catch (ExecutionException ingestFailure) {
+      // Expected rather than anomalous: the ingest task failing is usually why the caller is unwinding at
+      // all, and the caller reports it. Nothing to warn about here.
+    } catch (Exception stopFailure) {
+      // Swallowed on purpose: this runs while another failure is propagating, and replacing that failure
+      // with this one would hide the diagnostic the caller is about to report.
+      if (stopFailure instanceof InterruptedException) {
+        Thread.currentThread().interrupt();
+      }
+      log.warn("Could not stop the streamer cleanly after a failure, cancelling the ingest task", stopFailure);
+      // The bound only stops this thread waiting: HoodieAsyncService.shutdown(false) swallows the interrupt
+      // that stopper.shutdownNow() sends, and HoodieStreamer.shutdownGracefully runs ds.close() regardless, so
+      // forcing the executor down at least interrupts the ingest round before the close.
+      forceStopIngestion(ds);
+      if (dsFuture != null) {
+        dsFuture.cancel(true);
+      }
+    } finally {
+      stopper.shutdownNow();
+      // shutdownNow only interrupts the stopper out of awaitTermination. HoodieAsyncService.shutdown(false)
+      // swallows that interrupt without restoring the flag, so shutdownGracefully carries on into ds.close()
+      // on that thread. Give the close a bounded chance to finish here, rather than let it run on into the
+      // next test's setup, which deletes basePath underneath it.
+      // An interrupted caller would make awaitTermination throw at once and skip the wait, so the flag is
+      // cleared for the wait and restored afterwards.
+      boolean callerInterrupted = Thread.interrupted();
+      try {
+        if (!stopper.awaitTermination(stopTimeoutSecs, TimeUnit.SECONDS)) {
+          log.warn("The streamer stop did not finish closing within {}s, letting it run on", stopTimeoutSecs);
+        }
+      } catch (InterruptedException interrupted) {
+        callerInterrupted = true;
+      } finally {
+        if (callerInterrupted) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
+  }
+
+  private static void forceStopIngestion(HoodieDeltaStreamer ds) {
+    try {
+      HoodieIngestionService ingestionService = ds.getIngestionService();
+      if (ingestionService != null) {
+        ingestionService.shutdown(true);
+      }
+    } catch (Exception noService) {
+      // Nothing to force down: a streamer that never started an ingestion service. On a real streamer
+      // getIngestionService is an Option.get(), so absence arrives as an exception; a mock returns null
+      // instead, which the guard above covers.
+      log.debug("No ingestion service to force-stop", noService);
+    }
   }
 
   static void awaitDeltaStreamerShutdown(HoodieDeltaStreamer ds) throws InterruptedException {
@@ -2166,6 +2437,7 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
   }
 
   @Disabled("HUDI-8951")
+  @Test
   public void testHoodieIndexerExecutionAfterCommit() throws Exception {
     String tableBasePath = basePath + "/asyncindexer_commit";
     Set<String> customConfigs = new HashSet<>();
@@ -3334,28 +3606,56 @@ public class TestHoodieDeltaStreamer extends HoodieDeltaStreamerTestBase {
 
   @Test
   public void testKafkaTimestampType() throws Exception {
-    topicName = "topic" + testNum;
+    // Timestamp-based Kafka checkpoints have two distinct fallback behaviors we need to cover:
+    //   (1) Checkpoint captured BEFORE records are produced: every record has ts >= checkpoint,
+    //       so `offsetsForTimes` returns concrete offsets and ingestion consumes all of them.
+    //   (2) Checkpoint captured AFTER records are produced: no record has ts >= checkpoint, so
+    //       `offsetsForTimes` returns null for every partition and we fall back to the end offset
+    //       of each partition. Nothing should be ingested, and a subsequent batch produced *after*
+    //       the checkpoint should be picked up on the next sync — this proves that the fallback
+    //       stored a usable checkpoint at the partition tip (not offset 0, which would replay the
+    //       original records).
     kafkaCheckpointType = "timestamp";
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName);
-    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName);
-    String tableBasePath = basePath + "/test_json_kafka_table" + testNum;
-    HoodieDeltaStreamer deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null,
-            null, "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-    deltaStreamer.sync();
-    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath, sqlContext);
 
-    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName);
-    deltaStreamer = new HoodieDeltaStreamer(
-        TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
-            Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
-            true, 100000, false, null, null,
-            "timestamp", String.valueOf(System.currentTimeMillis())), jsc);
-    deltaStreamer.sync();
-    assertRecordCount(JSON_KAFKA_NUM_RECORDS * 2, tableBasePath, sqlContext);
-    deltaStreamer.shutdownGracefully();
+    // ---- Case 1: checkpoint captured BEFORE producing records ----
+    long checkpointBeforeProduction = System.currentTimeMillis();
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, "topic" + testNum);
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", "topic" + testNum);
+    String tableBasePath1 = basePath + "/test_json_kafka_table" + testNum;
+    syncOnce(TestHelpers.makeConfig(tableBasePath1, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null,
+        null, "timestamp", String.valueOf(checkpointBeforeProduction)));
+    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath1, sqlContext);
+
+    // ---- Case 2: checkpoint captured AFTER producing records ----
+    // First batch predates the checkpoint => fallback path returns end offsets (partition tips).
+    // Nothing should be ingested in the first sync; a second batch produced after the checkpoint
+    // should be fully consumed on the follow-up sync (which reuses the checkpoint stored by the
+    // first sync). This asserts we resumed at the tip, not at offset 0.
+    String topicName2 = "topic_after_" + testNum;
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, true, topicName2);
+    // Small pause so the timestamp is guaranteed to be after the last produced record's ts.
+    Thread.sleep(10);
+    long checkpointAfterProduction = System.currentTimeMillis();
+    prepareJsonKafkaDFSSource(PROPS_FILENAME_TEST_JSON_KAFKA, "earliest", topicName2);
+    String tableBasePath2 = basePath + "/test_json_kafka_table_after_" + testNum;
+    syncOnce(TestHelpers.makeConfig(tableBasePath2, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null, null,
+        "timestamp", String.valueOf(checkpointAfterProduction)));
+    assertRecordCount(0, tableBasePath2, sqlContext);
+
+    // Produce a fresh batch strictly after the checkpoint and sync again with no --checkpoint
+    // override, so the streamer picks up from the offsets we stored in the first sync.
+    prepareJsonKafkaDFSFiles(JSON_KAFKA_NUM_RECORDS, false, topicName2);
+    syncOnce(TestHelpers.makeConfig(tableBasePath2, WriteOperationType.UPSERT, JsonKafkaSource.class.getName(),
+        Collections.emptyList(), PROPS_FILENAME_TEST_JSON_KAFKA, false,
+        true, 100000, false, null, null,
+        "timestamp", null));
+    // Only the second batch should be ingested; the first batch (which predates the checkpoint)
+    // stays skipped, confirming the fallback resumed at the partition tip.
+    assertRecordCount(JSON_KAFKA_NUM_RECORDS, tableBasePath2, sqlContext);
   }
 
   @Disabled("HUDI-6609")

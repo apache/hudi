@@ -19,11 +19,11 @@
 package org.apache.hudi.io;
 
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.util.CloseableUtils;
 import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -104,7 +104,7 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     writeStatus.setStat(new HoodieWriteStat());
     this.writer = new HoodieParquetFileBinaryCopier(
         conf,
-        CompressionCodecName.fromConf(config.getStringOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
+        CompressionCodecName.fromConf(config.getParquetCompressionCodec()),
         fileMetadataMerger);
     // From the TABLE config, as the write handles do: the mode is a table property, and the copier
     // otherwise rewrites _hoodie_file_name on a table that does not populate it.
@@ -121,7 +121,11 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
       log.info("Schema evolution enabled for binary copy: {}", schemaEvolutionEnabled);
       records = this.writer.binaryCopy(inputFiles, Collections.singletonList(path), writeScheMessageType, schemaEvolutionEnabled);
     } catch (IOException e) {
+      closeWriterQuietly(e);
       throw new HoodieIOException(e.getMessage(), e);
+    } catch (RuntimeException e) {
+      closeWriterQuietly(e);
+      throw e;
     } finally {
       this.recordsWritten = records;
       this.insertRecordsWritten = records;
@@ -129,10 +133,19 @@ public class HoodieBinaryCopyHandle<T, I, K, O> extends HoodieWriteHandle<T, I, 
     log.info("Finish rewriting {}. Using {} mills", this.path, timer.endTimer());
   }
 
+  private void closeWriterQuietly(Throwable failure) {
+    markClosed();
+    CloseableUtils.closeSuppressing(writer::close, failure);
+  }
+
   @Override
   public List<WriteStatus> close() {
     log.info("Closing the file {} as we are done with all the records {}", writeStatus.getFileId(), recordsWritten);
     try {
+      if (isClosed()) {
+        return Collections.singletonList(writeStatus);
+      }
+      markClosed();
       this.writer.close();
 
       HoodieWriteStat stat = writeStatus.getStat();

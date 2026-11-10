@@ -345,8 +345,7 @@ object HoodieSchemaConversionUtils {
 
   /**
    * Gets the fully-qualified Avro record name and namespace for a Hudi table
-   * This delegates to [[HoodieSchemaUtils.getRecordQualifiedName]] which in turn
-   * delegates to [[AvroSchemaUtils.getAvroRecordQualifiedName]].
+   * This delegates to [[HoodieSchemaUtils.getRecordQualifiedName]].
    *
    * The qualified name follows the pattern: hoodie.{tableName}.{tableName}_record
    * where tableName is sanitized for Avro compatibility.

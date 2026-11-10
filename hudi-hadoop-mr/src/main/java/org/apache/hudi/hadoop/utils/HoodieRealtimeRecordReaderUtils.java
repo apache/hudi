@@ -63,6 +63,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
@@ -135,7 +136,7 @@ public class HoodieRealtimeRecordReaderUtils {
      */
     List<HoodieSchemaField> projectedFields = new ArrayList<>();
     for (String fn : fieldNames) {
-      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase());
+      HoodieSchemaField field = schemaFieldsMap.get(fn.toLowerCase(Locale.ROOT));
       if (field == null) {
         throw new HoodieException("Field " + fn + " not found in log schema. Query cannot proceed! "
             + "Derived Schema Fields: " + new ArrayList<>(schemaFieldsMap.keySet()));
@@ -150,7 +151,7 @@ public class HoodieRealtimeRecordReaderUtils {
   }
 
   public static Map<String, HoodieSchemaField> getNameToFieldMap(HoodieSchema schema) {
-    return schema.getFields().stream().map(r -> Pair.of(r.name().toLowerCase(), r))
+    return schema.getFields().stream().map(r -> Pair.of(r.name().toLowerCase(Locale.ROOT), r))
         .collect(Collectors.toMap(Pair::getLeft, Pair::getRight));
   }
 
@@ -273,15 +274,25 @@ public class HoodieRealtimeRecordReaderUtils {
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L188}
     // Field Names -> {@link https://github.com/apache/hive/blob/f37c5de6c32b9395d1b34fa3c02ed06d1bfbf6eb/serde/src/java
     // /org/apache/hadoop/hive/serde2/ColumnProjectionUtils.java#L229}
-    String[] fieldOrdersWithDups = fieldOrderCsv.isEmpty() ? new String[0] : fieldOrderCsv.split(",");
+    // Defence in depth. HoodieRealtimeInputFormatUtils#cleanProjectionColumnIds now drops blank ids from the
+    // JobConf before any reader runs, which is what HIVE-22438 produces for SELECT COUNT(*) on Hive before
+    // 3.0.0, so blanks should no longer arrive here. Callers that assemble the csv without going through that
+    // conf still can, and a blank token would otherwise reach Integer.parseInt below and fail with a bare
+    // NumberFormatException carrying neither projection list. Trim before filtering so a padded id parses and
+    // de-duplicates as the same entry rather than as a distinct one.
+    String[] fieldOrdersWithDups = Arrays.stream(fieldOrderCsv.split(","))
+        .map(String::trim).filter(id -> !id.isEmpty()).toArray(String[]::new);
     Set<String> fieldOrdersSet = new LinkedHashSet<>(Arrays.asList(fieldOrdersWithDups));
     String[] fieldOrders = fieldOrdersSet.toArray(new String[0]);
     List<String> fieldNames = fieldNameCsv.isEmpty() ? new ArrayList<>() : Arrays.stream(fieldNameCsv.split(",")).collect(Collectors.toList());
     Set<String> fieldNamesSet = new LinkedHashSet<>(fieldNames);
     if (fieldNamesSet.size() != fieldOrders.length) {
+      // Report the de-duplicated counts, since those are what was compared: the raw name count can print
+      // two equal numbers for a real mismatch.
       throw new HoodieException(String
-          .format("Error ordering fields for storage read. #fieldNames: %d, #fieldPositions: %d",
-              fieldNames.size(), fieldOrders.length));
+          .format("Error ordering fields for storage read. #distinctFieldNames: %d, #distinctFieldPositions: %d, "
+                  + "read column names: [%s], read column ids: [%s]",
+              fieldNamesSet.size(), fieldOrders.length, fieldNameCsv, fieldOrderCsv));
     }
     TreeMap<Integer, String> orderedFieldMap = new TreeMap<>();
     String[] fieldNamesArray = fieldNamesSet.toArray(new String[0]);
@@ -301,8 +312,8 @@ public class HoodieRealtimeRecordReaderUtils {
    */
   public static HoodieSchema addPartitionFields(HoodieSchema schema, List<String> partitioningFields) {
     final Set<String> firstLevelFieldNames =
-        schema.getFields().stream().map(HoodieSchemaField::name).map(String::toLowerCase).collect(Collectors.toSet());
-    List<String> fieldsToAdd = partitioningFields.stream().map(String::toLowerCase)
+        schema.getFields().stream().map(f -> f.name().toLowerCase(Locale.ROOT)).collect(Collectors.toSet());
+    List<String> fieldsToAdd = partitioningFields.stream().map(f -> f.toLowerCase(Locale.ROOT))
         .filter(x -> !firstLevelFieldNames.contains(x)).collect(Collectors.toList());
 
     return appendNullSchemaFields(schema, fieldsToAdd);

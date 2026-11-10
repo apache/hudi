@@ -21,7 +21,8 @@ import org.apache.hudi.HoodieSparkUtils.sparkAdapter
 import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.TypedProperties
 import org.apache.hudi.common.model._
-import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils => HoodieCommonSchemaUtils}
+import org.apache.hudi.common.schema.HoodieSchema
+import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.common.testutils.{OrderingFieldsTestUtils, SchemaTestUtil}
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH
@@ -30,6 +31,7 @@ import org.apache.hudi.exception.{HoodieException, HoodieKeyException}
 import org.apache.hudi.keygen._
 import org.apache.hudi.testutils.SparkDatasetTestUtils
 
+import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.InternalRow
@@ -487,6 +489,35 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
       assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
       assertEquals(UTF8String.fromString(expectedKey.getPartitionPath), keyGen.getPartitionPath(internalRow, structType))
     }
+
+    {
+      // The encoding persisted on an upgraded table wins over the version default: a VALUE_ONLY table at the
+      // current version (>= 9) keeps writing bare record keys.
+      val config = getKeyConfig("name,", "field1,", "false")
+      config.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, "VALUE_ONLY")
+      val keyGen = new ComplexKeyGenerator(config)
+
+      val expectedKey = new HoodieKey("value1", "value2")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+    }
+
+    {
+      // ... and a FIELD_PREFIXED property keeps the field name even where the config would drop it.
+      val config = getKeyConfig("name,", "field1,", "false")
+      config.put(HoodieWriteConfig.WRITE_TABLE_VERSION.key, "8")
+      config.put(HoodieWriteConfig.COMPLEX_KEYGEN_NEW_ENCODING.key, "true")
+      config.put(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key, "FIELD_PREFIXED")
+      val keyGen = new ComplexKeyGenerator(config)
+
+      val expectedKey = new HoodieKey("name:value1", "value2")
+
+      assertEquals(expectedKey, keyGen.getKey(baseRecord))
+      assertEquals(expectedKey.getRecordKey, keyGen.getRecordKey(baseRow))
+      assertEquals(UTF8String.fromString(expectedKey.getRecordKey), keyGen.getRecordKey(internalRow, structType))
+    }
   }
 
   @Test def testGlobalDeleteKeyGenerator(): Unit = {
@@ -624,14 +655,14 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val props = new TypedProperties()
     OrderingFieldsTestUtils.setOrderingFieldsConfig(props, key, "favoriteIntNumber")
     val baseOrderingVal: Object = baseRecord.get("favoriteIntNumber")
-    val fieldSchema: HoodieSchema = HoodieSchema.fromAvroSchema(baseRecord.getSchema().getField("favoriteIntNumber").schema())
+    val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
 
-    val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieCommonSchemaUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal, false).asInstanceOf[Comparable[_]])
+    val basePayload = new OverwriteWithLatestAvroPayload(baseRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, baseOrderingVal, false).asInstanceOf[Comparable[_]])
 
     val laterRecord = SchemaTestUtil
       .generateAvroRecordFromJson(schema, 2, "001", "f1")
     val laterOrderingVal: Object = laterRecord.get("favoriteIntNumber")
-    val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieCommonSchemaUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
+    val newerPayload = new OverwriteWithLatestAvroPayload(laterRecord, HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
     // it always returns the latest payload.
     val preCombinedPayload = basePayload.preCombine(newerPayload)
@@ -640,7 +671,7 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
   }
 
   @Test def testDefaultHoodieRecordPayloadCombineAndGetUpdateValue(): Unit = {
-    val fieldSchema: HoodieSchema = HoodieSchema.fromAvroSchema(baseRecord.getSchema().getField("favoriteIntNumber").schema())
+    val fieldSchema: Schema = baseRecord.getSchema().getField("favoriteIntNumber").schema()
     val props = HoodiePayloadConfig.newBuilder()
       .withPayloadOrderingFields("favoriteIntNumber").build().getProps;
 
@@ -653,10 +684,10 @@ class TestDataSourceDefaults extends ScalaAssertionSupport {
     val earlierOrderingVal: Object = earlierRecord.get("favoriteIntNumber")
 
     val laterPayload = new DefaultHoodieRecordPayload(laterRecord,
-      HoodieCommonSchemaUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
+      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, laterOrderingVal, false).asInstanceOf[Comparable[_]])
 
     val earlierPayload = new DefaultHoodieRecordPayload(earlierRecord,
-      HoodieCommonSchemaUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal, false).asInstanceOf[Comparable[_]])
+      HoodieAvroUtils.convertValueForSpecificDataTypes(fieldSchema, earlierOrderingVal, false).asInstanceOf[Comparable[_]])
 
     // it will provide the record with greatest combine value
     val preCombinedPayload = laterPayload.preCombine(earlierPayload)

@@ -20,14 +20,17 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceUtils, DataSourceWriteOptions}
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.HoodieStorageConfig
-import org.apache.hudi.common.model.{HoodieBaseFile, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
+import org.apache.hudi.common.fs.{FileNameParser, FSUtils}
+import org.apache.hudi.common.model.{HoodieBaseFile, HoodieConsistentHashingMetadata, HoodieRecord, HoodieRecordPayload, HoodieTableType, WriteOperationType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.config.{HoodieCompactionConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.execution.bulkinsert.{BulkInsertSortMode, RowCustomColumnsSortPartitioner}
+import org.apache.hudi.index.HoodieIndex
+import org.apache.hudi.index.bucket.{BucketIdentifier, ConsistentBucketIdentifier}
 import org.apache.hudi.testutils.{HoodieClientTestUtils, SparkClientFunctionalTestHarness}
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness.getSparkSqlConf
 
@@ -173,6 +176,53 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
       "middle-row-p1" -> "v1",
       "😀-row-p2" -> "v1",
       "Ａ-row-p2" -> "v1"))
+  }
+
+  @ParameterizedTest
+  @MethodSource(Array("bucketBulkInsertParams"))
+  def testBucketIndexBulkInsert(
+      tableType: HoodieTableType,
+      bucketEngineType: HoodieIndex.BucketIndexEngineType,
+      enableRowWriter: Boolean): Unit = {
+    val numBuckets = 2
+    val tablePath = s"${basePath}_${tableType.name.toLowerCase}_${bucketEngineType.name.toLowerCase}_$enableRowWriter"
+    val options = baseOptions(tableType) ++ Map(
+      DataSourceWriteOptions.ENABLE_ROW_WRITER.key -> enableRowWriter.toString,
+      HoodieWriteConfig.BULK_INSERT_SORT_MODE.key -> BulkInsertSortMode.NONE.name,
+      HoodieIndexConfig.INDEX_TYPE.key -> HoodieIndex.IndexType.BUCKET.name,
+      HoodieIndexConfig.BUCKET_INDEX_ENGINE_TYPE.key -> bucketEngineType.name,
+      HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD.key -> "id",
+      HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS.key -> numBuckets.toString)
+    val insertValues = Seq(
+      ("😀-bucket-p1", "v1", 1L, FirstPartition),
+      ("Ａ-bucket-p1", "v1", 1L, FirstPartition),
+      ("middle-bucket-p1", "v1", 1L, FirstPartition),
+      ("😀-bucket-p2", "v1", 1L, SecondPartition),
+      ("Ａ-bucket-p2", "v1", 1L, SecondPartition)) ++
+      routingRecords(bucketEngineType, numBuckets)
+    val inserts = rows(insertValues)
+
+    write(inserts, tablePath, options, WriteOperationType.BULK_INSERT, SaveMode.Overwrite)
+
+    assertLatestBaseFilesSorted(tablePath, WriteOperationType.BULK_INSERT)
+    assertBucketFileGroupRouting(tablePath, bucketEngineType, numBuckets)
+    val initialFileIds = latestBaseFiles(tablePath).map(_.getFileId).toSet
+    assertEquals(numBuckets * 2, initialFileIds.size)
+    assertSnapshot(tablePath, insertValues.map(value => value._1 -> value._2).toMap)
+
+    val upsertValues = Seq(
+      ("😀-bucket-p1", "v2", 2L, FirstPartition),
+      ("Ａ-bucket-p1", "v2", 2L, FirstPartition),
+      ("middle-bucket-p1", "v2", 2L, FirstPartition),
+      ("ascii-new-p1", "new", 2L, FirstPartition))
+    val upserts = rows(upsertValues)
+    write(upserts, tablePath, options, WriteOperationType.UPSERT)
+
+    assertChangedFilesSorted(tablePath, tableType, WriteOperationType.UPSERT, "log")
+    assertEquals(initialFileIds, latestBaseFiles(tablePath).map(_.getFileId).toSet)
+    assertSnapshot(tablePath,
+      insertValues.map(value => value._1 -> value._2).toMap ++
+        upsertValues.map(value => value._1 -> value._2).toMap)
   }
 
   @ParameterizedTest
@@ -412,6 +462,63 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
     }
   }
 
+  private def assertBucketFileGroupRouting(
+      tablePath: String,
+      bucketEngineType: HoodieIndex.BucketIndexEngineType,
+      numBuckets: Int): Unit = {
+    val actualFileIdsByPartition = spark.read.format("hudi").load(tablePath)
+      .select("id", HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD)
+      .collect()
+      .map { row =>
+        val recordKey = row.getString(0)
+        val partitionPath = row.getString(1)
+        val fileId = FSUtils.getFileId(row.getString(2))
+        val actualFileGroup = bucketEngineType match {
+          case HoodieIndex.BucketIndexEngineType.SIMPLE =>
+            BucketIdentifier.bucketIdStr(BucketIdentifier.bucketIdFromFileId(fileId))
+          case HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING =>
+            FileNameParser.getFileIdPfxFromFileId(fileId)
+        }
+        assertEquals(expectedFileGroup(recordKey, partitionPath, bucketEngineType, numBuckets), actualFileGroup,
+          s"Unexpected file group for record $recordKey in partition $partitionPath")
+        partitionPath -> actualFileGroup
+      }
+      .groupBy(_._1)
+
+    Seq(FirstPartition, SecondPartition).foreach { partitionPath =>
+      assertEquals(numBuckets, actualFileIdsByPartition(partitionPath).map(_._2).distinct.length,
+        s"Expected every bucket to be exercised in partition $partitionPath")
+    }
+  }
+
+  private def routingRecords(
+      bucketEngineType: HoodieIndex.BucketIndexEngineType,
+      numBuckets: Int): Seq[(String, String, Long, String)] = {
+    Seq(FirstPartition, SecondPartition).flatMap { partitionPath =>
+      val keysByFileGroup = (0 until 100)
+        .map(index => s"route-$index-$partitionPath")
+        .groupBy(recordKey => expectedFileGroup(recordKey, partitionPath, bucketEngineType, numBuckets))
+      assertEquals(numBuckets, keysByFileGroup.size,
+        s"Could not generate a routing key for every bucket in partition $partitionPath")
+      keysByFileGroup.values.map(_.head).toSeq
+        .map(recordKey => (recordKey, "v1", 1L, partitionPath))
+    }
+  }
+
+  private def expectedFileGroup(
+      recordKey: String,
+      partitionPath: String,
+      bucketEngineType: HoodieIndex.BucketIndexEngineType,
+      numBuckets: Int): String = {
+    bucketEngineType match {
+      case HoodieIndex.BucketIndexEngineType.SIMPLE =>
+        BucketIdentifier.bucketIdStr(BucketIdentifier.getBucketId(recordKey, "id", numBuckets))
+      case HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING =>
+        new ConsistentBucketIdentifier(new HoodieConsistentHashingMetadata(partitionPath, numBuckets))
+          .getBucket(recordKey, "id").getFileIdPrefix
+    }
+  }
+
   private def assertSnapshot(tablePath: String, expected: Map[String, String]): Unit = {
     val actual = spark.read.format("hudi").load(tablePath)
       .select("id", "value")
@@ -429,6 +536,15 @@ class TestLSMDataSource extends SparkClientFunctionalTestHarness {
 }
 
 object TestLSMDataSource {
+
+  def bucketBulkInsertParams(): java.util.stream.Stream[Arguments] =
+    java.util.stream.Stream.of(
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieIndex.BucketIndexEngineType.SIMPLE, Boolean.box(false)),
+      Arguments.of(HoodieTableType.COPY_ON_WRITE, HoodieIndex.BucketIndexEngineType.SIMPLE, Boolean.box(true)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieIndex.BucketIndexEngineType.SIMPLE, Boolean.box(false)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieIndex.BucketIndexEngineType.SIMPLE, Boolean.box(true)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING, Boolean.box(false)),
+      Arguments.of(HoodieTableType.MERGE_ON_READ, HoodieIndex.BucketIndexEngineType.CONSISTENT_HASHING, Boolean.box(true)))
 
   def bulkInsertWithHoodieRecordPathParams(): java.util.stream.Stream[Arguments] =
     java.util.stream.Stream.of(

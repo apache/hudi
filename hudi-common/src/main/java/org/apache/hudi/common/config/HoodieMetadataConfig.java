@@ -100,6 +100,15 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "instead of executing them inline. This prevents the current writer from executing compaction/logcompaction "
           + "on the metadata table, allowing a separate async pipeline to handle them.");
 
+  public static final ConfigProperty<Boolean> INLINE_TABLE_SERVICES_ENABLED = ConfigProperty
+      .key(METADATA_PREFIX + ".inline.table.services.enabled")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("If false, a data table writer does not run clean, compaction or archival on the metadata table "
+          + "inline. For jobs that must not maintain the metadata table, such as a partition delete, "
+          + "and that leave it to the regular writers or a table service platform.");
+
   public static final Set<ActionType> SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS =
       EnumSet.of(ActionType.compaction, ActionType.logcompaction);
 
@@ -199,7 +208,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".skip.zero.size.files.on.initialize")
       .defaultValue(false)
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("When enabled, zero-size data files encountered while listing the data table during "
           + "metadata table initialization and restore sync are skipped instead of being recorded in the metadata "
           + "table. Skipped files remain on storage and are not tracked by the metadata table or the cleaner; "
@@ -250,7 +259,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".index.partition.stats.enable")
       .defaultValue(true)
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.0.0")
       .withDocumentation("Enable aggregating the column stats index to the partition level in the metadata table, "
           + "used to prune partitions during index lookups. Partition stats requires the column stats index "
           + "(" + METADATA_PREFIX + ".index.column.stats.enable) to be enabled and has no effect when column stats "
@@ -709,7 +718,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .key(METADATA_PREFIX + ".enable.detailed.metrics")
       .defaultValue(false)
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion("1.2.1")
       .withDocumentation("Enables detailed metadata table metrics — per-metadata-partition file size and base/log "
           + "file counts. Emitting these requires building a HoodieTableFileSystemView for the metadata table on "
           + "the driver, which adds memory pressure at scale; leave disabled unless you need the breakdown.");
@@ -744,6 +753,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean isTableServiceManagerEnabled() {
     return getBoolean(TABLE_SERVICE_MANAGER_ENABLED);
+  }
+
+  public boolean isInlineTableServicesEnabled() {
+    return getBoolean(INLINE_TABLE_SERVICES_ENABLED);
   }
 
   public String getTableServiceManagerActions() {
@@ -1097,6 +1110,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withTableServiceManagerEnabled(boolean enabled) {
       metadataConfig.setValue(TABLE_SERVICE_MANAGER_ENABLED, String.valueOf(enabled));
+      return this;
+    }
+
+    public Builder withInlineTableServicesEnabled(boolean enabled) {
+      metadataConfig.setValue(INLINE_TABLE_SERVICES_ENABLED, String.valueOf(enabled));
       return this;
     }
 

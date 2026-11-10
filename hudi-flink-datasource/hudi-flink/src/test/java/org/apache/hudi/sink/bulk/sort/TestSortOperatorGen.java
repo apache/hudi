@@ -26,9 +26,11 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.runtime.generated.NormalizedKeyComputer;
 import org.apache.flink.table.runtime.generated.RecordComparator;
+import org.apache.flink.table.types.logical.ArrayType;
 import org.apache.flink.table.types.logical.DecimalType;
 import org.apache.flink.table.types.logical.IntType;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.MapType;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.logical.TimestampType;
 import org.apache.flink.table.types.logical.VarBinaryType;
@@ -39,6 +41,7 @@ import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -125,6 +128,32 @@ class TestSortOperatorGen {
 
     assertFalse(computer.isKeyFullyDetermines());
     assertEquals(0, computer.compareKey(segment1, 0, segment2, 0));
+  }
+
+  @Test
+  void testRejectsFieldTheSorterCannotOrder() {
+    // ROW, ARRAY and MAP fall to compareExpression's fallback, whose compareValues takes only byte[] and
+    // Comparable; BinaryRowData, BinaryArrayData and BinaryMapData are neither, so the sort would fail per
+    // record. The constructor rejects such a field by name instead.
+    RowType rowType = RowType.of(
+        new LogicalType[] {
+            new IntType(),
+            RowType.of(new LogicalType[] {new IntType()}, new String[] {"f0"}),
+            new ArrayType(new IntType()),
+            new MapType(new VarCharType(), new IntType())
+        },
+        new String[] {"id", "f_row", "f_array", "f_map"});
+
+    for (String field : new String[] {"f_row", "f_array", "f_map"}) {
+      IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+          () -> new SortOperatorGen(rowType, new String[] {"id", field}));
+      assertTrue(failure.getMessage().contains("'" + field + "'"),
+          "The error must name the unsortable field, got: " + failure.getMessage());
+    }
+    assertFalse(SortOperatorGen.isSortable(new MapType(new VarCharType(), new IntType())));
+    assertTrue(SortOperatorGen.isSortable(new IntType()));
+    // The sortable field next to them is still accepted
+    new SortOperatorGen(rowType, new String[] {"id"});
   }
 
   private static GenericRowData row(Integer id, String name, byte[] bytes, String amount, long timestampMillis) {

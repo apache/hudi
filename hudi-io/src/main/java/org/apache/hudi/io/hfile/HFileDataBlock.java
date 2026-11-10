@@ -93,8 +93,9 @@ public class HFileDataBlock extends HFileBlock {
    * of the data block; the cursor points to the actual first key of the data block which is
    * lexicographically greater than the lookup key.
    */
-  int seekTo(HFileCursor cursor, Key key, int blockStartOffsetInFile) {
-    int relativeOffset = cursor.getOffset() - blockStartOffsetInFile;
+  int seekTo(HFileCursor cursor, Key key, long blockStartOffsetInFile) {
+    // Safe cast: a block is under 2GB, so an offset within it fits an int.
+    int relativeOffset = (int) (cursor.getOffset() - blockStartOffsetInFile);
     int lastRelativeOffset = relativeOffset;
     Option<KeyValue> lastKeyValue = cursor.getKeyValue();
     while (relativeOffset < uncompressedContentEndRelativeOffset) {
@@ -158,8 +159,9 @@ public class HFileDataBlock extends HFileBlock {
    *                               HFile.
    * @return {@code true} if there is next {@link KeyValue}; {code false} otherwise.
    */
-  boolean next(HFileCursor cursor, int blockStartOffsetInFile) {
-    int offset = cursor.getOffset() - blockStartOffsetInFile;
+  boolean next(HFileCursor cursor, long blockStartOffsetInFile) {
+    // Safe cast: a block is under 2GB, so an offset within it fits an int.
+    int offset = (int) (cursor.getOffset() - blockStartOffsetInFile);
     Option<KeyValue> keyValue = cursor.getKeyValue();
     if (!keyValue.isPresent()) {
       keyValue = Option.of(readKeyValue(offset));

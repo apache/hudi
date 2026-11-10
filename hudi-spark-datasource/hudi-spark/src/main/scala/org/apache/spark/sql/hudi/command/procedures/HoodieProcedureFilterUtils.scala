@@ -18,11 +18,15 @@
 package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow}
+import org.apache.spark.sql.catalyst.analysis.{AnsiTypeCoercion, DecimalPrecision, TypeCoercion, UnresolvedAttribute, UnresolvedFunction}
+import org.apache.spark.sql.catalyst.expressions.{BinaryArithmetic, BinaryComparison, Cast, Coalesce, Divide, EqualNullSafe, Expression, GenericInternalRow, In, IntegralDivide, Unevaluable}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{BooleanType, ByteType, DataType, DecimalType, DoubleType, IntegerType, LongType, NullType, NumericType, ShortType, StructType}
 import org.apache.spark.unsafe.types.UTF8String
+
+import java.time.DateTimeException
+import java.util.Locale
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -56,11 +60,16 @@ object HoodieProcedureFilterUtils {
       Try {
         val parsedExpr = sparkSession.sessionState.sqlParser.parseExpression(filterExpression)
 
-        rows.filter { row =>
-          evaluateExpressionOnRow(parsedExpr, row, schema)
-        }
+        // Binding and resolution depend only on the schema, so run the three passes once for the
+        // whole batch instead of per row.
+        val boundExpr = bindAndResolveExpression(parsedExpr, schema)
+        rows.filter(row => evaluateExpressionOnRow(boundExpr, row, schema))
       } match {
         case Success(filteredRows) => filteredRows
+        // Surface an overflowing ANSI cast or arithmetic, or an ANSI cast of a malformed string,
+        // with Spark's own exception rather than restating it as a filter-expression problem: the
+        // expression is fine, the data does not fit.
+        case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException)) => throw e
         case Failure(exception) =>
           throw new IllegalArgumentException(
             s"Failed to parse or evaluate filter expression '$filterExpression': ${exception.getMessage}",
@@ -70,13 +79,9 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  private def evaluateExpressionOnRow(expression: Expression, row: Row, schema: StructType): Boolean = {
-
-    val internalRow = convertRowToInternalRow(row, schema)
-
-    Try {
-      // First pass: bind attributes
-      val attributeBound = expression.transform {
+  private def bindAndResolveExpression(expression: Expression, schema: StructType): Expression = {
+    // First pass: bind attributes
+    val attributeBound = expression.transform {
         case attr: org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute =>
           try {
             val fieldIndex = schema.fieldIndex(attr.name)
@@ -87,10 +92,10 @@ object HoodieProcedureFilterUtils {
           }
       }
 
-      // Second pass: resolve functions
-      val functionResolved = attributeBound.transform {
+    // Second pass: resolve functions
+    val functionResolved = attributeBound.transform {
         case unresolvedFunc: org.apache.spark.sql.catalyst.analysis.UnresolvedFunction =>
-          unresolvedFunc.nameParts.head.toLowerCase match {
+          unresolvedFunc.nameParts.head.toLowerCase(Locale.ROOT) match {
             case "upper" =>
               if (unresolvedFunc.arguments.length == 1) {
                 org.apache.spark.sql.catalyst.expressions.Upper(unresolvedFunc.arguments.head)
@@ -352,21 +357,43 @@ object HoodieProcedureFilterUtils {
               }
             case _ => unresolvedFunc
           }
-      }
+    }
 
-      // Third pass: handle type coercion for numeric comparisons
-      val boundExpr = functionResolved.transformUp {
-        case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
-          applyTypeCoercion(eq.left, eq.right, org.apache.spark.sql.catalyst.expressions.EqualTo.apply, eq)
-        case gt: org.apache.spark.sql.catalyst.expressions.GreaterThan =>
-          applyTypeCoercion(gt.left, gt.right, org.apache.spark.sql.catalyst.expressions.GreaterThan.apply, gt)
-        case gte: org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual =>
-          applyTypeCoercion(gte.left, gte.right, org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual.apply, gte)
-        case lt: org.apache.spark.sql.catalyst.expressions.LessThan =>
-          applyTypeCoercion(lt.left, lt.right, org.apache.spark.sql.catalyst.expressions.LessThan.apply, lt)
-        case lte: org.apache.spark.sql.catalyst.expressions.LessThanOrEqual =>
-          applyTypeCoercion(lte.left, lte.right, org.apache.spark.sql.catalyst.expressions.LessThanOrEqual.apply, lte)
-      }
+    // Third pass: handle type coercion for numeric comparisons
+    functionResolved.transformUp {
+      case eq: org.apache.spark.sql.catalyst.expressions.EqualTo =>
+        applyTypeCoercion(eq)
+      case gt: org.apache.spark.sql.catalyst.expressions.GreaterThan =>
+        applyTypeCoercion(gt)
+      case gte: org.apache.spark.sql.catalyst.expressions.GreaterThanOrEqual =>
+        applyTypeCoercion(gte)
+      case lt: org.apache.spark.sql.catalyst.expressions.LessThan =>
+        applyTypeCoercion(lt)
+      case lte: org.apache.spark.sql.catalyst.expressions.LessThanOrEqual =>
+        applyTypeCoercion(lte)
+      case eqns: EqualNullSafe =>
+        applyTypeCoercion(eqns)
+      case in: In =>
+        applyInTypeCoercion(in)
+      // Divide and IntegralDivide are BinaryArithmetic but accept only Double or Decimal, and only
+      // Long or Decimal, respectively, so each needs its own target type and has to be matched
+      // before the general arithmetic case below.
+      case divide: Divide =>
+        applyDivideTypeCoercion(divide)
+      case idiv: IntegralDivide =>
+        applyIntegralDivideTypeCoercion(idiv)
+      case arith: BinaryArithmetic =>
+        applyArithmeticTypeCoercion(arith)
+      case coalesce: Coalesce =>
+        applyCoalesceTypeCoercion(coalesce)
+    }
+  }
+
+  private def evaluateExpressionOnRow(boundExpr: Expression, row: Row, schema: StructType): Boolean = {
+
+    val internalRow = convertRowToInternalRow(row, schema)
+
+    Try {
       val result = boundExpr.eval(internalRow)
 
       result match {
@@ -381,6 +408,11 @@ object HoodieProcedureFilterUtils {
       }
     } match {
       case Success(result) => result
+      // Spark raises SparkArithmeticException for an overflowing ANSI cast or arithmetic, and
+      // SparkNumberFormatException or SparkDateTimeException for an ANSI cast of a malformed
+      // string; each extends the matching JDK type. Swallowing one would silently drop a row the
+      // same query keeps, so let it out and let the caller fail the way the equivalent query does.
+      case Failure(e @ (_: ArithmeticException | _: NumberFormatException | _: DateTimeException)) => throw e
       case Failure(_) => false
     }
   }
@@ -468,9 +500,27 @@ object HoodieProcedureFilterUtils {
         val columnNames = schema.fieldNames.toSet
         val referencedColumns = extractColumnReferences(parsedExpr)
         val invalidColumns = referencedColumns -- columnNames
+        val resolvedExpr = bindAndResolveExpression(parsedExpr, schema)
+        val unsupportedFunctions = extractFunctionReferences(resolvedExpr)
+        val unsupportedExpressions = resolvedExpr.collect {
+          case expression: Unevaluable
+            if !expression.isInstanceOf[UnresolvedAttribute]
+              && !expression.isInstanceOf[UnresolvedFunction] => expression.prettyName
+        }.toSet
 
         if (invalidColumns.nonEmpty) {
           Left(s"Invalid column references: ${invalidColumns.mkString(", ")}. Available columns: ${columnNames.mkString(", ")}")
+        } else if (unsupportedFunctions.nonEmpty) {
+          Left(s"Unsupported functions: ${unsupportedFunctions.toSeq.sorted.mkString(", ")}")
+        } else if (!resolvedExpr.resolved || unsupportedExpressions.nonEmpty) {
+          val names = unsupportedExpressions.toSeq.sorted
+          val detail = if (names.nonEmpty) s": ${names.mkString(", ")}" else ""
+          Left(s"Unsupported filter expression$detail")
+        } else if (resolvedExpr.dataType != BooleanType) {
+          // Spark rejects any non-boolean filter condition, string included, with
+          // DATATYPE_MISMATCH.FILTER_NOT_BOOLEAN. Without this a resolvable expression such as
+          // "ts + 1" would report zero matching rows instead of the error the same query raises.
+          Left(s"Filter expression must be boolean, got ${resolvedExpr.dataType.simpleString}")
         } else {
           Right(())
         }
@@ -479,6 +529,12 @@ object HoodieProcedureFilterUtils {
         case Failure(exception) => Left(s"Invalid filter expression: ${exception.getMessage}")
       }
     }
+  }
+
+  private def extractFunctionReferences(expression: Expression): Set[String] = expression match {
+    case unresolved: UnresolvedFunction =>
+      Set(unresolved.nameParts.mkString(".")) ++ unresolved.children.flatMap(extractFunctionReferences)
+    case _ => expression.children.flatMap(extractFunctionReferences).toSet
   }
 
   private def extractColumnReferences(expression: Expression): Set[String] = {
@@ -491,18 +547,197 @@ object HoodieProcedureFilterUtils {
     }
   }
 
-  private def applyTypeCoercion[T <: org.apache.spark.sql.catalyst.expressions.Expression](
-                                                                                            left: org.apache.spark.sql.catalyst.expressions.Expression,
-                                                                                            right: org.apache.spark.sql.catalyst.expressions.Expression,
-                                                                                            constructor: (org.apache.spark.sql.catalyst.expressions.Expression, org.apache.spark.sql.catalyst.expressions.Expression) => T,
-                                                                                            original: T): T = {
-    (left, right) match {
-      case (boundRef: org.apache.spark.sql.catalyst.expressions.BoundReference, literal: org.apache.spark.sql.catalyst.expressions.Literal)
-        if boundRef.dataType == org.apache.spark.sql.types.LongType && literal.dataType == org.apache.spark.sql.types.IntegerType =>
-        val castExpr = org.apache.spark.sql.catalyst.expressions.Cast(boundRef, org.apache.spark.sql.types.IntegerType)
-        constructor(castExpr, literal)
-      case _ => original
+  private def applyTypeCoercion(original: BinaryComparison): Expression = {
+    if (!original.childrenResolved) {
+      original
+    } else {
+      // Spark can replace an integral/decimal-literal inequality with an integral comparison,
+      // avoiding a lossy cast of the column. It also gives integral literals minimum decimal
+      // precision before finding the common comparison type.
+      val promoted = DecimalPrecision.transform.applyOrElse(original, identity[Expression])
+      // Mixed decimal/integral promotion creates two decimal operands. Apply the decimal-pair
+      // rule next, just as a subsequent analyzer iteration would.
+      val comparison = DecimalPrecision.transform.applyOrElse(promoted, identity[Expression])
+      comparison match {
+        case binary: BinaryComparison =>
+          widenOperands(Seq(binary.left, binary.right))
+            .map(binary.withNewChildren).getOrElse(binary)
+        case other => other
+      }
     }
   }
-}
 
+  private def applyInTypeCoercion(in: In): Expression = {
+    widenOperands(in.value +: in.list) match {
+      case Some(widened) => In(widened.head, widened.tail)
+      case _ => in
+    }
+  }
+
+  /**
+   * Arithmetic keeps its decimal operands exactly as they are. Unlike a comparison,
+   * BinaryArithmetic.checkInputDataTypes accepts two decimals of different precision and scale and
+   * derives the result type from them, so widening to a common type changes the answer rather than
+   * enabling it: DECIMAL(38,18) * DECIMAL(2,1) yields a scale-16 product, while casting both to
+   * DECIMAL(38,18) first drives the product to scale 6 and rounds 0.0000001 away to zero.
+   *
+   * Spark's DecimalPrecision rule promotes integral operands without changing the existing
+   * decimal's type, including minimum precision for integral literals. It also promotes decimals
+   * mixed with floating-point operands to Double. Null operands take the other operand's type.
+   */
+  private def applyArithmeticTypeCoercion(arith: BinaryArithmetic): Expression = {
+    val operands = Seq(arith.left, arith.right)
+    if (operands.exists(!_.resolved) || !operands.forall(operand => isNumericOrNull(operand.dataType))) {
+      arith
+    } else {
+      val decimalOperands = operands.exists(_.dataType.isInstanceOf[DecimalType])
+      val promoted = if (decimalOperands) {
+        DecimalPrecision.transform.applyOrElse(arith, identity[Expression])
+      } else {
+        arith
+      }
+      promoted match {
+        case binary: BinaryArithmetic =>
+          val children = Seq(binary.left, binary.right)
+          val widened = if (children.forall(_.dataType.isInstanceOf[DecimalType])) {
+            binary
+          } else {
+            widenOperands(children)
+              .map(binary.withNewChildren).getOrElse(binary)
+          }
+          // Spark 3.3 wraps decimal arithmetic in CheckOverflow after operand promotion.
+          // Later versions calculate the result precision within BinaryArithmetic itself.
+          if (decimalOperands) DecimalPrecision.transform.applyOrElse(widened, identity[Expression]) else widened
+        case other => other
+      }
+    }
+  }
+
+  /**
+   * Divide only accepts Double or Decimal, so widening its operands to their common numeric type
+   * leaves an integral pair unresolved and "ts / 2 > 500" rejected while "price / 2 > 5" works.
+   * Mirror the analyzer's Division rule instead: leave a pair that involves a decimal to the same
+   * widening as the other arithmetic, and promote everything else to Double. Like Spark, that
+   * includes a null operand, so "ts / null" resolves and evaluates to null rather than failing
+   * validation. The rule is unchanged between the two majors this builds against, only relocated:
+   *
+   * 3.5.5 object Division, in
+   * https://github.com/apache/spark/blob/v3.5.5/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/analysis/TypeCoercion.scala
+   * 4.1.1
+   * https://github.com/apache/spark/blob/v4.1.1/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/analysis/DivisionTypeCoercion.scala
+   */
+  private def applyDivideTypeCoercion(divide: Divide): Expression = {
+    val operands = Seq(divide.left, divide.right)
+    if (operands.exists(!_.resolved) || !operands.forall(operand => isNumericOrNull(operand.dataType))) {
+      divide
+    } else if (operands.exists(_.dataType.isInstanceOf[DecimalType])) {
+      applyArithmeticTypeCoercion(divide)
+    } else {
+      divide.withNewChildren(operands.map(operand => castTo(operand, DoubleType)))
+    }
+  }
+
+  /**
+   * IntegralDivide accepts only Long or Decimal, and its operands are never widened against each
+   * other, so a same-typed Int pair leaves "id div 2" unresolved while "ts div 2" resolves. Mirror
+   * the analyzer's IntegralDivision rule, which promotes each narrower integral operand on its own
+   * before the arithmetic widening runs.
+   */
+  private def applyIntegralDivideTypeCoercion(divide: IntegralDivide): Expression = {
+    if (!divide.childrenResolved) {
+      divide
+    } else {
+      val promoted = divide.withNewChildren(Seq(divide.left, divide.right).map { operand =>
+        operand.dataType match {
+          case ByteType | ShortType | IntegerType => castTo(operand, LongType)
+          case _ => operand
+        }
+      })
+      promoted match {
+        case arith: BinaryArithmetic => applyArithmeticTypeCoercion(arith)
+        case other => other
+      }
+    }
+  }
+
+  /** Spark's own guard for the numeric coercion rules, which admit a null literal. */
+  private def isNumericOrNull(dataType: DataType): Boolean =
+    dataType.isInstanceOf[NumericType] || dataType.isInstanceOf[NullType]
+
+  private def applyCoalesceTypeCoercion(coalesce: Coalesce): Expression = {
+    widenOperands(coalesce.children) match {
+      case Some(widened) => Coalesce(widened)
+      case _ => coalesce
+    }
+  }
+
+  /**
+   * Widens comparison operands of differing numeric types to their common wider type, so that
+   * e.g. a LongType column compares against an IntegerType literal on the widened Long rather
+   * than narrowing the column. A NullType operand takes the type of its peers whatever that type
+   * is, the way Spark plans `ts IN (1000, null)` and `name IN ('a1', null)`. Returns None when the
+   * operands need no widening or cannot be widened, in which case the caller keeps the expression
+   * untouched.
+   *
+   * Numeric conversion can still lose precision:
+   *  - Large integers may round when converted to Float or Double. For example, Long 16777217
+   *    becomes Float 16777216.
+   *  - Large integers may overflow when converted to a decimal with insufficient space before the
+   *    decimal point. For example, DECIMAL(38,20) allows only 18 digits before the decimal point,
+   *    so the 19-digit Long 9000000000000000000 does not fit.
+   *
+   * Rounding can change comparison results, silently, exactly as it does in a query. Overflow
+   * follows the session's ANSI mode the way Spark's own Cast does: without ANSI the cast yields
+   * null and the row is filtered out, with ANSI it raises and the failure reaches the caller.
+   */
+  private def widenOperands(operands: Seq[Expression]): Option[Seq[Expression]] = {
+    if (operands.exists(!_.resolved)) {
+      // dataType throws on an unresolved operand. Leaving it untouched lets validateFilterExpression
+      // report its own message ("Invalid column references", "Unsupported functions") instead of an
+      // UnresolvedException, and keeps Or/And short-circuiting intact at eval time.
+      None
+    } else {
+      val operandTypes = operands.map(_.dataType)
+      val nonNullTypes = operandTypes.filterNot(_.isInstanceOf[NullType]).distinct
+      if (operandTypes.distinct.length == 1) {
+        None
+      } else if (nonNullTypes.length == 1) {
+        // Only nulls differ from a single peer type, so the nulls take that type whether or not it
+        // is numeric. Nothing else needs widening.
+        Some(operands.map(operand => castTo(operand, nonNullTypes.head)))
+      } else if (!operandTypes.forall(isNumericOrNull)) {
+        None
+      } else {
+        findWiderNumericType(operandTypes)
+          .map(widerType => operands.map(operand => castTo(operand, widerType)))
+      }
+    }
+  }
+
+  /**
+   * Mirrors the analyzer's choice of coercion rules, so that a filter widens the way the same
+   * comparison would in a SQL query. The two disagree: for BIGINT with FLOAT, AnsiTypeCoercion
+   * gives DOUBLE while TypeCoercion follows numericPrecedence and gives FLOAT. Spark 4 defaults
+   * to ANSI mode, Spark 3 does not.
+   *
+   * Reads SQLConf.get rather than the SparkSession because Cast takes its eval mode from that same
+   * thread-local at construction, and the two-argument Cast(child, dataType) is the only form that
+   * is portable across Spark 3.3 to 4.x (3.3 takes ansiEnabled, 3.4+ takes evalMode).
+   *
+   * Decimal pairs go through Spark's own precision rules, which likewise only moved between the
+   * majors: 3.5.5 analysis/DecimalPrecision.scala, 4.1.1 analysis/DecimalPrecisionTypeCoercion
+   * .scala. Parity for a comparison whose common precision would exceed 38 is not settled here;
+   * see HUDI #19860.
+   */
+  private def findWiderNumericType(types: Seq[DataType]): Option[DataType] = {
+    if (SQLConf.get.ansiEnabled) {
+      AnsiTypeCoercion.findWiderCommonType(types)
+    } else {
+      TypeCoercion.findWiderCommonType(types)
+    }
+  }
+
+  private def castTo(expression: Expression, dataType: DataType): Expression = {
+    if (expression.dataType == dataType) expression else Cast(expression, dataType)
+  }
+}

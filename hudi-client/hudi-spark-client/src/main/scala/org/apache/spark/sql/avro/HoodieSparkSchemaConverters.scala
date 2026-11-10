@@ -199,8 +199,12 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
       case st: StructType =>
         val childNameSpace = if (nameSpace != "") s"$nameSpace.$recordName" else recordName
 
-        // Check if this might be a union (using heuristic like Avro converter)
-        if (canBeUnion(st)) {
+        // Check if this might be a union (using heuristic like Avro converter). The root struct is
+        // never one: it is the row, so a projection whose columns are all nullable and named
+        // member0..memberN would otherwise convert to a union, which pruneDataSchema keeps whole --
+        // handing the reader the entire table schema -- or which Avro rejects outright once two of
+        // those columns share a type ("Duplicate in union").
+        if (depth > 0 && canBeUnion(st)) {
           val nonNullUnionFieldTypes = st.map { f =>
             toHoodieTypeNested(f.dataType, nullable = false, f.name, childNameSpace, f.metadata, depth + 1)
           }
@@ -395,7 +399,6 @@ object HoodieSparkSchemaConverters extends SparkAdapterSupport {
         }
 
       // VARIANT type (Spark >4.x only), which will be handled via SparkAdapter
-      // TODO: Check if internalSchema will throw any errors here: #18021
       case HoodieSchemaType.VARIANT =>
         sparkAdapter.getVariantDataType match {
           case Some(variantType) => SchemaType(variantType, nullable = false)

@@ -20,7 +20,6 @@ package org.apache.hudi.utilities;
 
 import org.apache.hudi.client.transaction.lock.FileSystemBasedLockProvider;
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -46,7 +45,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 
-import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage;
 import static org.apache.hudi.testutils.HoodieClientTestUtils.getSparkConfForTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -83,7 +82,7 @@ public class TestUtilHelpers {
         sparkSession,
         new HoodieStreamerMetrics(
                 HoodieWriteConfig.newBuilder().withPath("mypath").build(),
-                HoodieStorageUtils.getStorage(getDefaultStorageConf())),
+                getDefaultStorage()),
         new DefaultStreamContext(new SchemaTestProvider(typedProperties), Option.empty()));
     assertTrue(source instanceof AvroKafkaSource);
   }
@@ -100,7 +99,7 @@ public class TestUtilHelpers {
         sparkSession,
         new HoodieStreamerMetrics(
                 HoodieWriteConfig.newBuilder().withPath("mypath").build(),
-                HoodieStorageUtils.getStorage(getDefaultStorageConf())),
+                getDefaultStorage()),
         new DefaultStreamContext(new SchemaTestProvider(typedProperties), Option.empty())));
     // We expect two constructors to complain about this error.
     assertEquals(2, e.getSuppressed().length);

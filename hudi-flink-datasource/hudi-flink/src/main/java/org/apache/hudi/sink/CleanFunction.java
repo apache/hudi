@@ -27,7 +27,6 @@ import org.apache.hudi.sink.compact.handler.CleanHandler;
 import org.apache.hudi.sink.compact.handler.TableServiceHandlerFactory;
 import org.apache.hudi.util.FlinkWriteClients;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.api.common.state.CheckpointListener;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.state.FunctionInitializationContext;
@@ -41,13 +40,10 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
  * at a time, a new task can not be scheduled until the last task finished(fails or normally succeed).
  * The cleaning task never expects to throw but only log.
  */
-@Slf4j
 public class CleanFunction<T> extends AbstractRichFunctionAdapter
     implements SinkFunctionAdapter<T>, CheckpointedFunction, CheckpointListener {
 
   private final Configuration conf;
-
-  protected HoodieFlinkWriteClient writeClient;
 
   private transient Option<CleanHandler> cleanHandlerOpt;
 
@@ -58,9 +54,12 @@ public class CleanFunction<T> extends AbstractRichFunctionAdapter
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    this.cleanHandlerOpt = conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)
-        ? Option.of(TableServiceHandlerFactory.createCleanHandler(conf, writeClient)) : Option.empty();
+    if (conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
+      HoodieFlinkWriteClient writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
+      this.cleanHandlerOpt = Option.of(TableServiceHandlerFactory.createCleanHandler(conf, writeClient));
+    } else {
+      this.cleanHandlerOpt = Option.empty();
+    }
     this.cleanHandlerOpt.ifPresent(CleanHandler::clean);
   }
 

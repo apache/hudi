@@ -20,6 +20,7 @@ package org.apache.hudi.sink.v2.clustering;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -80,6 +81,8 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
 
   private transient HoodieFlinkTable<?> table;
 
+  protected transient HoodieFlinkWriteClient writeClient;
+
   /**
    * Buffer to collect the event from each clustering task {@code ClusteringFunction}.
    *
@@ -105,9 +108,7 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    if (writeClient == null) {
-      this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    }
+    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.commitBuffer = new HashMap<>();
     this.clusteringPlanCache = new HashMap<>();
     this.table = writeClient.getHoodieTable();
@@ -130,6 +131,13 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileIds(), event);
     commitIfNecessary(instant, commitBuffer.get(instant).values());
+  }
+
+  @Override
+  public void close() throws Exception {
+    try (HoodieFlinkWriteClient ignored = writeClient) {
+      super.close();
+    }
   }
 
   private long getNumErrorRecords(ClusteringCommitEvent event) {
@@ -230,7 +238,7 @@ public class ClusteringCommitSinkV2 extends CleanFunctionV2<ClusteringCommitEven
 
     clusteringMetrics.updateCommitMetrics(instant, writeMetadata.getCommitMetadata().get());
     // whether to clean up the input base parquet files used for clustering
-    if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED) && !isCleaning) {
+    if (!conf.get(FlinkOptions.CLEAN_ASYNC_ENABLED)) {
       log.info("Running inline clean");
       this.writeClient.clean();
     }

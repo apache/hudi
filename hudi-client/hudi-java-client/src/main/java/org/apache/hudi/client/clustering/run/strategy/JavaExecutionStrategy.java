@@ -47,6 +47,7 @@ import org.apache.hudi.table.action.cluster.strategy.ClusteringExecutionStrategy
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -109,8 +110,11 @@ public abstract class JavaExecutionStrategy<T>
    */
   protected BulkInsertPartitioner<List<HoodieRecord<T>>> getPartitioner(Map<String, String> strategyParams, HoodieSchema schema) {
     if (strategyParams.containsKey(PLAN_STRATEGY_SORT_COLUMNS.key())) {
+      // Trim: the config and inline paths pass the list through verbatim (`id, ts`), while the
+      // partitioner looks up the column names as given.
       return new JavaCustomColumnsSortPartitioner(
-          strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","),
+          Arrays.stream(strategyParams.get(PLAN_STRATEGY_SORT_COLUMNS.key()).split(","))
+              .map(String::trim).toArray(String[]::new),
           HoodieSchemaUtils.addMetadataFields(schema), getWriteConfig());
     } else {
       return JavaBulkInsertInternalPartitionerFactory.get(getWriteConfig().getBulkInsertSortMode());

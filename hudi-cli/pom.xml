@@ -236,6 +236,12 @@
       <version>${project.version}</version>
     </dependency>
 
+    <!-- JCommander for SparkMain named-argument CLI (HUDI-96) -->
+    <dependency>
+      <groupId>com.beust</groupId>
+      <artifactId>jcommander</artifactId>
+    </dependency>
+
     <!-- Logging -->
     <dependency>
       <groupId>org.apache.logging.log4j</groupId>

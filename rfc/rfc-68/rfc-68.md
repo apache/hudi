@@ -49,7 +49,7 @@ a. Add one more member variable(Integer rowGroupId) into the class HoodieRecordL
  protected Integer rowGroupNum;
  }</pre>
 
-b. Number of rowgroup of a Parquet starts from 0 which continously increases util BlockSize reaches `hoodie.parquet.block.size`.  Since every record in parquet belongs to a rowgroup, we can simply use parquet API to locate rowgroup num of new record which needs to be written into corresponding parquet file, and then record rowgroup num into hoodieRecordLocation of each hoodieRecord.  HoodieRecordLocations will be collected into WriteStatus which will be updated to the index on batch.
+b. Number of rowgroup of a Parquet starts from 0 which continuously increases until BlockSize reaches `hoodie.parquet.block.size`.  Since every record in parquet belongs to a rowgroup, we can simply use parquet API to locate rowgroup num of new record which needs to be written into corresponding parquet file, and then record rowgroup num into hoodieRecordLocation of each hoodieRecord.  HoodieRecordLocations will be collected into WriteStatus which will be updated to the index on batch.
 
 c. At phase of tagging index, rowgroup num will be queried out, so that they can be used to accelerate updating files.
 

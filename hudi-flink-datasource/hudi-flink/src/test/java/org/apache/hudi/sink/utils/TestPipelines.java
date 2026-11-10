@@ -25,6 +25,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.sink.bootstrap.TimeBoundedRLIBootstrapOperator;
 import org.apache.hudi.sink.partitioner.GlobalRecordIndexPartitioner;
 import org.apache.hudi.utils.TestConfigurations;
 
@@ -34,6 +35,8 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.datastream.DataStreamSource;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
+import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.runtime.partitioner.CustomPartitionerWrapper;
 import org.apache.flink.streaming.runtime.partitioner.StreamPartitioner;
@@ -48,6 +51,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -99,6 +103,163 @@ public class TestPipelines {
         Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
     assertEquals("index_bootstrap", streaming.getTransformation().getName());
     assertEquals(3, streaming.getParallelism());
+  }
+
+  @Test
+  void testBootstrapSkippedForBucketIndex() {
+    // Bucket index assigns buckets by hashing the record key directly, so it never relies on
+    // a bootstrapped key index, regardless of the bounded/streaming mode.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.BUCKET.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+    assertEquals("row_data_to_hoodie_record", bounded.getTransformation().getName());
+
+    DataStream<HoodieFlinkInternalRow> streaming =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
+    assertEquals("row_data_to_hoodie_record", streaming.getTransformation().getName());
+  }
+
+  @Test
+  void testStreamingNonRLIWithoutBootstrapEnabledSkipsBootstrapOperator() {
+    // Streaming execution only wires in the bootstrap operator when the flag is explicitly
+    // turned on; the bounded-write auto-bootstrap rule does not apply here.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> streaming =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
+
+    assertEquals("row_data_to_hoodie_record", streaming.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedGlobalIndexNonRLIPartitionedUsesStreamBootstrap() {
+    // The per-partition batch bootstrap path is reserved for non-global, non-RLI indexes;
+    // a global (non-RLI) index must fall back to the generic streaming bootstrap operator
+    // even for bounded/batch execution, since it is not safe to shuffle by partition path.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, true);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("index_bootstrap", bounded.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedNonPartitionedTableUsesStreamBootstrap() {
+    // The per-partition batch bootstrap path shuffles by partition path, so it only applies to
+    // partitioned tables; a non-partitioned table must use the generic streaming bootstrap
+    // operator for bounded execution instead.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    conf.set(FlinkOptions.PARTITION_PATH_FIELD, "");
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("index_bootstrap", bounded.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedGlobalRLISkipsBootstrapOperator() {
+    // Global RLI bucket assignment queries the metadata table directly, so the generic
+    // index-bootstrap step (which loads existing keys into state for the default bucket
+    // assigner) must not be wired in for bounded/batch execution.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("row_data_to_hoodie_record", bounded.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedPartitionedRLISkipsBootstrapOperator() {
+    // Partitioned (non-global) RLI is routed to the DynamicBucketAssignOperator, which also
+    // looks up the record index directly rather than consuming bootstrapped state, so it must
+    // be treated the same as global RLI and skip the generic bootstrap operator when bounded.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, false);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("row_data_to_hoodie_record", bounded.getTransformation().getName());
+  }
+
+  @Test
+  void testBoundedPartitionedRLIStillBootstrapsWhenExplicitlyEnabled() {
+    // INDEX_BOOTSTRAP_ENABLED is an explicit override and must still wire in the bootstrap
+    // operator even for RLI index types.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> bounded =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, true, false);
+
+    assertEquals("index_bootstrap", bounded.getTransformation().getName());
+  }
+
+  @Test
+  void testPartitionedRLIWithRocksDBBackendUsesPartitionedRLIBootstrapOperator() {
+    // HoodieTableFactory no longer forces INDEX_BOOTSTRAP_ENABLED to false for RECORD_LEVEL_INDEX,
+    // so a user that wants time-bounded RLI bootstrap sets the flag explicitly alongside the
+    // rocksdb backend config; set it here to exercise the same gate a factory-built sink goes through.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+    conf.set(FlinkOptions.INDEX_BOOTSTRAP_ENABLED, true);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> streaming =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
+
+    assertEquals("index_bootstrap", streaming.getTransformation().getName());
+    assertInstanceOf(TimeBoundedRLIBootstrapOperator.class, bootstrapOperator(streaming));
+  }
+
+  @Test
+  void testPartitionedRLIWithRocksDBBackendSkipsBootstrapWhenNotExplicitlyEnabled() {
+    // With the forced false removed from HoodieTableFactory, INDEX_BOOTSTRAP_ENABLED is now the
+    // single source of truth in Pipelines: rocksdb backend + bootstrap-days config alone must not
+    // wire in a bootstrap operator unless the flag itself is turned on.
+    Configuration conf = defaultConf();
+    conf.set(FlinkOptions.INDEX_GLOBAL_ENABLED, false);
+    conf.set(FlinkOptions.INDEX_TYPE, HoodieIndex.IndexType.RECORD_LEVEL_INDEX.name());
+    conf.set(FlinkOptions.INDEX_RLI_BACKEND_TYPE, "rocksdb");
+    conf.set(FlinkOptions.INDEX_RLI_CACHE_ROCKSDB_BOOTSTRAP_DAYS, 1);
+    DataStream<RowData> input = rowDataInput();
+
+    DataStream<HoodieFlinkInternalRow> streaming =
+        Pipelines.bootstrap(conf, TestConfigurations.ROW_TYPE, input, false, false);
+
+    assertNotEquals("index_bootstrap", streaming.getTransformation().getName());
+  }
+
+  private Object bootstrapOperator(DataStream<HoodieFlinkInternalRow> stream) {
+    OneInputTransformation<?, ?> transformation = (OneInputTransformation<?, ?>) stream.getTransformation();
+    return ((SimpleOperatorFactory<?>) transformation.getOperatorFactory()).getOperator();
   }
 
   @Test

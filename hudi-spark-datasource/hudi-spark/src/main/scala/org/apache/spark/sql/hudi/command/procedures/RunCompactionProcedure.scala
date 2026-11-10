@@ -94,16 +94,18 @@ class RunCompactionProcedure extends BaseProcedure with ProcedureBuilder with Sp
     var (filteredPendingCompactionInstants, operation) = HoodieProcedureUtils.filterPendingInstantsAndGetOperation(
       pendingCompactionInstants, specificInstants.asInstanceOf[Option[String]], Option(op), limit)
 
+    confs = HoodieCLIUtils.getWriteParameters(sparkSession, metaClient, confs,
+      tableName.asInstanceOf[Option[String]])
+    // Apply the lock options before constructing the write client.
+    if (metaClient.getTableConfig.isMetadataTableAvailable
+      && !confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
+      confs = HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, confs) ++ confs
+    }
+
     var client: SparkRDDWriteClient[_] = null
     try {
       client = HoodieCLIUtils.createHoodieWriteClient(sparkSession, basePath, confs,
         tableName.asInstanceOf[Option[String]])
-
-      if (metaClient.getTableConfig.isMetadataTableAvailable) {
-        if (!confs.contains(HoodieLockConfig.LOCK_PROVIDER_CLASS_NAME.key)) {
-          confs = confs ++ HoodieCLIUtils.getLockOptions(basePath, metaClient.getBasePath.toUri.getScheme, client.getConfig.getCommonConfig.getProps())
-        }
-      }
 
       if (operation.isSchedule) {
         val instantTime = client.scheduleCompaction(HOption.empty[java.util.Map[String, String]])

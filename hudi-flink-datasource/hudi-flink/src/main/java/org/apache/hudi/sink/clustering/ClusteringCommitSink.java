@@ -20,6 +20,7 @@ package org.apache.hudi.sink.clustering;
 
 import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
+import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
@@ -73,6 +74,8 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
 
   private transient HoodieFlinkTable<?> table;
 
+  protected transient HoodieFlinkWriteClient writeClient;
+
   /**
    * Buffer to collect the event from each clustering task {@code ClusteringFunction}.
    *
@@ -98,9 +101,7 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
   @Override
   public void open(Configuration parameters) throws Exception {
     super.open(parameters);
-    if (writeClient == null) {
-      this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
-    }
+    this.writeClient = FlinkWriteClients.createWriteClient(conf, getRuntimeContext());
     this.commitBuffer = new HashMap<>();
     this.clusteringPlanCache = new HashMap<>();
     this.table = writeClient.getHoodieTable();
@@ -120,6 +121,13 @@ public class ClusteringCommitSink extends CleanFunction<ClusteringCommitEvent> {
     commitBuffer.computeIfAbsent(instant, k -> new HashMap<>())
         .put(event.getFileIds(), event);
     commitIfNecessary(instant, commitBuffer.get(instant).values());
+  }
+
+  @Override
+  public void close() throws Exception {
+    try (HoodieFlinkWriteClient ignored = writeClient) {
+      super.close();
+    }
   }
 
   private long getNumErrorRecords(ClusteringCommitEvent event) {

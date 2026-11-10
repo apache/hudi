@@ -42,6 +42,20 @@ async def test_loop_executes_tool_and_answers(settings, registry, fake_trino) ->
     assert "100 trips" in messages[-1].text()
 
 
+async def test_spark_agent_loop_calls_guarded_tool(settings, fake_trino) -> None:
+    from hudi_agent_gateway.tools import build_registry
+
+    spark = settings.model_copy(update={"sql_backend": "spark-connect"})
+    registry = build_registry(spark, fake_trino)
+    agent = build_agent(scripted_model(TOOL_CALL_THEN_ANSWER), registry, InMemorySaver(), spark)
+    result = await agent.ainvoke(
+        {"messages": [HumanMessage("How many trips per city?")]},
+        config={"configurable": {"thread_id": "spark"}},
+    )
+    assert fake_trino.executed and "LIMIT 100" in fake_trino.executed[0]
+    assert any(isinstance(message, ToolMessage) for message in result["messages"])
+
+
 async def test_checkpointer_preserves_history_across_turns(settings, registry) -> None:
     saver = InMemorySaver()
     first = scripted_model(

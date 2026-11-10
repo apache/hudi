@@ -104,15 +104,7 @@ public class ExpressionEvaluators {
           .bindFieldReference(rExpr);
     }
 
-    boolean hasNullLiteral =
-        childExprs.stream().anyMatch(e ->
-            e instanceof ValueLiteralExpression
-                && ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) e) == null);
-    if (hasNullLiteral) {
-      return AlwaysFalse.getInstance();
-    }
-
-    // handle IN specifically
+    // handle IN specifically: NULL candidates do not prevent other values from matching.
     if (BuiltInFunctionDefinitions.IN.equals(funDef)) {
       ValidationUtils.checkState(normalized, "The IN expression expects to be normalized");
       In in = In.getInstance();
@@ -120,6 +112,14 @@ public class ExpressionEvaluators {
       in.bindFieldReference(rExpr);
       in.bindVals(getInLiteralVals(childExprs));
       return in;
+    }
+
+    boolean hasNullLiteral =
+        childExprs.stream().anyMatch(e ->
+            e instanceof ValueLiteralExpression
+                && ExpressionUtils.getValueFromLiteral((ValueLiteralExpression) e) == null);
+    if (hasNullLiteral) {
+      return AlwaysFalse.getInstance();
     }
 
     NullFalseEvaluator evaluator;
@@ -191,7 +191,7 @@ public class ExpressionEvaluators {
       ColumnStats columnStats = columnStatsMap.get(this.name);
       ValidationUtils.checkState(
           columnStats != null,
-          "Can not find column " + this.name);
+          () -> "Can not find column " + this.name);
       return columnStats;
     }
 
@@ -409,7 +409,7 @@ public class ExpressionEvaluators {
 
     @Override
     public boolean eval(Map<String, ColumnStats> columnStatsMap) {
-      if (Arrays.stream(vals).anyMatch(Objects::isNull)) {
+      if (Arrays.stream(vals).allMatch(Objects::isNull)) {
         return false;
       }
       ColumnStats columnStats = getColumnStats(columnStatsMap);
@@ -425,7 +425,7 @@ public class ExpressionEvaluators {
         return true;
       }
 
-      return Arrays.stream(vals).anyMatch(v ->
+      return Arrays.stream(vals).filter(Objects::nonNull).anyMatch(v ->
           compare(minVal, v, this.type) <= 0 && compare(maxVal, v, this.type) >= 0);
     }
 

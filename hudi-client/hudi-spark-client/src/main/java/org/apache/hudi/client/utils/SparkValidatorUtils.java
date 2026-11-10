@@ -102,8 +102,6 @@ public class SparkValidatorUtils {
               return Stream.of(validator);
             } catch (ClassNotFoundException e) {
               throw new HoodieValidationException("Cannot find validator class: " + validatorClass, e);
-            } catch (ReflectiveOperationException e) {
-              throw new HoodieValidationException("Failed to instantiate validator: " + validatorClass, e);
             }
           })
           .collect(Collectors.toList());

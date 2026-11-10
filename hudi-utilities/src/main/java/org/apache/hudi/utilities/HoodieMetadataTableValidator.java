@@ -457,7 +457,7 @@ public class HoodieMetadataTableValidator implements Serializable {
         return false;
       }
       Config config = (Config) o;
-      return basePath.equals(config.basePath)
+      return Objects.equals(basePath, config.basePath)
           && Objects.equals(continuous, config.continuous)
           && Objects.equals(skipDataFilesForCleaning, config.skipDataFilesForCleaning)
           && Objects.equals(validateLatestFileSlices, config.validateLatestFileSlices)
@@ -491,7 +491,7 @@ public class HoodieMetadataTableValidator implements Serializable {
           validateSecondaryIndex, validateRecordIndexCount, validateRecordIndexContent, numRecordIndexErrorSamples,
           viewStorageTypeForFSListing, viewStorageTypeForMetadata,
           minValidateIntervalSeconds, parallelism, recordIndexParallelism, ignoreFailed,
-          sparkMaster, sparkMemory, assumeDatePartitioning, logDetailMaxLength, propsFilePath, configs, help);
+          sparkMaster, sparkMemory, assumeDatePartitioning, logDetailMaxLength, propsFilePath, configs);
     }
   }
 

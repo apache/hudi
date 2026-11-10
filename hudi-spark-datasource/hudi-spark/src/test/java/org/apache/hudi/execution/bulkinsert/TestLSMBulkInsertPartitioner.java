@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.table.BulkInsertPartitioner;
@@ -130,6 +131,36 @@ public class TestLSMBulkInsertPartitioner extends HoodieSparkClientTestHarness {
         row.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
     assertDistributionSemantics(sortMode, actual.javaRDD());
     assertTrue(partitioner.arePartitionRecordsSorted());
+  }
+
+  @Test
+  void testSimpleBucketRowPartitionerSortsByUtf8RecordKeyWithoutChangingSchema() {
+    StructType schema = new StructType()
+        .add(HoodieRecord.COMMIT_TIME_METADATA_FIELD, DataTypes.StringType, false)
+        .add(HoodieRecord.COMMIT_SEQNO_METADATA_FIELD, DataTypes.StringType, false)
+        .add(HoodieRecord.RECORD_KEY_METADATA_FIELD, DataTypes.StringType, false)
+        .add(HoodieRecord.PARTITION_PATH_METADATA_FIELD, DataTypes.StringType, false)
+        .add(HoodieRecord.FILENAME_METADATA_FIELD, DataTypes.StringType, false)
+        .add("value", DataTypes.IntegerType, false);
+    Dataset<Row> input = sqlContext.createDataFrame(
+        jsc.parallelize(createRowsWithMetaFields(), 3), schema);
+    HoodieWriteConfig config = createWriteConfig(BulkInsertSortMode.NONE, true);
+    config.setValue(HoodieIndexConfig.BUCKET_INDEX_HASH_FIELD, "id");
+    config.setValue(HoodieIndexConfig.BUCKET_INDEX_NUM_BUCKETS, "1");
+
+    List<BulkInsertPartitioner<Dataset<Row>>> partitioners = Arrays.asList(
+        new BucketIndexBulkInsertPartitionerWithRows("id", config, true),
+        new BucketIndexBulkInsertPartitionerWithRows(config, "p1|p2|p3,1", "regex", 1, true));
+
+    for (BulkInsertPartitioner<Dataset<Row>> partitioner : partitioners) {
+      Dataset<Row> actual = partitioner.repartitionRecords(input, 1);
+
+      assertEquals(schema, actual.schema(), "Sorting must not add temporary columns");
+      assertEquals(1, actual.javaRDD().getNumPartitions());
+      assertSortedSparkPartitions(actual.javaRDD().glom().collect(), row -> new Tuple2<>(
+          row.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD),
+          row.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD)));
+    }
   }
 
   @ParameterizedTest
@@ -290,6 +321,15 @@ public class TestLSMBulkInsertPartitioner extends HoodieSparkClientTestHarness {
     int value = 0;
     for (Tuple2<String, String> key : createKeys()) {
       rows.add(RowFactory.create(key._1, key._2, value++));
+    }
+    return rows;
+  }
+
+  private List<Row> createRowsWithMetaFields() {
+    List<Row> rows = new ArrayList<>();
+    int value = 0;
+    for (Tuple2<String, String> key : createKeys()) {
+      rows.add(RowFactory.create("001", "001_0", key._2, key._1, "", value++));
     }
     return rows;
   }
