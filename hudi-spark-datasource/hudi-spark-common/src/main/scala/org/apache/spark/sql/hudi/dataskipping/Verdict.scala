@@ -61,8 +61,10 @@ object Verdict extends PredicateHelper {
   }
 
   // A balanced OR, log2(n) deep. A left-deep `reduce(Or)` is one level per IN value, and Spark's
-  // analysis and codegen recurse over it: a few thousand values overflow the stack
-  private def anyOf(verdicts: Seq[Expression]): Expression = buildBalancedPredicate(verdicts, Or)
+  // analysis and codegen recurse over it: a few thousand values overflow the stack.
+  // Indexed because buildBalancedPredicate reads by position, quadratic on a Scala 2.13 List
+  private def anyOf(verdicts: Seq[Expression]): Expression =
+    buildBalancedPredicate(verdicts.toIndexedSeq, Or)
 
   // Some value of the file may equal `v`: lo <= v <= hi
   private def mayContain(r: TermRange, v: Expression): Expression =
