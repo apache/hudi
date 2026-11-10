@@ -45,9 +45,10 @@ public class HoodieSparkClusteringClient<T> extends
   }
 
   @Override
-  public void cluster(String instantTime) throws IOException {
+  public void cluster(BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> client,
+                      String instantTime) throws IOException {
     log.info("Executing clustering instance {}", instantTime);
-    SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) clusteringClient;
+    SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) client;
     Option<HoodieCommitMetadata> commitMetadata = writeClient.cluster(instantTime).getCommitMetadata();
     Stream<HoodieWriteStat> hoodieWriteStatStream = commitMetadata.get().getPartitionToWriteStats().entrySet().stream().flatMap(e ->
             e.getValue().stream());

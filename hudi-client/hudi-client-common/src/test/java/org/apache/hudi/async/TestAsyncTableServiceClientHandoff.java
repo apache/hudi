@@ -59,7 +59,6 @@ class TestAsyncTableServiceClientHandoff {
     HoodieWriteConfig config = mock(HoodieWriteConfig.class);
     when(oldClient.getConfig()).thenReturn(config);
     when(config.areTableServicesEnabled()).thenReturn(true);
-    AtomicReference<BaseHoodieWriteClient> currentClient = new AtomicReference<>(oldClient);
     AtomicReference<BaseHoodieWriteClient> firstRunClient = new AtomicReference<>();
     AtomicReference<BaseHoodieWriteClient> secondRunClient = new AtomicReference<>();
     CountDownLatch entered = new CountDownLatch(1);
@@ -67,26 +66,28 @@ class TestAsyncTableServiceClientHandoff {
     CountDownLatch firstRunDone = new CountDownLatch(1);
     CountDownLatch nextRun = new CountDownLatch(1);
     Answer<Void> run = invocation -> {
-      if ("001".equals(invocation.getArgument(0))) {
-        firstRunClient.set(currentClient.get());
+      // a run gets the client it runs with from the service
+      if ("001".equals(invocation.getArgument(1))) {
+        firstRunClient.set(invocation.getArgument(0));
         entered.countDown();
         assertTrue(finishRun.await(30, TimeUnit.SECONDS));
         firstRunDone.countDown();
       } else {
-        secondRunClient.set(currentClient.get());
+        secondRunClient.set(invocation.getArgument(0));
         nextRun.countDown();
       }
       return null;
     };
     Answer<Void> update = invocation -> {
-      currentClient.set(invocation.getArgument(0));
+      invocation.callRealMethod();
       return null;
     };
     HoodieAsyncService service;
     Consumer<BaseHoodieWriteClient> handoff;
     if (compact) {
       BaseCompactor compactor = mock(BaseCompactor.class);
-      doAnswer(run).when(compactor).compact(anyString());
+      compactor.compactionClient = oldClient;
+      doAnswer(run).when(compactor).compact(any(), anyString());
       doAnswer(update).when(compactor).updateWriteClient(any());
       AsyncCompactService compaction = new AsyncCompactService(context, oldClient, true) {
         @Override
@@ -98,7 +99,8 @@ class TestAsyncTableServiceClientHandoff {
       handoff = compaction::updateWriteClient;
     } else {
       BaseClusterer clusterer = mock(BaseClusterer.class);
-      doAnswer(run).when(clusterer).cluster(anyString());
+      clusterer.clusteringClient = oldClient;
+      doAnswer(run).when(clusterer).cluster(any(), anyString());
       doAnswer(update).when(clusterer).updateWriteClient(any());
       AsyncClusteringService clustering = new AsyncClusteringService(context, oldClient, true) {
         @Override

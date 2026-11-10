@@ -40,9 +40,10 @@ public class HoodieSparkCompactor<T> extends BaseCompactor<T,
   }
 
   @Override
-  public void compact(String instantTime) {
+  public void compact(BaseHoodieWriteClient<T, JavaRDD<HoodieRecord<T>>, JavaRDD<HoodieKey>, JavaRDD<WriteStatus>> client,
+                      String instantTime) {
     log.info("Compactor executing compaction {}", instantTime);
-    SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) compactionClient;
+    SparkRDDWriteClient<T> writeClient = (SparkRDDWriteClient<T>) client;
     HoodieWriteMetadata<JavaRDD<WriteStatus>> compactionMetadata = writeClient.compact(instantTime);
     // Commit compaction
     writeClient.commitCompaction(instantTime, compactionMetadata, Option.empty());

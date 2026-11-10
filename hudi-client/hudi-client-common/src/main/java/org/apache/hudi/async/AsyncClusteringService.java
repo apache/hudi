@@ -44,7 +44,6 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
 
   public static final String CLUSTERING_POOL_NAME = "hoodiecluster";
   private static final long serialVersionUID = 1L;
-  private static final long WRITE_CLIENT_POLL_MS = 1000;
   private final int maxConcurrentClustering;
   protected transient HoodieEngineContext context;
   private transient BaseClusterer clusteringClient;
@@ -78,24 +77,9 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
           final String instant = fetchNextAsyncServiceInstant();
           if (null != instant) {
             log.info("Starting clustering for instant {}", instant);
-            BaseHoodieWriteClient runClient = clusteringClient.clusteringClient;
-            try {
-              clusteringClient.cluster(instant);
-            } catch (Exception e) {
-              if (!isRetryableFailure(runClient, e)) {
-                throw e;
-              }
-              log.warn("Clustering for instant {} failed with a write client that was replaced, retrying it with the new write client",
-                  instant, e);
-              awaitWriteClientReplaced(runClient);
-              if (isPendingClustering(instant)) {
-                enqueuePendingAsyncServiceInstant(instant);
-              } else {
-                log.info("Clustering for instant {} is no longer pending, not retrying it", instant);
-              }
-              continue;
+            if (runWithClientHandoff("Clustering", instant, () -> clusteringClient.clusteringClient, clusteringClient::cluster)) {
+              log.info("Finished clustering for instant {}", instant);
             }
-            log.info("Finished clustering for instant {}", instant);
           }
         }
         log.info("Clustering executor shutting down properly");
@@ -125,30 +109,18 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   }
 
   /**
-   * Whether a clustering run that failed with the given exception is retried. The run used {@code runClient}, the
-   * client of the service when the run started. By default no failure is retried and the service stops with it.
-   */
-  protected boolean isRetryableFailure(BaseHoodieWriteClient runClient, Exception failure) {
-    return false;
-  }
-
-  /**
    * Whether the clustering instant is still pending, i.e. a retry of it has work to do.
    */
+  @Override
+  protected boolean isPendingInstant(BaseHoodieWriteClient client, String instantTime) {
+    return isPendingClustering(instantTime);
+  }
+
   protected boolean isPendingClustering(String instantTime) {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(context.getStorageConf().newInstance())
         .setBasePath(clusteringClient.clusteringClient.getConfig().getBasePath())
         .build();
     return metaClient.getActiveTimeline().filterPendingClusteringTimeline().containsInstant(instantTime);
-  }
-
-  /**
-   * Waits until the writer has switched this service away from the given client.
-   */
-  private synchronized void awaitWriteClientReplaced(BaseHoodieWriteClient client) throws InterruptedException {
-    while (!isShutdownRequested() && clusteringClient.clusteringClient == client) {
-      wait(WRITE_CLIENT_POLL_MS);
-    }
   }
 }

@@ -333,19 +333,22 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   }
 
   /**
-   * Closes the previous client right away, then switches the async table services to the new client for their next
-   * runs; the switch does not wait for a running compaction or clustering. A run still using the previous client can
-   * fail once it is closed: the previous client is marked as retired first, so that its service retries such a
-   * failure with the new client instead of stopping.
+   * Switches the async table services to the new client for their next runs, then closes the previous client right
+   * away, even if a switch fails; the switch does not wait for a running compaction or clustering. A run still using
+   * the previous client can fail once it is closed: the previous client is marked as retired first, so that its
+   * service retries such a failure with the new client instead of stopping.
    */
   private def retireWriteClient(previousClient: SparkRDDWriteClient[_], newClient: SparkRDDWriteClient[_]): Unit = {
     retiredWriteClients.add(previousClient)
-    closeQuietly(previousClient)
-    if (asyncCompactorService != null) {
-      asyncCompactorService.updateWriteClient(newClient)
-    }
-    if (asyncClusteringService != null) {
-      asyncClusteringService.updateWriteClient(newClient)
+    try {
+      if (asyncCompactorService != null) {
+        asyncCompactorService.updateWriteClient(newClient)
+      }
+      if (asyncClusteringService != null) {
+        asyncClusteringService.updateWriteClient(newClient)
+      }
+    } finally {
+      closeQuietly(previousClient)
     }
   }
 

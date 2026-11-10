@@ -39,11 +39,20 @@ public abstract class BaseClusterer<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Run clustering for the instant.
+   * Run clustering for the instant with the current write client.
    * @param instantTime
    * @throws IOException
    */
-  public abstract void cluster(String instantTime) throws IOException;
+  public void cluster(String instantTime) throws IOException {
+    cluster(clusteringClient, instantTime);
+  }
+
+  /**
+   * Run clustering for the instant with the given write client. The async clustering service reads the client once
+   * per run and passes it here, so that a failure of the run is attributed to the client that ran it even if the
+   * writer switches clients meanwhile.
+   */
+  public abstract void cluster(BaseHoodieWriteClient<T, I, K, O> client, String instantTime) throws IOException;
 
   /**
    * Update the write client used by async clustering.

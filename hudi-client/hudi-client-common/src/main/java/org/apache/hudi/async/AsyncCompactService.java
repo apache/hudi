@@ -20,10 +20,14 @@ package org.apache.hudi.async;
 import org.apache.hudi.client.BaseHoodieWriteClient;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.heartbeat.HoodieHeartbeatUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.storage.HoodieStorage;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -44,7 +48,6 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
    */
   public static final String COMPACT_POOL_NAME = "hoodiecompact";
   private static final long serialVersionUID = 1L;
-  private static final long WRITE_CLIENT_POLL_MS = 1000;
   private final int maxConcurrentCompaction;
   protected transient HoodieEngineContext context;
   private final transient BaseCompactor compactor;
@@ -80,24 +83,9 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
 
           if (null != instantTime) {
             log.info("Starting Compaction for instant {}", instantTime);
-            BaseHoodieWriteClient runClient = compactor.compactionClient;
-            try {
-              compactor.compact(instantTime);
-            } catch (Exception e) {
-              if (!isRetryableFailure(runClient, e)) {
-                throw e;
-              }
-              log.warn("Compaction for instant {} failed with a write client that was replaced, retrying it with the new write client",
-                  instantTime, e);
-              awaitWriteClientReplaced(runClient);
-              if (isPendingCompaction(instantTime)) {
-                enqueuePendingAsyncServiceInstant(instantTime);
-              } else {
-                log.info("Compaction for instant {} is no longer pending, not retrying it", instantTime);
-              }
-              continue;
+            if (runWithClientHandoff("Compaction", instantTime, () -> compactor.compactionClient, compactor::compact)) {
+              log.info("Finished Compaction for instant {}", instantTime);
             }
-            log.info("Finished Compaction for instant {}", instantTime);
           }
         }
         log.info("Compactor shutting down properly!!");
@@ -127,25 +115,13 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   }
 
   /**
-   * Switches the client used by later compaction runs. Does not wait for a compaction that is running: it can run
-   * for a long time, and the writer calling this must not be blocked until it completes.
-   */
-  public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
-    this.compactor.updateWriteClient(writeClient);
-    notifyAll();
-  }
-
-  /**
-   * Whether a compaction run that failed with the given exception is retried. The run used {@code runClient}, the
-   * client of the service when the run started. By default no failure is retried and the service stops with it.
-   */
-  protected boolean isRetryableFailure(BaseHoodieWriteClient runClient, Exception failure) {
-    return false;
-  }
-
-  /**
    * Whether the compaction instant is still pending, i.e. a retry of it has work to do.
    */
+  @Override
+  protected boolean isPendingInstant(BaseHoodieWriteClient client, String instantTime) {
+    return isPendingCompaction(instantTime);
+  }
+
   protected boolean isPendingCompaction(String instantTime) {
     HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
         .setConf(context.getStorageConf().newInstance())
@@ -155,11 +131,48 @@ public abstract class AsyncCompactService extends HoodieAsyncTableService {
   }
 
   /**
-   * Waits until the writer has switched this service away from the given client.
+   * With multi-writer concurrency, a compaction run holds a heartbeat on its instant, and a new run refuses to start
+   * while that heartbeat is fresh (it may belong to a concurrent writer). A run that failed because its client was
+   * closed leaves its heartbeat behind: closing a client stops its heartbeats without deleting their files, and the
+   * failed run can no longer delete it either. So wait for the heartbeat to expire before retrying. Without knowing
+   * whose heartbeat it is, this is safe either way: an orphaned heartbeat expires within the heartbeat timeout, and a
+   * heartbeat a concurrent writer keeps refreshing is waited out, after which the instant is no longer pending.
    */
-  private synchronized void awaitWriteClientReplaced(BaseHoodieWriteClient client) throws InterruptedException {
-    while (!isShutdownRequested() && compactor.compactionClient == client) {
-      wait(WRITE_CLIENT_POLL_MS);
+  @Override
+  protected void prepareRetry(BaseHoodieWriteClient retryClient, String instantTime) throws IOException, InterruptedException {
+    HoodieWriteConfig config = retryClient.getConfig();
+    if (config.getWriteConcurrencyMode().supportsMultiWriter()) {
+      awaitHeartbeatExpired(config, instantTime);
     }
+  }
+
+  private void awaitHeartbeatExpired(HoodieWriteConfig config, String instantTime) throws IOException, InterruptedException {
+    // same expiry as HoodieHeartbeatClient#isHeartbeatExpired, which compact() checks
+    long heartbeatIntervalMs = config.getHoodieClientHeartbeatIntervalInMs();
+    long maxHeartbeatIntervalMs = heartbeatIntervalMs * config.getHoodieClientHeartbeatTolerableMisses();
+    HoodieStorage storage = getStorage(config);
+    while (!isShutdownRequested()) {
+      long lastHeartbeatTime = HoodieHeartbeatUtils.getLastHeartbeatTime(storage, config.getBasePath(), instantTime);
+      long remainingMs = lastHeartbeatTime + maxHeartbeatIntervalMs - System.currentTimeMillis();
+      if (remainingMs < 0) {
+        return;
+      }
+      log.info("Waiting up to {} ms for the heartbeat of compaction instant {} to expire before retrying it", remainingMs, instantTime);
+      // re-read at least once per heartbeat interval, in case a concurrent writer is refreshing it
+      Thread.sleep(Math.min(remainingMs + 1, heartbeatIntervalMs));
+    }
+  }
+
+  protected HoodieStorage getStorage(HoodieWriteConfig config) {
+    return HoodieStorageUtils.getStorage(config.getBasePath(), context.getStorageConf());
+  }
+
+  /**
+   * Switches the client used by later compaction runs. Does not wait for a compaction that is running: it can run
+   * for a long time, and the writer calling this must not be blocked until it completes.
+   */
+  public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
+    this.compactor.updateWriteClient(writeClient);
+    notifyAll();
   }
 }
