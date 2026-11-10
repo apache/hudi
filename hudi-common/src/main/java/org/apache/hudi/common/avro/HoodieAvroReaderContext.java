@@ -164,7 +164,7 @@ public class HoodieAvroReaderContext extends HoodieReaderContext<IndexedRecord> 
   public void setSchemaHandler(FileGroupReaderSchemaHandler<IndexedRecord> schemaHandler) {
     super.setSchemaHandler(schemaHandler);
     List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
-    ((AvroRecordContext) recordContext).initOrderingValueConverter(schemaHandler.getRequiredSchema(), orderingFieldNames);
+    ((AvroRecordContext) recordContext).initOrderingValueConverter(schemaHandler.getTableSchema(), orderingFieldNames);
   }
 
   @Override

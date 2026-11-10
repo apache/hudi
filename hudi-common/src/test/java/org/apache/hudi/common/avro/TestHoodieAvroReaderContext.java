@@ -20,10 +20,12 @@
 package org.apache.hudi.common.avro;
 
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -35,6 +37,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -63,6 +66,27 @@ class TestHoodieAvroReaderContext {
   void setup() {
     when(tableConfig.getPayloadClass()).thenReturn(DefaultHoodieRecordPayload.class.getName());
     when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
+  }
+
+  @Test
+  void initOrderingValueConverterUsesTableSchema() {
+    HoodieSchema fullSchema = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"table_record\",\"fields\":["
+            + "{\"name\":\"id\",\"type\":\"string\"},"
+            + "{\"name\":\"date\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}}]}"));
+    HoodieSchema projectedSchema = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(
+        "{\"type\":\"record\",\"name\":\"table_record\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"}]}"));
+    when(tableConfig.getOrderingFields()).thenReturn(Collections.singletonList("date"));
+    HoodieAvroReaderContext readerContext = getReaderContextWithMetaFields();
+    readerContext.setHasLogFiles(false);
+    FileGroupReaderSchemaHandler<IndexedRecord> schemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    when(schemaHandler.getTableSchema()).thenReturn(fullSchema);
+    // Base-file-only reads may project away the ordering field.
+    when(schemaHandler.getRequiredSchema()).thenReturn(projectedSchema);
+    readerContext.setSchemaHandler(schemaHandler);
+
+    assertEquals(LocalDate.ofEpochDay(10),
+        readerContext.getRecordContext().getOrderingValue(DeleteRecord.create("key", "", 10)));
   }
 
   @Test

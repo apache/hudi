@@ -194,6 +194,7 @@ class TestKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
     HoodieReaderContext<IndexedRecord> readerContext = new HoodieAvroReaderContext(
         mock(StorageConfiguration.class), tableConfig, Option.empty(), Option.empty(), props);
     FileGroupReaderSchemaHandler<IndexedRecord> schemaHandler = mock(FileGroupReaderSchemaHandler.class);
+    when(schemaHandler.getTableSchema()).thenReturn(dateSchema);
     when(schemaHandler.getRequiredSchema()).thenReturn(dateSchema);
     when(schemaHandler.getSchemaForUpdates()).thenReturn(dateSchema);
     when(schemaHandler.getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());

@@ -64,10 +64,6 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   private final boolean consistentLogicalTimestampEnabled;
   private AvroOrderingValueConverter orderingValueConverter;
 
-  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass) {
-    this(tableConfig, payloadClass, new TypedProperties());
-  }
-
   public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, TypedProperties props) {
     super(tableConfig, new AvroJavaTypeConverter());
     this.payloadClass = payloadClass;
@@ -248,7 +244,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   /**
    * Initializes schema-aware conversion so delete values use the same logical types as data records.
    */
-  void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
+  public void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
     orderingValueConverter = AvroOrderingValueConverter.create(dataSchema, orderingFieldNames, consistentLogicalTimestampEnabled);
   }
 

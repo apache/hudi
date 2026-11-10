@@ -866,6 +866,11 @@ public class HoodieAvroUtils {
    * encoding for these logical types is fixed by spec to int / long and is identical across Avro
    * versions; only the in-memory Java type returned by the reader changed.
    *
+   * <p>Also accepts decoded delete-wrapper values: {@link Date}, {@link Timestamp}, and
+   * {@link BigDecimal}. SQL timestamps are interpreted as instants for timestamp logical types
+   * and as local date-times for local-timestamp logical types, then normalized with the same
+   * precision and configuration as primitive inputs. Already-decoded decimals are returned unchanged.
+   *
    * @param fieldSchema avro field schema
    * @param fieldValue  avro field value
    * @return field value either converted (for certain data types) or as it is.
@@ -885,6 +890,9 @@ public class HoodieAvroUtils {
     } else if (logicalType == LogicalTypes.localTimestampMicros()) {
       return extractLocalEpochMicros(fieldValue);
     } else if (logicalType instanceof LogicalTypes.Decimal) {
+      if (fieldValue instanceof BigDecimal) {
+        return fieldValue;
+      }
       Decimal dc = (Decimal) logicalType;
       DecimalConversion decimalConversion = new DecimalConversion();
       if (fieldSchema.getType() == Schema.Type.FIXED) {
@@ -904,9 +912,13 @@ public class HoodieAvroUtils {
   // The extract* helpers below accept either the Avro primitive form (Integer / Long, returned by
   // Avro 1.12.0 / 1.11.x) or the java.time form (returned by Avro 1.12.1 with its default
   // fastReaderEnabled=true), and return the canonical primitive for the same underlying bytes.
+  // SQL Date/Timestamp values from delete wrappers are first adapted to the corresponding java.time form.
   // See the javadoc on convertValueForAvroLogicalTypes for context.
 
   private static long extractEpochDay(Object fieldValue) {
+    if (fieldValue instanceof Date) {
+      fieldValue = ((Date) fieldValue).toLocalDate();
+    }
     if (fieldValue instanceof LocalDate) {
       return ((LocalDate) fieldValue).toEpochDay();
     }
@@ -917,6 +929,9 @@ public class HoodieAvroUtils {
   }
 
   private static long extractEpochMillis(Object fieldValue) {
+    if (fieldValue instanceof Timestamp) {
+      fieldValue = ((Timestamp) fieldValue).toInstant();
+    }
     if (fieldValue instanceof Instant) {
       return ((Instant) fieldValue).toEpochMilli();
     }
@@ -927,6 +942,9 @@ public class HoodieAvroUtils {
   }
 
   private static long extractEpochMicros(Object fieldValue) {
+    if (fieldValue instanceof Timestamp) {
+      fieldValue = ((Timestamp) fieldValue).toInstant();
+    }
     if (fieldValue instanceof Instant) {
       Instant instant = (Instant) fieldValue;
       return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);
@@ -938,6 +956,9 @@ public class HoodieAvroUtils {
   }
 
   private static long extractLocalEpochMillis(Object fieldValue) {
+    if (fieldValue instanceof Timestamp) {
+      fieldValue = ((Timestamp) fieldValue).toLocalDateTime();
+    }
     if (fieldValue instanceof LocalDateTime) {
       return ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC).toEpochMilli();
     }
@@ -948,6 +969,9 @@ public class HoodieAvroUtils {
   }
 
   private static long extractLocalEpochMicros(Object fieldValue) {
+    if (fieldValue instanceof Timestamp) {
+      fieldValue = ((Timestamp) fieldValue).toLocalDateTime();
+    }
     if (fieldValue instanceof LocalDateTime) {
       Instant instant = ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC);
       return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);

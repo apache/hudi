@@ -22,7 +22,6 @@ package org.apache.hudi.common.avro;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
-import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 
@@ -30,16 +29,13 @@ import org.apache.avro.Schema;
 import org.apache.avro.util.Utf8;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
-import java.sql.Date;
-import java.sql.Timestamp;
 import java.util.List;
 import java.util.stream.Collectors;
 
 /**
  * Converts delete ordering values using each field's schema and
  * {@link HoodieAvroUtils#convertValueForAvroLogicalTypes(Schema, Object, boolean)}.
- * Only delete-wrapper representation differences are handled here.
+ * Preserves null field values and converts strings to Avro's comparable representation.
  */
 public class AvroOrderingValueConverter implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -50,7 +46,8 @@ public class AvroOrderingValueConverter implements Serializable {
   private AvroOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean consistentLogicalTimestampEnabled) {
     this.orderingFieldSchemas = orderingFieldNames.stream()
         .map(field -> HoodieSchemaUtils.getNestedField(dataSchema, field)
-            .map(Pair::getRight).map(HoodieSchemaField::getNonNullSchema).orElse(null))
+            .map(Pair::getRight).map(HoodieSchemaField::getNonNullSchema)
+            .orElseThrow(() -> new IllegalArgumentException("Ordering field '" + field + "' not found in table schema")))
         .collect(Collectors.toList());
     this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
   }
@@ -60,34 +57,26 @@ public class AvroOrderingValueConverter implements Serializable {
   }
 
   public Comparable convert(Comparable value) {
+    if (orderingFieldSchemas.isEmpty()) {
+      return value;
+    }
     if (value instanceof ArrayComparable) {
       List<Comparable> values = ((ArrayComparable) value).getValues();
       Comparable[] converted = new Comparable[values.size()];
       for (int i = 0; i < values.size(); i++) {
-        converted[i] = convertFieldValue(values.get(i), orderingFieldSchemas.isEmpty() ? null : orderingFieldSchemas.get(i));
+        converted[i] = convertFieldValue(values.get(i), orderingFieldSchemas.get(i));
       }
       return new ArrayComparable(converted);
     }
-    return convertFieldValue(value, orderingFieldSchemas.isEmpty() ? null : orderingFieldSchemas.get(0));
+    return convertFieldValue(value, orderingFieldSchemas.get(0));
   }
 
   private Comparable convertFieldValue(Comparable value, HoodieSchema fieldSchema) {
-    if (OrderingValues.isCommitTimeOrderingValue(value) || value instanceof BigDecimal) {
-      // Delete decimal wrappers already decode to BigDecimal; the shared converter expects fixed/bytes.
-      return value;
+    if (value == null) {
+      return null;
     }
-    if (fieldSchema != null) {
-      Object avroValue = value;
-      // Adapt SQL types from delete wrappers to the representations accepted by the shared converter.
-      if (value instanceof Date) {
-        avroValue = ((Date) value).toLocalDate();
-      } else if (value instanceof Timestamp && fieldSchema instanceof HoodieSchema.Timestamp) {
-        avroValue = ((HoodieSchema.Timestamp) fieldSchema).isUtcAdjusted()
-            ? ((Timestamp) value).toInstant() : ((Timestamp) value).toLocalDateTime();
-      }
-      value = (Comparable) HoodieAvroUtils.convertValueForAvroLogicalTypes(
-          fieldSchema.toAvroSchema(), avroValue, consistentLogicalTimestampEnabled);
-    }
+    value = (Comparable) HoodieAvroUtils.convertValueForAvroLogicalTypes(
+        fieldSchema.toAvroSchema(), value, consistentLogicalTimestampEnabled);
     return value instanceof String ? new Utf8((String) value) : value;
   }
 }
