@@ -101,7 +101,10 @@ public class WriteStatMerger {
     merged.setTotalLogBlocks(stat2.getTotalLogBlocks() + stat1.getTotalLogBlocks());
     merged.setTotalCorruptLogBlock(stat2.getTotalCorruptLogBlock() + stat1.getTotalCorruptLogBlock());
     merged.setTotalRollbackBlocks(stat2.getTotalRollbackBlocks() + stat1.getTotalRollbackBlocks());
-    merged.setFileSizeInBytes(stat2.getFileSizeInBytes() + stat1.getFileSizeInBytes());
+    // COW mini-batches replace the previous file, while delta writes retain size aggregation.
+    merged.setFileSizeInBytes(stat1 instanceof HoodieDeltaWriteStat
+        ? stat1.getFileSizeInBytes() + stat2.getFileSizeInBytes()
+        : stat2.getFileSizeInBytes());
     // event time
     merged.setMinEventTime(minLong(stat1.getMinEventTime(), stat2.getMinEventTime()));
     merged.setMaxEventTime(maxLong(stat1.getMaxEventTime(), stat2.getMaxEventTime()));
