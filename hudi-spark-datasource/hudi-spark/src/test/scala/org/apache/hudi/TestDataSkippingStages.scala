@@ -86,9 +86,8 @@ class TestDataSkippingStages {
     val struct = AttributeReference("st", StructType(Seq(StructField("f", IntegerType))))()
     val values: Set[Any] = Set(InternalRow(1), InternalRow(2))
     assertEquals(Some(Leaf(struct, Op.InSet(values), Nil)), Leaf.parse(InSet(struct, values)))
-    // An unindexed column has no range, so the leaf compiles to TRUE without building them (the
-    // resolution check is off, so that the leaf is reached)
-    assertEquals(TrueLiteral, StatsFilterCompiler.compile(InSet(struct, values), source, strictResolution = false))
+    // An unindexed column has no range, so Verdict never builds them
+    assertEquals(None, TermRange.derive(struct, source))
   }
 
   @Test
@@ -346,7 +345,7 @@ class TestDataSkippingStages {
 
   @Test
   def testExpressionIndexFilterReadsOnlyTheIndexedExpression(): Unit = {
-    def compile(filter: Expression): Expression = StatsFilterCompiler.compile(filter, hourIndex, strictResolution = true)
+    def compile(filter: Expression): Expression = StatsFilterCompiler.compile(filter, hourIndex)
     val stats = hourIndex.rangeOf(hourOfTs).get
     val sixteen = Literal(16)
     assertEquals(And(LessThanOrEqual(stats.lo, sixteen), GreaterThanOrEqual(stats.hi, sixteen)), compile(EqualTo(hourOfTs, sixteen)))
@@ -378,7 +377,7 @@ class TestDataSkippingStages {
    * NULLs. NULL drops the file, like FALSE.
    */
   private def overNullStats(filter: Expression, statsSource: ColumnStatsSource, statsType: DataType): Any =
-    StatsFilterCompiler.compile(filter, statsSource, strictResolution = true).transform {
+    StatsFilterCompiler.compile(filter, statsSource).transform {
       case stat: LeafExpression if !stat.isInstanceOf[Literal] => Literal(null, statsType)
     }.eval()
 
@@ -399,10 +398,10 @@ class TestDataSkippingStages {
 
   @Test
   def testKeepOnNullWrapsOnlyPartialOrGuardedVerdicts(): Unit = {
-    assertEquals(LessThan(xRange.lo, ten), StatsFilterCompiler.compile(LessThan(x, ten), source, strictResolution = true))
+    assertEquals(LessThan(xRange.lo, ten), StatsFilterCompiler.compile(LessThan(x, ten), source))
     assertEquals(
       Coalesce(Seq(LessThan(TryEval(Log(xRange.lo)), ten), TrueLiteral)),
-      StatsFilterCompiler.compile(LessThan(Log(x), ten), source, strictResolution = true))
+      StatsFilterCompiler.compile(LessThan(Log(x), ten), source))
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -31,17 +31,15 @@ object DataSkippingUtils extends Logging {
   /**
    * Translates provided {@link filterExpr} into corresponding filter-expression for column-stats index table
    * to filter out candidate files that would hold records matching the original filter.
-   * In case the column stats were creating using expression index, the index filter must also account for the expression.
    *
    * @param dataTableFilterExpr source table's query's filter expression
    * @param indexSchema index table schema
-   * @param isExpressionIndex whether the index is an expression index
    * @return filter for column-stats index's table
    */
-  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, isExpressionIndex: Boolean = false, indexedCols : Seq[String] = Seq.empty,
+  def translateIntoColumnStatsIndexFilterExpr(dataTableFilterExpr: Expression, indexedCols : Seq[String] = Seq.empty,
                                               hasNonIndexedCols : AtomicBoolean = new AtomicBoolean(false)): Expression = {
     try {
-      StatsFilterCompiler.compile(dataTableFilterExpr, ColumnStatsSource(indexedCols), strictResolution = !isExpressionIndex)
+      StatsFilterCompiler.compile(dataTableFilterExpr, ColumnStatsSource(indexedCols))
     } catch {
       case e: AnalysisException =>
         logDebug(s"Failed to translated provided data table filter expr into column stats one ($dataTableFilterExpr)", e)
@@ -54,7 +52,7 @@ object DataSkippingUtils extends Logging {
    * index's `f(col)` reads its stats, every other leaf keeps the file.
    */
   def translateIntoExpressionIndexFilterExpr(dataTableFilterExpr: Expression, source: ExpressionIndexSource): Expression =
-    StatsFilterCompiler.compile(dataTableFilterExpr, source, strictResolution = true)
+    StatsFilterCompiler.compile(dataTableFilterExpr, source)
 
   /** Returns the column name of `resolvedExpr` if it is one of `indexedCols`, else None. */
   def getTargetIndexedColumnName(resolvedExpr: AttributeReference, indexedCols: Seq[String]): Option[String] = {
