@@ -409,16 +409,22 @@ class ExpressionIndexSupport(spark: SparkSession,
   /**
    * Bloom filter keys: the values of `f(col) = v` and `f(col) IN (...)`, as strings like the writer added them. A file
    * passes if it may hold any key, which is conservative across conjuncts. A conjunct with a value that is not a
-   * non-null literal gives no keys, and is skipped.
+   * non-null literal gives no keys, and is skipped. So does a term whose values the writer and the literal print
+   * differently, for ex a DATE is `2023-01-02` to the writer and `19359` here (#20567).
    */
   private def bloomFilterKeys(use: IndexUse): List[String] =
-    use.conjuncts.flatMap(Leaf.parse).filter(leaf => use.indexed.matches(leaf.term)).flatMap { leaf =>
+    use.conjuncts.flatMap(Leaf.parse).filter(leaf => use.indexed.matches(leaf.term) && hasWriterKeys(leaf.term.dataType)).flatMap { leaf =>
       val values: Seq[Any] = leaf.values.map {
         case Literal(value, _) => value
         case _ => null
       }
       if (values.isEmpty || values.contains(null)) Seq.empty else values.map(_.toString)
     }.toList
+
+  private def hasWriterKeys(dataType: DataType): Boolean = dataType match {
+    case _: StringType | ByteType | ShortType | IntegerType | LongType => true
+    case _ => false
+  }
 
   private def loadExpressionIndexRecords(indexPartition: String,
                                          prunedPartitions: Set[String],
