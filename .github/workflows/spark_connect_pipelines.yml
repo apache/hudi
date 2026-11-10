@@ -1,0 +1,72 @@
+name: Spark Connect nightly
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spark-connect-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  MVN_ARGS: -e -ntp -B -V -Dgpg.skip -Djacoco.skip -Pwarn-log -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.shade=warn -Dorg.slf4j.simpleLogger.log.org.apache.maven.plugins.dependency=warn -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.intervalMax=30000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504 -Daether.connector.http.connectionMaxTtl=25 -Dorg.eclipse.jetty.LEVEL=WARN
+
+jobs:
+  test-spark-connect-pipelines:
+    if: github.repository == 'apache/hudi' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          architecture: x64
+          cache: maven
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: hudi-integ-test/spark-pipelines/requirements.txt
+      - name: Test harness lifecycle
+        run: python3 -B -m unittest discover -s hudi-integ-test/spark-pipelines -p 'test_*.py' -v
+      - name: Build candidate Spark 4.1 bundle
+        run: >-
+          mvn package -T 2 -Pjava17 -Dspark4.1 -Dscala-2.13 -DskipTests=true
+          $MVN_ARGS -am -pl packaging/hudi-spark-bundle
+      - name: Install Spark pipelines and Connect
+        run: |
+          python3 -m venv "$RUNNER_TEMP/sdp-venv"
+          "$RUNNER_TEMP/sdp-venv/bin/python" -m pip install -r hudi-integ-test/spark-pipelines/requirements.txt
+      - name: Run real CLI against Spark Connect (retry once)
+        run: |
+          shopt -s nullglob
+          bundles=(packaging/hudi-spark-bundle/target/hudi-spark4.1-bundle_2.13-*.jar)
+          candidates=()
+          for bundle in "${bundles[@]}"; do
+            [[ "$bundle" == *-sources.jar || "$bundle" == *-javadoc.jar ]] || candidates+=("$bundle")
+          done
+          [[ ${#candidates[@]} -eq 1 ]] || { echo "Expected one candidate bundle, found ${#candidates[@]}"; exit 1; }
+          for attempt in 1 2; do
+            if "$RUNNER_TEMP/sdp-venv/bin/python" hudi-integ-test/spark-pipelines/harness.py \
+                --bundle "${candidates[0]}" --logs "$RUNNER_TEMP/sdp-logs/attempt-$attempt"; then
+              exit 0
+            fi
+            echo "::warning::Spark Connect attempt $attempt failed; diagnostics are retained."
+          done
+          exit 1
+      - name: Upload Spark Connect and client logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spark-connect-pipelines-logs
+          path: ${{ runner.temp }}/sdp-logs
+          if-no-files-found: ignore
+

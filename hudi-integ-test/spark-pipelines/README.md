@@ -17,13 +17,61 @@
 
 # Spark Connect / Declarative Pipelines integration harness
 
-This suite runs the **real `spark-pipelines` CLI** against a separately launched
+The nightly harness runs the **real `spark-pipelines` CLI** against a separately launched
 Spark 4.1.1 Connect JVM with the candidate Hudi bundle. It supports Linux and
 macOS, JDK 17, and Python 3.10 or newer (CI uses Python 3.11).
 The server and clients share a local filesystem; no external storage or metastore
 is required. Use a dedicated Python virtual environment.
 
-## Run locally
+## Two test layers
+
+Layer 2 invokes `python -m pyspark.pipelines.cli` with `SPARK_REMOTE`; layer 3
+also exercises the `spark-pipelines` launcher. Both use PySpark 4.1.1. Neither substitutes
+in-JVM `DataflowGraph` calls for the client/server protocol.
+
+| Layer | Server | Coverage | Execution |
+| --- | --- | --- | --- |
+| 2: `TestHoodieSparkConnectPipelines` | Connect service in the ScalaTest JVM, Hudi on the Maven test classpath | MV/ST exact rows, independent SQL flow insert/upsert settings, null-key failure and a fresh remote query afterward | Focused Maven job on PRs, pushes and merge groups |
+| 3: `harness.py` | Separate `spark-submit` JVM with the candidate bundle | Bundle packaging, static server configuration, remote writes/reads, process ownership and cleanup | Nightly at 03:23 UTC and `workflow_dispatch` |
+
+Spark 4.1 remains disabled in the broad Java CI matrices. The existing focused
+`test-spark-connect-pipelines` job now builds only the Spark Maven test dependency
+closure and runs the three layer-2 tests, without producing a shaded bundle.
+It is included in the existing `Java CI result` aggregate. This still costs a
+Spark 4.1 reactor build and a cached PySpark installation; it does not restore all
+Spark 4.1 test shards or make those costs disappear.
+
+The separate `Spark Connect nightly` workflow retries the remote smoke test once
+with fresh storage/processes and retains both attempts' logs. Build/install
+failures are reported directly. Scheduled runs are restricted to `apache/hudi`;
+manual runs also work on forks. There is no global merge gate, issue bot, or
+label-triggered PR bypass in this change. Whether a failed nightly should block
+unrelated merges remains a separate PMC decision.
+
+### Run the layer-2 suite locally
+
+With JDK 17, install the pinned `requirements.txt` in a Python environment, then:
+
+```sh
+mvn install -T 2 -Pjava17 -Dspark4.1 -Dscala-2.13 -DskipTests \
+  -Dgpg.skip -Djacoco.skip -am -pl hudi-spark-datasource/hudi-spark
+HUDI_SDP_PYTHON=/path/to/venv/bin/python HUDI_SDP_REQUIRE_PYTHON=true \
+  mvn test -Punit-tests -Pjava17 -Dspark4.1 -Dscala-2.13 \
+  -Dtest=skipJavaTests -Dsurefire.failIfNoSpecifiedTests=false \
+  -Dsuites=org.apache.spark.sql.connect.hudi.TestHoodieSparkConnectPipelines \
+  -Dgpg.skip -Djacoco.skip -pl hudi-spark-datasource/hudi-spark
+```
+
+`HUDI_SDP_PYTHON` defaults to `python3`. Without usable Python dependencies the
+suite cancels its tests locally; `HUDI_SDP_REQUIRE_PYTHON=true` makes that a failure
+and is always set in CI. Only the Spark 4.1 profile compiles the suite or resolves
+the test-scoped Connect server dependency. Other Spark profiles are unaffected.
+The server binds an ephemeral loopback port and is stopped with the test session.
+Each CLI has a 180-second timeout; dependency and post-failure probes have shorter
+bounds. Generated pipelines and CLI logs remain under
+`hudi-spark-datasource/hudi-spark/target/sdp-layer2`, including after failures.
+
+## Run the layer-3 harness locally
 
 From the repository root, with `JAVA_HOME` pointing to JDK 17:
 
@@ -116,7 +164,9 @@ Fast lifecycle regression tests require only the Python standard library:
 python3 -B -m unittest discover -s hudi-integ-test/spark-pipelines -p 'test_*.py' -v
 ```
 
-The `test-spark-connect-pipelines` job in `.github/workflows/bot.yml` runs these
-tests, builds the Spark 4.1 / Scala 2.13 bundle from the checked-out revision,
-and executes this harness with the pinned client. The general Spark 4.1 matrix
-entries remain disabled; this focused job provides the SDP remote execution lane.
+The `.github/workflows/spark_connect_pipelines.yml` nightly/manual workflow runs
+these lifecycle tests, builds the Spark 4.1 / Scala 2.13 bundle from the checked-out
+revision, and executes the separate-server harness with the pinned client. To
+validate a candidate before merge, run the documented command locally or manually
+dispatch the workflow on a branch containing it. The per-PR Maven suite is in
+`.github/workflows/bot.yml`.

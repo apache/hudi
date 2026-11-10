@@ -79,7 +79,7 @@ class TestProcessLifecycle(unittest.TestCase):
         spark_home = self.root / "pyspark"
         (spark_home / "bin").mkdir(parents=True)
         submit = spark_home / "bin/spark-submit"
-        submit.write_text("#!/bin/sh\nexec sleep 60\n")
+        submit.write_text(f"#!{sys.executable}\nimport time\ntime.sleep(60)\n")
         submit.chmod(0o755)
         bundle = self.root / "bundle.jar"
         bundle.touch()
