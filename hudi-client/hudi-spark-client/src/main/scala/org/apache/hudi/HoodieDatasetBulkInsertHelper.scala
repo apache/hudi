@@ -49,7 +49,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.unsafe.types.UTF8String
 
-import scala.collection.JavaConverters.asScalaBufferConverter
+import scala.collection.JavaConverters.{asScalaBufferConverter, seqAsJavaListConverter}
 import scala.collection.mutable
 
 object HoodieDatasetBulkInsertHelper
@@ -149,6 +149,22 @@ object HoodieDatasetBulkInsertHelper
     }
 
     partitioner.repartitionRecords(updatedDF, targetParallelism)
+  }
+
+  /**
+   * Returns the distinct partition paths of a dataset prepared by [[prepareForBulkInsert]] when
+   * meta fields are not populated. The `_hoodie_partition_path` column is only a null stub in that
+   * case, so the paths are derived with the key generator the row writer uses to route each row.
+   */
+  def getDistinctPartitionPaths(preparedDF: Dataset[Row], config: HoodieWriteConfig): java.util.List[String] = {
+    val schema = preparedDF.schema
+    val props = config.getProps
+    injectSQLConf(preparedDF.queryExecution.toRdd.mapPartitions { iter =>
+      val keyGeneratorOpt = HoodieSparkKeyGeneratorFactory.getKeyGenerator(props)
+      iter.map { row =>
+        if (keyGeneratorOpt.isPresent) keyGeneratorOpt.get.getPartitionPath(row, schema).toString else ""
+      }
+    }, SQLConf.get).distinct().collect().toSeq.asJava
   }
 
   /**
