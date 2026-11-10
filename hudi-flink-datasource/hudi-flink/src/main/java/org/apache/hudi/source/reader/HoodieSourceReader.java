@@ -20,6 +20,7 @@ package org.apache.hudi.source.reader;
 
 import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metrics.FlinkStreamReadMetrics;
 import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.source.reader.function.SplitReaderFunction;
 import org.apache.hudi.source.split.HoodieSourceSplit;
@@ -48,9 +49,25 @@ public class HoodieSourceReader<T> extends
           SourceReaderContext context,
           SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
           SerializableComparator<HoodieSourceSplit> splitComparator) {
-    super(() -> new HoodieSourceSplitReader<>(tableName, context, readerFunctionSupplier, splitComparator,
+    this(createReaderMetrics(context, tableName), recordEmitter, scanContext, context, readerFunctionSupplier, splitComparator);
+  }
+
+  private HoodieSourceReader(
+          FlinkStreamReadMetrics readerMetrics,
+          RecordEmitter<HoodieRecordWithPosition<T>, T, HoodieSourceSplit> recordEmitter,
+          HoodieScanContext scanContext,
+          SourceReaderContext context,
+          SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
+          SerializableComparator<HoodieSourceSplit> splitComparator) {
+    super(() -> new HoodieSourceSplitReader<>(readerMetrics, readerFunctionSupplier, splitComparator,
             scanContext.getLimit() == RecordLimiter.NO_LIMIT ? Option.empty() : Option.of(new RecordLimiter(scanContext.getLimit()))),
         recordEmitter, scanContext.getConf(), context);
+  }
+
+  private static FlinkStreamReadMetrics createReaderMetrics(SourceReaderContext context, String tableName) {
+    FlinkStreamReadMetrics readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
+    readerMetrics.registerMetrics();
+    return readerMetrics;
   }
 
   @Override

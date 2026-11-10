@@ -196,6 +196,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
       } else {
         // close the input format
         format.close();
+        readMetrics.clearCurrentSplit();
         // remove the split
         splits.poll();
         break;

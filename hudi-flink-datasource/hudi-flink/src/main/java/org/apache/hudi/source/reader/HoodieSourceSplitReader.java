@@ -26,7 +26,6 @@ import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.SerializableComparator;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.flink.api.connector.source.SourceReaderContext;
 import org.apache.flink.connector.base.source.reader.RecordsBySplits;
 import org.apache.flink.connector.base.source.reader.RecordsWithSplitIds;
 import org.apache.flink.connector.base.source.reader.splitreader.SplitReader;
@@ -72,9 +71,15 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   // Reset at the start of every fetch(), so it only ever means "a wakeUp() landed during THIS fetch".
   private volatile boolean wokenUp;
 
+  /**
+   * Creates a split reader.
+   *
+   * @param readerMetrics metrics of the source reader, already registered. Flink creates a new split
+   *                      reader each time it restarts an idle fetcher, so the instance is shared by
+   *                      all split readers of a source reader rather than registered per split reader.
+   */
   public HoodieSourceSplitReader(
-      String tableName,
-      SourceReaderContext context,
+      FlinkStreamReadMetrics readerMetrics,
       SerializableSupplier<SplitReaderFunction<T>> readerFunctionSupplier,
       SerializableComparator<HoodieSourceSplit> splitComparator,
       Option<RecordLimiter> recordLimiter) {
@@ -84,8 +89,7 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
     // fresh stateful cursor for each split reader so the old fetcher's close cannot affect the new one.
     this.readerFunction = readerFunctionSupplier.get();
     this.recordLimiter = recordLimiter;
-    this.readerMetrics = new FlinkStreamReadMetrics(context.metricGroup(), tableName);
-    this.readerMetrics.registerMetrics();
+    this.readerMetrics = readerMetrics;
   }
 
   @Override
@@ -109,6 +113,7 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
       }
       currentSplit = nextSplit;
       readerFunction.open(currentSplit);
+      readerMetrics.setSplitLatestCommit(currentSplit.getLatestCommit());
     }
 
     // Read the next bounded minibatch of the open split, unless the global limit is already reached.
@@ -181,6 +186,7 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   private RecordsWithSplitIds<HoodieRecordWithPosition<T>> finishSplit() {
     RecordsWithSplitIds<HoodieRecordWithPosition<T>> records = BatchRecords.lastBatchRecords(currentSplit.splitId());
     currentSplit = null;
+    readerMetrics.clearCurrentSplit();
     return records;
   }
 
