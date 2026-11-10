@@ -19,21 +19,22 @@ package org.apache.spark.sql.hudi.command.procedures
 
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMemoryConfig, HoodieReaderConfig}
 import org.apache.hudi.common.fs.FSUtils
-import org.apache.hudi.common.model.{HoodieLogFile, HoodieRecordPayload}
+import org.apache.hudi.common.model.HoodieLogFile
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.schema.HoodieSchema
-import org.apache.hudi.common.table.TableSchemaResolver
+import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.log.{HoodieLogFormat, HoodieMergedLogRecordScanner}
 import org.apache.hudi.common.table.log.block.HoodieDataBlock
+import org.apache.hudi.common.table.read.DeleteContext
+import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator
 import org.apache.hudi.common.util.ValidationUtils
 import org.apache.hudi.io.util.FileIOUtils
 import org.apache.hudi.storage.StoragePath
 
-import org.apache.avro.generic.IndexedRecord
+import org.apache.avro.generic.{GenericData, IndexedRecord}
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.types.{DataTypes, Metadata, StructField, StructType}
 
-import java.util.Objects
 import java.util.function.Supplier
 
 import scala.collection.JavaConverters._
@@ -70,30 +71,17 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     ValidationUtils.checkArgument(logFilePaths.nonEmpty, "There is no log file")
     val allRecords: java.util.List[IndexedRecord] = new java.util.ArrayList[IndexedRecord]
     if (merge) {
-      val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(client, new StoragePath(logFilePaths.last)))
-      val scanner = HoodieMergedLogRecordScanner.newBuilder
-        .withStorage(storage)
-        .withBasePath(basePath)
-        .withLogFilePaths(logFilePaths.asJava)
-        .withReaderSchema(schema)
-        .withLatestInstantTime(client.getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.get.requestedTime)
-        .withReverseReader(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
-        .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue)
-        .withMaxMemorySizeInBytes(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
-        .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath)
-        .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue)
-        .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
-        .build
-      scanner.asScala.foreach(hoodieRecord => {
-        val record = hoodieRecord.getData.asInstanceOf[HoodieRecordPayload[_]].getInsertValue(schema.toAvroSchema).get()
-        if (allRecords.size() < limit) {
-          allRecords.add(record)
-        }
-      })
+      // A log file with only delete or command blocks has no schema, so read it from the last globbed file that has one.
+      val readerSchema = logFilePaths.reverseIterator
+        .map(logFilePath => TableSchemaResolver.readSchemaFromLogFile(client, new StoragePath(logFilePath)))
+        .find(_ != null)
+      // When no log file has a data block there is nothing to merge.
+      readerSchema.foreach(schema => addMergedRecords(client, basePath, logFilePaths, schema, limit, allRecords))
     } else {
       logFilePaths.toStream.takeWhile(_ => allRecords.size() < limit).foreach {
         logFilePath => {
-          val schema = Objects.requireNonNull(TableSchemaResolver.readSchemaFromLogFile(client, new StoragePath(logFilePath)))
+          // Null for a log file with only delete or command blocks, which are skipped below.
+          val schema = TableSchemaResolver.readSchemaFromLogFile(client, new StoragePath(logFilePath))
           val reader = HoodieLogFormat.newReader(client, new HoodieLogFile(logFilePath), schema)
           while (reader.hasNext) {
             val block = reader.next()
@@ -106,6 +94,7 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
                   }
                 })
                 recordItr.close()
+              case _ =>
             }
           }
           reader.close()
@@ -114,10 +103,48 @@ class ShowHoodieLogFileRecordsProcedure extends BaseProcedure with ProcedureBuil
     }
     val rows: java.util.List[Row] = new java.util.ArrayList[Row](allRecords.size())
     allRecords.asScala.foreach(record => {
-      rows.add(Row(record.toString))
+      // GenericData reads every field, so a lazily decoded record prints its values rather than its raw bytes.
+      rows.add(Row(GenericData.get.toString(record)))
     })
     val results = rows.asScala.toSeq
     applyFilter(results, filter, outputType)
+  }
+
+  private def addMergedRecords(client: HoodieTableMetaClient, basePath: String, logFilePaths: List[String],
+                               schema: HoodieSchema, limit: Int, allRecords: java.util.List[IndexedRecord]): Unit = {
+    // Bound the scan by the latest completed instant of any write action, so an uncompacted MOR table
+    // (deltacommits only) and log blocks written after the last compaction are both read.
+    val latestInstantTime = client.getActiveTimeline.getCommitsTimeline.filterCompletedInstants.lastInstant
+      .map[String](instant => instant.requestedTime)
+      .orElse(HoodieInstantTimeGenerator.getCurrentInstantTimeStr)
+    val scanner = HoodieMergedLogRecordScanner.newBuilder
+      .withStorage(client.getStorage)
+      .withBasePath(basePath)
+      .withLogFilePaths(logFilePaths.asJava)
+      .withReaderSchema(schema)
+      .withLatestInstantTime(latestInstantTime)
+      .withReverseReader(java.lang.Boolean.parseBoolean(HoodieReaderConfig.COMPACTION_REVERSE_LOG_READ_ENABLE.defaultValue))
+      .withBufferSize(HoodieMemoryConfig.MAX_DFS_STREAM_BUFFER_SIZE.defaultValue)
+      .withMaxMemorySizeInBytes(HoodieMemoryConfig.DEFAULT_MAX_MEMORY_FOR_SPILLABLE_MAP_IN_BYTES)
+      .withSpillableMapBasePath(FileIOUtils.getDefaultSpillableMapBasePath)
+      .withDiskMapType(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.defaultValue)
+      .withBitCaskDiskMapCompressionEnabled(HoodieCommonConfig.DISK_MAP_BITCASK_COMPRESSION_ENABLED.defaultValue)
+      .build
+    try {
+      val props = client.getTableConfig.getProps
+      val deleteContext = new DeleteContext(props, schema).withReaderSchema(schema)
+      scanner.asScala.foreach(hoodieRecord => {
+        // A key whose merged result is a delete, from a delete block or a soft delete, is not shown.
+        if (allRecords.size() < limit && !hoodieRecord.isDelete(deleteContext, props)) {
+          val record = hoodieRecord.toIndexedRecord(schema, props)
+          if (record.isPresent) {
+            allRecords.add(record.get.getData)
+          }
+        }
+      })
+    } finally {
+      scanner.close()
+    }
   }
 
   override def build: Procedure = new ShowHoodieLogFileRecordsProcedure

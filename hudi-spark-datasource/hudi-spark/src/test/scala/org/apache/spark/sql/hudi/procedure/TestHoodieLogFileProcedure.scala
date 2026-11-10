@@ -23,16 +23,13 @@ import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
 
+import org.apache.spark.sql.Row
+
 class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
 
-  /**
-   * The throwable and its causes, in order. Null-terminated, and capped so a self-referential
-   * cause cannot spin forever.
-   */
-  private def causeChain(t: Throwable): Seq[Throwable] =
-    Iterator.iterate(t)(_.getCause).takeWhile(_ != null).take(16).toSeq
-
-  private def chainTypes(t: Throwable): String = causeChain(t).map(_.getClass.getName).mkString(" <- ")
+  /** The name field of each record string, sorted. */
+  private def names(rows: Array[Row]): Seq[String] =
+    rows.toSeq.map(row => "\"name\": \"([^\"]*)\"".r.findFirstMatchIn(row.getString(0)).map(_.group(1)).orNull).sorted
 
   private def createMorTable(tableName: String, tablePath: String, tableVersion: Option[Int] = None): Unit = {
     val versionProperty = tableVersion.map(version => s", hoodie.write.table.version = '$version'").getOrElse("")
@@ -108,57 +105,101 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
   }
 
   test("Test Call show_logfile_records Procedure with merge and filter") {
-    // Keep automatic cleaning off so the pre-compaction log files survive for the merged scan. The
-    // lowered compaction trigger + explicit run_compaction below are a workaround: the merged scan
-    // resolves the latest instant via getCommitAndReplaceTimeline.lastInstant.get, which throws on
-    // a deltacommit-only (never compacted) MOR table; see #19634.
-    withSQLConf("hoodie.clean.automatic" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      createMorTable(tableName, tablePath)
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
+      spark.sql(s"update $tableName set name = 'b1' where id = 1")
+      spark.sql(s"update $tableName set name = 'b2' where id = 2")
+
+      val pattern = s"$tablePath/*/*.log.*"
+
+      // Merged scan returns one row per updated key.
+      val merged = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', merge => true, limit => 10)""".stripMargin).collect()
+      assertResult(Seq("b1", "b2"))(names(merged))
+
+      // Every key is updated once, so the unmerged scan returns the same number of rows.
+      val unfiltered = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""".stripMargin).collect()
+      assertResult(merged.length)(unfiltered.length)
+
+      // A filter that always holds keeps every row.
+      val keepAll = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10, filter => "records IS NOT NULL")""".stripMargin).collect()
+      assertResult(unfiltered.length)(keepAll.length)
+
+      // A filter that never holds drops every row.
+      val dropAll = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10, filter => "records LIKE '%__no_such_token__%'")""".stripMargin).collect()
+      assertResult(0)(dropAll.length)
+    }
+  }
+
+  test("Test Call show_logfile_records Procedure merging a key updated twice on an uncompacted table") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      createMorTable(tableName, tablePath)
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
+      spark.sql(s"update $tableName set name = 'b1', ts = 2000 where id = 1")
+      spark.sql(s"update $tableName set name = 'c1', ts = 3000 where id = 1")
+      assert(createMetaClient(spark, tablePath).getActiveTimeline.getCommitAndReplaceTimeline.empty(),
+        "the table must have no commit or replacecommit, only deltacommits")
+
+      val pattern = s"$tablePath/*/*.log.*"
+      val unmerged = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""".stripMargin).collect()
+      assertResult(2)(unmerged.length)
+
+      // The two updates of key 1 merge into its latest version.
+      val merged = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', merge => true, limit => 10)""".stripMargin).collect()
+      assertResult(1)(merged.length)
+      val record = merged.head.getString(0)
+      assert(record.contains("\"name\": \"c1\"") && record.contains("\"ts\": 3000"), record)
+    }
+  }
+
+  test("Test Call show_logfile_records Procedure with merge when the last log file has no data block") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val tablePath = s"${tmp.getCanonicalPath}/$tableName"
+      // Table version 9 keeps deletes inline in the *.log.* files.
+      createMorTable(tableName, tablePath, Some(9))
+      spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
+      spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
+      spark.sql(s"update $tableName set name = 'b1', ts = 2000 where id = 1")
+      spark.sql(s"delete from $tableName where id = 2")
+
+      // The reader schema comes from an earlier log file with a data block; deleted key 2 is not shown.
+      val merged = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$tablePath/*/*.log.*', merge => true, limit => 10)""".stripMargin).collect()
+      assertResult(Seq("b1"))(names(merged))
+    }
+  }
+
+  test("Test Call show_logfile_records Procedure with merge reads log blocks written after a compaction") {
+    withSQLConf("hoodie.compact.inline" -> "false", "hoodie.compact.inline.max.delta.commits" -> "1") {
       withTempDir { tmp =>
         val tableName = generateTableName
         val tablePath = s"${tmp.getCanonicalPath}/$tableName"
         createMorTable(tableName, tablePath)
         spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
-        spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
-        // Each update touches a distinct key on purpose: a key updated in more than one log block
-        // makes the merged scan cast the merged record to HoodieRecordPayload and fail with a
-        // ClassCastException, so the merge-is-a-no-op shape is the only one that works; see #19634.
-        spark.sql(s"update $tableName set name = 'b1' where id = 1")
-        spark.sql(s"update $tableName set name = 'b2' where id = 2")
-
-        // Compaction produces a commit instant on the timeline, which the merged scan needs to
-        // determine the latest instant time; the delta log files remain on disk. The lowered
-        // delta-commit threshold above already compacts inline, so this call usually has nothing
-        // left to schedule and returns no rows -- it is the fallback for the day inline compaction
-        // stops firing. Assert the precondition the merged scan actually depends on, otherwise it
-        // dies later with an opaque NoSuchElementException; see #19634.
+        spark.sql(s"update $tableName set name = 'b1', ts = 2000 where id = 1")
+        spark.sql(s"call run_compaction(op => 'schedule', table => '$tableName')").collect()
         spark.sql(s"call run_compaction(op => 'run', table => '$tableName')").collect()
-        assert(createMetaClient(spark, tablePath).getActiveTimeline.getCommitAndReplaceTimeline.lastInstant.isPresent,
-          "compaction must produce a commit instant for the merged scan")
+        assert(createMetaClient(spark, tablePath).getActiveTimeline.getCommitsTimeline.filterCompletedInstants.getInstantsAsStream
+          .anyMatch(instant => instant.getAction == "commit"), "the table must have a completed compaction")
+        spark.sql(s"update $tableName set name = 'c1', ts = 3000 where id = 1")
 
-        val pattern = s"$tablePath/*/*.log.*"
-
-        // Merged scan returns one row per updated key.
+        // The update after the compaction is the latest version of key 1.
         val merged = spark.sql(
-          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', merge => true, limit => 10)""".stripMargin).collect()
-        assertResult(2)(merged.length)
-
-        // Unmerged scan, used as the baseline for the filter assertions. Because every key is
-        // updated exactly once, merging is a no-op here and both scans return the same rows, so
-        // this asserts no merge-vs-no-merge output distinction: a shape that would show one needs a
-        // key updated in more than one log block, which the merged scan cannot read; see #19634.
-        val unfiltered = spark.sql(
-          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""".stripMargin).collect()
-        assertResult(merged.length)(unfiltered.length)
-
-        // A filter that always holds keeps every row.
-        val keepAll = spark.sql(
-          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10, filter => "records IS NOT NULL")""".stripMargin).collect()
-        assertResult(unfiltered.length)(keepAll.length)
-
-        // A filter that never holds drops every row.
-        val dropAll = spark.sql(
-          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10, filter => "records LIKE '%__no_such_token__%'")""".stripMargin).collect()
-        assertResult(0)(dropAll.length)
+          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$tablePath/*/*.log.*', merge => true, limit => 10)""".stripMargin).collect()
+        assertResult(Seq("c1"))(names(merged))
       }
     }
   }
@@ -173,13 +214,7 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"insert into $tableName select 1, 'a1', 10, 1000, 1000")
       spark.sql(s"insert into $tableName select 2, 'a2', 20, 1500, 1000")
       // One statement that both updates and deletes, so the delta commit appends a data block and a
-      // delete block to the same log file. Standalone deletes are not the only way to trip the NPE:
-      // both branches of show_logfile_records requireNonNull a schema read off a log file, they just
-      // pick the file differently. The merged branch resolves the reader schema once from the last
-      // globbed file; the unmerged branch re-reads it per file and dies on the first file without a
-      // data block (or not at all, if `limit` is filled by earlier files first). With the single-file
-      // glob asserted below, both land on the same file. The CLI twin fixed this in HUDI-6694 (#9445)
-      // with per-file null tolerance and a backward scan for the schema; see #19634.
+      // delete block to the same log file.
       spark.sql(
         s"""
            |merge into $tableName as target
@@ -195,27 +230,30 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
            |when matched and src.id = 2 then update set target.name = src.name, target.ts = src.ts
            |""".stripMargin)
 
-      // Known limitation: both show_logfile procedures match log blocks with a single
-      // `case dataBlock: HoodieDataBlock` arm and no default arm, so a non-data block -- here the
-      // delete block -- raises a MatchError instead of being skipped; see #19634. A fix flips these
-      // assertions to assert the delete block is skipped, or surfaced, gracefully.
       val pattern = s"$tablePath/*/*.log.*"
 
-      // The MatchError pins below depend on small-file packing putting both keys in ONE file group,
-      // so the data block and the delete block share a single log file. If they ever split into two
-      // file groups, the last globbed file would be delete only and the procedures would die with a
-      // bare NPE on the null log-file schema instead, turning this test red for the wrong reason.
+      // Both keys must share one file group, so the data block and the delete block share one log file.
       val globbedLogFiles = FSUtils.getGlobStatusExcludingMetaFolder(
         createMetaClient(spark, tablePath).getStorage, new StoragePath(pattern))
       assertResult(1, "the delete block must share one log file with the data block")(globbedLogFiles.size())
 
-      val deleteBlockMatchError = "of class org.apache.hudi.common.table.log.block.HoodieDeleteBlock"
-      checkExceptionContain(
-        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""")(
-        deleteBlockMatchError)
-      checkExceptionContain(
-        s"""call show_logfile_metadata(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""")(
-        deleteBlockMatchError)
+      // The unmerged scan skips the delete block and returns the updated record of key 2.
+      val unmerged = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""".stripMargin).collect()
+      assertResult(1)(unmerged.length)
+      assert(unmerged.head.getString(0).contains("\"name\": \"b2\""), unmerged.head.getString(0))
+
+      // The merged scan drops deleted key 1 and keeps key 2.
+      val merged = spark.sql(
+        s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', merge => true, limit => 10)""".stripMargin).collect()
+      assertResult(1)(merged.length)
+      assert(merged.head.getString(0).contains("\"name\": \"b2\""), merged.head.getString(0))
+
+      // The metadata lists the delete block with no records next to the data block.
+      val metadata = spark.sql(
+        s"""call show_logfile_metadata(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""".stripMargin).collect()
+      assertResult(Seq(("AVRO_DATA_BLOCK", 1), ("DELETE_BLOCK", 0)))(
+        metadata.map(row => (row.getString(2), row.getInt(1))).toSeq.sorted)
     }
   }
 
@@ -231,25 +269,17 @@ class TestHoodieLogFileProcedure extends HoodieSparkProcedureTestBase {
       spark.sql(s"delete from $tableName where id = 1")
 
       val pattern = s"$tablePath/*/*.log.*"
-      // The inserts go to a base file, so the only log file the glob matches holds just the delete
-      // block -- the shape the pin below depends on.
+      // The inserts go to a base file, so the only log file the glob matches holds just the delete block.
       val globbedLogFiles = FSUtils.getGlobStatusExcludingMetaFolder(
         createMetaClient(spark, tablePath).getStorage, new StoragePath(pattern))
       assertResult(1, "the delete block must be alone in the only log file")(globbedLogFiles.size())
 
-      // Known limitation: the unmerged path requireNonNulls the schema it reads per log file, and a
-      // delete-only log file carries none, so the call dies with an NPE; see #19634 crash 4. A fix
-      // -- porting HUDI-6694's per-file null tolerance and backward schema scan -- flips this to
-      // returning the delete-block file gracefully.
-      // Assert the exception TYPE over the cause chain, message-agnostic: NPE is in the
-      // internal-error wrap set of every Spark version, so it arrives as an [INTERNAL_ERROR]
-      // SparkException rather than bare, and the NPE itself carries no message of its own
-      // (Objects.requireNonNull with no message argument), with no helpful-NPE text on JDK 11.
-      val failure = intercept[Throwable] {
-        spark.sql(
-          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', limit => 10)""".stripMargin).collect()
+      // A delete-only log file has no records to show, merged or not.
+      Seq(false, true).foreach { merge =>
+        val result = spark.sql(
+          s"""call show_logfile_records(table => '$tableName', log_file_path_pattern => '$pattern', merge => $merge, limit => 10)""".stripMargin).collect()
+        assertResult(0, s"merge = $merge")(result.length)
       }
-      assert(causeChain(failure).exists(_.isInstanceOf[NullPointerException]), chainTypes(failure))
     }
   }
 }
