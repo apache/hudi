@@ -23,7 +23,7 @@ import org.apache.hudi.core.index.expression.HoodieExpressionIndex.{DAYS_OPTION,
 
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, DateAdd, DateFormatClass, DateSub, DayOfMonth, Expression, FromUnixTime, Hour, Length, Literal, Lower, Month, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnixTimestamp, Upper, Year}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
-import org.apache.spark.sql.types.{BinaryType, DataType, DateType, LongType, StringType, TimestampNTZType, TimestampType}
+import org.apache.spark.sql.types.{AbstractDataType, AnyDataType, DateType, TimestampType}
 
 import scala.collection.JavaConverters._
 
@@ -37,76 +37,71 @@ import scala.collection.JavaConverters._
  */
 case class IndexedExpression(function: String, sourceColumn: String, options: Map[String, String]) {
 
-  def matches(term: Expression): Boolean = term.resolved && (term match {
-    case column: AttributeReference => function == IDENTITY_TRANSFORM && isSourceColumn(column)
+  def matches(term: Expression): Boolean = term.resolved && callOf.lift(term).exists { call =>
+    call.function == function && call.optionsMatch && isSource(call)
+  }
 
-    case e: Year => function == "year" && isSource(e.child, DateType)
-    case e: Month => function == "month" && isSource(e.child, DateType)
-    case e: DayOfMonth => function == "day" && isSource(e.child, DateType)
-    case e: Hour => function == "hour" && isSource(e.child, TimestampType)
+  /** A term read as the call the writer made: which function, on which input, with which options. */
+  private case class Call(function: String, input: Expression, inputType: AbstractDataType, optionsMatch: Boolean = true)
+
+  private def callOf: PartialFunction[Expression, Call] = {
+    case e: AttributeReference => Call(IDENTITY_TRANSFORM, e, AnyDataType)
+
+    case e: Year => Call("year", e.child, e.inputTypes.head)
+    case e: Month => Call("month", e.child, e.inputTypes.head)
+    case e: DayOfMonth => Call("day", e.child, e.inputTypes.head)
+    case e: Hour => Call("hour", e.child, e.inputTypes.head)
     case e: DateFormatClass =>
-      function == "date_format" && isSource(e.left, TimestampType) && literalEquals(e.right, options.get(FORMAT_OPTION))
+      Call("date_format", e.left, e.inputTypes.head, literalEquals(e.right, options.get(FORMAT_OPTION)))
     case e: FromUnixTime =>
-      function == "from_unixtime" && isSource(e.sec, LongType) && literalEquals(e.format, Some(formatOrDefault))
+      Call("from_unixtime", e.sec, e.inputTypes.head, literalEquals(e.format, Some(formatOrDefault)))
     case e: UnixTimestamp =>
-      function == "unix_timestamp" && isParseSource(e.timeExp) && literalEquals(e.format, Some(formatOrDefault))
-    case e: ParseToDate => function == "to_date" && isParseSource(e.left) && optionalLiteralEquals(e.format, FORMAT_OPTION)
+      Call("unix_timestamp", e.timeExp, e.inputTypes.head, literalEquals(e.format, Some(formatOrDefault)))
+    case e: ParseToDate => Call("to_date", e.left, e.inputTypes.head, optionalLiteralEquals(e.format, FORMAT_OPTION))
     case e: ParseToTimestamp =>
-      function == "to_timestamp" && isParseSource(e.left) && optionalLiteralEquals(e.format, FORMAT_OPTION)
+      Call("to_timestamp", e.left, e.inputTypes.head, optionalLiteralEquals(e.format, FORMAT_OPTION))
     // NOTE: The optimizer replaces a format-less `ParseToDate` / `ParseToTimestamp` by this cast
-    case e: Cast if e.dataType == DateType => function == "to_date" && isFormatLessParseOf(e.child)
-    case e: Cast if e.dataType == TimestampType => function == "to_timestamp" && isFormatLessParseOf(e.child)
-    case e: DateAdd => function == "date_add" && isSource(e.startDate, DateType) && literalEquals(e.days, options.get(DAYS_OPTION))
-    case e: DateSub => function == "date_sub" && isSource(e.startDate, DateType) && literalEquals(e.days, options.get(DAYS_OPTION))
+    case e: Cast if e.dataType == DateType => Call("to_date", e.child, AnyDataType, optionalLiteralEquals(None, FORMAT_OPTION))
+    case e: Cast if e.dataType == TimestampType =>
+      Call("to_timestamp", e.child, AnyDataType, optionalLiteralEquals(None, FORMAT_OPTION))
+    case e: DateAdd => Call("date_add", e.startDate, e.inputTypes.head, literalEquals(e.days, options.get(DAYS_OPTION)))
+    case e: DateSub => Call("date_sub", e.startDate, e.inputTypes.head, literalEquals(e.days, options.get(DAYS_OPTION)))
 
-    case e: Upper => function == "upper" && isSource(e.child, StringType)
-    case e: Lower => function == "lower" && isSource(e.child, StringType)
-    case e: Length => function == "length" && isSource(e.child, StringType, BinaryType)
+    case e: Upper => Call("upper", e.child, e.inputTypes.head)
+    case e: Lower => Call("lower", e.child, e.inputTypes.head)
+    case e: Length => Call("length", e.child, e.inputTypes.head)
     case e: Substring =>
-      function == "substring" && isSource(e.str, StringType, BinaryType) &&
-        literalEquals(e.pos, options.get(POSITION_OPTION)) && literalEquals(e.len, options.get(LENGTH_OPTION))
-    case e: StringTrim =>
-      function == "trim" && isSource(e.srcStr, StringType) && optionalLiteralEquals(e.trimStr, TRIM_STRING_OPTION)
-    case e: StringTrimLeft =>
-      function == "ltrim" && isSource(e.srcStr, StringType) && optionalLiteralEquals(e.trimStr, TRIM_STRING_OPTION)
-    case e: StringTrimRight =>
-      function == "rtrim" && isSource(e.srcStr, StringType) && optionalLiteralEquals(e.trimStr, TRIM_STRING_OPTION)
+      Call("substring", e.str, e.inputTypes.head,
+        literalEquals(e.pos, options.get(POSITION_OPTION)) && literalEquals(e.len, options.get(LENGTH_OPTION)))
+    case e: StringTrim => Call("trim", e.srcStr, e.inputTypes.head, optionalLiteralEquals(e.trimStr, TRIM_STRING_OPTION))
+    case e: StringTrimLeft => Call("ltrim", e.srcStr, e.inputTypes.head, optionalLiteralEquals(e.trimStr, TRIM_STRING_OPTION))
+    case e: StringTrimRight => Call("rtrim", e.srcStr, e.inputTypes.head, optionalLiteralEquals(e.trimStr, TRIM_STRING_OPTION))
     case e: RegExpReplace =>
-      function == "regexp_replace" && isSource(e.subject, StringType) && literalEquals(e.pos, Some("1")) &&
-        literalEquals(e.regexp, options.get(PATTERN_OPTION)) && literalEquals(e.rep, options.get(REPLACEMENT_OPTION))
+      Call("regexp_replace", e.subject, e.inputTypes.head, literalEquals(e.pos, Some("1")) &&
+        literalEquals(e.regexp, options.get(PATTERN_OPTION)) && literalEquals(e.rep, options.get(REPLACEMENT_OPTION)))
     case e: RegExpExtract =>
-      function == "regexp_extract" && isSource(e.subject, StringType) &&
-        literalEquals(e.regexp, options.get(PATTERN_OPTION)) && literalEquals(e.idx, options.get(REGEX_GROUP_INDEX_OPTION))
+      Call("regexp_extract", e.subject, e.inputTypes.head,
+        literalEquals(e.regexp, options.get(PATTERN_OPTION)) && literalEquals(e.idx, options.get(REGEX_GROUP_INDEX_OPTION)))
     case e: StringSplit =>
-      function == "split" && isSource(e.str, StringType) && literalEquals(e.limit, Some("-1")) &&
-        literalEquals(e.regex, options.get(PATTERN_OPTION))
-
-    case _ => false
-  })
+      Call("split", e.str, e.inputTypes.head,
+        literalEquals(e.limit, Some("-1")) && literalEquals(e.regex, options.get(PATTERN_OPTION)))
+  }
 
   private def isSourceColumn(column: AttributeReference): Boolean = column.name == sourceColumn
 
   /**
-   * The function's input: the column, or the cast Spark adds to `coercedType` when the function does not accept the
-   * column's type. The writer applied the same function to the same column type, so it went through the same cast. Any
-   * other cast is the query's own, and the index holds no stats for it.
-   *
-   * @param acceptedTypes other types the function takes as is: Spark adds no cast to a column of one of these
+   * The call's input: the column, or the cast Spark adds when the function does not take the column's type as is. The
+   * writer applied the same function to the same column type, so it went through the same cast. Any other cast is the
+   * query's own, and the index holds no stats for it.
    */
-  private def isSource(e: Expression, coercedType: DataType, acceptedTypes: DataType*): Boolean = e match {
+  private def isSource(call: Call): Boolean = call.input match {
     case column: AttributeReference => isSourceColumn(column)
-    case cast: Cast if cast.dataType == coercedType => cast.child match {
-      case column: AttributeReference => isSourceColumn(column) && !acceptedTypes.contains(column.dataType)
+    case cast: Cast => cast.child match {
+      case column: AttributeReference =>
+        isSourceColumn(column) && !call.inputType.acceptsType(column.dataType) &&
+          cast.dataType == call.inputType.defaultConcreteType
       case _ => false
     }
-    case _ => false
-  }
-
-  /** The input of a function that parses strings and takes dates and timestamps as is. */
-  private def isParseSource(e: Expression): Boolean = isSource(e, StringType, DateType, TimestampType, TimestampNTZType)
-
-  private def isFormatLessParseOf(e: Expression): Boolean = e match {
-    case column: AttributeReference => isSourceColumn(column) && optionalLiteralEquals(None, FORMAT_OPTION)
     case _ => false
   }
 
