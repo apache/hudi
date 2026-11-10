@@ -19,13 +19,13 @@ package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Cast, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, FromUnixTime, GreaterThan, GreaterThanOrEqual, Hour, If, In, InSet, IsNull, LeafExpression, Length, LessThan, LessThanOrEqual, Literal, Log, Minute, Not, Or, StartsWith, TryEval, UnaryMinus, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Cast, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, FromUnixTime, GreaterThan, GreaterThanOrEqual, Hour, If, In, InSet, IsNull, LeafExpression, Length, LessThan, LessThanOrEqual, Literal, Log, Minute, Not, Or, StartsWith, TryEval, UnaryMinus, UnixTimestamp, Upper}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, ExpressionIndexSource, Increasing, IndexedExpression, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, Verdict}
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering.Pattern
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, DoubleType, IntegerType, LongType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{BinaryType, DataType, DateType, DoubleType, IntegerType, LongType, StringType, StructField, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
@@ -309,6 +309,39 @@ class TestDataSkippingStages {
     assertTrue(identityIndex.matches(ts))
     assertFalse(identityIndex.matches(Upper(ts)))
     assertFalse(identityIndex.matches(UnresolvedAttribute("ts")))
+  }
+
+  @Test
+  def testIndexedExpressionMatchesOnlyTheCastSparkAdds(): Unit = {
+    val lengthIndex = IndexedExpression("length", "name", Map.empty)
+    val name = AttributeReference("name", StringType)()
+    assertTrue(lengthIndex.matches(Length(name)))
+    // Spark casts a number to a string for length
+    assertTrue(lengthIndex.matches(Length(Cast(AttributeReference("name", IntegerType)(), StringType))))
+    // The query's own casts: the writer computed the length of the string, or of the binary column as is
+    assertFalse(lengthIndex.matches(Length(Cast(name, BinaryType))))
+    assertFalse(lengthIndex.matches(Length(Cast(AttributeReference("name", BinaryType)(), StringType))))
+
+    val instant = AttributeReference("ts", TimestampType)()
+    val defaultFormat = Literal("yyyy-MM-dd HH:mm:ss")
+    val unixTimestampIndex = IndexedExpression("unix_timestamp", "ts", Map.empty)
+    assertTrue(unixTimestampIndex.matches(UnixTimestamp(instant, defaultFormat, Some("UTC"))))
+    assertFalse(unixTimestampIndex.matches(UnixTimestamp(Cast(instant, DateType, Some("UTC")), defaultFormat, Some("UTC"))))
+  }
+
+  @Test
+  def testIndexedExpressionMatchesTheCastAFormatLessParseBecomes(): Unit = {
+    val toDateIndex = IndexedExpression("to_date", "ts", Map.empty)
+    val toTimestampIndex = IndexedExpression("to_timestamp", "ts", Map.empty)
+    val asDate = Cast(ts, DateType, Some("UTC"))
+    val asTimestamp = Cast(ts, TimestampType, Some("UTC"))
+    assertTrue(toDateIndex.matches(asDate))
+    assertTrue(toTimestampIndex.matches(asTimestamp))
+    assertFalse(toDateIndex.matches(asTimestamp))
+    assertFalse(toTimestampIndex.matches(asDate))
+    // An index with a format holds the parse with that format, which is not this cast
+    assertFalse(IndexedExpression("to_date", "ts", Map("format" -> "yyyy-MM-dd")).matches(asDate))
+    assertFalse(toDateIndex.matches(Cast(AttributeReference("other", StringType)(), DateType, Some("UTC"))))
   }
 
   @Test

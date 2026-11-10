@@ -42,6 +42,7 @@ import org.apache.hudi.util.JFunction
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, Expression, Literal}
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoExpressionIndexFilterExpr
 import org.apache.spark.sql.hudi.dataskipping.{ExpressionIndexSource, IndexedExpression, Leaf, Op}
@@ -380,8 +381,10 @@ class ExpressionIndexSupport(spark: SparkSession,
   }
 
   /**
-   * Each expression index some query conjunct reads, with those conjuncts. A conjunct reads an index when one of its
-   * terms is the index's `f(col)` ([[IndexedExpression.matches]]).
+   * Each expression index some query conjunct reads, with those conjuncts. A conjunct reads an index when it compiles
+   * to a filter on the index's stats, that is when its term is the index's `f(col)` ([[IndexedExpression.matches]]) or
+   * a rule derives a range from it. Any other conjunct cannot prune, and reading the index for it would return every
+   * file and end the lookup before the indexes after this one.
    *
    * Only `=` and `IN` conjuncts read an expression index for now, as before; ranges follow with #20537.
    */
@@ -391,13 +394,15 @@ class ExpressionIndexSupport(spark: SparkSession,
       .filter(definition => MetadataPartitionType.fromPartitionPath(definition.getIndexName).equals(MetadataPartitionType.EXPRESSION_INDEX))
       .flatMap { definition =>
         val indexed = IndexedExpression(definition)
-        val uses = conjuncts.filter(_.find(indexed.matches).isDefined)
+        val source = ExpressionIndexSource(indexed)
+        val uses = conjuncts.filterNot(translateIntoExpressionIndexFilterExpr(_, source).equals(TrueLiteral))
         if (uses.isEmpty) None else Some(IndexUse(definition, indexed, uses))
       }
   }
 
+  // NOTE: Not `InSet`: its values are internal ones, for ex a DATE is an INT, which do not compare with the stats
   private def isEqualityOrIn(conjunct: Expression): Boolean = Leaf.parse(conjunct).exists(_.op match {
-    case Op.Eq | Op.In | Op.InSet(_) => true
+    case Op.Eq | Op.In => true
     case _ => false
   })
 
@@ -408,12 +413,9 @@ class ExpressionIndexSupport(spark: SparkSession,
    */
   private def bloomFilterKeys(use: IndexUse): List[String] =
     use.conjuncts.flatMap(Leaf.parse).filter(leaf => use.indexed.matches(leaf.term)).flatMap { leaf =>
-      val values: Seq[Any] = leaf.op match {
-        case Op.InSet(set) => set.toSeq
-        case _ => leaf.values.map {
-          case Literal(value, _) => value
-          case _ => null
-        }
+      val values: Seq[Any] = leaf.values.map {
+        case Literal(value, _) => value
+        case _ => null
       }
       if (values.isEmpty || values.contains(null)) Seq.empty else values.map(_.toString)
     }.toList

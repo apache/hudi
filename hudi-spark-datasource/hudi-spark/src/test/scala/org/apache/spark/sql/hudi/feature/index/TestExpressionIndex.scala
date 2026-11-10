@@ -1905,6 +1905,42 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         // Ranges do not read an expression index yet (#20537)
         assertScan(tableName, "hour(ts) > 12", Seq("rider-A", "rider-C", "rider-D", "rider-E"), expectedFiles = 3)
       }
+
+      spark.sql(s"CREATE INDEX ts_date ON $tableName USING column_stats(ts) options(expr='to_date')")
+      spark.sql(s"CREATE INDEX ts_next_day ON $tableName USING column_stats(ts) options(expr='date_add', days='1')")
+
+      withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+        "spark.sql.adaptive.enabled" -> "false") {
+        // The optimizer turns a format-less to_date(ts) into CAST(ts AS DATE)
+        assertScan(tableName, "to_date(ts) = DATE'2023-09-21'", Seq("rider-E"), expectedFiles = 1)
+        // More than 10 values become an InSet, which does not read an expression index: its DATE values are ints
+        val days = (1 to 11).map(day => f"DATE'2023-09-$day%02d'").mkString(", ")
+        assertScan(tableName, s"date_add(ts, 1) IN ($days)", Seq.empty, expectedFiles = 3)
+      }
+    }
+  }
+
+  test("Test Expression Index Leaves A Filter It Cannot Prune To Column Stats") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      // One base file per insert, so that column stats prune inside the partition
+      withSQLConf("hoodie.metadata.index.column.stats.enable" -> "true", "hoodie.parquet.small.file.limit" -> "0") {
+        spark.sql(
+          s"""CREATE TABLE $tableName (ts STRING, uuid STRING, rider STRING, fare DOUBLE, city STRING) USING HUDI
+             |PARTITIONED BY (city)
+             |LOCATION '${tmp.getCanonicalPath}/$tableName'
+             |TBLPROPERTIES (primaryKey = 'uuid', preCombineField = 'ts')
+             |""".stripMargin)
+        spark.sql(s"INSERT INTO $tableName VALUES ('2023-09-23 09:42:17','u1','rider-F',34.15,'sao_paulo')")
+        spark.sql(s"INSERT INTO $tableName VALUES ('2023-09-24 09:00:00','u2','rider-Z',12.50,'sao_paulo')")
+        spark.sql(s"CREATE INDEX ts_year ON $tableName USING column_stats(ts) options(expr='date_format', format='yyyy')")
+
+        withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+          "spark.sql.adaptive.enabled" -> "false") {
+          // Spark casts the indexed string to INT here, which no rule ranges: the index cannot prune this filter
+          assertScan(tableName, "date_format(ts, 'yyyy') = 2023 AND fare = 12.5", Seq("rider-Z"), expectedFiles = 1)
+        }
+      }
     }
   }
 

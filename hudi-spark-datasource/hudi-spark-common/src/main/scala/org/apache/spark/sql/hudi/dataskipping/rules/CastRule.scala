@@ -48,7 +48,7 @@ object CastRule extends RangeRule {
    *    spring-forward gap shifts forward, so 02:30 maps after 03:00)
    *  - string to date/timestamp, since unpadded strings sort differently from what they parse to (for
    *    ex, "2022-1-5" > "2022-01-10" as strings, but parses to an earlier date). Expression indexes on
-   *    to_date/to_timestamp do not need it: `ExpressionIndexSupport` strips the function first
+   *    to_date/to_timestamp do not need it: [[TermRange]] asks the source for the cast itself first
    */
   private[dataskipping] def preservesOrder(from: DataType, to: DataType): Boolean =
     (from, to) match {
