@@ -28,7 +28,6 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Spliterator;
@@ -215,32 +214,6 @@ public class HoodieListData<T> extends HoodieBaseListData<T> implements HoodieDa
   public HoodieData<T> union(HoodieData<T> other) {
     ValidationUtils.checkArgument(other instanceof HoodieListData);
     return new HoodieListData<>(Stream.concat(asStream(), ((HoodieListData<T>)other).asStream()), lazy);
-  }
-
-  /**
-   * Unions this container with all the given ones into a single {@link HoodieListData}.
-   *
-   * <p>Chaining {@link #union(HoodieData)} nests one {@link Stream#concat} per call, and accessing
-   * an element of a deeply concatenated stream can overflow the stack. This method flattens all
-   * the inputs in one pass instead, so the depth does not grow with the number of inputs.
-   *
-   * <p>Like {@link #union(HoodieData)}, the result bears the execution semantic of this container,
-   * and closing the result closes every input stream.
-   *
-   * @param others the containers to union with this one, all of them {@link HoodieListData}
-   * @return a new instance holding the elements of this container followed by those of the others
-   */
-  public HoodieData<T> unionAll(List<HoodieData<T>> others) {
-    List<Stream<T>> streams = new ArrayList<>(others.size() + 1);
-    streams.add(asStream());
-    for (HoodieData<T> other : others) {
-      ValidationUtils.checkArgument(other instanceof HoodieListData);
-      streams.add(((HoodieListData<T>) other).asStream());
-    }
-    Stream<T> flattened = streams.parallelStream()
-        .flatMap(Function.identity())
-        .onClose(() -> streams.forEach(Stream::close));
-    return new HoodieListData<>(flattened, lazy);
   }
 
   @Override

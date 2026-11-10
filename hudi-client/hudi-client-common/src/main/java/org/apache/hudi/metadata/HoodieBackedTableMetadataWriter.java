@@ -470,8 +470,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
             dataPartitionAndRecords.numFileGroups(), relativePartitionPath, dataPartitionAndRecords.dataPartition());
         recordsPerDataPartition.add(dataPartitionAndRecords.indexRecords());
       }
-      // Union once: folding with HoodieData#union nests one level per data partition, and the
-      // resulting lineage overflows the stack on tables with many partitions (partitioned RLI).
+      // Union once: on Spark, folding with HoodieData#union nests one UnionRDD per data partition,
+      // and the resulting lineage overflows the stack on tables with many partitions (partitioned RLI).
       HoodieData<HoodieRecord> records = engineContext.union(recordsPerDataPartition);
 
       bulkCommit(instantTimeForPartition, relativePartitionPath, records, initializationPlan.indexParser());

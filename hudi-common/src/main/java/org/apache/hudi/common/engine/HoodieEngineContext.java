@@ -22,7 +22,6 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
-import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
@@ -86,16 +85,11 @@ public abstract class HoodieEngineContext {
   /**
    * Unions all the given {@link HoodieData} into a single {@link HoodieData}.
    *
-   * <p>Folding the inputs with {@link HoodieData#union(HoodieData)} nests one level per input
-   * (one {@code UnionRDD} per call on Spark, one {@link Stream#concat} per call for in-memory data),
-   * and deep enough nesting overflows the stack: on Spark, a few hundred levels are enough to fail
-   * task serialization. Engines implement this as a single flat union instead.
-   *
-   * <p>When {@link #emptyHoodieData()} is a {@link HoodieListData}, as for the in-memory engines,
-   * the default implementation flattens the inputs in one pass and the result bears the execution
-   * semantic of {@link #emptyHoodieData()}. Otherwise it falls back to folding with
-   * {@link HoodieData#union(HoodieData)}, so engines with their own {@link HoodieData} should
-   * override this method.
+   * <p>The default implementation folds the inputs with {@link HoodieData#union(HoodieData)}, which
+   * does not nest when {@link #emptyHoodieData()} is eager, since every step materializes its result.
+   * Engines whose union nests per call should override this with a single flat union: on Spark, a
+   * chain of a few hundred {@code UnionRDD} levels is enough to overflow the stack during task
+   * serialization.
    *
    * @param dataList the {@link HoodieData} to union
    * @param <T>      type of object
@@ -103,12 +97,6 @@ public abstract class HoodieEngineContext {
    */
   public <T> HoodieData<T> union(List<HoodieData<T>> dataList) {
     HoodieData<T> result = emptyHoodieData();
-    if (dataList.isEmpty()) {
-      return result;
-    }
-    if (result instanceof HoodieListData) {
-      return ((HoodieListData<T>) result).unionAll(dataList);
-    }
     for (HoodieData<T> data : dataList) {
       result = result.union(data);
     }

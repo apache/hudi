@@ -28,7 +28,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -145,47 +144,5 @@ class TestHoodieListData {
     assertEquals(2, input.flatMapToPair(partition -> partition.equals(partition1) ? iterator1 : iterator2).collectAsList().size());
     assertTrue(iterator1.isClosed());
     assertTrue(iterator2.isClosed());
-  }
-
-  @Test
-  void testUnionAllEager() {
-    HoodieListData<Integer> first = HoodieListData.eager(Arrays.asList(1, 2));
-    HoodieData<Integer> union = first.unionAll(Arrays.asList(
-        HoodieListData.eager(Collections.emptyList()),
-        HoodieListData.lazy(Arrays.asList(3, 4)),
-        HoodieListData.eager(Collections.singletonList(5))));
-    assertEquals(Arrays.asList(1, 2, 3, 4, 5), union.collectAsList());
-    // The result of an eager receiver is materialized, so it can be de-referenced more than once
-    assertEquals(5, union.count());
-    assertEquals(Arrays.asList(1, 2, 3, 4, 5), union.collectAsList());
-
-    assertEquals(Arrays.asList(1, 2), first.unionAll(Collections.emptyList()).collectAsList());
-  }
-
-  @Test
-  void testUnionAllLazyClosesInputs() {
-    CloseValidationIterator<String> iterator1 = new CloseValidationIterator<>(Collections.singletonList("value1").iterator());
-    CloseValidationIterator<String> iterator2 = new CloseValidationIterator<>(Collections.singletonList("value2").iterator());
-    CloseValidationIterator<String> iterator3 = new CloseValidationIterator<>(Collections.singletonList("value3").iterator());
-    HoodieData<String> union = HoodieListData.lazy(iterator1)
-        .unionAll(Arrays.asList(HoodieListData.lazy(iterator2), HoodieListData.lazy(iterator3)));
-    assertFalse(iterator1.isClosed());
-    assertEquals(Arrays.asList("value1", "value2", "value3"), union.collectAsList());
-    assertTrue(iterator1.isClosed());
-    assertTrue(iterator2.isClosed());
-    assertTrue(iterator3.isClosed());
-  }
-
-  @Test
-  void testUnionAllDoesNotNest() {
-    // Chaining union over this many inputs nests as many Stream#concat calls, which is deep
-    // enough to overflow the stack when the elements are accessed.
-    int numInputs = 100000;
-    List<HoodieData<Integer>> inputs = new ArrayList<>(numInputs);
-    for (int i = 0; i < numInputs; i++) {
-      inputs.add(HoodieListData.lazy(Collections.singletonList(i)));
-    }
-    HoodieData<Integer> union = HoodieListData.<Integer>eager(Collections.emptyList()).unionAll(inputs);
-    assertEquals(IntStream.range(0, numInputs).boxed().collect(Collectors.toList()), union.collectAsList());
   }
 }
