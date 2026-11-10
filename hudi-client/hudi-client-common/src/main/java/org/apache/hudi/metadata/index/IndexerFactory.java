@@ -31,6 +31,7 @@ import org.apache.hudi.metadata.index.partitionstats.PartitionStatsIndexer;
 import org.apache.hudi.metadata.index.record.PartitionedRecordIndexer;
 import org.apache.hudi.metadata.index.record.RecordIndexer;
 import org.apache.hudi.metadata.index.secondary.SecondaryIndexer;
+import org.apache.hudi.metadata.index.vector.VectorIndexer;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -65,6 +66,8 @@ public class IndexerFactory {
         return new PartitionStatsIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
       case SECONDARY_INDEX:
         return new SecondaryIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
+      case VECTOR_INDEX:
+        return new VectorIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient, engineIndexerSupport);
       default:
         throw new HoodieNotSupportedException("Unsupported metadata partition type for indexing: " + partitionType);
     }
