@@ -160,7 +160,7 @@ public class TypeConverters {
 
             @Override
             public Object convert(Object val) {
-              return toDecimalData(Double.parseDouble(val.toString()), toType);
+              return toDecimalData(new BigDecimal(val.toString()), toType);
             }
           };
         }
@@ -378,7 +378,9 @@ public class TypeConverters {
    * @return Converted decimal that is wrapped in Flink's DecimalData object.
    */
   private static DecimalData toDecimalData(Number val, LogicalType decimalType) {
-    BigDecimal valAsDecimal = BigDecimal.valueOf(val.doubleValue());
+    BigDecimal valAsDecimal = val instanceof Integer || val instanceof Long
+        ? BigDecimal.valueOf(val.longValue())
+        : BigDecimal.valueOf(val.doubleValue());
     return toDecimalData(valAsDecimal, decimalType);
   }
 
