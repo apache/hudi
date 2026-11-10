@@ -27,7 +27,7 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, GetStructField, InSet, Not, ParseToDate, ParseToTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, GetStructField, In, InSet, Literal, Not, ParseToDate, ParseToTimestamp}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -260,6 +260,42 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     val rows: Seq[String] = applyFilterExpr(resolvedFilterExpr, input)
 
     assertEquals(expectedOutput, rows)
+  }
+
+  @Test
+  def testLargeInListCompilesToBalancedOr(): Unit = {
+    // OptimizeIn turns an IN list of more than 10 values into InSet. One OR level per value makes
+    // Spark's analysis and codegen recurse thousands of frames deep and overflow the stack
+    val values = 0L until 5000L
+    val input = Seq(
+      IndexRow("file_1", valueCount = 2, A_minValue = 4999, A_maxValue = 4999, A_nullCount = 0),
+      IndexRow("file_2", valueCount = 2, A_minValue = 5000, A_maxValue = 6000, A_nullCount = 0),
+      IndexRow("file_3", valueCount = 2, A_minValue = -10, A_maxValue = 10, A_nullCount = 0))
+    val a = UnresolvedAttribute("A")
+    Seq(
+      In(a, values.map(Literal(_))) -> Seq("file_1", "file_3"),
+      InSet(a, HashSet(values: _*)) -> Seq("file_1", "file_3"),
+      // Only a file holding nothing but listed values fails NOT IN
+      Not(In(a, values.map(Literal(_)))) -> Seq("file_2", "file_3")
+    ).foreach { case (filter, expected) =>
+      val resolvedFilterExpr = resolveExpr(spark, filter, sourceTableSchema)
+      val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedFilterExpr, indexedCols = indexedCols)
+      // A balanced OR over 5000 values is 13 levels deep, plus a few for NOT / AND / the comparison
+      assertTrue(depth(lookupFilter) <= 20, s"lookup filter is ${depth(lookupFilter)} levels deep")
+
+      assertEquals(expected, applyFilterExpr(resolvedFilterExpr, input))
+    }
+  }
+
+  // Level by level, so a left-deep filter fails the depth assertion instead of overflowing here
+  private def depth(expr: Expression): Int = {
+    var levels = 0
+    var nodes = Seq(expr)
+    while (nodes.nonEmpty) {
+      levels += 1
+      nodes = nodes.flatMap(_.children)
+    }
+    levels
   }
 
   @Test
