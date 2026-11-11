@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 
 import java.util.List;
@@ -55,6 +56,11 @@ public class JavaInsertOverwriteCommitActionExecutor<T>
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     return JavaWriteHelper.newInstance().write(instantTime, inputRecords, context, table,
         config.shouldCombineBeforeInsert(), config.getInsertShuffleParallelism(), this, operationType);
+  }
+
+  @Override
+  public Partitioner getInsertPartitioner(WorkloadProfile profile) {
+    return new JavaInsertOverwritePartitioner<>(profile, context, table, config);
   }
 
   @Override
