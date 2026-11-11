@@ -22,6 +22,7 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.ConsistentHashingNode;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -38,7 +39,6 @@ import org.apache.spark.sql.types.StructType;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * Helper class for native row writer for bulk_insert with consistent hashing bucket index.
@@ -93,8 +93,8 @@ public class ConsistentBucketBulkInsertDataInternalWriterHelper extends BucketBu
   }
 
   private ConsistentBucketIdentifier getBucketIdentifier(String partition) {
-    Set<HoodieFileGroupId> fileGroupsInPendingClustering = hoodieTable.getFileSystemView().getFileGroupsInPendingClustering()
-        .map(Pair::getKey).collect(Collectors.toSet());
+    Set<HoodieFileGroupId> fileGroupsInPendingClustering =
+        ClusteringUtils.getAllFileGroupsInPendingClusteringPlans(hoodieTable.getMetaClient()).keySet();
     if (fileGroupsInPendingClustering.stream().anyMatch(f -> f.getPartitionPath().equals(partition))) {
       Pair<String, ConsistentBucketIdentifier> bucketIdentifierPair =
           ConsistentHashingUpdateStrategyUtils.constructPartitionToIdentifier(Collections.singleton(partition), hoodieTable).get(partition);

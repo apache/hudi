@@ -150,6 +150,8 @@ public class TestHoodieGlobalBloomIndex extends TestHoodieMetadataBase {
     testTable.doWriteOperation(c2, WriteOperationType.UPSERT, Collections.singletonList(p3),
         partitionToFilesNameLengthMap, false, false);
 
+    metaClient.reloadActiveTimeline();
+    hoodieTable = HoodieSparkTable.create(config, context, metaClient);
     filesList = index.loadColumnRangesFromFiles(partitions, context, hoodieTable);
     assertEquals(4, filesList.size());
 

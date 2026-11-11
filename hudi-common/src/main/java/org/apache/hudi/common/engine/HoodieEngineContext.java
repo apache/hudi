@@ -20,8 +20,10 @@ package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.data.HoodieAccumulator;
+import org.apache.hudi.common.data.HoodieBroadcast;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.data.HoodieData.HoodieDataCacheKey;
+import org.apache.hudi.common.data.HoodieLocalBroadcast;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializableConsumer;
@@ -67,6 +69,21 @@ public abstract class HoodieEngineContext {
   protected TaskContextSupplier taskContextSupplier;
 
   public abstract HoodieAccumulator newAccumulator();
+
+  /**
+   * Shares a value with the tasks of this engine. Task functions capture the returned handle instead of
+   * the value, so a distributed engine ships the value once per worker instead of once per task. See
+   * {@link HoodieBroadcast} for what tasks see.
+   *
+   * <p>The default holds the value in the handle, which suits engines that run tasks in the current JVM.
+   *
+   * @param value the value to share; it must be serializable, and state it builds lazily must be thread-safe
+   * @param <T>   type of the value
+   * @return a serializable handle whose {@link HoodieBroadcast#value()} returns the value
+   */
+  public <T> HoodieBroadcast<T> broadcast(T value) {
+    return HoodieLocalBroadcast.of(value);
+  }
 
   public abstract <T> HoodieData<T> emptyHoodieData();
 
