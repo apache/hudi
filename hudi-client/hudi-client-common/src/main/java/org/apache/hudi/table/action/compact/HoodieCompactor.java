@@ -169,8 +169,16 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
                                    TaskContextSupplier taskContextSupplier) throws IOException {
     HoodieMergeHandle<T, ?, ?, ?> mergeHandle = HoodieMergeHandleFactory.create(writeConfig,
         instantTime, table, operation, taskContextSupplier, hoodieReaderContext, maxInstantTime, getEngineRecordType());
-    mergeHandle.doMerge();
-    return mergeHandle.close();
+    try {
+      mergeHandle.doMerge();
+      return mergeHandle.close();
+    } catch (Exception e) {
+      // doMerge() failed before the handle (and its underlying file writer/output stream) was
+      // closed. Close it here on a best-effort basis so the writer's stream isn't leaked, then
+      // surface the original failure.
+      closeQuietlyOnFailure(mergeHandle::close, e);
+      throw e;
+    }
   }
 
   public List<WriteStatus> logCompact(HoodieWriteConfig writeConfig,
@@ -182,8 +190,29 @@ public abstract class HoodieCompactor<T, I, K, O> implements Serializable {
     HoodieAppendHandle<T, ?, ?, ?> appendHandle = CommonClientUtils.shouldWriteNativeLogs(writeConfig)
         ? new FileGroupReaderBasedNativeLogAppendHandle<>(writeConfig, instantTime, table, operation, taskContextSupplier, readerContext)
         : new FileGroupReaderBasedInlineLogAppendHandle<>(writeConfig, instantTime, table, operation, taskContextSupplier, readerContext);
-    appendHandle.doAppend();
-    return appendHandle.close();
+    try {
+      appendHandle.doAppend();
+      return appendHandle.close();
+    } catch (Exception e) {
+      // doAppend() failed before the handle (and its underlying log writer/output stream) was
+      // closed. Close it here on a best-effort basis so the writer's stream isn't leaked, then
+      // surface the original failure.
+      closeQuietlyOnFailure(appendHandle::close, e);
+      throw e;
+    }
+  }
+
+  /**
+   * Best-effort close of a write handle after its merge/append step has already failed.
+   * Any exception thrown while closing is attached to the original failure rather than
+   * propagated, so the original failure remains the reported cause.
+   */
+  private static void closeQuietlyOnFailure(Runnable closer, Throwable originalFailure) {
+    try {
+      closer.run();
+    } catch (Throwable closeFailure) {
+      originalFailure.addSuppressed(closeFailure);
+    }
   }
 
   public String getMaxInstantTime(HoodieTableMetaClient metaClient) {
