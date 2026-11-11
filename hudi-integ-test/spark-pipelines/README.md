@@ -17,7 +17,7 @@
 
 # Spark Connect / Declarative Pipelines integration harness
 
-The nightly harness runs the **real `spark-pipelines` CLI** against a separately launched
+The process harness runs the **real `spark-pipelines` CLI** against a separately launched
 Spark 4.1.1 Connect JVM with the candidate Hudi bundle. It supports Linux and
 macOS, JDK 17, and Python 3.10 or newer (CI uses Python 3.11).
 The server and clients share a local filesystem; no external storage or metastore
@@ -31,22 +31,24 @@ in-JVM `DataflowGraph` calls for the client/server protocol.
 
 | Layer | Server | Coverage | Execution |
 | --- | --- | --- | --- |
-| 2: `TestHoodieSparkConnectPipelines` | Connect service in the ScalaTest JVM, Hudi on the Maven test classpath | MV/ST exact rows, independent SQL flow insert/upsert settings, null-key failure and a fresh remote query afterward | Focused Maven job on PRs, pushes and merge groups |
-| 3: `harness.py` | Separate `spark-submit` JVM with the candidate bundle | Bundle packaging, static server configuration, remote writes/reads, process ownership and cleanup | Nightly at 03:23 UTC and `workflow_dispatch` |
+| 2: `TestHoodieSparkConnectPipelines` | Connect service in the ScalaTest JVM, Hudi on the Maven test classpath | MV/ST exact rows, independent SQL flow insert/upsert settings, null-key failure and a fresh remote query afterward | Existing Scala-other job on PRs, pushes and merge groups |
+| 3: `harness.py` | Separate `spark-submit` JVM with the candidate bundle | Bundle packaging, static server configuration, remote writes/reads, process ownership and cleanup | Existing Scala-DML job on PRs, pushes and merge groups |
 
-Spark 4.1 remains disabled in the broad Java CI matrices. The existing focused
-`test-spark-connect-pipelines` job now builds only the Spark Maven test dependency
-closure and runs the three layer-2 tests, without producing a shaded bundle.
-It is included in the existing `Java CI result` aggregate. This still costs a
-Spark 4.1 reactor build and a cached PySpark installation; it does not restore all
-Spark 4.1 test shards or make those costs disappear.
+Both layers run as additional steps in existing `bot.yml` jobs; no new workflow,
+job, or matrix entry is added. Layer 2 runs in `test-spark-java17-scala-other-tests`
+and layer 3 in `test-spark-java17-scala-dml-tests`, only in their existing Spark 4.2
+matrix entries. Each first completes its normal tests and coverage upload, then
+performs a clean Spark 4.1 rebuild so compiled classes cannot leak across profiles.
+Both jobs already feed `Java CI result`; an SDP failure therefore fails normal PR
+validation. The separate nightly workflow and its retry policy are removed.
 
-The separate `Spark Connect nightly` workflow retries the remote smoke test once
-with fresh storage/processes and retains both attempts' logs. Build/install
-failures are reported directly. Scheduled runs are restricted to `apache/hudi`;
-manual runs also work on forks. There is no global merge gate, issue bot, or
-label-triggered PR bypass in this change. Whether a failed nightly should block
-unrelated merges remains a separate PMC decision.
+The November 11 guidance from Ethan and Siva permits every-PR execution with less
+than 30 minutes of additional runtime per job. Python setup/install, the Spark
+4.1 build and the tests must be included in that measurement. The build/test step
+has a 25-minute timeout to leave headroom; a timeout is a failure, not evidence
+that the performance target was met. CI timings must confirm the complete added
+cost independently for each job. There is no combined runtime budget across the
+two jobs and no new global nightly gate or bypass mechanism.
 
 ### Run the layer-2 suite locally
 
@@ -164,9 +166,7 @@ Fast lifecycle regression tests require only the Python standard library:
 python3 -B -m unittest discover -s hudi-integ-test/spark-pipelines -p 'test_*.py' -v
 ```
 
-The `.github/workflows/spark_connect_pipelines.yml` nightly/manual workflow runs
-these lifecycle tests, builds the Spark 4.1 / Scala 2.13 bundle from the checked-out
-revision, and executes the separate-server harness with the pinned client. To
-validate a candidate before merge, run the documented command locally or manually
-dispatch the workflow on a branch containing it. The per-PR Maven suite is in
-`.github/workflows/bot.yml`.
+The existing Scala-DML job in `.github/workflows/bot.yml` runs the lifecycle tests,
+builds the candidate Spark 4.1 / Scala 2.13 bundle, and executes the separate-server
+harness on every PR. The existing Scala-other job runs the layer-2 Maven suite.
+The commands above also support local validation before pushing.
