@@ -62,7 +62,14 @@ class SQLConfInjectingRDD[T: ClassTag](var sqlRDD: RDD[T], @transient conf: SQLC
 
 object SQLConfInjectingRDD {
 
-  /** The last config map captured; driver-side only, guarded by this object. See [[sharedConfigs]]. */
+  /**
+   * The last config map captured; driver-side only, guarded by this object. See [[sharedConfigs]].
+   *
+   * Held strongly on purpose, for the life of the driver JVM: one map, replaced by the next capture whose configs
+   * differ. A weak reference would let the map be collected between two groups' captures, and the next group would
+   * then ship a copy of its own. The map holds what every SQLConfInjectingRDD already carries and ships to its tasks,
+   * credentials included; keeping it adds no new place they go, only time past the session that set them.
+   */
   private var lastConfigs: Map[String, String] = Map.empty
 
   /**

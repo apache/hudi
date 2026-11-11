@@ -19,12 +19,16 @@
 
 package org.apache.hudi.client.clustering.run.strategy;
 
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.avro.model.HoodieClusteringGroup;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkSingleFileSortPlanStrategy;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.ReaderContextFactory;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -44,7 +48,10 @@ import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -58,8 +65,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
@@ -75,9 +85,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * (table schema, write config, reader properties, reader context factory, SQL configs) should therefore be shared
  * instances: Java serialization writes a shared instance once per stream.
  *
- * <p>The test runs the real strategy on a small and a large subset of one plan, serializes the resulting lineage
- * the way Spark's closure serializer does (one {@link ObjectOutputStream}), and counts the distinct instances of
- * each such payload. The counts must not grow with the number of groups.
+ * <p>The test runs each strategy, on the row writer and on the records path, on a small and a large subset of one
+ * plan, serializes the resulting lineage the way Spark's closure serializer does (one {@link ObjectOutputStream}),
+ * and counts the distinct instances of each such payload. The counts must not grow with the number of groups.
+ *
+ * <p>Groups submitted outside a run, through the protected hooks, build what they would have shared, and are still
+ * written in full.
  */
 @Tag("functional")
 public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
@@ -102,9 +115,92 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
     SHARED_PAYLOADS.put("StructType", StructType.class::isInstance);
   }
 
-  @Test
-  public void taskBinaryPayloadsDoNotGrowWithClusteringGroups() throws Exception {
-    HoodieWriteConfig config = getConfigBuilder()
+  /** The strategies whose groups share a write config of their own: each keys the shared config by its file size. */
+  private enum Strategy {
+    SORT_AND_SIZE {
+      @Override
+      MultipleSparkJobExecutionStrategy<?> create(HoodieSparkTable table, HoodieEngineContext context, HoodieWriteConfig config) {
+        return new SparkSortAndSizeExecutionStrategy<>(table, context, config);
+      }
+    },
+    SINGLE_FILE_SORT {
+      @Override
+      MultipleSparkJobExecutionStrategy<?> create(HoodieSparkTable table, HoodieEngineContext context, HoodieWriteConfig config) {
+        return new SparkSingleFileSortExecutionStrategy<>(table, context, config);
+      }
+    };
+
+    abstract MultipleSparkJobExecutionStrategy<?> create(HoodieSparkTable table, HoodieEngineContext context,
+                                                         HoodieWriteConfig config);
+  }
+
+  /** Each strategy on each write path: the row writer and the records path build their run invariants apart. */
+  private static Stream<Arguments> strategiesAndWritePaths() {
+    return Stream.of(Strategy.values())
+        .flatMap(strategy -> Stream.of(true, false).map(rowWriter -> Arguments.of(strategy, rowWriter)));
+  }
+
+  @ParameterizedTest(name = "{0}, row writer {1}")
+  @MethodSource("strategiesAndWritePaths")
+  public void taskBinaryPayloadsDoNotGrowWithClusteringGroups(Strategy strategy, boolean rowWriter) throws Exception {
+    HoodieWriteConfig config = clusteringConfig(rowWriter);
+    String clusteringInstant = scheduleClustering(config);
+    HoodieClusteringPlan plan = clusteringPlan(clusteringInstant);
+    HoodieSchema schema = new TableSchemaResolver(metaClient).getTableSchema(false);
+
+    TaskBinary small = taskBinary(strategy, config, firstGroups(plan, SMALL_PLAN_GROUPS), schema, clusteringInstant);
+    TaskBinary large = taskBinary(strategy, config, firstGroups(plan, LARGE_PLAN_GROUPS), schema, clusteringInstant);
+    String report = report(small, large);
+    LOG.info("Clustering task binary payloads, {}, row writer {}:\n{}", strategy, rowWriter, report);
+
+    int extraGroups = large.groups - small.groups;
+    for (String payload : small.counts.keySet()) {
+      // Spark's SQLExecutionRDD (Dataset.queryExecution.toRdd) captures its own copy of the SQL configs, once per
+      // group, as long as each group's RDD goes through a DataFrame; Hudi's SQLConfInjectingRDD map must be shared.
+      int expectedGrowth = payload.equals(SQL_CONF_MAPS) && rowWriter ? extraGroups : 0;
+      assertEquals(small.counts.get(payload) + expectedGrowth, large.counts.get(payload),
+          payload + " is shipped per clustering group; every task deserializes all of them.\n" + report);
+    }
+  }
+
+  /**
+   * A custom strategy may override performClustering and submit groups through the protected hooks itself. No run's
+   * invariants are held then, so each hook builds its own for the group: the group must still be written in full.
+   */
+  @ParameterizedTest(name = "row writer {0}")
+  @ValueSource(booleans = {true, false})
+  public void groupSubmittedOutsideARunIsWrittenInFull(boolean rowWriter) throws Exception {
+    HoodieWriteConfig config = clusteringConfig(rowWriter);
+    String clusteringInstant = scheduleClustering(config);
+    HoodieClusteringPlan plan = clusteringPlan(clusteringInstant);
+    HoodieClusteringGroup group = plan.getInputGroups().get(0);
+    long groupRecords = group.getSlices().stream()
+        .mapToLong(slice -> context.getSqlContext().read().parquet(slice.getDataFilePath()).count())
+        .sum();
+
+    MultipleSparkJobExecutionStrategy<?> strategy =
+        Strategy.SORT_AND_SIZE.create(HoodieSparkTable.create(config, context, metaClient), context, config);
+    Map<String, String> strategyParams = plan.getStrategy().getStrategyParams();
+    ExecutorService groupThread = Executors.newSingleThreadExecutor();
+    List<WriteStatus> statuses;
+    try {
+      HoodieData<WriteStatus> written = (rowWriter
+          ? strategy.runClusteringForGroupAsyncAsRow(group, strategyParams, true, clusteringInstant, groupThread)
+          : strategy.runClusteringForGroupAsync(group, strategyParams, true, clusteringInstant, groupThread)).get();
+      statuses = written.collectAsList();
+    } finally {
+      groupThread.shutdown();
+    }
+
+    assertNoWriteErrors(statuses);
+    assertEquals(groupRecords, statuses.stream().mapToLong(WriteStatus::getTotalRecords).sum(),
+        "records written for the group, submitted outside performClustering");
+  }
+
+  /** Small-file handling off and one clustering group per file group, so a few batches give many groups. */
+  private HoodieWriteConfig clusteringConfig(boolean rowWriter) {
+    return getConfigBuilder()
+        .withProps(Collections.singletonMap(DataSourceWriteOptions.ENABLE_ROW_WRITER().key(), Boolean.toString(rowWriter)))
         // Direct markers: what is measured here does not involve the timeline server.
         .withEmbeddedTimelineServerEnabled(false)
         .withMarkersType(MarkerType.DIRECT.name())
@@ -114,8 +210,10 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
             .withClusteringMaxNumGroups(INSERT_BATCHES * PARTITIONS)
             .build())
         .build();
+  }
 
-    String clusteringInstant;
+  /** Inserts {@value #INSERT_BATCHES} batches and schedules clustering over them; the clustering instant. */
+  private String scheduleClustering(HoodieWriteConfig config) {
     try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
       for (int batch = 0; batch < INSERT_BATCHES; batch++) {
         String instant = WriteClientTestUtils.createNewInstantTime();
@@ -125,39 +223,27 @@ public class TestClusteringTaskBinaryPayloads extends HoodieClientTestBase {
         assertNoWriteErrors(collected);
         client.commit(instant, jsc.parallelize(collected));
       }
-      clusteringInstant = (String) client.scheduleClustering(Option.empty()).get();
+      return (String) client.scheduleClustering(Option.empty()).get();
     }
+  }
 
+  private HoodieClusteringPlan clusteringPlan(String clusteringInstant) {
     metaClient = HoodieTableMetaClient.reload(metaClient);
     HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
         metaClient, INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringInstant)).map(Pair::getRight).get();
     assertTrue(plan.getInputGroups().size() >= LARGE_PLAN_GROUPS,
         "need at least " + LARGE_PLAN_GROUPS + " groups, plan has " + plan.getInputGroups().size());
-    HoodieSchema schema = new TableSchemaResolver(metaClient).getTableSchema(false);
-
-    TaskBinary small = taskBinary(config, firstGroups(plan, SMALL_PLAN_GROUPS), schema, clusteringInstant);
-    TaskBinary large = taskBinary(config, firstGroups(plan, LARGE_PLAN_GROUPS), schema, clusteringInstant);
-    String report = report(small, large);
-    LOG.info("Clustering task binary payloads:\n{}", report);
-
-    int extraGroups = large.groups - small.groups;
-    for (String payload : small.counts.keySet()) {
-      // Spark's SQLExecutionRDD (Dataset.queryExecution.toRdd) captures its own copy of the SQL configs, once per
-      // group, as long as each group's RDD goes through a DataFrame; Hudi's SQLConfInjectingRDD map must be shared.
-      int expectedGrowth = payload.equals(SQL_CONF_MAPS) ? extraGroups : 0;
-      assertEquals(small.counts.get(payload) + expectedGrowth, large.counts.get(payload),
-          payload + " is shipped per clustering group; every task deserializes all of them.\n" + report);
-    }
+    return plan;
   }
 
   private static HoodieClusteringPlan firstGroups(HoodieClusteringPlan plan, int groups) {
     return HoodieClusteringPlan.newBuilder(plan).setInputGroups(plan.getInputGroups().subList(0, groups)).build();
   }
 
-  private TaskBinary taskBinary(HoodieWriteConfig config, HoodieClusteringPlan plan, HoodieSchema schema, String instant)
-      throws IOException {
+  private TaskBinary taskBinary(Strategy strategy, HoodieWriteConfig config, HoodieClusteringPlan plan, HoodieSchema schema,
+                                String instant) throws IOException {
     HoodieSparkTable table = HoodieSparkTable.create(config, context, metaClient);
-    RDD<WriteStatus> writeStage = HoodieJavaRDD.getJavaRDD(new SparkSortAndSizeExecutionStrategy<>(table, context, config)
+    RDD<WriteStatus> writeStage = HoodieJavaRDD.getJavaRDD(strategy.create(table, context, config)
         .performClustering(plan, schema, instant).getWriteStatuses()).rdd();
     // The DAGScheduler resolves partitions and dependencies before serializing the task binary, which fills
     // the lineage fields that get shipped.

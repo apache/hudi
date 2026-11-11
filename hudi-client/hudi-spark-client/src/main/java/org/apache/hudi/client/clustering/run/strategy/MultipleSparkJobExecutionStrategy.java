@@ -47,7 +47,6 @@ import org.apache.hudi.common.util.CustomizedThreadFactory;
 import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SortUtils;
-import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.LazyConcatenatingIterator;
 import org.apache.hudi.common.util.collection.Pair;
@@ -184,7 +183,9 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
       writeMetadata.setWriteStatuses(HoodieJavaRDD.of(writeStatusRDD));
       return writeMetadata;
     } finally {
-      // Every group has been submitted and joined: the groups' RDDs hold what they need from the run invariants.
+      // On success every group has been joined, and the groups' RDDs hold what they need from the run invariants.
+      // On failure join() throws first, so a group may still be running: it reads the reader state it captured when
+      // submitted, and builds its own write config and writer schema from here on. The run fails either way.
       runInvariants = null;
       clusteringExecutorService.shutdown();
     }
@@ -223,11 +224,14 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
     }
   }
 
-  /** The invariants of the {@link #performClustering} run that is submitting groups. */
-  private ClusteringRunInvariants currentRunInvariants() {
+  /**
+   * The invariants of the {@link #performClustering} run that is submitting groups, or, for a group submitted from
+   * outside a run (a subclass's own performClustering calling the protected hooks), invariants built for that group
+   * alone: it pays the per-group cost this class otherwise avoids, but runs as it did before the holder existed.
+   */
+  private ClusteringRunInvariants currentRunInvariants(Supplier<ClusteringRunInvariants> forOneGroup) {
     ClusteringRunInvariants run = runInvariants;
-    ValidationUtils.checkState(run != null, "Clustering groups are submitted by performClustering");
-    return run;
+    return run != null ? run : forOneGroup.get();
   }
 
   /** The row writer reads with the table schema resolved from the timeline: see getTableSchemaWithMetaFields. */
@@ -345,7 +349,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
   protected CompletableFuture<HoodieData<WriteStatus>> runClusteringForGroupAsync(HoodieClusteringGroup clusteringGroup, Map<String, String> strategyParams,
                                                                                   boolean preserveHoodieMetadata, String instantTime,
                                                                                   ExecutorService clusteringExecutorService) {
-    ClusteringRunInvariants run = currentRunInvariants();
+    ClusteringRunInvariants run = currentRunInvariants(this::newRecordsRunInvariants);
     HoodieSchema readerSchema = run.readerSchema;
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
@@ -369,7 +373,7 @@ public abstract class MultipleSparkJobExecutionStrategy<T>
                                                                                        boolean shouldPreserveHoodieMetadata,
                                                                                        String instantTime,
                                                                                        ExecutorService clusteringExecutorService) {
-    ClusteringRunInvariants run = currentRunInvariants();
+    ClusteringRunInvariants run = currentRunInvariants(this::newRowWriterRunInvariants);
     HoodieSchema tableSchemaWithMetaFields = run.readerSchema;
     return CompletableFuture.supplyAsync(() -> {
       JavaSparkContext jsc = HoodieSparkEngineContext.getSparkContext(getEngineContext());
