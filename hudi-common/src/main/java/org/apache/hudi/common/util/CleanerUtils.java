@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.deserializeAvroMetadata;
 
@@ -153,6 +154,20 @@ public class CleanerUtils {
       String earliestTimeToRetain = TimelineUtils.formatDate(Date.from(latestDateTime.minusHours(hoursRetained).toInstant()));
       earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream().filter(i -> compareTimestamps(i.requestedTime(),
           GREATER_THAN_OR_EQUALS, earliestTimeToRetain)).findFirst());
+      if (!earliestCommitToRetain.isPresent()) {
+        // Every completed commit is older than the window: retain from the latest one, but not past a pending commit,
+        // and not from before the commit the previous clean retained from.
+        Option<HoodieInstant> earliestPendingCommit = commitsTimeline.filter(s -> !s.isCompleted()).firstInstant();
+        earliestCommitToRetain = earliestPendingCommit.isPresent()
+            ? completedCommitsTimeline.findInstantsBefore(earliestPendingCommit.get().requestedTime()).lastInstant()
+            : completedCommitsTimeline.lastInstant();
+        if (earliestCommitToRetain.isPresent() && previousEarliestCommitToRetain.isPresent()
+            && compareTimestamps(earliestCommitToRetain.get().requestedTime(), LESSER_THAN, previousEarliestCommitToRetain.get())) {
+          earliestCommitToRetain = Option.fromJavaOptional(completedCommitsTimeline.getInstantsAsStream()
+              .filter(i -> compareTimestamps(i.requestedTime(), GREATER_THAN_OR_EQUALS, previousEarliestCommitToRetain.get())).findFirst())
+              .or(earliestCommitToRetain);
+        }
+      }
     }
 
     // Apply maxCommitsToClean cap if configured and applicable
