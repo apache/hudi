@@ -13,9 +13,17 @@
  */
 package io.trino.plugin.hudi;
 
+import io.airlift.units.DataSize;
+import io.trino.filesystem.local.LocalFileSystemFactory;
 import io.trino.metastore.HiveType;
+import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HiveColumnProjectionInfo;
+import io.trino.plugin.hive.parquet.ParquetReaderConfig;
+import io.trino.plugin.hudi.split.HudiSplitFactory;
+import io.trino.plugin.hudi.split.HudiSplitWeightProvider;
+import io.trino.spi.connector.ConnectorPageSource;
+import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
@@ -25,6 +33,13 @@ import io.trino.spi.type.BigintType;
 import io.trino.spi.type.RowType;
 import io.trino.spi.type.Type;
 import io.trino.testing.MaterializedResult;
+import io.trino.testing.TestingConnectorSession;
+import org.apache.hudi.common.model.BaseFile;
+import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.parquet.schema.LogicalTypeAnnotation;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -34,21 +49,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 
+import static io.airlift.units.DataSize.Unit.MEGABYTE;
 import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.remapColumnIndicesToPhysical;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.remapPredicateColumnIndicesToPhysical;
 import static io.trino.plugin.hudi.TestingBaseFilePageSource.dynamicFilterOn;
 import static io.trino.plugin.hudi.TestingBaseFilePageSource.writeBaseFile;
+import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+import static io.trino.testing.MaterializedResult.materializeSourceDataStream;
 import static java.lang.Integer.parseInt;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
@@ -542,6 +562,54 @@ class TestHudiPageSourceProviderTest
         assertThat(positional.getMaterializedRows())
                 .as("hudi.parquet.use-column-names=false must read what use-column-names=true reads")
                 .isEqualTo(byName.getMaterializedRows());
+    }
+
+    @Test
+    public void testReadsExternalBootstrapData(@TempDir Path directory)
+            throws Exception
+    {
+        String instant = "20260101000000000";
+        Path skeletonPath = Files.createDirectory(directory.resolve("table")).resolve("fileid_0-0-0_" + instant + ".parquet");
+        Path externalPath = Files.createDirectory(directory.resolve("source")).resolve("data.parquet");
+        writeBaseFile(skeletonPath, new MessageType("skeleton",
+                Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, OPTIONAL)
+                        .as(LogicalTypeAnnotation.stringType()).named("_hoodie_record_key")),
+                1, (group, row) -> group.append("_hoodie_record_key", "key1"));
+        writeBaseFile(externalPath, new MessageType("data",
+                Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, OPTIONAL).named("id")),
+                1, (group, row) -> group.append("id", 42L));
+
+        StoragePathInfo external = localPathInfo(directory, externalPath);
+        FileSlice bootstrapSlice = new FileSlice("", instant, "fileid");
+        bootstrapSlice.setBaseFile(new HoodieBaseFile(localPathInfo(directory, skeletonPath), new BaseFile(external)));
+        FileSlice externalSlice = new FileSlice("", instant, "fileid");
+        externalSlice.setBaseFile(new HoodieBaseFile(external, "fileid", instant, null));
+
+        HudiTableHandle table = new HudiTableHandle("tests", "t", "local:///table", HoodieTableType.COPY_ON_WRITE,
+                List.of(), List.of(), TupleDomain.all(), TupleDomain.all(), OptionalLong.empty(), "", instant);
+        HudiSplitFactory factory = new HudiSplitFactory(table, HudiSplitWeightProvider.uniformStandardWeightProvider(), DataSize.of(128, MEGABYTE));
+        HudiSplit control = factory.createSplits(List.of(), externalSlice, instant).getFirst();
+        HudiSplit bootstrap = factory.createSplits(List.of(), bootstrapSlice, instant).getFirst();
+
+        ParquetReaderConfig config = new ParquetReaderConfig();
+        ConnectorSession session = TestingConnectorSession.builder()
+                .setPropertyMetadata(new HudiSessionProperties(new HudiConfig(), config).getSessionProperties())
+                .build();
+        HiveColumnHandle column = createBaseColumn("id", 0, HiveType.HIVE_LONG, BIGINT, HiveColumnHandle.ColumnType.REGULAR, Optional.empty());
+        HudiPageSourceProvider provider = new HudiPageSourceProvider(new LocalFileSystemFactory(directory), new FileFormatDataSourceStats(), config);
+        for (HudiSplit split : List.of(control, bootstrap)) {
+            try (ConnectorPageSource source = provider.createPageSource(null, session, split, table, Optional.empty(), List.of(column), DynamicFilter.EMPTY)) {
+                assertThat(materializeSourceDataStream(session, source, List.of(BIGINT)).getOnlyValue()).isEqualTo(42L);
+            }
+        }
+    }
+
+    private static StoragePathInfo localPathInfo(Path directory, Path file)
+            throws IOException
+    {
+        StoragePath path = new StoragePath("local:///" + directory.toUri().relativize(file.toUri()).getPath());
+        long size = Files.size(file);
+        return new StoragePathInfo(path, size, false, (short) 0, size, Files.getLastModifiedTime(file).toMillis());
     }
 
     private static MaterializedResult read(
