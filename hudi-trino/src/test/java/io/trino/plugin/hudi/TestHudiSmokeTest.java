@@ -328,6 +328,23 @@ public class TestHudiSmokeTest
     }
 
     @Test
+    public void testHiddenColumnPredicatesWithCaseResolution()
+    {
+        Session session = SessionBuilder.from(getSession())
+                .withMdtEnabled(true)
+                .withResolveColumnNameCasingEnabled(true)
+                .withTableStatisticsEnabled(false)
+                .build();
+        String query = "SELECT count(*) FROM " + HUDI_NON_PART_COW;
+
+        assertThat(computeScalar(session, query)).isEqualTo(2L);
+        assertThat(computeScalar(session, query + " WHERE \"$path\" = 'not-a-file'")).isEqualTo(0L);
+        assertThat(computeScalar(session, query + " WHERE id = 1 AND \"$path\" = 'not-a-file'")).isEqualTo(0L);
+        assertThat(computeScalar(session, query + " WHERE \"$file_size\" > 0")).isEqualTo(2L);
+        assertThat(computeScalar(session, query + " WHERE \"$file_modified_time\" IS NOT NULL")).isEqualTo(2L);
+    }
+
+    @Test
     public void testPartitionColumn()
     {
         assertQuery("SELECT \"$partition\" FROM " + HUDI_COW_PT_TBL + " WHERE id = 1", "VALUES 'dt=2021-12-09/hh=10'");

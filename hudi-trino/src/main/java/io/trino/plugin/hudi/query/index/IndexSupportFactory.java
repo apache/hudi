@@ -128,6 +128,8 @@ public class IndexSupportFactory
 
     private static TupleDomain<String> transformTupleDomain(ConnectorSession session, HudiTableHandle hudiTableHandle, TupleDomain<HiveColumnHandle> tupleDomain)
     {
+        // Synthesized columns have no physical field in the Hudi schema or its indexes.
+        tupleDomain = tupleDomain.filter((column, domain) -> !column.isHidden());
         if (isResolveColumnNameCasingEnabled(session)) {
             // if column case reconciliation is enabled, transform the tuple domain keys to match the column names from the Hudi table.
             return tupleDomain.transformKeys(hiveColumnHandle ->
