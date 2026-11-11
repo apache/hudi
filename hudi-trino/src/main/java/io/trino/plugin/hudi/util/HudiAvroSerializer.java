@@ -50,12 +50,8 @@ import org.apache.avro.util.Utf8;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -65,7 +61,6 @@ import static com.google.common.base.Verify.verify;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.plugin.hudi.HudiUtil.getFieldFromSchema;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
-import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.Decimals.writeBigDecimal;
@@ -304,69 +299,9 @@ public class HudiAvroSerializer
             }
             else if (javaType == LongTimestamp.class) {
                 if (value instanceof SqlTimestamp sqlTimestamp) {
-                    // value is read from parquet
-                    // From tests, sqlTimestamp is a UTC epoch that is converted from ZoneId#systemDefault()
-                    // IMPORTANT: Even when session's zoneId != ZoneId#systemDefault(), ZoneId#systemDefault() is used calculate/produce the false UTC.
-                    // The current sqlTimestamp is calculated as such:
-                    // 1. The true UTC timestamp that is stored in file is assumed to be in the local timezone
-                    // 2. Trino will them attempt to convert this to a false UTC by subtracting the timezone's offset (factoring offset rules like DST)
-                    // Hence, to calculate the true UTC, we will just have to reverse the steps
-
-                    // Reconstruct the original local wall time from sqlTimestamp's fields
-                    long microsFromSqlTs = sqlTimestamp.getEpochMicros();
-                    // picosFromSqlTs is defined as "picoseconds within the microsecond" (0 to 999,999)
-                    int picosFromSqlTs = sqlTimestamp.getPicosOfMicros();
-                    long secondsComponent = microsFromSqlTs / 1_000_000L;
-                    // Storing nanos component separately from seconds component, hence the modulo to remove secondsComponent
-                    int nanosComponent = (int) ((microsFromSqlTs % 1_000_000L) * 1000L + picosFromSqlTs / 1000L);
-                    LocalDateTime originalLocalWallTime = LocalDateTime.ofEpochSecond(secondsComponent, nanosComponent, ZoneOffset.UTC);
-
-                    // Determine the ZoneId in which originalLocalWallTime was observed
-                    ZoneId assumedOriginalZoneId = ZoneId.systemDefault();
-
-                    // Convert to true UTC by interpreting the local wall time in its original zone
-                    // This correctly handles DST for that zone at that specific historical date/time.
-                    ZonedDateTime zdtInOriginalZone;
-                    try {
-                        zdtInOriginalZone = originalLocalWallTime.atZone(assumedOriginalZoneId);
-                    }
-                    catch (DateTimeException e) {
-                        // Handle cases where the local time is invalid in the zone (e.g., during DST "spring forward" gap) or ambiguous (during DST "fall back" overlap).
-                        // For now, rethrow or log, as robustly handling this requires a defined policy.
-                        throw new TrinoException(GENERIC_INTERNAL_ERROR,
-                                format("Cannot uniquely or validly map local time %s to zone %s: %s",
-                                        originalLocalWallTime, assumedOriginalZoneId, e.getMessage()), e);
-                    }
-                    Instant trueUtcInstant = zdtInOriginalZone.toInstant();
-
-                    // Extract true UTC epoch micros and picos
-                    long trueUtcEpochSeconds = trueUtcInstant.getEpochSecond();
-                    long trueUtcEpochMicrosContributionFromSeconds;
-                    try {
-                        trueUtcEpochMicrosContributionFromSeconds = Math.multiplyExact(trueUtcEpochSeconds, 1_000_000L);
-                    }
-                    catch (ArithmeticException e) {
-                        // Multiplication could overflow if epochSeconds is approximately more than 292,271 years from epoch
-                        throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
-                                "Timestamp " + trueUtcInstant + " is too far in the past or future to be represented as microseconds in a long.", e);
-                    }
-
-                    long trueUtcEpochMicrosContributionFromNanos = trueUtcInstant.getNano() / 1000L;
-                    long trueUtcEpochMicros;
-
-                    try {
-                        trueUtcEpochMicros = Math.addExact(trueUtcEpochMicrosContributionFromSeconds, trueUtcEpochMicrosContributionFromNanos);
-                    }
-                    catch (ArithmeticException e) {
-                        // Addition could also theoretically overflow if epochMicrosContributionFromSeconds is:
-                        // 1. Very close to Long.MAX_VALUE and trueUtcEpochMicrosContributionFromNanos is positive
-                        // 2. Very close to Long.MIN_VALUE and trueUtcEpochMicrosContributionFromNanos is negative
-                        throw new TrinoException(NUMERIC_VALUE_OUT_OF_RANGE,
-                                "Timestamp " + trueUtcInstant + " results in microsecond representation overflow after adding nanosecond component.", e);
-                    }
-
-                    int truePicosOfMicros = (trueUtcInstant.getNano() % 1000) * 1000;
-                    ((Fixed12BlockBuilder) output).writeFixed12(trueUtcEpochMicros, truePicosOfMicros);
+                    // The Parquet reader already produced Trino's timestamp-without-time-zone value.
+                    // Preserve it verbatim; applying the JVM zone here shifts only the base-file records.
+                    ((Fixed12BlockBuilder) output).writeFixed12(sqlTimestamp.getEpochMicros(), sqlTimestamp.getPicosOfMicros());
                 }
                 else if (value instanceof Long epochMicros) {
                     // value is read from log
