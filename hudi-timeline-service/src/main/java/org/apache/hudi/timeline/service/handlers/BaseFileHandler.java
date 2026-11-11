@@ -39,27 +39,27 @@ public class BaseFileHandler extends Handler {
   }
 
   public List<BaseFileDTO> getLatestDataFiles(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getLatestBaseFiles(partitionPath)
+    return viewFor(basePath).getLatestBaseFiles(partitionPath)
         .map(BaseFileDTO::fromHoodieBaseFile).collect(Collectors.toList());
   }
 
   public List<BaseFileDTO> getLatestDataFile(String basePath, String partitionPath, String fileId) {
-    return viewManager.getFileSystemView(basePath).getLatestBaseFile(partitionPath, fileId)
+    return viewFor(basePath).getLatestBaseFile(partitionPath, fileId)
         .map(BaseFileDTO::fromHoodieBaseFile).map(Collections::singletonList).orElse(Collections.emptyList());
   }
 
   public List<BaseFileDTO> getLatestDataFiles(String basePath) {
-    return viewManager.getFileSystemView(basePath).getLatestBaseFiles().map(BaseFileDTO::fromHoodieBaseFile)
+    return viewFor(basePath).getLatestBaseFiles().map(BaseFileDTO::fromHoodieBaseFile)
         .collect(Collectors.toList());
   }
 
   public List<BaseFileDTO> getLatestDataFilesBeforeOrOn(String basePath, String partitionPath, String maxInstantTime) {
-    return viewManager.getFileSystemView(basePath).getLatestBaseFilesBeforeOrOn(partitionPath, maxInstantTime)
+    return viewFor(basePath).getLatestBaseFilesBeforeOrOn(partitionPath, maxInstantTime)
         .map(BaseFileDTO::fromHoodieBaseFile).collect(Collectors.toList());
   }
 
   public Map<String, List<BaseFileDTO>> getAllLatestDataFilesBeforeOrOn(String basePath, String maxInstantTime) {
-    return viewManager.getFileSystemView(basePath)
+    return viewFor(basePath)
         .getAllLatestBaseFilesBeforeOrOn(maxInstantTime)
         .entrySet().stream()
         .collect(Collectors.toMap(
@@ -70,17 +70,17 @@ public class BaseFileHandler extends Handler {
 
   public List<BaseFileDTO> getLatestDataFileOn(String basePath, String partitionPath, String instantTime,
                                                String fileId) {
-    return viewManager.getFileSystemView(basePath).getBaseFileOn(partitionPath, instantTime, fileId)
+    return viewFor(basePath).getBaseFileOn(partitionPath, instantTime, fileId)
         .map(BaseFileDTO::fromHoodieBaseFile).map(Collections::singletonList).orElse(Collections.emptyList());
   }
 
   public List<BaseFileDTO> getLatestDataFilesInRange(String basePath, List<String> instants) {
-    return viewManager.getFileSystemView(basePath).getLatestBaseFilesInRange(instants)
+    return viewFor(basePath).getLatestBaseFilesInRange(instants)
         .map(BaseFileDTO::fromHoodieBaseFile).collect(Collectors.toList());
   }
 
   public List<BaseFileDTO> getAllDataFiles(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllBaseFiles(partitionPath).map(BaseFileDTO::fromHoodieBaseFile)
+    return viewFor(basePath).getAllBaseFiles(partitionPath).map(BaseFileDTO::fromHoodieBaseFile)
         .collect(Collectors.toList());
   }
 

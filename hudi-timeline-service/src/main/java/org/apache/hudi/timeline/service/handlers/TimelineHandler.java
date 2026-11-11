@@ -129,12 +129,12 @@ public class TimelineHandler extends Handler {
   }
 
   public List<InstantDTO> getLastInstant(String basePath) {
-    return viewManager.getFileSystemView(basePath).getLastInstant().map(InstantDTO::fromInstant)
+    return viewFor(basePath).getLastInstant().map(InstantDTO::fromInstant)
         .map(Arrays::asList).orElse(Collections.emptyList());
   }
 
   public TimelineDTO getTimeline(String basePath) {
-    return TimelineDTO.fromTimeline(viewManager.getFileSystemView(basePath).getTimeline());
+    return TimelineDTO.fromTimeline(viewFor(basePath).getTimeline());
   }
 
   public UiTimelineDTO getUiTimeline(String basePath) {

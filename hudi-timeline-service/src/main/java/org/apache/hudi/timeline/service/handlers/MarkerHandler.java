@@ -212,12 +212,14 @@ public class MarkerHandler extends Handler {
           if (!markerDir.equalsIgnoreCase(currentMarkerDir)) {
             this.currentMarkerDir = markerDir;
             Set<String> actions = CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION);
-            Set<HoodieInstant> completedCommits = new HashSet<>(
-                viewManager.getFileSystemView(basePath)
-                    .getTimeline()
-                    .filterCompletedInstants()
-                    .filter(instant -> actions.contains(instant.getAction()))
-                    .getInstants());
+            Set<HoodieInstant> completedCommits;
+            try (FileSystemViewManager.ViewLease lease = viewManager.leaseFileSystemView(basePath)) {
+              completedCommits = new HashSet<>(lease.getView()
+                  .getTimeline()
+                  .filterCompletedInstants()
+                  .filter(instant -> actions.contains(instant.getAction()))
+                  .getInstants());
+            }
 
             earlyConflictDetectionStrategy.startAsyncDetection(
                 timelineServiceConfig.asyncConflictDetectorInitialDelayMs,

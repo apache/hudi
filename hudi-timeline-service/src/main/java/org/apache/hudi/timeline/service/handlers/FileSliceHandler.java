@@ -45,44 +45,44 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileSliceDTO> getAllFileSlices(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getAllFileSlices(partitionPath).map(FileSliceDTO::fromFileSlice)
+    return viewFor(basePath).getAllFileSlices(partitionPath).map(FileSliceDTO::fromFileSlice)
         .collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestFileSliceInRange(String basePath, List<String> instantsToReturn) {
-    return viewManager.getFileSystemView(basePath).getLatestFileSliceInRange(instantsToReturn)
+    return viewFor(basePath).getLatestFileSliceInRange(instantsToReturn)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestMergedFileSlicesBeforeOrOn(String basePath, String partitionPath,
       String maxInstantTime) {
-    return viewManager.getFileSystemView(basePath).getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime)
+    return viewFor(basePath).getLatestMergedFileSlicesBeforeOrOn(partitionPath, maxInstantTime)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestMergedFileSlicesBeforeOrOnIncludingInflight(String basePath, String partitionPath,
                                                                                  String maxInstantTime,
                                                                                  String currentInstantTime) {
-    return viewManager.getFileSystemView(basePath)
+    return viewFor(basePath)
         .getLatestMergedFileSlicesBeforeOrOnIncludingInflight(partitionPath, maxInstantTime, currentInstantTime)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestMergedFileSliceBeforeOrOn(String basePath, String partitionPath,
                                                                String maxInstantTime, String fileId) {
-    return viewManager.getFileSystemView(basePath).getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId)
+    return viewFor(basePath).getLatestMergedFileSliceBeforeOrOn(partitionPath, maxInstantTime, fileId)
         .map(FileSliceDTO::fromFileSlice).map(Collections::singletonList).orElse(Collections.emptyList());
   }
 
   public List<FileSliceDTO> getLatestFileSlicesBeforeOrOn(String basePath, String partitionPath, String maxInstantTime,
       boolean includeFileSlicesInPendingCompaction) {
-    return viewManager.getFileSystemView(basePath)
+    return viewFor(basePath)
         .getLatestFileSlicesBeforeOrOn(partitionPath, maxInstantTime, includeFileSlicesInPendingCompaction)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
   public Map<String, List<FileSliceDTO>> getAllLatestFileSlicesBeforeOrOn(String basePath, String maxInstantTime) {
-    return viewManager.getFileSystemView(basePath)
+    return viewFor(basePath)
         .getAllLatestFileSlicesBeforeOrOn(maxInstantTime)
         .entrySet().stream()
         .collect(Collectors.toMap(
@@ -92,80 +92,80 @@ public class FileSliceHandler extends Handler {
   }
 
   public List<FileSliceDTO> getLatestUnCompactedFileSlices(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getLatestUnCompactedFileSlices(partitionPath)
+    return viewFor(basePath).getLatestUnCompactedFileSlices(partitionPath)
         .map(FileSliceDTO::fromFileSlice).collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestFileSlices(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getLatestFileSlices(partitionPath).map(FileSliceDTO::fromFileSlice)
+    return viewFor(basePath).getLatestFileSlices(partitionPath).map(FileSliceDTO::fromFileSlice)
         .collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestFileSlicesIncludingInflight(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getLatestFileSlicesIncludingInflight(partitionPath).map(FileSliceDTO::fromFileSlice)
+    return viewFor(basePath).getLatestFileSlicesIncludingInflight(partitionPath).map(FileSliceDTO::fromFileSlice)
         .collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestFileSlicesStateless(String basePath, String partitionPath) {
-    return viewManager.getFileSystemView(basePath).getLatestFileSlicesStateless(partitionPath).map(FileSliceDTO::fromFileSlice)
+    return viewFor(basePath).getLatestFileSlicesStateless(partitionPath).map(FileSliceDTO::fromFileSlice)
         .collect(Collectors.toList());
   }
 
   public List<FileSliceDTO> getLatestFileSlice(String basePath, String partitionPath, String fileId) {
-    return viewManager.getFileSystemView(basePath).getLatestFileSlice(partitionPath, fileId)
+    return viewFor(basePath).getLatestFileSlice(partitionPath, fileId)
         .map(FileSliceDTO::fromFileSlice).map(Arrays::asList).orElse(Collections.emptyList());
   }
 
   public List<CompactionOpDTO> getPendingCompactionOperations(String basePath) {
-    return viewManager.getFileSystemView(basePath).getPendingCompactionOperations()
+    return viewFor(basePath).getPendingCompactionOperations()
         .map(instantOp -> CompactionOpDTO.fromCompactionOperation(instantOp.getKey(), instantOp.getValue()))
         .collect(Collectors.toList());
   }
 
   public List<CompactionOpDTO> getPendingLogCompactionOperations(String basePath) {
-    return viewManager.getFileSystemView(basePath).getPendingLogCompactionOperations()
+    return viewFor(basePath).getPendingLogCompactionOperations()
         .map(instantOp -> CompactionOpDTO.fromCompactionOperation(instantOp.getKey(), instantOp.getValue()))
         .collect(Collectors.toList());
   }
 
   public List<FileGroupDTO> getAllFileGroups(String basePath, String partitionPath) {
-    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroups(partitionPath)
+    List<HoodieFileGroup> fileGroups =  viewFor(basePath).getAllFileGroups(partitionPath)
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<FileGroupDTO> getAllFileGroupsStateless(String basePath, String partitionPath) {
-    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllFileGroupsStateless(partitionPath)
+    List<HoodieFileGroup> fileGroups =  viewFor(basePath).getAllFileGroupsStateless(partitionPath)
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsBeforeOrOn(String basePath, String maxCommitTime, String partitionPath) {
-    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath)
+    List<HoodieFileGroup> fileGroups =  viewFor(basePath).getReplacedFileGroupsBeforeOrOn(maxCommitTime, partitionPath)
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsBefore(String basePath, String maxCommitTime, String partitionPath) {
-    List<HoodieFileGroup> fileGroups = viewManager.getFileSystemView(basePath).getReplacedFileGroupsBefore(maxCommitTime, partitionPath)
+    List<HoodieFileGroup> fileGroups = viewFor(basePath).getReplacedFileGroupsBefore(maxCommitTime, partitionPath)
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<FileGroupDTO> getReplacedFileGroupsAfterOrOn(String basePath, String minCommitTime, String partitionPath) {
-    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getReplacedFileGroupsAfterOrOn(minCommitTime, partitionPath)
+    List<HoodieFileGroup> fileGroups =  viewFor(basePath).getReplacedFileGroupsAfterOrOn(minCommitTime, partitionPath)
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
   
   public List<FileGroupDTO> getAllReplacedFileGroups(String basePath, String partitionPath) {
-    List<HoodieFileGroup> fileGroups =  viewManager.getFileSystemView(basePath).getAllReplacedFileGroups(partitionPath)
+    List<HoodieFileGroup> fileGroups =  viewFor(basePath).getAllReplacedFileGroups(partitionPath)
         .collect(Collectors.toList());
     return DTOUtils.fileGroupDTOsfromFileGroups(fileGroups);
   }
 
   public List<ClusteringOpDTO> getFileGroupsInPendingClustering(String basePath) {
-    return viewManager.getFileSystemView(basePath).getFileGroupsInPendingClustering()
+    return viewFor(basePath).getFileGroupsInPendingClustering()
         .map(fgInstant -> ClusteringOpDTO.fromClusteringOp(fgInstant.getLeft(), fgInstant.getRight()))
         .collect(Collectors.toList());
   }
@@ -176,12 +176,12 @@ public class FileSliceHandler extends Handler {
   }
 
   public boolean loadAllPartitions(String basePath) {
-    viewManager.getFileSystemView(basePath).loadAllPartitions();
+    viewFor(basePath).loadAllPartitions();
     return true;
   }
 
   public boolean loadPartitions(String basePath, List<String> partitionPaths) {
-    viewManager.getFileSystemView(basePath).loadPartitions(partitionPaths);
+    viewFor(basePath).loadPartitions(partitionPaths);
     return true;
   }
 }
