@@ -114,17 +114,33 @@ spec:
               readOnly: true
             - name: scratch
               mountPath: /tmp
-          # TCP probes check the listener, not catalog or write correctness.
-          # The ADBC smoke test verifies the complete data path.
+          # Startup always checks the listener. Optional readiness can also
+          # query a pre-provisioned non-empty table through Spark Connect.
           startupProbe:
             tcpSocket:
               port: connect
             periodSeconds: 5
             failureThreshold: 60
           readinessProbe:
+            {{- if .Values.readiness.sql.enabled }}
+            exec:
+              command:
+                - python3
+                - /opt/spark/check-ready.py
+                - --schema
+                - {{ required "readiness.sql.schema is required" .Values.readiness.sql.schema | quote }}
+                - --table
+                - {{ required "readiness.sql.table is required" .Values.readiness.sql.table | quote }}
+                - --column
+                - {{ required "readiness.sql.column is required" .Values.readiness.sql.column | quote }}
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 3
+            {{- else }}
             tcpSocket:
               port: connect
             periodSeconds: 10
+            {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:

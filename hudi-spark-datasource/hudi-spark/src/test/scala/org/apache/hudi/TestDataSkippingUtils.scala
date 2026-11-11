@@ -27,7 +27,7 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.resolveExpr
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.encoders.DummyExpressionHolder
-import org.apache.spark.sql.catalyst.expressions.{And, Expression, GetStructField, InSet, Not, ParseToDate, ParseToTimestamp}
+import org.apache.spark.sql.catalyst.expressions.{And, Expression, GetStructField, In, InSet, Literal, Not, ParseToDate, ParseToTimestamp}
 import org.apache.spark.sql.catalyst.optimizer.OptimizeIn
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan}
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -263,6 +263,42 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
   }
 
   @Test
+  def testLargeInListCompilesToBalancedOr(): Unit = {
+    // OptimizeIn turns an IN list of more than 10 values into InSet. One OR level per value makes
+    // Spark's analysis and codegen recurse thousands of frames deep and overflow the stack
+    val values = 0L until 5000L
+    val input = Seq(
+      IndexRow("file_1", valueCount = 2, A_minValue = 4999, A_maxValue = 4999, A_nullCount = 0),
+      IndexRow("file_2", valueCount = 2, A_minValue = 5000, A_maxValue = 6000, A_nullCount = 0),
+      IndexRow("file_3", valueCount = 2, A_minValue = -10, A_maxValue = 10, A_nullCount = 0))
+    val a = UnresolvedAttribute("A")
+    Seq(
+      In(a, values.map(Literal(_))) -> Seq("file_1", "file_3"),
+      InSet(a, HashSet(values: _*)) -> Seq("file_1", "file_3"),
+      // Only a file holding nothing but listed values fails NOT IN
+      Not(In(a, values.map(Literal(_)))) -> Seq("file_2", "file_3")
+    ).foreach { case (filter, expected) =>
+      val resolvedFilterExpr = resolveExpr(spark, filter, sourceTableSchema)
+      val lookupFilter = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(resolvedFilterExpr, indexedCols = indexedCols)
+      // A balanced OR over 5000 values is 13 levels deep, plus a few for NOT / AND / the comparison
+      assertTrue(depth(lookupFilter) <= 20, s"lookup filter is ${depth(lookupFilter)} levels deep")
+
+      assertEquals(expected, applyFilterExpr(resolvedFilterExpr, input))
+    }
+  }
+
+  // Level by level, so a left-deep filter fails the depth assertion instead of overflowing here
+  private def depth(expr: Expression): Int = {
+    var levels = 0
+    var nodes = Seq(expr)
+    while (nodes.nonEmpty) {
+      levels += 1
+      nodes = nodes.flatMap(_.children)
+    }
+    levels
+  }
+
+  @Test
   def testSessionZoneConversionsAcrossDstFallBack(): Unit = {
     spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "America/New_York")
     try {
@@ -308,6 +344,92 @@ class TestDataSkippingUtils extends HoodieSparkClientTestBase with SparkAdapterS
     } finally {
       spark.sqlContext.setConf(SESSION_LOCAL_TIMEZONE.key, "UTC")
     }
+  }
+
+  @Test
+  def testLocalDateAcrossMidnightFallBack(): Unit = {
+    withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "America/St_Johns") {
+      // At 02:31Z on 2009-11-01 the clocks went from 00:01 NDT back to 23:01 NST of the previous day, so 02:30:30Z
+      // renders as 2009-11-01 but 02:31Z as 2009-10-31. Re-applying a date rendering over min/max stats puts the max
+      // below the min and would wrongly prune file_1 for either date; must keep the file
+      val acrossFallBack = IndexRow("file_1", valueCount = 2,
+        A_minValue = 1257042630L, A_maxValue = 1257042660L, A_nullCount = 0, // epoch seconds of C's bounds
+        C_minValue = new Timestamp(1257042630000L), // 2009-11-01 02:30:30Z
+        C_maxValue = new Timestamp(1257042660000L), // 2009-11-01 02:31:00Z, the first instant after the fall-back
+        C_nullCount = 0)
+      // Files that do not span the fall-back are still pruned
+      val afterFallBack = IndexRow("file_2", valueCount = 2,
+        A_minValue = 1257042660L, A_maxValue = 1257043200L, A_nullCount = 0,
+        C_minValue = new Timestamp(1257042660000L), // 2009-11-01 02:31:00Z, renders as 2009-10-31
+        C_maxValue = new Timestamp(1257043200000L), // 2009-11-01 02:40:00Z, renders as 2009-10-31
+        C_nullCount = 0)
+      val earlierDay = IndexRow("file_3", valueCount = 2,
+        A_minValue = 1256904000L, A_maxValue = 1256907600L, A_nullCount = 0,
+        C_minValue = new Timestamp(1256904000000L), // 2009-10-30 12:00Z
+        C_maxValue = new Timestamp(1256907600000L), // 2009-10-30 13:00Z
+        C_nullCount = 0)
+      val files = Seq(acrossFallBack, afterFallBack, earlierDay)
+      Seq(
+        "date_format(C, 'yyyy-MM-dd') = '2009-10-31'" -> Seq("file_1", "file_2"),
+        "date_format(C, 'yyyy-MM-dd') = '2009-11-01'" -> Seq("file_1"),
+        "from_unixtime(A, 'yyyy-MM-dd') = '2009-10-31'" -> Seq("file_1", "file_2"),
+        "CAST(C AS DATE) IN (DATE'2009-10-29', DATE'2009-10-31')" -> Seq("file_1", "file_2"),
+        "date_add(CAST(C AS DATE), 1) = DATE'2009-11-01'" -> Seq("file_1", "file_2")
+      ).foreach { case (filter, expected) =>
+        assertEquals(expected, applyFilterExpr(resolveExpr(spark, filter, sourceTableSchema), files), filter)
+      }
+      // to_date reaches data skipping as the cast it stands for, once the optimizer replaced it. Two dates: with one,
+      // the optimizer turns IN into "=", which Spark 3.5+ rewrites into a range on C itself
+      assertEquals(Seq("file_1", "file_2"),
+        lookupThroughFullOptimizer("to_date(C) IN (DATE'2009-10-29', DATE'2009-10-31')", files))
+
+      // The same date at both ends does not rule out a row of the previous date in between
+      val aroundFallBack = IndexRow("file_4", valueCount = 3,
+        C_minValue = new Timestamp(1257042630000L), // 2009-11-01 02:30:30Z, renders as 2009-11-01
+        C_maxValue = new Timestamp(1257046800000L), // 2009-11-01 03:40:00Z, renders as 2009-11-01
+        C_nullCount = 0)
+      assertEquals(Seq("file_4"), applyFilterExpr(
+        resolveExpr(spark, "NOT (date_format(C, 'yyyy-MM-dd') = '2009-11-01')", sourceTableSchema), Seq(aroundFallBack)))
+    }
+  }
+
+  @Test
+  def testLocalDateGuardToleratesFailingBounds(): Unit = {
+    // America/Phoenix ran its date backwards twice in 1944, so the cast to the local date is guarded there, and the
+    // guard reads both bounds of the cast's input, while "<" only needs the min. The max of each file overflows,
+    // which must not fail the lookup. Without its max, file_1 may span the first instant, so it is kept: its min
+    // renders as 1944-01-01, but a row 30 seconds later renders as 1943-12-31. The min of file_2 is past both
+    // instants, which settles the guard without the max, so file_2 is still pruned
+    withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "America/Phoenix") {
+      assertEquals(Seq("file_1"), applyFilterExpr(
+        resolveExpr(spark, "CAST(from_utc_timestamp(C, '+08:00') AS DATE) < DATE'1944-01-01'", sourceTableSchema),
+        filesWithFailingMax))
+    }
+  }
+
+  @Test
+  def testFormatGuardToleratesFailingBounds(): Unit = {
+    // Formatting is guarded in every zone, to years 0001 to 9999, and that guard reads both bounds too. The lookup
+    // must not fail; as the guard needs the max, both files are kept
+    withSqlConf(SESSION_LOCAL_TIMEZONE.key -> "UTC") {
+      assertEquals(Seq("file_1", "file_2"), applyFilterExpr(
+        resolveExpr(spark, "date_format(from_utc_timestamp(C, '+08:00'), 'yyyy-MM-dd') < '2000-01-01'", sourceTableSchema),
+        filesWithFailingMax))
+    }
+  }
+
+  // Shifting the max of these files, the largest timestamp, by from_utc_timestamp overflows
+  private def filesWithFailingMax: Seq[IndexRow] = {
+    val failingMax = new Timestamp(Long.MaxValue / 1000) // in year 294247
+    Seq(
+      IndexRow("file_1", valueCount = 2,
+        C_minValue = new Timestamp(-820547970000L), // 1943-12-31 22:00:30Z, shifted to 06:00:30Z on 1944-01-01
+        C_maxValue = failingMax,
+        C_nullCount = 0),
+      IndexRow("file_2", valueCount = 2,
+        C_minValue = new Timestamp(978307200000L), // 2001-01-01 00:00Z
+        C_maxValue = failingMax,
+        C_nullCount = 0))
   }
 
   @ParameterizedTest

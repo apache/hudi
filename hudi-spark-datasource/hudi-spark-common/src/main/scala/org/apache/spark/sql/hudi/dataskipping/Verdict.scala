@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dataskipping
 
-import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, StartsWith}
+import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, PredicateHelper, StartsWith}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -27,7 +27,7 @@ import org.apache.spark.unsafe.types.UTF8String
  * Invariant: TRUE whenever unsure. A negated op (NotEq / NotIn / NotStartsWith) only drops a file
  * whose every value fails, which is NOT the negation of the positive verdict.
  */
-object Verdict {
+object Verdict extends PredicateHelper {
 
   def apply(leaf: Leaf, r: TermRange): Expression = leaf.op match {
     case Op.Eq => mayContain(r, single(leaf))
@@ -39,9 +39,9 @@ object Verdict {
     case Op.Gt => GreaterThan(r.hi, single(leaf))
     case Op.GtEq => GreaterThanOrEqual(r.hi, single(leaf))
 
-    case Op.In => leaf.values.map(v => mayContain(r, v)).reduce(Or)
-    case Op.InSet(values) => values.toSeq.map(toLiteral).map(v => mayContain(r, v)).reduce(Or)
-    case Op.NotIn => Not(leaf.values.map(v => onlyContains(r, v)).reduce(Or))
+    case Op.In => anyOf(leaf.values.map(v => mayContain(r, v)))
+    case Op.InSet(values) => anyOf(values.toSeq.map(toLiteral).map(v => mayContain(r, v)))
+    case Op.NotIn => Not(anyOf(leaf.values.map(v => onlyContains(r, v))))
 
     // Bug #20430: checks `lo <= p AND hi >= p`, which drops a file whose min extends `p` (min 'abcd' > 'abc')
     case Op.StartsWith => mayContain(r, single(leaf))
@@ -59,6 +59,12 @@ object Verdict {
       case _ => TrueLiteral
     }
   }
+
+  // A balanced OR, log2(n) deep. A left-deep `reduce(Or)` is one level per IN value, and Spark's
+  // analysis and codegen recurse over it: a few thousand values overflow the stack.
+  // Indexed because buildBalancedPredicate reads by position, quadratic on a Scala 2.13 List
+  private def anyOf(verdicts: Seq[Expression]): Expression =
+    buildBalancedPredicate(verdicts.toIndexedSeq, Or)
 
   // Some value of the file may equal `v`: lo <= v <= hi
   private def mayContain(r: TermRange, v: Expression): Expression =

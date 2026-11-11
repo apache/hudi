@@ -35,7 +35,8 @@ import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.expressions.{Expression, PredicateHelper}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
 import org.apache.spark.sql.catalyst.util.quoteIdentifier
-import org.apache.spark.sql.hudi.DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr
+import org.apache.spark.sql.hudi.DataSkippingUtils.{translateIntoColumnStatsIndexFilterExpr, translateIntoExpressionIndexFilterExpr}
+import org.apache.spark.sql.hudi.dataskipping.ExpressionIndexSource
 
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.{break, breakable}
@@ -106,7 +107,8 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
   }
 
   protected def getCandidateFiles(indexDf: DataFrame, queryFilters: Seq[Expression], fileNamesFromPrunedPartitions: Set[String],
-                                  getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String], isExpressionIndex: Boolean = false,
+                                  getValidIndexedColumnsFunc: HoodieIndexDefinition => Seq[String],
+                                  expressionIndexSource: Option[ExpressionIndexSource] = None,
                                   indexDefinitionOpt: Option[HoodieIndexDefinition] = Option.empty): Set[String] = {
     val indexDefinition : HoodieIndexDefinition = if (indexDefinitionOpt.isDefined) {
       indexDefinitionOpt.get
@@ -116,7 +118,7 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
     }
 
     val validIndexedColumns = getValidIndexedColumnsFunc.apply(indexDefinition)
-    val candidateFilter = buildCandidateFilter(indexDf, queryFilters, validIndexedColumns, isExpressionIndex)
+    val candidateFilter = buildCandidateFilter(indexDf, queryFilters, validIndexedColumns, expressionIndexSource)
     if (candidateFilter.isEmpty) {
       // No translated predicate can prune files, so avoid scanning the index.
       fileNamesFromPrunedPartitions
@@ -151,10 +153,13 @@ abstract class SparkBaseIndexSupport(spark: SparkSession,
    * A null null-count marks missing statistics, whereas null min/max values can also describe an all-null column.
    */
   protected def buildCandidateFilter(indexDf: DataFrame, queryFilters: Seq[Expression], validIndexedColumns: Seq[String],
-                                     isExpressionIndex: Boolean = false): Option[Column] = {
+                                     expressionIndexSource: Option[ExpressionIndexSource] = None): Option[Column] = {
     // Only split top-level AND predicates; keep OR and NOT subtrees intact.
     val indexFilters = queryFilters.flatMap(SparkBaseIndexSupport.splitConjuncts)
-      .map(translateIntoColumnStatsIndexFilterExpr(_, isExpressionIndex, validIndexedColumns))
+      .map(filter => expressionIndexSource match {
+        case Some(source) => translateIntoExpressionIndexFilterExpr(filter, source)
+        case None => translateIntoColumnStatsIndexFilterExpr(filter, indexedCols = validIndexedColumns)
+      })
       .filterNot(_.equals(TrueLiteral))
     if (indexFilters.isEmpty) {
       None
