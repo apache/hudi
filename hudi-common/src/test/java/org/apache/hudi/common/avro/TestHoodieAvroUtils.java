@@ -571,39 +571,6 @@ public class TestHoodieAvroUtils {
     assertEquals(FIXTURE_EPOCH_MICROS, HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MICROS_SCHEMA, FIXTURE_LOCAL_DT_MICROS, false));
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  public void testConvertValueForAvroLogicalTypesSqlTimestamp(boolean consistentTimestamp) {
-    for (long micros : new long[] {-1001L, FIXTURE_EPOCH_MICROS}) {
-      Instant instant = Instant.ofEpochSecond(Math.floorDiv(micros, 1_000_000L), Math.floorMod(micros, 1_000_000L) * 1000L);
-      Timestamp timestamp = Timestamp.from(instant);
-      long millis = instant.toEpochMilli();
-      Object expectedMillis = consistentTimestamp ? new Timestamp(millis) : millis;
-      Object expectedMicros = consistentTimestamp ? new Timestamp(micros / 1000) : micros;
-      assertEquals(expectedMillis,
-          HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MILLIS_SCHEMA, timestamp, consistentTimestamp));
-      assertEquals(expectedMicros,
-          HoodieAvroUtils.convertValueForAvroLogicalTypes(TS_MICROS_SCHEMA, timestamp, consistentTimestamp));
-
-      // A local timestamp uses its wall-clock fields, independently of the JVM's timezone.
-      Timestamp localTimestamp = Timestamp.valueOf(LocalDateTime.ofInstant(instant, ZoneOffset.UTC));
-      assertEquals(millis,
-          HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MILLIS_SCHEMA, localTimestamp, consistentTimestamp));
-      assertEquals(micros,
-          HoodieAvroUtils.convertValueForAvroLogicalTypes(LOCAL_TS_MICROS_SCHEMA, localTimestamp, consistentTimestamp));
-    }
-  }
-
-  @Test
-  public void testConvertValueForAvroLogicalTypesDecodedDecimal() {
-    BigDecimal decimal = new BigDecimal("1234.56");
-    LogicalTypes.Decimal logicalType = LogicalTypes.decimal(10, 2);
-    Schema bytesSchema = logicalType.addToSchema(Schema.create(Schema.Type.BYTES));
-    Schema fixedSchema = logicalType.addToSchema(Schema.createFixed("decimal_fixed", null, null, 8));
-    assertSame(decimal, HoodieAvroUtils.convertValueForAvroLogicalTypes(bytesSchema, decimal, false));
-    assertSame(decimal, HoodieAvroUtils.convertValueForAvroLogicalTypes(fixedSchema, decimal, false));
-  }
-
   @Test
   public void testConvertValueForSpecificDataTypes_NullSchema() {
     // Test with null schema - should return value unchanged
@@ -636,7 +603,6 @@ public class TestHoodieAvroUtils {
     assertNotNull(result);
     assertTrue(result instanceof LocalDate);
     assertEquals(LocalDate.of(2023, 1, 1), result);
-    assertEquals(result, HoodieAvroUtils.convertValueForSpecificDataTypes(DATE_SCHEMA, Date.valueOf("2023-01-01"), false));
   }
 
   @Test

@@ -25,10 +25,15 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.avro.LogicalType;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.util.Utf8;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
+import java.sql.Date;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -72,11 +77,28 @@ public class AvroOrderingValueConverter implements Serializable {
   }
 
   private Comparable convertFieldValue(Comparable value, HoodieSchema fieldSchema) {
-    if (value == null) {
-      return null;
+    // Decoded decimals already use the representation needed for comparison.
+    if (value == null || value instanceof BigDecimal) {
+      return value;
     }
-    value = (Comparable) HoodieAvroUtils.convertValueForAvroLogicalTypes(
-        fieldSchema.toAvroSchema(), value, consistentLogicalTimestampEnabled);
-    return value instanceof String ? new Utf8((String) value) : value;
+    Schema avroSchema = fieldSchema.toAvroSchema();
+    LogicalType logicalType = avroSchema.getLogicalType();
+    // Normalize decoded delete values here. Timestamp precision and configuration
+    // handling remain shared with data records.
+    if (value instanceof String) {
+      return new Utf8((String) value);
+    }
+    if (value instanceof Date) {
+      return ((Date) value).toLocalDate();
+    }
+    if (value instanceof Timestamp) {
+      if (logicalType == LogicalTypes.localTimestampMillis() || logicalType == LogicalTypes.localTimestampMicros()) {
+        value = ((Timestamp) value).toLocalDateTime();
+      } else if (logicalType == LogicalTypes.timestampMillis() || logicalType == LogicalTypes.timestampMicros()) {
+        value = ((Timestamp) value).toInstant();
+      }
+    }
+    return (Comparable) HoodieAvroUtils.convertValueForAvroLogicalTypes(
+        avroSchema, value, consistentLogicalTimestampEnabled);
   }
 }

@@ -210,6 +210,28 @@ class TestAvroRecordContext {
     assertEquals(expected, context.getOrderingValue(roundTripDelete(Timestamp.valueOf(localTime))));
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testTimestampDeleteOrderingPrecision(boolean consistentTimestamp) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), String.valueOf(consistentTimestamp));
+    AvroRecordContext context = new AvroRecordContext(new HoodieTableConfig(), null, props);
+    for (String logicalType : Arrays.asList("timestamp-millis", "timestamp-micros", "local-timestamp-millis", "local-timestamp-micros")) {
+      Schema schema = new Schema.Parser().parse("{\"type\":\"record\",\"name\":\"timestamp_ordering\",\"fields\":["
+          + "{\"name\":\"ts\",\"type\":{\"type\":\"long\",\"logicalType\":\"" + logicalType + "\"}}]}");
+      context.initOrderingValueConverter(HoodieSchema.fromAvroSchema(schema), Collections.singletonList("ts"));
+      for (long micros : new long[] {-1001L, 1790812800123456L}) {
+        Instant instant = Instant.ofEpochSecond(Math.floorDiv(micros, 1_000_000L), Math.floorMod(micros, 1_000_000L) * 1000L);
+        long rawValue = logicalType.endsWith("millis") ? instant.toEpochMilli() : micros;
+        Object expected = HoodieAvroUtils.convertValueForAvroLogicalTypes(schema.getField("ts").schema(), rawValue, consistentTimestamp);
+        // Local timestamps preserve wall-clock fields rather than the instant in the JVM's timezone.
+        Timestamp timestamp = logicalType.startsWith("local-")
+            ? Timestamp.valueOf(LocalDateTime.ofInstant(instant, ZoneOffset.UTC)) : Timestamp.from(instant);
+        assertEquals(expected, context.convertOrderingValueToEngineType(timestamp), logicalType);
+      }
+    }
+  }
+
   @Test
   void testMultiFieldDeleteOrderingWithEpochDate() throws IOException {
     HoodieSchema schema = HoodieSchema.fromAvroSchema(new Schema.Parser().parse(
