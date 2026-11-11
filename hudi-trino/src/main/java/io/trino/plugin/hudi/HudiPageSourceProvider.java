@@ -262,20 +262,27 @@ public class HudiPageSourceProvider
         // Build delta-log parquet page sources on demand, projected on the file-group reader's requiredSchema
         // with predicate pushdown OFF so every log record is read and merged.
         HudiTrinoReaderContext.LogFileParquetPageSourceFactory logPageSourceFactory =
-                (logPath, logStart, logLength, projection) -> createPageSource(
-                        session,
-                        projection,
-                        hudiSplit,
-                        newLogInputFile(fileSystem, logPath),
-                        logPath,
-                        logStart,
-                        logLength,
-                        OptionalLong.empty(),
-                        dataSourceStats,
-                        sessionOptions,
-                        timeZone,
-                        DynamicFilter.EMPTY,
-                        false);
+                (logPath, logStart, logLength, projection) -> {
+                    TrinoInputFile logFile = newLogInputFile(fileSystem, logPath);
+                    // A parquet data block's size is exact, so a small block is read in a single request
+                    OptionalLong estimatedFileSize = logFile instanceof InlineTrinoInputFile inlineFile
+                            ? OptionalLong.of(inlineFile.length())
+                            : OptionalLong.empty();
+                    return createPageSource(
+                            session,
+                            projection,
+                            hudiSplit,
+                            logFile,
+                            logPath,
+                            logStart,
+                            logLength,
+                            estimatedFileSize,
+                            dataSourceStats,
+                            sessionOptions,
+                            timeZone,
+                            DynamicFilter.EMPTY,
+                            false);
+                };
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
                 metaClient.getStorageConf(),
                 metaClient.getTableConfig(),

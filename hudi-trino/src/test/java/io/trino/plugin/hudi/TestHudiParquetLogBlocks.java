@@ -13,18 +13,30 @@
  */
 package io.trino.plugin.hudi;
 
+import com.google.common.collect.HashMultiset;
+import com.google.common.collect.ImmutableMultiset;
+import com.google.common.collect.Multiset;
 import io.trino.plugin.hudi.testing.ParquetLogBlockHudiTablesInitializer;
+import io.trino.plugin.hudi.util.FileOperationUtils.FileOperation;
 import io.trino.testing.AbstractTestQueryFramework;
+import io.trino.testing.DistributedQueryRunner;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
 
 import static io.trino.plugin.hudi.testing.ParquetLogBlockHudiTablesInitializer.RT_TABLE_NAME;
 import static io.trino.plugin.hudi.testing.ParquetLogBlockHudiTablesInitializer.TABLE_NAME;
+import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.LOG;
+import static io.trino.testing.MultisetAssertions.assertMultisetsEqual;
+import static java.util.stream.Collectors.toCollection;
+import static org.junit.jupiter.api.parallel.ExecutionMode.SAME_THREAD;
 
 /**
  * Snapshot reads of a Merge-On-Read table whose log files hold parquet data blocks, which the file-group reader
  * hands to the connector as {@code inlinefs://} paths. Written by {@link ParquetLogBlockHudiTablesInitializer}.
  */
+// Sequential so that the file operations recorded for a query are only that query's
+@Execution(SAME_THREAD)
 public class TestHudiParquetLogBlocks
         extends AbstractTestQueryFramework
 {
@@ -85,5 +97,23 @@ public class TestHudiParquetLogBlocks
         assertQuery(
                 "SELECT count(DISTINCT _hoodie_commit_time) FROM " + RT_TABLE_NAME + " WHERE key IN ('k1', 'k6')",
                 "VALUES 2");
+    }
+
+    @Test
+    public void testSmallParquetLogBlockIsReadInOneRequest()
+    {
+        // The table's log files hold 5 parquet data blocks
+        DistributedQueryRunner queryRunner = getDistributedQueryRunner();
+        queryRunner.executeWithPlan(queryRunner.getDefaultSession(), "SELECT key, value FROM " + RT_TABLE_NAME);
+        Multiset<FileOperation> logReads = queryRunner.getSpans().stream()
+                .filter(span -> span.getName().startsWith("Input."))
+                .map(FileOperation::create)
+                .filter(operation -> operation.fileType() == LOG)
+                .collect(toCollection(HashMultiset::create));
+        assertMultisetsEqual(
+                logReads,
+                ImmutableMultiset.<FileOperation>builder()
+                        .addCopies(new FileOperation("Input.readFully", LOG), 5)
+                        .build());
     }
 }
