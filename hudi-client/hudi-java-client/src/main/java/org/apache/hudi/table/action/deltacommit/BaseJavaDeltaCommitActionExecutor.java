@@ -25,13 +25,13 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.execution.JavaLazyInsertIterable;
 import org.apache.hudi.io.AppendHandleFactory;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.commit.BaseJavaCommitActionExecutor;
-import org.apache.hudi.table.action.commit.JavaUpsertPartitioner;
 import org.apache.hudi.table.action.commit.Partitioner;
 
 import lombok.extern.slf4j.Slf4j;
@@ -61,11 +61,14 @@ abstract class BaseJavaDeltaCommitActionExecutor<T> extends BaseJavaCommitAction
     super(context, config, table, instantTime, operationType, extraMetadata);
   }
 
-  private JavaUpsertPartitioner partitioner;
+  private JavaUpsertDeltaCommitPartitioner<T> partitioner;
 
   @Override
   public Partitioner getUpsertPartitioner(WorkloadProfile profile) {
-    this.partitioner = (JavaUpsertPartitioner) super.getUpsertPartitioner(profile);
+    if (profile == null) {
+      throw new HoodieUpsertException("Need workload profile to construct the upsert partitioner.");
+    }
+    this.partitioner = new JavaUpsertDeltaCommitPartitioner<>(profile, context, table, config);
     return this.partitioner;
   }
 
