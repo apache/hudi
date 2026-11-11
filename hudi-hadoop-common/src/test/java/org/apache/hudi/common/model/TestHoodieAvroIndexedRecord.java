@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.table.read.DeleteContext;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.GenericRecordBuilder;
@@ -32,6 +33,7 @@ import java.util.Arrays;
 
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_KEY;
 import static org.apache.hudi.common.model.DefaultHoodieRecordPayload.DELETE_MARKER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -113,5 +115,21 @@ class TestHoodieAvroIndexedRecord {
         .build();
     HoodieAvroIndexedRecord indexedRecord2 = new HoodieAvroIndexedRecord(record2);
     assertFalse(indexedRecord2.isDelete(deleteContext, props));
+  }
+
+  @Test
+  void testTimestampOrderingValueIgnoresConsistentLogicalTimestamp() {
+    HoodieSchema hoodieSchema = HoodieSchema.createRecord("TestRecord", null, null,
+        Arrays.asList(
+            HoodieSchemaField.of("id", HoodieSchema.create(HoodieSchemaType.STRING)),
+            HoodieSchemaField.of("ts", HoodieSchema.createTimestampMicros())
+        ));
+    GenericRecord record = new GenericRecordBuilder(hoodieSchema.toAvroSchema())
+        .set("id", "key0")
+        .set("ts", 1_000_500L)
+        .build();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    assertEquals(1_000_500L, new HoodieAvroIndexedRecord(record).getOrderingValue(hoodieSchema, props, new String[] {"ts"}));
   }
 }

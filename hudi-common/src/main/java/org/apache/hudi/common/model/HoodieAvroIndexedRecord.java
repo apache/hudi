@@ -29,7 +29,6 @@ import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.BaseKeyGenerator;
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.Serializer;
@@ -310,12 +309,9 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
       return OrderingValues.getDefault();
     }
     decodeRecord(recordSchema.toAvroSchema());
-    boolean consistentLogicalTimestampEnabled = Boolean.parseBoolean(props.getProperty(
-        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-        KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
     return OrderingValues.create(
         orderingFields,
-        field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, consistentLogicalTimestampEnabled));
+        field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, false));
   }
 
   private void decodeRecord(Schema recordSchema) {

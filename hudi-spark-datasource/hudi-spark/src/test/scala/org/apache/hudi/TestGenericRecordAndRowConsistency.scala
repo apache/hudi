@@ -17,6 +17,7 @@
  */
 package org.apache.hudi
 
+import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
@@ -24,6 +25,8 @@ import org.apache.hudi.testutils.HoodieSparkClientTestBase
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 
 import java.sql.{Date, Timestamp}
 
@@ -84,6 +87,55 @@ class TestGenericRecordAndRowConsistency extends HoodieSparkClientTestBase {
     ).toDF("typeId", "eventTime", "str")
 
     testConsistencyBetweenGenericRecordAndRow(df)
+  }
+
+  /**
+   * Upserts and deletes that hit existing keys must order on the stored timestamp value
+   * when the consistent logical timestamp key generation is on.
+   */
+  @ParameterizedTest
+  @EnumSource(classOf[HoodieTableType])
+  def testUpsertWithTimestampOrderingField(tableType: HoodieTableType): Unit = {
+    val _spark = spark
+    import _spark.implicits._
+
+    val opts = Map(
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_ts_ordering_tbl",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      "hoodie.upsert.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.TABLE_TYPE.key -> tableType.name(),
+      DataSourceWriteOptions.RECORDKEY_FIELD.key -> "id",
+      HoodieTableConfig.ORDERING_FIELDS.key() -> "ts",
+      DataSourceWriteOptions.PARTITIONPATH_FIELD.key -> "part",
+      DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key -> "true"
+    )
+    def ts(s: String): Timestamp = Timestamp.valueOf("2026-01-01 " + s)
+    val columns = Seq("id", "ts", "part", "val", "_hoodie_is_deleted")
+
+    Seq("key0", "key1", "key2", "key3", "key4", "key5")
+      .map(id => (id, ts("10:00:00.000500"), "p0", "v1", false))
+      .toDF(columns: _*)
+      .write.format("hudi").options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, "upsert")
+      .mode(org.apache.spark.sql.SaveMode.Overwrite)
+      .save(basePath)
+
+    Seq(
+      ("key0", ts("10:00:00.000501"), "p0", "v2", false),
+      ("key1", ts("10:00:00.000499"), "p0", "v2", false),
+      ("key2", ts("10:00:01.000500"), "p0", "v2", false),
+      ("key3", ts("09:59:59.000500"), "p0", "v2", false),
+      ("key4", ts("09:59:59.000500"), "p0", "v2", true),
+      ("key5", ts("10:00:01.000500"), "p0", "v2", true)
+    ).toDF(columns: _*)
+      .write.format("hudi").options(opts)
+      .option(DataSourceWriteOptions.OPERATION.key, "upsert")
+      .mode(org.apache.spark.sql.SaveMode.Append)
+      .save(basePath)
+
+    val actual = spark.read.format("hudi").load(basePath)
+      .select("id", "val").as[(String, String)].collect().sorted.toSeq
+    assertEquals(Seq(("key0", "v2"), ("key1", "v1"), ("key2", "v2"), ("key3", "v1"), ("key4", "v1")), actual)
   }
 
   private def testConsistencyBetweenGenericRecordAndRow(df: DataFrame): Unit = {
