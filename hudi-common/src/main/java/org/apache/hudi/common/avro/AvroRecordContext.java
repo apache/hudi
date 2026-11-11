@@ -250,7 +250,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
 
   @Override
   public Comparable convertOrderingValueToEngineType(Comparable value) {
-    return orderingValueConverter == null ? super.convertOrderingValueToEngineType(value) : orderingValueConverter.convert(value);
+    return orderingValueConverter.convert(value);
   }
 
   @Override
