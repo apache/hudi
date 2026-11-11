@@ -1210,7 +1210,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
     boolean cannotRestore = filesGroups.stream().map(fileGroup -> fileGroup.getAllFileSlices().map(FileSlice::getBaseInstantTime).anyMatch(
         instantTime1 -> compareTimestamps(instantTime1, LESSER_THAN_OR_EQUALS, restoreToInstantTime))).anyMatch(canRestore -> !canRestore);
-    if (cannotRestore) {
+    // A metadata table built after the restore target has nothing to roll back, and before table version 8 its base
+    // files carry the latest data table instant.
+    if (cannotRestore && !HoodieTableMetadataUtil.hasOnlyInitializationDeltaCommits(HoodieTableMetaClient.reload(metadataMetaClient))) {
       throw new HoodieMetadataException(String.format("Can't restore to %s since there is no base file in MDT lesser than the commit to restore to. "
           + "Please delete metadata table and retry", restoreToInstantTime));
     }
