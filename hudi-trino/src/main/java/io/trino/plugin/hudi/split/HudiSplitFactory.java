@@ -82,6 +82,9 @@ public class HudiSplitFactory
         if (isCopyOnWriteOrReadOptimized(hudiTableHandle, fileSlice)) {
             // Handle MERGE_ON_READ tables to be read in read_optimized mode
             // IMPORTANT: These tables will have a COPY_ON_WRITE table type due to how `HudiTableTypeUtils#fromInputFormat`
+            if (fileSlice.getBaseFile().isEmpty()) {
+                return ImmutableList.of();
+            }
             return createSplitsForBaseFile(hudiTableHandle, partitionKeys, fileSlice, commitTime, hudiSplitWeightProvider, targetSplitSize);
         }
         return createSplitForMergeOnRead(hudiTableHandle, partitionKeys, fileSlice, commitTime, hudiSplitWeightProvider);
