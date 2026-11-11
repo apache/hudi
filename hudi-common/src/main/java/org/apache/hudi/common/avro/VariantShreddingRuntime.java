@@ -46,6 +46,7 @@ public final class VariantShreddingRuntime {
    * module is missing from this list silently writes unshredded.
    */
   private static final String[] INFERRER_CANDIDATES = {
+      "org.apache.hudi.variant.Spark43VariantShreddingSchemaInferrer",
       "org.apache.hudi.variant.Spark42VariantShreddingSchemaInferrer",
       "org.apache.hudi.variant.Spark41VariantShreddingSchemaInferrer"
   };
