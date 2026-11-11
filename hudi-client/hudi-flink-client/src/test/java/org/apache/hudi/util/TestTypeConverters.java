@@ -46,6 +46,18 @@ class TestTypeConverters {
   }
 
   @Test
+  void testPaddedStringToDecimalPreservesPrecision() {
+    assertDecimal(DataTypes.STRING().getLogicalType(), StringData.fromString(" \t9007199254740993.01\r\n"),
+        22, 2, "9007199254740993.01");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {" 1.5", "1.5 ", " \t1.5\r\n"})
+  void testStringToDecimalTrimsWhitespace(String value) {
+    assertDecimal(DataTypes.STRING().getLogicalType(), StringData.fromString(value), 3, 2, "1.50");
+  }
+
+  @Test
   void testDecimalScaleAndNumericConversions() {
     assertDecimal(DataTypes.INT().getLogicalType(), Integer.MAX_VALUE, 12, 2, "2147483647.00");
     assertDecimal(DataTypes.BIGINT().getLogicalType(), 9007199254740993L, 18, 2, "9007199254740993.00");

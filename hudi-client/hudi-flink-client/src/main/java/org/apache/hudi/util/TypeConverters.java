@@ -170,7 +170,7 @@ public class TypeConverters {
 
             @Override
             public Object convert(Object val) {
-              return toDecimalData(new BigDecimal(val.toString()), toType);
+              return toDecimalData(new BigDecimal(val.toString().trim()), toType);
             }
           };
         }
