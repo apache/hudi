@@ -71,9 +71,10 @@ public final class ArchiveExecutorUtils {
     HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath)
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(minCommits, maxCommits).build())
         .withCleanConfig(HoodieCleanConfig.newBuilder().retainCommits(commitsRetained).build())
-        .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(enableMetadata).build())
         .withProps(options)
+        // No timeline server is started here, so it stays off whatever the options say.
+        .withEmbeddedTimelineServerEnabled(false)
         .build();
     HoodieEngineContext context = new HoodieSparkEngineContext(jsc);
     HoodieSparkTable<HoodieAvroPayload> table = HoodieSparkTable.create(config, context);

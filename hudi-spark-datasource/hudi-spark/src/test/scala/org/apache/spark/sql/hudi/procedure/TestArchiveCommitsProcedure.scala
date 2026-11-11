@@ -19,13 +19,18 @@
 
 package org.apache.spark.sql.hudi.procedure
 
+import org.apache.hudi.common.table.HoodieTableVersion
+import org.apache.hudi.testutils.HoodieClientTestUtils.createMetaClient
+
+import java.nio.file.{Files, Paths}
+
 class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
 
   /**
    * Helper: create a fresh COW table at the given location with `numCommits`
    * insert commits already written. Returns the table name.
    */
-  private def createTableWithCommits(location: String, numCommits: Int): String = {
+  private def createTableWithCommits(location: String, numCommits: Int, tableVersion: Option[Int] = None): String = {
     val tableName = generateTableName
     spark.sql(
       s"""
@@ -41,6 +46,7 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
          |   type = 'cow',
          |   orderingFields = 'ts',
          |   hoodie.metadata.enable = "false"
+         |   ${tableVersion.map(v => s", hoodie.write.table.version = '$v', hoodie.write.auto.upgrade = 'false'").getOrElse("")}
          | )
          |""".stripMargin)
 
@@ -123,6 +129,32 @@ class TestArchiveCommitsProcedure extends HoodieSparkProcedureTestBase {
       val archived = spark.sql(
         s"call show_archived_commits(table => '$tableName', end_ts => '$endTs')").collect()
       assertResult(4)(archived.length)
+    }
+  }
+
+  Seq(HoodieTableVersion.SIX, HoodieTableVersion.current()).map(_.versionCode()).distinct.foreach { tableVersion =>
+    test(s"Test Call archive_commits Procedure with the embedded timeline server enabled in options at table version $tableVersion") {
+      withTempDir { tmp =>
+        val tablePath = tmp.getCanonicalPath
+        val tableName = createTableWithCommits(tablePath, 6, Some(tableVersion))
+        val metaClient = createMetaClient(spark, tablePath)
+        assertResult(tableVersion)(metaClient.getTableConfig.getTableVersion.versionCode())
+        val firstInstant = metaClient.getActiveTimeline.getCommitsTimeline.firstInstant().get().requestedTime()
+        val markerDir = Paths.get(metaClient.getMarkerFolderPath(firstInstant))
+        Files.createDirectories(markerDir)
+        Files.createFile(markerDir.resolve("f1.parquet.marker.CREATE"))
+
+        val result = spark.sql(
+          s"call archive_commits(table => '$tableName'," +
+            " min_commits => 2, max_commits => 3, retain_commits => 1, enable_metadata => false," +
+            s" options => 'hoodie.write.table.version=$tableVersion,hoodie.embed.timeline.server=true," +
+            "hoodie.write.markers.type=TIMELINE_SERVER_BASED')")
+          .collect()
+        assertResult(0)(result(0).getInt(0))
+
+        assertResult(2)(spark.sql(s"call show_commits(table => '$tableName', limit => 10)").collect().length)
+        assert(!Files.exists(markerDir))
+      }
     }
   }
 
