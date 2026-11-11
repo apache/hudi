@@ -77,6 +77,8 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
    * @param readerMetrics metrics of the source reader, already registered. Flink creates a new split
    *                      reader each time it restarts an idle fetcher, so the instance is shared by
    *                      all split readers of a source reader rather than registered per split reader.
+   *                      The split reader only starts splits; {@link HoodieSourceReader} finishes them
+   *                      once their records are emitted.
    */
   public HoodieSourceSplitReader(
       FlinkStreamReadMetrics readerMetrics,
@@ -112,8 +114,8 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
         return new RecordsBySplits<>(Collections.emptyMap(), Collections.emptySet());
       }
       currentSplit = nextSplit;
+      readerMetrics.startSplit(currentSplit.splitId(), currentSplit.getLatestCommit());
       readerFunction.open(currentSplit);
-      readerMetrics.setSplitLatestCommit(currentSplit.getLatestCommit());
     }
 
     // Read the next bounded minibatch of the open split, unless the global limit is already reached.
@@ -186,7 +188,6 @@ public class HoodieSourceSplitReader<T> implements SplitReader<HoodieRecordWithP
   private RecordsWithSplitIds<HoodieRecordWithPosition<T>> finishSplit() {
     RecordsWithSplitIds<HoodieRecordWithPosition<T>> records = BatchRecords.lastBatchRecords(currentSplit.splitId());
     currentSplit = null;
-    readerMetrics.clearCurrentSplit();
     return records;
   }
 

@@ -31,12 +31,15 @@ import java.text.ParseException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Metrics for flink stream read.
  *
  * <p>The delays are computed when the gauges are read, so they keep growing while the reader stalls
- * or discovery finds no new commits. The setters run on the reading thread and the gauges are read
+ * or discovery finds no new commits. The setters run on the reading threads and the gauges are read
  * by the metric reporter thread.
  */
 @Slf4j
@@ -60,9 +63,11 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
   private volatile Instant splitLatestCommit;
 
   /**
-   * Whether the reader is reading the split of {@link #splitLatestCommit}.
+   * Latest commits of the splits that were started and not yet finished, keyed by split id. On
+   * Source V2 a split starts on the fetcher thread and finishes on the task thread once all of its
+   * records are emitted, so the next split can start before the previous one finishes.
    */
-  private volatile boolean readingSplit;
+  private final Map<String, Instant> activeSplitCommits = new ConcurrentHashMap<>();
 
   public FlinkStreamReadMetrics(MetricGroup metricGroup, String tableName) {
     this(metricGroup, tableName, Clock.systemUTC());
@@ -91,31 +96,40 @@ public class FlinkStreamReadMetrics extends HoodieFlinkMetrics {
   }
 
   /**
-   * Records that the reader started reading a split whose latest commit is {@code splitLatestCommit}.
+   * Records that the reader started a split whose latest commit is {@code splitLatestCommit}. Call it
+   * before opening the split, so that a slow open or recovery replay counts as reading.
    */
-  public void setSplitLatestCommit(String splitLatestCommit) {
+  public void startSplit(String splitId, String splitLatestCommit) {
     try {
-      this.splitLatestCommit = HoodieInstantTimeGenerator.parseDateFromInstantTime(splitLatestCommit).toInstant();
-      this.readingSplit = true;
+      Instant commit = HoodieInstantTimeGenerator.parseDateFromInstantTime(splitLatestCommit).toInstant();
+      this.splitLatestCommit = commit;
+      activeSplitCommits.put(splitId, commit);
     } catch (ParseException e) {
       log.warn("Invalid input latest commit: {}", splitLatestCommit);
     }
   }
 
   /**
-   * Records that the reader finished its current split. Until the next split starts,
-   * {@code splitLatestCommitDelay} reports 0 and {@code splitLatestCommit} keeps the last value.
+   * Records that all records of the split were emitted. Splits that were never started are ignored.
+   * Once no split is active, {@code splitLatestCommitDelay} reports 0 and {@code splitLatestCommit}
+   * keeps the last value.
    */
-  public void clearCurrentSplit() {
-    this.readingSplit = false;
+  public void finishSplit(String splitId) {
+    activeSplitCommits.remove(splitId);
   }
 
   private long getIssuedInstantDelay() {
     return delaySeconds(issuedInstant);
   }
 
+  /**
+   * Returns the delay of the oldest active split, whose records are the stalest still to be emitted.
+   */
   private long getSplitLatestCommitDelay() {
-    return readingSplit ? delaySeconds(splitLatestCommit) : 0L;
+    return activeSplitCommits.values().stream()
+        .min(Comparator.naturalOrder())
+        .map(this::delaySeconds)
+        .orElse(0L);
   }
 
   private long delaySeconds(Instant instant) {

@@ -457,24 +457,42 @@ public class TestHoodieSourceSplitReader {
   }
 
   @Test
-  public void testMetricsTrackTheSplitBeingRead() throws IOException {
+  public void testMetricsStartTheSplitBeforeOpeningIt() throws IOException {
+    FlinkStreamReadMetrics metrics = Mockito.mock(FlinkStreamReadMetrics.class);
+    HoodieSourceSplit split = createSplitWithCommit("20261109100000000");
+    // A slow open or recovery replay must already count as reading the split.
+    TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(Arrays.asList("r1", "r2")) {
+      @Override
+      public void open(HoodieSourceSplit openedSplit) {
+        verify(metrics).startSplit(split.splitId(), "20261109100000000");
+        super.open(openedSplit);
+      }
+    };
+    HoodieSourceSplitReader<String> reader =
+        new HoodieSourceSplitReader<>(metrics, () -> readerFunction, null, Option.empty());
+    reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
+
+    reader.fetch();
+
+    assertEquals(1, readerFunction.getOpenCount());
+    verify(metrics, times(1)).startSplit(Mockito.anyString(), Mockito.anyString());
+  }
+
+  @Test
+  public void testMetricsSplitIsNotFinishedWhenItsLastBatchIsFetched() throws IOException {
     FlinkStreamReadMetrics metrics = Mockito.mock(FlinkStreamReadMetrics.class);
     TestSplitReaderFunction readerFunction = new TestSplitReaderFunction(Arrays.asList("r1", "r2"));
     HoodieSourceSplitReader<String> reader =
         new HoodieSourceSplitReader<>(metrics, () -> readerFunction, null, Option.empty());
-
-    HoodieSourceSplit split = new HoodieSourceSplit(1, "base-path-1", Option.of(Collections.emptyList()),
-        "/test/table", "/test/partition", "read_optimized", "20261109100000000", "file1", Option.empty());
+    HoodieSourceSplit split = createSplitWithCommit("20261109100000000");
     reader.handleSplitsChanges(new SplitsAddition<>(Collections.singletonList(split)));
-
     reader.fetch();
-    verify(metrics).setSplitLatestCommit("20261109100000000");
-    verify(metrics, never()).clearCurrentSplit();
 
     RecordsWithSplitIds<HoodieRecordWithPosition<String>> finishBatch = reader.fetch();
+
+    // Earlier batches may still be queued for emission, so the source reader finishes the split.
     assertTrue(finishBatch.finishedSplits().contains(split.splitId()));
-    verify(metrics).clearCurrentSplit();
-    verify(metrics, times(1)).setSplitLatestCommit(Mockito.anyString());
+    verify(metrics, never()).finishSplit(Mockito.anyString());
   }
 
   @Test
@@ -840,6 +858,11 @@ public class TestHoodieSourceSplitReader {
         fileId,
         Option.empty()
     );
+  }
+
+  private HoodieSourceSplit createSplitWithCommit(String latestCommit) {
+    return new HoodieSourceSplit(1, "base-path-1", Option.of(Collections.emptyList()),
+        "/test/table", "/test/partition", "read_optimized", latestCommit, "file1", Option.empty());
   }
 
   /**

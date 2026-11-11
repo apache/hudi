@@ -82,7 +82,7 @@ class TestFlinkStreamReadMetrics {
 
   @Test
   void testSplitLatestCommitDelayGrowsWhileReadingASplit() throws ParseException {
-    metrics.setSplitLatestCommit(INSTANT);
+    metrics.startSplit("split-1", INSTANT);
     assertEquals(toInstant(INSTANT).getEpochSecond(), gauge("splitLatestCommit"));
 
     clock.advance(Duration.ofMinutes(10));
@@ -92,16 +92,47 @@ class TestFlinkStreamReadMetrics {
   }
 
   @Test
-  void testSplitLatestCommitDelayIsZeroWithoutACurrentSplit() throws ParseException {
-    metrics.setSplitLatestCommit(INSTANT);
+  void testSplitLatestCommitDelayIsZeroWithoutAnActiveSplit() throws ParseException {
+    metrics.startSplit("split-1", INSTANT);
     clock.advance(Duration.ofMinutes(10));
-    metrics.clearCurrentSplit();
+    metrics.finishSplit("split-1");
 
     assertEquals(0L, gauge("splitLatestCommitDelay"));
     assertEquals(toInstant(INSTANT).getEpochSecond(), gauge("splitLatestCommit"),
         "the last split's commit is still reported");
 
-    metrics.setSplitLatestCommit(INSTANT);
+    metrics.startSplit("split-2", INSTANT);
+    assertEquals(600L, gauge("splitLatestCommitDelay"));
+  }
+
+  @Test
+  void testSplitLatestCommitDelayReportsTheOldestActiveSplit() throws ParseException {
+    metrics.startSplit("split-1", INSTANT);
+    metrics.startSplit("split-2", NEWER_INSTANT);
+    clock.advance(Duration.ofHours(2));
+
+    assertEquals(7200L, gauge("splitLatestCommitDelay"));
+    assertEquals(toInstant(NEWER_INSTANT).getEpochSecond(), gauge("splitLatestCommit"));
+  }
+
+  @Test
+  void testFinishingAnOlderSplitKeepsTheNewerSplitActive() {
+    metrics.startSplit("split-1", INSTANT);
+    metrics.startSplit("split-2", NEWER_INSTANT);
+    clock.advance(Duration.ofHours(2));
+
+    metrics.finishSplit("split-1");
+
+    assertEquals(3600L, gauge("splitLatestCommitDelay"));
+  }
+
+  @Test
+  void testFinishingASplitThatWasNotStartedIsIgnored() {
+    metrics.startSplit("split-1", INSTANT);
+    clock.advance(Duration.ofMinutes(10));
+
+    metrics.finishSplit("split-2");
+
     assertEquals(600L, gauge("splitLatestCommitDelay"));
   }
 
@@ -111,7 +142,7 @@ class TestFlinkStreamReadMetrics {
     metrics.setIssuedInstant("not-an-instant");
     assertEquals(toInstant(INSTANT).getEpochSecond(), gauge("issuedInstant"));
 
-    metrics.setSplitLatestCommit("not-an-instant");
+    metrics.startSplit("split-1", "not-an-instant");
     assertEquals(0L, gauge("splitLatestCommit"));
     assertEquals(0L, gauge("splitLatestCommitDelay"));
   }
