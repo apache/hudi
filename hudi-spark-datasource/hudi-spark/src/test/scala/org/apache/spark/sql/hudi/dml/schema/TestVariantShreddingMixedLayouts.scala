@@ -3039,7 +3039,7 @@ class TestVariantShreddingMixedLayouts extends HoodieSparkSqlTestBase with Varia
       }
 
       // A file of root scalars is the third inference outcome beside inferred-object and
-      // declined: Spark types the root and Spark41VariantShreddingSchemaInferrer.sanitizeTypedValue
+      // declined: Spark types the root and Spark41PlusVariantShreddingSchemaInferrer.sanitizeTypedValue
       // passes scalars through, so the file IS shredded, with a typed_value that is a leaf rather
       // than an object.
       withWriteLayout(Inferred) {

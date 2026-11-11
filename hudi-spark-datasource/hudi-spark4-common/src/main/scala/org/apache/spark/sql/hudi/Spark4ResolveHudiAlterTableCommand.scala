@@ -31,7 +31,7 @@ class Spark4ResolveHudiAlterTableCommand(sparkSession: SparkSession)
   extends BaseResolveHudiAlterTableCommand(sparkSession) {
 
   override protected def resolveAlterColumnCommand: PartialFunction[LogicalPlan, LogicalPlan] = {
-    case alter@AlterColumns(ResolvedHoodieV2TablePlan(t), _) if alter.resolved =>
-      HudiAlterTableCommand(t.v1Table, alter.changes, ColumnChangeID.UPDATE)
+    case alter: AlterColumns if alter.resolved && ResolvedHoodieV2TablePlan.unapply(alter.table).isDefined =>
+      HudiAlterTableCommand(ResolvedHoodieV2TablePlan.unapply(alter.table).get.v1Table, alter.changes, ColumnChangeID.UPDATE)
   }
 }

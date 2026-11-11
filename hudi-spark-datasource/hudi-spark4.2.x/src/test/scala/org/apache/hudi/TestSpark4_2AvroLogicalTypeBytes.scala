@@ -22,7 +22,7 @@ package org.apache.hudi
 import org.apache.avro.Schema
 import org.apache.avro.generic.{GenericDatumWriter, GenericRecord}
 import org.apache.avro.io.EncoderFactory
-import org.apache.spark.sql.avro.HoodieSpark4_2AvroSerializer
+import org.apache.spark.sql.avro.HoodieSpark41PlusAvroSerializer
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.types.{DataTypes, StructField, StructType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -36,7 +36,7 @@ import java.time.LocalDate
  *
  * The Avro on-wire encoding for `date`, `timestamp-millis`, and `timestamp-micros` logical types
  * is fixed by spec to int / long, and is identical across all Avro versions Hudi supports
- * (1.11.x, 1.12.0, 1.12.1). As long as Hudi's Spark→Avro path (`HoodieSpark4_2AvroSerializer` →
+ * (1.11.x, 1.12.0, 1.12.1). As long as Hudi's Spark→Avro path (`HoodieSpark41PlusAvroSerializer` →
  * `AvroSerializer`) emits raw `java.lang.Long` / `java.lang.Integer` into the `GenericRecord` —
  * and never `java.time.Instant` / `java.time.LocalDate` — the bytes Hudi writes on Spark 4.2 are
  * bit-identical to what it writes on Spark 3.5 / 4.0 / 4.1, preserving forward/backward
@@ -69,7 +69,7 @@ class TestSpark4_2AvroLogicalTypeBytes {
   // Catalyst representation: epoch-day (Int) for DateType, epoch-micros (Long) for TimestampType.
   // ts_millis is also passed as micros in catalyst — AvroSerializer converts to millis on write.
   private def serializeFixtureRow(): GenericRecord = {
-    val serializer = new HoodieSpark4_2AvroSerializer(sparkSchema, avroSchema, nullable = false)
+    val serializer = new HoodieSpark41PlusAvroSerializer(sparkSchema, avroSchema, nullable = false)
     serializer.serialize(InternalRow(epochDay, epochMillis * 1000L, epochMicros)).asInstanceOf[GenericRecord]
   }
 

@@ -97,6 +97,13 @@
             <plugin>
                 <groupId>org.scalastyle</groupId>
                 <artifactId>scalastyle-maven-plugin</artifactId>
+                <configuration>
+                    <!-- also lint the 4.1+ sources, which the version modules compile -->
+                    <sourceDirectories>
+                        <sourceDirectory>${project.basedir}/src/main/scala</sourceDirectory>
+                        <sourceDirectory>${project.basedir}/src/main/spark4.1-plus/scala</sourceDirectory>
+                    </sourceDirectories>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>

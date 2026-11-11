@@ -121,6 +121,25 @@
         <artifactId>jacoco-maven-plugin</artifactId>
       </plugin>
       <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>${build-helper-maven-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>add-spark41-plus-source</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>add-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>../hudi-spark4-common/src/main/spark4.1-plus/scala</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
         <groupId>org.antlr</groupId>
         <artifactId>antlr4-maven-plugin</artifactId>
         <version>${antlr.version}</version>
@@ -134,8 +153,8 @@
         <configuration>
           <visitor>true</visitor>
           <listener>true</listener>
-          <sourceDirectory>../hudi-spark4.1.x/src/main/antlr4</sourceDirectory>
-          <libDirectory>../hudi-spark4.1.x/src/main/antlr4/imports</libDirectory>
+          <sourceDirectory>../hudi-spark4-common/src/main/spark4.1-plus/antlr4</sourceDirectory>
+          <libDirectory>../hudi-spark4-common/src/main/spark4.1-plus/antlr4/imports</libDirectory>
         </configuration>
       </plugin>
     </plugins>
