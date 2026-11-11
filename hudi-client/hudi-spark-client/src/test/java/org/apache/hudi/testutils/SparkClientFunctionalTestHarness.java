@@ -40,6 +40,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestTable;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
@@ -103,7 +104,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMetaClientProvider, HoodieWriteClientProvider {
 
   protected static int timelineServicePort =
-      FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue();
+      HoodieTestUtils.toForkUniquePort(FileSystemViewStorageConfig.REMOTE_PORT_NUM.defaultValue());
   private static transient SparkSession spark;
   private static transient SQLContext sqlContext;
   private static transient JavaSparkContext jsc;

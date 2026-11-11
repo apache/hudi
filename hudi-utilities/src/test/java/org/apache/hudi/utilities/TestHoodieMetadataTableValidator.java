@@ -94,6 +94,7 @@ import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -143,6 +144,9 @@ import static org.mockito.Mockito.when;
 
 public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase {
   private static final Random RANDOM = new Random();
+
+  @TempDir
+  static java.nio.file.Path additionalFilesFixtureDir;
 
   private static Stream<Arguments> lastNFileSlicesTestArgs() {
     return Stream.of(-1, 1, 3, 4, 5).flatMap(i -> Stream.of(Arguments.of(i, true), Arguments.of(i, false)));
@@ -690,17 +694,30 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
       writeOptions.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
       writeOptions.put(HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key(), "2");
 
-      Dataset<Row> inserts = makeInsertDf("000", 10).cache();
-      inserts.write().format("hudi").options(writeOptions)
-          .mode(SaveMode.Overwrite)
-          .save(basePath);
-
-      for (int i = 0; i < 6; i++) {
+      // The table written here does not depend on the test arguments, so it is written once and copied for the other cases.
+      FileSystem localFs = FileSystem.getLocal(new Configuration(false)).getRawFileSystem();
+      Path fixtureTablePath = new Path(additionalFilesFixtureDir.resolve("table").toString());
+      // A marker file rather than a static flag, so a Surefire rerun that gets a fresh @TempDir writes the table again.
+      Path fixtureReadyMarker = new Path(additionalFilesFixtureDir.resolve("READY").toString());
+      if (localFs.exists(fixtureReadyMarker)) {
+        localFs.delete(new Path(basePath), true);
+        copy(localFs, fixtureTablePath, localFs, new Path(basePath), false, localFs.getConf());
+      } else {
+        Dataset<Row> inserts = makeInsertDf("000", 10).cache();
         inserts.write().format("hudi").options(writeOptions)
-            .mode(SaveMode.Append)
+            .mode(SaveMode.Overwrite)
             .save(basePath);
+
+        for (int i = 0; i < 6; i++) {
+          inserts.write().format("hudi").options(writeOptions)
+              .mode(SaveMode.Append)
+              .save(basePath);
+        }
+        inserts.unpersist(true);
+        localFs.delete(fixtureTablePath, true);
+        copy(localFs, new Path(basePath), localFs, fixtureTablePath, false, localFs.getConf());
+        localFs.create(fixtureReadyMarker).close();
       }
-      inserts.unpersist(true);
 
       HoodieMetadataTableValidator.Config config = new HoodieMetadataTableValidator.Config();
       config.basePath = "file:" + basePath;

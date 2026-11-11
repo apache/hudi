@@ -78,13 +78,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SORT_COLUMNS;
 import static org.apache.hudi.config.HoodieWriteConfig.AVRO_SCHEMA_VALIDATE_ENABLE;
 import static org.apache.hudi.config.HoodieWriteConfig.SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP;
 import static org.apache.hudi.table.catalog.CatalogOptions.CATALOG_PATH;
 import static org.apache.hudi.table.catalog.CatalogOptions.DEFAULT_DATABASE;
+import static org.apache.hudi.utils.TestConfigurations.CLOCK_SKEW_MS;
+import static org.apache.hudi.utils.TestConfigurations.CLOCK_SKEW_MS_KEY;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -92,6 +93,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @ExtendWith(FlinkMiniCluster.class)
 public class ITTestDataStreamWrite extends TestLogger {
+
+  // Most test jobs advance (source batches, Hudi commits) on checkpoint completion, so their runtime scales with this.
+  private static final long CHECKPOINT_INTERVAL_MS = 1000L;
 
   private static final Map<String, List<String>> EXPECTED = new HashMap<>();
   private static final Map<String, List<String>> EXPECTED_KEYLESS = new HashMap<>();
@@ -287,7 +291,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.getConfig().disableObjectReuse();
     execEnv.setParallelism(4);
     // set up checkpoint interval
-    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.enableCheckpointing(CHECKPOINT_INTERVAL_MS, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
     // Read from file source
@@ -337,7 +341,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.getConfig().disableObjectReuse();
     execEnv.setParallelism(4);
     // set up checkpoint interval
-    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.enableCheckpointing(CHECKPOINT_INTERVAL_MS, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
     // Read from file source
@@ -378,7 +382,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.getConfig().disableObjectReuse();
     execEnv.setParallelism(1);
     // set up checkpoint interval
-    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.enableCheckpointing(CHECKPOINT_INTERVAL_MS, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
     Configuration conf = TestConfigurations.getDefaultConf(tempFile.toURI().toString());
     conf.set(FlinkOptions.TABLE_NAME, "t1");
@@ -408,7 +412,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     DataStream<RowData> rowDataDataStream = builder.source(execEnv);
     List<RowData> result = new ArrayList<>();
     rowDataDataStream.executeAndCollect().forEachRemaining(result::add);
-    TimeUnit.SECONDS.sleep(2);//sleep 2 second for collect data
     TestData.assertRowDataEquals(result, TestData.dataSetInsert(5, 6));
   }
 
@@ -420,11 +423,12 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.getConfig().disableObjectReuse();
     execEnv.setParallelism(4);
     // set up checkpoint interval
-    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.enableCheckpointing(CHECKPOINT_INTERVAL_MS, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
     options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource("test_read_schema.avsc")).toString());
+    options.put(CLOCK_SKEW_MS_KEY, CLOCK_SKEW_MS);
     Configuration conf = Configuration.fromMap(options);
 
     String sourcePath = Objects.requireNonNull(Thread.currentThread()
@@ -475,7 +479,7 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.getConfig().disableObjectReuse();
     execEnv.setParallelism(1);
     // set up checkpoint interval
-    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.enableCheckpointing(CHECKPOINT_INTERVAL_MS, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
     // create table dir
@@ -519,7 +523,6 @@ public class ITTestDataStreamWrite extends TestLogger {
     DataStream<RowData> rowDataDataStream = builder.source(execEnv);
     List<RowData> result = new ArrayList<>();
     rowDataDataStream.executeAndCollect().forEachRemaining(result::add);
-    TimeUnit.SECONDS.sleep(2);//sleep 2 second for collect data
     TestData.assertRowDataEquals(result, TestData.dataSetInsert(5, 6));
   }
 
@@ -530,11 +533,12 @@ public class ITTestDataStreamWrite extends TestLogger {
     execEnv.getConfig().disableObjectReuse();
     execEnv.setParallelism(4);
     // set up checkpoint interval
-    execEnv.enableCheckpointing(4000, CheckpointingMode.EXACTLY_ONCE);
+    execEnv.enableCheckpointing(CHECKPOINT_INTERVAL_MS, CheckpointingMode.EXACTLY_ONCE);
     execEnv.getCheckpointConfig().setMaxConcurrentCheckpoints(1);
 
     options.put(FlinkOptions.PATH.key(), tempFile.toURI().toString());
     options.put(FlinkOptions.SOURCE_AVRO_SCHEMA_PATH.key(), Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource("test_read_schema.avsc")).toString());
+    options.put(CLOCK_SKEW_MS_KEY, CLOCK_SKEW_MS);
     Configuration conf = Configuration.fromMap(options);
 
     String sourcePath = Objects.requireNonNull(Thread.currentThread()

@@ -27,6 +27,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.checkpoint.CheckpointUtils;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.JavaTestUtils;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
@@ -362,7 +363,7 @@ public class TestHoodieDeltaStreamerWithMultiWriter extends HoodieDeltaStreamerT
     props.setProperty("hoodie.write.lock.hivemetastore.database", "testdb1");
     props.setProperty("hoodie.write.lock.hivemetastore.table", "table1");
     props.setProperty("hoodie.write.lock.zookeeper.url", "127.0.0.1");
-    props.setProperty("hoodie.write.lock.zookeeper.port", "2828");
+    props.setProperty("hoodie.write.lock.zookeeper.port", String.valueOf(HoodieTestUtils.toForkUniquePort(2828)));
     props.setProperty("hoodie.write.lock.wait_time_ms", "1200000");
     props.setProperty("hoodie.write.lock.num_retries", "10");
     props.setProperty("hoodie.write.lock.zookeeper.lock_key", "test_table");
