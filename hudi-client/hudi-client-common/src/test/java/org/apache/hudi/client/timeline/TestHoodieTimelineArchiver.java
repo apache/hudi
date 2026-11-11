@@ -19,18 +19,22 @@
 
 package org.apache.hudi.client.timeline;
 
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.timeline.versioning.v1.ActiveTimelineV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.testutils.InProcessTimeGenerator;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieArchivalConfig;
+import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.table.HoodieTable;
@@ -38,6 +42,8 @@ import org.apache.hudi.testutils.HoodieWriteableTestTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Collections;
 
@@ -96,6 +102,40 @@ class TestHoodieTimelineArchiver extends HoodieCommonTestHarness {
 
     ActiveTimelineV1 rawActiveTimeline = new ActiveTimelineV1(metaClient, false);
     assertEquals(9, rawActiveTimeline.countInstants());
+  }
+
+  /**
+   * When the compaction trigger ignores empty delta commits, archival keeps every delta commit since the latest compaction,
+   * otherwise archiving the older ones would shrink the count of non-empty delta commits and postpone the compaction.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void archiveIfRequired_keepsDeltaCommitsSinceCompactionWhenIgnoringEmptyCommits(boolean ignoreEmptyCommits) throws Exception {
+    initPath("mor");
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.MERGE_ON_READ);
+    HoodieWriteConfig writeConfig = HoodieWriteConfig
+        .newBuilder()
+        .withPath(basePath)
+        .withArchivalConfig(HoodieArchivalConfig.newBuilder()
+            .archiveCommitsWith(2, 3)
+            .build())
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(2)
+            .withCompactionIgnoreEmptyCommits(ignoreEmptyCommits)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withMarkersType("DIRECT")
+        .build();
+    HoodieEngineContext context = new HoodieLocalEngineContext(metaClient.getStorageConf());
+    HoodieStorage hoodieStorage = HoodieStorageUtils.getStorage(basePath, metaClient.getStorageConf());
+    HoodieWriteableTestTable testTable = new HoodieWriteableTestTable(basePath, hoodieStorage, metaClient, SCHEMA, null, null, Option.of(context));
+    for (int i = 0; i < 6; i++) {
+      testTable.addDeltaCommit(InProcessTimeGenerator.createNewInstantTime());
+    }
+
+    new TimelineArchiverV1<>(writeConfig, setupMockHoodieTable(context, writeConfig)).archiveIfRequired(context);
+    // Without the flag, only the last max.delta.commits delta commits are pinned and the timeline shrinks to keep.min.commits.
+    assertEquals(ignoreEmptyCommits ? 6 : 2, metaClient.reloadActiveTimeline().getDeltaCommitTimeline().countInstants());
   }
 
   /**

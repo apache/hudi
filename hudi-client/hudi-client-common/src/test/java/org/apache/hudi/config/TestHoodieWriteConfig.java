@@ -68,6 +68,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class TestHoodieWriteConfig {
 
   @Test
+  void testMaxTotalDeltaCommitsBeforeCompaction() {
+    // Default: 5 x max.delta.commits.
+    assertEquals(20, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4).build())
+        .build().getInlineCompactMaxTotalDeltaCommits());
+    assertEquals(30, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4)
+            .withMaxTotalDeltaCommitsBeforeCompaction(30).build())
+        .build().getInlineCompactMaxTotalDeltaCommits());
+    // A cap below max.delta.commits is raised to it.
+    assertEquals(4, HoodieWriteConfig.newBuilder().withPath("/tmp")
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder().withMaxNumDeltaCommitsBeforeCompaction(4)
+            .withMaxTotalDeltaCommitsBeforeCompaction(2).build())
+        .build().getInlineCompactMaxTotalDeltaCommits());
+  }
+
+  @Test
   public void testCompactionPlanParallelism() {
     assertEquals(200, HoodieWriteConfig.newBuilder().withPath("/tmp").build().getCompactionPlanParallelism());
     assertEquals(8, HoodieWriteConfig.newBuilder().withPath("/tmp")
