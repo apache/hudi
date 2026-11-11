@@ -19,6 +19,7 @@
 package org.apache.hudi.common.serialization;
 
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.function.SerializableSupplier;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieFileGroup;
@@ -35,11 +36,30 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestHoodieFileGroupSerializer {
+
+  private static final String PARTITION = "1";
+
+  private static HoodieInstant instant(String time) {
+    return new HoodieInstant(HoodieInstant.State.COMPLETED, "commit", time, InstantComparatorV1.REQUESTED_TIME_BASED_COMPARATOR);
+  }
+
+  private static HoodieFileGroup fileGroup(HoodieInstant instant, HoodieTimeline timeline) {
+    String fileId = UUID.randomUUID().toString();
+    FileSlice fileSlice = new FileSlice(new HoodieFileGroupId(PARTITION, fileId), instant.requestedTime(),
+        new HoodieBaseFile("/tmp/" + FSUtils.makeBaseFileName(instant.requestedTime(), "1-0-1", fileId, ".parquet")), Collections.emptyList());
+    HoodieFileGroup fileGroup = new HoodieFileGroup(PARTITION, fileId, timeline);
+    fileGroup.addFileSlice(fileSlice);
+    return fileGroup;
+  }
 
   @Test
   void serializerReusesTimelineInstance() throws IOException {
@@ -78,5 +98,42 @@ class TestHoodieFileGroupSerializer {
     assertSame(mockTimeline1, outputs.get(0).getTimeline());
     assertSame(mockTimeline1, outputs.get(1).getTimeline());
     assertSame(mockTimeline2, outputs.get(2).getTimeline());
+  }
+
+  @Test
+  void serializerBindsFileGroupsToTheCurrentTimeline() throws IOException {
+    HoodieInstant instant1 = instant("001");
+    HoodieInstant instant2 = instant("002");
+    HoodieTimeline timeline1 = new MockHoodieTimeline(Collections.singletonList(instant1));
+    HoodieTimeline timeline2 = new MockHoodieTimeline(Collections.singletonList(instant2));
+    List<HoodieFileGroup> inputs = Arrays.asList(fileGroup(instant1, timeline1), fileGroup(instant1, timeline1), fileGroup(instant2, timeline2));
+    HoodieTimeline current = new MockHoodieTimeline(Arrays.asList(instant1, instant2));
+    HoodieFileGroupSerializer serializer = new HoodieFileGroupSerializer(() -> current);
+
+    List<HoodieFileGroup> outputs = serializer.deserialize(serializer.serialize(inputs));
+
+    assertEquals(inputs.size(), outputs.size());
+    for (int i = 0; i < inputs.size(); i++) {
+      assertEquals(inputs.get(i).getFileGroupId(), outputs.get(i).getFileGroupId());
+      assertEquals(inputs.get(i).getAllRawFileSlices().collect(Collectors.toList()), outputs.get(i).getAllRawFileSlices().collect(Collectors.toList()));
+      assertSame(current, outputs.get(i).getTimeline(), "a file group read back is bound to the current timeline");
+    }
+  }
+
+  @Test
+  void readingBackWithoutATimelineNamesTheClosedView() throws IOException {
+    HoodieInstant instant1 = instant("001");
+    AtomicReference<HoodieTimeline> current = new AtomicReference<>(new MockHoodieTimeline(Collections.singletonList(instant1)));
+    HoodieFileGroupSerializer serializer = new HoodieFileGroupSerializer(current::get);
+    byte[] serialized = serializer.serialize(Collections.singletonList(fileGroup(instant1, current.get())));
+    current.set(null);
+
+    IllegalStateException e = assertThrows(IllegalStateException.class, () -> serializer.deserialize(serialized));
+    assertTrue(e.getMessage().contains("view holding them is closed"), e.getMessage());
+  }
+
+  @Test
+  void serializerRefusesANullTimelineSupplier() {
+    assertThrows(NullPointerException.class, () -> new HoodieFileGroupSerializer((SerializableSupplier<HoodieTimeline>) null));
   }
 }

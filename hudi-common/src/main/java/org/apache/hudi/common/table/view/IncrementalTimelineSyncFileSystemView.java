@@ -104,6 +104,7 @@ public abstract class IncrementalTimelineSyncFileSystemView extends AbstractTabl
           log.info("Finished incremental sync");
           // Reset timeline to latest
           refreshTimeline(newTimeline);
+          rebindFileGroupTimelines(getVisibleCommitsAndCompactionTimeline());
           return;
         }
       }

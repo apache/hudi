@@ -144,6 +144,13 @@ public class ExternalSpillableMap<T extends Serializable, R> implements Map<T, R
   }
 
   /**
+   * The values held in memory; nothing spilled to disk is read.
+   */
+  public Iterator<R> inMemoryValues() {
+    return inMemoryMap.values().iterator();
+  }
+
+  /**
    * In-memory map iterator with a key filter.
    */
   private Iterator<R> inMemoryMapIterator(Predicate<T> filter) {

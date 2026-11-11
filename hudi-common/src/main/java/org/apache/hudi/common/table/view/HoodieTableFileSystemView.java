@@ -39,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -329,7 +330,12 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   }
 
   public Stream<HoodieFileGroup> getAllFileGroups() {
-    return fetchAllStoredFileGroups();
+    try {
+      readLock.lock();
+      return fetchAllStoredFileGroups().collect(Collectors.toList()).stream();
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
@@ -410,6 +416,18 @@ public class HoodieTableFileSystemView extends IncrementalTimelineSyncFileSystem
   @Override
   public Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
     return partitionToFileGroupsMap.values().stream().flatMap(Collection::stream);
+  }
+
+  @Override
+  protected void rebindFileGroupTimelines(HoodieTimeline timeline) {
+    rebindFileGroupTimelines(partitionToFileGroupsMap.values().iterator(), timeline);
+  }
+
+  /**
+   * Replaces, in place, every file group of the given partition lists with a copy bound to the given timeline.
+   */
+  protected static void rebindFileGroupTimelines(Iterator<List<HoodieFileGroup>> partitions, HoodieTimeline timeline) {
+    partitions.forEachRemaining(fileGroups -> fileGroups.replaceAll(fileGroup -> new HoodieFileGroup(fileGroup, timeline)));
   }
 
   @Override
