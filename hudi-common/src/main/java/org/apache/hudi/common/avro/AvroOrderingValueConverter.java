@@ -34,8 +34,11 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
 
 /**
  * Converts delete ordering values using each field's schema and
@@ -77,25 +80,38 @@ public class AvroOrderingValueConverter implements Serializable {
   }
 
   private Comparable convertFieldValue(Comparable value, HoodieSchema fieldSchema) {
-    // Decoded decimals already use the representation needed for comparison.
+    // Spark/Flink decimal extraction and Avro logical-type normalization produce BigDecimal.
+    // DecimalWrapper decoding preserves this comparison representation.
     if (value == null || value instanceof BigDecimal) {
       return value;
     }
     Schema avroSchema = fieldSchema.toAvroSchema();
     LogicalType logicalType = avroSchema.getLogicalType();
-    // Normalize decoded delete values here. Timestamp precision and configuration
-    // handling remain shared with data records.
+    // Spark/Flink Java value extraction and StringWrapper decoding produce String.
     if (value instanceof String) {
       return new Utf8((String) value);
     }
+    // Callers may supply java.sql.Date as a payload ordering value; DateWrapper decodes to Date.
+    // Built-in DATE extraction instead yields Integer (Spark/Flink) or LocalDate (Avro).
     if (value instanceof Date) {
       return ((Date) value).toLocalDate();
     }
+    // Avro timestamp extraction produces Timestamp when consistent logical timestamps are enabled.
+    // Callers can also supply Timestamp directly; TimestampMicrosWrapper decodes back to Timestamp.
     if (value instanceof Timestamp) {
-      if (logicalType == LogicalTypes.localTimestampMillis() || logicalType == LogicalTypes.localTimestampMicros()) {
-        value = ((Timestamp) value).toLocalDateTime();
-      } else if (logicalType == LogicalTypes.timestampMillis() || logicalType == LogicalTypes.timestampMicros()) {
-        value = ((Timestamp) value).toInstant();
+      Timestamp timestamp = (Timestamp) value;
+      if (logicalType == LogicalTypes.localTimestampMillis()) {
+        return timestamp.toLocalDateTime().toInstant(ZoneOffset.UTC).toEpochMilli();
+      }
+      if (logicalType == LogicalTypes.localTimestampMicros()) {
+        return instantToMicros(timestamp.toLocalDateTime().toInstant(ZoneOffset.UTC));
+      }
+      if (logicalType == LogicalTypes.timestampMillis()) {
+        return consistentLogicalTimestampEnabled ? new Timestamp(timestamp.getTime()) : timestamp.getTime();
+      }
+      if (logicalType == LogicalTypes.timestampMicros()) {
+        long micros = instantToMicros(timestamp.toInstant());
+        return consistentLogicalTimestampEnabled ? new Timestamp(micros / 1000) : micros;
       }
     }
     return (Comparable) HoodieAvroUtils.convertValueForAvroLogicalTypes(
