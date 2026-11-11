@@ -25,18 +25,22 @@ error naming the strategy config and the coordinated rebuild procedure.
 
 | Strategy | Recovery batch | Consequence |
 | --- | --- | --- |
-| `FAIL` (default) | Stop before constructing an unsafe batch | Rebuild downstream tables and checkpoints together |
+| `FAIL` (default) | Stop before executing an unsafe batch | Rebuild downstream tables and checkpoints together |
 | `READ_UPTO_LATEST_COMMIT` | One full snapshot bounded by Spark's recorded batch end, then resume increments | Append targets may duplicate rows; upsert targets may retain keys deleted upstream |
 | `READ_LATEST` | Empty batch acknowledging Spark's recorded latest end, then resume increments | Deliberately skip the unread range, accepting data loss |
 
 These are recovery policies, not alternate settings for every healthy batch.
 An explicit choice takes precedence over
 `hoodie.datasource.read.incr.fallback.fulltablescan.enable`; latest-state
-streaming incremental reads disable that legacy silent fallback. The strategy
+streaming incremental reads disable that legacy silent fallback after the initial
+earliest offset. Fresh earliest starts retain the configured fallback so a
+coordinated rebuild can read tables with cleaned, replaced files. The strategy
 is captured at source construction. Restart the query to change it. Initial
 startup still uses `hoodie.datasource.streaming.startOffset` (earliest, latest,
 or an explicit instant); a fresh earliest checkpoint can read the current state.
-CDC behavior is unchanged.
+CDC behavior is unchanged. Validation runs when the batch is executed; Spark
+may re-plan and discard the last committed batch on restart without validating
+that already-delivered range.
 
 For direct readers:
 

@@ -139,7 +139,7 @@ object DataSourceReadOptions {
       + "FAIL stops with an actionable error. READ_UPTO_LATEST_COMMIT reads a single full snapshot at the "
       + "batch end, then resumes increments; this may duplicate append rows or retain stale downstream upsert keys. "
       + "READ_LATEST skips the unread range, accepting data loss. Rebuilding downstream tables and checkpoints "
-      + "together is the safe reset recovery. This strategy overrides incremental full-table-scan fallback. "
+      + "together is the safe reset recovery. This strategy overrides incremental full-table-scan fallback after the initial earliest offset. "
       + "Initial earliest/latest/instant selection still uses hoodie.datasource.streaming.startOffset. "
       + "Tune hoodie.keep.min.commits and hoodie.keep.max.commits for consumer lag. "
       + "KEEP_LATEST_FILE_VERSIONS cleaning records no retention boundary, so any new clean deleting files "

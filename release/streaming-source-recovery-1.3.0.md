@@ -24,7 +24,8 @@ as Spark Declarative Pipelines. Previously incremental full-table-scan fallback
 could silently scan after history loss.
 
 The new `hoodie.datasource.read.streaming.recovery.strategy` takes precedence
-over `hoodie.datasource.read.incr.fallback.fulltablescan.enable` on this path:
+over `hoodie.datasource.read.incr.fallback.fulltablescan.enable` on resumed incremental reads. Fresh earliest starts retain the configured
+full-scan fallback for rebuilding from retained table state:
 
 - `FAIL` (default): stop with an actionable error; coordinate rebuilding the
   downstream tables and checkpoints.
