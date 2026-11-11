@@ -24,9 +24,12 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.CleanerUtils
 import org.apache.hudi.exception.HoodieException
 
+import org.apache.spark.{Dependency, OneToOneDependency, Partition, TaskContext}
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.datasources.HadoopFsRelation
+import org.apache.spark.sql.execution.LogicalRDD
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
@@ -34,6 +37,35 @@ import scala.collection.JavaConverters._
 /** Conservative reset and history validation for checkpointed latest-state streaming consumers. */
 private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSupport {
   private class RebuildRequired(message: String) extends HoodieException(message)
+
+  // Spark re-plans the last committed batch during restart without executing it. Defer both
+  // validation and relation construction until the scheduler asks for this batch's partitions.
+  def defer(sqlContext: SQLContext, schema: StructType)(batch: => DataFrame): DataFrame = {
+    val rows = new DeferredBatchRDD(sqlContext, () => batch.queryExecution.logical match {
+      case relation: LogicalRDD => relation.rdd
+      case plan =>
+        // Keep the file-group reader's required filters and projection while executing this
+        // individual micro-batch as a bounded scan beneath the outer streaming LogicalRDD.
+        val boundedPlan = plan.transform {
+          case relation: LogicalRelation => relation.copy(isStreaming = false)
+        }
+        sparkAdapter.getUnsafeUtils.createDataFrameFrom(sqlContext.sparkSession, boundedPlan).queryExecution.toRdd
+    })
+    sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession, rows, schema, isStreaming = true)
+  }
+
+  private class DeferredBatchRDD(sqlContext: SQLContext,
+                                 @transient private val build: () => RDD[InternalRow])
+    extends RDD[InternalRow](sqlContext.sparkContext, Nil) {
+    @transient private lazy val delegate = build()
+
+    override protected def getPartitions: Array[Partition] = delegate.partitions
+
+    override protected def getDependencies: Seq[Dependency[_]] = Seq(new OneToOneDependency(delegate))
+
+    override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] =
+      firstParent[InternalRow].iterator(split, context)
+  }
 
   def strategy(parameters: Map[String, String]): String = {
     val config = DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY
@@ -64,12 +96,21 @@ private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSuppor
             sqlContext.sparkContext.emptyRDD[InternalRow], recoverySchema, isStreaming = true))
         case "READ_UPTO_LATEST_COMMIT" =>
           // Spark owns the batch end/checkpoint. Never read a newer snapshot and checkpoint an older end.
-          val writes = metaClient.reloadActiveTimeline().getCommitsTimeline.filterCompletedInstants()
+          val timeline = metaClient.reloadActiveTimeline()
+          val writes = timeline.getCommitsTimeline.filterCompletedInstants()
             .getInstants.asScala.toSeq
           def offset(i: HoodieInstant): String = if (completionTime) i.getCompletionTime else i.requestedTime()
           val included = writes.filter(i => offset(i) <= end)
           val bound = included.map(_.requestedTime()).reduceOption((a, b) => if (a > b) a else b)
-          if (bound.isEmpty || writes.exists(i => offset(i) > end && i.requestedTime() <= bound.get)) {
+          def isTableService(instant: HoodieInstant): Boolean = {
+            val operation = if (instant.getAction == HoodieTimeline.REPLACE_COMMIT_ACTION) {
+              timeline.readReplaceCommitMetadata(instant).getOperationType
+            } else {
+              timeline.readCommitMetadata(instant).getOperationType
+            }
+            Set(WriteOperationType.COMPACT, WriteOperationType.LOG_COMPACT, WriteOperationType.CLUSTER).contains(operation)
+          }
+          if (bound.isEmpty || writes.exists(i => offset(i) > end && i.requestedTime() <= bound.get && !isTableService(i))) {
             throw new HoodieException("Cannot reconstruct the recovery snapshot at the checkpointed batch end. "
               + "Rebuild downstream tables and checkpoints together.", error)
           }
@@ -143,9 +184,9 @@ private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSuppor
         val boundary = Option(retained).filter(_.nonEmpty)
         val retainedInstant = completedByRequestedTime.get(retained)
         val expired = boundary.exists { floor =>
-          requestedStart.exists(_ < floor) || earliestUnread.exists(_ < floor) ||
+          earliestUnread.exists(_ < floor) ||
             (requestedStart.isEmpty && retainedInstant.exists(i => start < offset(i))) ||
-            (requestedStart.isEmpty && retainedInstant.isEmpty && firstWrite.isPresent)
+            (requestedStart.isEmpty && retainedInstant.isEmpty && firstWrite.isPresent && start < offset(firstWrite.get))
         }
         if (expired) {
           fail(s"history after offset $start has been cleaned (earliest retained commit $retained)")

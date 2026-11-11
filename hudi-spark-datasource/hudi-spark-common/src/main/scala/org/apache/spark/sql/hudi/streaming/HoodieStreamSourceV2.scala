@@ -53,7 +53,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
 
   // Capture flow-scoped SQLConf once; explicit reader options take precedence.
   private val recoveryStrategy = HoodieStreamingSourceSafety.strategy(
-    DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, parameters))
+    DataSourceOptionsHelper.collectHoodieAndSparkHoodieConfs(sqlContext, parameters))
 
   private lazy val tableType = metaClient.getTableType
 
@@ -113,8 +113,14 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
-    var startOffset = start.map(HoodieSourceOffset(_))
-      .getOrElse(initialOffsets)
+    val batchStart = start.map(HoodieSourceOffset(_)).getOrElse(initialOffsets)
+    if (isCDCQuery) buildBatch(start, end, batchStart) else {
+      HoodieStreamingSourceSafety.defer(sqlContext, schema) { buildBatch(start, end, batchStart) }
+    }
+  }
+
+  private def buildBatch(start: Option[Offset], end: Offset, batchStart: HoodieSourceOffset): DataFrame = {
+    var startOffset = batchStart
     var endOffset = HoodieSourceOffset(end)
 
     val recovery = if (isCDCQuery) None else HoodieStreamingSourceSafety.recover(
@@ -147,8 +153,9 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
           sparkAdapter.createStreamingDataFrame(sqlContext, relation, HoodieCDCFileIndex.FULL_CDC_SPARK_SCHEMA)
         } else {
           // Consume the data between (startCommitTime, endCommitTime]
-          val incParams = parameters ++ Map(
-            DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key() -> "false",
+          val fallbackOptions = if (startOffset == INIT_OFFSET) Map.empty[String, String] else Map(
+            DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key() -> "false")
+          val incParams = parameters ++ fallbackOptions ++ Map(
             DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
             DataSourceReadOptions.START_COMMIT.key -> startCompletionTime,
             DataSourceReadOptions.END_COMMIT.key -> endOffset.offsetCommitTime
