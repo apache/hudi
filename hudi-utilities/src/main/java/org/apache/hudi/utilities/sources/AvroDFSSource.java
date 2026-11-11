@@ -64,6 +64,6 @@ public class AvroDFSSource extends AvroSource {
     sparkContext.setJobGroup(this.getClass().getSimpleName(), "Fetch Avro data from files");
     JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr, AvroKeyInputFormat.class,
         AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
-    return avroRDD.keys().map(r -> ((GenericRecord) r.datum()));
+    return toIndependentRecords(avroRDD);
   }
 }

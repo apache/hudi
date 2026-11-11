@@ -22,7 +22,11 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
 
+import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.mapred.AvroKey;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -37,5 +41,16 @@ public abstract class AvroSource extends Source<JavaRDD<GenericRecord>> {
   @Override
   protected final InputBatch<JavaRDD<GenericRecord>> fetchNewData(Option<String> lastCkptStr, long sourceLimit) {
     throw new UnsupportedOperationException("AvroSource#fetchNewData should not be called");
+  }
+
+  /**
+   * Returns the records of Avro files read through the Hadoop input format. Its record reader reuses the record
+   * and the nested record, array, map and fixed instances for all rows of a file, so each row is copied.
+   */
+  protected static JavaRDD<GenericRecord> toIndependentRecords(JavaPairRDD<AvroKey, NullWritable> avroRDD) {
+    return avroRDD.keys().map(key -> {
+      GenericRecord record = (GenericRecord) key.datum();
+      return GenericData.get().deepCopy(record.getSchema(), record);
+    });
   }
 }

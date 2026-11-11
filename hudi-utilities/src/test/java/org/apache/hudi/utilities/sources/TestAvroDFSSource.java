@@ -20,14 +20,17 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.FilebasedSchemaProvider;
+import org.apache.hudi.utilities.streamer.HoodieStreamer;
 import org.apache.hudi.utilities.streamer.SourceFormatAdapter;
 import org.apache.hudi.utilities.testutils.sources.AbstractDFSSourceTestBase;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.api.java.JavaRDD;
@@ -36,9 +39,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -140,6 +147,67 @@ public class TestAvroDFSSource extends AbstractDFSSourceTestBase {
         "Records from the narrow file should get the wider reader schema's default for additive_field");
     assertEquals(wideCount, preserved,
         "Records from the wider file should preserve the written value of additive_field");
+  }
+
+  @Test
+  public void testFetchedRecordsKeepTheirOwnValues() throws Exception {
+    String root = basePath + "/avroFilesOwnValues";
+    fs.mkdirs(new Path(root));
+    List<GenericRecord> written = Helpers.toGenericRecords(dataGenerator.generateInserts("000", 20));
+    Helpers.saveAvroToDFS(written, new Path(root, "1" + fileSuffix));
+
+    TypedProperties props = new TypedProperties();
+    props.setProperty("hoodie.streamer.source.dfs.root", root);
+    AvroDFSSource source = new AvroDFSSource(props, jsc, sparkSession, schemaProvider);
+    List<GenericRecord> read = new SourceFormatAdapter(source)
+        .fetchNewDataInAvroFormat(Option.empty(), Long.MAX_VALUE).getBatch().get().collect();
+
+    assertEquals(sortedValues(written), sortedValues(read));
+  }
+
+  @Test
+  public void testStreamerUpsertKeepsFixedAndNestedValues() throws Exception {
+    String root = basePath + "/avroFilesStreamerUpsert";
+    fs.mkdirs(new Path(root));
+    List<GenericRecord> written = Helpers.toGenericRecords(dataGenerator.generateInserts("000", 20));
+    Helpers.saveAvroToDFS(written, new Path(root, "1" + fileSuffix));
+    List<String> expectedValues = written.stream()
+        .map(record -> record.get("_row_key")
+            + "," + new BigDecimal(new BigInteger(((GenericFixed) record.get("height")).bytes()), 6)
+            + "," + ((GenericRecord) record.get("fare")).get("amount")
+            + "," + ((List<GenericRecord>) record.get("tip_history")).get(0).get("amount"))
+        .sorted()
+        .collect(Collectors.toList());
+
+    TypedProperties props = Helpers.setupSchemaOnDFS();
+    props.setProperty("hoodie.streamer.source.dfs.root", root);
+    props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "partition_path");
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.targetBasePath = basePath + "/avro_source_upsert_table";
+    cfg.targetTableName = "avro_source_upsert_table";
+    cfg.tableType = "COPY_ON_WRITE";
+    cfg.sourceClassName = AvroDFSSource.class.getName();
+    cfg.schemaProviderClassName = FilebasedSchemaProvider.class.getName();
+    cfg.sourceOrderingFields = "timestamp";
+    cfg.operation = WriteOperationType.UPSERT;
+    HoodieStreamer streamer = new HoodieStreamer(cfg, jsc, Option.of(props));
+    streamer.sync();
+    streamer.shutdownGracefully();
+
+    List<String> storedValues = sparkSession.read().format("hudi").load(cfg.targetBasePath)
+        .selectExpr("_row_key", "height", "fare.amount", "tip_history[0].amount").collectAsList().stream()
+        .map(row -> row.getString(0) + "," + row.getDecimal(1) + "," + row.getDouble(2) + "," + row.getDouble(3))
+        .sorted()
+        .collect(Collectors.toList());
+    assertEquals(expectedValues, storedValues);
+  }
+
+  private static List<String> sortedValues(List<GenericRecord> records) {
+    return records.stream()
+        .map(record -> record.get("_row_key") + "," + record.get("rider") + "," + Arrays.toString(((GenericFixed) record.get("height")).bytes()))
+        .sorted()
+        .collect(Collectors.toList());
   }
 
   /**
