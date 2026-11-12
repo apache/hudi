@@ -652,6 +652,14 @@ public abstract class BaseHoodieTimeline implements HoodieTimeline {
   /**
    * Computes the timeline hash and returns.
    */
+  @Override
+  public String getTimelineHash(int numLatestInstants) {
+    if (numLatestInstants <= 0 || numLatestInstants >= instants.size()) {
+      return timelineHash;
+    }
+    return computeTimelineHash(instants.subList(instants.size() - numLatestInstants, instants.size()));
+  }
+
   private String computeTimelineHash(List<HoodieInstant> instants) {
     MessageDigest md;
     try {
