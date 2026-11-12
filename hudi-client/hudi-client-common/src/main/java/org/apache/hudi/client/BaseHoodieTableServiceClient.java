@@ -404,6 +404,10 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
       final HoodieInstant compactionInstant = instantGenerator.getCompactionInflightInstant(compactionCommitTime);
       try {
         this.txnManager.beginStateChange(Option.of(compactionInstant), Option.empty());
+        // a concurrent writer may have rolled back the compaction once its heartbeat expired
+        if (heartbeatClient.getHeartbeat(compactionCommitTime) != null) {
+          WriterHeartbeatUtils.abortIfHeartbeatExpired(compactionCommitTime, table, heartbeatClient, config);
+        }
         preCommit(metadata, false);
         finalizeWrite(table, compactionCommitTime, writeStats);
         // commit to data table after committing to metadata table.
