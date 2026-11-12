@@ -164,12 +164,20 @@ class TestAvroRecordContext {
       Comparable dataOrdering = context.getOrderingValue(record, hoodieSchema, fields);
       Comparable deleteOrdering = context.getOrderingValue(roundTripDelete(entry.getValue()));
       assertEquals(0, dataOrdering.compareTo(deleteOrdering), entry.getKey());
+      assertNull(context.convertOrderingValueToEngineType(null), entry.getKey());
+      if (entry.getValue() instanceof BigDecimal) {
+        assertEquals(dataOrdering, context.convertOrderingValueToEngineType((Comparable) record.get(entry.getKey())));
+      }
     }
 
     // SQL date/timestamp wrappers decode to different Java representations than primitive wrappers.
     context.initOrderingValueConverter(hoodieSchema, Collections.singletonList("date"));
     LocalDate date = LocalDate.ofEpochDay(20727);
     assertEquals(date, context.getOrderingValue(roundTripDelete(Date.valueOf(date))));
+    assertEquals(date, context.convertOrderingValueToEngineType(date));
+    assertEquals(date, context.convertOrderingValueToEngineType("20727"));
+    assertEquals(date, context.convertOrderingValueToEngineType(new Utf8("20727")));
+    assertThrows(NumberFormatException.class, () -> context.convertOrderingValueToEngineType("invalid"));
     for (String field : Arrays.asList("ts_millis", "ts_micros")) {
       List<String> fields = Collections.singletonList(field);
       context.initOrderingValueConverter(hoodieSchema, fields);
@@ -228,6 +236,9 @@ class TestAvroRecordContext {
         Timestamp timestamp = logicalType.startsWith("local-")
             ? Timestamp.valueOf(LocalDateTime.ofInstant(instant, ZoneOffset.UTC)) : Timestamp.from(instant);
         assertEquals(expected, context.convertOrderingValueToEngineType(timestamp), logicalType);
+        assertEquals(expected, context.convertOrderingValueToEngineType(rawValue), logicalType);
+        Comparable javaTimeValue = logicalType.startsWith("local-") ? LocalDateTime.ofInstant(instant, ZoneOffset.UTC) : instant;
+        assertEquals(expected, context.convertOrderingValueToEngineType(javaTimeValue), logicalType);
       }
     }
   }

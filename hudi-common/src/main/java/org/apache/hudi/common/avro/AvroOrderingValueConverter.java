@@ -25,39 +25,44 @@ import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.avro.Conversions.DecimalConversion;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericFixed;
 import org.apache.avro.util.Utf8;
 
-import java.io.Serializable;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.time.ZoneOffset;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.hudi.common.util.DateTimeUtils.instantToMicros;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.extractEpochDay;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.extractEpochMicros;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.extractEpochMillis;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.extractLocalEpochMicros;
+import static org.apache.hudi.common.avro.HoodieAvroUtils.extractLocalEpochMillis;
 
 /**
- * Converts delete ordering values using each field's schema and
+ * Prebuilds a converter for each delete ordering field to match the comparison representation of
  * {@link HoodieAvroUtils#convertValueForAvroLogicalTypes(Schema, Object, boolean)}.
  * Preserves null field values and converts strings to Avro's comparable representation.
  */
-public class AvroOrderingValueConverter implements Serializable {
-  private static final long serialVersionUID = 1L;
-
-  private final List<HoodieSchema> orderingFieldSchemas;
-  private final boolean consistentLogicalTimestampEnabled;
+public class AvroOrderingValueConverter {
+  private final List<Function<Comparable, Comparable>> converters;
 
   private AvroOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean consistentLogicalTimestampEnabled) {
-    this.orderingFieldSchemas = orderingFieldNames.stream()
+    this.converters = orderingFieldNames.stream()
         .map(field -> HoodieSchemaUtils.getNestedField(dataSchema, field)
             .map(Pair::getRight).map(HoodieSchemaField::getNonNullSchema)
             .orElseThrow(() -> new IllegalArgumentException("Ordering field '" + field + "' not found in table schema")))
+        .map(schema -> createConverter(schema.toAvroSchema(), consistentLogicalTimestampEnabled))
+        .map(converter -> (Function<Comparable, Comparable>) value -> value == null ? null : converter.apply(value))
         .collect(Collectors.toList());
-    this.consistentLogicalTimestampEnabled = consistentLogicalTimestampEnabled;
   }
 
   public static AvroOrderingValueConverter create(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean consistentLogicalTimestampEnabled) {
@@ -65,56 +70,67 @@ public class AvroOrderingValueConverter implements Serializable {
   }
 
   public Comparable convert(Comparable value) {
-    if (orderingFieldSchemas.isEmpty()) {
+    if (converters.isEmpty()) {
       return value;
     }
-    if (value instanceof ArrayComparable) {
-      List<Comparable> values = ((ArrayComparable) value).getValues();
-      Comparable[] converted = new Comparable[values.size()];
-      for (int i = 0; i < values.size(); i++) {
-        converted[i] = convertFieldValue(values.get(i), orderingFieldSchemas.get(i));
-      }
-      return new ArrayComparable(converted);
-    }
-    return convertFieldValue(value, orderingFieldSchemas.get(0));
+    return value instanceof ArrayComparable
+        ? ((ArrayComparable) value).apply(converters)
+        : converters.get(0).apply(value);
   }
 
-  private Comparable convertFieldValue(Comparable value, HoodieSchema fieldSchema) {
-    // Spark/Flink decimal extraction and Avro logical-type normalization produce BigDecimal.
-    // DecimalWrapper decoding preserves this comparison representation.
-    if (value == null || value instanceof BigDecimal) {
-      return value;
+  private static Function<Comparable, Comparable> createConverter(Schema schema, boolean consistentLogicalTimestampEnabled) {
+    LogicalType logicalType = schema.getLogicalType();
+    if (logicalType == LogicalTypes.date()) {
+      // Spark/Flink supply epoch days; Avro supplies LocalDate. Callers may supply java.sql.Date.
+      return value -> value instanceof Date ? ((Date) value).toLocalDate() : LocalDate.ofEpochDay(extractEpochDay(value));
     }
-    Schema avroSchema = fieldSchema.toAvroSchema();
-    LogicalType logicalType = avroSchema.getLogicalType();
-    // Spark/Flink Java value extraction and StringWrapper decoding produce String.
-    if (value instanceof String) {
-      return new Utf8((String) value);
+    if (logicalType == LogicalTypes.timestampMillis()) {
+      return consistentLogicalTimestampEnabled
+          ? value -> new Timestamp(toEpochMillis(value)) : AvroOrderingValueConverter::toEpochMillis;
     }
-    // Callers may supply java.sql.Date as a payload ordering value; DateWrapper decodes to Date.
-    // Built-in DATE extraction instead yields Integer (Spark/Flink) or LocalDate (Avro).
-    if (value instanceof Date) {
-      return ((Date) value).toLocalDate();
+    if (logicalType == LogicalTypes.timestampMicros()) {
+      // Match the shared normalizer's millisecond truncation, including negative timestamps.
+      return consistentLogicalTimestampEnabled
+          ? value -> new Timestamp(toEpochMicros(value) / 1000) : AvroOrderingValueConverter::toEpochMicros;
     }
-    // Avro timestamp extraction produces Timestamp when consistent logical timestamps are enabled.
-    // Callers can also supply Timestamp directly; TimestampMicrosWrapper decodes back to Timestamp.
-    if (value instanceof Timestamp) {
-      Timestamp timestamp = (Timestamp) value;
-      if (logicalType == LogicalTypes.localTimestampMillis()) {
-        return timestamp.toLocalDateTime().toInstant(ZoneOffset.UTC).toEpochMilli();
-      }
-      if (logicalType == LogicalTypes.localTimestampMicros()) {
-        return instantToMicros(timestamp.toLocalDateTime().toInstant(ZoneOffset.UTC));
-      }
-      if (logicalType == LogicalTypes.timestampMillis()) {
-        return consistentLogicalTimestampEnabled ? new Timestamp(timestamp.getTime()) : timestamp.getTime();
-      }
-      if (logicalType == LogicalTypes.timestampMicros()) {
-        long micros = instantToMicros(timestamp.toInstant());
-        return consistentLogicalTimestampEnabled ? new Timestamp(micros / 1000) : micros;
+    // A caller-supplied Timestamp represents wall-clock fields for a local timestamp schema.
+    if (logicalType == LogicalTypes.localTimestampMillis()) {
+      return value -> extractLocalEpochMillis(value instanceof Timestamp ? ((Timestamp) value).toLocalDateTime() : value);
+    }
+    if (logicalType == LogicalTypes.localTimestampMicros()) {
+      return value -> extractLocalEpochMicros(value instanceof Timestamp ? ((Timestamp) value).toLocalDateTime() : value);
+    }
+    if (logicalType instanceof LogicalTypes.Decimal) {
+      // Spark/Flink and Avro extraction produce BigDecimal, preserved by DecimalWrapper decoding.
+      DecimalConversion decimalConversion = new DecimalConversion();
+      if (schema.getType() == Schema.Type.FIXED) {
+        return value -> value instanceof BigDecimal ? value
+            : decimalConversion.fromFixed((GenericFixed) value, schema, logicalType);
+      } else if (schema.getType() == Schema.Type.BYTES) {
+        return value -> {
+          if (value instanceof BigDecimal) {
+            return value;
+          }
+          ByteBuffer buffer = (ByteBuffer) value;
+          BigDecimal convertedValue = decimalConversion.fromBytes(buffer, schema, logicalType);
+          buffer.rewind();
+          return convertedValue;
+        };
       }
     }
-    return (Comparable) HoodieAvroUtils.convertValueForAvroLogicalTypes(
-        avroSchema, value, consistentLogicalTimestampEnabled);
+    if (schema.getType() == Schema.Type.STRING) {
+      // Spark/Flink Java value extraction and StringWrapper decoding produce String.
+      return value -> value instanceof String ? new Utf8((String) value) : value;
+    }
+    return value -> value;
+  }
+
+  private static long toEpochMillis(Comparable value) {
+    // Avro extraction with consistent logical timestamps enabled and wrapper decoding yield Timestamp.
+    return value instanceof Timestamp ? ((Timestamp) value).getTime() : extractEpochMillis(value);
+  }
+
+  private static long toEpochMicros(Comparable value) {
+    return extractEpochMicros(value instanceof Timestamp ? ((Timestamp) value).toInstant() : value);
   }
 }
