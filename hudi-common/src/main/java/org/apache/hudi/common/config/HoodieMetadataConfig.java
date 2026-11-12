@@ -437,7 +437,26 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("1.2.0")
       .withDocumentation("When enabled, defers RLI initialization to 2nd commit for a fresh table. This should help with determining the file group "
-          + "count dynamically for Record Index (global and non-global RLI)");
+          + "count dynamically for Record Index (global and non-global RLI). When enabled, while the global record index is not built, its "
+          + "fallback index moves a record whose partition path changes as hoodie.record.index.update.partition.path says, so the behavior "
+          + "does not change once the index is built.");
+
+  public static final ConfigProperty<Long> DEFER_RLI_INIT_MIN_RECORDS = ConfigProperty
+      .key(METADATA_PREFIX + ".record.level.index.defer.init.min.records")
+      .defaultValue(0L)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Used when " + DEFER_RLI_INIT_FOR_FRESH_TABLE.key() + " is enabled. RLI initialization is deferred until "
+          + "the latest base files of the data table hold at least this many records, so the file group count is estimated "
+          + "from data that has already been written. Records that only exist in log files are not counted. While the index is "
+          + "deferred, each commit reads the footers of the latest base files to count their records. Once the threshold "
+          + "is reached, initialization also waits until no other instant is pending on the data table, so a compaction or "
+          + "clustering plan that is never executed holds it back. The record index is built by a non-streaming metadata writer, "
+          + "such as the one a write creates at its start, which the table lock serializes with other writers when a lock is "
+          + "configured, and not by streaming metadata writes, so with streaming metadata writes it is usually built at the start "
+          + "of the next write once the threshold is reached. With the default "
+          + "of 0, RLI is initialized on the 2nd commit. The threshold is ignored when the metadata index is built "
+          + "asynchronously, and it cannot be used with a multi-writer concurrency mode or the Flink engine.");
 
   public static final ConfigProperty<Integer> RECORD_INDEX_MAX_PARALLELISM = ConfigProperty
       .key(METADATA_PREFIX + ".max.init.parallelism")
@@ -785,6 +804,10 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
   public boolean shouldDeferRliInitForFreshTable() {
     return getBooleanOrDefault(DEFER_RLI_INIT_FOR_FRESH_TABLE);
+  }
+
+  public long getDeferRliInitMinRecords() {
+    return getLongOrDefault(DEFER_RLI_INIT_MIN_RECORDS);
   }
 
   public List<String> getColumnsEnabledForColumnStatsIndex() {
@@ -1258,6 +1281,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
 
     public Builder withDeferRliInitializationForFreshTable(boolean deferRliInitializationForFreshTable) {
       metadataConfig.setValue(DEFER_RLI_INIT_FOR_FRESH_TABLE, String.valueOf(deferRliInitializationForFreshTable));
+      return this;
+    }
+
+    public Builder withDeferRliInitMinRecords(long minRecords) {
+      metadataConfig.setValue(DEFER_RLI_INIT_MIN_RECORDS, String.valueOf(minRecords));
       return this;
     }
 

@@ -106,9 +106,11 @@ import org.apache.hudi.metadata.HoodieMetadataMetrics;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
+import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.RawKey;
 import org.apache.hudi.metadata.SparkHoodieBackedTableMetadataWriter;
+import org.apache.hudi.metadata.SparkMetadataWriterFactory;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.metrics.Metrics;
 import org.apache.hudi.storage.HoodieStorage;
@@ -127,6 +129,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.functions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
@@ -134,6 +138,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -186,6 +191,9 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.REQUESTED_EXT
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_SECOND_PARTITION_PATH;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_THIRD_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
@@ -2336,6 +2344,416 @@ public class TestHoodieBackedMetadata extends TestHoodieMetadataBase {
           "File group count should be between 1 and " + maxFileGroupCount + ", but got: " + fileGroupCount);
       // Validate metadata integrity
       validateMetadata(client);
+    }
+  }
+
+  /**
+   * Record index initialization waits until the latest base files hold the configured number of records, and the
+   * index is then sized from those records.
+   */
+  @ParameterizedTest
+  @CsvSource({"COPY_ON_WRITE, SIX", "COPY_ON_WRITE, TEN", "MERGE_ON_READ, SIX", "MERGE_ON_READ, TEN"})
+  void testRecordIndexDeferredUntilMinRecords(HoodieTableType tableType, HoodieTableVersion tableVersion) throws Exception {
+    initTable(tableType, tableVersion);
+    HoodieWriteConfig writeConfig = globalRecordIndexWriteConfig(true, 1000L, tableVersion);
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      // The 3rd commit starts with only 200 records on disk, so it is still below the threshold.
+      for (int numRecords : new int[] {100, 100, 2000}) {
+        allRecords.addAll(insertBatch(client, numRecords));
+        assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
+            "Record index should be deferred with " + allRecords.size() + " records written");
+      }
+
+      // The commit that builds the index was tagged by the fallback index: it updates 300 existing keys and inserts 10.
+      String transitionCommitTime = client.startCommit();
+      List<HoodieRecord> transitionRecords = new ArrayList<>(dataGen.generateUpdates(transitionCommitTime, allRecords.subList(0, 300)));
+      List<HoodieRecord> transitionInserts = dataGen.generateInserts(transitionCommitTime, 10);
+      transitionRecords.addAll(transitionInserts);
+      commitBatch(client, transitionCommitTime, transitionRecords, true);
+      allRecords.addAll(transitionInserts);
+      assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+      // 2200 records x growth factor 2 / (9600 bytes / 48 bytes per entry) = 22 file groups
+      assertEquals(22, recordIndexFileGroupCount(client));
+      assertEachKeyStoredOnce(allRecords);
+      Set<String> transitionKeys = transitionRecords.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet());
+      List<String> keysWrittenByTransition = sqlContext.read().format("hudi").load(basePath)
+          .filter(functions.col("_hoodie_commit_time").equalTo(transitionCommitTime))
+          .select("_hoodie_record_key").collectAsList().stream().map(row -> row.getString(0)).collect(Collectors.toList());
+      assertEquals(transitionKeys, new HashSet<>(keysWrittenByTransition));
+      assertRecordIndexResolvesAllKeys(writeConfig, allRecords);
+
+      // Records written while the fallback index was in use are updated, not inserted again.
+      upsertBatch(client, allRecords.subList(0, 300));
+      assertEachKeyStoredOnce(allRecords);
+      validateMetadata(client);
+      assertTableVersion(tableVersion);
+    }
+  }
+
+  /**
+   * Record index initialization waits while another instant is pending, since a writer of that instant may have started
+   * while the index was deferred. Here a pending compaction holds the build back. Once it completes, the index is built
+   * under the table lock: at the compaction commit on the batch metadata path, or at the start of the next write when the
+   * compaction writes to the metadata table through streaming writes.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "TEN"})
+  void testRecordIndexInitializationWaitsForPendingInstants(HoodieTableVersion tableVersion) throws Exception {
+    initTable(HoodieTableType.MERGE_ON_READ, tableVersion);
+    HoodieWriteConfig writeConfig = globalRecordIndexWriteConfig(true, 1000L, tableVersion);
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      allRecords.addAll(insertBatch(client, 100));
+      upsertBatch(client, allRecords.subList(0, 50));
+      String compactionTime = (String) client.scheduleCompaction(Option.empty()).get();
+
+      // The threshold is crossed by the 3rd commit, so the 4th would build the index if nothing were pending.
+      allRecords.addAll(insertBatch(client, 2000));
+      allRecords.addAll(insertBatch(client, 10));
+      assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
+          "Record index should be deferred while compaction " + compactionTime + " is pending");
+
+      HoodieWriteMetadata result = client.compact(compactionTime);
+      client.commitCompaction(compactionTime, result, Option.empty());
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      boolean streamingWrites = writeConfig.isMetadataStreamingWritesEnabled(tableVersion);
+      assertEquals(!streamingWrites, metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
+          "Record index should be built by the compaction only on the batch metadata path");
+
+      allRecords.addAll(insertBatch(client, 10));
+      assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+      assertRecordIndexResolvesAllKeys(writeConfig, allRecords);
+
+      upsertBatch(client, allRecords.subList(0, 300));
+      assertEachKeyStoredOnce(allRecords);
+      validateMetadata(client);
+      assertTableVersion(tableVersion);
+    }
+  }
+
+  /**
+   * A metadata writer of streaming writes is created outside the table lock, so it never builds the record index: a
+   * writer that starts while the index is being built would not see the build and would leave its records out of the
+   * index. The index is built by a metadata writer created under the lock.
+   */
+  @Test
+  void testRecordIndexNotBuiltByStreamingMetadataWriter() throws Exception {
+    initTable(HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.TEN);
+    Properties props = globalRecordIndexWriteConfig(true, 1000L, HoodieTableVersion.TEN).getProps();
+    props.setProperty(HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key(), "true");
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withProperties(props).build();
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      // The 2nd commit starts with 100 records on disk, so the index stays deferred while the table crosses the threshold.
+      allRecords.addAll(insertBatch(client, 100));
+      allRecords.addAll(insertBatch(client, 2000));
+    }
+    assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+
+    try (HoodieTableMetadataWriter streamingWriter = SparkMetadataWriterFactory.createWithStreamingWrites(
+        storageConf, writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, context, Option.empty())) {
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX),
+          "A metadata writer of streaming writes should not build the record index");
+    }
+    try (HoodieTableMetadataWriter writer = SparkMetadataWriterFactory.create(
+        storageConf, writeConfig, context, Option.empty(), metaClient.getTableConfig())) {
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+    }
+    assertRecordIndexResolvesAllKeys(writeConfig, allRecords);
+  }
+
+  /**
+   * While the global record index is deferred, the fallback index moves a record whose partition path changes only if
+   * the record index would. Without deferral, for example with the metadata table disabled, the fallback keeps its own
+   * setting and moves the record.
+   */
+  @ParameterizedTest
+  @CsvSource({
+      // record index update partition path, table version, defer init, expect moved
+      "true, SIX, true, true",
+      "true, TEN, true, true",
+      "false, SIX, true, false",
+      "false, TEN, true, false",
+      "false, TEN, false, true"})
+  void testRecordIndexFallbackFollowsRecordIndexUpdatePartitionPath(boolean updatePartitionPath, HoodieTableVersion tableVersion, boolean deferInit,
+                                                                    boolean expectMoved) throws Exception {
+    initTable(HoodieTableType.COPY_ON_WRITE, tableVersion);
+    Properties overrideProps = new Properties();
+    overrideProps.put("hoodie.datasource.write.recordkey.field", "_row_key");
+    overrideProps.put("hoodie.datasource.write.partitionpath.field", "partition_path");
+    if (!deferInit) {
+      // the record index is never built, so every write uses the fallback index
+      overrideProps.put(HoodieMetadataConfig.ENABLE.key(), "false");
+    }
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
+        .withProperties(globalRecordIndexWriteConfig(deferInit, deferInit ? 1_000_000L : 0L, tableVersion).getProps())
+        .withProperties(overrideProps)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.RECORD_INDEX)
+            .withRecordIndexUpdatePartitionPath(updatePartitionPath)
+            .build())
+        .build();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      List<HoodieRecord> records = insertBatch(client, DEFAULT_FIRST_PARTITION_PATH, 10);
+      String commitTime = client.startCommit();
+      long newerTimestamp = System.currentTimeMillis() + 60_000L;
+      List<HoodieRecord> moved = records.stream()
+          .map(record -> dataGen.generateUpdateRecordWithTimestamp(
+              new HoodieKey(record.getRecordKey(), DEFAULT_SECOND_PARTITION_PATH), commitTime, newerTimestamp))
+          .collect(Collectors.toList());
+      commitBatch(client, commitTime, moved, true);
+      assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+
+      String expectedPartition = expectMoved ? DEFAULT_SECOND_PARTITION_PATH : DEFAULT_FIRST_PARTITION_PATH;
+      List<Row> rows = sqlContext.read().format("hudi").load(basePath).select("_hoodie_partition_path").collectAsList();
+      assertEquals(Collections.nCopies(10, expectedPartition), rows.stream().map(row -> row.getString(0)).collect(Collectors.toList()));
+      assertTableVersion(tableVersion);
+    }
+  }
+
+  /**
+   * A data partition added after the partitioned record index exists is sized from the existing partitions and from
+   * the records the creating commit inserts into it.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testPartitionedRecordIndexSizesNewPartitions(boolean streamingWrites) throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordLevelIndex(true)
+            .withPartitionedRecordIndexFileGroupCount(1, 1000)
+            .withRecordIndexMaxFileGroupSizeBytes(9600L)
+            .withStreamingWriteEnabled(streamingWrites)
+            .build())
+        .build();
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      // 1000 inserts x growth factor 2 / 200 entries per file group = 10 file groups
+      allRecords.addAll(insertBatch(client, DEFAULT_FIRST_PARTITION_PATH, 1000));
+      // 100 inserts need 1 file group, so the p90 of the existing partitions (10) is used
+      allRecords.addAll(insertBatch(client, DEFAULT_SECOND_PARTITION_PATH, 100));
+      // 3000 inserts need 30 file groups, more than the p90 of the existing partitions
+      allRecords.addAll(insertBatch(client, DEFAULT_THIRD_PARTITION_PATH, 3000));
+
+      Map<String, Long> expectedFileGroupCounts = new HashMap<>();
+      expectedFileGroupCounts.put(DEFAULT_FIRST_PARTITION_PATH, 10L);
+      expectedFileGroupCounts.put(DEFAULT_SECOND_PARTITION_PATH, 10L);
+      expectedFileGroupCounts.put(DEFAULT_THIRD_PARTITION_PATH, 30L);
+      assertEquals(expectedFileGroupCounts, partitionedRecordIndexFileGroupCounts(client));
+
+      // Updates are routed through the new file groups of each partition, so they do not create duplicates.
+      upsertBatch(client, allRecords.subList(0, 100));
+      upsertBatch(client, allRecords.subList(1000, 1100));
+      upsertBatch(client, allRecords.subList(1100, 1200));
+      assertEachKeyStoredOnce(allRecords);
+      validateMetadata(client);
+    }
+  }
+
+  /**
+   * Without the records inserted per partition, as on the streaming metadata write path that Flink uses, a new data
+   * partition gets the min file group count, which is what the Flink record index partitioner assumes for a partition it
+   * has not seen.
+   */
+  @Test
+  void testPartitionedRecordIndexNewPartitionWithoutInsertCountsUsesMinFileGroupCount() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordLevelIndex(true)
+            .withPartitionedRecordIndexFileGroupCount(2, 1000)
+            .withRecordIndexMaxFileGroupSizeBytes(9600L)
+            .withStreamingWriteEnabled(true)
+            .build())
+        .build();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      // 1000 inserts x growth factor 2 / 200 entries per file group = 10 file groups
+      insertBatch(client, DEFAULT_FIRST_PARTITION_PATH, 1000);
+      String instantTime = client.startCommit();
+      try (HoodieTableMetadataWriter writer = SparkMetadataWriterFactory.createWithStreamingWrites(
+          storageConf, writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, context, Option.of(instantTime))) {
+        writer.startCommit(instantTime);
+        writer.streamWriteToMetadataPartitions(context.emptyHoodieData(), Collections.singleton(DEFAULT_SECOND_PARTITION_PATH), instantTime);
+      }
+    }
+    StoragePath recordIndexPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath), RECORD_INDEX.getPartitionPath());
+    Map<String, Long> fileGroupCounts = storage.listDirectEntries(recordIndexPath).stream()
+        .filter(pathInfo -> FSUtils.isLogFile(pathInfo.getPath()) || FSUtils.isBaseFile(pathInfo.getPath()))
+        .map(pathInfo -> FSUtils.getFileIdFromFilePath(pathInfo.getPath()))
+        .distinct()
+        .collect(Collectors.groupingBy(HoodieTableMetadataUtil::getDataTablePartitionNameFromFileGroupName, Collectors.counting()));
+    Map<String, Long> expectedFileGroupCounts = new HashMap<>();
+    expectedFileGroupCounts.put(DEFAULT_FIRST_PARTITION_PATH, 10L);
+    expectedFileGroupCounts.put(DEFAULT_SECOND_PARTITION_PATH, 2L);
+    assertEquals(expectedFileGroupCounts, fileGroupCounts);
+  }
+
+  /**
+   * While the partitioned record index is deferred, a commit that adds a data partition creates no record index file
+   * groups for it.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testDeferredPartitionedRecordIndexCreatesNoFileGroups(boolean streamingWrites) throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.RECORD_LEVEL_INDEX)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordLevelIndex(true)
+            .withStreamingWriteEnabled(streamingWrites)
+            .withDeferRliInitializationForFreshTable(true)
+            .withDeferRliInitMinRecords(1_000_000L)
+            .build())
+        .build();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), writeConfig)) {
+      insertBatch(client, DEFAULT_FIRST_PARTITION_PATH, 100);
+      insertBatch(client, DEFAULT_FIRST_PARTITION_PATH, 100);
+      insertBatch(client, DEFAULT_SECOND_PARTITION_PATH, 100);
+      assertFalse(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+      StoragePath recordIndexPath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(basePath), RECORD_INDEX.getPartitionPath());
+      assertFalse(storage.exists(recordIndexPath) && !storage.listDirectEntries(recordIndexPath).isEmpty(),
+          "No record index file groups should be created while the record index is deferred");
+    }
+  }
+
+  /**
+   * A record index built before deferral was configured keeps receiving updates, even though the table is below the
+   * threshold.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "TEN"})
+  void testBuiltRecordIndexIsNotDeferred(HoodieTableVersion tableVersion) throws Exception {
+    initTable(HoodieTableType.COPY_ON_WRITE, tableVersion);
+    HoodieWriteConfig builtConfig = globalRecordIndexWriteConfig(false, 0L, tableVersion);
+    List<HoodieRecord> allRecords = new ArrayList<>();
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), builtConfig)) {
+      allRecords.addAll(insertBatch(client, 100));
+    }
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+
+    HoodieWriteConfig deferredConfig = globalRecordIndexWriteConfig(true, 1_000_000L, tableVersion);
+    try (SparkRDDWriteClient client = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), deferredConfig)) {
+      allRecords.addAll(insertBatch(client, 500));
+      assertTrue(metaClient.getTableConfig().isMetadataPartitionAvailable(RECORD_INDEX));
+      assertRecordIndexResolvesAllKeys(deferredConfig, allRecords);
+      validateMetadata(client);
+      assertTableVersion(tableVersion);
+    }
+  }
+
+  private void assertTableVersion(HoodieTableVersion tableVersion) {
+    assertEquals(tableVersion, HoodieTableMetaClient.reload(metaClient).getTableConfig().getTableVersion());
+  }
+
+  /**
+   * Creates a table of the given type and version, without a metadata table.
+   */
+  private void initTable(HoodieTableType tableType, HoodieTableVersion tableVersion) throws IOException {
+    init(tableType, false);
+    HoodieTableConfig tableConfig = metaClient.getTableConfig();
+    tableConfig.setTableVersion(tableVersion);
+    initMetaClient(tableType, tableConfig.getProps());
+  }
+
+  private HoodieWriteConfig globalRecordIndexWriteConfig(boolean deferInit, long deferInitMinRecords, HoodieTableVersion tableVersion) {
+    return getWriteConfigBuilder(true, true, false)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withIndexConfig(HoodieIndexConfig.newBuilder()
+            .withIndexType(HoodieIndex.IndexType.RECORD_INDEX)
+            .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableGlobalRecordLevelIndex(true)
+            .withRecordIndexFileGroupCount(1, 1000)
+            .withRecordIndexMaxFileGroupSizeBytes(9600L)
+            .withDeferRliInitializationForFreshTable(deferInit)
+            .withDeferRliInitMinRecords(deferInitMinRecords)
+            .build())
+        .build();
+  }
+
+  private List<HoodieRecord> insertBatch(SparkRDDWriteClient client, int numRecords) {
+    String commitTime = client.startCommit();
+    return commitBatch(client, commitTime, dataGen.generateInserts(commitTime, numRecords), false);
+  }
+
+  private List<HoodieRecord> insertBatch(SparkRDDWriteClient client, String partition, int numRecords) {
+    String commitTime = client.startCommit();
+    return commitBatch(client, commitTime, dataGen.generateInsertsForPartition(commitTime, numRecords, partition), false);
+  }
+
+  private void upsertBatch(SparkRDDWriteClient client, List<HoodieRecord> baseRecords) throws IOException {
+    String commitTime = client.startCommit();
+    commitBatch(client, commitTime, dataGen.generateUpdates(commitTime, baseRecords), true);
+  }
+
+  private List<HoodieRecord> commitBatch(SparkRDDWriteClient client, String commitTime, List<HoodieRecord> records, boolean upsert) {
+    JavaRDD<HoodieRecord> recordsRdd = jsc.parallelize(records, 2);
+    List<WriteStatus> writeStatuses = (upsert ? client.upsert(recordsRdd, commitTime) : client.insert(recordsRdd, commitTime)).collect();
+    assertNoWriteErrors(writeStatuses);
+    client.commit(commitTime, jsc.parallelize(writeStatuses));
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    return records;
+  }
+
+  private int recordIndexFileGroupCount(SparkRDDWriteClient client) {
+    HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client, storage);
+    return HoodieTableMetadataUtil.getPartitionLatestFileSlices(
+        metadataReader.getMetadataMetaClient(), Option.empty(), RECORD_INDEX.getPartitionPath()).size();
+  }
+
+  private Map<String, Long> partitionedRecordIndexFileGroupCounts(SparkRDDWriteClient client) {
+    HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client, storage);
+    return HoodieTableMetadataUtil.getPartitionLatestFileSlices(
+            metadataReader.getMetadataMetaClient(), Option.empty(), RECORD_INDEX.getPartitionPath()).stream()
+        .collect(Collectors.groupingBy(
+            fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId()), Collectors.counting()));
+  }
+
+  private void assertEachKeyStoredOnce(List<HoodieRecord> records) {
+    List<String> expectedKeys = records.stream().map(HoodieRecord::getRecordKey).sorted().collect(Collectors.toList());
+    List<String> storedKeys = sqlContext.read().format("hudi").load(basePath).select("_hoodie_record_key").collectAsList().stream()
+        .map(row -> row.getString(0)).sorted().collect(Collectors.toList());
+    assertEquals(expectedKeys, storedKeys);
+  }
+
+  /**
+   * Asserts that the record index maps every key to the partition and file group that hold the key in the data table.
+   */
+  private void assertRecordIndexResolvesAllKeys(HoodieWriteConfig writeConfig, List<HoodieRecord> records) throws Exception {
+    Set<String> recordKeys = records.stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet());
+    Map<String, Pair<String, String>> expectedLocations = sqlContext.read().format("hudi").load(basePath)
+        .select("_hoodie_record_key", "_hoodie_partition_path", "_hoodie_file_name").collectAsList().stream()
+        .filter(row -> recordKeys.contains(row.getString(0)))
+        .collect(Collectors.toMap(row -> row.getString(0), row -> Pair.of(row.getString(1), FSUtils.getFileIdFromFileName(row.getString(2)))));
+    assertEquals(recordKeys, expectedLocations.keySet());
+    try (HoodieTableMetadata metadataReader = metaClient.getTableFormat().getMetadataFactory().create(
+        context, storage, writeConfig.getMetadataConfig(), writeConfig.getBasePath())) {
+      HoodiePairData<String, HoodieRecordGlobalLocation> locations =
+          metadataReader.readRecordIndexLocationsWithKeys(HoodieListData.eager(new ArrayList<>(recordKeys)));
+      try {
+        Map<String, Pair<String, String>> indexedLocations = HoodieDataUtils.dedupeAndCollectAsMap(locations).entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, entry -> Pair.of(entry.getValue().getPartitionPath(), entry.getValue().getFileId())));
+        assertEquals(expectedLocations, indexedLocations);
+      } finally {
+        locations.unpersistWithDependencies();
+      }
     }
   }
 
