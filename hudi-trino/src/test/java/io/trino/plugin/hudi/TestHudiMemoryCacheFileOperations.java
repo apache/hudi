@@ -32,12 +32,17 @@ import java.util.Map;
 
 import static io.trino.filesystem.tracing.CacheFileSystemTraceUtils.getFileLocation;
 import static io.trino.filesystem.tracing.CacheFileSystemTraceUtils.isTrinoSchemaOrPermissions;
+import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COMPREHENSIVE_TYPES_V6_MOR;
+import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_COMPREHENSIVE_TYPES_V8_MOR;
 import static io.trino.plugin.hudi.testing.ResourceHudiTablesInitializer.TestingTable.HUDI_MULTI_FG_PT_V8_MOR;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.DATA;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.INDEX_DEFINITION;
+import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.LOG;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TABLE;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.METADATA_TABLE_PROPERTIES;
+import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.OTHER_TABLE_METADATA;
 import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.TABLE_PROPERTIES;
+import static io.trino.plugin.hudi.util.FileOperationUtils.FileType.TIMELINE;
 import static io.trino.testing.MultisetAssertions.assertMultisetsEqual;
 import static java.util.stream.Collectors.toCollection;
 
@@ -114,6 +119,43 @@ public class TestHudiMemoryCacheFileOperations
                         .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 4)
                         .addCopies(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES), 2)
                         .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 4)
+                        .build());
+    }
+
+    @Test
+    public void testSnapshotReadV8()
+    {
+        // Three file groups with log files, so three splits take the merge path. The table schema and the table
+        // state travel in the table handle, so none of the splits reads table metadata of its own: the table
+        // properties and index definitions are the coordinator's, as in testSelectWithFilter, and the one timeline
+        // read is the commit metadata the coordinator resolves the schema from. Each split used to add a read of
+        // each, plus the timeline reads of its own schema resolution.
+        @Language("SQL") String query = "SELECT uuid, col_int FROM " + HUDI_COMPREHENSIVE_TYPES_V8_MOR.getRtTableName();
+        assertFileSystemAccesses(query,
+                ImmutableMultiset.<FileOperation>builder()
+                        .addCopies(new FileOperation("BlobCache.get", DATA), 3)
+                        .addCopies(new FileOperation("BlobCache.get", LOG), 7)
+                        .add(new FileOperation("BlobCache.get", TIMELINE))
+                        .addCopies(new FileOperation("InputFile.newStream", INDEX_DEFINITION), 2)
+                        .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
+                        .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
+                        .build());
+    }
+
+    @Test
+    public void testSnapshotReadV6()
+    {
+        // As testSnapshotReadV8, on a table before version 8: its log blocks are validated against the committed
+        // instants, which travel in the table handle as well, and its timeline lives directly under .hoodie, hence
+        // OTHER_TABLE_METADATA for the commit metadata read
+        @Language("SQL") String query = "SELECT uuid, col_int FROM " + HUDI_COMPREHENSIVE_TYPES_V6_MOR.getRtTableName();
+        assertFileSystemAccesses(query,
+                ImmutableMultiset.<FileOperation>builder()
+                        .addCopies(new FileOperation("BlobCache.get", DATA), 3)
+                        .addCopies(new FileOperation("BlobCache.get", LOG), 7)
+                        .add(new FileOperation("BlobCache.get", OTHER_TABLE_METADATA))
+                        .add(new FileOperation("InputFile.newStream", METADATA_TABLE_PROPERTIES))
+                        .addCopies(new FileOperation("InputFile.newStream", TABLE_PROPERTIES), 2)
                         .build());
     }
 

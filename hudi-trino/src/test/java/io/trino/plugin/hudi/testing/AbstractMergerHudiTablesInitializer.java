@@ -21,6 +21,7 @@ import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.metastore.Column;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.HiveMetastoreFactory;
+import io.trino.metastore.HiveType;
 import io.trino.metastore.PrincipalPrivileges;
 import io.trino.metastore.StorageFormat;
 import io.trino.metastore.Table;
@@ -99,6 +100,8 @@ public abstract class AbstractMergerHudiTablesInitializer
     private final String tableName;
 
     private TrinoFileSystem fileSystem;
+    private HiveMetastore metastore;
+    private String schemaName;
     private Location tableLocation;
     private java.nio.file.Path stagingDir;
     private Path stagingTablePath;
@@ -116,9 +119,10 @@ public abstract class AbstractMergerHudiTablesInitializer
         fileSystem = ((HudiConnector) queryRunner.getCoordinator().getConnector("hudi")).getInjector()
                 .getInstance(TrinoFileSystemFactory.class)
                 .create(ConnectorIdentity.ofUser("test"));
-        HiveMetastore metastore = ((HudiConnector) queryRunner.getCoordinator().getConnector("hudi")).getInjector()
+        metastore = ((HudiConnector) queryRunner.getCoordinator().getConnector("hudi")).getInjector()
                 .getInstance(HiveMetastoreFactory.class)
                 .createMetastore(Optional.empty());
+        this.schemaName = schemaName;
 
         tableLocation = externalLocation.appendPath(tableName);
         stagingDir = createTempDirectory(tableName.replace('_', '-'));
@@ -212,6 +216,23 @@ public abstract class AbstractMergerHudiTablesInitializer
     protected HoodieJavaWriteClient<HoodieAvroPayload> writeClient()
     {
         return writeClient;
+    }
+
+    /**
+     * Replaces the write client with one writing the current {@link #avroSchema()}, for fixtures that evolve the
+     * table schema mid-test; only meaningful when {@link #keepsWriterOpen()}.
+     */
+    protected void reopenWriteClient()
+    {
+        writeClient.close();
+        writeClient = createWriteClient();
+    }
+
+    /** Appends a data column to the metastore definitions of both tables, as hive sync does after a schema evolution. */
+    protected void addMetastoreColumn(String columnName, HiveType type)
+    {
+        metastore.addColumn(schemaName, tableName, columnName, type, null);
+        metastore.addColumn(schemaName, tableName + "_rt", columnName, type, null);
     }
 
     protected static HoodieRecord<HoodieAvroPayload> avroRecord(GenericRecord record, String key)

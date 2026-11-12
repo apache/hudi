@@ -166,8 +166,17 @@ public class HudiMetadata
         String inputFormat = table.getStorage().getStorageFormat().getInputFormat();
         HoodieTableType hoodieTableType = HudiTableTypeUtils.fromInputFormat(inputFormat);
         Lazy<HoodieTableMetaClient> lazyMetaClient = Lazy.lazily(() -> buildTableMetaClient(fileSystem, tableName.toString(), basePath));
-        Optional<Lazy<HoodieSchema>> hudiTableSchema = isResolveColumnNameCasingEnabled(session) ?
-                Optional.of(Lazy.lazily(() -> getLatestTableSchema(lazyMetaClient.get(), tableName.getTableName()))) : Optional.empty();
+        // Only a MERGE_ON_READ handle (a snapshot read; read-optimized tables report COPY_ON_WRITE) creates splits with
+        // log files, and merging those on a worker needs the table schema and the table state. Both are resolved here,
+        // once per query on the meta client the split listing uses, instead of on a meta client per split.
+        boolean mergesLogFiles = hoodieTableType == HoodieTableType.MERGE_ON_READ;
+        // Column name casing resolution needs the schema on the coordinator, whatever the table type
+        Optional<Lazy<HoodieSchema>> hudiTableSchema = mergesLogFiles || isResolveColumnNameCasingEnabled(session)
+                ? Optional.of(Lazy.lazily(() -> getLatestTableSchema(lazyMetaClient.get(), tableName.getTableName())))
+                : Optional.empty();
+        Optional<Lazy<HudiTableState>> tableState = mergesLogFiles
+                ? Optional.of(Lazy.lazily(() -> HudiTableState.capture(lazyMetaClient.get())))
+                : Optional.empty();
 
         return new HudiTableHandle(
                 table,
@@ -182,7 +191,8 @@ public class HudiMetadata
                 TupleDomain.all(),
                 TupleDomain.all(),
                 OptionalLong.empty(),
-                hudiTableSchema);
+                hudiTableSchema,
+                tableState);
     }
 
     @Override
