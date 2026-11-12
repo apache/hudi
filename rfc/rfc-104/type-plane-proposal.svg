@@ -1,0 +1,473 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1620 1650" width="1620" height="1650" class="viz-root" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Proposed Hudi schema contract: catalog renderers, type-system mappers, HoodieSchema, format mappers</title>
+  <style>
+    .viz-root {
+      color-scheme: light;
+      --surface-1: #fcfcfb;
+      --lane: #0b0b0b;
+      --text-primary: #0b0b0b;
+      --text-secondary: #52514e;
+      --text-muted: #8a8984;
+      --boundary: #2a78d6;
+      --engine: #eb6834;
+      --format: #1baf7a;
+      --persist: #8a8984;
+      --persist-fill: #f0efec;
+    }
+    @media (prefers-color-scheme: dark) {
+      .viz-root {
+        color-scheme: dark;
+        --surface-1: #1a1a19;
+        --lane: #f0efec;
+        --text-primary: #f0efec;
+        --text-secondary: #c3c2b7;
+        --text-muted: #8a8984;
+        --boundary: #3987e5;
+        --engine: #d95926;
+        --format: #199e70;
+        --persist: #8a8984;
+        --persist-fill: #383835;
+      }
+    }
+    .bg { fill: var(--surface-1); }
+    .h1 { fill: var(--text-primary); font-size: 20px; font-weight: 700; }
+    .sub { fill: var(--text-secondary); font-size: 12.5px; }
+    .legend { fill: var(--text-secondary); font-size: 12px; }
+    .boundary rect { fill: var(--boundary); fill-opacity: 0.12; stroke: var(--boundary); stroke-width: 2; }
+    .boundary.core rect { stroke-width: 3; }
+    .engine rect { fill: var(--engine); fill-opacity: 0.12; stroke: var(--engine); stroke-width: 2; }
+    .format rect { fill: var(--format); fill-opacity: 0.12; stroke: var(--format); stroke-width: 2; }
+    .persist rect { fill: var(--persist-fill); stroke: var(--persist); stroke-width: 2; stroke-dasharray: 5 3; }
+    .iface rect { stroke-width: 2.5; }
+    .panel rect { fill: var(--lane); fill-opacity: 0.035; stroke: var(--text-muted); stroke-width: 1; }
+    .node:hover rect { fill-opacity: 0.24; }
+    .t { fill: var(--text-primary); font-size: 13px; font-weight: 700; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .ts { fill: var(--text-primary); font-size: 13.5px; font-weight: 700; }
+    .tag { fill: var(--text-muted); font-size: 11px; text-anchor: end; }
+    .code { fill: var(--text-primary); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .code-s { fill: var(--text-primary); font-size: 10.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .cmt { fill: var(--text-muted); }
+    .gen { fill: var(--text-secondary); font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .d { fill: var(--text-secondary); font-size: 11px; }
+    .m { fill: var(--text-muted); font-size: 10.5px; }
+    .note { fill: var(--text-muted); font-size: 11.5px; }
+    .edge { stroke: var(--text-secondary); stroke-width: 1.5; fill: none; }
+    .real { stroke: var(--text-secondary); stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; }
+    .arrow { fill: var(--text-secondary); }
+    .tri { fill: var(--surface-1); stroke: var(--text-secondary); stroke-width: 1.2; }
+    .lbl { fill: var(--text-secondary); font-size: 11px; paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+    .lbl-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; }
+    .ph { fill: var(--text-primary); font-size: 13.5px; font-weight: 700; }
+    .p { fill: var(--text-secondary); font-size: 11.5px; }
+    .pn { fill: var(--text-primary); font-size: 11.5px; font-weight: 700; }
+    .chip { font-size: 11px; fill: var(--text-primary); text-anchor: middle; }
+    .flow-h { fill: var(--text-primary); font-size: 11.5px; font-weight: 700; }
+    .pill-r88 rect { fill: var(--text-primary); }
+    .pill-r88 text { fill: var(--surface-1); font-size: 10px; font-weight: 700; text-anchor: middle; }
+    .pill-offer rect { fill: var(--surface-1); stroke: var(--text-primary); stroke-width: 1.2; stroke-dasharray: 3 2; }
+    .pill-offer text { fill: var(--text-primary); font-size: 10px; font-weight: 700; text-anchor: middle; }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow"/>
+    </marker>
+    <marker id="tri" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto">
+      <path d="M1,1 L11,6 L1,11 z" class="tri"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1620" height="1650"/>
+
+  <!-- Header -->
+  <text class="h1" x="50" y="36">Proposed schema contract: catalog renderers, type-system mappers, one logical schema, format mappers</text>
+  <text class="sub" x="50" y="58">Sketch for discussion; names are placeholders. Type systems and formats never map to each other: both map to and from HoodieSchema. Catalogs add table-level rules on top. Untagged boxes: RFC-104.</text>
+
+  <!-- Legend -->
+  <g transform="translate(50,78)">
+    <rect x="0" y="0" width="14" height="14" rx="3" fill="var(--boundary)" fill-opacity="0.12" stroke="var(--boundary)" stroke-width="2"/>
+    <text class="legend" x="20" y="11">Hudi schema boundary (hudi-common)</text>
+    <rect x="275" y="0" width="14" height="14" rx="3" fill="var(--engine)" fill-opacity="0.12" stroke="var(--engine)" stroke-width="2"/>
+    <text class="legend" x="295" y="11">Type-system mapper (engine or catalog)</text>
+    <rect x="550" y="0" width="14" height="14" rx="3" fill="var(--format)" fill-opacity="0.12" stroke="var(--format)" stroke-width="2"/>
+    <text class="legend" x="570" y="11">File format mapper</text>
+    <rect x="720" y="0" width="14" height="14" rx="3" fill="var(--persist-fill)" stroke="var(--persist)" stroke-width="2" stroke-dasharray="4 2"/>
+    <text class="legend" x="740" y="11">Catalog renderer (hudi-sync) / persisted copy</text>
+    <line class="real" x1="1035" y1="7" x2="1085" y2="7" marker-end="url(#tri)"/>
+    <text class="legend" x="1093" y="11">implements</text>
+    <line class="edge" x1="1185" y1="7" x2="1225" y2="7" marker-end="url(#arr)"/>
+    <text class="legend" x="1233" y="11">uses / derives</text>
+    <g class="pill-r88"><rect x="1345" y="-1" width="54" height="16" rx="8"/><text x="1372" y="11">RFC-99</text></g>
+    <text class="legend" x="1405" y="11">owned by RFC-99</text>
+  </g>
+
+  <!-- ===== Edges ===== -->
+
+  <!-- catalog renderer impls -> CatalogSchemaRenderer -->
+  <line class="real" x1="194" y1="260" x2="420" y2="222" marker-end="url(#tri)"/>
+  <line class="real" x1="1118" y1="260" x2="1100" y2="222" marker-end="url(#tri)"/>
+  <line class="real" x1="1426" y1="260" x2="1230" y2="222" marker-end="url(#tri)"/>
+
+  <!-- catalog renderer impls use type-system mappers -->
+  <line class="edge" x1="194" y1="368" x2="194" y2="406" marker-end="url(#arr)"/>
+  <text class="lbl" x="202" y="391">uses</text>
+  <line class="edge" x1="1118" y1="368" x2="1118" y2="406" marker-end="url(#arr)"/>
+  <text class="lbl" x="1126" y="391">uses</text>
+  <line class="edge" x1="1426" y1="368" x2="1426" y2="406" marker-end="url(#arr)"/>
+  <text class="lbl" x="1434" y="391">uses</text>
+
+  <!-- type-system mapper impls -> TypeSystemMapper -->
+  <line class="real" x1="194" y1="514" x2="470" y2="552" marker-end="url(#tri)"/>
+  <line class="real" x1="502" y1="514" x2="640" y2="552" marker-end="url(#tri)"/>
+  <line class="real" x1="810" y1="514" x2="810" y2="552" marker-end="url(#tri)"/>
+  <line class="real" x1="1118" y1="514" x2="980" y2="552" marker-end="url(#tri)"/>
+  <line class="real" x1="1426" y1="514" x2="1150" y2="552" marker-end="url(#tri)"/>
+
+  <!-- TypeSystemMapper <-> HoodieSchema -->
+  <line class="edge" x1="810" y1="676" x2="810" y2="714" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text class="lbl" x="820" y="699">type system to / from HoodieSchema</text>
+
+  <!-- HoodieSchema -> FormatSchemaMapper -->
+  <line class="edge" x1="810" y1="864" x2="810" y2="904" marker-end="url(#arr)"/>
+  <text class="lbl" x="820" y="888">physical schema derived only from HoodieSchema</text>
+
+  <!-- persisted <-> SerDe <- HoodieSchema -->
+  <line class="edge" x1="250" y1="790" x2="220" y2="790" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <line class="edge" x1="580" y1="790" x2="540" y2="790" marker-end="url(#arr)"/>
+
+  <!-- HoodieSchema -> TypeSupport, SchemaMappers -->
+  <line class="edge" x1="1040" y1="747" x2="1080" y2="747" marker-end="url(#arr)"/>
+  <line class="edge" x1="1040" y1="829" x2="1080" y2="829" marker-start="url(#arr)"/>
+
+  <!-- format impls -> FormatSchemaMapper -->
+  <line class="real" x1="348" y1="1066" x2="540" y2="1028" marker-end="url(#tri)"/>
+  <line class="real" x1="656" y1="1066" x2="720" y2="1028" marker-end="url(#tri)"/>
+  <line class="real" x1="964" y1="1066" x2="900" y2="1028" marker-end="url(#tri)"/>
+  <line class="real" x1="1272" y1="1066" x2="1080" y2="1028" marker-end="url(#tri)"/>
+
+  <!-- ===== Row A: CatalogSchemaRenderer interface ===== -->
+  <g class="node persist iface">
+    <title>One renderer per catalog dialect, in hudi-sync. Adds table-level rules only; every type decision comes from a TypeSystemMapper.</title>
+    <rect x="358" y="112" width="904" height="110" rx="8"/>
+    <text class="t" x="372" y="134">interface CatalogSchemaRenderer&lt;C&gt;</text>
+    <text class="tag" x="1248" y="134">hudi-sync-common</text>
+    <text class="code" x="388" y="158">String catalog();</text>
+    <text class="code" x="388" y="176">C render(HoodieSchema schema, List&lt;String&gt; partitionFields, SyncOptions opts);</text>
+    <text class="code" x="388" y="194">SchemaDifference diff(HoodieSchema tableSchema, C current);</text>
+    <text class="code cmt" x="388" y="212">// table-level rules only: partition columns, nullability, comments, DDL, ALTER</text>
+  </g>
+
+  <!-- ===== Row B: catalog renderer implementations ===== -->
+  <g class="node persist">
+    <title>Spark catalog table properties. Holds the logical schema; must merge, never overwrite an existing column (#19162).</title>
+    <rect x="50" y="260" width="288" height="108" rx="8"/>
+    <text class="t" x="62" y="282">SparkPropsRenderer</text>
+    <text class="gen" x="62" y="300">CatalogSchemaRenderer&lt;Props&gt;</text>
+    <text class="d" x="62" y="318">spark.sql.sources.schema.* table props;</text>
+    <text class="d" x="62" y="332">replaces: SparkSchemaUtils,</text>
+    <text class="d" x="62" y="346">SparkDataSourceTableUtils</text>
+    <text class="m" x="62" y="362">module: hudi-sync-common</text>
+  </g>
+  <text class="note" x="380" y="302">Flink and Trino need no renderer of their own: Trino takes its columns</text>
+  <text class="note" x="380" y="318">from HoodieSchema, and Flink's Hive catalog (HoodieHiveCatalog) uses</text>
+  <text class="note" x="380" y="334">HiveCatalogRenderer instead of mapping LogicalType to TypeInfo itself.</text>
+  <g class="node persist">
+    <title>Hive dialect catalogs: HMS, Glue, ADB, and Flink's HoodieHiveCatalog.</title>
+    <rect x="974" y="260" width="288" height="108" rx="8"/>
+    <text class="t" x="986" y="282">HiveCatalogRenderer</text>
+    <text class="gen" x="986" y="300">CatalogSchemaRenderer&lt;FieldSchemas&gt;</text>
+    <text class="d" x="986" y="318">HMS, Glue, ADB, Flink HoodieHiveCatalog</text>
+    <text class="d" x="986" y="332">replaces: HiveSchemaUtil (sync), Flink</text>
+    <text class="d" x="986" y="346">catalog HiveSchemaUtils, HMS diff</text>
+    <text class="m" x="986" y="362">module: hudi-hive-sync</text>
+  </g>
+  <g class="node persist">
+    <title>BigQuery manifest-backed table. Drops partition columns; renders the SQL column list.</title>
+    <rect x="1282" y="260" width="288" height="108" rx="8"/>
+    <text class="t" x="1294" y="282">BigQueryRenderer</text>
+    <text class="gen" x="1294" y="300">CatalogSchemaRenderer&lt;bq Schema&gt;</text>
+    <text class="d" x="1294" y="318">manifest table; drops partition columns</text>
+    <text class="d" x="1294" y="332">replaces: BigQuerySchemaResolver</text>
+    <text class="d" x="1294" y="346">(table part) + schemaToSqlString</text>
+    <text class="m" x="1294" y="362">module: hudi-gcp</text>
+  </g>
+
+  <!-- ===== Row C: type-system mapper implementations ===== -->
+  <g class="node engine">
+    <title>Spark type system. Lives in the Spark client module.</title>
+    <rect x="50" y="406" width="288" height="108" rx="8"/>
+    <text class="t" x="62" y="428">SparkTypeMapper</text>
+    <text class="gen" x="62" y="446">TypeSystemMapper&lt;DataType&gt;</text>
+    <text class="d" x="62" y="464">replaces: HoodieSparkSchemaConverters,</text>
+    <text class="d" x="62" y="478">SparkInternalSchemaConverter</text>
+    <text class="m" x="62" y="508">module: hudi-spark-client</text>
+  </g>
+  <g class="node engine">
+    <title>Flink type system. Lives in the Flink client module.</title>
+    <rect x="358" y="406" width="288" height="108" rx="8"/>
+    <text class="t" x="370" y="428">FlinkTypeMapper</text>
+    <text class="gen" x="370" y="446">TypeSystemMapper&lt;LogicalType&gt;</text>
+    <text class="d" x="370" y="464">replaces: HoodieSchemaConverter [flink]</text>
+    <text class="m" x="370" y="508">module: hudi-flink-client</text>
+  </g>
+  <g class="node engine">
+    <title>Trino type system. Trino columns derive from HoodieSchema instead of HMS Hive type strings.</title>
+    <rect x="666" y="406" width="288" height="108" rx="8"/>
+    <text class="t" x="678" y="428">TrinoTypeMapper</text>
+    <text class="gen" x="678" y="446">TypeSystemMapper&lt;trino Type&gt;</text>
+    <text class="d" x="678" y="464">replaces: HiveType columns read from HMS</text>
+    <text class="m" x="678" y="508">module: hudi-trino</text>
+  </g>
+  <g class="node engine">
+    <title>The single Hive mapping: hadoop-mr reads and HMS type strings (TypeInfo.getTypeName()). Declares VECTOR as LOSSY (binary).</title>
+    <rect x="974" y="406" width="288" height="108" rx="8"/>
+    <text class="t" x="986" y="428">HiveTypeMapper</text>
+    <text class="gen" x="986" y="446">TypeSystemMapper&lt;TypeInfo&gt;</text>
+    <text class="d" x="986" y="464">one Hive mapping for hadoop-mr reads</text>
+    <text class="d" x="986" y="478">and HMS strings (getTypeName())</text>
+    <text class="d" x="986" y="492">replaces: HiveTypeUtils</text>
+    <text class="m" x="986" y="508">module: hudi-hadoop-mr</text>
+  </g>
+  <g class="node engine">
+    <title>BigQuery type system. Declares DECIMAL with scale above 9 and local TIMESTAMP explicitly instead of silently mapping them.</title>
+    <rect x="1282" y="406" width="288" height="108" rx="8"/>
+    <text class="t" x="1294" y="428">BigQueryTypeMapper</text>
+    <text class="gen" x="1294" y="446">TypeSystemMapper&lt;bq Field&gt;</text>
+    <text class="d" x="1294" y="464">replaces: type switch in</text>
+    <text class="d" x="1294" y="478">BigQuerySchemaResolver</text>
+    <text class="m" x="1294" y="508">module: hudi-gcp</text>
+  </g>
+
+  <!-- ===== Row D: TypeSystemMapper interface ===== -->
+  <g class="node engine iface">
+    <title>One implementation per type system: engines and catalogs with their own types.</title>
+    <rect x="440" y="552" width="740" height="124" rx="8"/>
+    <text class="t" x="454" y="574">interface TypeSystemMapper&lt;T&gt;</text>
+    <text class="tag" x="1166" y="574">hudi-common</text>
+    <text class="code" x="470" y="598">String typeSystem();<tspan class="cmt"> // spark, flink, trino, hive, bigquery</tspan></text>
+    <text class="code" x="470" y="616">T toTypeSystem(HoodieSchema schema, MappingOptions opts);</text>
+    <text class="code" x="470" y="634">HoodieSchema fromTypeSystem(T type, Option&lt;HoodieSchema&gt; hint);</text>
+    <text class="code" x="470" y="652">TypeSupport support(HoodieSchemaType type, MappingOptions opts);</text>
+    <text class="code cmt" x="470" y="668">// opts: e.g. Hive supportTimestamp=false declares TIMESTAMP as BIGINT (LOSSY)</text>
+  </g>
+
+  <!-- ===== Row E: Hudi schema boundary ===== -->
+  <g class="node persist">
+    <title>Where serialized schemas live on storage.</title>
+    <rect x="50" y="714" width="170" height="150" rx="8"/>
+    <text class="ts" x="62" y="736">Persisted copies</text>
+    <text class="d" x="62" y="758">commit metadata</text>
+    <text class="d" x="62" y="774">log block headers</text>
+    <text class="d" x="62" y="790">hoodie.properties</text>
+    <text class="d" x="62" y="806">parquet / HFile footers</text>
+  </g>
+  <g class="node boundary">
+    <title>Parses and prints HoodieSchema for every persisted copy (RFC-99 API). Persisted form unchanged.</title>
+    <rect x="250" y="714" width="290" height="150" rx="8"/>
+    <text class="t" x="262" y="736">Persisted form</text>
+    <text class="code-s" x="262" y="758">String toString();</text>
+    <text class="code-s" x="262" y="774">static HoodieSchema parse(String j);</text>
+    <text class="d" x="262" y="800">persisted form stays Avro JSON</text>
+    <text class="d" x="262" y="814">+ Hudi logical-type props</text>
+  </g>
+  <g class="node boundary core">
+    <title>The only logical type system. Type systems and physical schemas are derived from it.</title>
+    <rect x="580" y="714" width="460" height="150" rx="8"/>
+    <text class="t" x="594" y="736">final class HoodieSchema</text>
+    <text class="tag" x="1026" y="736">the hub (RFC-99)</text>
+    <text class="code" x="610" y="760">HoodieSchemaType type();</text>
+    <text class="code" x="610" y="778">LogicalTypeSpec spec();<tspan class="cmt"> // precision, scale, tz, dims</tspan></text>
+    <text class="code" x="610" y="796">List&lt;HoodieSchemaField&gt; fields();<tspan class="cmt"> // + field id</tspan></text>
+    <text class="code" x="610" y="814">boolean isNullable();</text>
+    <text class="code cmt" x="610" y="838">// no org.apache.avro inside; Avro is one adapter</text>
+    <text class="code cmt" x="610" y="854">// interned: cheap equals() on the hot path</text>
+  </g>
+  <g class="node boundary">
+    <title>Every mapper declares, per HoodieSchemaType and options, whether it maps natively, lossily (with a reason) or not at all.</title>
+    <rect x="1080" y="714" width="490" height="66" rx="8"/>
+    <text class="t" x="1092" y="734">final class TypeSupport</text>
+    <text class="code-s" x="1092" y="752">Level { NATIVE, LOSSY, UNSUPPORTED }</text>
+    <text class="code-s" x="1092" y="768">String reason();<tspan class="cmt"> // e.g. "VECTOR stored as Hive binary"</tspan></text>
+  </g>
+  <g class="node boundary">
+    <title>Registry; mappers are discovered via ServiceLoader so engine and sync modules plug in without hudi-common depending on them.</title>
+    <rect x="1080" y="794" width="490" height="74" rx="8"/>
+    <text class="t" x="1092" y="814">final class SchemaMappers</text>
+    <text class="code-s" x="1092" y="832">&lt;T&gt; TypeSystemMapper&lt;T&gt; typeSystem(String name);</text>
+    <text class="code-s" x="1092" y="846">&lt;P&gt; FormatSchemaMapper&lt;P&gt; format(HoodieFileFormat f);</text>
+    <text class="code-s cmt" x="1092" y="858">// ServiceLoader: one mapper per type system / format</text>
+  </g>
+
+  <g class="pill-r88"><rect x="976" y="706" width="54" height="16" rx="8"/><text x="1003" y="718">RFC-99</text></g>
+  <g class="pill-r88"><rect x="476" y="706" width="54" height="16" rx="8"/><text x="503" y="718">RFC-99</text></g>
+
+  <!-- ===== Row F: FormatSchemaMapper interface ===== -->
+  <g class="node format iface">
+    <title>One implementation per physical format. The only place a physical layout is decided.</title>
+    <rect x="465" y="904" width="690" height="124" rx="8"/>
+    <text class="t" x="479" y="926">interface FormatSchemaMapper&lt;P&gt;</text>
+    <text class="tag" x="1141" y="926">hudi-common</text>
+    <text class="code" x="495" y="950">HoodieFileFormat format();</text>
+    <text class="code" x="495" y="968">P toPhysicalSchema(HoodieSchema schema, PhysicalOptions opts);</text>
+    <text class="code" x="495" y="986">HoodieSchema fromPhysicalSchema(P physical, Option&lt;HoodieSchema&gt; hint);</text>
+    <text class="code" x="495" y="1004">TypeSupport support(HoodieSchemaType type, PhysicalOptions opts);</text>
+    <text class="code cmt" x="495" y="1020">// opts: legacy list / decimal, timestamp NTZ, variant shredding, blob encoding</text>
+  </g>
+
+  <!-- ===== Row G: format mapper implementations ===== -->
+  <g class="node format">
+    <title>Single source of Parquet MessageType for every engine.</title>
+    <rect x="204" y="1066" width="288" height="108" rx="8"/>
+    <text class="t" x="216" y="1088">ParquetSchemaMapper</text>
+    <text class="gen" x="216" y="1106">FormatSchemaMapper&lt;MessageType&gt;</text>
+    <text class="d" x="216" y="1124">replaces: parquet-avro converter fork,</text>
+    <text class="d" x="216" y="1138">Flink ParquetSchemaConverter, Spark</text>
+    <text class="d" x="216" y="1152">row-writer schema derivation</text>
+    <text class="m" x="216" y="1168">module: hudi-hadoop-common</text>
+  </g>
+  <g class="node format">
+    <title>Single source of the Arrow schema used by the Lance writers of every engine.</title>
+    <rect x="512" y="1066" width="288" height="108" rx="8"/>
+    <text class="t" x="524" y="1088">ArrowSchemaMapper</text>
+    <text class="gen" x="524" y="1106">FormatSchemaMapper&lt;arrow Schema&gt;</text>
+    <text class="d" x="524" y="1124">for Lance; replaces Spark LanceArrowUtils</text>
+    <text class="d" x="524" y="1138">path + BLOB patch, and</text>
+    <text class="d" x="524" y="1152">HoodieFlinkLanceArrowUtils</text>
+    <text class="m" x="524" y="1168">module: hudi-hadoop-common</text>
+  </g>
+  <g class="node format">
+    <title>Avro becomes one adapter: log blocks, HFile records, parquet.avro.schema footer.</title>
+    <rect x="820" y="1066" width="288" height="108" rx="8"/>
+    <text class="t" x="832" y="1088">AvroSchemaMapper</text>
+    <text class="gen" x="832" y="1106">FormatSchemaMapper&lt;avro Schema&gt;</text>
+    <text class="d" x="832" y="1124">log blocks, HFile, Parquet footer;</text>
+    <text class="d" x="832" y="1138">replaces HoodieSchema.toAvroSchema()</text>
+    <text class="m" x="832" y="1168">module: hudi-common</text>
+  </g>
+  <g class="node format">
+    <title>ORC TypeDescription from HoodieSchema.</title>
+    <rect x="1128" y="1066" width="288" height="108" rx="8"/>
+    <text class="t" x="1140" y="1088">OrcSchemaMapper</text>
+    <text class="gen" x="1140" y="1106">FormatSchemaMapper&lt;TypeDescription&gt;</text>
+    <text class="d" x="1140" y="1124">replaces: AvroOrcUtils</text>
+    <text class="m" x="1140" y="1168">module: hudi-hadoop-common</text>
+  </g>
+
+  <!-- ===== Example flows ===== -->
+  <text class="ph" x="50" y="1214">Example flows</text>
+
+  <text class="flow-h" x="50" y="1254">Spark write</text>
+  <g class="engine"><rect x="140" y="1236" width="100" height="28" rx="6"/></g>
+  <text class="chip" x="190" y="1254">StructType</text>
+  <line class="edge" x1="240" y1="1250" x2="440" y2="1250" marker-end="url(#arr)"/>
+  <text class="lbl lbl-code" x="340" y="1244" text-anchor="middle">SparkTypeMapper.fromTypeSystem</text>
+  <g class="boundary"><rect x="440" y="1236" width="110" height="28" rx="6"/></g>
+  <text class="chip" x="495" y="1254">HoodieSchema</text>
+  <line class="edge" x1="550" y1="1250" x2="790" y2="1250" marker-end="url(#arr)"/>
+  <text class="lbl lbl-code" x="670" y="1244" text-anchor="middle">ParquetSchemaMapper.toPhysicalSchema</text>
+  <g class="format"><rect x="790" y="1236" width="150" height="28" rx="6"/></g>
+  <text class="chip" x="865" y="1254">MessageType</text>
+  <line class="edge" x1="940" y1="1250" x2="980" y2="1250" marker-end="url(#arr)"/>
+  <g class="engine"><rect x="980" y="1236" width="200" height="28" rx="6"/></g>
+  <text class="chip" x="1080" y="1254">FileFormatIO via HoodieRow</text>
+
+  <text class="flow-h" x="50" y="1304">Trino read</text>
+  <g class="persist"><rect x="140" y="1286" width="120" height="28" rx="6"/></g>
+  <text class="chip" x="200" y="1304">commit metadata</text>
+  <line class="edge" x1="260" y1="1300" x2="440" y2="1300" marker-end="url(#arr)"/>
+  <text class="lbl lbl-code" x="350" y="1294" text-anchor="middle">HoodieSchema.parse</text>
+  <g class="boundary"><rect x="440" y="1286" width="110" height="28" rx="6"/></g>
+  <text class="chip" x="495" y="1304">HoodieSchema</text>
+  <line class="edge" x1="550" y1="1300" x2="790" y2="1300" marker-end="url(#arr)"/>
+  <text class="lbl lbl-code" x="670" y="1294" text-anchor="middle">TrinoTypeMapper.toTypeSystem</text>
+  <g class="engine"><rect x="790" y="1286" width="150" height="28" rx="6"/></g>
+  <text class="chip" x="865" y="1304">Trino columns</text>
+
+  <text class="flow-h" x="50" y="1354">Hive sync</text>
+  <g class="boundary"><rect x="140" y="1336" width="110" height="28" rx="6"/></g>
+  <text class="chip" x="195" y="1354">HoodieSchema</text>
+  <line class="edge" x1="250" y1="1350" x2="440" y2="1350" marker-end="url(#arr)"/>
+  <text class="lbl lbl-code" x="345" y="1344" text-anchor="middle">HiveTypeMapper.toTypeSystem</text>
+  <g class="engine"><rect x="440" y="1336" width="110" height="28" rx="6"/></g>
+  <text class="chip" x="495" y="1354">TypeInfo</text>
+  <line class="edge" x1="550" y1="1350" x2="790" y2="1350" marker-end="url(#arr)"/>
+  <text class="lbl lbl-code" x="670" y="1344" text-anchor="middle">HiveCatalogRenderer.render / diff</text>
+  <g class="persist"><rect x="790" y="1336" width="150" height="28" rx="6"/></g>
+  <text class="chip" x="865" y="1354">HMS columns + ALTER</text>
+  <text class="note" x="956" y="1354">VECTOR stored as binary is declared LOSSY by HiveTypeMapper.support(), not hidden in sync code</text>
+
+  <!-- ===== Panels: contract, kit, phasing ===== -->
+  <g class="panel"><rect x="50" y="1386" width="510" height="250" rx="8"/></g>
+  <text class="ph" x="66" y="1410">Contract</text>
+  <text class="pn" x="66" y="1434">1</text>
+  <text class="p" x="82" y="1434">HoodieSchema is the only logical type system. Type systems and physical</text>
+  <text class="p" x="82" y="1448">schemas derive from it, never from each other. New types land here first.</text>
+  <text class="pn" x="66" y="1464">2</text>
+  <text class="p" x="82" y="1464">Physical layout comes only from toPhysicalSchema(). Format writers and</text>
+  <text class="p" x="82" y="1478">readers (RFC-88) are built from that physical schema.</text>
+  <text class="pn" x="66" y="1494">3</text>
+  <text class="p" x="82" y="1494">Every mapper declares NATIVE, LOSSY (with reason) or UNSUPPORTED per type</text>
+  <text class="p" x="82" y="1508">and options. Writing an UNSUPPORTED type fails fast; no silent fallback.</text>
+  <text class="pn" x="66" y="1524">4</text>
+  <text class="p" x="82" y="1524">LOSSY drops type identity, never values. The hint (table schema) or a</text>
+  <text class="p" x="82" y="1538">hudi_type marker in the target restores it; round trips are exact.</text>
+  <text class="pn" x="66" y="1554">5</text>
+  <text class="p" x="82" y="1554">Types turn lossy only inside a TypeSystemMapper. A CatalogSchemaRenderer</text>
+  <text class="p" x="82" y="1568">adds table-level rules (partition columns, comments, DDL, diff), nothing else.</text>
+  <text class="pn" x="66" y="1584">6</text>
+  <text class="p" x="82" y="1584">Hudi-aware readers (Trino included) take columns from HoodieSchema; catalog</text>
+  <text class="p" x="82" y="1598">types serve readers that do not understand Hudi.</text>
+  <text class="pn" x="66" y="1614">7</text>
+  <text class="p" x="82" y="1614">Mappers only emit layouts a current writer emits; anything new waits</text>
+  <text class="p" x="82" y="1628">for a table-version bump. Existing files are never rewritten.</text>
+
+  <g class="panel"><rect x="580" y="1386" width="490" height="250" rx="8"/></g>
+  <text class="ph" x="596" y="1410">Conformance kit (shared tests)</text>
+  <text class="pn" x="596" y="1434">-</text>
+  <text class="p" x="612" y="1434">TypeSystemMapperContract&lt;T&gt;: abstract JUnit suite each module extends;</text>
+  <text class="p" x="612" y="1448">round-trips every type x nullability x nesting x options; support() must</text>
+  <text class="p" x="612" y="1462">match behaviour.</text>
+  <text class="pn" x="596" y="1484">-</text>
+  <text class="p" x="612" y="1484">FormatSchemaMapperContract&lt;P&gt;: checked-in golden physical schema per type</text>
+  <text class="p" x="612" y="1498">and PhysicalOptions combo.</text>
+  <text class="pn" x="596" y="1520">-</text>
+  <text class="p" x="612" y="1520">CatalogSchemaRendererContract&lt;C&gt;: golden DDL per catalog; diff() of a</text>
+  <text class="p" x="612" y="1534">freshly rendered schema is empty (no ALTER on every sync).</text>
+  <text class="pn" x="596" y="1556">-</text>
+  <text class="p" x="612" y="1556">Cross-checks: BigQuery MAP rendering matches ParquetSchemaMapper's</text>
+  <text class="p" x="612" y="1570">key_value layout (BigQuery reads the Parquet files directly); UUID maps</text>
+  <text class="p" x="612" y="1584">consistently across catalogs (today Hive binary vs BigQuery STRING).</text>
+  <text class="pn" x="596" y="1606">-</text>
+  <text class="p" x="612" y="1606">Cross-engine golden tables seeded by the #20322 type matrix and the</text>
+  <text class="p" x="612" y="1620">#20442 parity harness.</text>
+
+  <g class="panel"><rect x="1090" y="1386" width="480" height="250" rx="8"/></g>
+  <text class="ph" x="1106" y="1410">Rollout (type plane)</text>
+  <text class="pn" x="1106" y="1434">1</text>
+  <text class="p" x="1124" y="1434">Mappers: interfaces, registry and shared tests; the</text>
+  <text class="p" x="1124" y="1448">implementations wrap today's converters, so nothing</text>
+  <text class="p" x="1124" y="1462">changes. Test failures become the bug list.</text>
+  <text class="pn" x="1106" y="1486">2</text>
+  <text class="p" x="1124" y="1486">Converge: callers use the mappers; the duplicated</text>
+  <text class="p" x="1124" y="1500">converters (three Hive mappings, three Parquet schema</text>
+  <text class="p" x="1124" y="1514">paths) are deleted; repair moves into the format mappers;</text>
+  <text class="p" x="1124" y="1528">Trino takes its columns from HoodieSchema; the types</text>
+  <text class="p" x="1124" y="1542">RFC-99 left open land with their mappings and tests.</text>
+  <text class="note" x="1106" y="1574">Field ids and renames: the rest of RFC-104.</text>
+  <text class="note" x="1106" y="1589">Reader / writer: RFC-88.</text>
+</svg>

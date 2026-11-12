@@ -1,0 +1,316 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 960" width="1600" height="960" class="viz-root" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>Hudi schema layout on master (62bae026)</title>
+  <style>
+    .viz-root {
+      color-scheme: light;
+      --surface-1: #fcfcfb;
+      --lane: #0b0b0b;
+      --text-primary: #0b0b0b;
+      --text-secondary: #52514e;
+      --text-muted: #8a8984;
+      --boundary: #2a78d6;
+      --engine: #eb6834;
+      --format: #1baf7a;
+      --persist: #8a8984;
+      --persist-fill: #f0efec;
+    }
+    @media (prefers-color-scheme: dark) {
+      .viz-root {
+        color-scheme: dark;
+        --surface-1: #1a1a19;
+        --lane: #f0efec;
+        --text-primary: #f0efec;
+        --text-secondary: #c3c2b7;
+        --text-muted: #8a8984;
+        --boundary: #3987e5;
+        --engine: #d95926;
+        --format: #199e70;
+        --persist: #8a8984;
+        --persist-fill: #383835;
+      }
+    }
+    .bg { fill: var(--surface-1); }
+    .lane { fill: var(--lane); fill-opacity: 0.035; }
+    .sep { stroke: var(--text-muted); stroke-opacity: 0.35; stroke-width: 1; }
+    .row-label { fill: var(--text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
+    .row-sub { fill: var(--text-muted); font-size: 11px; }
+    .col-h { fill: var(--text-primary); font-size: 14px; font-weight: 700; text-anchor: middle; }
+    .h1 { fill: var(--text-primary); font-size: 20px; font-weight: 700; }
+    .sub { fill: var(--text-secondary); font-size: 12.5px; }
+    .legend { fill: var(--text-secondary); font-size: 12px; }
+    .boundary rect { fill: var(--boundary); fill-opacity: 0.12; stroke: var(--boundary); stroke-width: 2; }
+    .engine rect { fill: var(--engine); fill-opacity: 0.12; stroke: var(--engine); stroke-width: 2; }
+    .format rect { fill: var(--format); fill-opacity: 0.12; stroke: var(--format); stroke-width: 2; }
+    .persist rect { fill: var(--persist-fill); stroke: var(--persist); stroke-width: 2; stroke-dasharray: 5 3; }
+    .node:hover rect { fill-opacity: 0.24; }
+    .t { fill: var(--text-primary); font-size: 12.5px; font-weight: 700; }
+    .c { fill: var(--text-secondary); font-size: 10.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .d { fill: var(--text-secondary); font-size: 11px; }
+    .m { fill: var(--text-muted); font-size: 11px; }
+    .edge { stroke: var(--text-secondary); stroke-width: 1.5; fill: none; }
+    .bypass { stroke-dasharray: 6 4; }
+    .arrow { fill: var(--text-secondary); }
+    .lbl { fill: var(--text-secondary); font-size: 10.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+    .lbl-s { fill: var(--text-secondary); font-size: 11px; paint-order: stroke; stroke: var(--surface-1); stroke-width: 4px; stroke-linejoin: round; }
+    .badge circle { fill: var(--text-primary); }
+    .badge text { fill: var(--surface-1); font-size: 11px; font-weight: 700; text-anchor: middle; }
+    .note { fill: var(--text-secondary); font-size: 12px; }
+    .note-h { fill: var(--text-primary); font-size: 13.5px; font-weight: 700; }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1600" height="960"/>
+
+  <!-- Header -->
+  <text class="h1" x="50" y="36">Hudi schema layout on master (62bae026)</text>
+  <text class="sub" x="50" y="58">One column per engine. Read each column top to bottom: engine type, the Hudi schema it converts through, and the physical schema it writes. Converter names sit inside the target box.</text>
+
+  <!-- Legend -->
+  <g transform="translate(50,76)">
+    <rect x="0" y="0" width="14" height="14" rx="3" fill="var(--boundary)" fill-opacity="0.12" stroke="var(--boundary)" stroke-width="2"/>
+    <text class="legend" x="20" y="11">Hudi schema (hudi-common)</text>
+    <rect x="215" y="0" width="14" height="14" rx="3" fill="var(--engine)" fill-opacity="0.12" stroke="var(--engine)" stroke-width="2"/>
+    <text class="legend" x="235" y="11">Engine type</text>
+    <rect x="335" y="0" width="14" height="14" rx="3" fill="var(--format)" fill-opacity="0.12" stroke="var(--format)" stroke-width="2"/>
+    <text class="legend" x="355" y="11">Physical file format schema</text>
+    <rect x="550" y="0" width="14" height="14" rx="3" fill="var(--persist-fill)" stroke="var(--persist)" stroke-width="2" stroke-dasharray="4 2"/>
+    <text class="legend" x="570" y="11">Catalog / persisted copy</text>
+    <line class="edge" x1="760" y1="7" x2="800" y2="7" marker-end="url(#arr)"/>
+    <text class="legend" x="808" y="11">goes through HoodieSchema</text>
+    <line class="edge bypass" x1="985" y1="7" x2="1025" y2="7" marker-end="url(#arr)"/>
+    <text class="legend" x="1033" y="11">skips HoodieSchema</text>
+    <g class="badge"><circle cx="1175" cy="7" r="9"/><text x="1175" y="11">n</text></g>
+    <text class="legend" x="1189" y="11">layers disagree (see notes)</text>
+  </g>
+
+  <!-- Column headers -->
+  <text class="col-h" x="355" y="122">Spark</text>
+  <text class="col-h" x="625" y="122">Flink</text>
+  <text class="col-h" x="895" y="122">Hive / hadoop-mr</text>
+  <text class="col-h" x="1165" y="122">Trino (hudi-trino)</text>
+  <text class="col-h" x="1435" y="122">Avro record path</text>
+
+  <!-- Row lanes -->
+  <rect class="lane" x="50" y="132" width="1520" height="66" rx="8"/>
+  <text class="row-label" x="62" y="160">ENGINE TYPE</text>
+  <rect class="lane" x="50" y="214" width="1520" height="150" rx="8"/>
+  <text class="row-label" x="62" y="262">HUDI SCHEMA</text>
+  <text class="row-sub" x="62" y="278">hudi-common</text>
+  <rect class="lane" x="50" y="384" width="1520" height="214" rx="8"/>
+  <text class="row-label" x="62" y="430">PHYSICAL SCHEMA</text>
+  <text class="row-sub" x="62" y="446">what is written</text>
+  <rect class="lane" x="50" y="618" width="1520" height="96" rx="8"/>
+  <text class="row-label" x="62" y="660">CATALOG AND</text>
+  <text class="row-label" x="62" y="676">PERSISTED COPIES</text>
+
+  <!-- Column separators -->
+  <line class="sep" x1="490" y1="108" x2="490" y2="714"/>
+  <line class="sep" x1="760" y1="108" x2="760" y2="714"/>
+  <line class="sep" x1="1030" y1="108" x2="1030" y2="714"/>
+  <line class="sep" x1="1300" y1="108" x2="1300" y2="714"/>
+
+  <!-- ===== HoodieSchema band (spans every column) ===== -->
+  <g class="node boundary">
+    <title>HoodieSchema: Hudi's schema API, used in ~360 non-test files. Each HoodieSchemaType maps to an Avro Schema.Type.</title>
+    <rect x="220" y="236" width="1350" height="40" rx="8"/>
+    <text class="t" x="580" y="261">HoodieSchema</text>
+    <text class="d" x="692" y="261">~460 main files; every HoodieSchemaType maps to an Avro Schema.Type underneath</text>
+  </g>
+
+  <!-- ===== Column 1: Spark ===== -->
+  <g class="node engine">
+    <title>Spark Catalyst types; one shim module per Spark line.</title>
+    <rect x="240" y="142" width="240" height="46" rx="8"/>
+    <text class="t" x="252" y="161">StructType / DataType</text>
+    <text class="d" x="252" y="178">shims for Spark 3.3 - 4.2</text>
+  </g>
+  <!-- Spark <-> HoodieSchema -->
+  <line class="edge" x1="320" y1="188" x2="320" y2="236" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text class="lbl" x="328" y="209">HoodieSparkSchema</text>
+  <text class="lbl" x="328" y="222">Converters</text>
+  <!-- Spark <-> InternalSchema (skips HoodieSchema) -->
+  <line class="edge bypass" x1="262" y1="188" x2="262" y2="310" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text class="lbl" x="270" y="296">SparkInternalSchemaConverter</text>
+  <g class="node boundary">
+    <title>InternalSchema: field-id schema for schema-on-read evolution (RFC-33), ~100 main files.</title>
+    <rect x="240" y="310" width="160" height="46" rx="8"/>
+    <text class="t" x="276" y="329">InternalSchema</text>
+    <text class="c" x="276" y="346">field ids (RFC-33)</text>
+  </g>
+  <!-- Spark -> Parquet / Arrow (skip HoodieSchema) -->
+  <path class="edge bypass" d="M452,188 L452,428 L440,428" marker-end="url(#arr)"/>
+  <path class="edge bypass" d="M472,188 L472,498 L440,498" marker-end="url(#arr)"/>
+  <g class="node format">
+    <title>Spark row writer derives the Parquet MessageType from StructType; HoodieSchema supplies timestamp precision, decimal width, VECTOR and VARIANT.</title>
+    <rect x="240" y="406" width="200" height="46" rx="8"/>
+    <text class="t" x="252" y="425">Parquet MessageType</text>
+    <text class="c" x="252" y="442">HoodieRowParquetWriteSupport</text>
+  </g>
+  <g class="node format">
+    <title>Spark Lance writer maps StructType to Arrow with LanceArrowUtils, then forces BLOB data leaves to LargeBinary.</title>
+    <rect x="240" y="476" width="200" height="46" rx="8"/>
+    <text class="t" x="252" y="495">Lance Arrow schema</text>
+    <text class="c" x="252" y="512">LanceArrowUtils + BLOB patch</text>
+  </g>
+
+  <!-- ===== Column 2: Flink ===== -->
+  <g class="node engine">
+    <title>Flink logical types; one shim module per Flink line.</title>
+    <rect x="510" y="142" width="230" height="46" rx="8"/>
+    <text class="t" x="522" y="161">RowType / LogicalType</text>
+    <text class="d" x="522" y="178">shims for Flink 1.18 - 2.2</text>
+  </g>
+  <line class="edge" x1="570" y1="188" x2="570" y2="236" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <text class="lbl" x="578" y="216">HoodieSchemaConverter</text>
+  <path class="edge" d="M722,276 L722,428 L710,428" marker-end="url(#arr)"/>
+  <path class="edge" d="M740,276 L740,498 L710,498" marker-end="url(#arr)"/>
+  <g class="node format">
+    <title>Flink ParquetSchemaConverter maps HoodieSchema (or RowType) to MessageType.</title>
+    <rect x="510" y="406" width="200" height="46" rx="8"/>
+    <text class="t" x="522" y="425">Parquet MessageType</text>
+    <text class="c" x="522" y="442">ParquetSchemaConverter</text>
+  </g>
+  <g class="node format">
+    <title>Flink Lance writer maps HoodieSchema to Arrow with HoodieFlinkLanceArrowUtils.</title>
+    <rect x="510" y="476" width="200" height="46" rx="8"/>
+    <text class="t" x="522" y="495">Lance Arrow schema</text>
+    <text class="c" x="522" y="512">HoodieFlinkLanceArrowUtils</text>
+  </g>
+
+  <!-- ===== Column 3: Hive / hadoop-mr ===== -->
+  <g class="node engine">
+    <title>Hive / hadoop-mr input formats.</title>
+    <rect x="780" y="142" width="230" height="46" rx="8"/>
+    <text class="t" x="792" y="161">TypeInfo / ArrayWritable</text>
+    <text class="d" x="792" y="178">read path only</text>
+  </g>
+  <line class="edge" x1="840" y1="236" x2="840" y2="188" marker-end="url(#arr)"/>
+  <text class="lbl" x="848" y="216">HiveTypeUtils</text>
+  <!-- Hive sync -->
+  <line class="edge" x1="900" y1="276" x2="900" y2="640" marker-end="url(#arr)"/>
+  <text class="lbl-s" x="908" y="440">Hive sync:</text>
+  <text class="lbl" x="908" y="454">HiveSchemaUtil</text>
+
+  <!-- ===== Column 4: Trino ===== -->
+  <g class="node engine">
+    <title>Trino column types are built from the HiveType of each column in the metastore.</title>
+    <rect x="1050" y="142" width="230" height="46" rx="8"/>
+    <text class="t" x="1062" y="161">Trino Type</text>
+    <text class="d" x="1062" y="178">columns built from HiveType</text>
+  </g>
+  <line class="edge" x1="1090" y1="236" x2="1090" y2="188" marker-end="url(#arr)"/>
+  <text class="lbl" x="1098" y="208">TableSchemaResolver</text>
+  <text class="lbl-s" x="1098" y="222">reads and merges</text>
+  <!-- HMS -> Trino (skips HoodieSchema) -->
+  <line class="edge bypass" x1="1255" y1="640" x2="1255" y2="188" marker-end="url(#arr)"/>
+  <text class="lbl" x="1247" y="440" text-anchor="end">HiveTypeTranslator</text>
+  <text class="lbl-s" x="1247" y="454" text-anchor="end">column types from HMS</text>
+  <text class="m" x="1050" y="560">reads Parquet with Trino's</text>
+  <text class="m" x="1050" y="575">reader + parquet.avro.schema</text>
+
+  <!-- ===== Column 5: Avro record path ===== -->
+  <text class="m" x="1320" y="161">no engine type: Avro records</text>
+  <text class="m" x="1320" y="177">(AVRO record type, Java client, MDT)</text>
+  <line class="edge" x1="1450" y1="276" x2="1450" y2="310" marker-end="url(#arr)"/>
+  <text class="lbl" x="1442" y="297" text-anchor="end">toAvroSchema()</text>
+  <g class="node boundary">
+    <title>org.apache.avro.Schema, wrapped by HoodieSchema and still imported directly by ~86 non-test files.</title>
+    <rect x="1320" y="310" width="230" height="46" rx="8"/>
+    <text class="t" x="1332" y="329">org.apache.avro.Schema</text>
+    <text class="d" x="1332" y="346">~86 main files import it directly</text>
+  </g>
+  <line class="edge" x1="1450" y1="356" x2="1450" y2="406" marker-end="url(#arr)"/>
+  <path class="edge" d="M1320,346 L1310,346 L1310,513 L1320,513" marker-end="url(#arr)"/>
+  <path class="edge" d="M1310,513 L1310,569 L1320,569" marker-end="url(#arr)"/>
+  <g class="node format">
+    <title>Avro write path: parquet-avro with Hudi's forked converter; footer carries parquet.avro.schema.</title>
+    <rect x="1320" y="406" width="230" height="74" rx="8"/>
+    <text class="t" x="1332" y="425">Parquet MessageType</text>
+    <text class="c" x="1332" y="442">HoodieAvroWriteSupport +</text>
+    <text class="c" x="1332" y="456">AvroSchemaConverter</text>
+    <text class="c" x="1332" y="470">WithTimestampNTZ</text>
+  </g>
+  <g class="node format">
+    <title>ORC TypeDescription built from Avro.</title>
+    <rect x="1320" y="490" width="230" height="46" rx="8"/>
+    <text class="t" x="1332" y="509">ORC TypeDescription</text>
+    <text class="c" x="1332" y="526">AvroOrcUtils</text>
+  </g>
+  <g class="node format">
+    <title>Log blocks and metadata-table HFiles store Avro records; the block header / file info holds the Avro JSON schema.</title>
+    <rect x="1320" y="546" width="230" height="46" rx="8"/>
+    <text class="t" x="1332" y="565">Log blocks + HFile (MDT)</text>
+    <text class="d" x="1332" y="582">Avro records, Avro JSON in headers</text>
+  </g>
+
+  <!-- ===== Catalog and persisted copies ===== -->
+  <g class="node persist">
+    <title>Persisted schema copies read back by TableSchemaResolver.</title>
+    <rect x="240" y="640" width="500" height="64" rx="8"/>
+    <text class="t" x="252" y="659">Persisted copies</text>
+    <text class="d" x="252" y="676">Avro JSON: commit metadata "schema", hoodie.properties, log headers, footers</text>
+    <text class="d" x="252" y="692">InternalSchema JSON: "latest_schema" + .hoodie/.schema (schema-on-read only)</text>
+  </g>
+  <line class="edge" x1="500" y1="640" x2="500" y2="276" marker-end="url(#arr)"/>
+  <text class="lbl" x="508" y="614">TableSchemaResolver</text>
+  <g class="node persist">
+    <title>HMS / Glue: Hive type strings written by Hive sync, plus spark.sql.sources.schema.* table properties.</title>
+    <rect x="780" y="640" width="500" height="64" rx="8"/>
+    <text class="t" x="792" y="659">HMS / Glue catalog</text>
+    <text class="d" x="792" y="676">Hive type strings (e.g. VECTOR -&gt; BINARY)</text>
+    <text class="d" x="792" y="692">+ spark.sql.sources.schema.* table props</text>
+  </g>
+
+  <!-- ===== Badges ===== -->
+  <g class="badge"><circle cx="440" cy="406" r="9"/><text x="440" y="410">1</text></g>
+  <g class="badge"><circle cx="710" cy="406" r="9"/><text x="710" y="410">1</text></g>
+  <g class="badge"><circle cx="1550" cy="406" r="9"/><text x="1550" y="410">1</text></g>
+  <g class="badge"><circle cx="440" cy="476" r="9"/><text x="440" y="480">2</text></g>
+  <g class="badge"><circle cx="710" cy="476" r="9"/><text x="710" y="480">2</text></g>
+  <g class="badge"><circle cx="1550" cy="310" r="9"/><text x="1550" y="314">3</text></g>
+  <g class="badge"><circle cx="740" cy="640" r="9"/><text x="740" y="644">4</text></g>
+  <g class="badge"><circle cx="1255" cy="330" r="9"/><text x="1255" y="334">5</text></g>
+  <g class="badge"><circle cx="480" cy="142" r="9"/><text x="480" y="146">6</text></g>
+
+  <!-- ===== Notes ===== -->
+  <text class="note-h" x="50" y="756">Where the layers disagree</text>
+  <g class="badge"><circle cx="60" cy="782" r="9"/><text x="60" y="786">1</text></g>
+  <text class="note" x="76" y="786">Parquet MessageType is produced three ways (Spark row writer, Flink converter, parquet-avro</text>
+  <text class="note" x="76" y="802">fork, cf. #20307). The same logical type can land in a different physical layout per engine.</text>
+  <g class="badge"><circle cx="60" cy="828" r="9"/><text x="60" y="832">2</text></g>
+  <text class="note" x="76" y="832">Lance's Arrow schema is produced two ways: Spark from StructType plus a BLOB patch, Flink</text>
+  <text class="note" x="76" y="848">from HoodieSchema.</text>
+  <g class="badge"><circle cx="60" cy="874" r="9"/><text x="60" y="878">3</text></g>
+  <text class="note" x="76" y="878">HoodieSchema wraps Avro: every HoodieSchemaType maps to an Avro Schema.Type (VARIANT and BLOB</text>
+  <text class="note" x="76" y="894">are RECORD, VECTOR is FIXED), so Avro still bounds the type system.</text>
+
+  <g class="badge"><circle cx="830" cy="782" r="9"/><text x="830" y="786">4</text></g>
+  <text class="note" x="846" y="786">Two persisted formats: Avro JSON everywhere (no field ids), InternalSchema JSON only when</text>
+  <text class="note" x="846" y="802">schema-on-read is enabled.</text>
+  <g class="badge"><circle cx="830" cy="828" r="9"/><text x="830" y="832">5</text></g>
+  <text class="note" x="846" y="832">Trino column types come from Hive type strings that Hive sync wrote, not from HoodieSchema.</text>
+  <text class="note" x="846" y="848">Trino reads and merges build their schema from HoodieSchema.</text>
+  <g class="badge"><circle cx="830" cy="874" r="9"/><text x="830" y="878">6</text></g>
+  <text class="note" x="846" y="878">Spark alone has four schema paths: two converter stacks (to HoodieSchema and to InternalSchema)</text>
+  <text class="note" x="846" y="894">and two direct StructType paths to Parquet and Arrow (dashed).</text>
+</svg>
