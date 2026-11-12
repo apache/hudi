@@ -135,6 +135,23 @@ public class HoodieSparkEngineContext extends HoodieEngineContext {
     return HoodieJavaRDD.of(javaSparkContext.parallelize(data, parallelism));
   }
 
+  /**
+   * Unions all the inputs with a single {@link JavaSparkContext#union}, which yields one
+   * {@code UnionRDD} whose parents are the inputs, instead of a chain of nested ones.
+   */
+  @Override
+  public <T> HoodieData<T> union(List<HoodieData<T>> dataList) {
+    if (dataList.isEmpty()) {
+      return emptyHoodieData();
+    }
+    if (dataList.size() == 1) {
+      return dataList.get(0);
+    }
+    @SuppressWarnings("unchecked")
+    JavaRDD<T>[] rdds = dataList.stream().map(data -> HoodieJavaRDD.getJavaRDD(data)).toArray(JavaRDD[]::new);
+    return HoodieJavaRDD.of(javaSparkContext.union(rdds));
+  }
+
   @Override
   public <I, O> List<O> map(List<I> data, SerializableFunction<I, O> func, int parallelism) {
     final Map<String, Registry> registries = getDistributedRegistries();

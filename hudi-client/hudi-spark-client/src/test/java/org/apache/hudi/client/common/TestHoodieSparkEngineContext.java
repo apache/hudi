@@ -25,13 +25,18 @@ import org.apache.hudi.common.function.SerializableBiFunction;
 import org.apache.hudi.common.function.SerializablePairFlatMapFunction;
 import org.apache.hudi.common.util.collection.ImmutablePair;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
+import org.apache.hudi.util.JavaScalaConverters;
 
+import org.apache.spark.rdd.RDD;
+import org.apache.spark.rdd.UnionRDD;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -39,6 +44,8 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarness {
@@ -104,6 +111,29 @@ public class TestHoodieSparkEngineContext extends SparkClientFunctionalTestHarne
     result.forEach(entry -> {
       assertEquals(entry.getKey() * 10, entry.getValue());
     });
+  }
+
+  @Test
+  void testUnion() {
+    assertTrue(context.union(Collections.<HoodieData<Integer>>emptyList()).isEmpty());
+
+    HoodieData<Integer> single = context.parallelize(Arrays.asList(1, 2), 2);
+    assertSame(single, context.union(Collections.singletonList(single)));
+
+    int numInputs = 50;
+    List<HoodieData<Integer>> inputs = IntStream.range(0, numInputs)
+        .mapToObj(i -> context.parallelize(Collections.singletonList(i), 1))
+        .collect(Collectors.toList());
+    HoodieData<Integer> union = context.union(inputs);
+    assertEquals(IntStream.range(0, numInputs).boxed().collect(Collectors.toList()), union.collectAsList());
+
+    // A single UnionRDD whose parents are the inputs, not a chain of nested UnionRDDs
+    RDD<Integer> unionRdd = HoodieJavaRDD.getJavaRDD(union).rdd();
+    assertInstanceOf(UnionRDD.class, unionRdd);
+    List<Integer> expectedParentIds = inputs.stream().map(HoodieData::getId).collect(Collectors.toList());
+    List<Integer> parentIds = JavaScalaConverters.convertScalaListToJavaList(((UnionRDD<Integer>) unionRdd).rdds())
+        .stream().map(RDD::id).collect(Collectors.toList());
+    assertEquals(expectedParentIds, parentIds);
   }
 
   static class SerializablePairFlatMapTestFunc implements SerializablePairFlatMapFunction<Iterator<java.lang.Integer>, java.lang.Integer, java.lang.Integer> {
