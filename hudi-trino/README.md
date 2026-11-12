@@ -56,6 +56,38 @@ CI follows the same two steps: `.github/workflows/hudi_trino_ci.yml` runs `boots
 
 The tests resolve dependency versions from Hudi's root pom, while the shipped plugin bundles Trino's. The nightly `.github/workflows/hudi_trino_dependency_drift.yml` compares the two classpaths with `scripts/trino/check_dependency_drift.py` and files or updates an issue when versions differ.
 
+## Benchmarks
+
+Local MOR read benchmarks live in test scope under `io.trino.plugin.hudi.benchmark`. They need no cluster and no S3, and are named `*Benchmark` so surefire and CI never pick them up. Each one asserts its results against the generator's expected values, so a fast but wrong change fails the run.
+
+```
+# merge buffer: one file group's log records through the spillable map, sized by HudiTrinoReaderContext
+mvn -Phudi-trino,hudi-trino-tests -pl hudi-trino test -Dtest=HudiMergeBufferBenchmark \
+    -Dsurefire.failIfNoSpecifiedTests=false
+
+# end to end: _ro vs _rt queries on a generated TPC-DS-shaped MOR table, storage behind injected S3 latency
+mvn -Phudi-trino,hudi-trino-tests -pl hudi-trino test -Dtest=HudiMorReadBenchmark \
+    -Dsurefire.failIfNoSpecifiedTests=false
+```
+
+Knobs (`-D` system properties):
+
+| Knob | Default | Meaning |
+|---|---|---|
+| `bench.partitions` | 48 | store_sales partitions |
+| `bench.rowsPerPartition` | 40000 | base rows per partition |
+| `bench.updateFraction` | 0.10 | fraction of keys updated in each of the three update rounds |
+| `bench.deleteFraction` | 0.01 | fraction of keys deleted in the delete round |
+| `bench.rounds` | 3 | measured runs after one warmup |
+| `bench.workers` | 1 | extra Trino workers; the coordinator also runs splits |
+| `bench.s3.getMillis` / `headMillis` / `listMillis` | 20 / 15 / 40 | latency charged per storage GET / HEAD / LIST |
+| `bench.s3.latency.enabled` | 1 | 0 turns the injected latency off (CPU-bound run) |
+| `bench.nativeLogs` | false | true writes table version 10 native logs instead of version 9 Avro logs |
+| `bench.s3.samples` | false | true prints one example path per request and file type |
+| `bench.logRecords` | 300000 | log records in `HudiMergeBufferBenchmark` |
+
+`HudiMorReadBenchmark` prints one line per query with wall time, CPU, input bytes and storage calls per file type, and appends the same to `target/hudi-mor-read-benchmark.jsonl`.
+
 ## End-to-end tests (docker)
 
 The testcontainers E2E suite (`hudi-integ-test`, classes `ITTestTrino*` under
