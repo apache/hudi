@@ -21,9 +21,10 @@ import org.apache.hudi.{DataSourceReadOptions, DataSourceUtils, DataSourceWriteO
 import org.apache.hudi.DataSourceWriteOptions.{STREAMING_CHECKPOINT_IDENTIFIER, UPSERT_OPERATION_OPT_VAL}
 import org.apache.hudi.HoodieStreamingSink.SINK_CHECKPOINT_KEY
 import org.apache.hudi.client.SparkRDDWriteClient
-import org.apache.hudi.common.config.{HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.engine.RecordContext
-import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieTableType, WriteConcurrencyMode}
+import org.apache.hudi.common.model.{FileSlice, HoodieFailedWritesCleaningPolicy, HoodieRecord, HoodieTableType, WriteConcurrencyMode}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.table.marker.MarkerType
 import org.apache.hudi.common.table.read.BufferedRecord
@@ -32,9 +33,10 @@ import org.apache.hudi.common.table.view.{FileSystemViewStorageConfig, FileSyste
 import org.apache.hudi.common.testutils.{HoodieTestDataGenerator, HoodieTestTable, HoodieTestUtils}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, MarkerUtils, Option => HOption}
-import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieLockConfig, HoodieWriteConfig}
+import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider
 import org.apache.hudi.exception.{HoodieException, TableNotFoundException}
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}
 
@@ -226,6 +228,68 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   def testStructuredStreaming(tableType: HoodieTableType): Unit = {
     structuredStreamingTestRunner(
       tableType, addCompactionConfigs = false, isAsyncCompaction = false)
+  }
+
+  /**
+   * Small micro-batches are the case a commit count cannot handle: the record index is built only once the table holds
+   * the configured number of records, and is then sized from them.
+   */
+  @Test
+  def testRecordIndexDeferredUntilMinRecords(): Unit = {
+    val (sourcePath, destPath) = initStreamingSourceAndDestPath("source", "dest")
+    val hudiOptions = getOptsWithTableType(HoodieTableType.COPY_ON_WRITE) ++ Map(
+      HoodieMetadataConfig.ENABLE.key -> "true",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "true",
+      HoodieIndexConfig.INDEX_TYPE.key -> "GLOBAL_RECORD_LEVEL_INDEX",
+      HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key -> "true",
+      HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key -> "1000",
+      HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key -> "9600",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1000")
+    val toDf = (records: java.util.List[HoodieRecord[_]]) => spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records).asScala.toList, 2))
+    val isRecordIndexAvailable = () => HoodieTableMetaClient.builder().setBasePath(destPath).setConf(storageConf).build()
+      .getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+
+    val allInserts = new java.util.ArrayList[HoodieRecord[_]]()
+    val firstBatch = dataGen.generateInserts("001", 100)
+    val streamingQuery = initWritingStreamingQuery(toDf(firstBatch).schema, sourcePath, destPath, hudiOptions)
+    try {
+      var numCommits = 0
+      // The 3rd micro-batch starts with only 200 records on disk, so it is still below the threshold.
+      Seq(firstBatch, dataGen.generateInserts("002", 100), dataGen.generateInserts("003", 2000)).foreach { batch =>
+        allInserts.addAll(batch)
+        toDf(batch).coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+        numCommits = waitTillAtleastNCommits(storage, destPath, numCommits + 1, 120, 1)
+        assertFalse(isRecordIndexAvailable(), s"Record index should be deferred with ${allInserts.size} records written")
+      }
+
+      val updatedRecords = dataGen.generateUpdates("004", allInserts.subList(0, 300))
+      val newRecords = dataGen.generateInserts("004", 10)
+      val upserts = new java.util.ArrayList[HoodieRecord[_]](updatedRecords)
+      upserts.addAll(newRecords)
+      allInserts.addAll(newRecords)
+      toDf(upserts).coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      waitTillAtleastNCommits(storage, destPath, numCommits + 1, 120, 1)
+      assertTrue(isRecordIndexAvailable())
+
+      val rows = spark.read.format("org.apache.hudi").load(destPath).select("_row_key", "rider").collect()
+      assertEquals(allInserts.asScala.map(_.getRecordKey).sorted, rows.map(_.getString(0)).toSeq.sorted)
+      assertEquals(upserts.asScala.map(_.getRecordKey).toSet, rows.filter(_.getString(1) == "rider-004").map(_.getString(0)).toSet)
+      val metaClient = HoodieTableMetaClient.builder().setBasePath(destPath).setConf(storageConf).build()
+      val metadata = metaClient.getTableFormat.getMetadataFactory
+        .create(context, storage, HoodieMetadataConfig.newBuilder().enable(true).build(), destPath).asInstanceOf[HoodieBackedTableMetadata]
+      try {
+        // 2200 records x growth factor 2 / (9600 bytes / 48 bytes per entry) = 22 file groups
+        assertEquals(22, metadata.getMetadataFileSystemView.getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath).count())
+        val keys = allInserts.asScala.map(_.getRecordKey).asJava
+        assertEquals(keys.asScala.toSet,
+          metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(keys)).collectAsList().asScala.map(_.getKey).toSet)
+      } finally {
+        metadata.close()
+      }
+    } finally {
+      streamingQuery.stop()
+    }
   }
 
   @throws[InterruptedException]

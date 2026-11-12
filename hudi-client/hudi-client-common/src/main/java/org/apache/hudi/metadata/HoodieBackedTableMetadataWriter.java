@@ -145,6 +145,9 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
   // from the metadata payload schema.
   private static final String RECORD_KEY_FIELD_NAME = HoodieMetadataPayload.KEY_FIELD_NAME;
 
+  // Percentile of the existing data partitions' partitioned record index file group counts used to size a new one.
+  private static final double EXISTING_PARTITIONS_FILE_GROUP_COUNT_PERCENTILE = 0.9;
+
   private transient BaseHoodieWriteClient<?, I, ?, O> writeClient;
 
   protected HoodieWriteConfig metadataWriteConfig;
@@ -200,7 +203,8 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
     this.dataMetaClient = HoodieTableMetaClient.builder().setConf(storageConf.newInstance())
         .setBasePath(dataWriteConfig.getBasePath())
         .setTimeGeneratorConfig(dataWriteConfig.getTimeGeneratorConfig()).build();
-    this.enabledIndexerMap = IndexerFactory.getEnabledIndexerMap(engineContext, dataWriteConfig, dataMetaClient, engineIndexerSupport);
+    this.enabledIndexerMap = IndexerFactory.getEnabledIndexerMap(engineContext, dataWriteConfig, dataMetaClient, engineIndexerSupport,
+        inflightInstantTimestamp, streamingWritesEnabled);
     this.engineIndexerSupport = engineIndexerSupport;
     if (writeConfig.isMetadataTableEnabled()) {
       this.metadataWriteConfig = createMetadataWriteConfig(writeConfig, failedWritesCleaningPolicy, dataMetaClient.getTableConfig().getTableVersion());
@@ -1092,34 +1096,69 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param instantTime    Timestamp for the mdt commit
    */
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieCommitMetadata commitMetadata, String instantTime) {
-    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
-      Set<String> partitionsTouchedByInflightCommit = new HashSet<>(commitMetadata.getPartitionToWriteStats().keySet());
-      initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
+    if (isPartitionedRecordIndexMaintained()) {
+      Map<String, Long> insertsByPartition = new HashMap<>();
+      commitMetadata.getPartitionToWriteStats().forEach((partition, writeStats) ->
+          insertsByPartition.put(partition, writeStats.stream().mapToLong(HoodieWriteStat::getNumInserts).sum()));
+      initializeNewFileGroupsForPartitionedRLIHelper(insertsByPartition.keySet(), Option.of(insertsByPartition), instantTime);
     }
   }
 
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieData<WriteStatus> writeStatus, String instantTime) {
-    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
-      Set<String> partitionsTouchedByInflightCommit = new HashSet<>(writeStatus.map(WriteStatus::getPartitionPath).collectAsList());
-      initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
+    if (isPartitionedRecordIndexMaintained()) {
+      Map<String, Long> insertsByPartition = new HashMap<>();
+      writeStatus.map(status -> Pair.of(status.getPartitionPath(), status.getStat() == null ? 0L : status.getStat().getNumInserts()))
+          .collectAsList()
+          .forEach(partitionAndInserts -> insertsByPartition.merge(partitionAndInserts.getKey(), partitionAndInserts.getValue(), Long::sum));
+      initializeNewFileGroupsForPartitionedRLIHelper(insertsByPartition.keySet(), Option.of(insertsByPartition), instantTime);
     }
   }
 
+  /**
+   * Initializes partitioned record index file groups for new data partitions without the records inserted per partition,
+   * so they get the min file group count. Used by streaming metadata writes in Flink.
+   */
   private void maybeInitializeNewFileGroupsForPartitionedRLI(Set<String> partitionsTouchedByInflightCommit, String instantTime) {
-    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
-      initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
+    if (isPartitionedRecordIndexMaintained()) {
+      initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, Option.empty(), instantTime);
     }
   }
 
-  private void initializeNewFileGroupsForPartitionedRLIHelper(Set<String> partitionsTouchedByInflightCommit, String instantTime) {
+  /**
+   * Whether this writer maintains a partitioned record index. A deferred record index is left out of the enabled indexers,
+   * so no file groups are created for it until it is initialized.
+   */
+  private boolean isPartitionedRecordIndexMaintained() {
+    return dataWriteConfig.isRecordLevelIndexEnabled() && enabledIndexerMap.containsKey(RECORD_INDEX);
+  }
+
+  /**
+   * Creates partitioned record index file groups for data partitions that the inflight commit adds. In Spark, with the
+   * records inserted per partition known, each new partition gets the larger of the p90 file group count of the existing
+   * partitions and the count estimated from the records this commit inserts into it, within the configured min and max.
+   * Otherwise each new partition gets the configured min file group count: the Flink record index partitioner assumes
+   * the min file group count for a data partition it has not seen.
+   *
+   * @param partitionsTouchedByInflightCommit data partitions written by the inflight commit
+   * @param insertsByPartitionOpt             records inserted per data partition by the inflight commit
+   * @param instantTime                       timestamp for the metadata table commit
+   */
+  private void initializeNewFileGroupsForPartitionedRLIHelper(Set<String> partitionsTouchedByInflightCommit,
+                                                              Option<Map<String, Long>> insertsByPartitionOpt, String instantTime) {
     try {
-      Set<String> partitionsFromFilesIndex = new HashSet<>(metadata.getAllPartitionPaths());
-      partitionsTouchedByInflightCommit.removeAll(partitionsFromFilesIndex);
-      if (!partitionsTouchedByInflightCommit.isEmpty()) {
-        for (String partitionToWrite : partitionsTouchedByInflightCommit) {
-          // Always use the min file group count!
-          initializeFileGroups(dataMetaClient, RECORD_INDEX, instantTime,
-              dataWriteConfig.getRecordLevelIndexMinFileGroupCount(),
+      Set<String> newPartitions = new HashSet<>(partitionsTouchedByInflightCommit);
+      newPartitions.removeAll(metadata.getAllPartitionPaths());
+      if (!newPartitions.isEmpty()) {
+        boolean sizeFromData = insertsByPartitionOpt.isPresent() && getEngineType() == EngineType.SPARK;
+        int existingPartitionsFileGroupCount = sizeFromData
+            ? getExistingPartitionsFileGroupCount() : dataWriteConfig.getRecordLevelIndexMinFileGroupCount();
+        Map<String, Long> insertsByPartition = sizeFromData ? insertsByPartitionOpt.get() : Collections.emptyMap();
+        for (String partitionToWrite : newPartitions) {
+          int fileGroupCount = Math.max(existingPartitionsFileGroupCount,
+              estimatePartitionedRecordIndexFileGroupCount(insertsByPartition.getOrDefault(partitionToWrite, 0L)));
+          LOG.info("Creating {} partitioned record index file groups for new data partition {} (from existing partitions: {}, inserts: {})",
+              fileGroupCount, partitionToWrite, existingPartitionsFileGroupCount, insertsByPartition.get(partitionToWrite));
+          initializeFileGroups(dataMetaClient, RECORD_INDEX, instantTime, fileGroupCount,
               RECORD_INDEX.getPartitionPath(), Option.of(partitionToWrite));
         }
         initMetadataReader();
@@ -1128,6 +1167,32 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
       LOG.error("Failed to initialize newly added partitions for the partitioned record index", e);
       throw new HoodieMetadataException("Failed to initialize newly added partitions for the partitioned record index", e);
     }
+  }
+
+  /**
+   * Returns the p90 of the partitioned record index file group counts of the existing data partitions, or the
+   * configured min file group count when there are none.
+   */
+  private int getExistingPartitionsFileGroupCount() {
+    List<Integer> fileGroupCounts = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.empty(), RECORD_INDEX.getPartitionPath())
+        .stream()
+        .collect(Collectors.groupingBy(
+            fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId()), Collectors.counting()))
+        .values().stream()
+        .map(Long::intValue)
+        .sorted()
+        .collect(Collectors.toList());
+    if (fileGroupCounts.isEmpty()) {
+      return dataWriteConfig.getRecordLevelIndexMinFileGroupCount();
+    }
+    int nearestRank = (int) Math.ceil(EXISTING_PARTITIONS_FILE_GROUP_COUNT_PERCENTILE * fileGroupCounts.size());
+    return fileGroupCounts.get(nearestRank - 1);
+  }
+
+  private int estimatePartitionedRecordIndexFileGroupCount(long numInserts) {
+    return HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, () -> numInserts, HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE,
+        dataWriteConfig.getRecordLevelIndexMinFileGroupCount(), dataWriteConfig.getRecordLevelIndexMaxFileGroupCount(),
+        dataWriteConfig.getRecordIndexGrowthFactor(), dataWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
   }
 
   /**

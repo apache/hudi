@@ -83,8 +83,14 @@ public class SparkMetadataTableGlobalRecordLevelIndex extends HoodieIndex<Object
       log.warn("Record index not initialized. Falling back to {} for tagging records", getFallbackIndexType().name());
 
       // Fallback to another index so that tagLocation is still accurate and there are no duplicates.
+      HoodieIndexConfig.Builder fallbackIndexConfig = HoodieIndexConfig.newBuilder().withIndexType(getFallbackIndexType());
+      if (config.getMetadataConfig().shouldDeferRliInitForFreshTable()) {
+        // With deferred initialization, move records across partitions the same way the record index does, so the
+        // behavior does not change once the index is built.
+        fallbackIndexConfig.withGlobalSimpleIndexUpdatePartitionPath(config.getRecordIndexUpdatePartitionPath());
+      }
       HoodieWriteConfig otherConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
-          .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(getFallbackIndexType()).build()).build();
+          .withIndexConfig(fallbackIndexConfig.build()).build();
       HoodieIndex fallbackIndex = SparkHoodieIndexFactory.createIndex(otherConfig);
 
       // Fallback index needs to be a global index like record index

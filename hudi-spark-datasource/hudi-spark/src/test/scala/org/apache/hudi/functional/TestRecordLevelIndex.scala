@@ -34,7 +34,7 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.exception.{HoodieException, HoodieMetadataException}
-import org.apache.hudi.functional.TestRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
+import org.apache.hudi.functional.TestRecordLevelIndex.{expectedFileGroupCount, DeferredUntilMinRecordsTestCase, TestPartitionedRecordLevelIndexTestCase}
 import org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
@@ -411,6 +411,99 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertEquals(0, readRecordIndex(metadata, batch1Keys, HOption.of("partition3")).size)
     assertEquals(0, readRecordIndex(metadata, batch2Keys, HOption.of("partition1")).size)
     assertEquals(0, readRecordIndex(metadata, batch2Keys, HOption.of("partition2")).size)
+  }
+
+  /**
+   * Record index initialization through the datasource writer waits until the latest base files hold the configured
+   * number of records, across bulk_insert and upsert commits. With the metadata table disabled the setting has no
+   * effect and writes stay correct.
+   */
+  @ParameterizedTest
+  @MethodSource(Array("testArgsForDeferredUntilMinRecords"))
+  def testRecordIndexDeferredUntilMinRecords(testCase: DeferredUntilMinRecordsTestCase): Unit = {
+    val options = Map(
+      HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> testCase.tableType.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.ENABLE.key -> testCase.metadataEnabled.toString,
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> (!testCase.partitioned).toString,
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> testCase.partitioned.toString,
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1000",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1000",
+      HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key -> "9600",
+      HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key -> "true",
+      HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key -> "1000",
+      HoodieCompactionConfig.INLINE_COMPACT.key -> "false",
+      HoodieIndexConfig.INDEX_TYPE.key -> (if (testCase.partitioned) "RECORD_LEVEL_INDEX" else "GLOBAL_RECORD_LEVEL_INDEX"))
+    val dataGen = new HoodieTestDataGenerator()
+    val allInserts = new util.ArrayList[HoodieRecord[_]]()
+    val write = (records: util.List[HoodieRecord[_]], operation: String, mode: SaveMode) =>
+      toDataset(spark, records).write.format("hudi").options(options)
+        .option(DataSourceWriteOptions.OPERATION.key, operation).mode(mode).save(basePath)
+
+    // The 3rd commit starts with only 200 records on disk, so it is still below the threshold.
+    val batches = Seq(("001", 100, BULK_INSERT_OPERATION_OPT_VAL), ("002", 100, UPSERT_OPERATION_OPT_VAL), ("003", 2000, BULK_INSERT_OPERATION_OPT_VAL))
+    batches.zipWithIndex.foreach { case ((instant, numRecords, operation), i) =>
+      val inserts = dataGen.generateInserts(instant, numRecords)
+      allInserts.addAll(inserts)
+      write(inserts.asInstanceOf[util.List[HoodieRecord[_]]], operation, if (i == 0) SaveMode.Overwrite else SaveMode.Append)
+      assertFalse(isRecordIndexAvailable, s"Record index should be deferred with ${allInserts.size} records written")
+    }
+    val rowsPerPartition = spark.read.format("hudi").load(basePath).groupBy("partition_path").count().collect()
+      .map(row => row.getString(0) -> row.getLong(1)).toMap
+
+    // Updates of records written while the fallback index was in use, plus new records.
+    val updatedRecords = dataGen.generateUpdates("004", allInserts.subList(0, 300))
+    val newRecords = dataGen.generateInserts("004", 10)
+    val upserts = new util.ArrayList[HoodieRecord[_]](updatedRecords)
+    upserts.addAll(newRecords)
+    allInserts.addAll(newRecords)
+    write(upserts, UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+    // Inserts in a commit after the record index exists.
+    val laterRecords = dataGen.generateInserts("005", 10)
+    allInserts.addAll(laterRecords)
+    write(laterRecords, UPSERT_OPERATION_OPT_VAL, SaveMode.Append)
+
+    val tableRows = spark.read.format("hudi").load(basePath).select("_row_key", "rider").collect()
+    assertEquals(allInserts.asScala.map(_.getRecordKey).sorted, tableRows.map(_.getString(0)).toSeq.sorted)
+    assertEquals(upserts.asScala.map(_.getRecordKey).toSet, tableRows.filter(_.getString(1) == "rider-004").map(_.getString(0)).toSet)
+
+    if (!testCase.metadataEnabled) {
+      metaClient = HoodieTableMetaClient.reload(metaClient)
+      assertFalse(metaClient.getTableConfig.isMetadataTableAvailable)
+    } else {
+      assertTrue(isRecordIndexAvailable)
+      val writeConfig = getWriteConfig(options)
+      val metadata = getHoodieTable(metaClient, writeConfig).getTableMetadata.asInstanceOf[HoodieBackedTableMetadata]
+      val fileGroupIds = metadata.getMetadataFileSystemView.getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+        .iterator().asScala.map(_.getFileGroupId.getFileId).toSeq
+      val allKeys = allInserts.asScala.map(_.getRecordKey)
+      if (testCase.partitioned) {
+        val fileGroupsPerPartition = fileGroupIds.groupBy(HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName).mapValues(_.size).toMap
+        assertEquals(rowsPerPartition.mapValues(rows => expectedFileGroupCount(rows, 1, 1000)).toMap, fileGroupsPerPartition)
+        // A partitioned lookup reads one file group, so keys are grouped by file group the way tagging does it.
+        allInserts.asScala.groupBy(_.getPartitionPath).foreach { case (partition, records) =>
+          val keys = records.map(_.getRecordKey)
+          val located = keys.groupBy(key => HoodieTableMetadataUtil.mapRecordKeyToFileGroupIndex(key, fileGroupsPerPartition(partition)))
+            .values.flatMap(shardKeys => readRecordIndex(metadata, shardKeys.asJava, HOption.of(partition)).keySet).toSet
+          assertEquals(keys.toSet, located)
+        }
+      } else {
+        // 2200 records x growth factor 2 / (9600 bytes / 48 bytes per entry) = 22 file groups
+        assertEquals(22, fileGroupIds.size)
+        assertEquals(allKeys.toSet, readRecordIndex(metadata, allKeys.asJava, HOption.empty()).keySet)
+      }
+      metadata.close()
+    }
+  }
+
+  private def isRecordIndexAvailable: Boolean = {
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    metaClient.getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
   }
 
   @ParameterizedTest
@@ -930,6 +1023,23 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
 object TestRecordLevelIndex {
 
   case class TestPartitionedRecordLevelIndexTestCase(tableType: HoodieTableType, streamingWriteEnabled: Boolean)
+
+  case class DeferredUntilMinRecordsTestCase(tableType: HoodieTableType, partitioned: Boolean, metadataEnabled: Boolean)
+
+  def testArgsForDeferredUntilMinRecords: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      Arguments.arguments(DeferredUntilMinRecordsTestCase(HoodieTableType.COPY_ON_WRITE, partitioned = false, metadataEnabled = true)),
+      Arguments.arguments(DeferredUntilMinRecordsTestCase(HoodieTableType.COPY_ON_WRITE, partitioned = true, metadataEnabled = true)),
+      Arguments.arguments(DeferredUntilMinRecordsTestCase(HoodieTableType.MERGE_ON_READ, partitioned = false, metadataEnabled = true)),
+      Arguments.arguments(DeferredUntilMinRecordsTestCase(HoodieTableType.COPY_ON_WRITE, partitioned = false, metadataEnabled = false))
+    )
+  }
+
+  /** Mirrors HoodieTableMetadataUtil.estimateFileGroupCount with growth factor 2 and 200 entries per file group. */
+  def expectedFileGroupCount(records: Long, min: Int, max: Int): Int = {
+    val estimated = (math.ceil(records * 2.0).toLong / 200).toInt
+    if (estimated >= max) max else if (estimated <= min) min else estimated
+  }
 
   def testArgsForPartitionedRecordLevelIndex: java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(

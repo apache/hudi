@@ -3990,7 +3990,18 @@ public class HoodieWriteConfig extends HoodieConfig {
             String.format(
                 "To enable %s, set hoodie.clean.failed.writes.policy=LAZY",
                 writeConcurrencyMode.name()));
+        // A writer that started while the record index was deferred would commit without updating it.
+        checkArgument(!writeConfig.getBooleanOrDefault(HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE)
+                || writeConfig.getLongOrDefault(HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS) <= 0,
+            String.format("%s cannot be used with %s", HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key(), writeConcurrencyMode.name()));
       }
+      checkArgument(writeConfig.getLongOrDefault(HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS) >= 0,
+          String.format("%s must not be negative", HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key()));
+      // Flink looks up the record index without a fallback index, so it cannot write while the record index is deferred.
+      checkArgument(engineType != EngineType.FLINK
+              || !writeConfig.getBooleanOrDefault(HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE)
+              || writeConfig.getLongOrDefault(HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS) <= 0,
+          String.format("%s is not supported with the Flink engine", HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key()));
       if (writeConcurrencyMode == WriteConcurrencyMode.NON_BLOCKING_CONCURRENCY_CONTROL) {
         boolean isMetadataTable = HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath());
         checkArgument(

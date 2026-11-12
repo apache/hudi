@@ -20,17 +20,30 @@ package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.common.data.HoodieListData;
+import org.apache.hudi.common.data.HoodiePairData;
+import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.config.HoodieIndexConfig;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
+import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metrics.RecordIndexLookupMetrics;
+import org.apache.hudi.utilities.config.SourceTestConfig;
 import org.apache.hudi.utilities.testutils.CapturingMetricsReporter;
 
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -124,5 +137,54 @@ public class TestRliMetricsOnStreamerPath extends HoodieDeltaStreamerTestBase {
     // global and partitioned variants (10 and 3 on this workload).
     assertTrue(Long.parseLong(counters.get(RecordIndexLookupMetrics.SHARDS_READ)) > 0,
         "at least one shard was read");
+  }
+
+  /**
+   * A streamer running in continuous mode re-evaluates record index deferral on every commit, so the index is built
+   * once the table holds the configured number of records and is sized from them, while the same streamer keeps writing.
+   */
+  @Test
+  public void testRecordIndexDeferredUntilMinRecordsInContinuousMode() throws Exception {
+    String tableBasePath = basePath + "/test_rli_deferred_continuous";
+    int totalRecords = 1500;
+    HoodieDeltaStreamer.Config cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.continuousMode = true;
+    cfg.sourceLimit = 300;
+    cfg.configs.add(SourceTestConfig.MAX_UNIQUE_RECORDS_PROP.key() + "=" + totalRecords);
+    cfg.configs.add(HoodieMetadataConfig.ENABLE.key() + "=true");
+    cfg.configs.add(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() + "=true");
+    cfg.configs.add(HoodieIndexConfig.INDEX_TYPE.key() + "=GLOBAL_RECORD_LEVEL_INDEX");
+    cfg.configs.add(HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key() + "=true");
+    cfg.configs.add(HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key() + "=1000");
+    cfg.configs.add(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key() + "=9600");
+    cfg.configs.add(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key() + "=1");
+    cfg.configs.add(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key() + "=1000");
+
+    HoodieDeltaStreamer streamer = new HoodieDeltaStreamer(cfg, jsc);
+    TestHoodieDeltaStreamer.deltaStreamerTestRunner(streamer, cfg, ignored -> {
+      HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(storage.getConf()).build();
+      assertTrue(metaClient.getTableConfig().getMetadataPartitions().contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath()));
+      assertRecordCount(totalRecords, tableBasePath, sqlContext);
+      return true;
+    });
+
+    assertDistanceCount(totalRecords, tableBasePath, sqlContext);
+    List<String> recordKeys = sqlContext.read().format("hudi").load(tableBasePath).select("_hoodie_record_key").collectAsList().stream()
+        .map(row -> row.getString(0)).collect(Collectors.toList());
+    HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(storage.getConf()).build();
+    try (HoodieTableMetadata metadata = metaClient.getTableFormat().getMetadataFactory()
+        .create(context, storage, HoodieMetadataConfig.newBuilder().enable(true).build(), tableBasePath)) {
+      // Built from at least 1000 records (>= 10 file groups) and at most the 1500 the source produces (<= 15). Building
+      // it on the 2nd commit from 300 records would give 3.
+      long fileGroupCount = ((HoodieBackedTableMetadata) metadata).getMetadataFileSystemView()
+          .getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath()).count();
+      assertTrue(fileGroupCount >= 10 && fileGroupCount <= 15, "Unexpected record index file group count " + fileGroupCount);
+      HoodiePairData<String, HoodieRecordGlobalLocation> locations = metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys));
+      try {
+        assertEquals(new HashSet<>(recordKeys), HoodieDataUtils.dedupeAndCollectAsMap(locations).keySet());
+      } finally {
+        locations.unpersistWithDependencies();
+      }
+    }
   }
 }

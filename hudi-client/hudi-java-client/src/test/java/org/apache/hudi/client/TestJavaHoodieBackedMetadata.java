@@ -158,6 +158,7 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.ROLLBACK_ACTION;
 import static org.apache.hudi.common.table.timeline.InstantComparison.GREATER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
+import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.getNextCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_FILE_NAME_GENERATOR;
@@ -1295,6 +1296,40 @@ public class TestJavaHoodieBackedMetadata extends TestHoodieMetadataBase {
           MetadataPartitionType.FILES.getPartitionPath()).size(), 1);
       assertEquals(HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(), Option.empty(),
           MetadataPartitionType.RECORD_INDEX.getPartitionPath()).size(), 3);
+    }
+  }
+
+  /**
+   * Only Spark sizes a new data partition of the partitioned record index from the existing partitions and the records
+   * the commit inserts into it. Other engines keep the min file group count, which is what the Flink record index
+   * partitioner assumes for a data partition it has not seen.
+   */
+  @Test
+  public void testPartitionedRecordIndexNewPartitionUsesMinFileGroupCountOutsideSpark() throws Exception {
+    init(HoodieTableType.COPY_ON_WRITE);
+    HoodieEngineContext engineContext = new HoodieJavaEngineContext(storageConf);
+    HoodieWriteConfig writeConfig = getWriteConfigBuilder(true, true, false)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .enable(true)
+            .withEnableRecordLevelIndex(true)
+            .withPartitionedRecordIndexFileGroupCount(1, 1000)
+            .withRecordIndexMaxFileGroupSizeBytes(9600L)
+            .build())
+        .build();
+    try (HoodieJavaWriteClient client = new HoodieJavaWriteClient(engineContext, writeConfig)) {
+      // 1000 inserts would size the partition at 10 file groups in Spark: 1000 x growth factor 2 / 200 entries per file group
+      String commitTime = client.startCommit();
+      List<HoodieRecord> records = dataGen.generateInsertsForPartition(commitTime, 1000, DEFAULT_FIRST_PARTITION_PATH);
+      List<WriteStatus> writeStatuses = client.insert(records, commitTime);
+      assertNoWriteErrors(writeStatuses);
+      client.commit(commitTime, writeStatuses);
+
+      HoodieBackedTableMetadata metadataReader = (HoodieBackedTableMetadata) metadata(client);
+      Map<String, Long> fileGroupCounts = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataReader.getMetadataMetaClient(),
+              Option.empty(), RECORD_INDEX.getPartitionPath()).stream()
+          .collect(Collectors.groupingBy(
+              fileSlice -> HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName(fileSlice.getFileId()), Collectors.counting()));
+      assertEquals(Collections.singletonMap(DEFAULT_FIRST_PARTITION_PATH, 1L), fileGroupCounts);
     }
   }
 

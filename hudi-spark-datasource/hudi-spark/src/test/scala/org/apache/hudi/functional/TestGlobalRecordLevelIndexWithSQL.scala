@@ -20,6 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, HoodieFileIndex, RecordLevelIndexSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
+import org.apache.hudi.common.data.HoodieListData
 import org.apache.hudi.common.model.{FileSlice, HoodieTableType}
 import org.apache.hudi.common.model.HoodieRecord.HoodieMetadataField.RECORD_KEY_METADATA_FIELD
 import org.apache.hudi.common.table.HoodieTableMetaClient
@@ -27,7 +28,7 @@ import org.apache.hudi.common.table.view.{FileSystemViewManager, HoodieTableFile
 import org.apache.hudi.common.testutils.HoodieTestUtils
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.core.index.record.HoodieRecordIndex
-import org.apache.hudi.metadata.MetadataPartitionType
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, MetadataPartitionType}
 import org.apache.hudi.util.JFunction
 
 import org.apache.spark.sql.{DataFrame, HoodieCatalystExpressionUtils, SaveMode}
@@ -35,11 +36,13 @@ import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, Equal
 import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.junit.jupiter.api.{Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Assumptions.assumeFalse
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
 
+import scala.collection.JavaConverters._
 import scala.util.Using
 
 @Tag("functional")
@@ -331,6 +334,80 @@ class TestGlobalRecordLevelIndexWithSQL extends RecordLevelIndexTestBase {
     val rliIndexSupport = RecordLevelIndexSupport.create(spark, getConfig.getMetadataConfig, metaClient)
     val fileNames = rliIndexSupport.computeCandidateFileNames(fileIndex, Seq(dataFilter), null, prunedPaths, false)
     assertEquals(if (includeLogFiles) 2 else 1, fileNames.get.size)
+  }
+
+  /**
+   * Record index initialization through Spark SQL waits for the configured number of records: INSERT INTO with
+   * bulk_insert and upsert stays below it, and MERGE INTO crosses it without duplicating rows.
+   */
+  @Test
+  def testRecordIndexDeferredUntilMinRecordsWithSQL(): Unit = {
+    assumeFalse(isPartitionedRli, "Covered for the global record index only")
+    val tableName = "rli_deferred_sql"
+    val tablePath = tempDir.resolve(tableName).toAbsolutePath.toString
+    spark.sql(
+      s"""
+         |create table $tableName (
+         |  id string,
+         |  ts long,
+         |  name string,
+         |  part string
+         |) using hudi
+         | options (
+         |  primaryKey = 'id',
+         |  orderingFields = 'ts',
+         |  hoodie.metadata.enable = 'true',
+         |  ${HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key} = 'true',
+         |  hoodie.index.type = 'GLOBAL_RECORD_LEVEL_INDEX',
+         |  ${HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key} = 'true',
+         |  ${HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key} = '1000',
+         |  ${HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key} = '9600',
+         |  ${HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key} = '1',
+         |  ${HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key} = '1000'
+         | )
+         | partitioned by (part)
+         | location '$tablePath'
+       """.stripMargin)
+    this.metaClient = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(HoodieTestUtils.getDefaultStorageConf).build()
+    val isRecordIndexAvailable = () => HoodieTableMetaClient.reload(metaClient).getTableConfig.getMetadataPartitions
+      .contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+    val rowsOf = (from: Int, to: Int, ts: Long, name: String) =>
+      s"select cast(id as string) as id, ${ts}L as ts, '$name' as name, concat('p', cast(id % 3 as string)) as part from range($from, $to)"
+
+    // The 3rd commit starts with only 200 records on disk, so it is still below the threshold.
+    try {
+      Seq(("bulk_insert", 0, 100), ("upsert", 100, 200), ("bulk_insert", 200, 2200)).foreach { case (operation, from, to) =>
+        spark.conf.set("hoodie.spark.sql.insert.into.operation", operation)
+        spark.sql(s"insert into $tableName ${rowsOf(from, to, 1L, "v1")}")
+        assertFalse(isRecordIndexAvailable(), s"Record index should be deferred with $to records written")
+      }
+    } finally {
+      spark.conf.unset("hoodie.spark.sql.insert.into.operation")
+    }
+
+    spark.sql(
+      s"""
+         |merge into $tableName t
+         |using (${rowsOf(0, 300, 4L, "v4")} union all ${rowsOf(2200, 2210, 4L, "v4")}) s
+         |on t.id = s.id
+         |when matched then update set *
+         |when not matched then insert *
+       """.stripMargin)
+    assertTrue(isRecordIndexAvailable())
+
+    val rows = spark.sql(s"select id, name from $tableName").collect()
+    assertEquals((0 until 2210).map(_.toString).sorted, rows.map(_.getString(0)).toSeq.sorted)
+    assertEquals(((0 until 300) ++ (2200 until 2210)).map(_.toString).toSet, rows.filter(_.getString(1) == "v4").map(_.getString(0)).toSet)
+
+    val metadataConfig = HoodieMetadataConfig.newBuilder().enable(true).build()
+    Using(metaClient.getTableFormat.getMetadataFactory.create(context, metaClient.getStorage, metadataConfig, tablePath)) { metadata =>
+      // 2200 records x growth factor 2 / (9600 bytes / 48 bytes per entry) = 22 file groups
+      assertEquals(22, metadata.asInstanceOf[HoodieBackedTableMetadata].getMetadataFileSystemView
+        .getAllFileGroups(MetadataPartitionType.RECORD_INDEX.getPartitionPath).count())
+      val keys = (0 until 2210).map(_.toString).asJava
+      val located = metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(keys)).collectAsList().asScala.map(_.getKey).toSet
+      assertEquals(keys.asScala.toSet, located)
+    }.get
   }
 
   @Test

@@ -44,6 +44,7 @@ import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -501,6 +502,56 @@ public class TestHoodieWriteConfig {
         true, true, true,
         WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL, HoodieFailedWritesCleaningPolicy.LAZY,
         InProcessLockProvider.class.getName());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true, 1000, true", "true, 0, false", "false, 1000, false"})
+  void testDeferRecordIndexMinRecordsRejectedWithMultiWriter(boolean deferInit, long minRecords, boolean expectRejected) {
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withDeferRliInitializationForFreshTable(deferInit)
+            .withDeferRliInitMinRecords(minRecords)
+            .build());
+    if (expectRejected) {
+      IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, builder::build);
+      assertEquals(HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key() + " cannot be used with OPTIMISTIC_CONCURRENCY_CONTROL", exception.getMessage());
+    } else {
+      assertEquals(minRecords, builder.build().getMetadataConfig().getDeferRliInitMinRecords());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {-1L, Long.MIN_VALUE})
+  void testNegativeDeferRecordIndexMinRecordsRejected(long minRecords) {
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
+        .withPath("/tmp")
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withDeferRliInitializationForFreshTable(true)
+            .withDeferRliInitMinRecords(minRecords)
+            .build());
+    IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, builder::build);
+    assertEquals(HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key() + " must not be negative", exception.getMessage());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"FLINK, 1000, true", "FLINK, 0, false", "SPARK, 1000, false", "JAVA, 1000, false"})
+  void testDeferRecordIndexMinRecordsRejectedWithFlink(EngineType engineType, long minRecords, boolean expectRejected) {
+    HoodieWriteConfig.Builder builder = HoodieWriteConfig.newBuilder()
+        .withEngineType(engineType)
+        .withPath("/tmp")
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withDeferRliInitializationForFreshTable(true)
+            .withDeferRliInitMinRecords(minRecords)
+            .build());
+    if (expectRejected) {
+      IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, builder::build);
+      assertEquals(HoodieMetadataConfig.DEFER_RLI_INIT_MIN_RECORDS.key() + " is not supported with the Flink engine", exception.getMessage());
+    } else {
+      assertEquals(minRecords, builder.build().getMetadataConfig().getDeferRliInitMinRecords());
+    }
   }
 
   @ParameterizedTest
