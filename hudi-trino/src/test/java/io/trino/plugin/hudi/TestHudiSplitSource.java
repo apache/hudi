@@ -33,6 +33,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -166,6 +167,7 @@ public class TestHudiSplitSource
                 regularPredicates,
                 OptionalLong.empty(),
                 "",
+                Optional.empty(),
                 "101");
     }
 }

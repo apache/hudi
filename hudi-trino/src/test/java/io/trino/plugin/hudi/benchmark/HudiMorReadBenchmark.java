@@ -60,8 +60,9 @@ import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
  * <ul>
  *   <li><b>Merge-path CPU</b> (record size estimation, Page/Avro conversion, key-based merge): {@code _rt} vs
  *   {@code _ro} CPU on the {@code scan} scenario.</li>
- *   <li><b>Per-split metadata reads</b> (meta client + {@code TableSchemaResolver} per split): table-properties and
- *   timeline reads per query, which should not grow with the number of splits.</li>
+ *   <li><b>Per-split metadata reads</b> (a meta client and a {@code TableSchemaResolver} per split, until
+ *   apache/hudi#20628): table-properties and timeline reads per query, which should not grow with the number of
+ *   splits.</li>
  *   <li><b>Dynamic partition pruning</b> missing its wait window: the {@code dpp} scenario reports the date filter's
  *   collection time against {@code hudi.dynamic-filtering.wait-timeout} (session property
  *   {@code dynamic_filtering_wait_timeout}) and the fact table's base-file input.</li>
@@ -208,8 +209,6 @@ final class HudiMorReadBenchmark
     enum Variant
     {
         DEFAULT(Map.of()),
-        /** Resolves the table schema once on the coordinator, which removes the per-split {@code TableSchemaResolver}. */
-        SCHEMA_IN_HANDLE(Map.of("resolve_column_name_casing_enabled", "true")),
         /** Waits long enough for the dimension's dynamic filter, isolating the pruning-timing effect. */
         DF_WAIT_10S(Map.of("dynamic_filtering_wait_timeout", "10s"));
 
