@@ -140,7 +140,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
     val batchStart = start.map(HoodieSourceOffset(_)).getOrElse(initialOffsets)
     if (isCDCQuery) buildBatch(start, end, batchStart) else {
-      HoodieStreamingSourceSafety.defer(sqlContext, schema) { buildBatch(start, end, batchStart) }
+      HoodieStreamingSourceSafety.deferRejection(sqlContext, schema) { buildBatch(start, end, batchStart) }
     }
   }
 

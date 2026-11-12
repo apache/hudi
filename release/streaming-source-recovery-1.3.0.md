@@ -38,3 +38,11 @@ Initial start-offset selection and CDC reads are unchanged. Restart queries to
 change the strategy. SDP internal sources must pass explicit recovery through
 `spark.hoodie.datasource.read.streaming.recovery.strategy` in flow SQLConf.
 See [source recovery and operational limits](../hudi-integ-test/spark-pipelines/SOURCE_SAFETY.md).
+
+`FAIL` requires the sink to propagate batch execution errors. Safety rejections
+are deferred until execution so Spark can discard the last committed batch plan
+on restart. For Hudi sinks, keep
+`hoodie.datasource.write.streaming.ignore.failed.batch=false` (the default).
+Setting it to `true`, or swallowing errors in a custom sink, can acknowledge a
+rejected batch and advance the checkpoint past unread data even under `FAIL`.
+Healthy batches retain their scan relations for column pruning and filter pushdown.

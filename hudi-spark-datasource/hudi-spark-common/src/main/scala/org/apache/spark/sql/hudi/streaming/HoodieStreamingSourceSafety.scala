@@ -24,47 +24,33 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.util.CleanerUtils
 import org.apache.hudi.exception.HoodieException
 
-import org.apache.spark.{Dependency, OneToOneDependency, Partition, TaskContext}
+import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, SQLContext}
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.execution.LogicalRDD
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 
 /** Conservative reset and history validation for checkpointed latest-state streaming consumers. */
 private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSupport {
-  private class RebuildRequired(message: String) extends HoodieException(message)
+  private class RebuildRequired(message: String, cause: Throwable = null) extends HoodieException(message, cause)
 
-  // Spark re-plans the last committed batch during restart without executing it. Defer both
-  // validation and relation construction until the scheduler asks for this batch's partitions.
-  def defer(sqlContext: SQLContext, schema: StructType)(batch: => DataFrame): DataFrame = {
-    val rows = new DeferredBatchRDD(sqlContext, () => batch.queryExecution.logical match {
-      case relation: LogicalRDD => relation.rdd
-      case plan =>
-        // Keep the file-group reader's required filters and projection while executing this
-        // individual micro-batch as a bounded scan beneath the outer streaming LogicalRDD.
-        val boundedPlan = plan.transform {
-          case relation: LogicalRelation => relation.copy(isStreaming = false)
+  // Spark re-plans the last committed batch on restart and discards it. Delay only safety
+  // rejections; healthy scans must remain visible to column pruning and predicate pushdown.
+  def deferRejection(sqlContext: SQLContext, schema: StructType)(batch: => DataFrame): DataFrame = {
+    try {
+      batch
+    } catch {
+      case error: RebuildRequired =>
+        val rows = new RDD[InternalRow](sqlContext.sparkContext, Nil) {
+          override protected def getPartitions: Array[Partition] = throw error
+
+          override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] = throw error
         }
-        sparkAdapter.getUnsafeUtils.createDataFrameFrom(sqlContext.sparkSession, boundedPlan).queryExecution.toRdd
-    })
-    sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession, rows, schema, isStreaming = true)
-  }
-
-  private class DeferredBatchRDD(sqlContext: SQLContext,
-                                 @transient private val build: () => RDD[InternalRow])
-    extends RDD[InternalRow](sqlContext.sparkContext, Nil) {
-    @transient private lazy val delegate = build()
-
-    override protected def getPartitions: Array[Partition] = delegate.partitions
-
-    override protected def getDependencies: Seq[Dependency[_]] = Seq(new OneToOneDependency(delegate))
-
-    override def compute(split: Partition, context: TaskContext): Iterator[InternalRow] =
-      firstParent[InternalRow].iterator(split, context)
+        sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession, rows, schema, isStreaming = true)
+    }
   }
 
   def strategy(parameters: Map[String, String]): String = {
@@ -111,7 +97,7 @@ private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSuppor
             Set(WriteOperationType.COMPACT, WriteOperationType.LOG_COMPACT, WriteOperationType.CLUSTER).contains(operation)
           }
           if (bound.isEmpty || writes.exists(i => offset(i) > end && i.requestedTime() <= bound.get && !isTableService(i))) {
-            throw new HoodieException("Cannot reconstruct the recovery snapshot at the checkpointed batch end. "
+            throw new RebuildRequired("Cannot reconstruct the recovery snapshot at the checkpointed batch end. "
               + "Rebuild downstream tables and checkpoints together.", error)
           }
           val options = parameters ++ Map(
