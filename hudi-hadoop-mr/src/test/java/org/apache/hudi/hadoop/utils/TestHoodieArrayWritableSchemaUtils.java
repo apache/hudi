@@ -28,6 +28,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 import org.apache.hudi.hadoop.HiveRecordContext;
 
@@ -269,6 +270,56 @@ public class TestHoodieArrayWritableSchemaUtils {
     ArrayWritable resultGroup = (ArrayWritable) resultArray.get()[0];
     assertEquals(new IntWritable(7), resultGroup.get()[0]);
     assertNull(resultGroup.get()[1]);
+  }
+
+  @Test
+  void testRewriteUnionRecordBranchWithReorderedFields() {
+    // Reproduces the correctness issue raised on review: union [long, Member] whose record branch
+    // evolves from {a, b} to {b, a}. The member group layout is unchanged, but the populated
+    // member must be rewritten, otherwise b is read from a's slot.
+    HoodieSchema oldSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":{\"type\":\"record\",\"name\":\"Cu\",\"fields\":["
+        + "{\"name\":\"member0\",\"type\":[\"null\",\"long\"]},"
+        + "{\"name\":\"member1\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"string\"},{\"name\":\"b\",\"type\":\"string\"}]}]}]}}]}");
+    HoodieSchema newSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":[\"null\",\"long\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"b\",\"type\":\"string\"},{\"name\":\"a\",\"type\":\"string\"}]}]}]}");
+
+    ArrayWritable member = new ArrayWritable(Writable.class, new Writable[] {new Text("A"), new Text("B")});
+    ArrayWritable memberGroup = new ArrayWritable(Writable.class, new Writable[] {null, member});
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[] {memberGroup});
+
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap());
+
+    ArrayWritable resultGroup = (ArrayWritable) result.get()[0];
+    assertNull(resultGroup.get()[0]);
+    ArrayWritable resultMember = (ArrayWritable) resultGroup.get()[1];
+    assertEquals(new Text("B"), resultMember.get()[0]);
+    assertEquals(new Text("A"), resultMember.get()[1]);
+  }
+
+  @Test
+  void testRewriteUnionBranchOrderMismatchThrows() {
+    // The target union lists its non-null branches in a different order, so memberN no longer
+    // addresses the same branch. Reject instead of silently reading the wrong branch.
+    HoodieSchema oldSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":{\"type\":\"record\",\"name\":\"Cu\",\"fields\":["
+        + "{\"name\":\"member0\",\"type\":[\"null\",\"long\"]},"
+        + "{\"name\":\"member1\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"string\"},{\"name\":\"b\",\"type\":\"string\"}]}]}]}}]}");
+    HoodieSchema newSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"string\"},{\"name\":\"b\",\"type\":\"string\"}]},\"long\"]}]}");
+
+    ArrayWritable memberGroup = new ArrayWritable(Writable.class, new Writable[] {
+        new LongWritable(1L), null});
+
+    assertThrows(SchemaCompatibilityException.class, () ->
+        HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+            new ArrayWritable(Writable.class, new Writable[] {memberGroup}),
+            oldSchema, newSchema, Collections.emptyMap()));
   }
 
   @Test
