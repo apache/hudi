@@ -46,7 +46,9 @@ public class TestHudiMorMergeModeSemantics
         return HudiQueryRunner.builder()
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new EventTimeDeletesHudiTablesInitializer(),
-                        new CommitTimeOrderingHudiTablesInitializer()))
+                        new CommitTimeOrderingHudiTablesInitializer(),
+                        EventTimeDeletesHudiTablesInitializer.spillingEveryLogRecord(),
+                        CommitTimeOrderingHudiTablesInitializer.spillingEveryLogRecord()))
                 .build();
     }
 
@@ -114,6 +116,24 @@ public class TestHudiMorMergeModeSemantics
         assertQuery(
                 "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
+    }
+
+    @Test
+    public void testSpilledMergeMatchesInMemoryMerge()
+    {
+        // The spilling tables hold the same commits with a one-byte merge budget, so every log record and delete
+        // goes through HudiTrinoReaderContext.getRecordSerializer before it is merged
+        assertQuery(
+                "SELECT key, name, value FROM " + EventTimeDeletesHudiTablesInitializer.SPILLING_RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k4', 'k4_base', 40),"
+                        + " ('k5', 'k5_base', 50), ('k6', 'k6_base', 60)");
+        assertQuery(
+                "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.SPILLING_RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
+        assertThat(query("SELECT key, name, value, ts, _hoodie_is_deleted FROM " + EventTimeDeletesHudiTablesInitializer.SPILLING_RT_TABLE_NAME))
+                .matches("SELECT key, name, value, ts, _hoodie_is_deleted FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME);
+        assertThat(query("SELECT key, name, value, ts FROM " + CommitTimeOrderingHudiTablesInitializer.SPILLING_RT_TABLE_NAME))
+                .matches("SELECT key, name, value, ts FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME);
     }
 
     @Test
