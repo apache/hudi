@@ -17,7 +17,7 @@
 
 package org.apache.hudi.functional
 
-import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils}
+import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
 import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.HoodieReaderConfig
@@ -38,7 +38,7 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode}
 import org.apache.spark.sql.streaming.StreamTest
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
-class TestStreamingSource extends StreamTest {
+class TestStreamingSource extends StreamTest with SparkAdapterSupport {
 
   import testImplicits._
   protected val commonOptions: Map[String, String] = Map(
@@ -682,7 +682,12 @@ class TestStreamingSource extends StreamTest {
           val reader = source()
           val saved = reader.getOffset.get
           addData(tablePath, Seq(("2", "new", "20", "002")), enableInlineCluster = true)
-          assert(batchIds(reader.getBatch(Some(saved), reader.getOffset.get)) == Seq("2"))
+          val healthyBatch = reader.getBatch(Some(saved), reader.getOffset.get)
+          assert(healthyBatch.queryExecution.logical.exists {
+            case _: org.apache.spark.sql.execution.datasources.LogicalRelation => true
+            case _ => false
+          }, "Healthy batches must expose the scan to pruning and predicate pushdown")
+          assert(batchIds(healthyBatch) == Seq("2"))
           assert(metaClient.reloadActiveTimeline().getCompletedReplaceTimeline.countInstants() > 0)
           val beforeResetEnd = reader.getOffset.get
           Seq(("3", "replacement", "30", "003")).toDF(columns: _*).write.format("hudi")
@@ -920,14 +925,18 @@ class TestStreamingSource extends StreamTest {
   }
 
   private def batchIds(batch: org.apache.spark.sql.DataFrame): Seq[String] = {
-    val idIndex = batch.schema.fieldIndex("id")
-    batch.queryExecution.logical.collectFirst {
-      case relation: org.apache.spark.sql.execution.datasources.LogicalRelation =>
-        spark.sqlContext.baseRelationToDataFrame(relation.relation).select("id")
-          .collect().map(_.getString(0)).toSeq.sorted
+    batch.queryExecution.logical match {
       case relation: org.apache.spark.sql.execution.LogicalRDD =>
+        val idIndex = batch.schema.fieldIndex("id")
         relation.rdd.collect().map(_.getUTF8String(idIndex).toString).toSeq.sorted
-    }.get
+      case plan =>
+        // Keep incremental filters and projection; the base relation alone reads extra clustered rows.
+        val boundedPlan = plan.transform {
+          case relation: org.apache.spark.sql.execution.datasources.LogicalRelation => relation.copy(isStreaming = false)
+        }
+        sparkAdapter.getUnsafeUtils.createDataFrameFrom(spark, boundedPlan)
+          .select("id").collect().map(_.getString(0)).toSeq.sorted
+    }
   }
 
   private def addData(inputPath: String,

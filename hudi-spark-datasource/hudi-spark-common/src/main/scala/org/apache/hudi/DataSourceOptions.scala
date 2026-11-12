@@ -136,7 +136,9 @@ object DataSourceReadOptions {
     .withValidValues("FAIL", "READ_UPTO_LATEST_COMMIT", "READ_LATEST")
     .sinceVersion("1.3.0")
     .withDocumentation("Recovery when a saved latest-state streaming offset is archived, cleaned, or reset. "
-      + "FAIL stops with an actionable error. READ_UPTO_LATEST_COMMIT reads a single full snapshot at the "
+      + "FAIL stops with an actionable error and requires sinks to propagate execution errors; keep "
+      + "hoodie.datasource.write.streaming.ignore.failed.batch=false for Hudi sinks. "
+      + "READ_UPTO_LATEST_COMMIT reads a single full snapshot at the "
       + "batch end, then resumes increments; this may duplicate append rows or retain stale downstream upsert keys. "
       + "READ_LATEST skips the unread range, accepting data loss. Rebuilding downstream tables and checkpoints "
       + "together is the safe reset recovery. This strategy overrides incremental full-table-scan fallback after the initial earliest offset. "

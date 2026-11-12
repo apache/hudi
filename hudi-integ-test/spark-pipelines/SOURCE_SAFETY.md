@@ -38,9 +38,10 @@ coordinated rebuild can read tables with cleaned, replaced files. The strategy
 is captured at source construction. Restart the query to change it. Initial
 startup still uses `hoodie.datasource.streaming.startOffset` (earliest, latest,
 or an explicit instant); a fresh earliest checkpoint can read the current state.
-CDC behavior is unchanged. Validation runs when the batch is executed; Spark
-may re-plan and discard the last committed batch on restart without validating
-that already-delivered range.
+CDC behavior is unchanged. Validation runs during batch planning, but safety
+rejections are raised only when the batch executes. Spark may therefore re-plan
+and discard the last committed batch on restart without failing on that
+already-delivered range.
 
 For direct readers:
 
@@ -115,3 +116,11 @@ python hudi-integ-test/spark-pipelines/source_safety_acceptance.py \
   --table-type cow
 # Repeat with --table-type mor.
 ```
+
+`FAIL` requires the sink to propagate batch execution errors. Safety rejections
+are deferred until execution so Spark can discard the last committed batch plan
+on restart. For Hudi sinks, keep
+`hoodie.datasource.write.streaming.ignore.failed.batch=false` (the default).
+Setting it to `true`, or swallowing errors in a custom sink, can acknowledge a
+rejected batch and advance the checkpoint past unread data even under `FAIL`.
+Healthy batches retain their scan relations for column pruning and filter pushdown.
