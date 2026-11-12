@@ -694,7 +694,7 @@ public class RequestHandler {
               String timelineHashFromClient = getTimelineHashParam(context);
               HoodieTimeline localTimeline =
                   viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
-              if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
+              if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient, getTimelineHashNumInstantsParam(context))) {
                 String errMsg = String.format("Last known instant from client was %s but server has the following timeline %s",
                         lastKnownInstantFromClient, localTimeline.getInstants());
                 throw new BadRequestResponse(errMsg);
@@ -749,7 +749,7 @@ public class RequestHandler {
         return false;
       }
 
-      String localTimelineHash = localTimeline.getTimelineHash();
+      String localTimelineHash = localTimeline.getTimelineHash(getTimelineHashNumInstantsParam(ctx));
       // Keep the final consistency check strict so server-ahead responses still activate
       // PriorityBasedFileSystemView's local fallback (apart from the trailing-clean exception).
       if (!localTimelineHash.equals(timelineHashFromClient)) {
@@ -770,7 +770,7 @@ public class RequestHandler {
         HoodieTimeline localTimeline = view.getTimeline();
         // The final check already accepts a trailing clean with an otherwise matching timeline.
         // Other extensions still need a sync: restore may have deleted their extra instants.
-        if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, getTimelineHashParam(ctx))) {
+        if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, getTimelineHashParam(ctx), getTimelineHashNumInstantsParam(ctx))) {
           return false;
         }
         if (isLocalViewBehind(ctx)) {
@@ -789,12 +789,12 @@ public class RequestHandler {
     /**
      * Determine whether to throw an exception when local view of table's timeline is behind that of client's view.
      */
-    private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String timelineHashFromClient) {
+    private boolean shouldThrowExceptionIfLocalViewBehind(HoodieTimeline localTimeline, String timelineHashFromClient, int timelineHashNumInstants) {
       Option<HoodieInstant> lastInstant = localTimeline.lastInstant();
       // When performing async clean, we may have one more .clean.completed after lastInstantTs.
       // In this case, we do not need to throw an exception.
       return !lastInstant.isPresent() || !lastInstant.get().getAction().equals(HoodieTimeline.CLEAN_ACTION)
-          || !localTimeline.findInstantsBefore(lastInstant.get().requestedTime()).getTimelineHash().equals(timelineHashFromClient);
+          || !localTimeline.findInstantsBefore(lastInstant.get().requestedTime()).getTimelineHash(timelineHashNumInstants).equals(timelineHashFromClient);
     }
 
     private boolean isRefreshCheckDisabledInQuery(Context ctx) {
@@ -807,6 +807,13 @@ public class RequestHandler {
 
     private String getTimelineHashParam(Context ctx) {
       return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH, String.class).getOrDefault("");
+    }
+
+    /**
+     * Number of latest instants the client hashed. Absent means the client hashed all its instants.
+     */
+    private int getTimelineHashNumInstantsParam(Context ctx) {
+      return ctx.queryParamAsClass(RemoteHoodieTableFileSystemView.TIMELINE_HASH_NUM_INSTANTS, Integer.class).getOrDefault(0);
     }
   }
 }

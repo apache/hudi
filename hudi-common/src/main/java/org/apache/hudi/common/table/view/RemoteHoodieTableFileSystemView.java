@@ -123,6 +123,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   public static final String FILEID_PARAM = "fileid";
   public static final String LAST_INSTANT_TS = "lastinstantts";
   public static final String TIMELINE_HASH = "timelinehash";
+  public static final String TIMELINE_HASH_NUM_INSTANTS = "timelinehashnuminstants";
   public static final String REFRESH_OFF = "refreshoff";
   public static final String INCLUDE_FILES_IN_PENDING_COMPACTION_PARAM = "includependingcompaction";
 
@@ -141,6 +142,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
   private final String basePath;
   private final HoodieTableMetaClient metaClient;
   private HoodieTimeline timeline;
+  private final int timelineHashNumInstants;
   private final TimelineServiceClientBase timelineServiceClient;
 
   private boolean closed = false;
@@ -153,6 +155,7 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
     this.basePath = metaClient.getBasePath().toString();
     this.metaClient = metaClient;
     this.timeline = metaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
+    this.timelineHashNumInstants = viewConf.getRemoteTimelineHashNumInstants();
     this.timelineServiceClient = new TimelineServiceClient(viewConf);
   }
 
@@ -162,7 +165,10 @@ public class RemoteHoodieTableFileSystemView implements SyncableFileSystemView, 
 
     // Adding mandatory parameters - Last instants affecting file-slice
     timeline.lastInstant().ifPresent(instant -> queryParameters.put(LAST_INSTANT_TS, instant.requestedTime()));
-    queryParameters.put(TIMELINE_HASH, timeline.getTimelineHash());
+    queryParameters.put(TIMELINE_HASH, timeline.getTimelineHash(timelineHashNumInstants));
+    if (timelineHashNumInstants > 0) {
+      queryParameters.put(TIMELINE_HASH_NUM_INSTANTS, String.valueOf(timelineHashNumInstants));
+    }
 
     return timelineServiceClient.makeRequest(
             TimelineServiceClient.Request.newBuilder(method, requestPath).addQueryParams(queryParameters).build())
