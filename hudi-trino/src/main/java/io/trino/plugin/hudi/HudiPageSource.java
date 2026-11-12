@@ -38,7 +38,6 @@ import static com.google.common.base.Throwables.throwIfUnchecked;
 public class HudiPageSource
         implements ConnectorPageSource
 {
-    private final HoodieFileGroupReader<IndexedRecord> fileGroupReader;
     // Reads flow through fileGroupReader; pageSource is kept for stats/isBlocked delegation
     private final ConnectorPageSource pageSource;
     private final PageBuilder pageBuilder;
@@ -51,12 +50,27 @@ public class HudiPageSource
             List<HiveColumnHandle> columnHandles,
             PrefilledColumnValues prefilledColumnValues)
     {
+        this(pageSource, createRecordIterator(pageSource, fileGroupReader), columnHandles, prefilledColumnValues);
+    }
+
+    HudiPageSource(
+            ConnectorPageSource pageSource,
+            ClosableIterator<IndexedRecord> recordIterator,
+            List<HiveColumnHandle> columnHandles,
+            PrefilledColumnValues prefilledColumnValues)
+    {
         this.pageSource = pageSource;
-        this.fileGroupReader = fileGroupReader;
+        this.recordIterator = recordIterator;
         this.pageBuilder = new PageBuilder(columnHandles.stream().map(HiveColumnHandle::getType).toList());
         this.avroSerializer = new HudiAvroSerializer(columnHandles, prefilledColumnValues);
+    }
+
+    private static ClosableIterator<IndexedRecord> createRecordIterator(
+            ConnectorPageSource pageSource,
+            HoodieFileGroupReader<IndexedRecord> fileGroupReader)
+    {
         try {
-            this.recordIterator = fileGroupReader.getClosableIterator();
+            return fileGroupReader.getClosableIterator();
         }
         catch (Throwable e) {
             // Hudi's log scanning wraps failures in a generic HoodieException ("Exception when
@@ -116,7 +130,7 @@ public class HudiPageSource
     public SourcePage getNextSourcePage()
     {
         checkState(pageBuilder.isEmpty(), "PageBuilder is not empty at the beginning of a new page");
-        while (recordIterator.hasNext()) {
+        while (!pageBuilder.isFull() && recordIterator.hasNext()) {
             avroSerializer.buildRecordInPage(pageBuilder, recordIterator.next());
         }
 
@@ -128,7 +142,7 @@ public class HudiPageSource
     @Override
     public long getMemoryUsage()
     {
-        return pageSource.getMemoryUsage();
+        return pageSource.getMemoryUsage() + pageBuilder.getRetainedSizeInBytes();
     }
 
     @Override
