@@ -17,10 +17,21 @@ limitations under the License.
 -->
 # hudi-lakehouse
 
-Kubernetes packaging for running a Hudi lakehouse: deployable Helm charts for
-the components, plus a self-contained laptop environment to develop against.
+Packaging for running a Hudi lakehouse: Docker Compose for local use, deployable
+Helm charts for Kubernetes, and a laptop environment to develop against.
 
-## Quickstart (one command)
+## Docker Compose (Docker only)
+
+```bash
+./hudi-lakehouse/docker/lakehouse.sh up --build
+```
+
+Starts MinIO, HMS, Spark Connect and the Agent Gateway, seeds sample Hudi tables,
+and verifies MCP queries. No host JDK, Maven or Kubernetes is required.
+See the [Docker installation guide](docker/README.md) for chat/LLM configuration,
+persistence, published-image configuration and the current release-packaging limits.
+
+## Kubernetes quickstart (one command)
 
 Prereqs: `docker`, `minikube`, `helm`, `kubectl`, `mvn`, a JDK (11/17 for the
 Hudi build; a JDK 23 for the Trino connector is auto-provisioned if missing).

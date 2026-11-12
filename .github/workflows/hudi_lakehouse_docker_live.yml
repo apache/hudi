@@ -1,0 +1,36 @@
+name: Hudi Lakehouse Docker live acceptance
+
+# Explicit opt-in: builds containers and runs real Spark SQL, no API key required.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      COMPOSE_PROJECT_NAME: hudi-docker-ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and install with sample data
+        run: ./hudi-lakehouse/docker/lakehouse.sh up --build
+      - name: Recreate services without seeding and verify persistence
+        run: |
+          set -euo pipefail
+          ./hudi-lakehouse/docker/lakehouse.sh down
+          docker compose -f hudi-lakehouse/docker/compose.yaml up -d --wait --wait-timeout 300 spark-connect
+          docker compose -f hudi-lakehouse/docker/compose.yaml up -d --no-deps --wait gateway
+          ./hudi-lakehouse/docker/lakehouse.sh test
+      - name: Verify repeat installation does not duplicate sample data
+        run: ./hudi-lakehouse/docker/lakehouse.sh up
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          ./hudi-lakehouse/docker/lakehouse.sh status || true
+          ./hudi-lakehouse/docker/lakehouse.sh logs || true
+      - name: Remove disposable installation
+        if: always()
+        run: docker compose -f hudi-lakehouse/docker/compose.yaml --profile local-llm down --volumes
