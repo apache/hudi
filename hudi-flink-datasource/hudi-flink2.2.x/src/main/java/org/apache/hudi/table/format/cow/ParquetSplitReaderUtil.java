@@ -81,6 +81,7 @@ import org.apache.parquet.column.page.PageReadStore;
 import org.apache.parquet.column.page.PageReader;
 import org.apache.parquet.filter.UnboundRecordFilter;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.io.ColumnIO;
 import org.apache.parquet.io.GroupColumnIO;
 import org.apache.parquet.io.MessageColumnIO;
@@ -142,8 +143,7 @@ public class ParquetSplitReaderUtil {
       int[] selectedFields,
       int batchSize,
       Path path,
-      long splitStart,
-      long splitLength,
+      ParquetMetadata footer,
       FilterPredicate filterPredicate,
       UnboundRecordFilter recordFilter) throws IOException {
 
@@ -181,8 +181,7 @@ public class ParquetSplitReaderUtil {
         gen,
         batchSize,
         new org.apache.hadoop.fs.Path(path.toUri()),
-        splitStart,
-        splitLength,
+        footer,
         filterPredicate,
         recordFilter);
   }

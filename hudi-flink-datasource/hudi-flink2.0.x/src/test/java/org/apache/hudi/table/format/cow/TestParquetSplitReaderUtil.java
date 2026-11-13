@@ -35,6 +35,7 @@ import org.apache.parquet.example.data.Group;
 import org.apache.parquet.example.data.simple.SimpleGroupFactory;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.example.ExampleParquetWriter;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
 import org.junit.jupiter.api.Test;
@@ -51,6 +52,8 @@ import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.range;
+import static org.apache.parquet.hadoop.ParquetFileReader.readFooter;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -352,6 +355,7 @@ public class TestParquetSplitReaderUtil {
       }
     }
 
+    ParquetMetadata footer = readFooter(conf, path, range(0, new File(tempDir, "data.parquet").length()));
     List<String> values = new ArrayList<>();
     try (ParquetColumnarRowSplitReader reader = new ParquetColumnarRowSplitReader(
         true,
@@ -362,8 +366,7 @@ public class TestParquetSplitReaderUtil {
         VectorizedColumnBatch::new,
         batchSize,
         path,
-        0,
-        new File(tempDir, "data.parquet").length(),
+        footer,
         null,
         null)) {
       while (!reader.reachedEnd()) {
