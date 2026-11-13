@@ -393,19 +393,25 @@ test('every test job carries the route condition, and the aggregate job does not
 test('the matrix-expanded test jobs stay within the ASF cap of 20 jobs at once', () => {
   let total = 0;
   for (const job of testJobs) {
-    const matrix = ci.workflow.jobs[job].strategy?.matrix;
+    // All test jobs start together once `changes` is done. A test job that waited on another would
+    // not run at the same time as it, which this count does not model; extend it first.
+    assert.equal(ci.workflow.jobs[job].needs, 'changes', job);
+    const strategy = ci.workflow.jobs[job].strategy;
+    const matrix = strategy?.matrix;
     const axes = Object.keys(matrix || {}).filter((key) => !['include', 'exclude'].includes(key));
+    let instances;
     if (axes.length) {
       // Combining axes with include or exclude needs GitHub's matching rules; extend this count first.
       assert.ok(!('include' in matrix) && !('exclude' in matrix), job);
-      total += axes.reduce((product, axis) => product * matrix[axis].length, 1);
+      instances = axes.reduce((product, axis) => product * matrix[axis].length, 1);
     } else {
-      total += matrix?.include ? matrix.include.length : 1;
+      instances = matrix?.include ? matrix.include.length : 1;
     }
+    total += Math.min(instances, strategy?.['max-parallel'] ?? instances);
   }
-  assert.ok(total <= 20, 'test job instances: ' + total);
-  // The aggregate job's comment states the current total.
-  const stated = /test jobs currently total (\d+) instances/.exec(
+  assert.ok(total <= 20, 'test job instances at once: ' + total);
+  // The aggregate job's comment states the current number.
+  const stated = /test jobs can currently run (\d+) at once/.exec(
     readFileSync(path.join(__dirname, '../../workflows/bot.yml'), 'utf8'));
   assert.equal(Number(stated?.[1]), total);
 });
