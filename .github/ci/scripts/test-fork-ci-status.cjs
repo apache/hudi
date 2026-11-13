@@ -18,7 +18,9 @@
 // Adapted from apache/arrow-rs .github/ci/scripts/test-fork-ci-status.cjs.
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
-const { readFileSync } = require('node:fs');
+const fs = require('node:fs');
+const { readFileSync } = fs;
+const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
 
@@ -403,14 +405,18 @@ function interpolate(value, scope) {
 }
 const functions = {
   always: () => true,
+  cancelled: () => false,
   startsWith: (text, prefix) => text.startsWith(prefix),
   contains: (list, item) => list.includes(item),
 };
 const withName = (ci, github) => ({ ...github, workflow: ci.name });
 const group = (ci, github) => interpolate(ci.workflow.concurrency.group, { github: withName(ci, github) });
 const cancels = (ci, github) => interpolate(ci.workflow.concurrency['cancel-in-progress'], { github: withName(ci, github) });
-const jobIf = (ci, job, github) => interpolate(ci.workflow.jobs[job].if, { github: withName(ci, github), ...functions });
-const testJobs = (ci) => Object.keys(ci.workflow.jobs).filter((job) => job !== ci.aggregate);
+// The `changes` job runs on merge_group only, so it is skipped and has no outputs by default.
+const skippedChanges = { changes: { result: 'skipped', outputs: {} } };
+const jobIf = (ci, job, github, needs = skippedChanges) =>
+  interpolate(ci.workflow.jobs[job].if, { github: withName(ci, github), needs, ...functions });
+const testJobs = (ci) => Object.keys(ci.workflow.jobs).filter((job) => job !== ci.aggregate && job !== 'changes');
 // GitHub expressions resolve absent properties to an empty string.
 function context({
   event_name, repository = 'apache/hudi', ref = 'refs/heads/feature', sha = 'first',
@@ -431,13 +437,17 @@ const upstreamPush = (branch) => context({ event_name: 'push', ref: 'refs/heads/
 
 const FORK_PR = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master'";
 const UPSTREAM_OTHER_PUSH = "github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x'";
+const DOCS_ONLY = "needs.changes.outputs.docs_only == 'true'";
 // PyYAML resolves the `*route` aliases, so every test job shows the expanded condition.
 test('every test job carries the route condition, and the aggregate job does not', () => {
   for (const ci of javaCi) {
     const jobs = testJobs(ci);
     assert.ok(jobs.length > 1, ci.file);
     for (const job of jobs) {
-      assert.equal(ci.workflow.jobs[job].if, '${{ !(' + FORK_PR + ') && !(' + UPSTREAM_OTHER_PUSH + ') }}', ci.file + ' ' + job);
+      assert.equal(ci.workflow.jobs[job].if,
+        '${{ !cancelled() && !(' + FORK_PR + ') && !(' + UPSTREAM_OTHER_PUSH + ') && ' + DOCS_ONLY.replace('==', '!=') + ' }}',
+        ci.file + ' ' + job);
+      assert.equal(ci.workflow.jobs[job].needs, 'changes', ci.file + ' ' + job);
     }
     const aggregate = ci.workflow.jobs[ci.aggregate];
     assert.equal(aggregate.if, '${{ always() && !(' + UPSTREAM_OTHER_PUSH + ') }}', ci.file);
@@ -447,13 +457,17 @@ test('every test job carries the route condition, and the aggregate job does not
   }
 });
 
-// [case, context, whether the test jobs run, whether the aggregate job runs]
-for (const [name, github, tests, aggregate] of [
+// [case, context, whether the test jobs run, whether the aggregate job runs, the `changes` job]
+for (const [name, github, tests, aggregate, needs] of [
   ['fork PR to master', forkPr, false, true],
   ['fork PR to release-1.2', { ...forkPr, base_ref: 'release-1.2' }, true, true],
   ['fork PR to branch-0.x', { ...forkPr, base_ref: 'branch-0.x' }, true, true],
   ['same-repository PR to master', upstreamPr, true, true],
   ['merge queue', queue, true, true],
+  ['merge queue with a docs-only change', queue, false, true, { changes: { result: 'success', outputs: { docs_only: 'true' } } }],
+  ['merge queue with a code change', queue, true, true, { changes: { result: 'success', outputs: { docs_only: 'false' } } }],
+  // A failed selector has no outputs, so the queue tests everything.
+  ['merge queue with a failed selector', queue, true, true, { changes: { result: 'failure', outputs: {} } }],
   // Only the event_name guard keeps a queue run from matching FORK_PR if base_ref were set.
   ['merge queue with a base_ref', { ...queue, base_ref: 'master' }, true, true],
   ['upstream push to master', upstreamPush('master'), true, true],
@@ -465,17 +479,19 @@ for (const [name, github, tests, aggregate] of [
 ]) {
   test('routes ' + name, () => {
     for (const ci of javaCi) {
-      for (const job of testJobs(ci)) assert.equal(jobIf(ci, job, github), tests, ci.file + ' ' + job);
-      assert.equal(jobIf(ci, ci.aggregate, github), aggregate, ci.file + ' ' + ci.aggregate);
+      for (const job of testJobs(ci)) assert.equal(jobIf(ci, job, github, needs), tests, ci.file + ' ' + job);
+      assert.equal(jobIf(ci, ci.aggregate, github, needs), aggregate, ci.file + ' ' + ci.aggregate);
+      // The selector runs on merge_group only; GitHub evaluates an `if` without ${{ }} as an expression.
+      assert.equal(evaluate(ci.workflow.jobs.changes.if, { github }), github.event_name === 'merge_group', ci.file);
     }
   });
 }
-function aggregateFails(ci, github, results) {
+function aggregateFails(ci, github, results, overrides = {}) {
   const job = ci.workflow.jobs[ci.aggregate];
   const env = { FORK_PR: String(interpolate(job.env.FORK_PR, { github })) };
   const step = job.steps.find((item) => item.name === 'Fail unless every job succeeded');
   const needs = Object.fromEntries(results.map((result, index) => ['job-' + index, { result }]));
-  return interpolate(step.if, { github, env, needs, ...functions });
+  return interpolate(step.if, { github, env, needs, ...functions, ...overrides });
 }
 test('the aggregate jobs accept skipped test jobs only on fork PRs to master', () => {
   for (const ci of javaCi) {
@@ -483,12 +499,25 @@ test('the aggregate jobs accept skipped test jobs only on fork PRs to master', (
     for (const results of [['skipped', 'failure'], ['cancelled', 'skipped'], ['success', 'skipped'], ['success', 'success']]) {
       assert.equal(aggregateFails(ci, forkPr, results), true, ci.file + ' ' + results.join());
     }
-    for (const github of [upstreamPr, queue, forkPush, upstreamPush('master'), { ...forkPr, base_ref: 'release-1.2' }]) {
+    for (const github of [upstreamPr, forkPush, upstreamPush('master'), { ...forkPr, base_ref: 'release-1.2' }]) {
       assert.equal(aggregateFails(ci, github, ['success', 'success', 'success']), false, ci.file);
       for (const results of [['skipped', 'skipped'], ['success', 'skipped'], ['failure', 'success'], ['success', 'cancelled']]) {
         assert.equal(aggregateFails(ci, github, results), true, ci.file + ' ' + results.join());
       }
     }
+  }
+});
+// On merge_group the route skips a test job only for DOCS_ONLY, which skips them all.
+test('the aggregate jobs accept a merge queue run in which every test job skipped', () => {
+  for (const ci of javaCi) {
+    for (const results of [['success', 'success', 'success'], ['skipped', 'skipped', 'skipped']]) {
+      assert.equal(aggregateFails(ci, queue, results), false, ci.file + ' ' + results.join());
+    }
+    for (const results of [['success', 'skipped'], ['skipped', 'failure'], ['skipped', 'cancelled'], ['failure', 'success'], ['success', 'cancelled']]) {
+      assert.equal(aggregateFails(ci, queue, results), true, ci.file + ' ' + results.join());
+    }
+    // A queue run cancelled before its test jobs started is not docs-only.
+    assert.equal(aggregateFails(ci, queue, ['skipped', 'skipped'], { cancelled: () => true }), true, ci.file);
   }
 });
 test('each aggregate job links the fork run of its own workflow on fork PRs', () => {
@@ -498,6 +527,95 @@ test('each aggregate job links the fork run of its own workflow on fork PRs', ()
     assert.equal(evaluate(step.if, { env: { FORK_PR: 'false' } }), false);
     assert.ok(step.run.includes('/actions/workflows/' + ci.file + ')'), ci.file);
     assert.doesNotMatch(step.run, /\$\{\{/, ci.file);
+  }
+});
+
+// The docs-only selector, the `changes` job, is the same in both workflows.
+const changesJob = javaCi[0].workflow.jobs.changes;
+const changesStep = changesJob.steps.find((item) => item.id === 'diff');
+test('the changes job is identical in both workflows and runs on merge_group only', () => {
+  for (const ci of javaCi) assert.deepEqual(ci.workflow.jobs.changes, changesJob, ci.file);
+  assert.equal(changesJob.if, "github.event_name == 'merge_group'");
+  assert.equal(changesJob.outputs.docs_only, '${{ steps.diff.outputs.docs_only }}');
+  // Expressions reach the script only through env.
+  assert.doesNotMatch(changesStep.run, /\$\{\{/);
+});
+test('the changes job excludes exactly what the push filter of each workflow ignores', () => {
+  const excluded = [...changesStep.run.matchAll(/':\(([^)]*)\)([^']*)'/g)].map(([pathspec]) => pathspec);
+  assert.ok(excluded.length > 1);
+  for (const ci of javaCi) {
+    // PyYAML reads the key `on` as the boolean true.
+    const ignored = ci.workflow.true.push.paths.filter((pattern) => pattern.startsWith('!')).map((pattern) => {
+      const glob = pattern.slice(1);
+      // GitHub's `**.md` matches at any depth; git's `**/*.md` does too, including the root.
+      if (/^\*\*\.[a-z]+$/.test(glob)) return "':(exclude,glob)**/*" + glob.slice(2) + "'";
+      // Without the glob magic a pathspec without wildcards matches that path from the root only.
+      assert.match(glob, /^[^*?[]+$/, ci.file + ' ' + pattern);
+      return "':(exclude)" + glob + "'";
+    });
+    assert.deepEqual(excluded, ignored, ci.file);
+  }
+});
+// Runs the selector script against a local repository served over file://, as the merge queue
+// runs it against apache/hudi.
+test('the changes job reports docs_only for diffs of only docs and images', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hudi-changes-'));
+  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: path.join(tmp, 'gitconfig') };
+  const git = (...args) => execFileSync('git', [
+    '-c', 'user.name=ci', '-c', 'user.email=ci@example.com', '-c', 'init.defaultBranch=master', ...args,
+  ], { cwd: source, env, encoding: 'utf8', stdio: 'pipe' }).trim();
+  const write = (file, content = file) => {
+    fs.mkdirSync(path.dirname(path.join(source, file)), { recursive: true });
+    fs.writeFileSync(path.join(source, file), content + '\n');
+  };
+  const source = path.join(tmp, 'apache', 'hudi.git');
+  const select = (base, head) => {
+    const work = fs.mkdtempSync(path.join(tmp, 'run-'));
+    const output = path.join(tmp, path.basename(work) + '.output');
+    const summary = path.join(tmp, path.basename(work) + '.summary');
+    execFileSync('bash', ['-c', changesStep.run], {
+      cwd: work, stdio: 'pipe', env: {
+        ...env, GITHUB_SERVER_URL: 'file://' + tmp, GITHUB_REPOSITORY: 'apache/hudi',
+        BASE_SHA: base, HEAD_SHA: head, GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary,
+      },
+    });
+    return { output: readFileSync(output, 'utf8'), summary: readFileSync(summary, 'utf8') };
+  };
+  try {
+    fs.mkdirSync(source, { recursive: true });
+    git('init', '-q');
+    git('config', 'uploadpack.allowFilter', 'true');
+    git('config', 'uploadpack.allowAnySHA1InWant', 'true');
+    for (const file of ['README.md', 'notes.md', 'sub/A.java', '.gitignore']) write(file);
+    git('add', '-A');
+    git('commit', '-qm', 'base');
+    const base = git('rev-parse', 'HEAD');
+    // [case, change, whether docs-only, files the summary lists]
+    for (const [name, change, docsOnly, listed = []] of [
+      ['root README.md', () => write('README.md', 'changed'), true],
+      ['nested markdown', () => write('rfc/x/y.md'), true],
+      ['image', () => write('docs/images/arch.png'), true],
+      ['root .gitignore', () => write('.gitignore', 'changed'), true],
+      ['nested .gitignore', () => write('sub/.gitignore'), false, ['sub/.gitignore']],
+      ['yml file', () => write('docker/compose.yml'), false, ['docker/compose.yml']],
+      ['java file', () => write('sub/A.java', 'changed'), false, ['sub/A.java']],
+      ['rename of .md to .java', () => git('mv', 'notes.md', 'Notes.java'), false, ['Notes.java']],
+      ['docs and one java file', () => { write('docs/guide.md'); write('sub/A.java', 'changed'); }, false, ['sub/A.java']],
+      ['more than 50 files', () => { for (let i = 0; i < 52; i++) write('gen/F' + i + '.java'); }, false, ['(52)', 'gen/F0.java', 'gen/F7.java', '... and 2 more']],
+    ]) {
+      git('checkout', '-q', '--detach', base);
+      change();
+      git('add', '-A');
+      git('commit', '-qm', name);
+      const { output, summary } = select(base, git('rev-parse', 'HEAD'));
+      assert.equal(output, 'docs_only=' + docsOnly + '\n', name);
+      for (const text of listed) assert.ok(summary.includes(text), name + ': ' + text + ' in\n' + summary);
+      assert.doesNotMatch(summary, /\.md$|notes|guide|gen\/F[89]\.java/m, name);
+    }
+    // A failed fetch fails the job, which leaves docs_only empty, so the test jobs run.
+    assert.throws(() => select(base, 'f'.repeat(40)));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
 
