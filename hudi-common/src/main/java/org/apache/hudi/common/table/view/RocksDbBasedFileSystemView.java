@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.common.util.collection.RocksDBDAO;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
 import lombok.AccessLevel;
@@ -46,7 +47,6 @@ import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -307,73 +307,62 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
         partitionPath, config.getRocksdbBasePath(), fileGroups.size());
   }
 
-  @Override
-  /*
-   * This is overridden to incrementally apply file-slices to rocks DB
+  /**
+   * Applies the delta per file group: the stored slices of each changed group are rebuilt from their base and log files
+   * with the delta added or removed, the way a listing builds them, and the result replaces the group's stored slices.
    */
+  @Override
   protected void applyDeltaFileSlicesToPartitionView(String partition, List<HoodieFileGroup> deltaFileGroups,
       DeltaApplyMode mode) {
+    if (deltaFileGroups.isEmpty()) {
+      return;
+    }
+    HoodieTimeline timeline = deltaFileGroups.get(0).getTimeline();
     rocksDB.writeBatch(batch ->
-        deltaFileGroups.forEach(fg ->
-            fg.getAllRawFileSlices().map(fs -> {
-              Option<FileSlice> oldSliceOption = fetchLatestFileSliceBeforeOrOn(partition, fs.getFileId(), fs.getBaseInstantTime());
-              if (!oldSliceOption.isPresent() || !shouldMergeFileSlice(oldSliceOption.get(), fs)) {
-                return fs;
-              } else {
-                FileSlice oldSlice = oldSliceOption.get();
-                // First remove the file-slice
-                log.info("Removing old Slice in DB. FS={}", oldSlice);
-                rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, oldSlice));
-                rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, oldSlice));
-
-                Map<String, HoodieLogFile> logFiles = oldSlice.getLogFiles()
-                    .map(lf -> Pair.of(FSUtils.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
-                    .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-                Map<String, HoodieLogFile> deltaLogFiles =
-                    fs.getLogFiles().map(lf -> Pair.of(FSUtils.getPathWithoutSchemeAndAuthority(lf.getPath()).toString(), lf))
-                        .collect(Collectors.toMap(Pair::getKey, Pair::getValue));
-
-                switch (mode) {
-                  case ADD: {
-                    FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
-                    oldSlice.getBaseFile().ifPresent(newFileSlice::setBaseFile);
-                    fs.getBaseFile().ifPresent(newFileSlice::setBaseFile);
-                    Map<String, HoodieLogFile> newLogFiles = new HashMap<>(logFiles);
-                    deltaLogFiles.entrySet().stream().filter(e -> !logFiles.containsKey(e.getKey()))
-                        .forEach(p -> newLogFiles.put(p.getKey(), p.getValue()));
-                    newLogFiles.values().forEach(newFileSlice::addLogFile);
-                    log.info("Adding back new File Slice after add FS={}", newFileSlice);
-                    return newFileSlice;
-                  }
-                  case REMOVE: {
-                    log.info("Removing old File Slice ={}", fs);
-                    FileSlice newFileSlice = new FileSlice(oldSlice.getFileGroupId(), oldSlice.getBaseInstantTime());
-                    fs.getBaseFile().orElseGet(() -> {
-                      oldSlice.getBaseFile().ifPresent(newFileSlice::setBaseFile);
-                      return null;
-                    });
-
-                    deltaLogFiles.keySet().forEach(logFiles::remove);
-                    // Add remaining log files back
-                    logFiles.values().forEach(newFileSlice::addLogFile);
-                    if (newFileSlice.getBaseFile().isPresent() || (newFileSlice.getLogFiles().count() > 0)) {
-                      log.info("Adding back new file-slice after remove FS={}", newFileSlice);
-                      return newFileSlice;
-                    }
-                    return null;
-                  }
-                  default:
-                    throw new IllegalStateException("Unknown diff apply mode=" + mode);
-                }
-              }
-            }).filter(Objects::nonNull).forEach(fs -> {
-              rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, fs), fs);
-              fs.getBaseFile().ifPresent(baseFile ->
-                  rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, fs), baseFile)
-              );
-            })
-        )
+        deltaFileGroups.forEach(deltaGroup -> {
+          String fileId = deltaGroup.getFileGroupId().getFileId();
+          List<FileSlice> storedSlices = rocksDB.<FileSlice>prefixSearch(schemaHelper.getColFamilyForView(),
+              schemaHelper.getPrefixForSliceViewByPartitionFile(partition, fileId)).map(Pair::getValue).collect(Collectors.toList());
+          Map<String, HoodieBaseFile> baseFiles = baseFilesByPath(storedSlices.stream());
+          Map<String, HoodieLogFile> logFiles = logFilesByPath(storedSlices.stream());
+          Map<String, HoodieBaseFile> deltaBaseFiles = baseFilesByPath(deltaGroup.getAllRawFileSlices());
+          Map<String, HoodieLogFile> deltaLogFiles = logFilesByPath(deltaGroup.getAllRawFileSlices());
+          switch (mode) {
+            case ADD:
+              baseFiles.putAll(deltaBaseFiles);
+              logFiles.putAll(deltaLogFiles);
+              break;
+            case REMOVE:
+              deltaBaseFiles.keySet().forEach(baseFiles::remove);
+              deltaLogFiles.keySet().forEach(logFiles::remove);
+              break;
+            default:
+              throw new IllegalStateException("Unknown diff apply mode=" + mode);
+          }
+          storedSlices.forEach(slice -> {
+            rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(deltaGroup, slice));
+            rocksDB.deleteInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(deltaGroup, slice));
+          });
+          buildFileGroups(partition, baseFiles.values().stream(), logFiles.values().stream(), timeline, true)
+              .forEach(fg -> fg.getAllRawFileSlices().forEach(slice -> {
+                rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForSliceView(fg, slice), slice);
+                slice.getBaseFile().ifPresent(baseFile ->
+                    rocksDB.putInBatch(batch, schemaHelper.getColFamilyForView(), schemaHelper.getKeyForDataFileView(fg, slice), baseFile));
+              }));
+        })
     );
+  }
+
+  private static Map<String, HoodieBaseFile> baseFilesByPath(Stream<FileSlice> slices) {
+    return slices.map(FileSlice::getBaseFile).filter(Option::isPresent).map(Option::get)
+        .collect(Collectors.toMap(baseFile -> FSUtils.getPathWithoutSchemeAndAuthority(new StoragePath(baseFile.getPath())).toString(),
+            baseFile -> baseFile, (a, b) -> a, HashMap::new));
+  }
+
+  private static Map<String, HoodieLogFile> logFilesByPath(Stream<FileSlice> slices) {
+    return slices.flatMap(FileSlice::getLogFiles)
+        .collect(Collectors.toMap(logFile -> FSUtils.getPathWithoutSchemeAndAuthority(logFile.getPath()).toString(),
+            logFile -> logFile, (a, b) -> a, HashMap::new));
   }
 
   @Override
@@ -580,18 +569,6 @@ public class RocksDbBasedFileSystemView extends IncrementalTimelineSyncFileSyste
           slicePair.getValue().forEach(e -> fg.addFileSlice(e.getValue()));
           return fg;
         });
-  }
-
-  private static boolean shouldMergeFileSlice(FileSlice oldSlice, FileSlice newSlice) {
-    // 1. the new file slice has no compaction been scheduled, it should always be merged into the latest file slice;
-    // 2. the old file slice has no compaction scheduled, while the new file slice does,
-    //    if they have different base instant time, should not merge;
-    // 3. the new file slice has compaction been scheduled, should not merge if old and new base instant time is different.
-    return isFileSliceWithoutCompactionBarrier(newSlice) || newSlice.getBaseInstantTime().equals(oldSlice.getBaseInstantTime());
-  }
-
-  private static boolean isFileSliceWithoutCompactionBarrier(FileSlice fileSlice) {
-    return fileSlice.getLogFiles().anyMatch(logFile -> logFile.getDeltaCommitTime().equals(fileSlice.getBaseInstantTime()));
   }
 
   @Override
