@@ -273,6 +273,23 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.13.0")
       .withDocumentation(ExecutorType.class);
 
+  public static final ConfigProperty<Integer> JAVA_WRITE_MAX_PARALLELISM = ConfigProperty
+      .key("hoodie.java.write.max.parallelism")
+      .defaultValue(1)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Java engine only. Maximum number of file groups that one write operation of the Java "
+          + "write client works on at the same time. The file groups of a commit are written on a pool of up to "
+          + "this many threads, created for the write and shut down when the write stage ends. The default 1 "
+          + "works on the file groups one after the other on the calling thread. The value bounds the file groups "
+          + "in flight, not the threads of the process: a queue-based hoodie.write.executor.type adds a producer "
+          + "and a consumer thread per file group being written. Memory grows with this value: each file group "
+          + "being written holds its merge map (up to hoodie.memory.merge.max.size), the row group it is building, "
+          + "on merge-on-read tables the log block it is buffering (up to hoodie.logfile.data.block.max.size), "
+          + "and the queue of a queue-based write executor, so lower hoodie.memory.merge.max.size when raising it. "
+          + "Shuffle parallelism settings such as hoodie.upsert.shuffle.parallelism are sized for Spark and do not "
+          + "control this.");
+
   public static final ConfigProperty<String> KEYGENERATOR_TYPE = ConfigProperty
       .key("hoodie.datasource.write.keygenerator.type")
       .defaultValue(KeyGeneratorType.SIMPLE.name())
@@ -1594,6 +1611,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public ExecutorType getExecutorType() {
     return ExecutorType.valueOf(getStringOrDefault(WRITE_EXECUTOR_TYPE).toUpperCase(Locale.ROOT));
+  }
+
+  public int getJavaWriteMaxParallelism() {
+    return getInt(JAVA_WRITE_MAX_PARALLELISM);
   }
 
   public boolean isConsistentHashingEnabled() {
@@ -3365,6 +3386,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withJavaWriteMaxParallelism(int maxParallelism) {
+      writeConfig.setValue(JAVA_WRITE_MAX_PARALLELISM, String.valueOf(maxParallelism));
+      return this;
+    }
+
     public Builder withTimelineLayoutVersion(int version) {
       writeConfig.setValue(TIMELINE_LAYOUT_VERSION_NUM, String.valueOf(version));
       return this;
@@ -4038,6 +4064,11 @@ public class HoodieWriteConfig extends HoodieConfig {
       checkArgument(lookbackCommits >= 0,
           String.format("%s must be non-negative, but was %d",
               ROLLING_METADATA_TIMELINE_LOOKBACK_COMMITS.key(), lookbackCommits));
+
+      int javaWriteMaxParallelism = writeConfig.getInt(JAVA_WRITE_MAX_PARALLELISM);
+      checkArgument(javaWriteMaxParallelism > 0,
+          String.format("%s must be positive, but was %d",
+              JAVA_WRITE_MAX_PARALLELISM.key(), javaWriteMaxParallelism));
 
       int ttlStatsMaxParallelism = writeConfig.getInt(HoodieTTLConfig.STATS_MAX_PARALLELISM);
       checkArgument(ttlStatsMaxParallelism > 0,

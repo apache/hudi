@@ -19,6 +19,7 @@
 package org.apache.hudi.table.action.commit;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.common.JavaParallelTaskRunner;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieKey;
@@ -54,6 +55,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -115,13 +117,20 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
     Map<Integer, List<HoodieRecord<T>>> partitionedRecords = partition(inputRecords, partitioner);
 
     List<WriteStatus> writeStatuses = new LinkedList<>();
-    partitionedRecords.forEach((partition, records) -> {
-      if (WriteOperationType.isChangingRecords(operationType)) {
-        handleUpsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
-      } else {
-        handleInsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
-      }
-    });
+    int maxParallelism = config.getJavaWriteMaxParallelism();
+    if (maxParallelism > 1 && partitionedRecords.size() > 1) {
+      List<Map.Entry<Integer, List<HoodieRecord<T>>>> buckets = new ArrayList<>(partitionedRecords.entrySet());
+      JavaParallelTaskRunner.mapInOrder(buckets, bucket -> writeBucket(bucket.getKey(), bucket.getValue(), partitioner),
+          maxParallelism, "hoodie-java-write").forEach(writeStatuses::addAll);
+    } else {
+      partitionedRecords.forEach((partition, records) -> {
+        if (WriteOperationType.isChangingRecords(operationType)) {
+          handleUpsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
+        } else {
+          handleInsertPartition(instantTime, partition, records.iterator(), partitioner).forEachRemaining(writeStatuses::addAll);
+        }
+      });
+    }
     updateIndex(writeStatuses, result);
     updateIndexAndMaybeRunPreCommitValidations(writeStatuses, result);
     return result;
@@ -139,6 +148,19 @@ public abstract class BaseJavaCommitActionExecutor<T> extends
   @Override
   protected String getCommitActionType() {
     return table.getMetaClient().getCommitActionType();
+  }
+
+  /**
+   * Writes one bucket and drains its statuses on the thread that calls it: insert buckets write their files while
+   * the returned iterator is consumed.
+   */
+  private List<WriteStatus> writeBucket(Integer partition, List<HoodieRecord<T>> records, Partitioner partitioner) {
+    Iterator<List<WriteStatus>> statuses = WriteOperationType.isChangingRecords(operationType)
+        ? handleUpsertPartition(instantTime, partition, records.iterator(), partitioner)
+        : handleInsertPartition(instantTime, partition, records.iterator(), partitioner);
+    List<WriteStatus> written = new ArrayList<>();
+    statuses.forEachRemaining(written::addAll);
+    return written;
   }
 
   private Partitioner getPartitioner(WorkloadProfile profile) {
