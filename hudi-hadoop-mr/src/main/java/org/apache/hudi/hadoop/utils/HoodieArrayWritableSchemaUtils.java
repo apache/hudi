@@ -28,8 +28,11 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.SchemaCompatibilityException;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
 import org.apache.hadoop.hive.serde2.io.HiveDecimalWritable;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
@@ -44,6 +47,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.parquet.avro.AvroSchemaConverterWithTimestampNTZ;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -64,6 +68,9 @@ import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 
 public class HoodieArrayWritableSchemaUtils {
 
+  private static final Cache<Pair<HoodieSchema, HoodieSchema>, HoodieSchema> UNION_MEMBER_SCHEMAS =
+      Caffeine.newBuilder().maximumSize(1024).build();
+
   public static ArrayWritable rewriteRecordWithNewSchema(ArrayWritable writable, HoodieSchema oldSchema, HoodieSchema newSchema, Map<String, String> renameCols) {
     return rewriteRecordWithNewSchema(writable, oldSchema, newSchema, renameCols, HoodieProjectionMask.all());
   }
@@ -83,8 +90,8 @@ public class HoodieArrayWritableSchemaUtils {
 
   private static Writable rewriteRecordWithNewSchema(Writable writable, HoodieSchema oldSchema, HoodieSchema newSchema,
                                                      Map<String, String> renameCols, Deque<String> fieldNames, HoodieProjectionMask physicalMask) {
-    if (writable == null) {
-      return null;
+    if (writable == null || writable instanceof NullWritable) {
+      return writable;
     }
     HoodieSchema oldSchemaNonNull = oldSchema.getNonNullType();
     HoodieSchema newSchemaNonNull = newSchema.getNonNullType();
@@ -154,10 +161,9 @@ public class HoodieArrayWritableSchemaUtils {
         // have evolved (e.g. its fields were reordered), and passing it through would surface
         // values at the old positions.
         if (oldSchema.getType() == HoodieSchemaType.RECORD && writable instanceof ArrayWritable) {
-          return rewriteUnionMemberGroup((ArrayWritable) writable, oldSchema, newSchema, renameCols, fieldNames);
-        }
-        if (writable instanceof NullWritable) {
-          return writable;
+          HoodieSchema memberSchema = UNION_MEMBER_SCHEMAS.get(Pair.of(oldSchema, newSchema),
+              schemas -> unionMemberSchema(schemas.getLeft(), schemas.getRight()));
+          return rewriteRecordWithNewSchema(writable, oldSchema, memberSchema, renameCols, fieldNames, physicalMask);
         }
         throw new IllegalArgumentException("should not be here?");
 
@@ -167,68 +173,48 @@ public class HoodieArrayWritableSchemaUtils {
   }
 
   /**
-   * Rewrites the on-disk union member group to the target union, keeping the group layout.
+   * Derives the target member record once per schema pair. Keep logical branch types in the
+   * rewrite schema (e.g. ENUM), but validate against their Parquet representations: physical
+   * STRING/RECORD fields can represent enums/nested unions without any schema evolution.
    *
-   * <p>Avro writes a union with more than one non-null branch to Parquet as a group of optional
-   * {@code member0..memberN} fields, one per non-null branch in declaration order
-   * (see {@code AvroSchemaConverterWithTimestampNTZ#convertUnion}). Hive reads that group back as
-   * the column's struct, so the member layout is preserved. Each populated member is still
-   * rewritten recursively: a branch may itself be a record that evolved, e.g. its fields were
-   * reordered, and passing it through would surface values at the old positions.
-   *
-   * <p>Member numbers line up only when both unions list their non-null branches in the same
-   * order, so the correspondence is validated positionally and a mismatch is rejected rather than
-   * silently reading the wrong branch.
+   * <p>The footer's physical schema loses named branch identities. Prefer a matching physical type; reject
+   * competing matches of that type. A type promotion is allowed only when there is a unique
+   * compatible target. In particular, unchanged INT/LONG branches are unambiguous, whereas
+   * promoting both to FLOAT/DOUBLE cannot establish which member represents which branch.
    */
-  private static Writable rewriteUnionMemberGroup(ArrayWritable memberGroup, HoodieSchema oldSchema, HoodieSchema newSchema,
-                                                  Map<String, String> renameCols, Deque<String> fieldNames) {
-    List<HoodieSchema> newBranches = new ArrayList<>();
+  private static HoodieSchema unionMemberSchema(HoodieSchema oldSchema, HoodieSchema newSchema) {
+    List<HoodieSchemaField> members = new ArrayList<>();
     for (HoodieSchema branch : newSchema.getTypes()) {
       if (branch.getType() != HoodieSchemaType.NULL) {
-        newBranches.add(branch);
+        members.add(HoodieSchemaField.of("member" + members.size(), HoodieSchema.createNullable(branch), null, HoodieSchema.NULL_VALUE));
       }
     }
+    HoodieSchema target = HoodieSchema.createRecord(oldSchema.getName(), oldSchema.getNamespace().orElse(null), null, members);
+    AvroSchemaConverterWithTimestampNTZ converter = new AvroSchemaConverterWithTimestampNTZ();
+    HoodieSchema physicalTarget = converter.convert(converter.convert(target));
     List<HoodieSchemaField> oldMembers = oldSchema.getFields();
-    if (oldMembers.size() != newBranches.size()) {
-      throw new SchemaCompatibilityException(String.format(
-          "Cannot rewrite union member group %s to %s: the target has %d non-null branches but the member group has %d",
-          oldSchema.getName(), newSchema, newBranches.size(), oldMembers.size()));
+    if (oldMembers.size() != members.size()) {
+      throw new SchemaCompatibilityException("Cannot rewrite union member group: non-null branch count changed");
     }
-    Writable[] inputs = memberGroup.get();
-    // Trailing slots of a recycled row buffer beyond the union's own members are preserved.
-    Writable[] values = new Writable[Math.max(inputs.length, newBranches.size())];
-    for (int i = 0; i < newBranches.size(); i++) {
+    for (int i = 0; i < members.size(); i++) {
       HoodieSchemaField oldMember = oldMembers.get(i);
-      if (!("member" + i).equals(oldMember.name())) {
-        throw new SchemaCompatibilityException(String.format(
-            "Cannot rewrite union member group %s to %s: member %d is named '%s'",
-            oldSchema.getName(), newSchema, i, oldMember.name()));
+      if (!members.get(i).name().equals(oldMember.name())) {
+        throw new SchemaCompatibilityException("Cannot rewrite union member group: unexpected member " + oldMember.name());
       }
-      // Each member is optional on disk, so its declared schema is the nullable union; rewrite
-      // the branch itself against the target branch.
       HoodieSchema oldBranch = oldMember.schema().getNonNullType();
-      HoodieSchema newBranch = newBranches.get(i);
-      if (!HoodieSchemaCompatibility.isSchemaCompatible(oldBranch, newBranch, false, true)) {
-        throw new SchemaCompatibilityException(String.format(
-            "Cannot rewrite union member group %s to %s: branch %d of type %s does not correspond to target branch %s",
-            oldSchema.getName(), newSchema, i, oldBranch, newBranch));
+      HoodieSchema targetBranch = physicalTarget.getFields().get(i).schema().getNonNullType();
+      if (!HoodieSchemaCompatibility.isSchemaCompatible(oldBranch, targetBranch, false, true)) {
+        throw new SchemaCompatibilityException("Cannot rewrite union member group: incompatible branch " + oldMember.name());
       }
-      Writable value = i < inputs.length ? inputs[i] : null;
-      if (value == null || value instanceof NullWritable) {
-        // An absent branch stays absent; Hive's member group represents it as a null slot.
-        values[i] = value;
-        continue;
+      for (int j = 0; j < members.size(); j++) {
+        HoodieSchema otherBranch = physicalTarget.getFields().get(j).schema().getNonNullType();
+        if (i != j && (oldBranch.getType() != targetBranch.getType() || oldBranch.getType() == otherBranch.getType())
+            && HoodieSchemaCompatibility.isSchemaCompatible(oldBranch, otherBranch, false, true)) {
+          throw new SchemaCompatibilityException("Cannot determine union branch identity from physical schema for " + oldMember.name());
+        }
       }
-      fieldNames.push(oldMember.name());
-      // The nested projection mask describes record fields; a union member is addressed by the
-      // union's own physical layout, so the branch is always rewritten in canonical shape.
-      values[i] = rewriteRecordWithNewSchema(value, oldBranch, newBranch, renameCols, fieldNames, HoodieProjectionMask.all());
-      fieldNames.pop();
     }
-    if (inputs.length > newBranches.size()) {
-      System.arraycopy(inputs, newBranches.size(), values, newBranches.size(), inputs.length - newBranches.size());
-    }
-    return new ArrayWritable(Writable.class, values);
+    return target;
   }
 
   /**
