@@ -113,8 +113,11 @@ public class FlinkRowDataReaderContext extends HoodieReaderContext<RowData> {
         .getReaderFactory(HoodieRecord.HoodieRecordType.FLINK)
         .getFileReader(tableConfig, filePath, format, Option.empty());
     try {
+      // Native delete logs may omit business key columns, so query predicates can discard tombstones needed for merging.
+      List<ExpressionPredicates.Predicate> predicates = FSUtils.isNativeDeleteLogFile(filePath.getName())
+          ? Collections.emptyList() : getSafePredicates(requiredSchema);
       ClosableIterator<RowData> rowDataIterator =
-          reader.getRowDataIterator(dataSchema, requiredSchema, schemaManager, getSafePredicates(requiredSchema));
+          reader.getRowDataIterator(dataSchema, requiredSchema, schemaManager, predicates);
       return resolveRowKind(rowDataIterator, requiredSchema);
     } catch (Throwable e) {
       reader.close();
