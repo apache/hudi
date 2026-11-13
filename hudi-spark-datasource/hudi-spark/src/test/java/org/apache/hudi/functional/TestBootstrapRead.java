@@ -18,6 +18,7 @@
 
 package org.apache.hudi.functional;
 
+import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Map;
 import java.util.stream.Stream;
@@ -131,6 +133,30 @@ public class TestBootstrapRead extends TestBootstrapReadBase {
     doUpdate(options, "001");
     compareTables();
     verifyMetaColOnlyRead(1);
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {0, 2})
+  public void testMetadataBootstrapReadWithPathFilterListing(Integer nPartitions) {
+    this.bootstrapType = "metadata";
+    this.dashPartitions = true;
+    this.tableType = COPY_ON_WRITE;
+    this.nPartitions = nPartitions;
+    setupDirs();
+
+    Map<String, String> options = setBootstrapOptions();
+    sparkSession.emptyDataFrame().write().format("hudi")
+        .options(options)
+        .mode(SaveMode.Overwrite)
+        .save(bootstrapTargetPath);
+    // The listing optimization must not drop the bootstrap base files, or the data columns read as nulls
+    String pathFilterListingKey = "spark." + DataSourceReadOptions.FILE_INDEX_LIST_FILE_STATUSES_USING_RO_PATH_FILTER().key();
+    sparkSession.conf().set(pathFilterListingKey, "true");
+    try {
+      compareTables();
+    } finally {
+      sparkSession.conf().unset(pathFilterListingKey);
+    }
   }
 
   private static Map<String, String> withLegacyMergeHandle(Map<String, String> options) {

@@ -291,8 +291,11 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
 
     // ROPathFilter optimization is only applicable for COW tables with snapshot queries
     // For MOR tables with READ_OPTIMIZED queries, we also only need base files
+    // Not for bootstrapped tables: the base files it creates lack their bootstrap base files, so the data columns
+    // of the bootstrapped files would be read as nulls
     if (useLatestBaseFilesPathFilterForListing
         && !shouldIncludePendingCommits
+        && !metaClient.getTableConfig().getBootstrapBasePath().isPresent()
         && (metaClient.getTableConfig().getTableType() == HoodieTableType.COPY_ON_WRITE
             || queryType == HoodieTableQueryType.READ_OPTIMIZED)) {
       return generatePartitionFileSlicesPostROTablePathFilter(partitions, allFiles);
