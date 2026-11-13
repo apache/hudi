@@ -19,12 +19,10 @@
 # runs the Java CI suites on the contributor's fork (see fork_ci_status.yml). A run there cannot
 # use apache/hudi's Codecov token, and Codecov would not link it to the PR anyway, so
 # .github/actions/upload-coverage stores each JaCoCo report as a run artifact named
-# coverage-<sha>__<job id>__<flag> instead. Java CI runs on the fork as two workflows, bot.yml and
-# java_ci_engines.yml, and both store reports. Every 15 minutes, `select` finds the newest completed
-# fork run of each for the head commit of each recently updated fork PR and, once both have
-# completed, lists their coverage artifacts, `upload` uploads each one to Codecov for the PR and its
-# head commit, and `record` marks the pair of runs as done with a `Coverage (fork)` check, so later
-# sweeps skip it.
+# coverage-<sha>__<job id>__<flag> instead. Every 15 minutes, `select` finds the newest completed
+# fork run of Java CI (bot.yml) for the head commit of each recently updated fork PR and lists its
+# coverage artifacts, `upload` uploads each one to Codecov for the PR and its head commit, and
+# `record` marks the run as done with a `Coverage (fork)` check, so later sweeps skip it.
 #
 # This workflow polls because workflow_run in apache/hudi does not fire for runs in a fork.
 #
@@ -71,18 +69,18 @@ jobs:
         with:
           script: |
             const CHECK = 'Coverage (fork)';
-            // Java CI is split across two workflows to stay under the ASF limit on jobs running at
-            // once per workflow, and each fork run stores the reports of its own jobs.
-            const WORKFLOWS = ['bot.yml', 'java_ci_engines.yml'];
-            // The flags of the upload steps in bot.yml and java_ci_engines.yml. A fork cannot add
-            // flags of its own to apache/hudi's Codecov reports.
+            // The fork workflows whose runs store coverage reports. With more than one, a PR waits
+            // until each has a completed run and its check records all of them.
+            const WORKFLOWS = ['bot.yml'];
+            // The flags of the upload steps in bot.yml. A fork cannot add flags of its own to
+            // apache/hudi's Codecov reports.
             const FLAGS = new Set([
               'common-and-other-modules', 'flink-integration-tests', 'hadoop-mr-java-client',
               'integration-tests', 'spark-client-hadoop-common', 'spark-java-tests',
               'spark-scala-tests', 'utilities',
             ]);
-            // The two fork runs of a PR upload 12 reports together, so a sweep covers at least 5
-            // PRs. PRs beyond the cap wait for the next sweep.
+            // The fork run of a PR uploads 12 reports, so a sweep covers at least 5 PRs. PRs beyond
+            // the cap wait for the next sweep.
             const MAX_ARTIFACTS = 60;
             const MAX_BYTES = 50 * 1024 * 1024;
             const upstream = { owner: context.repo.owner, repo: context.repo.repo };
@@ -91,13 +89,12 @@ jobs:
             const isForkPr = (pr) => pr.state === 'open' && pr.head.repo &&
               pr.head.repo.full_name.toLowerCase() !== repository.toLowerCase() && pr.base.ref === 'master';
             // A re-run of a job keeps the run id and bumps the run attempt. The id holds both for
-            // each workflow, so a new run or a re-run of either one is uploaded again.
+            // each workflow, so a new run or a re-run is uploaded again.
             const externalId = (pr, runs) => 'hudi-fork-coverage:' + pr.number + ':' +
               runs.map((run) => run.id + '.' + run.run_attempt).join(':');
 
             // An absent workflow, run or artifact list is expected on a fork with Actions
-            // disabled or without one of the workflows. Other API errors must not pass as missing
-            // coverage.
+            // disabled or without the workflow. Other API errors must not pass as missing coverage.
             async function optional(request) {
               try {
                 return await request();
@@ -118,8 +115,8 @@ jobs:
                   ...fork, workflow_id: workflow, head_sha: sha, branch: pr.head.ref, per_page: 100,
                 }));
                 // As in fork_ci_status.yml, only push and manual runs test the branch head. An
-                // unfinished run has not uploaded all of its reports yet. The PR waits until both
-                // workflows have a completed run, so that its check covers all of Java CI.
+                // unfinished run has not uploaded all of its reports yet, so the PR waits until the
+                // run completes.
                 const run = (data?.data.workflow_runs || []).filter((item) =>
                   item.status === 'completed' && item.head_sha === sha && item.head_branch === pr.head.ref &&
                   ['push', 'workflow_dispatch'].includes(item.event)
