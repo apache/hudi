@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.command
 
 import org.apache.hudi.{HoodieSparkSqlWriter, SparkAdapterSupport}
-import org.apache.hudi.DataSourceWriteOptions.{SPARK_SQL_OPTIMIZED_WRITES, SPARK_SQL_WRITES_PREPPED_KEY}
+import org.apache.hudi.DataSourceWriteOptions.SPARK_SQL_WRITES_PREPPED_KEY
 import org.apache.hudi.common.table.HoodieTableConfig
 import org.apache.hudi.keygen.KeyGenUtils
 
@@ -76,12 +76,13 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
   def inputPlan(sparkSession: SparkSession, dft: DeleteFromTable, catalogTable: HoodieCatalogTable): (LogicalPlan, Map[String, String]) = {
     val condition = sparkAdapter.extractDeleteCondition(dft)
 
-    val config = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val usePreppedWrites = ProvidesHoodieConfig.shouldUsePreppedSqlWrites(sparkSession, catalogTable)
+    val config = if (usePreppedWrites) {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession) + (SPARK_SQL_WRITES_PREPPED_KEY -> "true")
     } else {
       buildHoodieDeleteTableConfig(catalogTable, sparkSession)
     }
+    ProvidesHoodieConfig.validateSqlWriteMatchesStoredKeys(catalogTable, config, "DELETE")
 
     val recordKeysStr = config.getOrElse(HoodieTableConfig.RECORDKEY_FIELDS.key(), "")
     val recordKeys = KeyGenUtils.getRecordKeyFields(recordKeysStr).asScala.toSeq
@@ -95,8 +96,7 @@ object DeleteHoodieTableCommand extends SparkAdapterSupport with ProvidesHoodieC
 
     val requiredCols = recordKeys ++ conditionColumns
 
-    val targetLogicalPlan = if (sparkSession.sessionState.conf.getConfString(SPARK_SQL_OPTIMIZED_WRITES.key()
-      , SPARK_SQL_OPTIMIZED_WRITES.defaultValue()) == "true") {
+    val targetLogicalPlan = if (usePreppedWrites) {
       tryPruningDeleteRecordSchema(dft.table, requiredCols)
     } else {
       stripMetaFieldAttributes(dft.table)

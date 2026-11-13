@@ -588,6 +588,80 @@ class TestUpdateTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test Update Table Without Meta Fields") {
+    withRecordType()(withTempDir { tmp =>
+      Seq(
+        ("cow", "hoodie.populate.meta.fields = 'false'"),
+        ("mor", "hoodie.populate.meta.fields = 'false'"),
+        ("cow", "hoodie.meta.fields.mode = 'COMMIT_TIME_AND_FILE_NAME'")
+      ).foreach { case (tableType, metaFieldsProp) =>
+        val tableName = generateTableName
+        spark.sql(
+          s"""
+             |create table $tableName (
+             |  id int,
+             |  name string,
+             |  price double,
+             |  ts long,
+             |  dt string
+             |) using hudi
+             | location '${tmp.getCanonicalPath}/$tableName'
+             | tblproperties (
+             |  type = '$tableType',
+             |  primaryKey = 'id',
+             |  orderingFields = 'ts',
+             |  $metaFieldsProp
+             | )
+             | partitioned by (dt)
+             |""".stripMargin)
+        spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000, '2021-01-05'), (2, 'a2', 20.0, 1000, '2021-01-05')")
+
+        // The table does not store the record key meta field, so the update cannot be a prepped write
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> "true") {
+          spark.sql(s"update $tableName set price = 11.0 where id = 1")
+          checkAnswer(s"select id, name, price, ts, dt from $tableName order by id")(
+            Seq(1, "a1", 11.0, 1000, "2021-01-05"),
+            Seq(2, "a2", 20.0, 1000, "2021-01-05")
+          )
+        }
+      }
+
+      // A complex key generator keys the records as `id:<value>`, while the rows of a table without the record
+      // key meta field are keyed by the bare value on read, so the update could not match them and fails instead
+      val complexKeyTableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $complexKeyTableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long,
+           |  dt string
+           |) using hudi
+           | location '${tmp.getCanonicalPath}/$complexKeyTableName'
+           | tblproperties (
+           |  type = 'cow',
+           |  primaryKey = 'id',
+           |  orderingFields = 'ts',
+           |  hoodie.populate.meta.fields = 'false',
+           |  hoodie.table.keygenerator.class = 'org.apache.hudi.keygen.ComplexKeyGenerator'
+           | )
+           | partitioned by (dt)
+           |""".stripMargin)
+      spark.sql(s"insert into $complexKeyTableName values (1, 'a1', 10.0, 1000, '2021-01-05'), (2, 'a2', 20.0, 1000, '2021-01-05')")
+      Seq("true", "false").foreach { optimizedWrites =>
+        withSQLConf(SPARK_SQL_OPTIMIZED_WRITES.key() -> optimizedWrites) {
+          checkExceptionContain(s"update $complexKeyTableName set price = 11.0 where id = 1")(
+            "UPDATE is not supported on table")
+        }
+      }
+      checkAnswer(s"select id, name, price, ts, dt from $complexKeyTableName order by id")(
+        Seq(1, "a1", 10.0, 1000, "2021-01-05"),
+        Seq(2, "a2", 20.0, 1000, "2021-01-05")
+      )
+    })
+  }
+
   test("Test UPDATE on VECTOR column preserves custom-type metadata") {
     withTempDir { tmp =>
       val tableName = generateTableName
