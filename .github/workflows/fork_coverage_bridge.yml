@@ -273,7 +273,7 @@ jobs:
       # File fixes would read source files, which are absent here. They apply to none of the
       # languages of Hudi.
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5.5.5
         with:
           files: ${{ runner.temp }}/coverage/jacoco-report.xml
           disable_search: true
