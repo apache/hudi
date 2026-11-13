@@ -19,6 +19,7 @@
 package org.apache.hudi.util;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
+import org.apache.hudi.HoodieUTF8String;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -27,21 +28,24 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.common.util.collection.Pair;
 
+import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.sql.types.DecimalType;
 import org.apache.spark.sql.types.StringType;
 import org.apache.spark.sql.types.TimestampType;
+import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
 
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * A converter that converts ordering value from native Java type to Spark type.
+ * Converts ordering values between Java and Spark representations.
  */
 public class OrderingValueEngineTypeConverter {
   private final List<Function<Comparable, Comparable>> converters;
@@ -53,6 +57,33 @@ public class OrderingValueEngineTypeConverter {
     return value instanceof ArrayComparable
         ? ((ArrayComparable) value).apply(this.converters)
         : this.converters.get(0).apply(value);
+  }
+
+  public static Comparable convertToJava(Comparable value) {
+    return value instanceof ArrayComparable
+        ? ((ArrayComparable) value).apply(component -> (Comparable) convertValueToJava(component))
+        : (Comparable) convertValueToJava(value);
+  }
+
+  public static Object convertValueToJava(Object value) {
+    if (value == null) {
+      return null;
+    } else if (value instanceof HoodieUTF8String) {
+      return ((HoodieUTF8String) value).getUtf8String().toString();
+    } else if (value instanceof UTF8String) {
+      return ((UTF8String) value).toString();
+    } else if (value instanceof Decimal) {
+      return ((Decimal) value).toJavaBigDecimal();
+    } else if (value instanceof byte[]) {
+      return ByteBuffer.wrap((byte[]) value);
+    } else if (value instanceof CalendarInterval
+        || value instanceof InternalRow
+        || value instanceof org.apache.spark.sql.catalyst.util.MapData
+        || value instanceof org.apache.spark.sql.catalyst.util.ArrayData) {
+      throw new UnsupportedOperationException(String.format("Unsupported value type (%s)", value.getClass().getName()));
+    } else {
+      return value;
+    }
   }
 
   public static OrderingValueEngineTypeConverter create(HoodieSchema dataSchema, List<String> orderingFieldNames) {
