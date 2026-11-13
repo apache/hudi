@@ -39,7 +39,12 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.ColumnReader;
 import org.apache.parquet.filter.RecordFilter;
 import org.apache.parquet.filter.UnboundRecordFilter;
+import org.apache.parquet.filter2.predicate.FilterApi;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
+import org.apache.parquet.filter2.predicate.LogicalInverseRewriter;
+import org.apache.parquet.filter2.predicate.Operators;
+import org.apache.parquet.filter2.predicate.Statistics;
+import org.apache.parquet.filter2.predicate.UserDefinedPredicate;
 import org.apache.parquet.format.converter.ParquetMetadataConverter.MetadataFilter;
 import org.apache.parquet.hadoop.BadConfigurationException;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -50,13 +55,16 @@ import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.MessageTypeParser;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 
 import static org.apache.parquet.filter2.predicate.FilterApi.eq;
 import static org.apache.parquet.filter2.predicate.FilterApi.intColumn;
@@ -65,6 +73,7 @@ import static org.apache.parquet.hadoop.ParquetInputFormat.FILTER_PREDICATE;
 import static org.apache.parquet.hadoop.ParquetInputFormat.UNBOUND_RECORD_FILTER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -155,6 +164,34 @@ class TestRecordIterators {
     assertNull(RecordIterators.createFilterPredicate(schema, Collections.singletonList(predicate), null));
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"stored", "nested.id", "missing", "nested.missing", "nested"})
+  void testConfiguredPredicateColumnValidation(String columnName) {
+    MessageType schema = MessageTypeParser.parseMessageType(
+        "message file { optional int32 stored; optional group nested { optional int32 id; } }");
+    Operators.IntColumn column = intColumn(columnName);
+    FilterPredicate userDefined = FilterApi.userDefined(column, KeepAllPredicate.class);
+    List<FilterPredicate> predicates = Arrays.asList(
+        eq(column, 7), FilterApi.notEq(column, 7), FilterApi.lt(column, 7), FilterApi.ltEq(column, 7),
+        FilterApi.gt(column, 7), FilterApi.gtEq(column, 7),
+        FilterApi.in(column, Collections.singleton(7)), FilterApi.notIn(column, Collections.singleton(7)),
+        FilterApi.and(eq(intColumn("stored"), 1), eq(column, 7)),
+        FilterApi.or(eq(intColumn("stored"), 1), eq(column, 7)),
+        FilterApi.not(eq(column, 7)), userDefined, LogicalInverseRewriter.rewrite(FilterApi.not(userDefined)));
+    boolean expected = columnName.equals("stored") || columnName.equals("nested.id");
+    for (FilterPredicate predicate : predicates) {
+      assertEquals(expected, ParquetPredicateColumnValidator.hasAllColumns(predicate, schema), predicate.toString());
+    }
+  }
+
+  @Test
+  void testUnknownConfiguredPredicateIsSkipped() {
+    FilterPredicate predicate = mock(FilterPredicate.class);
+    when(predicate.accept(any())).thenThrow(new UnsupportedOperationException("Unsupported operator"));
+    MessageType schema = MessageTypeParser.parseMessageType("message file { optional int32 stored; }");
+    assertFalse(ParquetPredicateColumnValidator.hasAllColumns(predicate, schema));
+  }
+
   @Test
   void testUnboundRecordFilterConfiguration() throws Exception {
     Configuration conf = new Configuration();
@@ -218,8 +255,8 @@ class TestRecordIterators {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void testParquetIteratorReusesFooterAndBuildsPredicate(boolean schemaEvolution) throws Exception {
+  @CsvSource({"false, false", "false, true", "true, false", "true, true"})
+  void testParquetIteratorReusesFooterAndBuildsPredicate(boolean schemaEvolution, boolean configuredMissingColumn) throws Exception {
     InternalSchema mergeSchema = schemaEvolution ? new InternalSchema(Types.RecordType.get(
         Types.Field.get(0, false, "id", Types.IntType.get()))) : InternalSchema.getEmptyInternalSchema();
     InternalSchemaManager schemaManager = mock(InternalSchemaManager.class);
@@ -242,6 +279,10 @@ class TestRecordIterators {
     when(reader.reachedEnd()).thenReturn(true);
 
     Configuration conf = new Configuration();
+    if (configuredMissingColumn) {
+      SerializationUtil.writeObjectToConfAsBase64(FILTER_PREDICATE, eq(intColumn("missing"), 1), conf);
+    }
+    String originalFilter = conf.get(FILTER_PREDICATE);
     org.apache.hadoop.fs.Path path = new org.apache.hadoop.fs.Path("file:///table.parquet");
     MessageType fileSchema = MessageTypeParser.parseMessageType("message file { optional int32 id; }");
     ParquetMetadata footer = new ParquetMetadata(new FileMetaData(fileSchema, Collections.emptyMap(), "test"), Collections.emptyList());
@@ -259,6 +300,13 @@ class TestRecordIterators {
           any(), any())).thenAnswer(invocation -> {
             assertSame(footer, invocation.getArgument(9));
             assertEquals(eq(intColumn("id"), 7), invocation.getArgument(10));
+            Configuration readConf = invocation.getArgument(2);
+            assertNull(readConf.get(FILTER_PREDICATE));
+            if (configuredMissingColumn) {
+              assertNotSame(conf, readConf);
+            } else {
+              assertSame(conf, readConf);
+            }
             return reader;
           });
 
@@ -279,6 +327,7 @@ class TestRecordIterators {
       assertFalse(iterator.hasNext());
       iterator.close();
       verify(reader).close();
+      assertEquals(originalFilter, conf.get(FILTER_PREDICATE));
       parquetReader.verify(() -> ParquetFileReader.readFooter(
           org.mockito.ArgumentMatchers.eq(conf), org.mockito.ArgumentMatchers.eq(path), any(MetadataFilter.class)));
     }
@@ -292,6 +341,23 @@ class TestRecordIterators {
     Method method = RecordIterators.class.getDeclaredMethod(methodName, parameterTypes);
     method.setAccessible(true);
     return (T) method.invoke(null, arguments);
+  }
+
+  public static class KeepAllPredicate extends UserDefinedPredicate<Integer> {
+    @Override
+    public boolean keep(Integer value) {
+      return true;
+    }
+
+    @Override
+    public boolean canDrop(Statistics<Integer> statistics) {
+      return false;
+    }
+
+    @Override
+    public boolean inverseCanDrop(Statistics<Integer> statistics) {
+      return false;
+    }
   }
 
   public static class ConfigurableRecordFilter

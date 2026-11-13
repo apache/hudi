@@ -54,6 +54,9 @@ import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.parquet.filter2.predicate.FilterApi;
+import org.apache.parquet.filter2.predicate.FilterPredicate;
+import org.apache.parquet.hadoop.ParquetInputFormat;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -61,6 +64,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -196,8 +200,9 @@ class TestFlinkRowDataReaderContext {
       storage.createDirectory(partitionPath);
     }
 
-    @Test
-    void testPrimaryKeyFilterDoesNotResurrectDeletedRecord() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void testPrimaryKeyFilterDoesNotResurrectDeletedRecord(boolean configuredFilter) throws Exception {
       HoodieBaseFile baseFile = HoodieFileSliceTestUtils.createBaseFile(
           new StoragePath(partitionPath, FSUtils.makeBaseFileName("001", DEFAULT_WRITE_TOKEN, FILE_ID, ".parquet")).toString(),
           Arrays.asList(record("k", 100L), record("survivor", 100L)), HOODIE_SCHEMA, "001");
@@ -210,6 +215,9 @@ class TestFlinkRowDataReaderContext {
       }
       assertEquals(Collections.singletonList("survivor"), readSnapshot(baseFile, deleteFile, null));
       assertEquals(Collections.singletonList("survivor"), readSnapshot(baseFile, deleteFile, "survivor"));
+      if (configuredFilter) {
+        ParquetInputFormat.setFilterPredicate(storage.getConf().unwrapAs(Configuration.class), keyEquals(ROW_KEY, "k").filter());
+      }
       assertEquals(Collections.emptyList(), readSnapshot(baseFile, deleteFile, "k"));
     }
 
@@ -238,6 +246,36 @@ class TestFlinkRowDataReaderContext {
       }
     }
 
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("org.apache.hudi.table.format.TestFlinkRowDataReaderContext#configuredDeleteLogPredicates")
+    void testConfiguredDeleteLogPredicates(FilterPredicate predicate, List<String> expectedKeys) throws Exception {
+      HoodieLogFile deleteFile = createDeleteFile();
+      Configuration conf = storage.getConf().unwrapAs(Configuration.class);
+      ParquetInputFormat.setFilterPredicate(conf, predicate);
+      String originalFilter = conf.get(ParquetInputFormat.FILTER_PREDICATE);
+      // No query predicates: exercise the configured filter and its downstream reload in ParquetFileReader.
+      assertEquals(expectedKeys, readDeleteKeys(deleteFile, null));
+      assertEquals(originalFilter, conf.get(ParquetInputFormat.FILTER_PREDICATE));
+    }
+
+    @Test
+    void testConfiguredFilterRemainsAvailableForDataFiles() throws Exception {
+      HoodieLogFile deleteFile = createDeleteFile();
+      HoodieLogFile dataFile = HoodieFileSliceTestUtils.createNativeDataLogFile(
+          nativeLogPath(".log.parquet"), Collections.singletonList(record("other", 100L)), HOODIE_SCHEMA, "002");
+      Configuration conf = storage.getConf().unwrapAs(Configuration.class);
+      ParquetInputFormat.setFilterPredicate(conf, keyEquals(ROW_KEY, "k").filter());
+      String originalFilter = conf.get(ParquetInputFormat.FILTER_PREDICATE);
+      assertEquals(Collections.singletonList("k"), readDeleteKeys(deleteFile, null));
+      assertEquals(originalFilter, conf.get(ParquetInputFormat.FILTER_PREDICATE));
+      FlinkRowDataReaderContext context = readerContext(Collections.emptyList());
+      context.setHasLogFiles(true);
+      try (ClosableIterator<RowData> iterator = context.getFileRecordIterator(dataFile.getPath(), 0, Long.MAX_VALUE,
+          HOODIE_SCHEMA, HOODIE_SCHEMA, storage)) {
+        assertFalse(iterator.hasNext(), "The shared configuration must still filter files containing the business key");
+      }
+    }
+
     private HoodieLogFile createDeleteFile() throws Exception {
       return HoodieFileSliceTestUtils.createNativeDeleteLogFile(storage,
           nativeLogPath(".deletes.parquet"), Collections.singletonList(record("k", 200L)), HOODIE_SCHEMA, "002");
@@ -245,7 +283,7 @@ class TestFlinkRowDataReaderContext {
 
     private List<String> readDeleteKeys(HoodieLogFile deleteFile, ExpressionPredicates.Predicate predicate) throws Exception {
       HoodieSchema schema = HoodieSchemaUtils.createDeleteLogSchema(HOODIE_SCHEMA, Collections.singletonList("timestamp"));
-      FlinkRowDataReaderContext context = readerContext(Collections.singletonList(predicate));
+      FlinkRowDataReaderContext context = readerContext(predicate == null ? Collections.emptyList() : Collections.singletonList(predicate));
       context.setHasLogFiles(true);
       List<String> keys = new ArrayList<>();
       try (ClosableIterator<RowData> iterator = context.getFileRecordIterator(deleteFile.getPath(), 0, Long.MAX_VALUE,
@@ -300,6 +338,21 @@ class TestFlinkRowDataReaderContext {
     private IndexedRecord record(String key, long timestamp) {
       return DATA_GEN.generateGenericRecord(key, PARTITION, "rider." + key, "driver." + key, timestamp, false, false);
     }
+  }
+
+  private static Stream<Arguments> configuredDeleteLogPredicates() {
+    FilterPredicate missingKey = keyEquals(ROW_KEY, "k").filter();
+    FilterPredicate storedKey = keyEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, "other").filter();
+    List<String> retainedKeys = Collections.singletonList("k");
+    return Stream.of(
+        Arguments.of(missingKey, retainedKeys),
+        Arguments.of(FilterApi.and(missingKey, storedKey), retainedKeys),
+        Arguments.of(FilterApi.or(missingKey, storedKey), retainedKeys),
+        Arguments.of(FilterApi.or(storedKey, missingKey), retainedKeys),
+        Arguments.of(FilterApi.not(FilterApi.and(keyEquals(ROW_KEY, "other").filter(),
+            keyEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, "k").filter())), retainedKeys),
+        Arguments.of(keyEquals(HoodieRecord.RECORD_KEY_METADATA_FIELD, "k").filter(), retainedKeys),
+        Arguments.of(storedKey, Collections.emptyList()));
   }
 
   private static Stream<Arguments> deleteLogPredicates() {

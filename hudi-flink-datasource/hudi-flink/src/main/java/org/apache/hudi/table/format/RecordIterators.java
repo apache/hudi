@@ -111,8 +111,17 @@ public abstract class RecordIterators {
       List<Predicate> predicates) throws IOException {
     // Read the footer once for both predicate validation and the split reader.
     ParquetMetadata footer = readFooter(conf, new org.apache.hadoop.fs.Path(path.toUri()), range(splitStart, splitStart + splitLength));
-    FilterPredicate filterPredicate = createFilterPredicate(footer.getFileMetaData().getSchema(), predicates, getFilterPredicate(conf));
-    UnboundRecordFilter recordFilter = getUnboundRecordFilterInstance(conf);
+    MessageType fileSchema = footer.getFileMetaData().getSchema();
+    FilterPredicate configuredFilter = getFilterPredicate(conf);
+    Configuration readConf = conf;
+    if (configuredFilter != null && !ParquetPredicateColumnValidator.hasAllColumns(configuredFilter, fileSchema)) {
+      // ParquetFileReader reloads the configured predicate, so remove it from a per-file copy as well.
+      readConf = new Configuration(conf);
+      readConf.unset(FILTER_PREDICATE);
+      configuredFilter = null;
+    }
+    FilterPredicate filterPredicate = createFilterPredicate(fileSchema, predicates, configuredFilter);
+    UnboundRecordFilter recordFilter = getUnboundRecordFilterInstance(readConf);
 
     InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(getFileName(path));
     if (mergeSchema.isEmptySchema()) {
@@ -120,7 +129,7 @@ public abstract class RecordIterators {
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
               caseSensitive,
-              conf,
+              readConf,
               fieldNames,
               fieldTypes,
               partitionSpec,
@@ -137,7 +146,7 @@ public abstract class RecordIterators {
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
               caseSensitive,
-              conf,
+              readConf,
               internalSchemaManager.getMergeFieldNames(mergeSchema, fieldNames), // the reconciled field names
               castMap.getFileFieldTypes(),                                     // the reconciled field types
               partitionSpec,
