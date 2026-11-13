@@ -35,9 +35,11 @@ import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRollingStatMetadata;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.HoodieLogFormat.Writer;
 import org.apache.hudi.common.table.log.HoodieLogFormatWriter;
@@ -48,6 +50,7 @@ import org.apache.hudi.common.table.timeline.versioning.v1.ArchivedTimelineV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantComparatorV1;
 import org.apache.hudi.common.table.timeline.versioning.v1.InstantGeneratorV1;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
+import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.CompactionUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
@@ -100,6 +103,38 @@ public class TestArchivedTimelineV1 extends HoodieCommonTestHarness {
   @AfterEach
   public void clean() {
     cleanMetaClient();
+  }
+
+  @Test
+  public void testCleanPayloadsAcrossCommitOnlyArchiveFile() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, HoodieTableVersion.SIX);
+    StoragePath archiveFilePath = ArchivedTimelineV1.getArchiveLogPath(metaClient.getArchivePath());
+    HoodieInstant olderClean = createInstantV1(COMPLETED, HoodieTimeline.CLEAN_ACTION, "01");
+    HoodieInstant newerClean = createInstantV1(COMPLETED, HoodieTimeline.CLEAN_ACTION, "05");
+    List<HoodieInstant> archived = Arrays.asList(olderClean,
+        createInstantV1(COMPLETED, HoodieTimeline.COMMIT_ACTION, "03"), newerClean);
+    for (int i = 0; i < archived.size(); i++) {
+      HoodieInstant instant = archived.get(i);
+      List<IndexedRecord> records = new ArrayList<>();
+      if (HoodieTimeline.CLEAN_ACTION.equals(instant.getAction())) {
+        records.add(createArchivedMetaWrapper(createInstantV1(REQUESTED, HoodieTimeline.CLEAN_ACTION, instant.requestedTime())));
+      }
+      records.add(createArchivedMetaWrapper(instant));
+      try (Writer writer = buildWriter(archiveFilePath, i + 1)) {
+        writeArchiveLog(writer, records);
+      }
+    }
+    assertEquals(3, getArchiveLogFilePaths().size());
+    List<HoodieInstant> cleans = metaClient.getArchivedTimeline().getCleanerTimeline().filterCompletedInstants()
+        .getReverseOrderedInstants().collect(Collectors.toList());
+    assertEquals(Arrays.asList(newerClean, olderClean), cleans);
+    HoodieTimeline metadataTimeline = ArchivedCleanTimelineUtils.getTimeline(metaClient, cleans, false, 2);
+    HoodieTimeline planTimeline = ArchivedCleanTimelineUtils.getTimeline(metaClient, cleans, true, 2);
+    for (HoodieInstant clean : cleans) {
+      assertEquals(1, metadataTimeline.readCleanMetadata(clean).getTotalFilesDeleted());
+      HoodieInstant requested = createInstantV1(REQUESTED, HoodieTimeline.CLEAN_ACTION, clean.requestedTime());
+      assertEquals(HoodieCleaningPolicy.KEEP_LATEST_COMMITS.name(), planTimeline.readCleanerPlan(requested).getPolicy());
+    }
   }
 
   @Test
