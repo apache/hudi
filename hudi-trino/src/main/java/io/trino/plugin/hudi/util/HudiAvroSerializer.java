@@ -67,6 +67,7 @@ import static io.trino.plugin.hudi.HudiUtil.getFieldFromSchema;
 import static io.trino.spi.StandardErrorCode.GENERIC_INTERNAL_ERROR;
 import static io.trino.spi.StandardErrorCode.NUMERIC_VALUE_OUT_OF_RANGE;
 import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.Chars.truncateToLengthAndTrimSpaces;
 import static io.trino.spi.type.DateType.DATE;
 import static io.trino.spi.type.Decimals.writeBigDecimal;
 import static io.trino.spi.type.Decimals.writeShortDecimal;
@@ -458,7 +459,7 @@ public class HudiAvroSerializer
                         format("Unhandled type for %s: %s | value type: %s", type.getJavaType().getSimpleName(), type, value.getClass().getName()));
             }
         }
-        else if (type instanceof CharType) {
+        else if (type instanceof CharType charType) {
             String stringValue;
             if (value instanceof Utf8) {
                 stringValue = ((Utf8) value).toString();
@@ -472,7 +473,7 @@ public class HudiAvroSerializer
             }
             // IMPORTANT: Char types may be padded with trailing "space" characters to make up for length if the contents are lesser than defined length.
             // Need to trim out trailing spaces as Slice representing Char should not have trailing spaces
-            type.writeSlice(output, utf8Slice(stringValue.trim()));
+            type.writeSlice(output, truncateToLengthAndTrimSpaces(utf8Slice(stringValue), charType));
         }
         else {
             throw new TrinoException(GENERIC_INTERNAL_ERROR,
