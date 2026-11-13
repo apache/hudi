@@ -104,6 +104,7 @@ class ShowHoodieLogFileMetadataProcedure extends BaseProcedure with ProcedureBui
                 val recordItr = dataBlock.getRecordIterator(HoodieRecordType.AVRO)
                 recordItr.asScala.foreach(_ => recordCount.incrementAndGet())
                 recordItr.close()
+              case _ =>
             }
           }
           if (commitCountAndMetadata.containsKey(instantTime)) {
