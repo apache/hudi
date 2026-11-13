@@ -35,6 +35,7 @@ import java.util.Optional;
 import static io.trino.metastore.HiveType.HIVE_BOOLEAN;
 import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_IS_DELETED_FIELD;
 
 /**
@@ -58,10 +59,26 @@ public class EventTimeDeletesHudiTablesInitializer
 {
     public static final String TABLE_NAME = "deletes_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
+    public static final String SPILLING_TABLE_NAME = TABLE_NAME + "_spilling";
+    public static final String SPILLING_RT_TABLE_NAME = SPILLING_TABLE_NAME + "_rt";
 
     public EventTimeDeletesHudiTablesInitializer()
     {
         super(TABLE_NAME);
+    }
+
+    private EventTimeDeletesHudiTablesInitializer(String tableName, Map<String, String> extraTableProperties)
+    {
+        super(tableName, extraTableProperties);
+    }
+
+    /**
+     * The same commits under {@link #SPILLING_TABLE_NAME}, with a one-byte merge memory budget. The merge buffer's
+     * in-memory share of it rounds down to zero bytes, so every log record and delete is spilled to disk.
+     */
+    public static EventTimeDeletesHudiTablesInitializer spillingEveryLogRecord()
+    {
+        return new EventTimeDeletesHudiTablesInitializer(SPILLING_TABLE_NAME, Map.of(MAX_MEMORY_FOR_MERGE.key(), "1"));
     }
 
     @Override

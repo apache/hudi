@@ -34,11 +34,15 @@ import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.model.OverwriteWithLatestMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordSerializer;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.HoodieStorage;
@@ -290,6 +294,27 @@ public class HudiTrinoReaderContext
                 }
                 return recordMerger;
         }
+    }
+
+    /**
+     * Sizes merge buffer records from their values. The inherited estimator walks the record graph on every 100th
+     * put and counts the schema shared by all records each time (13 KB per TPC-DS store_sales row), so the merge
+     * buffer spilled after about 64k records.
+     */
+    @Override
+    public SizeEstimator<BufferedRecord<IndexedRecord>> getRecordSizeEstimator()
+    {
+        return new HudiRecordSizeEstimator();
+    }
+
+    /**
+     * Spills merge buffer records without their schema and keeps the Trino value kinds of native log rows, which the
+     * inherited Kryo serializer cannot write: it encodes the record as Avro binary, prefixed with its schema JSON.
+     */
+    @Override
+    public CustomSerializer<BufferedRecord<IndexedRecord>> getRecordSerializer()
+    {
+        return new BufferedRecordSerializer<>(new HudiRecordSerializer(schemaId -> getRecordContext().decodeAvroSchema(schemaId).toAvroSchema()));
     }
 
     @Override
