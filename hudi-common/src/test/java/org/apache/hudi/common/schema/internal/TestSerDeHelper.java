@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.schema.internal;
 
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.internal.utils.InternalSchemaUtils;
 import org.apache.hudi.common.schema.internal.utils.SerDeHelper;
 
@@ -28,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 /**
  * Tests {@link SerDeHelper}.
@@ -115,5 +117,34 @@ public class TestSerDeHelper {
     // convert back
     Assertions.assertEquals(SerDeHelper.parseSchemas(finalResult).size(), 3);
   }
-}
 
+  @Test
+  public void testBlobReferenceIdsFromOlderReleasesAreUpgradedOnRead() {
+    // Releases 1.2.0 and 1.2.1 persisted the fields of a blob's reference record with the ids 0..3,
+    // which are also the ids of the first table columns.
+    Types.RecordType legacyReference = Types.RecordType.get(
+        Types.Field.get(0, false, HoodieSchema.Blob.EXTERNAL_REFERENCE_PATH, Types.StringType.get()),
+        Types.Field.get(1, true, HoodieSchema.Blob.EXTERNAL_REFERENCE_OFFSET, Types.LongType.get()),
+        Types.Field.get(2, true, HoodieSchema.Blob.EXTERNAL_REFERENCE_LENGTH, Types.LongType.get()),
+        Types.Field.get(3, false, HoodieSchema.Blob.EXTERNAL_REFERENCE_IS_MANAGED, Types.BooleanType.get()));
+    Types.RecordType legacyBlob = Types.RecordType.get(
+        Types.Field.get(-10, false, HoodieSchema.Blob.TYPE, Types.StringType.get()),
+        Types.Field.get(-11, true, HoodieSchema.Blob.INLINE_DATA_FIELD, Types.BinaryType.get()),
+        Types.Field.get(-12, true, HoodieSchema.Blob.EXTERNAL_REFERENCE, legacyReference));
+    InternalSchema legacySchema = new InternalSchema(Types.RecordType.get(
+        Types.Field.get(0, false, "id", Types.IntType.get()),
+        Types.Field.get(1, false, "name", Types.StringType.get()),
+        Types.Field.get(2, true, "payload", legacyBlob)));
+
+    InternalSchema upgraded = SerDeHelper.fromJson(SerDeHelper.toJson(legacySchema)).get();
+
+    // the table columns are found under their own ids again
+    Assertions.assertEquals("id", upgraded.findField(0).name());
+    Assertions.assertEquals("name", upgraded.findField(1).name());
+    Assertions.assertEquals("payload", upgraded.findField(2).name());
+    // and the reference fields carry the sentinel ids of the current layout
+    Types.RecordType upgradedReference = (Types.RecordType) upgraded.findType("payload.reference");
+    Assertions.assertEquals(Arrays.asList(-13, -14, -15, -16),
+        upgradedReference.fields().stream().map(Types.Field::fieldId).collect(Collectors.toList()));
+  }
+}
