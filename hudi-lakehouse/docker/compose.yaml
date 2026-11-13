@@ -1,0 +1,167 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: hudi-lakehouse
+
+# Six default services and one optional Ollama service. Startup order:
+# minio -> minio-init -> hive-metastore -> spark-connect -> seed -> gateway.
+# minio-init and seed exit after completing their work; the other services stay running.
+services:
+  # S3-compatible storage for Hudi data, log files and timelines.
+  # S3 is internal at http://minio:9000; the console defaults to localhost:9001.
+  minio:
+    image: ${MINIO_IMAGE:-cgr.dev/chainguard/minio:latest@sha256:fb893e36fc369d41e92f678b17ec27378fa5bf0576aeef7ac15460c13629ab5a}
+    command: [server, /data, --console-address, ':9001']
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password
+    volumes:
+      - minio-data:/data
+    ports:
+      - '127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001'
+
+  # One-shot job: wait for MinIO, then create the warehouse bucket if absent.
+  minio-init:
+    image: ${MINIO_CLIENT_IMAGE:-cgr.dev/chainguard/minio-client:latest-dev@sha256:fe649f71872c299489deb3cb9e057e5d2f76a45c85b7599f7c21616ac80b5e63}
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: [/bin/sh, -ec]
+    command:
+      - |
+        for attempt in $$(seq 1 60); do
+          if mc alias set local http://minio:9000 admin password; then
+            mc mb --ignore-existing local/warehouse
+            exit 0
+          fi
+          sleep 2
+        done
+        echo 'MinIO did not become ready' >&2
+        exit 1
+
+  # Stores database/table schemas, locations and partition metadata in persistent
+  # Derby storage. Serves the internal Hive Metastore Thrift endpoint on port 9083.
+  hive-metastore:
+    image: apache/hive:3.1.3
+    # The existing local-dev HMS image is amd64-only (emulated on ARM).
+    platform: linux/amd64
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+    user: '0:0'
+    entrypoint: [/bin/bash, /lakehouse/start-metastore.sh]
+    environment:
+      SERVICE_NAME: metastore
+    volumes:
+      - metastore-data:/opt/hive/data
+      # Shared schema/server settings, including HMS's own S3A access to MinIO.
+      - ./conf/hive-site.xml:/opt/hive/conf/hive-site.xml:ro
+      - ./scripts/start-metastore.sh:/lakehouse/start-metastore.sh:ro
+    healthcheck:
+      test: [CMD, bash, -c, 'exec 3<>/dev/tcp/127.0.0.1/9083']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  # Executes SQL with an HMS-backed HoodieCatalog and reads/writes Hudi data in
+  # MinIO. Runs local[2]; external Connect clients use localhost:15002 by default.
+  spark-connect:
+    image: ${SPARK_CONNECT_IMAGE:-hudi-lakehouse-spark-connect:4.1.3-hudi1.2.0}
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: admin
+      AWS_SECRET_ACCESS_KEY: password
+      AWS_REGION: us-east-1
+    volumes:
+      - ./conf/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - ./scripts/check-connect.py:/lakehouse/check-connect.py:ro
+    ports:
+      - '127.0.0.1:${SPARK_CONNECT_PORT:-15002}:15002'
+    healthcheck:
+      test: [CMD, python3, /lakehouse/check-connect.py]
+      interval: 30s
+      timeout: 30s
+      retries: 20
+      start_period: 30s
+    stop_grace_period: 30s
+
+  # One-shot Python Connect client: create/populate trips and drivers, then verify
+  # the sample data. Reuses the Spark image without starting another Spark server.
+  seed:
+    image: ${SPARK_CONNECT_IMAGE:-hudi-lakehouse-spark-connect:4.1.3-hudi1.2.0}
+    depends_on:
+      spark-connect:
+        condition: service_healthy
+    entrypoint: [python3, /lakehouse/seed.py]
+    volumes:
+      - ./scripts/seed.py:/lakehouse/seed.py:ro
+
+  # Chat UI, chat API and read-only MCP tools, exposed on localhost:8000 by default.
+  # Chat uses the configured LLM; SQL tools execute through Spark Connect.
+  # Waits for successful sample-data initialization before starting.
+  gateway:
+    image: ${GATEWAY_IMAGE:-hudi-lakehouse-agent-gateway:0.1.0}
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+    environment:
+      GATEWAY_SQL_BACKEND: spark-connect
+      GATEWAY_SPARK_CONNECT_URI: sc://spark-connect:15002
+      GATEWAY_SPARK_CONNECT_CATALOG: spark_catalog
+      GATEWAY_SPARK_CONNECT_SCHEMA: default
+      GATEWAY_LLM_PROVIDER: ${GATEWAY_LLM_PROVIDER:-ollama}
+      GATEWAY_LLM_MODEL: ${GATEWAY_LLM_MODEL:-qwen3:8b}
+      GATEWAY_OLLAMA_BASE_URL: ${GATEWAY_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      GATEWAY_OPENAI_BASE_URL: ${GATEWAY_OPENAI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - '127.0.0.1:${GATEWAY_PORT:-8000}:8000'
+    volumes:
+      - ./scripts/smoke-test.py:/lakehouse/smoke-test.py:ro
+    # MCP tools do not require a gateway LLM. The installer checks /ready
+    # separately and reports chat availability without failing MCP startup.
+    healthcheck:
+      test: [CMD, python, -c, 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/health", timeout=5)']
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  # Optional local LLM server for Gateway chat, using CPU inference by default.
+  # lakehouse.sh up --local-llm starts it and pulls any missing model via docker compose
+  # exec (default qwen3:8b), then starts Gateway with this server's internal address.
+  ollama:
+    profiles: [local-llm]
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.11.4@sha256:be17b353bf3cfab0b6980530284e64716a57589ed753a82d9a6a2a5fa9a61a31}
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+# Preserve table data, catalog metadata and cached models across container recreation.
+# Ordinary compose down retains these volumes; down --volumes removes them.
+volumes:
+  minio-data:
+  metastore-data:
+  ollama-data:
