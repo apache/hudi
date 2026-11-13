@@ -34,6 +34,9 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -69,6 +72,8 @@ public class FileSystemViewManager {
   private final Function2<HoodieTableMetaClient, FileSystemViewStorageConfig, SyncableFileSystemView> viewCreator;
   // Map from Base-Path to View
   private final ConcurrentHashMap<String, SyncableFileSystemView> globalViewMap;
+  // Lease count of each leased view and whether the manager retired it; guarded by itself
+  private final Map<SyncableFileSystemView, ViewLeases> viewLeases = new IdentityHashMap<>();
 
   private FileSystemViewManager(
       HoodieEngineContext context,
@@ -88,7 +93,60 @@ public class FileSystemViewManager {
   public void clearFileSystemView(String basePath) {
     SyncableFileSystemView view = globalViewMap.remove(basePath);
     if (view != null) {
+      closeView(view);
+    }
+  }
+
+  /**
+   * Closes a view removed from the map, at once when no lease of it is held, otherwise when its last lease is closed;
+   * leases taken later find it replaced. Never waits for a lease.
+   */
+  private void closeView(SyncableFileSystemView view) {
+    synchronized (viewLeases) {
+      ViewLeases leases = viewLeases.get(view);
+      if (leases != null) {
+        leases.retired = true;
+        return;
+      }
+    }
+    view.close();
+  }
+
+  /**
+   * Leases the file-system view of the base-path, creating the view if absent. Leases of one view are held at the
+   * same time; a view the manager removes while leases of it are held is closed when the last of them is closed. A
+   * view the manager replaced before the lease was taken is left for its replacement.
+   *
+   * @param basePath Hoodie table base path
+   * @return the lease, to be closed by the caller
+   */
+  public ViewLease leaseFileSystemView(String basePath) {
+    while (true) {
+      SyncableFileSystemView view = getFileSystemView(basePath);
+      synchronized (viewLeases) {
+        if (globalViewMap.get(basePath) == view) {
+          viewLeases.computeIfAbsent(view, v -> new ViewLeases()).count++;
+          return new ViewLease(this, view);
+        }
+      }
+    }
+  }
+
+  private void release(SyncableFileSystemView view) {
+    synchronized (viewLeases) {
+      ViewLeases leases = viewLeases.get(view);
+      if (--leases.count > 0) {
+        return;
+      }
+      viewLeases.remove(view);
+      if (!leases.retired) {
+        return;
+      }
+    }
+    try {
       view.close();
+    } catch (Exception e) {
+      log.warn("Failed to close a file system view after its last lease", e);
     }
   }
 
@@ -121,9 +179,38 @@ public class FileSystemViewManager {
    * Closes all views opened.
    */
   public void close() {
-    if (!this.globalViewMap.isEmpty()) {
-      this.globalViewMap.values().forEach(SyncableFileSystemView::close);
-      this.globalViewMap.clear();
+    new ArrayList<>(globalViewMap.keySet()).forEach(this::clearFileSystemView);
+  }
+
+  private static final class ViewLeases {
+    private int count;
+    private boolean retired;
+  }
+
+  /**
+   * A leased file-system view; the manager does not close the view while the lease is held. Closing the lease more
+   * than once has no effect.
+   */
+  public static final class ViewLease implements AutoCloseable {
+    private final FileSystemViewManager manager;
+    private final SyncableFileSystemView view;
+    private boolean released;
+
+    private ViewLease(FileSystemViewManager manager, SyncableFileSystemView view) {
+      this.manager = manager;
+      this.view = view;
+    }
+
+    public SyncableFileSystemView getView() {
+      return view;
+    }
+
+    @Override
+    public synchronized void close() {
+      if (!released) {
+        released = true;
+        manager.release(view);
+      }
     }
   }
 

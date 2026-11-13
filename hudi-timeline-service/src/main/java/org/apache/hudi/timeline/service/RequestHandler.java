@@ -280,13 +280,13 @@ public class RequestHandler {
       metricsRegistry.add("LAST_INSTANT", 1);
       List<InstantDTO> dtos = instantHandler.getLastInstant(getBasePathParam(ctx));
       writeValueAsString(ctx, dtos);
-    }, false));
+    }, false, true));
 
     app.get(RemoteHoodieTableFileSystemView.TIMELINE_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("TIMELINE", 1);
       TimelineDTO dto = instantHandler.getTimeline(getBasePathParam(ctx));
       writeValueAsString(ctx, dto);
-    }, false));
+    }, false, true));
   }
 
   /**
@@ -541,13 +541,13 @@ public class RequestHandler {
       } catch (IOException e) {
         throw new HoodieIOException("Failed to parse request parameter", e);
       }
-    }, false));
+    }, false, true));
 
     app.post(RemoteHoodieTableFileSystemView.LOAD_ALL_PARTITIONS_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("LOAD_ALL_PARTITIONS", 1);
       boolean success = sliceHandler.loadAllPartitions(getBasePathParam(ctx));
       writeValueAsString(ctx, success);
-    }, false));
+    }, false, true));
 
     app.get(RemoteHoodieTableFileSystemView.ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON_URL, new ViewHandler(ctx -> {
       metricsRegistry.add("ALL_REPLACED_FILEGROUPS_BEFORE_OR_ON", 1);
@@ -645,17 +645,24 @@ public class RequestHandler {
   }
 
   /**
-   * Used for logging and performing refresh check.
+   * Used for logging and performing refresh check. A handler that reads the table's view runs, together with the
+   * checks, on a lease of the view, which the manager closes only after the response data is complete.
    */
   private class ViewHandler implements Handler {
 
     private final Handler handler;
     private final boolean performRefreshCheck;
+    private final boolean readsView;
     private final UserGroupInformation ugi;
 
     ViewHandler(Handler handler, boolean performRefreshCheck) {
+      this(handler, performRefreshCheck, performRefreshCheck);
+    }
+
+    ViewHandler(Handler handler, boolean performRefreshCheck, boolean readsView) {
       this.handler = handler;
       this.performRefreshCheck = performRefreshCheck;
+      this.readsView = readsView;
       try {
         ugi = UserGroupInformation.getCurrentUser();
       } catch (Exception e) {
@@ -674,26 +681,31 @@ public class RequestHandler {
         long refreshCheckTimeTaken = 0;
         long handleTimeTaken = 0;
         long finalCheckTimeTaken = 0;
-        try {
+        try (FileSystemViewManager.ViewLease lease = readsView ? viewManager.leaseFileSystemView(getBasePathParam(context)) : null) {
+          SyncableFileSystemView view = lease == null ? null : lease.getView();
           if (refreshCheck) {
             long beginRefreshCheck = System.currentTimeMillis();
-            synced = syncIfLocalViewBehind(context);
+            synced = syncIfLocalViewBehind(context, view);
             long endRefreshCheck = System.currentTimeMillis();
             refreshCheckTimeTaken = endRefreshCheck - beginRefreshCheck;
           }
 
           long handleBeginMs = System.currentTimeMillis();
-          handler.handle(context);
+          org.apache.hudi.timeline.service.handlers.Handler.bindView(view);
+          try {
+            handler.handle(context);
+          } finally {
+            org.apache.hudi.timeline.service.handlers.Handler.unbindView();
+          }
           long handleEndMs = System.currentTimeMillis();
           handleTimeTaken = handleEndMs - handleBeginMs;
 
           if (refreshCheck) {
             long beginFinalCheck = System.currentTimeMillis();
-            if (isLocalViewBehind(context)) {
+            if (isLocalViewBehind(context, view)) {
               String lastKnownInstantFromClient = getLastInstantTsParam(context);
               String timelineHashFromClient = getTimelineHashParam(context);
-              HoodieTimeline localTimeline =
-                  viewManager.getFileSystemView(context.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM)).getTimeline();
+              HoodieTimeline localTimeline = view.getTimeline();
               if (shouldThrowExceptionIfLocalViewBehind(localTimeline, timelineHashFromClient)) {
                 String errMsg = String.format("Last known instant from client was %s but server has the following timeline %s",
                         lastKnownInstantFromClient, localTimeline.getInstants());
@@ -734,12 +746,10 @@ public class RequestHandler {
     /**
      * Determines if local view of table's timeline is behind that of client's view.
      */
-    private boolean isLocalViewBehind(Context ctx) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
+    private boolean isLocalViewBehind(Context ctx, SyncableFileSystemView view) {
       String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
       String timelineHashFromClient = getTimelineHashParam(ctx);
-      HoodieTimeline localTimeline =
-          viewManager.getFileSystemView(basePath).getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
+      HoodieTimeline localTimeline = view.getTimeline().filterCompletedOrMajorOrMinorCompactionInstants();
       if (log.isDebugEnabled()) {
         log.debug("Client [ LastTs={}, TimelineHash={}], localTimeline={}",lastKnownInstantFromClient, timelineHashFromClient, localTimeline.getInstants());
       }
@@ -763,9 +773,7 @@ public class RequestHandler {
     /**
      * Syncs data-set view if local view is behind.
      */
-    private boolean syncIfLocalViewBehind(Context ctx) {
-      String basePath = ctx.queryParam(RemoteHoodieTableFileSystemView.BASEPATH_PARAM);
-      SyncableFileSystemView view = viewManager.getFileSystemView(basePath);
+    private boolean syncIfLocalViewBehind(Context ctx, SyncableFileSystemView view) {
       synchronized (view) {
         HoodieTimeline localTimeline = view.getTimeline();
         // The final check already accepts a trailing clean with an otherwise matching timeline.
@@ -773,7 +781,7 @@ public class RequestHandler {
         if (!shouldThrowExceptionIfLocalViewBehind(localTimeline, getTimelineHashParam(ctx))) {
           return false;
         }
-        if (isLocalViewBehind(ctx)) {
+        if (isLocalViewBehind(ctx, view)) {
           String lastKnownInstantFromClient = getLastInstantTsParam(ctx);
           if (log.isInfoEnabled()) {
             log.info("Syncing view as client passed last known instant {} as last known instant but server has the following last instant on timeline: {}",
