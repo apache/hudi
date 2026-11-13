@@ -1,0 +1,419 @@
+<!--
+  Licensed to the Apache Software Foundation (ASF) under one or more
+  contributor license agreements.  See the NOTICE file distributed with
+  this work for additional information regarding copyright ownership.
+  The ASF licenses this file to You under the Apache License, Version 2.0
+  (the "License"); you may not use this file except in compliance with
+  the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="4926" viewBox="0 0 1500 4926" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<defs>
+<marker id="arr-normal" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#37474f"/></marker>
+<marker id="arr-writer" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1565c0"/></marker>
+<marker id="arr-delete" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#c62828"/></marker>
+<marker id="arr-abort" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6c00"/></marker>
+<marker id="arr-read" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#2e7d32"/></marker>
+</defs>
+<rect width="1500" height="4926" fill="#ffffff"/>
+<text x="750.0" y="30" text-anchor="middle" font-size="20" font-weight="bold">RFC-100 blob cleaner, trimmed proposal: scenarios</text>
+<text x="750.0" y="48" text-anchor="middle" font-size="12" fill="#455a64">arrow colors: blue = writer, grey = cleaner action, green = cleaner read, red = physical delete, orange = abort / refuse.  Orange dashed band = inside the transaction lock.</text>
+<rect x="40" y="60" width="1420" height="34" fill="#eceff1"/>
+<text x="52" y="83" font-size="16" font-weight="bold">1. Normal workflow: a blob reference is superseded, its file expires, the blob is deleted in the same clean</text>
+<text x="52" y="116" font-size="12" fill="#455a64" font-style="italic">Row r in file group FG-A points at external blob P. The row is updated to point at Q. When F1 falls out of retention, P is the only thing that still mentions it. Watch for: nothing is</text>
+<text x="52" y="132" font-size="12" fill="#455a64" font-style="italic">tombstoned by the clean; the registry entry (P, F1) dies later, in MDT compaction.</text>
+<rect x="78.33333333333331" y="146" width="160" height="30" rx="5" fill="#ffffff" stroke="#1565c0" stroke-width="2"/>
+<text x="158.33333333333331" y="166" text-anchor="middle" font-weight="bold" fill="#1565c0">Writer</text>
+<rect x="315.0" y="146" width="160" height="30" rx="5" fill="#ffffff" stroke="#6a1b9a" stroke-width="2"/>
+<text x="395.0" y="166" text-anchor="middle" font-weight="bold" fill="#6a1b9a">Timeline + lock</text>
+<rect x="551.6666666666666" y="146" width="160" height="30" rx="5" fill="#ffffff" stroke="#37474f" stroke-width="2"/>
+<text x="631.6666666666666" y="166" text-anchor="middle" font-weight="bold" fill="#37474f">Cleaner</text>
+<rect x="788.3333333333334" y="146" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="868.3333333333334" y="166" text-anchor="middle" font-weight="bold" fill="#2e7d32">blob_refs (MDT)</text>
+<rect x="1025.0" y="146" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="1105.0" y="166" text-anchor="middle" font-weight="bold" fill="#2e7d32">FILES (MDT)</text>
+<rect x="1261.6666666666667" y="146" width="160" height="30" rx="5" fill="#ffffff" stroke="#8d6e63" stroke-width="2"/>
+<text x="1341.6666666666667" y="166" text-anchor="middle" font-weight="bold" fill="#8d6e63">Storage</text>
+<line x1="158.33333333333331" y1="176" x2="158.33333333333331" y2="1048" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="395.0" y1="176" x2="395.0" y2="1048" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="631.6666666666666" y1="176" x2="631.6666666666666" y2="1048" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="868.3333333333334" y1="176" x2="868.3333333333334" y2="1048" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1105.0" y1="176" x2="1105.0" y2="1048" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1341.6666666666667" y1="176" x2="1341.6666666666667" y2="1048" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="40" y="700" width="1420" height="146" fill="#fff3e0" stroke="#ef6c00" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.9"/>
+<text x="48" y="713" font-size="11" font-weight="bold" fill="#ef6c00">LOCKED: under the scheduleCleaning transaction lock</text>
+<rect x="40" y="192" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="206" font-weight="bold" fill="#37474f">commit t1</text>
+<text x="750.0" y="226" text-anchor="middle" fill="#1565c0">write F1 (FG-A): row r -&gt; P, type OUT_OF_LINE, managed = true</text>
+<line x1="158.33333333333331" y1="234" x2="1341.6666666666667" y2="234" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="513.3333333333334" y="256" text-anchor="middle" fill="#1565c0">insert (P, F1) [distinct path set from WriteStatus, same MDT delta commit as the data]</text>
+<line x1="158.33333333333331" y1="264" x2="868.3333333333334" y2="264" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="631.6666666666666" y="286" text-anchor="middle" fill="#1565c0">add F1</text>
+<line x1="158.33333333333331" y1="294" x2="1105.0" y2="294" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="276.66666666666663" y="316" text-anchor="middle" fill="#1565c0">t1 COMPLETED</text>
+<line x1="158.33333333333331" y1="324" x2="395.0" y2="324" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<rect x="40" y="336" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="350" font-weight="bold" fill="#37474f">commit t2</text>
+<text x="750.0" y="370" text-anchor="middle" fill="#1565c0">write F2 (FG-A): row r -&gt; Q</text>
+<line x1="158.33333333333331" y1="378" x2="1341.6666666666667" y2="378" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="513.3333333333334" y="400" text-anchor="middle" fill="#1565c0">insert (Q, F2)</text>
+<line x1="158.33333333333331" y1="408" x2="868.3333333333334" y2="408" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="631.6666666666666" y="430" text-anchor="middle" fill="#1565c0">add F2</text>
+<line x1="158.33333333333331" y1="438" x2="1105.0" y2="438" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="276.66666666666663" y="460" text-anchor="middle" fill="#1565c0">t2 COMPLETED</text>
+<line x1="158.33333333333331" y1="468" x2="395.0" y2="468" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<rect x="40" y="480" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="494" font-weight="bold" fill="#37474f">clean C1 planning (createCleanerPlan, unlocked): retention policy expires F1</text>
+<text x="986.6666666666667" y="514" text-anchor="middle" fill="#2e7d32">enumerate F1&#x27;s blob column -&gt; {P} (only type == OUT_OF_LINE and managed; skip any path that is a Hudi</text>
+<text x="986.6666666666667" y="530" text-anchor="middle" fill="#2e7d32">base/log file)</text>
+<line x1="631.6666666666666" y1="538" x2="1341.6666666666667" y2="538" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="513.3333333333333" y="560" text-anchor="middle" fill="#2e7d32">T0 = instant set of the cleaner&#x27;s</text>
+<text x="513.3333333333333" y="576" text-anchor="middle" fill="#2e7d32">DEDICATED MDT reader = {t1, t2}; no</text>
+<text x="513.3333333333333" y="592" text-anchor="middle" fill="#2e7d32">reset between the two reads below</text>
+<line x1="631.6666666666666" y1="600" x2="395.0" y2="600" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="750.0" y="622" text-anchor="middle" fill="#2e7d32">Step A: prefix scan P at T0 -&gt; {(P, F1)}</text>
+<line x1="631.6666666666666" y1="630" x2="868.3333333333334" y2="630" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="868.3333333333333" y="652" text-anchor="middle" fill="#2e7d32">F1 at T0: present, but F1 is in C1&#x27;s own expired set -&gt; does not count</text>
+<line x1="631.6666666666666" y1="660" x2="1105.0" y2="660" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<path d="M 631.6666666666666 676 h 22 v 16 h -22" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<text x="661.6666666666666" y="682" fill="#37474f">no live entry for P -&gt; P survives Step A</text>
+<text x="513.3333333333333" y="730" text-anchor="middle" fill="#2e7d32">reload timeline inside the lock; commits</text>
+<text x="513.3333333333333" y="746" text-anchor="middle" fill="#2e7d32">completed in (T0, now] = {} -&gt; no</text>
+<text x="513.3333333333333" y="762" text-anchor="middle" fill="#2e7d32">blobRefsWritten flag to worry about</text>
+<line x1="631.6666666666666" y1="770" x2="395.0" y2="770" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="513.3333333333333" y="792" text-anchor="middle" fill="#37474f">persist plan + plan sidecar {P} (sorted,</text>
+<text x="513.3333333333333" y="808" text-anchor="middle" fill="#37474f">bloom filter); saveToCleanRequested -&gt;</text>
+<text x="513.3333333333333" y="824" text-anchor="middle" fill="#37474f">C1 REQUESTED</text>
+<line x1="631.6666666666666" y1="832" x2="395.0" y2="832" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<rect x="40" y="854" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="868" font-weight="bold" fill="#37474f">clean C1 execution (existing executor, unchanged lock scope)</text>
+<text x="986.6666666666667" y="888" text-anchor="middle" fill="#c62828">delete F1</text>
+<line x1="631.6666666666666" y1="896" x2="1341.6666666666667" y2="896" stroke="#c62828" stroke-width="1.6" marker-end="url(#arr-delete)"/>
+<text x="986.6666666666667" y="918" text-anchor="middle" fill="#c62828">delete blob P (FileNotFound = success)</text>
+<line x1="631.6666666666666" y1="926" x2="1341.6666666666667" y2="926" stroke="#c62828" stroke-width="1.6" marker-end="url(#arr-delete)"/>
+<text x="868.3333333333333" y="948" text-anchor="middle" fill="#37474f">remove F1 (the clean&#x27;s normal MDT update; no blob_refs tombstones)</text>
+<line x1="631.6666666666666" y1="956" x2="1105.0" y2="956" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<text x="513.3333333333333" y="978" text-anchor="middle" fill="#37474f">C1 COMPLETED</text>
+<line x1="631.6666666666666" y1="986" x2="395.0" y2="986" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<rect x="100" y="996" width="1300" height="44" rx="4" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="1009" fill="#333">Later, MDT compaction of blob_refs: the compaction filter drops (P, F1) because F1 is absent from FILES. Until then the stale entry is harmless: any lookup that finds it also finds F1 missing from</text>
+<text x="110" y="1025" fill="#333">FILES and treats it as dead.</text>
+<rect x="40" y="1078" width="1420" height="34" fill="#eceff1"/>
+<text x="52" y="1101" font-size="16" font-weight="bold">2. Concurrent writer re-references P while clean C1 is verifying it (C2 delete-and-re-add, R1)</text>
+<text x="52" y="1134" font-size="12" fill="#455a64" font-style="italic">Same setup: F1 (expired) references P. Writer W wants to commit F3 that also references P. There are exactly three places W&#x27;s commit can land relative to C1&#x27;s verification. Each is shown. In</text>
+<text x="52" y="1150" font-size="12" fill="#455a64" font-style="italic">none of them is P deleted while F3 references it.</text>
+<rect x="78.33333333333331" y="1164" width="160" height="30" rx="5" fill="#ffffff" stroke="#1565c0" stroke-width="2"/>
+<text x="158.33333333333331" y="1184" text-anchor="middle" font-weight="bold" fill="#1565c0">Writer</text>
+<rect x="315.0" y="1164" width="160" height="30" rx="5" fill="#ffffff" stroke="#6a1b9a" stroke-width="2"/>
+<text x="395.0" y="1184" text-anchor="middle" font-weight="bold" fill="#6a1b9a">Timeline + lock</text>
+<rect x="551.6666666666666" y="1164" width="160" height="30" rx="5" fill="#ffffff" stroke="#37474f" stroke-width="2"/>
+<text x="631.6666666666666" y="1184" text-anchor="middle" font-weight="bold" fill="#37474f">Cleaner</text>
+<rect x="788.3333333333334" y="1164" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="868.3333333333334" y="1184" text-anchor="middle" font-weight="bold" fill="#2e7d32">blob_refs (MDT)</text>
+<rect x="1025.0" y="1164" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="1105.0" y="1184" text-anchor="middle" font-weight="bold" fill="#2e7d32">FILES (MDT)</text>
+<rect x="1261.6666666666667" y="1164" width="160" height="30" rx="5" fill="#ffffff" stroke="#8d6e63" stroke-width="2"/>
+<text x="1341.6666666666667" y="1184" text-anchor="middle" font-weight="bold" fill="#8d6e63">Storage</text>
+<line x1="158.33333333333331" y1="1194" x2="158.33333333333331" y2="2232" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="395.0" y1="1194" x2="395.0" y2="2232" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="631.6666666666666" y1="1194" x2="631.6666666666666" y2="2232" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="868.3333333333334" y1="1194" x2="868.3333333333334" y2="2232" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1105.0" y1="1194" x2="1105.0" y2="2232" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1341.6666666666667" y1="1194" x2="1341.6666666666667" y2="2232" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="40" y="1652" width="1420" height="222" fill="#fff3e0" stroke="#ef6c00" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.9"/>
+<text x="48" y="1665" font-size="11" font-weight="bold" fill="#ef6c00">LOCKED: under the scheduleCleaning transaction lock</text>
+<rect x="40" y="1904" width="1420" height="52" fill="#fff3e0" stroke="#ef6c00" stroke-width="1.5" stroke-dasharray="6 3" opacity="0.9"/>
+<text x="48" y="1917" font-size="11" font-weight="bold" fill="#ef6c00">LOCKED: under the scheduleCleaning transaction lock</text>
+<rect x="40" y="1210" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="1224" font-weight="bold" fill="#37474f">timing A: W completes BEFORE the cleaner takes its snapshot T0</text>
+<text x="513.3333333333334" y="1244" text-anchor="middle" fill="#1565c0">insert (P, F3)</text>
+<line x1="158.33333333333331" y1="1252" x2="868.3333333333334" y2="1252" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="631.6666666666666" y="1274" text-anchor="middle" fill="#1565c0">add F3</text>
+<line x1="158.33333333333331" y1="1282" x2="1105.0" y2="1282" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="276.66666666666663" y="1304" text-anchor="middle" fill="#1565c0">W COMPLETED</text>
+<line x1="158.33333333333331" y1="1312" x2="395.0" y2="1312" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="750.0" y="1334" text-anchor="middle" fill="#2e7d32">Step A: prefix scan P at T0 -&gt; {(P, F1),</text>
+<text x="750.0" y="1350" text-anchor="middle" fill="#2e7d32">(P, F3)}</text>
+<line x1="631.6666666666666" y1="1358" x2="868.3333333333334" y2="1358" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="868.3333333333333" y="1380" text-anchor="middle" fill="#2e7d32">F3 present at T0 -&gt; LIVE</text>
+<line x1="631.6666666666666" y1="1388" x2="1105.0" y2="1388" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<path d="M 631.6666666666666 1404 h 22 v 16 h -22" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<text x="661.6666666666666" y="1410" fill="#37474f">P retained (deferred). It is re-derived when F3 itself expires.</text>
+<rect x="40" y="1430" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="1444" font-weight="bold" fill="#37474f">timing B: W completes AFTER T0 but BEFORE the cleaner&#x27;s locked Step B</text>
+<text x="750.0" y="1464" text-anchor="middle" fill="#2e7d32">Step A: prefix scan P at T0 -&gt; {(P, F1)}</text>
+<text x="750.0" y="1480" text-anchor="middle" fill="#2e7d32">-&gt; P survives</text>
+<line x1="631.6666666666666" y1="1488" x2="868.3333333333334" y2="1488" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="276.66666666666663" y="1510" text-anchor="middle" fill="#1565c0">W takes the txn lock; preCommit: no</text>
+<text x="276.66666666666663" y="1526" text-anchor="middle" fill="#1565c0">REQUESTED / INFLIGHT clean, and no clean</text>
+<text x="276.66666666666663" y="1542" text-anchor="middle" fill="#1565c0">completed after W&#x27;s instant, lists P -&gt;</text>
+<text x="276.66666666666663" y="1558" text-anchor="middle" fill="#1565c0">proceed</text>
+<line x1="158.33333333333331" y1="1566" x2="395.0" y2="1566" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="513.3333333333334" y="1588" text-anchor="middle" fill="#1565c0">insert (P, F3)</text>
+<line x1="158.33333333333331" y1="1596" x2="868.3333333333334" y2="1596" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="276.66666666666663" y="1618" text-anchor="middle" fill="#1565c0">W COMPLETED with extraMetadata</text>
+<text x="276.66666666666663" y="1634" text-anchor="middle" fill="#1565c0">blobRefsWritten=true; lock released</text>
+<line x1="158.33333333333331" y1="1642" x2="395.0" y2="1642" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="513.3333333333333" y="1682" text-anchor="middle" fill="#2e7d32">reload; commits completed in (T0, now] =</text>
+<text x="513.3333333333333" y="1698" text-anchor="middle" fill="#2e7d32">{W}; W carries blobRefsWritten -&gt; cannot</text>
+<text x="513.3333333333333" y="1714" text-anchor="middle" fill="#2e7d32">persist yet</text>
+<line x1="631.6666666666666" y1="1722" x2="395.0" y2="1722" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="750.0" y="1744" text-anchor="middle" fill="#2e7d32">release the lock; re-run Step A at a</text>
+<text x="750.0" y="1760" text-anchor="middle" fill="#2e7d32">fresh T0 (now includes W): prefix scan P</text>
+<text x="750.0" y="1776" text-anchor="middle" fill="#2e7d32">-&gt; {(P, F1), (P, F3)}, F3 live</text>
+<line x1="631.6666666666666" y1="1784" x2="868.3333333333334" y2="1784" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<path d="M 631.6666666666666 1800 h 22 v 16 h -22" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<text x="661.6666666666666" y="1806" fill="#37474f">P DEFERRED (live reference exists): left out of the sidecar; re-take</text>
+<text x="661.6666666666666" y="1822" fill="#37474f">the lock, no new flagged commit -&gt; persist</text>
+<text x="513.3333333333333" y="1852" text-anchor="middle" fill="#37474f">persist plan + sidecar {} ; C1 REQUESTED</text>
+<line x1="631.6666666666666" y1="1860" x2="395.0" y2="1860" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<rect x="40" y="1882" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="1896" font-weight="bold" fill="#37474f">timing C: W&#x27;s preCommit runs AFTER C1&#x27;s plan is persisted (REQUESTED or INFLIGHT, sidecar lists P)</text>
+<text x="513.3333333333333" y="1934" text-anchor="middle" fill="#37474f">persist plan + sidecar {P}; C1 REQUESTED</text>
+<line x1="631.6666666666666" y1="1942" x2="395.0" y2="1942" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<text x="276.66666666666663" y="1974" text-anchor="middle" fill="#1565c0">W takes the txn lock; preCommit probes</text>
+<text x="276.66666666666663" y="1990" text-anchor="middle" fill="#1565c0">the sidecars of REQUESTED + INFLIGHT</text>
+<text x="276.66666666666663" y="2006" text-anchor="middle" fill="#1565c0">cleans and of cleans completed after W&#x27;s</text>
+<text x="276.66666666666663" y="2022" text-anchor="middle" fill="#1565c0">instant -&gt; P overlaps</text>
+<line x1="158.33333333333331" y1="2030" x2="395.0" y2="2030" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<path d="M 158.33333333333331 2046 h 22 v 16 h -22" fill="none" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#arr-abort)"/>
+<text x="188.33333333333331" y="2052" fill="#ef6c00">HoodieBlobReferenceConflictException: abort; the writer must re-derive</text>
+<text x="188.33333333333331" y="2068" fill="#ef6c00">or re-upload before retrying</text>
+<text x="276.66666666666663" y="2098" text-anchor="middle" fill="#ef6c00">retry after C1 COMPLETED: bounded</text>
+<text x="276.66666666666663" y="2114" text-anchor="middle" fill="#ef6c00">completed-window check finds P in C1&#x27;s</text>
+<text x="276.66666666666663" y="2130" text-anchor="middle" fill="#ef6c00">delete list -&gt; abort again (P is gone;</text>
+<text x="276.66666666666663" y="2146" text-anchor="middle" fill="#ef6c00">stale-path user error, outside R1)</text>
+<line x1="158.33333333333331" y1="2154" x2="395.0" y2="2154" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#arr-abort)"/>
+<rect x="100" y="2164" width="1300" height="60" rx="4" fill="#fffde7" stroke="#f9a825" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="2177" fill="#333">Why there is no fourth case: the writer&#x27;s commit path holds one lock across preCommit -&gt; MDT write -&gt; saveAsComplete, and Step B holds the same lock. So W is either fully before T0 (timing A), fully</text>
+<text x="110" y="2193" fill="#333">inside (T0, Step B] (timing B), or after the plan is visible (timing C). Trade-off of plan-time verification: the veto window runs from REQUESTED to COMPLETED, so an async clean stuck in REQUESTED</text>
+<text x="110" y="2209" fill="#333">blocks writers that re-reference P for that long. v2 only vetoed during the INFLIGHT drain.</text>
+<rect x="40" y="2262" width="1420" height="34" fill="#eceff1"/>
+<text x="52" y="2285" font-size="16" font-weight="bold">3. Cross-file-group sharing and replace commits (C3, C7): the common case for external blobs</text>
+<text x="52" y="2318" font-size="12" fill="#455a64" font-style="italic">P is referenced from two file groups in two partitions. Then clustering replaces FG-A. Watch for: liveness uses raw FILES membership, not the file-system view, because the view hides</text>
+<text x="52" y="2334" font-size="12" fill="#455a64" font-style="italic">replaced file groups that are still readable by time travel.</text>
+<rect x="78.33333333333331" y="2348" width="160" height="30" rx="5" fill="#ffffff" stroke="#1565c0" stroke-width="2"/>
+<text x="158.33333333333331" y="2368" text-anchor="middle" font-weight="bold" fill="#1565c0">Writer</text>
+<rect x="315.0" y="2348" width="160" height="30" rx="5" fill="#ffffff" stroke="#6a1b9a" stroke-width="2"/>
+<text x="395.0" y="2368" text-anchor="middle" font-weight="bold" fill="#6a1b9a">Timeline + lock</text>
+<rect x="551.6666666666666" y="2348" width="160" height="30" rx="5" fill="#ffffff" stroke="#37474f" stroke-width="2"/>
+<text x="631.6666666666666" y="2368" text-anchor="middle" font-weight="bold" fill="#37474f">Cleaner</text>
+<rect x="788.3333333333334" y="2348" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="868.3333333333334" y="2368" text-anchor="middle" font-weight="bold" fill="#2e7d32">blob_refs (MDT)</text>
+<rect x="1025.0" y="2348" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="1105.0" y="2368" text-anchor="middle" font-weight="bold" fill="#2e7d32">FILES (MDT)</text>
+<rect x="1261.6666666666667" y="2348" width="160" height="30" rx="5" fill="#ffffff" stroke="#8d6e63" stroke-width="2"/>
+<text x="1341.6666666666667" y="2368" text-anchor="middle" font-weight="bold" fill="#8d6e63">Storage</text>
+<line x1="158.33333333333331" y1="2378" x2="158.33333333333331" y2="2834" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="395.0" y1="2378" x2="395.0" y2="2834" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="631.6666666666666" y1="2378" x2="631.6666666666666" y2="2834" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="868.3333333333334" y1="2378" x2="868.3333333333334" y2="2834" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1105.0" y1="2378" x2="1105.0" y2="2834" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1341.6666666666667" y1="2378" x2="1341.6666666666667" y2="2834" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="40" y="2394" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="2408" font-weight="bold" fill="#37474f">P shared: F1 (FG-A, partition p1) and F5 (FG-B, partition p2). F1 expires in clean C1.</text>
+<text x="986.6666666666667" y="2428" text-anchor="middle" fill="#2e7d32">enumerate F1 -&gt; {P}</text>
+<line x1="631.6666666666666" y1="2436" x2="1341.6666666666667" y2="2436" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="750.0" y="2458" text-anchor="middle" fill="#2e7d32">prefix scan P -&gt; {(P, F1), (P, F5)}</text>
+<line x1="631.6666666666666" y1="2466" x2="868.3333333333334" y2="2466" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="868.3333333333333" y="2488" text-anchor="middle" fill="#2e7d32">F5 present (partition p2) -&gt; LIVE</text>
+<line x1="631.6666666666666" y1="2496" x2="1105.0" y2="2496" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<path d="M 631.6666666666666 2512 h 22 v 16 h -22" fill="none" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<text x="661.6666666666666" y="2518" fill="#37474f">P retained. One FILES lookup per distinct partition among the entries,</text>
+<text x="661.6666666666666" y="2534" fill="#37474f">cached for the clean.</text>
+<rect x="40" y="2554" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="2568" font-weight="bold" fill="#37474f">clustering: FG-A replaced by FG-C; the pointer to P is copied into F7. FG-A&#x27;s files stay on disk inside retention.</text>
+<text x="750.0" y="2588" text-anchor="middle" fill="#1565c0">replacecommit: write F7 (FG-C) with r -&gt; P</text>
+<line x1="158.33333333333331" y1="2596" x2="1341.6666666666667" y2="2596" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="513.3333333333334" y="2618" text-anchor="middle" fill="#1565c0">insert (P, F7). Nothing happens to (P, F1): entries die only with their file.</text>
+<line x1="158.33333333333331" y1="2626" x2="868.3333333333334" y2="2626" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<rect x="40" y="2638" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="2652" font-weight="bold" fill="#37474f">later: row r updated in FG-C to Q, F7&#x27;s old slice expires, P becomes a candidate again</text>
+<text x="750.0" y="2672" text-anchor="middle" fill="#2e7d32">prefix scan P -&gt; {(P, F1), (P, F5), (P,</text>
+<text x="750.0" y="2688" text-anchor="middle" fill="#2e7d32">F7)}</text>
+<line x1="631.6666666666666" y1="2696" x2="868.3333333333334" y2="2696" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="868.3333333333333" y="2718" text-anchor="middle" fill="#2e7d32">F1 still listed in FILES (replaced FG, within retention) -&gt; LIVE</text>
+<line x1="631.6666666666666" y1="2726" x2="1105.0" y2="2726" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<rect x="100" y="2736" width="1300" height="44" rx="4" fill="#ffebee" stroke="#c62828" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="2749" fill="#333">If the cleaner had asked the file-system view instead, getAllFileGroups would have filtered FG-A out as replaced, (P, F1) would look dead, and P would be deleted while a time-travel query inside the</text>
+<text x="110" y="2765" fill="#333">retention window can still read FG-A. That is the C7 trap. Raw FILES membership avoids it.</text>
+<text x="986.6666666666667" y="2800" text-anchor="middle" fill="#c62828">when FG-A&#x27;s replaced files and F5 finally expire, each of those cleans re-derives P from the expired file;</text>
+<text x="986.6666666666667" y="2816" text-anchor="middle" fill="#c62828">the last one finds no live entry and deletes P</text>
+<line x1="631.6666666666666" y1="2824" x2="1341.6666666666667" y2="2824" stroke="#c62828" stroke-width="1.6" marker-end="url(#arr-delete)"/>
+<rect x="40" y="2864" width="1420" height="34" fill="#eceff1"/>
+<text x="52" y="2887" font-size="16" font-weight="bold">4. MOR: a log update shadows the base file&#x27;s reference (C4, R3), then compaction</text>
+<text x="52" y="2920" font-size="12" fill="#455a64" font-style="italic">FG-A has base F1 (row r -&gt; P) and log L1 (row r -&gt; Q). The base ref to P is dead logically but F1 physically still contains it. Watch for: P is over-retained until F1 dies, never</text>
+<text x="52" y="2936" font-size="12" fill="#455a64" font-style="italic">under-retained; log reads are fenced to completed instants.</text>
+<rect x="78.33333333333331" y="2950" width="160" height="30" rx="5" fill="#ffffff" stroke="#1565c0" stroke-width="2"/>
+<text x="158.33333333333331" y="2970" text-anchor="middle" font-weight="bold" fill="#1565c0">Writer</text>
+<rect x="315.0" y="2950" width="160" height="30" rx="5" fill="#ffffff" stroke="#6a1b9a" stroke-width="2"/>
+<text x="395.0" y="2970" text-anchor="middle" font-weight="bold" fill="#6a1b9a">Timeline + lock</text>
+<rect x="551.6666666666666" y="2950" width="160" height="30" rx="5" fill="#ffffff" stroke="#37474f" stroke-width="2"/>
+<text x="631.6666666666666" y="2970" text-anchor="middle" font-weight="bold" fill="#37474f">Cleaner</text>
+<rect x="788.3333333333334" y="2950" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="868.3333333333334" y="2970" text-anchor="middle" font-weight="bold" fill="#2e7d32">blob_refs (MDT)</text>
+<rect x="1025.0" y="2950" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="1105.0" y="2970" text-anchor="middle" font-weight="bold" fill="#2e7d32">FILES (MDT)</text>
+<rect x="1261.6666666666667" y="2950" width="160" height="30" rx="5" fill="#ffffff" stroke="#8d6e63" stroke-width="2"/>
+<text x="1341.6666666666667" y="2970" text-anchor="middle" font-weight="bold" fill="#8d6e63">Storage</text>
+<line x1="158.33333333333331" y1="2980" x2="158.33333333333331" y2="3338" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="395.0" y1="2980" x2="395.0" y2="3338" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="631.6666666666666" y1="2980" x2="631.6666666666666" y2="3338" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="868.3333333333334" y1="2980" x2="868.3333333333334" y2="3338" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1105.0" y1="2980" x2="1105.0" y2="3338" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1341.6666666666667" y1="2980" x2="1341.6666666666667" y2="3338" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="40" y="2996" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="3010" font-weight="bold" fill="#37474f">steady state: slice {F1, L1} is the latest slice. Nothing expires, nothing is cleaned.</text>
+<text x="750.0" y="3030" text-anchor="middle" fill="#2e7d32">(P, F1) and (Q, L1) are both live</text>
+<text x="750.0" y="3046" text-anchor="middle" fill="#2e7d32">entries; the registry does not know that</text>
+<text x="750.0" y="3062" text-anchor="middle" fill="#2e7d32">L1 shadows F1 and does not need to</text>
+<line x1="631.6666666666666" y1="3070" x2="868.3333333333334" y2="3070" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<rect x="40" y="3082" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="3096" font-weight="bold" fill="#37474f">compaction writes base F2 (row r -&gt; Q). Old slice {F1, L1} expires in clean C1.</text>
+<text x="986.6666666666667" y="3116" text-anchor="middle" fill="#2e7d32">enumerate F1 -&gt; {P}; enumerate L1 through the instant-range-validated log reader -&gt; {Q} (a block from a</text>
+<text x="986.6666666666667" y="3132" text-anchor="middle" fill="#2e7d32">failed, not-yet-rolled-back commit is never read)</text>
+<line x1="631.6666666666666" y1="3140" x2="1341.6666666666667" y2="3140" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="750.0" y="3162" text-anchor="middle" fill="#2e7d32">scan P -&gt; {(P, F1)}: only in C1&#x27;s own</text>
+<text x="750.0" y="3178" text-anchor="middle" fill="#2e7d32">expired set -&gt; survivor</text>
+<line x1="631.6666666666666" y1="3186" x2="868.3333333333334" y2="3186" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="750.0" y="3208" text-anchor="middle" fill="#2e7d32">scan Q -&gt; {(Q, L1), (Q, F2)}</text>
+<line x1="631.6666666666666" y1="3216" x2="868.3333333333334" y2="3216" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="868.3333333333333" y="3238" text-anchor="middle" fill="#2e7d32">F2 present -&gt; Q LIVE -&gt; retained</text>
+<line x1="631.6666666666666" y1="3246" x2="1105.0" y2="3246" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="986.6666666666667" y="3268" text-anchor="middle" fill="#c62828">delete F1, L1, and blob P</text>
+<line x1="631.6666666666666" y1="3276" x2="1341.6666666666667" y2="3276" stroke="#c62828" stroke-width="1.6" marker-end="url(#arr-delete)"/>
+<rect x="100" y="3286" width="1300" height="44" rx="4" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="3299" fill="#333">Rollback resurrection is safe for the same reason: if the log update in L1 had been rolled back before compaction, P would simply still be referenced by the retained F1, and (P, F1) never left the</text>
+<text x="110" y="3315" fill="#333">registry. Over-retention is the only MOR degradation.</text>
+<rect x="40" y="3368" width="1420" height="34" fill="#eceff1"/>
+<text x="52" y="3391" font-size="16" font-weight="bold">5. Rollback of a failed commit, and restore to a savepoint (C9)</text>
+<text x="52" y="3424" font-size="12" fill="#455a64" font-style="italic">A writer references P and dies before completing. Separately, the table is restored to an older savepoint. Watch for: the registry and FILES move together because they ride the same MDT</text>
+<text x="52" y="3440" font-size="12" fill="#455a64" font-style="italic">commit; the one unrecoverable case is spelled out.</text>
+<rect x="78.33333333333331" y="3454" width="160" height="30" rx="5" fill="#ffffff" stroke="#1565c0" stroke-width="2"/>
+<text x="158.33333333333331" y="3474" text-anchor="middle" font-weight="bold" fill="#1565c0">Writer</text>
+<rect x="315.0" y="3454" width="160" height="30" rx="5" fill="#ffffff" stroke="#6a1b9a" stroke-width="2"/>
+<text x="395.0" y="3474" text-anchor="middle" font-weight="bold" fill="#6a1b9a">Timeline + lock</text>
+<rect x="551.6666666666666" y="3454" width="160" height="30" rx="5" fill="#ffffff" stroke="#37474f" stroke-width="2"/>
+<text x="631.6666666666666" y="3474" text-anchor="middle" font-weight="bold" fill="#37474f">Cleaner</text>
+<rect x="788.3333333333334" y="3454" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="868.3333333333334" y="3474" text-anchor="middle" font-weight="bold" fill="#2e7d32">blob_refs (MDT)</text>
+<rect x="1025.0" y="3454" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="1105.0" y="3474" text-anchor="middle" font-weight="bold" fill="#2e7d32">FILES (MDT)</text>
+<rect x="1261.6666666666667" y="3454" width="160" height="30" rx="5" fill="#ffffff" stroke="#8d6e63" stroke-width="2"/>
+<text x="1341.6666666666667" y="3474" text-anchor="middle" font-weight="bold" fill="#8d6e63">Storage</text>
+<line x1="158.33333333333331" y1="3484" x2="158.33333333333331" y2="4034" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="395.0" y1="3484" x2="395.0" y2="4034" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="631.6666666666666" y1="3484" x2="631.6666666666666" y2="4034" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="868.3333333333334" y1="3484" x2="868.3333333333334" y2="4034" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1105.0" y1="3484" x2="1105.0" y2="4034" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1341.6666666666667" y1="3484" x2="1341.6666666666667" y2="4034" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="40" y="3500" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="3514" font-weight="bold" fill="#37474f">rollback: writer W writes F3 (r -&gt; P), MDT delta commit lands, W crashes before saveAsComplete</text>
+<text x="750.0" y="3534" text-anchor="middle" fill="#1565c0">write F3 with r -&gt; P</text>
+<line x1="158.33333333333331" y1="3542" x2="1341.6666666666667" y2="3542" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<text x="513.3333333333334" y="3564" text-anchor="middle" fill="#1565c0">insert (P, F3) in W&#x27;s MDT delta commit</text>
+<line x1="158.33333333333331" y1="3572" x2="868.3333333333334" y2="3572" stroke="#1565c0" stroke-width="1.6" marker-end="url(#arr-writer)"/>
+<path d="M 158.33333333333331 3588 h 22 v 16 h -22" fill="none" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#arr-abort)"/>
+<text x="188.33333333333331" y="3594" fill="#ef6c00">crash: W never reaches COMPLETED</text>
+<text x="750.0" y="3624" text-anchor="middle" fill="#2e7d32">Step A while W is inflight: (P, F3) is</text>
+<text x="750.0" y="3640" text-anchor="middle" fill="#2e7d32">hidden by the completed-instant fence;</text>
+<text x="750.0" y="3656" text-anchor="middle" fill="#2e7d32">it is neither a retain vote nor a delete</text>
+<text x="750.0" y="3672" text-anchor="middle" fill="#2e7d32">vote</text>
+<line x1="631.6666666666666" y1="3680" x2="868.3333333333334" y2="3680" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<text x="276.66666666666663" y="3702" text-anchor="middle" fill="#37474f">rollback of W: the whole MDT delta</text>
+<text x="276.66666666666663" y="3718" text-anchor="middle" fill="#37474f">commit is rolled back, so (P, F3) and</text>
+<text x="276.66666666666663" y="3734" text-anchor="middle" fill="#37474f">FILES&#x27; F3 disappear together</text>
+<line x1="158.33333333333331" y1="3742" x2="395.0" y2="3742" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<rect x="100" y="3752" width="1300" height="60" rx="4" fill="#e8f5e9" stroke="#2e7d32" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="3765" fill="#333">The liveness predicate never observes a half-state: either both the registry entry and the FILES entry are visible, or neither is. If W had completed instead of crashing, its blobRefsWritten flag</text>
+<text x="110" y="3781" fill="#333">would have forced the cleaner to re-verify (timing B). Safety never rests on inflight entries. Rollback removes the whole MDT delta commit, so the hidden entries disappear with it. Separately, if F3</text>
+<text x="110" y="3797" fill="#333">was the only file referencing managed P, rollback hands P to the next clean as a candidate (C9).</text>
+<rect x="40" y="3822" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="3836" font-weight="bold" fill="#37474f">restore: table restored to savepoint S, which predates the commit that removed the last reference to P</text>
+<text x="276.66666666666663" y="3856" text-anchor="middle" fill="#37474f">restore to S</text>
+<line x1="158.33333333333331" y1="3864" x2="395.0" y2="3864" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<text x="513.3333333333334" y="3886" text-anchor="middle" fill="#37474f">partition delete-and-rebuild via the async indexer (shouldDeletePartitionOnRestore = true for blob_refs)</text>
+<line x1="158.33333333333331" y1="3894" x2="868.3333333333334" y2="3894" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<text x="750.0" y="3916" text-anchor="middle" fill="#2e7d32">partition is inflight -&gt; verification</text>
+<text x="750.0" y="3932" text-anchor="middle" fill="#2e7d32">refuses to authorize any delete; every</text>
+<text x="750.0" y="3948" text-anchor="middle" fill="#2e7d32">candidate defers until the rebuild</text>
+<text x="750.0" y="3964" text-anchor="middle" fill="#2e7d32">completes</text>
+<line x1="631.6666666666666" y1="3972" x2="868.3333333333334" y2="3972" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<rect x="100" y="3982" width="1300" height="44" rx="4" fill="#ffebee" stroke="#c62828" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="3995" fill="#333">Unrecoverable case: a blob hard-deleted by a clean that completed before the restore, where the restored state references it. With same-clean deletion there is no window. This is exactly what the</text>
+<text x="110" y="4011" fill="#333">optional grace window and queue buy; if a savepoint/restore SLA matters, enable them and size grace to that SLA. The file-slice cleaner has the same gap for data files today.</text>
+<rect x="40" y="4064" width="1420" height="34" fill="#eceff1"/>
+<text x="52" y="4087" font-size="16" font-weight="bold">6. Failure handling: enumeration failure, crash mid-execution, plan replay, lock modes, table-internal paths</text>
+<text x="52" y="4120" font-size="12" fill="#455a64" font-style="italic">Five things that go wrong in practice. Each resolves to retain, retry, or refuse. None resolves to delete.</text>
+<rect x="78.33333333333331" y="4134" width="160" height="30" rx="5" fill="#ffffff" stroke="#1565c0" stroke-width="2"/>
+<text x="158.33333333333331" y="4154" text-anchor="middle" font-weight="bold" fill="#1565c0">Writer</text>
+<rect x="315.0" y="4134" width="160" height="30" rx="5" fill="#ffffff" stroke="#6a1b9a" stroke-width="2"/>
+<text x="395.0" y="4154" text-anchor="middle" font-weight="bold" fill="#6a1b9a">Timeline + lock</text>
+<rect x="551.6666666666666" y="4134" width="160" height="30" rx="5" fill="#ffffff" stroke="#37474f" stroke-width="2"/>
+<text x="631.6666666666666" y="4154" text-anchor="middle" font-weight="bold" fill="#37474f">Cleaner</text>
+<rect x="788.3333333333334" y="4134" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="868.3333333333334" y="4154" text-anchor="middle" font-weight="bold" fill="#2e7d32">blob_refs (MDT)</text>
+<rect x="1025.0" y="4134" width="160" height="30" rx="5" fill="#ffffff" stroke="#2e7d32" stroke-width="2"/>
+<text x="1105.0" y="4154" text-anchor="middle" font-weight="bold" fill="#2e7d32">FILES (MDT)</text>
+<rect x="1261.6666666666667" y="4134" width="160" height="30" rx="5" fill="#ffffff" stroke="#8d6e63" stroke-width="2"/>
+<text x="1341.6666666666667" y="4154" text-anchor="middle" font-weight="bold" fill="#8d6e63">Storage</text>
+<line x1="158.33333333333331" y1="4164" x2="158.33333333333331" y2="4876" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="395.0" y1="4164" x2="395.0" y2="4876" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="631.6666666666666" y1="4164" x2="631.6666666666666" y2="4876" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="868.3333333333334" y1="4164" x2="868.3333333333334" y2="4876" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1105.0" y1="4164" x2="1105.0" y2="4876" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<line x1="1341.6666666666667" y1="4164" x2="1341.6666666666667" y2="4876" stroke="#b0bec5" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="40" y="4180" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="4194" font-weight="bold" fill="#37474f">a) a file&#x27;s blob column cannot be read at plan time</text>
+<text x="986.6666666666667" y="4214" text-anchor="middle" fill="#ef6c00">enumerate F1 -&gt; FAILS (corrupt footer, unreadable block)</text>
+<line x1="631.6666666666666" y1="4222" x2="1341.6666666666667" y2="4222" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#arr-abort)"/>
+<path d="M 631.6666666666666 4238 h 22 v 16 h -22" fill="none" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#arr-abort)"/>
+<text x="661.6666666666666" y="4244" fill="#ef6c00">remove F1 from C1&#x27;s delete set: keep the slice, warn, metric, retry</text>
+<text x="661.6666666666666" y="4260" fill="#ef6c00">next cycle</text>
+<rect x="100" y="4278" width="1300" height="28" rx="4" fill="#ffebee" stroke="#c62828" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="4291" fill="#333">v2 said proceed-and-flag. That deletes F1, never enqueues its paths, and the sweep only reclaims registry entries, so every blob referenced only by F1 is a permanent orphan (R2).</text>
+<rect x="40" y="4316" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="4330" font-weight="bold" fill="#37474f">b) crash during execution</text>
+<text x="986.6666666666667" y="4350" text-anchor="middle" fill="#c62828">delete F1 ok; crash before blob P is deleted</text>
+<line x1="631.6666666666666" y1="4358" x2="1341.6666666666667" y2="4358" stroke="#c62828" stroke-width="1.6" marker-end="url(#arr-delete)"/>
+<text x="513.3333333333333" y="4380" text-anchor="middle" fill="#37474f">C1 is INFLIGHT: re-execution re-reads</text>
+<text x="513.3333333333333" y="4396" text-anchor="middle" fill="#37474f">the plan sidecar and deletes P.</text>
+<text x="513.3333333333333" y="4412" text-anchor="middle" fill="#37474f">FileNotFound = success. No liveness</text>
+<text x="513.3333333333333" y="4428" text-anchor="middle" fill="#37474f">re-check is needed because the list was</text>
+<text x="513.3333333333333" y="4444" text-anchor="middle" fill="#37474f">verified under the lock and the veto has</text>
+<text x="513.3333333333333" y="4460" text-anchor="middle" fill="#37474f">protected it since.</text>
+<line x1="631.6666666666666" y1="4468" x2="395.0" y2="4468" stroke="#37474f" stroke-width="1.6" marker-end="url(#arr-normal)"/>
+<rect x="40" y="4480" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="4494" font-weight="bold" fill="#37474f">c) plan replay</text>
+<text x="513.3333333333333" y="4514" text-anchor="middle" fill="#2e7d32">requestClean finds C0&#x27;s completed file</text>
+<text x="513.3333333333333" y="4530" text-anchor="middle" fill="#2e7d32">empty: it replays C0&#x27;s plan under a NEW</text>
+<text x="513.3333333333333" y="4546" text-anchor="middle" fill="#2e7d32">instant without re-planning</text>
+<line x1="631.6666666666666" y1="4554" x2="395.0" y2="4554" stroke="#2e7d32" stroke-width="1.6" marker-end="url(#arr-read)"/>
+<path d="M 631.6666666666666 4570 h 22 v 16 h -22" fill="none" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#arr-abort)"/>
+<text x="661.6666666666666" y="4576" fill="#ef6c00">keep C0&#x27;s plan sidecar list as-is; run it through the FULL verify</text>
+<text x="661.6666666666666" y="4592" fill="#ef6c00">again (fresh T0, locked flag check) before deleting</text>
+<rect x="100" y="4610" width="1300" height="44" rx="4" fill="#ffebee" stroke="#c62828" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="4623" fill="#333">C0&#x27;s files are already deleted, so the list cannot be re-derived from them; stripping it would orphan every path only they referenced (R2). Re-verifying it catches the other direction: C0 already</text>
+<text x="110" y="4639" fill="#333">deleted its blobs, the user re-creates P, a writer commits a reference to P, and a blind replay would delete the now-live P. Pending REQUESTED / INFLIGHT plans are a different case and run unchanged.</text>
+<rect x="40" y="4664" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="4678" font-weight="bold" fill="#37474f">d) lock modes</text>
+<rect x="100" y="4686" width="1300" height="60" rx="4" fill="#fffde7" stroke="#f9a825" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="4699" fill="#333">Multi-writer with an external lock provider: supported. Single writer, all services inline: safe by sequentiality (clean runs in the writer&#x27;s thread after endStateChange). Single writer + async</text>
+<text x="110" y="4715" fill="#333">services + MDT: auto InProcessLockProvider, supported. Standalone HoodieCleaner process on a single-writer table: NO cross-process exclusion, and auto-adjust silently replaces a user-set provider with</text>
+<text x="110" y="4731" fill="#333">InProcessLockProvider when all services are inline. Blob deletion must fail fast there.</text>
+<rect x="40" y="4756" width="1420" height="20" fill="#f5f5f5"/>
+<text x="52" y="4770" font-weight="bold" fill="#37474f">e) table-internal paths</text>
+<text x="986.6666666666667" y="4790" text-anchor="middle" fill="#ef6c00">candidate path parses as a Hudi base or log file (e.g. a Lance DESCRIPTOR self-reference with managed =</text>
+<text x="986.6666666666667" y="4806" text-anchor="middle" fill="#ef6c00">true that leaked through a Parquet writer) -&gt; never a candidate, never deleted</text>
+<line x1="631.6666666666666" y1="4814" x2="1341.6666666666667" y2="4814" stroke="#ef6c00" stroke-width="1.6" marker-end="url(#arr-abort)"/>
+<rect x="100" y="4824" width="1300" height="44" rx="4" fill="#fffde7" stroke="#f9a825" stroke-width="1.2" opacity="0.95"/>
+<text x="110" y="4837" fill="#333">A blanket &#x27;skip anything under the table base path&#x27; is wrong: RFC-100 Phase 3 puts Hudi-managed blobs under &lt;base&gt;/.hoodie/blobs/, which must stay eligible. Exclude by file-name shape</text>
+<text x="110" y="4853" fill="#333">(FSUtils.isBaseFile / isLogFile) and reject such references at write time in every writer, not just the Lance one.</text>
+</svg>
