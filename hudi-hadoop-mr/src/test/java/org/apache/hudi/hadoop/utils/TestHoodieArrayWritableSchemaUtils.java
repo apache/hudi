@@ -28,6 +28,7 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.schema.HoodieSchemaUtils;
 import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.exception.SchemaCompatibilityException;
 import org.apache.hudi.hadoop.HiveHoodieReaderContext;
 import org.apache.hudi.hadoop.HiveRecordContext;
 
@@ -53,6 +54,7 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
+import org.apache.parquet.avro.AvroSchemaConverterWithTimestampNTZ;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
@@ -66,6 +68,7 @@ import java.util.function.UnaryOperator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
@@ -226,6 +229,221 @@ public class TestHoodieArrayWritableSchemaUtils {
     Writable result = HoodieArrayWritableSchemaUtils.rewritePrimaryType(oldWritable, oldSchema, decimalSchema);
     assertEquals(input, ((HiveDecimalWritable) result).getHiveDecimal().bigDecimalValue());
     validateRewriteWithAvro(oldWritable, oldSchema, result, decimalSchema);
+  }
+
+  @Test
+  void testRewriteRecordWithUnionTargetKeepsMemberGroup() {
+    HoodieSchema oldSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":{\"type\":\"record\",\"name\":\"Cu\",\"fields\":["
+        + "{\"name\":\"member0\",\"type\":[\"null\",\"int\"]},"
+        + "{\"name\":\"member1\",\"type\":[\"null\",\"string\"]}]}}]}");
+    HoodieSchema newSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":[\"null\",\"int\",\"string\"]}]}");
+
+    ArrayWritable memberGroup = new ArrayWritable(Writable.class, new Writable[] {new IntWritable(1), null});
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[] {memberGroup});
+
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap());
+
+    ArrayWritable resultGroup = (ArrayWritable) result.get()[0];
+    assertEquals(new IntWritable(1), resultGroup.get()[0]);
+    assertNull(resultGroup.get()[1]);
+  }
+
+  @Test
+  void testRewriteArrayOfUnionTargetKeepsMemberGroups() {
+    HoodieSchema oldSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"uas\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Ua\",\"fields\":["
+        + "{\"name\":\"member0\",\"type\":[\"null\",\"int\"]},"
+        + "{\"name\":\"member1\",\"type\":[\"null\",\"boolean\"]}]}}}]}");
+    HoodieSchema newSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"uas\",\"type\":{\"type\":\"array\",\"items\":[\"int\",\"boolean\"]}}]}");
+
+    ArrayWritable memberGroup = new ArrayWritable(Writable.class, new Writable[] {new IntWritable(7), null});
+    ArrayWritable array = new ArrayWritable(Writable.class, new Writable[] {memberGroup});
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[] {array});
+
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap());
+
+    ArrayWritable resultArray = (ArrayWritable) result.get()[0];
+    ArrayWritable resultGroup = (ArrayWritable) resultArray.get()[0];
+    assertEquals(new IntWritable(7), resultGroup.get()[0]);
+    assertNull(resultGroup.get()[1]);
+  }
+
+  @Test
+  void testRewriteUnionRecordBranchWithReorderedFields() {
+    // Reproduces the correctness issue raised on review: union [long, Member] whose record branch
+    // evolves from {a, b} to {b, a}. The member group layout is unchanged, but the populated
+    // member must be rewritten, otherwise b is read from a's slot.
+    HoodieSchema oldSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":{\"type\":\"record\",\"name\":\"Cu\",\"fields\":["
+        + "{\"name\":\"member0\",\"type\":[\"null\",\"long\"]},"
+        + "{\"name\":\"member1\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"string\"},{\"name\":\"b\",\"type\":\"string\"}]}]}]}}]}");
+    HoodieSchema newSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":[\"null\",\"long\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"b\",\"type\":\"string\"},{\"name\":\"a\",\"type\":\"string\"}]}]}]}");
+
+    ArrayWritable member = new ArrayWritable(Writable.class, new Writable[] {new Text("A"), new Text("B")});
+    ArrayWritable memberGroup = new ArrayWritable(Writable.class, new Writable[] {null, member});
+    ArrayWritable record = new ArrayWritable(Writable.class, new Writable[] {memberGroup});
+
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        record, oldSchema, newSchema, Collections.emptyMap());
+
+    ArrayWritable resultGroup = (ArrayWritable) result.get()[0];
+    assertNull(resultGroup.get()[0]);
+    ArrayWritable resultMember = (ArrayWritable) resultGroup.get()[1];
+    assertEquals(new Text("B"), resultMember.get()[0]);
+    assertEquals(new Text("A"), resultMember.get()[1]);
+  }
+
+  @Test
+  void testRewriteUnionBranchOrderMismatchThrows() {
+    // The target union lists its non-null branches in a different order, so memberN no longer
+    // addresses the same branch. Reject instead of silently reading the wrong branch.
+    HoodieSchema oldSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":{\"type\":\"record\",\"name\":\"Cu\",\"fields\":["
+        + "{\"name\":\"member0\",\"type\":[\"null\",\"long\"]},"
+        + "{\"name\":\"member1\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"string\"},{\"name\":\"b\",\"type\":\"string\"}]}]}]}}]}");
+    HoodieSchema newSchema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"User\",\"fields\":["
+        + "{\"name\":\"cu\",\"type\":[\"null\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"string\"},{\"name\":\"b\",\"type\":\"string\"}]},\"long\"]}]}");
+
+    ArrayWritable memberGroup = new ArrayWritable(Writable.class, new Writable[] {
+        new LongWritable(1L), null});
+
+    assertThrows(SchemaCompatibilityException.class, () ->
+        HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+            new ArrayWritable(Writable.class, new Writable[] {memberGroup}),
+            oldSchema, newSchema, Collections.emptyMap()));
+  }
+
+  @Test
+  void testRewriteAmbiguousNamedUnionBranchesThrows() {
+    HoodieSchema writer = unionSchema("[{\"type\":\"record\",\"name\":\"A\",\"fields\":[{\"name\":\"x\",\"type\":\"string\"}]},"
+        + "{\"type\":\"record\",\"name\":\"B\",\"fields\":[{\"name\":\"x\",\"type\":\"string\"}]}]");
+    HoodieSchema target = unionSchema("[{\"type\":\"record\",\"name\":\"B\",\"fields\":[{\"name\":\"x\",\"type\":\"string\"}]},"
+        + "{\"type\":\"record\",\"name\":\"A\",\"fields\":[{\"name\":\"x\",\"type\":\"string\"}]}]");
+    ArrayWritable row = arrayWritable(arrayWritable(arrayWritable(new Text("A-value")), null));
+    assertThrows(SchemaCompatibilityException.class, () -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        row, parquetSchema(writer), target, Collections.emptyMap()));
+    // Even unchanged named branches cannot be distinguished from a reorder using only the footer.
+    assertThrows(SchemaCompatibilityException.class, () -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        row, parquetSchema(writer), writer, Collections.emptyMap()));
+  }
+
+  @Test
+  void testRewriteUnionWithNestedUnionFromParquet() {
+    HoodieSchema schema = unionSchema("[\"long\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"nested\",\"type\":[\"int\",\"string\"]}]}]");
+    ArrayWritable nested = arrayWritable(new IntWritable(7), null);
+    ArrayWritable row = arrayWritable(arrayWritable(null, arrayWritable(nested)));
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        row, parquetSchema(schema), schema, Collections.emptyMap());
+    ArrayWritable members = (ArrayWritable) result.get()[0];
+    ArrayWritable record = (ArrayWritable) members.get()[1];
+    ArrayWritable actual = (ArrayWritable) record.get()[0];
+    assertEquals(new IntWritable(7), actual.get()[0]);
+    assertNull(actual.get()[1]);
+  }
+
+  @Test
+  void testRewriteUnionWithEnumFromParquet() {
+    HoodieSchema schema = unionSchema("[\"null\",\"long\",{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"A\",\"B\"]}]");
+    HoodieSchema physicalSchema = parquetSchema(schema);
+    ArrayWritable row = arrayWritable(arrayWritable(null, new Text("A")));
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        row, physicalSchema, schema, Collections.emptyMap());
+    ArrayWritable members = (ArrayWritable) result.get()[0];
+    assertNull(members.get()[0]);
+    assertEquals(new BytesWritable(new byte[] {'A'}), members.get()[1]);
+
+    // Reuse the schema pair with an absent enum member represented by NullWritable.
+    result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        arrayWritable(arrayWritable(new LongWritable(3), NullWritable.get())), physicalSchema, schema, Collections.emptyMap());
+    assertSame(NullWritable.get(), ((ArrayWritable) result.get()[0]).get()[1]);
+    result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        arrayWritable(NullWritable.get()), physicalSchema, schema, Collections.emptyMap());
+    assertSame(NullWritable.get(), result.get()[0]);
+  }
+
+  @Test
+  void testRewriteProjectedUnionMemberFromParquet() {
+    HoodieSchema schema = unionSchema("[\"long\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"x\",\"type\":\"string\"}]}]");
+    HoodieProjectionMask mask = HoodieProjectionMask.canonicalWith(Collections.singletonMap("u",
+        HoodieProjectionMask.builder().field("member1").build()));
+    ArrayWritable member = arrayWritable(new Text("value"));
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        arrayWritable(arrayWritable(member)), parquetSchema(schema), schema, Collections.emptyMap(), mask);
+    ArrayWritable members = (ArrayWritable) result.get()[0];
+    assertEquals(1, members.get().length);
+    assertEquals(new Text("value"), ((ArrayWritable) members.get()[0]).get()[0]);
+  }
+
+  @Test
+  void testRewriteProjectedFieldWithinUnionMemberFromParquet() {
+    HoodieSchema schema = unionSchema("[\"long\",{\"type\":\"record\",\"name\":\"Member\",\"fields\":["
+        + "{\"name\":\"a\",\"type\":\"string\"},"
+        + "{\"name\":\"b\",\"type\":{\"type\":\"enum\",\"name\":\"E\",\"symbols\":[\"B\"]}}]}]");
+    HoodieProjectionMask mask = HoodieProjectionMask.canonicalWith(Collections.singletonMap("u",
+        HoodieProjectionMask.builder().field("member1", HoodieProjectionMask.builder().field("b").build()).build()));
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        arrayWritable(arrayWritable(arrayWritable(new Text("B")))), parquetSchema(schema), schema, Collections.emptyMap(), mask);
+    ArrayWritable members = (ArrayWritable) result.get()[0];
+    assertEquals(1, members.get().length);
+    ArrayWritable member = (ArrayWritable) members.get()[0];
+    assertEquals(1, member.get().length);
+    assertEquals(new BytesWritable(new byte[] {'B'}), member.get()[0]);
+  }
+
+  @Test
+  void testRewriteDistinctPrimitiveUnionBranchesFromParquet() {
+    HoodieSchema schema = unionSchema("[\"int\",\"null\",\"long\",\"string\"]");
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        arrayWritable(arrayWritable(new IntWritable(7), null, null)), parquetSchema(schema), schema, Collections.emptyMap());
+    ArrayWritable members = (ArrayWritable) result.get()[0];
+    assertEquals(3, members.get().length);
+    assertEquals(new IntWritable(7), members.get()[0]);
+    assertNull(members.get()[1]);
+    assertNull(members.get()[2]);
+  }
+
+  @Test
+  void testRewriteUnionWithAmbiguousPromotionsThrows() {
+    HoodieSchema writer = unionSchema("[\"int\",\"long\"]");
+    HoodieSchema target = unionSchema("[\"float\",\"double\"]");
+    assertThrows(SchemaCompatibilityException.class, () -> HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        arrayWritable(arrayWritable(new IntWritable(7), null)), parquetSchema(writer), target, Collections.emptyMap()));
+  }
+
+  @Test
+  void testRewriteUnionWithUniquePromotion() {
+    HoodieSchema writer = unionSchema("[\"int\",\"boolean\"]");
+    HoodieSchema target = unionSchema("[\"long\",\"boolean\"]");
+    ArrayWritable result = HoodieArrayWritableSchemaUtils.rewriteRecordWithNewSchema(
+        arrayWritable(arrayWritable(new IntWritable(7), null)), parquetSchema(writer), target, Collections.emptyMap());
+    ArrayWritable members = (ArrayWritable) result.get()[0];
+    assertEquals(new LongWritable(7), members.get()[0]);
+    assertNull(members.get()[1]);
+  }
+
+  private static HoodieSchema unionSchema(String branches) {
+    return HoodieSchema.parse("{\"type\":\"record\",\"name\":\"Root\",\"fields\":[{\"name\":\"u\",\"type\":" + branches + "}]}");
+  }
+
+  private static HoodieSchema parquetSchema(HoodieSchema schema) {
+    AvroSchemaConverterWithTimestampNTZ converter = new AvroSchemaConverterWithTimestampNTZ();
+    return converter.convert(converter.convert(schema));
+  }
+
+  private static ArrayWritable arrayWritable(Writable... values) {
+    return new ArrayWritable(Writable.class, values);
   }
 
   @Test
