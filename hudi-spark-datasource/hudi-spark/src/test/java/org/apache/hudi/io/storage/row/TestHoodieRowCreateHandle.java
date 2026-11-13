@@ -19,6 +19,8 @@
 package org.apache.hudi.io.storage.row;
 
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
+import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.MetaFieldsMode;
@@ -27,6 +29,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieSparkClientTestHarness;
@@ -35,14 +38,18 @@ import org.apache.hudi.testutils.SparkDatasetTestUtils;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.UUID;
@@ -76,6 +83,39 @@ public class TestHoodieRowCreateHandle extends HoodieSparkClientTestHarness {
   @AfterEach
   public void tearDown() throws Exception {
     cleanupResources();
+  }
+
+  @Test
+  @DisabledIfSystemProperty(named = "lance.skip.tests", matches = "true")
+  void testLanceWriteStatusContainsColumnStats() throws Exception {
+    Properties tableProps = new Properties();
+    tableProps.setProperty(HoodieTableConfig.BASE_FILE_FORMAT.key(), HoodieFileFormat.LANCE.name());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), tableProps);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieWriteConfig config = SparkDatasetTestUtils.getConfigBuilder(basePath, timelineServicePort)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(true).withMetadataIndexColumnStats(true)
+            .withColumnStatsIndexForColumns("randomInt,_hoodie_record_key,_hoodie_file_name").build()).build();
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    String partition = HoodieTestDataGenerator.DEFAULT_FIRST_PARTITION_PATH;
+    HoodieRowCreateHandle handle = new HoodieRowCreateHandle(table, config, partition, UUID.randomUUID().toString(),
+        "000", 0, 0, 0, SparkDatasetTestUtils.STRUCT_TYPE);
+    for (int i = 0; i < 2; i++) {
+      UTF8String key = UTF8String.fromString("key" + i);
+      UTF8String partitionValue = UTF8String.fromString(partition);
+      handle.write(new GenericInternalRow(new Object[] {null, null, key, partitionValue,
+          UTF8String.fromString("old-file"), key, partitionValue, i == 0 ? 9 : -2, (long) i}));
+    }
+    WriteStatus status = handle.close();
+    assertEquals(0, status.getTotalErrorRecords());
+    assertTrue(status.getStat().getColumnStats().isPresent());
+    Map<String, HoodieColumnRangeMetadata<Comparable>> stats = status.getStat().getColumnStats().get();
+    assertEquals(-2, stats.get("randomInt").getMinValue());
+    assertEquals(9, stats.get("randomInt").getMaxValue());
+    assertEquals(2, stats.get("randomInt").getValueCount());
+    assertEquals("key0", stats.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).getMinValue().toString());
+    assertEquals("key1", stats.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).getMaxValue().toString());
+    assertEquals(0, stats.get(HoodieRecord.RECORD_KEY_METADATA_FIELD).getNullCount());
+    assertTrue(status.getStat().getPath().endsWith(stats.get(HoodieRecord.FILENAME_METADATA_FIELD).getMinValue().toString()));
   }
 
   @ParameterizedTest

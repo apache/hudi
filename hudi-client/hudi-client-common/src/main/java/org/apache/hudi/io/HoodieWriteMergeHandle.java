@@ -194,6 +194,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
           instantTime, newFilePath, hoodieTable.getStorage(),
 
           config, writeSchemaWithMetaFields, taskContextSupplier, getRecordType());
+      initColumnStatsCollector(fileWriter, newFilePath, getRecordType());
     } catch (IOException io) {
       log.error("Error in update task at commit {}", instantTime, io);
       writeStatus.setGlobalError(io);
@@ -478,6 +479,8 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
         writeIncomingRecords();
       }
       closeFileWriter();
+
+      updateColumnStats();
 
       long fileSizeInBytes = storage.getPathInfo(newFilePath).getLength();
       HoodieWriteStat stat = writeStatus.getStat();
