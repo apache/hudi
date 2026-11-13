@@ -17,10 +17,9 @@
 
 # Adapted from apache/arrow-rs .github/workflows/fork_ci_status.yml.
 # Mirror fork results as the informational CI (fork) check after upstream PR CI
-# completes and through scheduled polling for late runs and reruns. The fork's
-# Java CI (bot.yml) and Java CI Engines (java_ci_engines.yml) runs for the PR
-# head combine into that one check, which reports the worse result. Read fork
-# runs and write upstream checks using reviewed default-branch code.
+# completes and through scheduled polling for late runs and reruns. The check
+# reports the fork's Java CI (bot.yml) run for the PR head. Read fork runs and
+# write upstream checks using reviewed default-branch code.
 # No checkout, artifacts, or code from the pull request are used here.
 # Test with Python 3.11+, PyYAML, and Node.js 24:
 #   node --test .github/ci/scripts/test-fork-ci-status.cjs
@@ -30,7 +29,7 @@ name: Fork CI status
 
 on:
   workflow_run:
-    workflows: [Java CI, Java CI Engines]
+    workflows: [Java CI]
     types: [completed]
   schedule:
     - cron: '7,22,37,52 * * * *'
@@ -42,9 +41,9 @@ permissions:
   pull-requests: read
 
 # Like DataFusion, group notifications separately from scheduled/manual sweeps.
-# workflow_run identifies the fork and branch rather than the PR number. Both
-# upstream workflows notify for the same branch, and either notification syncs
-# the whole combined check, so the later one may cancel the earlier.
+# workflow_run identifies the fork and branch rather than the PR number. Every
+# notification for a branch syncs the same check, so a later one may cancel the
+# earlier.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.workflow_run.head_repository.full_name || 'update' }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: ${{ github.event_name == 'workflow_run' }}
@@ -63,11 +62,10 @@ jobs:
             // Adapted from apache/datafusion#25591. Fork results are informational:
             // contributors control their workflows; only upstream merge-queue CI gates merging.
             const CHECK = 'CI (fork)';
-            // Java CI is split across two workflows to stay under the ASF limit on jobs running
-            // at once per workflow. The check combines them, and its details link the first.
+            // The fork workflows the check reports. With more than one, it reports the worst
+            // result and its details link the first.
             const WORKFLOWS = [
               { file: 'bot.yml', name: 'Java CI' },
-              { file: 'java_ci_engines.yml', name: 'Java CI Engines' },
             ];
             const upstream = { owner: context.repo.owner, repo: context.repo.repo };
             const repository = upstream.owner + '/' + upstream.repo;
@@ -77,7 +75,7 @@ jobs:
             const isForkPr = (pr) => pr.state === 'open' && pr.head.repo &&
               pr.head.repo.full_name.toLowerCase() !== repository.toLowerCase() && pr.base.ref === 'master';
             const externalId = (pr) => 'hudi-fork-ci:' + pr.number;
-            // The check conclusions, worst first: the combined check reports the worst of its runs.
+            // The check conclusions, worst first: the check reports the worst of its runs.
             // Run conclusions a check cannot take, such as stale or startup_failure, count as failure.
             const CONCLUSIONS = [
               'failure', 'timed_out', 'cancelled', 'action_required', 'neutral', 'skipped', 'success',
@@ -183,7 +181,7 @@ jobs:
                       ...(runs.some(Boolean) ? [runList] : []),
                       'Enable workflows in the Actions tab of your fork, sync/rebase onto master to include the fork CI workflows, ' +
                       'then push your branch. A newly pushed run may take a moment to appear.',
-                      'A push that changes only docs or images is skipped by the path filters of bot.yml and java_ci_engines.yml, ' +
+                      'A push that changes only docs or images is skipped by the path filter of bot.yml, ' +
                       'so no run exists for such a commit.',
                       UPDATE_NOTE,
                       '[Fork CI setup](' + GUIDE + ')',
