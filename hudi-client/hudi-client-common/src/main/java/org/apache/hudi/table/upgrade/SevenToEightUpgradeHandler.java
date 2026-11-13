@@ -262,6 +262,9 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
           activeActionsBatch.add(iterator.next());
           // If the batch is full, write it to the LSM timeline
           if (activeActionsBatch.size() == batchSize) {
+            // the legacy reader does not return instants in time order, and the LSM file name is taken from the
+            // first and last instant of the batch, so sort it to keep every instant inside the file's range
+            Collections.sort(activeActionsBatch);
             lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
             activeActionsBatch.clear();
           }
@@ -269,6 +272,7 @@ public class SevenToEightUpgradeHandler implements UpgradeHandler {
 
         // Write any remaining actions in the final batch
         if (!activeActionsBatch.isEmpty()) {
+          Collections.sort(activeActionsBatch);
           lsmTimelineWriter.write(new ArrayList<>(activeActionsBatch), Option.empty(), Option.empty());
         }
       }

@@ -32,6 +32,7 @@ import org.apache.hudi.common.table.log.block.HoodieAvroDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.ActiveAction;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.MetadataConversionUtils;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
@@ -89,13 +90,13 @@ public class TestLegacyArchivedMetaEntryReader {
   }
 
   @Test
-  void testReadLegacyArchivedTimelineSkipsInstantsWithoutCompletedState() throws Exception {
+  void testReadLegacyArchivedTimelineCompletesInstantsWithoutCompletedState() throws Exception {
     String tableName = "testTable";
     String tablePath = tempFile.getAbsolutePath() + StoragePath.SEPARATOR + tableName;
     HoodieTableMetaClient metaClient = HoodieTestUtils.init(
         HoodieTestUtils.getDefaultStorageConf(), tablePath, HoodieTableType.COPY_ON_WRITE, tableName);
     HoodieTestTable testTable = HoodieTestTable.of(metaClient);
-    for (String instantTime : Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000013")) {
+    for (String instantTime : Arrays.asList("00000001", "00000002", "00000003", "00000004", "00000013", "00000015")) {
       HoodieCommitMetadata metadata = testTable.createCommitMetadata(instantTime, WriteOperationType.INSERT, Arrays.asList("par1", "par2"), 10, false);
       testTable.addCommit(instantTime, Option.of(metadata));
     }
@@ -104,21 +105,38 @@ public class TestLegacyArchivedMetaEntryReader {
     testTable.addInflightCommit("00000012");
     testTable.addRequestedCommit("00000014");
     List<HoodieInstant> instants = TIMELINE_FACTORY.createActiveTimeline(metaClient, false).getInstantsAsStream().sorted().collect(Collectors.toList());
-    // archive files are read newest first, so 00000014 is the last record read
-    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000003") < 0 || i.requestedTime().equals("00000014")));
+    // 00000014 is the last record read, and the completed record of 00000015 is read before its pending records
+    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000003") < 0 || i.requestedTime().equals("00000014")
+        || (i.requestedTime().equals("00000015") && i.isCompleted())));
     // 00000013 has its requested and inflight records in one block and its completed record in a later block
-    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000011") >= 0 && i.requestedTime().compareTo("00000014") < 0 && !i.isCompleted()));
+    archive(metaClient, filter(instants, i -> i.requestedTime().compareTo("00000011") >= 0 && !i.requestedTime().equals("00000014") && !i.isCompleted()));
     archive(metaClient, filter(instants, i -> (i.requestedTime().compareTo("00000003") >= 0 && i.requestedTime().compareTo("00000011") < 0)
         || (i.requestedTime().equals("00000013") && i.isCompleted())));
 
-    List<ActiveAction> activeActions = new ArrayList<>();
+    Map<String, ActiveAction> activeActions = new HashMap<>();
     try (ClosableIterator<ActiveAction> iterator = new LegacyArchivedMetaEntryReader(metaClient).getActiveActionsIterator()) {
       while (iterator.hasNext()) {
-        activeActions.add(iterator.next());
+        ActiveAction activeAction = iterator.next();
+        assertThat(activeActions.put(activeAction.getInstantTime(), activeAction) == null, is(true));
       }
     }
-    assertThat(activeActions.stream().map(ActiveAction::getInstantTime).sorted().collect(Collectors.joining(",")),
-        is("00000001,00000002,00000003,00000004,00000013"));
+    assertThat(activeActions.keySet().stream().sorted().collect(Collectors.joining(",")),
+        is("00000001,00000002,00000003,00000004,00000011,00000012,00000013,00000014,00000015"));
+    // an instant without a completed record is completed at the transition time of its latest archived state
+    assertThat(activeActions.get("00000011").getCompletionTime(), is(transitionTime("00000011", HoodieInstant.State.REQUESTED)));
+    assertThat(activeActions.get("00000012").getCompletionTime(), is(transitionTime("00000012", HoodieInstant.State.INFLIGHT)));
+    assertThat(activeActions.get("00000014").getCompletionTime(), is(transitionTime("00000014", HoodieInstant.State.REQUESTED)));
+    for (HoodieInstant completed : filter(instants, HoodieInstant::isCompleted)) {
+      assertThat(activeActions.get(completed.requestedTime()).getCompletionTime(), is(completed.getCompletionTime()));
+    }
+    activeActions.values().forEach(activeAction -> assertThat(activeAction.getAction(), is(HoodieTimeline.COMMIT_ACTION)));
+  }
+
+  /**
+   * The 0.x archiver records a transition time for every state, while pending instants on the active timeline have none.
+   */
+  private static String transitionTime(String instantTime, HoodieInstant.State state) {
+    return instantTime + state.ordinal();
   }
 
   private void prepareLegacyArchivedTimeline(HoodieTableMetaClient metaClient) throws Exception {
@@ -185,6 +203,10 @@ public class TestLegacyArchivedMetaEntryReader {
 
   private IndexedRecord convertToAvroRecord(HoodieInstant hoodieInstant, HoodieTableMetaClient metaClient)
       throws IOException {
-    return MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+    HoodieArchivedMetaEntry record = MetadataConversionUtils.createMetaWrapper(hoodieInstant, metaClient);
+    if (!hoodieInstant.isCompleted()) {
+      record.setStateTransitionTime(transitionTime(hoodieInstant.requestedTime(), hoodieInstant.getState()));
+    }
+    return record;
   }
 }

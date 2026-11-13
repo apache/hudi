@@ -51,11 +51,14 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.TimelineMetadataUtils.convertMetadataToByteArray;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
@@ -178,6 +181,12 @@ public class LegacyArchivedMetaEntryReader {
 
         private Pair<HoodieInstant, Option<byte[]>> nextInstantAndDetail;
 
+        // records of instants read so far without a completed record, keyed by instant time
+        private final Map<String, List<Pair<HoodieInstant, Option<byte[]>>>> incompleteInstants = new LinkedHashMap<>();
+
+        // the archive files are read newest first, so the records of an instant can come after its completed record
+        private final Set<String> completedInstantTimes = new HashSet<>();
+
         @Override
         public void close() {
           itr.close();
@@ -185,6 +194,40 @@ public class LegacyArchivedMetaEntryReader {
 
         @Override
         public boolean hasNext() {
+          while (true) {
+            List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails = readNextInstant();
+            if (instantAndDetails.isEmpty()) {
+              Iterator<List<Pair<HoodieInstant, Option<byte[]>>>> incomplete = incompleteInstants.values().iterator();
+              if (!incomplete.hasNext()) {
+                return false;
+              }
+              instantAndDetails = incomplete.next();
+              incomplete.remove();
+              instantAndDetails.add(Pair.of(deduceCompletedInstant(instantAndDetails), Option.empty()));
+            } else {
+              String instantTime = instantAndDetails.get(0).getKey().requestedTime();
+              List<Pair<HoodieInstant, Option<byte[]>>> earlierRecords = incompleteInstants.remove(instantTime);
+              if (earlierRecords != null) {
+                mergeStates(instantAndDetails, earlierRecords);
+              }
+              if (instantAndDetails.stream().noneMatch(instantAndDetail -> instantAndDetail.getKey().isCompleted())) {
+                if (!completedInstantTimes.contains(instantTime)) {
+                  // the completed record may still be in a later block, so hold the instant until the archive is read
+                  incompleteInstants.put(instantTime, instantAndDetails);
+                }
+                continue;
+              }
+              completedInstantTimes.add(instantTime);
+            }
+            this.activeAction = ActiveActionWithDetails.fromInstantAndDetails(instantAndDetails);
+            return true;
+          }
+        }
+
+        /**
+         * Reads the next run of consecutive records that share an instant time.
+         */
+        private List<Pair<HoodieInstant, Option<byte[]>>> readNextInstant() {
           List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails = new ArrayList<>();
           String lastInstantTime = null;
           if (nextInstantAndDetail != null) {
@@ -202,38 +245,20 @@ public class LegacyArchivedMetaEntryReader {
                 lastInstantTime = instantTime;
               } else if (lastInstantTime.equals(instantTime)) {
                 instantAndDetails.add(instantAndDetail);
-              } else if (hasCompletedInstant(instantAndDetails)) {
+              } else {
                 nextInstantAndDetail = instantAndDetail;
                 break;
-              } else {
-                discardInstantWithoutCompletedState(instantAndDetails);
-                instantAndDetails.add(instantAndDetail);
-                lastInstantTime = instantTime;
               }
             }
           }
-          if (!hasCompletedInstant(instantAndDetails)) {
-            discardInstantWithoutCompletedState(instantAndDetails);
-          }
-          if (!instantAndDetails.isEmpty()) {
-            this.activeAction = ActiveActionWithDetails.fromInstantAndDetails(instantAndDetails);
-            return true;
-          }
-          return false;
+          return instantAndDetails;
         }
 
-        private boolean hasCompletedInstant(List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails) {
-          return instantAndDetails.stream().anyMatch(instantAndDetail -> instantAndDetail.getKey().isCompleted());
-        }
-
-        /**
-         * Discards the records of an instant that has no completed record. The 0.x archiver can archive such an
-         * instant when converting one of its state files fails with hoodie.fail.on.timeline.archiving=false.
-         */
-        private void discardInstantWithoutCompletedState(List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails) {
-          if (!instantAndDetails.isEmpty()) {
-            log.warn("Skipping archived instant with no completed state: {}", instantAndDetails.stream().map(Pair::getKey).collect(Collectors.toList()));
-            instantAndDetails.clear();
+        private void mergeStates(List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails, List<Pair<HoodieInstant, Option<byte[]>>> otherRecords) {
+          for (Pair<HoodieInstant, Option<byte[]>> other : otherRecords) {
+            if (instantAndDetails.stream().noneMatch(instantAndDetail -> instantAndDetail.getKey().getState() == other.getKey().getState())) {
+              instantAndDetails.add(other);
+            }
           }
         }
 
@@ -245,6 +270,34 @@ public class LegacyArchivedMetaEntryReader {
     } catch (IOException e) {
       throw new HoodieIOException(
           "Could not load archived commit timeline from path " + metaClient.getArchivePath(), e);
+    }
+  }
+
+  /**
+   * Deduces the completed instant of an archived instant that has no completed record, using the last state
+   * transition time as the completion time, which is a lower bound of the real one. The 0.x archiver can archive such an instant when converting one of
+   * its state files fails with hoodie.fail.on.timeline.archiving=false. The instant is treated as completed because
+   * 1.x deems an instant without a completion time pending, which would hide the commit from queries.
+   */
+  private HoodieInstant deduceCompletedInstant(List<Pair<HoodieInstant, Option<byte[]>>> instantAndDetails) {
+    HoodieInstant latest = instantAndDetails.stream().map(Pair::getKey)
+        .max(Comparator.comparing(instant -> instant.isRequested() ? 0 : 1)).get();
+    String completionTime = Option.ofNullable(latest.getCompletionTime()).orElse(latest.requestedTime());
+    log.warn("Archived instant {} has no completed state, treating it as completed at {}", latest, completionTime);
+    return metaClient.getInstantGenerator().createNewInstant(
+        HoodieInstant.State.COMPLETED, getCompletedAction(latest.getAction()), latest.requestedTime(), completionTime);
+  }
+
+  private static String getCompletedAction(String action) {
+    switch (action) {
+      case HoodieTimeline.COMPACTION_ACTION:
+        return HoodieTimeline.COMMIT_ACTION;
+      case HoodieTimeline.LOG_COMPACTION_ACTION:
+        return HoodieTimeline.DELTA_COMMIT_ACTION;
+      case HoodieTimeline.CLUSTERING_ACTION:
+        return HoodieTimeline.REPLACE_COMMIT_ACTION;
+      default:
+        return action;
     }
   }
 
