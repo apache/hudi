@@ -180,7 +180,7 @@ final class HudiMergeBufferBenchmark
     private static HudiTrinoReaderContext readerContext(HoodieTableConfig tableConfig, TypedProperties props, HoodieSchema schema, Path tablePath)
     {
         // Same initialization order as HoodieFileGroupReader for a split with log files.
-        HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(new TrinoStorageConfiguration(), tableConfig, null, List.of(), null, null);
+        HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(new TrinoStorageConfiguration(), tableConfig, null, List.of(), null, null, props);
         readerContext.setHasLogFiles(true);
         readerContext.getRecordContext().setPartitionPath("ss_sold_date_sk=2451000");
         readerContext.initRecordMerger(props);

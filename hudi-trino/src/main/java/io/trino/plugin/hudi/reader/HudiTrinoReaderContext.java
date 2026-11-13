@@ -25,6 +25,7 @@ import io.trino.spi.connector.SourcePage;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.fs.FSUtils;
@@ -37,6 +38,8 @@ import org.apache.hudi.common.serialization.CustomSerializer;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordSerializer;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
@@ -87,9 +90,11 @@ public class HudiTrinoReaderContext
             ConnectorPageSource pageSource,
             List<HiveColumnHandle> columnHandles,
             PrefilledColumnValues prefilledColumnValues,
-            LogFileParquetPageSourceFactory logPageSourceFactory)
+            LogFileParquetPageSourceFactory logPageSourceFactory,
+            TypedProperties props)
     {
-        super(storageConfiguration, tableConfig, Option.empty(), Option.empty(), new AvroRecordContext(tableConfig, tableConfig.getPayloadClass()));
+        super(storageConfiguration, tableConfig, Option.empty(), Option.empty(),
+                new AvroRecordContext(tableConfig, tableConfig.getPayloadClass(), ConfigUtils.getMergeProps(props, tableConfig)));
         this.pageSource = pageSource;
         this.prefilledColumnValues = prefilledColumnValues;
         this.columnHandles = columnHandles;
@@ -102,6 +107,14 @@ public class HudiTrinoReaderContext
         // colNameToHandle cannot serve that purpose because buildRequiredColumnHandles adds log-side
         // handles to it on demand.
         this.baseProjectionNames = ImmutableSet.copyOf(colNameToHandle.keySet());
+    }
+
+    @Override
+    public void setSchemaHandler(FileGroupReaderSchemaHandler<IndexedRecord> schemaHandler)
+    {
+        super.setSchemaHandler(schemaHandler);
+        List<String> orderingFieldNames = HoodieRecordUtils.getOrderingFieldNames(getMergeMode(), tableConfig);
+        ((AvroRecordContext) recordContext).initOrderingValueConverter(schemaHandler.getTableSchema(), orderingFieldNames);
     }
 
     @Override

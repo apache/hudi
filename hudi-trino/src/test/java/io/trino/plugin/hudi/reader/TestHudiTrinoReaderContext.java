@@ -19,6 +19,7 @@ import io.trino.spi.block.ArrayBlockBuilder;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.block.RowBlockBuilder;
+import io.trino.spi.connector.EmptyPageSource;
 import io.trino.spi.type.ArrayType;
 import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.LongTimestamp;
@@ -30,6 +31,21 @@ import io.trino.spi.type.SqlTimestamp;
 import io.trino.spi.type.SqlVarbinary;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeOperators;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.io.UncheckedIOException;
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
+import java.nio.file.Path;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
@@ -38,28 +54,28 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.read.BufferedRecord;
+import org.apache.hudi.common.table.read.BufferedRecordMerger;
+import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
+import org.apache.hudi.common.table.read.TableState;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.DefaultSizeEstimator;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.SizeEstimator;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
+import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.storage.StoragePath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import java.io.IOException;
-import java.io.Serializable;
-import java.io.UncheckedIOException;
-import java.math.BigDecimal;
-import java.nio.ByteBuffer;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
@@ -77,8 +93,13 @@ import static io.trino.spi.type.TimestampType.TIMESTAMP_NANOS;
 import static io.trino.spi.type.TinyintType.TINYINT;
 import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static io.trino.spi.type.VarcharType.VARCHAR;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
+
 import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
+import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -261,7 +282,7 @@ final class TestHudiTrinoReaderContext
 
     private static HudiTrinoReaderContext readerContext()
     {
-        return new HudiTrinoReaderContext(new TrinoStorageConfiguration(), new HoodieTableConfig(), null, List.of(), null, null);
+        return new HudiTrinoReaderContext(new TrinoStorageConfiguration(), new HoodieTableConfig(), null, List.of(), null, null, new TypedProperties());
     }
 
     private ExternalSpillableMap<Serializable, BufferedRecord<IndexedRecord>> spillableMap(
@@ -283,5 +304,98 @@ final class TestHudiTrinoReaderContext
         catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"9, false", "11, true"})
+    void testDateOrderingWithSerializedDelete(int deleteEpochDay, boolean expectDeleted)
+            throws IOException
+    {
+        HoodieSchema schema = schemaWithOrdering(LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)));
+        TypedProperties props = new TypedProperties();
+        HudiTrinoReaderContext readerContext = createReaderContext(schema, tableConfig(), props);
+        GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+        record.put("id", "key");
+        record.put("ordering", 10);
+        BufferedRecord<IndexedRecord> data = BufferedRecords.fromEngineRecord(
+                record, "key", schema, readerContext.getRecordContext(), List.of("ordering"), null);
+        BufferedRecord<IndexedRecord> delete = readDelete(readerContext, deleteEpochDay);
+        BufferedRecordMerger<IndexedRecord> merger = BufferedRecordMergerFactory.create(
+                readerContext, EVENT_TIME_ORDERING, false, Option.empty(), schema, Option.empty(), props, Option.empty());
+
+        assertThat(merger.finalMerge(data, delete)).isSameAs(expectDeleted ? delete : data);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"false, false", "true, false", "false, true", "true, true"})
+    void testTimestampOrderingConfiguration(boolean consistentTimestamp, boolean persistedProperty)
+            throws IOException
+    {
+        HoodieSchema schema = schemaWithOrdering(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)));
+        HoodieTableConfig tableConfig = tableConfig();
+        TypedProperties props = new TypedProperties();
+        String key = KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key();
+        if (persistedProperty) {
+            tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + key, Boolean.toString(consistentTimestamp));
+            // Persisted merge properties take precedence over the reader's value.
+            props.setProperty(key, Boolean.toString(!consistentTimestamp));
+        }
+        else {
+            props.setProperty(key, Boolean.toString(consistentTimestamp));
+        }
+        HudiTrinoReaderContext readerContext = createReaderContext(schema, tableConfig, props);
+        GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+        record.put("id", "key");
+        record.put("ordering", 1_234_567L);
+        Object expected = consistentTimestamp ? new Timestamp(1234) : 1_234_567L;
+
+        assertThat(readerContext.getRecordContext().getOrderingValue(record, schema, List.of("ordering"))).isEqualTo(expected);
+        assertThat(readDelete(readerContext, 1_234_567L).getOrderingValue()).isEqualTo(expected);
+    }
+
+    private static HoodieSchema schemaWithOrdering(Schema orderingSchema)
+    {
+        return HoodieSchema.fromAvroSchema(SchemaBuilder.record("test_record").fields()
+                .requiredString("id")
+                .name("ordering").type(orderingSchema).noDefault()
+                .endRecord());
+    }
+
+    private static HoodieTableConfig tableConfig()
+    {
+        HoodieTableConfig tableConfig = new HoodieTableConfig();
+        tableConfig.setValue(HoodieTableConfig.VERSION, "9");
+        tableConfig.setValue(HoodieTableConfig.RECORD_MERGE_MODE, EVENT_TIME_ORDERING.name());
+        tableConfig.setValue(HoodieTableConfig.ORDERING_FIELDS, "ordering");
+        return tableConfig;
+    }
+
+    private static HudiTrinoReaderContext createReaderContext(HoodieSchema schema, HoodieTableConfig tableConfig, TypedProperties props)
+    {
+        // These tests consume classic log records directly; no page source is read.
+        HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
+                new TrinoStorageConfiguration(), tableConfig, new EmptyPageSource(), List.of(), null,
+                (path, start, length, projection) -> {
+                    throw new AssertionError("Unexpected parquet read");
+                }, props);
+        TypedProperties mergeProps = ConfigUtils.getMergeProps(props, tableConfig);
+        readerContext.initRecordMerger(mergeProps);
+        readerContext.setHasLogFiles(false);
+        readerContext.setHasBootstrapBaseFile(false);
+        HoodieSchema projectedSchema = HoodieSchema.fromAvroSchema(SchemaBuilder.record("test_record").fields().requiredString("id").endRecord());
+        // The ordering field can be absent from the projection, so initialization must use the table schema.
+        readerContext.setSchemaHandler(new FileGroupReaderSchemaHandler<>(
+                readerContext, schema, projectedSchema, Option.empty(), mergeProps,
+                TableState.of(new StoragePath("/test-table"), tableConfig, Option.empty(), Option.empty())));
+        return readerContext;
+    }
+
+    private static BufferedRecord<IndexedRecord> readDelete(HudiTrinoReaderContext readerContext, Comparable<?> orderingValue)
+            throws IOException
+    {
+        HoodieDeleteBlock written = new HoodieDeleteBlock(List.of(Pair.of(DeleteRecord.create("key", "", orderingValue), -1L)), Map.of());
+        HoodieDeleteBlock read = new HoodieDeleteBlock(Option.of(written.getContentBytes(null).toByteArray()),
+                null, false, Option.empty(), Map.of(), Map.of());
+        return read.getRecordsToDelete(readerContext).getFirst();
     }
 }
