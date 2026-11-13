@@ -25,6 +25,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
 import org.apache.hudi.common.model.DeleteRecord;
+import org.apache.hudi.common.model.HoodieOperation;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.internal.InternalSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -33,6 +34,7 @@ import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.PartialUpdateMode;
 import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
+import org.apache.hudi.common.table.read.BaseFileUpdateCallback;
 import org.apache.hudi.common.table.read.FileGroupReaderSchemaHandler;
 import org.apache.hudi.common.table.read.HoodieReadStats;
 import org.apache.hudi.common.table.read.InputSplit;
@@ -46,6 +48,8 @@ import org.apache.hudi.storage.StorageConfiguration;
 
 import org.apache.avro.generic.IndexedRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -60,8 +64,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuffer {
@@ -119,6 +127,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     properties.setProperty(DELETE_KEY, "counter");
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
@@ -225,7 +234,47 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     assertTrue(actualRecords.indexOf(bmpRecord) < actualRecords.indexOf(supplementaryRecord));
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void readLogOnlyRecordsBeforeBaseWithCallbacks(boolean emitDeletes) throws IOException {
+    HoodieReaderContext<TestRecord> readerContext = mock(HoodieReaderContext.class, RETURNS_DEEP_STUBS);
+    BaseFileUpdateCallback<TestRecord> callback = mock(BaseFileUpdateCallback.class);
+    SortedKeyBasedFileGroupRecordBuffer<TestRecord> buffer = buildSortedKeyBasedFileGroupRecordBuffer(
+        readerContext, new HoodieReadStats(), emitDeletes, Option.of(callback));
+    try {
+      buffer.setBaseFileIterator(ClosableIterator.wrap(Arrays.asList(testRecord3, testRecord5).iterator()));
+      HoodieDataBlock dataBlock = mock(HoodieDataBlock.class);
+      when(dataBlock.getSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
+      when(dataBlock.getEngineRecordIterator(readerContext)).thenReturn(
+          ClosableIterator.wrap(Arrays.asList(testRecord6, testRecord2, testRecord1).iterator()));
+      HoodieDeleteBlock deleteBlock = mock(HoodieDeleteBlock.class);
+      mockDeleteRecords(deleteBlock, DeleteRecord.create("4", ""));
+      buffer.processDataBlock(dataBlock, Option.empty());
+      buffer.processDeleteBlock(deleteBlock);
+
+      // Keys 1 and 2 precede the first base record; delete 4 precedes the second.
+      // Key 6 is emitted by the log-only tail after the base iterator is exhausted.
+      List<TestRecord> expected = emitDeletes
+          ? Arrays.asList(testRecord1, testRecord2, testRecord3, testRecord4, testRecord5, testRecord6)
+          : Arrays.asList(testRecord1, testRecord2, testRecord3, testRecord5, testRecord6);
+      assertEquals(expected, getActualRecordsForSortedKeyBased(buffer));
+      verify(callback).onInsert(eq("1"), any());
+      verify(callback).onInsert(eq("2"), any());
+      verify(callback).onDelete(eq("4"), isNull(), eq(HoodieOperation.DELETE));
+      verify(callback).onInsert(eq("6"), any());
+      verifyNoMoreInteractions(callback);
+    } finally {
+      buffer.close();
+    }
+  }
+
   private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats) {
+    return buildSortedKeyBasedFileGroupRecordBuffer(mockReaderContext, readStats, false, Option.empty());
+  }
+
+  private SortedKeyBasedFileGroupRecordBuffer<TestRecord> buildSortedKeyBasedFileGroupRecordBuffer(
+      HoodieReaderContext<TestRecord> mockReaderContext, HoodieReadStats readStats,
+      boolean emitDeletes, Option<BaseFileUpdateCallback<TestRecord>> callback) {
     when(mockReaderContext.getSchemaHandler().getRequiredSchema()).thenReturn(HoodieTestDataGenerator.HOODIE_SCHEMA);
     when(mockReaderContext.getSchemaHandler().getInternalSchema()).thenReturn(InternalSchema.getEmptyInternalSchema());
     when(mockReaderContext.getSchemaHandler().getSchemaEvolutionTransformer(any(), any())).thenReturn(Option.empty());
@@ -243,7 +292,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     Option<PartialUpdateMode> partialUpdateModeOpt = Option.empty();
     TypedProperties props = new TypedProperties();
     when(mockReaderContext.getPayloadClasses(any())).thenReturn(Option.empty());
-    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, false, Option.empty(), props);
+    UpdateProcessor<TestRecord> updateProcessor = UpdateProcessor.create(readStats, mockReaderContext, emitDeletes, callback, props);
     return new SortedKeyBasedFileGroupRecordBuffer<>(
         mockReaderContext, recordMergeMode, partialUpdateModeOpt, props, Collections.emptyList(), updateProcessor);
   }

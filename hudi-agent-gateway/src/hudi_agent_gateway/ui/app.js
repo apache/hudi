@@ -27,6 +27,11 @@
   var messagesEl = document.getElementById("messages");
   var welcomeEl = document.getElementById("welcome");
   var inputEl = document.getElementById("input");
+  var activeController = null;
+  var stopEl = document.getElementById("stop");
+  stopEl.addEventListener("click", function () {
+    if (activeController) activeController.abort();
+  });
   var sendEl = document.getElementById("send");
   var composerEl = document.getElementById("composer");
   var modelInfoEl = document.getElementById("model-info");
@@ -49,7 +54,10 @@
   fetch("../v1/info").then(function (r) { return r.json(); }).then(function (info) {
     modelInfoEl.textContent = info.provider + " · catalog " + info.catalog;
     var base = window.location.origin;
-    document.getElementById("ep-trino").textContent = info.trino_url;
+    document.getElementById("ep-trino").textContent = info.lakehouse_url || info.trino_url;
+    document.getElementById("ep-sql-label").textContent =
+      info.sql_backend === "spark-connect" ? "Spark Connect" : "Trino SQL";
+    document.getElementById("ep-trino-ui-row").hidden = !info.trino_ui_url;
     var trinoUi = document.getElementById("ep-trino-ui");
     trinoUi.textContent = info.trino_ui_url;
     trinoUi.href = info.trino_ui_url;
@@ -158,6 +166,8 @@
   function setBusy(value) {
     busy = value;
     sendEl.disabled = value;
+    stopEl.hidden = !value;
+    document.getElementById("clear-chat").disabled = value;
   }
 
   function send(text) {
@@ -165,6 +175,25 @@
     setBusy(true);
 
     var msg = el("div", "msg assistant", messagesEl);
+    var status = el("div", "response-status", msg);
+    status.setAttribute("role", "status");
+    var phase = "Connecting…";
+    var started = Date.now();
+    function updateStatus() {
+      status.textContent = phase + " · " + Math.floor((Date.now() - started) / 1000) + "s";
+    }
+    updateStatus();
+    var timer = setInterval(updateStatus, 1000);
+    var controller = new AbortController();
+    activeController = controller;
+    var connectionTimedOut = false;
+    var connectionTimer = setTimeout(function () {
+      connectionTimedOut = true;
+      controller.abort();
+    }, 15000);
+    var terminal = false;
+    var failed = false;
+    var stopped = false;
     var bubble = el("div", "bubble md", msg);
     var answer = "";
     var cursor = el("span", "cursor", bubble);
@@ -181,8 +210,10 @@
     fetch("../v1/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+      signal: controller.signal,
       body: JSON.stringify(payload)
     }).then(function (resp) {
+      clearTimeout(connectionTimer);
       if (!resp.ok || !resp.body) {
         return resp.text().then(function (body) {
           throw new Error("gateway returned " + resp.status + ": " + body.slice(0, 300));
@@ -194,7 +225,10 @@
 
       function pump() {
         return reader.read().then(function (step) {
-          if (step.done) { finish(); return null; }
+          if (step.done) {
+            if (!terminal) throw new Error("Connection closed before the response completed.");
+            return null;
+          }
           // Normalize SSE line endings (servers may emit \r\n) before framing.
           buffer += decoder.decode(step.value, { stream: true }).replace(/\r/g, "");
           var frames = buffer.split("\n\n");
@@ -205,9 +239,16 @@
       }
       return pump();
     }).catch(function (err) {
-      addErrorBanner(err.message || String(err));
-      finish();
-    });
+      if (connectionTimedOut) {
+        failed = true;
+        addErrorBanner("Gateway did not respond within 15s. Check the service connection and try again.");
+      } else if (err.name === "AbortError") {
+        stopped = true;
+      } else {
+        failed = true;
+        addErrorBanner(err.message || String(err));
+      }
+    }).finally(finish);
 
     function handleFrame(frame) {
       var event = "message";
@@ -220,10 +261,16 @@
       var data;
       try { data = JSON.parse(dataLines.join("\n")); } catch (e) { return; }
 
-      if (event === "token") {
+      if (event === "status") {
+        phase = data.message;
+        updateStatus();
+      } else if (event === "token") {
+        phase = "Generating answer…";
         answer += data.text;
         renderAnswer();
       } else if (event === "tool_call") {
+        phase = "Running " + data.name + "…";
+        updateStatus();
         var chip = el("details", "tool-chip running", bubble.parentNode);
         bubble.parentNode.insertBefore(chip, bubble);
         var summary = el("summary", "", chip);
@@ -233,6 +280,8 @@
         chips[data.id || data.name] = chip;
         scrollToBottom();
       } else if (event === "tool_result") {
+        phase = "Waiting for model…";
+        updateStatus();
         var target = chips[data.id || data.name];
         if (target) {
           target.classList.remove("running");
@@ -244,8 +293,11 @@
         }
         scrollToBottom();
       } else if (event === "error") {
+        terminal = true;
+        failed = true;
         addErrorBanner(data.code + ": " + data.message);
       } else if (event === "done") {
+        terminal = true;
         if (!answer && data.message) {
           answer = data.message;
           renderAnswer();
@@ -254,10 +306,23 @@
     }
 
     function finish() {
+      clearTimeout(connectionTimer);
+      clearInterval(timer);
+      activeController = null;
+      phase = stopped ? "Stopped" : failed ? "Failed" : "Complete";
+      updateStatus();
+      if (stopped || failed) {
+        // A cancelled turn can leave unmatched tool calls in checkpoint history.
+        sessionId = newSession();
+        status.textContent += " · Next message starts a new conversation.";
+      }
+      msg.querySelectorAll(".tool-chip.running").forEach(function (chip) {
+        chip.classList.remove("running");
+      });
       setBusy(false);
       if (cursor.parentNode) cursor.remove();
       if (!answer && !msg.querySelector(".tool-chip")) {
-        bubble.innerHTML = "<p><em>(no response)</em></p>";
+        bubble.textContent = stopped ? "Response stopped." : failed ? "Response failed." : "(no response)";
       } else {
         bubble.innerHTML = window.HudiMarkdown.render(answer);
       }

@@ -31,7 +31,7 @@ jobs:
     if: |
       github.event.issue.pull_request != null &&
       github.event.comment.user.login == 'hudi-bot'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2

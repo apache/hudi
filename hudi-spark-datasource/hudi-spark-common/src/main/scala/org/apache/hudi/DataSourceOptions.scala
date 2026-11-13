@@ -638,7 +638,9 @@ object DataSourceWriteOptions {
     .defaultValue("3")
     .markAdvanced()
     .sinceVersion("0.9.0")
-    .withDocumentation("Config to indicate how many times streaming job should retry for a failed micro batch.")
+    .withDocumentation("Config to indicate how many times streaming job should retry for a failed micro batch. "
+      + "When attempts are exhausted and failed batches are not ignored, the streaming query fails with an exception. "
+      + "The driver JVM remains running; the caller is responsible for restarting the query.")
 
   val STREAMING_RETRY_INTERVAL_MS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.retry.interval.ms")
@@ -1111,7 +1113,7 @@ object DataSourceOptionsHelper {
       case (key, _) =>
         key.startsWith(SPARK_HOODIE_PREFIX) || (includeHoodiePrefix && key.startsWith(HOODIE_PREFIX))
     }
-    normalizeSparkHoodiePrefix(sparkConfs) ++ optParams
+    normalizeSparkHoodiePrefix(sparkConfs) ++ normalizeSparkHoodiePrefix(optParams)
   }
 
   /**

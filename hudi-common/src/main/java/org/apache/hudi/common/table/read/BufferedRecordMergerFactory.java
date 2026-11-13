@@ -493,7 +493,7 @@ public class BufferedRecordMergerFactory {
       return Option.empty();
     }
     Comparable existingOrderingVal = existingRecord.getOrderingValue();
-    Comparable deleteOrderingVal = recordContext.convertOrderingValueToEngineType(deleteRecord.getOrderingValue());
+    Comparable deleteOrderingVal = recordContext.getOrderingValue(deleteRecord);
     // Checks the ordering value does not equal to 0
     // because we use 0 as the default value which means natural order
     boolean chooseExisting = !OrderingValues.isDefault(deleteOrderingVal)

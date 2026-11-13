@@ -48,6 +48,7 @@ import org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils;
 import org.apache.hudi.hive.ddl.HMSDDLExecutor;
 import org.apache.hudi.hive.ddl.HiveSyncMode;
+import org.apache.hudi.hive.replication.GlobalHiveSyncTool;
 import org.apache.hudi.hive.testutils.HiveTestUtil;
 import org.apache.hudi.hive.util.HiveDriverPool;
 import org.apache.hudi.hive.util.HiveMetaStoreClientPool;
@@ -62,6 +63,7 @@ import org.apache.hudi.sync.common.model.PartitionEvent.PartitionEventType;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.IMetaStoreClient;
+import org.apache.hadoop.hive.metastore.api.MetaException;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hadoop.hive.ql.Driver;
@@ -118,6 +120,7 @@ import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_AS_DATA_SOURCE
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_BATCHING_THREADS;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_COMMENT;
+import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_DETAILED_METRICS_ENABLED;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_MODE;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_SYNC_TABLE_STRATEGY;
 import static org.apache.hudi.hive.HiveSyncConfigHolder.HIVE_TABLE_PROPERTIES;
@@ -145,6 +148,11 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.verify;
 
@@ -1241,6 +1249,129 @@ public class TestHiveSyncTool {
         "The one partition we wrote should be added to hive");
     assertEquals(commitTime2, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
         "The last commit that was synced should be 101");
+  }
+
+  @Test
+  void testSyncMetricsAreEmptyUnlessEnabled() throws Exception {
+    HiveTestUtil.createCOWTable("100", 5, true);
+    reInitHiveSyncClient();
+
+    HoodieHiveSyncStats stats = syncAndGetMetrics();
+    assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
+    assertFalse(stats.getSchemaReadMs().isPresent());
+    assertFalse(stats.getPartitionScanMs().isPresent());
+    assertFalse(stats.getRemainingMs().isPresent());
+    assertEquals(0, stats.getPartitionsAdded());
+    assertFalse(stats.isSchemaEvolved());
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  void testSyncMetricsDescribeWhatTheSyncDid(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    HiveTestUtil.createCOWTable("100", 5, true);
+    reInitHiveSyncClient();
+
+    HoodieHiveSyncStats stats = syncAndGetMetrics();
+    assertTrue(stats.getSchemaReadMs().isPresent());
+    assertTrue(stats.getPartitionScanMs().isPresent());
+    assertTrue(stats.getRemainingMs().isPresent());
+    assertEquals(5, stats.getPartitionsAdded());
+    assertFalse(stats.isSchemaEvolved(), "Creating the table is not a schema evolution");
+
+    HiveTestUtil.addCOWPartitions(1, false, true, ZonedDateTime.now().plusDays(6), "101");
+    reInitHiveSyncClient();
+    stats = syncAndGetMetrics();
+    assertEquals(1, stats.getPartitionsAdded());
+    assertTrue(stats.isSchemaEvolved(), "The partition written with the evolved schema changes the table's schema");
+
+    stats = syncAndGetMetrics();
+    assertFalse(stats.getSchemaReadMs().isPresent(), "A table already synced to the latest commit reads no schema");
+    assertFalse(stats.getPartitionScanMs().isPresent(), "A table already synced to the latest commit looks for no partitions");
+    assertTrue(stats.getRemainingMs().isPresent());
+    assertEquals(0, stats.getPartitionsAdded());
+    assertFalse(stats.isSchemaEvolved());
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  void testSyncMetricsCountAMergeOnReadTableOnce(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    HiveTestUtil.createMORTable("100", "101", 5, true, true);
+    reInitHiveSyncClient();
+
+    HoodieHiveSyncStats stats = syncAndGetMetrics();
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE));
+    assertTrue(hiveClient.tableExists(HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE));
+    assertEquals(5, stats.getPartitionsAdded(),
+        "The read-optimized and snapshot tables get the same 5 partitions, which count once");
+  }
+
+  @Test
+  void testSyncMetricsCountTheMostPartitionsAddedToOneTableOfAMergeOnReadTable() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
+    HiveTestUtil.createMORTable("100", "101", 5, true, true);
+    reInitHiveSyncClient();
+    syncAndGetMetrics();
+    String roTable = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_READ_OPTIMIZED_TABLE;
+    String rtTable = HiveTestUtil.TABLE_NAME + HiveSyncTool.SUFFIX_SNAPSHOT_TABLE;
+    List<String> partitions = hiveClient.getAllPartitions(roTable).stream()
+        .map(p -> getRelativePartitionPath(new Path(basePath), new Path(p.getStorageLocation())))
+        .sorted()
+        .collect(Collectors.toList());
+    // the Hive tables miss different partitions, as after one of them was repaired by hand
+    hiveClient.dropPartitions(roTable, partitions.subList(0, 1));
+    hiveClient.dropPartitions(rtTable, partitions.subList(1, 3));
+    hiveSyncProps.setProperty(META_SYNC_INCREMENTAL.key(), "false");
+    reInitHiveSyncClient();
+
+    HoodieHiveSyncStats stats = syncAndGetMetrics();
+    assertEquals(5, hiveClient.getAllPartitions(roTable).size());
+    assertEquals(5, hiveClient.getAllPartitions(rtTable).size());
+    assertEquals(2, stats.getPartitionsAdded(),
+        "The most partitions added to one table, not the 3 distinct partitions the sync added");
+  }
+
+  @Test
+  void testSyncMetricsOfGlobalHiveSyncTool() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
+    HiveTestUtil.createCOWTable("100", 5, true);
+
+    try (GlobalHiveSyncTool tool = new GlobalHiveSyncTool(hiveSyncProps, HiveTestUtil.getHiveConf())) {
+      tool.syncHoodieTable();
+      HoodieHiveSyncStats stats = tool.getSyncMetrics();
+      assertTrue(stats.getRemainingMs().isPresent());
+      assertEquals(5, stats.getPartitionsAdded());
+    }
+  }
+
+  @Test
+  void testSyncMetricsCountNoPartitionsWhenAddingThemFails() throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), HiveSyncMode.HMS.name());
+    hiveSyncProps.setProperty(HIVE_BATCH_SYNC_PARTITION_NUM.key(), "2");
+    HiveTestUtil.createCOWTable("100", 5, true);
+    reInitHiveSyncClient();
+    // the metastore takes the first batch of 2 partitions and fails the second
+    IMetaStoreClient metaStoreClient = IMetaStoreClientUtil.getMSC(getHiveConf());
+    IMetaStoreClient failingClient = mock(IMetaStoreClient.class, delegatesTo(metaStoreClient));
+    doAnswer(invocation -> metaStoreClient.add_partitions(
+        invocation.getArgument(0), invocation.getArgument(1), invocation.getArgument(2)))
+        .doThrow(new MetaException("second batch fails"))
+        .when(failingClient).add_partitions(anyList(), anyBoolean(), anyBoolean());
+    hiveClient.ddlExecutor = new HMSDDLExecutor(new HiveSyncConfig(hiveSyncProps, getHiveConf()), failingClient);
+
+    assertThrows(HoodieException.class, () -> hiveSyncTool.syncHoodieTable());
+    assertEquals(0, hiveSyncTool.getSyncMetrics().getPartitionsAdded(),
+        "Partitions are only counted once adding them all succeeds");
+    reInitHiveSyncClient();
+    assertEquals(2, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
+
+    HoodieHiveSyncStats retryMetrics = syncAndGetMetrics();
+    assertEquals(3, retryMetrics.getPartitionsAdded(), "The retry adds only the partitions the failed sync did not");
+    assertEquals(5, hiveClient.getAllPartitions(HiveTestUtil.TABLE_NAME).size());
   }
 
   @ParameterizedTest
@@ -2871,6 +3002,13 @@ public class TestHiveSyncTool {
 
     assertEquals(updatedDb, hiveClient.getDatabaseName(), "Database name in sync client should match");
     assertEquals(updatedTable, hiveClient.getTableName(), "Table name in sync client should match");
+  }
+
+  private HoodieHiveSyncStats syncAndGetMetrics() {
+    hiveSyncTool.syncHoodieTable();
+    HoodieHiveSyncStats stats = hiveSyncTool.getSyncMetrics();
+    reInitHiveSyncClient();
+    return stats;
   }
 
   private void reSyncHiveTable() {

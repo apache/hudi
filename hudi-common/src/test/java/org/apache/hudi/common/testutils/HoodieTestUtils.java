@@ -86,6 +86,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
@@ -552,6 +553,20 @@ public class HoodieTestUtils {
         }
       }
     }
+  }
+
+  /**
+   * Asserts that hoodie.properties holds exactly the expected table configs, ignoring the checksum and the
+   * create schema. The table-config tests of each engine pin table creation per table version through this
+   * check, so a table config change updates their expected configs instead of adding a new test.
+   */
+  public static void assertTableConfigs(HoodieStorage storage, String basePath, Map<String, String> expectedConfigs) {
+    Map<String, String> actualConfigs = new TreeMap<>();
+    HoodieTableConfig.loadFromHoodieProps(storage, basePath).getProps()
+        .forEach((key, value) -> actualConfigs.put((String) key, (String) value));
+    actualConfigs.remove(HoodieTableConfig.TABLE_CHECKSUM.key());
+    actualConfigs.remove(HoodieTableConfig.CREATE_SCHEMA.key());
+    assertEquals(new TreeMap<>(expectedConfigs), actualConfigs);
   }
 
   public static void validateTableConfig(HoodieStorage storage,

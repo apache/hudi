@@ -63,6 +63,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import scala.Tuple2;
@@ -186,6 +187,17 @@ public class DataSourceUtils {
 
   public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
                                                        String tblName, Map<String, String> parameters) {
+    return createHoodieClient(jssc, schemaStr, basePath, tblName, parameters,
+        (context, writeConfig) -> new SparkRDDWriteClient<>(context, writeConfig));
+  }
+
+  /**
+   * Creates a write client, letting the caller construct it from the resolved write config. Callers that own
+   * resources shared across clients (e.g. an embedded timeline server) use this to hand them to the client.
+   */
+  public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
+                                                       String tblName, Map<String, String> parameters,
+                                                       BiFunction<HoodieSparkEngineContext, HoodieWriteConfig, SparkRDDWriteClient> clientFactory) {
     HoodieSparkEngineContext context = new HoodieSparkEngineContext(jssc);
     HoodieWriteConfig writeConfig = createHoodieConfig(schemaStr, basePath, tblName, parameters);
     // The write options carry the table config of an existing table, so only a single-field complex keygen table
@@ -198,7 +210,7 @@ public class DataSourceUtils {
         KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
       }
     }
-    return new SparkRDDWriteClient<>(context, writeConfig);
+    return clientFactory.apply(context, writeConfig);
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,

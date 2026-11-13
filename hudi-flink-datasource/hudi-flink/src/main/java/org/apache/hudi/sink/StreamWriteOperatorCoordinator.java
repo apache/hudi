@@ -427,11 +427,9 @@ public class StreamWriteOperatorCoordinator
     long checkpointId = request.getCheckpointId();
     // Existing instants must remain available while another checkpoint's creation is blocked.
     Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-    if (instantTimeAndEventBuffer == null && !instantRequestExecutor.hasRunningTasks()) {
+    if (instantTimeAndEventBuffer == null && !isInstantCreationBlocked(checkpointId) && !instantRequestExecutor.hasRunningTasks()) {
       instantRequestExecutor.execute(() -> {
-        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
-          // Wait until previous instants are committed.
-          eventBuffers.awaitAllInstantsToCompleteIfNecessary();
+        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null && !isInstantCreationBlocked(checkpointId)) {
           this.eventBuffers.initNewEventBuffer(checkpointId, startInstant());
         }
       }, "request instant time");
@@ -439,6 +437,14 @@ public class StreamWriteOperatorCoordinator
     }
     String instantTime = instantTimeAndEventBuffer == null ? null : instantTimeAndEventBuffer.getLeft();
     return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
+  }
+
+  /**
+   * Defers new instant creation while an earlier checkpoint has a pending instant, even without write metadata events.
+   * Later checkpoints belong to an abandoned attempt when a writer requests an earlier checkpoint after recovery.
+   */
+  private boolean isInstantCreationBlocked(long checkpointId) {
+    return OptionsResolver.isBlockingInstantGeneration(conf) && !eventBuffers.getPendingInstantsBefore(checkpointId).isEmpty();
   }
 
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
@@ -469,8 +475,7 @@ public class StreamWriteOperatorCoordinator
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
-    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup());
-    this.hiveSyncMetrics.registerMetrics();
+    this.hiveSyncMetrics = FlinkHiveSyncMetrics.register(context.metricGroup(), hiveSyncContext.isDetailedMetricsEnabled());
   }
 
   private void syncHiveAsync() {
@@ -491,17 +496,37 @@ public class StreamWriteOperatorCoordinator
    */
   public void doSyncHive() {
     HoodieTimer timer = HoodieTimer.start();
-    try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+    try (HiveSyncTool syncTool = createHiveSyncTool()) {
       if (!syncTool.isSyncClientInitialized()) {
         hiveSyncMetrics.markSyncFailed(timer.endTimer());
         return;
       }
-      syncTool.syncHoodieTable();
+      try {
+        syncTool.syncHoodieTable();
+      } finally {
+        hiveSyncMetrics.updateSyncMetrics(syncTool.getSyncMetrics());
+      }
     } catch (Throwable t) {
       hiveSyncMetrics.markSyncFailed(timer.endTimer());
       throw t;
     }
     hiveSyncMetrics.markSyncSucceeded(timer.endTimer());
+  }
+
+  /**
+   * Builds the sync tool. With detailed metrics enabled, records how long that took even when it
+   * fails, as when the metastore cannot be reached.
+   */
+  private HiveSyncTool createHiveSyncTool() {
+    if (!hiveSyncContext.isDetailedMetricsEnabled()) {
+      return hiveSyncContext.hiveSyncTool();
+    }
+    HoodieTimer timer = HoodieTimer.start();
+    try {
+      return hiveSyncContext.hiveSyncTool();
+    } finally {
+      hiveSyncMetrics.updateInitDuration(timer.endTimer());
+    }
   }
 
   private void scheduleTableServices(Boolean committed) {

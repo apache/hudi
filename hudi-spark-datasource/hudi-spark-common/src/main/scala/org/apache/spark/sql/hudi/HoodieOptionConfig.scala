@@ -19,14 +19,18 @@ package org.apache.spark.sql.hudi
 
 import org.apache.hudi.DataSourceWriteOptions
 import org.apache.hudi.common.avro.HoodieAvroUtils.getRootLevelFieldName
+import org.apache.hudi.common.config.ConfigProperty
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableConfig
-import org.apache.hudi.common.util.ValidationUtils
+import org.apache.hudi.common.util.{ConfigUtils, ValidationUtils}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.StructType
 
+import java.util.Locale
+
+import scala.collection.JavaConverters._
 
 /**
  * The HoodieOptionConfig defines some short name for the hoodie
@@ -133,6 +137,25 @@ object HoodieOptionConfig {
   private lazy val tableConfigKeyToSqlOptionKey: Map[String, String] =
     (sqlOptionKeyToTableConfigKey -- legacySqlOptionKeys).map(f => f._2 -> f._1)
 
+  private lazy val tableConfigProperties: Map[String, ConfigProperty[_]] =
+    classOf[HoodieTableConfig].getFields
+      .filter(_.getType == classOf[ConfigProperty[_]])
+      .map(_.get(null).asInstanceOf[ConfigProperty[_]])
+      .map(config => config.key -> config).toMap
+
+  private lazy val tableConfigKeys: Map[String, String] = {
+    // Alternatives take precedence over deprecated declarations, e.g. PRECOMBINE_FIELD -> ORDERING_FIELDS.
+    tableConfigProperties.keys.map(key => key -> key).toMap ++ tableConfigProperties.values.flatMap { config =>
+      config.getAlternatives.asScala.map(_ -> config.key)
+    }.toMap
+  }
+
+  private lazy val caseInsensitiveSqlOptionKeys: Map[String, String] =
+    sqlOptionKeyToWriteConfigKey.keys.map(key => key.toLowerCase(Locale.ROOT) -> key).toMap
+
+  private[hudi] def canonicalizeSqlOptionKey(key: String): String =
+    caseInsensitiveSqlOptionKeys.getOrElse(key.toLowerCase(Locale.ROOT), key)
+
   /**
    * Mapping of the short sql value to the hoodie's config value
    */
@@ -180,6 +203,29 @@ object HoodieOptionConfig {
         k -> v
       }
     }
+  }
+
+  /**
+   * Map a SQL option, data source write config or table config, given by key and value, to the table config
+   * it is persisted as in hoodie.properties. Returns None if it is not persisted as a table config.
+   */
+  def mapToTableConfig(key: String, value: String): Option[(String, String)] = {
+    val sqlKey = writeConfigKeyToSqlOptionKey.getOrElse(key, canonicalizeSqlOptionKey(key))
+    sqlOptionKeyToTableConfigKey.get(sqlKey).orElse(tableConfigKeys.get(key)).map { tableKey =>
+      val tableValue = if (tableKey == HoodieTableConfig.TYPE.key) {
+        sqlOptionValueToHoodieConfigValue.getOrElse(value.toLowerCase(Locale.ROOT), value.toUpperCase(Locale.ROOT))
+      } else {
+        value
+      }
+      tableKey -> tableValue
+    }
+  }
+
+  /** Read a persisted value using its declared alternative keys and the same conversion as incoming options. */
+  private[hudi] def getTableConfigValue(tableConfig: HoodieTableConfig, key: String): Option[String] = {
+    tableConfigProperties.get(key)
+      .flatMap(config => Option(ConfigUtils.getStringWithAltKeys(tableConfig.getProps, config, null: String)))
+      .flatMap(value => mapToTableConfig(key, value).map(_._2))
   }
 
   val defaultSqlOptions: Map[String, String] = {
@@ -261,17 +307,7 @@ object HoodieOptionConfig {
   }
 
   def makeOptionsCaseInsensitive(sqlOptions: Map[String, String]): Map[String, String] = {
-    // Make Keys Case Insensitive
-    val standardOptions = Seq(SQL_KEY_TABLE_PRIMARY_KEY, SQL_KEY_ORDERING_FIELDS,
-      SQL_KEY_TABLE_TYPE, SQL_PAYLOAD_CLASS, SQL_RECORD_MERGE_STRATEGY_ID, SQL_RECORD_MERGE_MODE)
-      .flatMap(key => (List(key.sqlKeyName) ++ key.alternatives).toStream)
-
-    sqlOptions.map(option => {
-      standardOptions.find(_.equalsIgnoreCase(option._1)) match {
-        case Some(standardKey) => (standardKey, option._2)
-        case None => (option._1, option._2)
-      }
-    })
+    sqlOptions.map { case (key, value) => canonicalizeSqlOptionKey(key) -> value }
   }
 
   private def getSqlOptionWithAlternatives(sqlOption: HoodieSQLOption[String], options: Map[String, String]): Option[String] = {

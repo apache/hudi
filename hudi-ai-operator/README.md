@@ -64,7 +64,7 @@ judgement on top of it, and a fix to a detector reaches every Skill at once.
 
 Skills also hand off to each other by name. `hudi-optimizer` stops at anything that would change
 what is on storage — table type, index type, partitioning — and hands the measurements to
-`hudi-architect` (in `hudi-agent-gateway/skills/hudi-architect`) for an Architecture Decision
+`hudi-architect` (in `hudi-ai-operator/skills/hudi-architect`) for an Architecture Decision
 Record. If the job is failing rather than slow, that is `hudi-rca`.
 
 ## Install

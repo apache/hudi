@@ -68,9 +68,14 @@ java -cp "$HUDI_UTILITIES_BUNDLE" org.apache.hudi.utilities.HoodieTableHealthChe
   --output JSON
 ```
 
-Always request `--output JSON`. Capture the exit code as well as stdout: `0` healthy, `1` unhealthy,
-`2` the tool could not run (bad arguments, unreadable table, or a check that threw). On `2`, read
-the `errors` array and stderr before saying anything about the table.
+Always request `--output JSON`. Capture the exit code as well as stdout: `0` every check healthy or
+skipped, `3` at least one check UNHEALTHY, `4` no check unhealthy but at least one could not run,
+`2` the tool itself could not run (bad arguments or an unreadable table). No verdict uses exit code
+`1`: the JVM exits `1` when the process fails to start, so a bad classpath can never read as a
+finding about the table. A rejected command line (no arguments, a missing `--base-path`, an unknown
+flag) also exits `1` today, because the argument parser runs before the tool's own error handling;
+treat `1` as "the tool did not run", never as a verdict. On `2` or `4`, read the `errors` array and
+stderr before saying anything about the table; on `3`, the `UNHEALTHY` checks are the finding.
 
 Use `--checks compaction,cleaner` to narrow the run when the user is investigating one service.
 

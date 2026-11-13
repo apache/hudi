@@ -82,14 +82,14 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
         }
         log.info("Clustering executor shutting down properly");
       } catch (InterruptedException ie) {
-        hasError = true;
+        recordFailure(ie);
         log.warn("Clustering executor got interrupted exception! Stopping", ie);
       } catch (IOException e) {
-        hasError = true;
+        recordFailure(e);
         log.error("Clustering executor failed due to IOException", e);
         throw new HoodieIOException(e.getMessage(), e);
       } catch (Exception e) {
-        hasError = true;
+        recordFailure(e);
         log.error("Clustering executor failed", e);
         throw e;
       }
@@ -98,7 +98,8 @@ public abstract class AsyncClusteringService extends HoodieAsyncTableService {
   }
 
   /**
-   * Update the write client to be used for clustering.
+   * Switches the client used by later clustering runs. Does not wait for a clustering that is running: it can run
+   * for a long time, and the writer calling this must not be blocked until it completes.
    */
   public synchronized void updateWriteClient(BaseHoodieWriteClient writeClient) {
     this.clusteringClient.updateWriteClient(writeClient);

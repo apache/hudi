@@ -41,6 +41,7 @@ import java.util.List;
 
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestExpressionUtils {
@@ -79,6 +80,7 @@ class TestExpressionUtils {
   
   @Test
   void getValueFromLiteralForNull() {
+    assertNull(ExpressionUtils.getValueFromLiteral(new ValueLiteralExpression(null, DataTypes.NULL())));
     List<RowType.RowField> fields = ((RowType) ROW_DATA_TYPE.getLogicalType()).getFields();
     List<DataType> dataTypes = ROW_DATA_TYPE.getChildren();
     CallExpression callExpression;

@@ -23,9 +23,10 @@ import org.apache.hudi.common.schema.HoodieSchema;
 
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.parquet.schema.GroupType;
 
 /**
- * Interface for shredding variant values at write time.
+ * Interface for shredding variant values at write time and reconstructing them at read time.
  * <p>
  * Implementations parse variant binary data (value + metadata bytes) and produce
  * a shredded {@link GenericRecord} with typed_value columns populated according
@@ -65,24 +66,39 @@ public interface VariantShreddingProvider {
       HoodieSchema.Variant variantSchema);
 
   /**
-   * Reconstruct an unshredded variant GenericRecord from a shredded one (the inverse of
-   * {@link #shredVariantRecord}).
+   * Prepares the reconstruction of one shredded variant column of a parquet file (the inverse of
+   * {@link #shredVariantRecord}), validating its shredding layout once, when the file is opened.
    * <p>
    * Used on the read path: records read from an already-shredded base file (compaction/clustering)
-   * arrive with {@code typed_value} populated. This rebuilds the full variant binary so the record
-   * presents the standard unshredded {@code {metadata, value}} shape before it reaches the
-   * merger/writer.
+   * arrive with {@code typed_value} populated. The returned rebuilder turns each such record back
+   * into the standard unshredded {@code {metadata, value}} shape before it reaches the merger/writer.
+   * <p>
+   * The layout comes from the file's parquet type rather than from the Avro schema the record is read
+   * at: converting the parquet footer to Avro loses encodings (unsigned and decimal INT32/INT64, JSON,
+   * nanosecond timestamps) that decide how a {@code typed_value} must be read.
    *
-   * @param shreddedVariant  GenericRecord with {value, metadata, typed_value} read from a shredded base file
-   * @param shreddedSchema   the Avro schema of {@code shreddedVariant} (carries typed_value)
-   * @param unshreddedSchema target Avro schema with {value: ByteBuffer, metadata: ByteBuffer}
-   * @return a GenericRecord conforming to {@code unshreddedSchema} with the full reconstructed
-   *         variant binary in {@code value}, or {@code null} when {@code shreddedVariant} is null
-   * @throws org.apache.hudi.exception.HoodieException if {@code shreddedVariant} is missing its
-   *         required {@code metadata} field (a malformed shredded base file)
+   * @param columnPath         dotted path of the variant column, for error messages
+   * @param parquetVariantType the variant column's parquet group, as it sits in the file
+   * @param unshreddedSchema   target Avro schema with {value: ByteBuffer, metadata: ByteBuffer}
+   * @return a rebuilder for records of this column
+   * @throws org.apache.hudi.exception.HoodieException if the column's shredding layout cannot be read
    */
-  GenericRecord rebuildVariantRecord(
-      GenericRecord shreddedVariant,
-      Schema shreddedSchema,
-      Schema unshreddedSchema);
+  VariantRebuilder prepareRebuild(String columnPath, GroupType parquetVariantType, Schema unshreddedSchema);
+
+  /**
+   * Rebuilds the records of one shredded variant column, as prepared by {@link #prepareRebuild}.
+   */
+  interface VariantRebuilder {
+
+    /**
+     * Rebuilds the full variant binary of one record of the column.
+     *
+     * @param shreddedVariant GenericRecord with {value, metadata, typed_value} read from a shredded base file
+     * @return a GenericRecord conforming to the unshredded schema with the full reconstructed variant
+     *         binary in {@code value}, or {@code null} when {@code shreddedVariant} is null
+     * @throws org.apache.hudi.exception.HoodieException if {@code shreddedVariant} is missing its
+     *         required {@code metadata} field (a malformed shredded base file)
+     */
+    GenericRecord rebuild(GenericRecord shreddedVariant);
+  }
 }
