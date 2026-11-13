@@ -264,7 +264,7 @@ public class BufferedRecordMergerFactory {
       Comparable oldOrderingValue = olderRecord.getOrderingValue();
       HoodieSchema newSchema = recordContext.getSchemaFromBufferRecord(newerRecord);
       if (!olderRecord.isCommitTimeOrderingDelete()
-          && oldOrderingValue.compareTo(newOrderingValue) > 0) {
+          && OrderingValues.isBaseOrderingHigher(oldOrderingValue, newOrderingValue)) {
         // Use old record as the base record since old record has higher ordering value.
         olderRecord = partialUpdateHandler.partialMerge(
             olderRecord,
@@ -512,6 +512,6 @@ public class BufferedRecordMergerFactory {
       // The orderingVal is constant 0 (int) and not guaranteed to match the type of the old or new record's ordering value.
       return true;
     }
-    return newRecord.getOrderingValue().compareTo(oldRecord.getOrderingValue()) >= 0;
+    return !OrderingValues.isBaseOrderingHigher(oldRecord.getOrderingValue(), newRecord.getOrderingValue());
   }
 }
