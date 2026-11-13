@@ -421,6 +421,60 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Test version based time travel") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  name string,
+           |  price double,
+           |  ts long
+           |) using hudi
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+           | location '${tmp.getCanonicalPath}/$tableName'
+       """.stripMargin)
+      // Version 0: first commit
+      spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
+      // Version 1: second commit (upsert the same record)
+      spark.sql(s"insert into $tableName values(1, 'a2', 20, 2000)")
+
+      // Delta Lake style VERSION AS OF resolves 0-indexed versions to commit instants.
+      // All supported spellings must return the state as of that version.
+      Seq(
+        s"select id, name, price, ts from $tableName VERSION AS OF 0",
+        s"select id, name, price, ts from $tableName FOR VERSION AS OF 0",
+        s"select id, name, price, ts from $tableName SYSTEM_VERSION AS OF 0",
+        s"select id, name, price, ts from $tableName FOR SYSTEM_VERSION AS OF 0"
+      ).foreach { sql =>
+        spark.sessionState.catalog.invalidateAllCachedTables()
+        checkAnswer(sql)(Seq(1, "a1", 10.0, 1000))
+      }
+      Seq(
+        s"select id, name, price, ts from $tableName VERSION AS OF 1",
+        s"select id, name, price, ts from $tableName FOR VERSION AS OF 1"
+      ).foreach { sql =>
+        spark.sessionState.catalog.invalidateAllCachedTables()
+        checkAnswer(sql)(Seq(1, "a2", 20.0, 2000))
+      }
+
+      // Out-of-range versions fail with a clear error.
+      checkExceptionContain(s"select * from $tableName VERSION AS OF 2")(
+        "Version 2 is out of range")
+      checkExceptionContain(s"select * from $tableName VERSION AS OF -1")(
+        "Version for time travel must be non-negative")
+
+      // Non-literal version expressions are rejected.
+      checkExceptionContain(
+        s"select * from $tableName VERSION AS OF (select max(id) from $tableName)")(
+        "Version expression for time travel must be an integer literal")
+    }
+  }
+
   test("Test time travel validation errors") {
     withTempDir { tmp =>
       val tableName = generateTableName
@@ -439,16 +493,6 @@ class TestTimeTravelTable extends HoodieSparkSqlTestBase {
            | location '${tmp.getCanonicalPath}/$tableName'
        """.stripMargin)
       spark.sql(s"insert into $tableName values(1, 'a1', 10, 1000)")
-
-      // Every version-travel spelling is rejected: Hudi does not support version-based time travel.
-      Seq(
-        s"select * from $tableName VERSION AS OF 1",
-        s"select * from $tableName FOR VERSION AS OF 1",
-        s"select * from $tableName SYSTEM_VERSION AS OF 1",
-        s"select * from $tableName FOR SYSTEM_VERSION AS OF 1"
-      ).foreach { sql =>
-        checkExceptionContain(sql)("Version expression is not supported for time travel")
-      }
 
       // Spark 3.3 rejects a subquery timestamp at parse time; Spark 3.4+ defer to the Hudi guard.
       val subqueryError = if (HoodieSparkUtils.isSpark3_3) {
