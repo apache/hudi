@@ -41,6 +41,7 @@ import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.PATTER
 import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.POSITION_OPTION;
 import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.REGEX_GROUP_INDEX_OPTION;
 import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.REPLACEMENT_OPTION;
+import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.TIME_ZONE_OPTION;
 import static org.apache.hudi.core.index.expression.HoodieExpressionIndex.TRIM_STRING_OPTION;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_BLOOM_FILTERS;
 
@@ -108,6 +109,8 @@ public class ExpressionIndexSparkFunctions {
 
     default void validateOptions(Map<String, String> options, String indexType) {
       Set<String> validOptions = new HashSet<>(getValidOptions());
+      // every function may carry the zone its values are computed in
+      validOptions.add(TIME_ZONE_OPTION);
       // add bloom filters options if index type is bloom_filters
       if (indexType.equals(PARTITION_NAME_BLOOM_FILTERS)) {
         validOptions.addAll(BLOOM_FILTER_CONFIG_MAPPING.keySet());
