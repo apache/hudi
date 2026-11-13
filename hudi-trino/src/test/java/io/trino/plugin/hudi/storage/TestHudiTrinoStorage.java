@@ -16,7 +16,9 @@ package io.trino.plugin.hudi.storage;
 import io.trino.filesystem.FileEntry;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
+import io.trino.filesystem.local.LocalFileSystemFactory;
 import io.trino.filesystem.memory.MemoryFileSystem;
+import io.trino.testing.TestingConnectorSession;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -28,8 +30,10 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -120,9 +124,11 @@ class TestHudiTrinoStorage
 
         List<StoragePathInfo> entries = storage.listDirectEntries(new StoragePath("memory:///table"));
 
-        assertThat(entries).hasSize(2);
+        assertThat(entries).hasSize(3);
         assertThat(entries.get(0).getPath()).isEqualTo(new StoragePath("memory:///table/a.parquet"));
         assertThat(entries.get(1).getPath()).isEqualTo(new StoragePath("memory:///table/b.parquet"));
+        assertThat(entries.get(2).getPath()).isEqualTo(new StoragePath("memory:///table/nested"));
+        assertThat(entries.get(2).isDirectory()).isTrue();
         for (StoragePathInfo entry : entries) {
             assertThat(entry.getBlockSize()).isEqualTo(entry.getLength());
         }
@@ -203,22 +209,24 @@ class TestHudiTrinoStorage
     }
 
     @Test
-    void testInitTableWritesThroughExtensionPoint()
+    void testInitTableWritesThroughExtensionPoint(@TempDir Path directory)
             throws IOException
     {
-        TrinoFileSystem fileSystem = new MemoryFileSystem();
+        // Initializing a timeline requires a real empty directory, which MemoryFileSystem cannot store.
+        TrinoFileSystem fileSystem = new LocalFileSystemFactory(directory).create(TestingConnectorSession.SESSION);
+        StoragePath tablePath = new StoragePath("local:///warehouse/table");
 
         HoodieTableMetaClient metaClient = HoodieTableMetaClient.newTableBuilder()
                 .setTableName("t")
                 .setTableType(HoodieTableType.COPY_ON_WRITE)
-                .initTable(new TrinoStorageConfiguration(fileSystem), EXTENSION_POINT_PATH);
+                .initTable(new TrinoStorageConfiguration(fileSystem), tablePath);
         metaClient.getActiveTimeline().createNewInstant(
                 metaClient.createNewInstant(HoodieInstant.State.REQUESTED, "commit", "001"));
 
         assertThat(fileSystem.newInputFile(
-                Location.of(EXTENSION_POINT_PATH + "/.hoodie/hoodie.properties")).exists()).isTrue();
+                Location.of(tablePath + "/.hoodie/hoodie.properties")).exists()).isTrue();
         assertThat(fileSystem.newInputFile(
-                Location.of(EXTENSION_POINT_PATH + "/.hoodie/timeline/001.commit.requested")).exists()).isTrue();
+                Location.of(tablePath + "/.hoodie/timeline/001.commit.requested")).exists()).isTrue();
     }
 
     private static HudiTrinoStorage createStorageWithFiles()
