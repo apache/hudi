@@ -133,7 +133,7 @@ public class HiveIncrPullSource extends AvroSource {
       JavaPairRDD<AvroKey, NullWritable> avroRDD = sparkContext.newAPIHadoopFile(pathStr, AvroKeyInputFormat.class,
           AvroKey.class, NullWritable.class, sparkContext.hadoopConfiguration());
       sparkContext.setJobGroup(this.getClass().getSimpleName(), "Fetch new data");
-      return new InputBatch<>(Option.of(avroRDD.keys().map(r -> ((GenericRecord) r.datum()))),
+      return new InputBatch<>(Option.of(toIndependentRecords(avroRDD)),
           createCheckpoint(String.valueOf(commitToPull.get())));
     } catch (Exception e) {
       throw new HoodieReadFromSourceException("Unable to read from source from checkpoint: " + lastCheckpoint, e);
