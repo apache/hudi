@@ -56,7 +56,11 @@ public class HudiTableHandle
     private final TupleDomain<HiveColumnHandle> partitionPredicates;
     private final TupleDomain<HiveColumnHandle> regularPredicates;
     private final OptionalLong limit;
+    // Present for MERGE_ON_READ handles, whose splits with log files merge on the worker, and whenever column name
+    // casing resolution is enabled, which needs the schema on the coordinator
     private final Optional<Lazy<HoodieSchema>> hudiTableSchema;
+    // Present for MERGE_ON_READ handles only; see HudiTableState
+    private final Optional<Lazy<HudiTableState>> tableState;
     // Coordinator-only
     private final transient Optional<Table> table;
     private final transient Optional<Lazy<HoodieTableMetaClient>> lazyMetaClient;
@@ -74,10 +78,11 @@ public class HudiTableHandle
             @JsonProperty("regularPredicates") TupleDomain<HiveColumnHandle> regularPredicates,
             @JsonProperty("limit") OptionalLong limit,
             @JsonProperty("tableSchemaStr") String tableSchemaStr,
+            @JsonProperty("tableState") Optional<HudiTableState> tableState,
             @JsonProperty("latestCommitTime") String latestCommitTime)
     {
         this(Optional.empty(), Optional.empty(), schemaName, tableName, basePath, tableType, partitionColumns, Lazy.eagerly(mergeRequiredColumns), ImmutableSet.of(),
-                partitionPredicates, regularPredicates, limit, buildTableSchema(tableSchemaStr), () -> latestCommitTime);
+                partitionPredicates, regularPredicates, limit, buildTableSchema(tableSchemaStr), tableState.map(Lazy::eagerly), () -> latestCommitTime);
     }
 
     public HudiTableHandle(
@@ -93,7 +98,8 @@ public class HudiTableHandle
             TupleDomain<HiveColumnHandle> partitionPredicates,
             TupleDomain<HiveColumnHandle> regularPredicates,
             OptionalLong limit,
-            Optional<Lazy<HoodieSchema>> hudiTableSchema)
+            Optional<Lazy<HoodieSchema>> hudiTableSchema,
+            Optional<Lazy<HudiTableState>> tableState)
     {
         this(
                 Optional.of(table),
@@ -109,6 +115,7 @@ public class HudiTableHandle
                 regularPredicates,
                 limit,
                 hudiTableSchema,
+                tableState,
                 () -> lazyMetaClient
                         .get()
                         .getActiveTimeline()
@@ -135,6 +142,7 @@ public class HudiTableHandle
             TupleDomain<HiveColumnHandle> regularPredicates,
             OptionalLong limit,
             Optional<Lazy<HoodieSchema>> hudiTableSchema,
+            Optional<Lazy<HudiTableState>> tableState,
             Supplier<String> latestCommitTimeSupplier)
     {
         this.table = requireNonNull(table, "table is null");
@@ -150,6 +158,7 @@ public class HudiTableHandle
         this.regularPredicates = requireNonNull(regularPredicates, "regularPredicates is null");
         this.limit = requireNonNull(limit, "limit is null");
         this.hudiTableSchema = requireNonNull(hudiTableSchema, "hudiTableSchema is null");
+        this.tableState = requireNonNull(tableState, "tableState is null");
         this.lazyLatestCommitTime = Lazy.lazily(latestCommitTimeSupplier);
     }
 
@@ -248,6 +257,17 @@ public class HudiTableHandle
         return hudiTableSchema.map(Lazy::get).orElse(null);
     }
 
+    /**
+     * The table state the merge read path of a split with log files needs on the worker, in place of a meta client;
+     * present for MERGE_ON_READ handles only. On the coordinator it is captured on first use, at the latest when the
+     * handle is serialized for the workers.
+     */
+    @JsonProperty
+    public Optional<HudiTableState> getTableState()
+    {
+        return tableState.map(Lazy::get);
+    }
+
     // do not serialize constraint columns as they are not needed on workers
     @JsonIgnore
     public Set<HiveColumnHandle> getConstraintColumns()
@@ -302,6 +322,7 @@ public class HudiTableHandle
                 regularPredicates.intersect(regularTupleDomain),
                 limit,
                 hudiTableSchema,
+                tableState,
                 this::getLatestCommitTime);
     }
 
@@ -321,6 +342,7 @@ public class HudiTableHandle
                 regularPredicates,
                 OptionalLong.of(newLimit),
                 hudiTableSchema,
+                tableState,
                 this::getLatestCommitTime);
     }
 
