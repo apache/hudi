@@ -22,13 +22,17 @@ import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.util.HoodieStorageUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.exception.HoodieRestoreException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieSparkTable;
@@ -37,6 +41,7 @@ import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Objects;
@@ -45,6 +50,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR
 import static org.apache.hudi.metadata.HoodieTableMetadata.SOLO_COMMIT_TIMESTAMP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -123,6 +130,219 @@ public class TestSavepointRestoreCopyOnWrite extends HoodieClientTestBase {
           .setLoadActiveTimelineOnLoad(true)
           .build();
       assertEquals(1, metadataMetaClient.getCommitsTimeline().filter(instant -> !instant.requestedTime().startsWith(SOLO_COMMIT_TIMESTAMP)).countInstants());
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE", "TEN"})
+  void testRestoreWithMetadataCompactionAfterEveryDeltaCommit(HoodieTableVersion tableVersion) throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withStreamingWriteEnabled(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
+            .withMaxNumDeltaCommitsBeforeCompaction(1)
+            .build())
+        .build();
+    initMetaClient(HoodieTableType.COPY_ON_WRITE, hoodieWriteConfig.getProps());
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      String savepointCommit = null;
+      String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
+      final int numRecords = 10;
+      final int iterations = 3;
+      for (int i = 1; i <= iterations; i++) {
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+            false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
+        prevInstant = newCommitTime;
+        if (i == 1) {
+          savepointCommit = newCommitTime;
+          client.savepoint("user1", "Savepoint for 1st commit");
+        }
+      }
+      assertRowNumberEqualsTo(iterations * numRecords);
+      client.restoreToSavepoint(Objects.requireNonNull(savepointCommit, "restore commit should not be null"));
+      assertRowNumberEqualsTo(numRecords);
+      assertEquals(tableVersion, HoodieTableMetaClient.reload(metaClient).getTableConfig().getTableVersion());
+      String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(hoodieWriteConfig.getBasePath());
+      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(metadataTableBasePath)
+          .setConf(storageConf)
+          .setLoadActiveTimelineOnLoad(true)
+          .build();
+      HoodieTimeline metadataTimeline = metadataMetaClient.getActiveTimeline();
+      assertFalse(metadataTimeline.getCommitTimeline().filterCompletedInstants().empty());
+      // Table version 6 restores the metadata table in place and keeps the delta commit of the savepointed commit.
+      // Later versions rebuild it, and a compaction follows the bootstrap commits before the metadata restore is planned.
+      int expectedDeltaCommits = tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT) ? 1 : 2;
+      assertEquals(expectedDeltaCommits, metadataTimeline.getDeltaCommitTimeline()
+          .filter(instant -> !instant.requestedTime().startsWith(SOLO_COMMIT_TIMESTAMP)).countInstants());
+    }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "NINE", "TEN"})
+  void testRestoreToSavepointOlderThanMetadataTable(HoodieTableVersion tableVersion) throws Exception {
+    HoodieWriteConfig configWithoutMetadata = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+    HoodieWriteConfig configWithMetadata = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder()
+            .withStreamingWriteEnabled(tableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT))
+            .build())
+        .build();
+    initMetaClient(HoodieTableType.COPY_ON_WRITE, configWithMetadata.getProps());
+    final int numRecords = 10;
+    String savepointCommit;
+    String prevInstant;
+    try (SparkRDDWriteClient client = getHoodieWriteClient(configWithoutMetadata)) {
+      savepointCommit = WriteClientTestUtils.createNewInstantTime();
+      insertBatch(configWithoutMetadata, client, savepointCommit, HoodieTimeline.INIT_INSTANT_TS, numRecords, SparkRDDWriteClient::insert,
+          false, true, numRecords, numRecords, 1, Option.empty(), INSTANT_GENERATOR);
+      client.savepoint("user1", "Savepoint for 1st commit");
+      prevInstant = WriteClientTestUtils.createNewInstantTime();
+      insertBatch(configWithoutMetadata, client, prevInstant, savepointCommit, numRecords, SparkRDDWriteClient::insert,
+          false, true, numRecords, numRecords * 2, 1, Option.empty(), INSTANT_GENERATOR);
+    }
+    try (SparkRDDWriteClient client = getHoodieWriteClient(configWithMetadata)) {
+      String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+      insertBatch(configWithMetadata, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+          false, true, numRecords, numRecords * 3, 1, Option.empty(), INSTANT_GENERATOR);
+      assertRowNumberEqualsTo(numRecords * 3);
+      client.restoreToSavepoint(savepointCommit);
+      assertRowNumberEqualsTo(numRecords);
+      assertEquals(tableVersion, HoodieTableMetaClient.reload(metaClient).getTableConfig().getTableVersion());
+      HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
+          .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(configWithMetadata.getBasePath()))
+          .setConf(storageConf)
+          .setLoadActiveTimelineOnLoad(true)
+          .build();
+      assertFalse(metadataMetaClient.getActiveTimeline().getDeltaCommitTimeline()
+          .containsInstant(newCommitTime));
+      String commitAfterRestore = WriteClientTestUtils.createNewInstantTime();
+      insertBatch(configWithMetadata, client, commitAfterRestore, savepointCommit, numRecords, SparkRDDWriteClient::insert,
+          false, true, numRecords, numRecords * 2, 1, Option.empty(), INSTANT_GENERATOR);
+      assertRowNumberEqualsTo(numRecords * 2);
+    }
+  }
+
+  /**
+   * A metadata table built after the savepoint that holds only its initialization delta commits is kept and restored in
+   * place.
+   */
+  @Test
+  void testRestoreKeepsAMetadataTableBuiltAfterTheSavepointWithoutLaterDeltaCommits() throws Exception {
+    HoodieWriteConfig configWithoutMetadata = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+    HoodieWriteConfig configWithMetadata = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .build();
+    final int numRecords = 10;
+    String savepointCommit = WriteClientTestUtils.createNewInstantTime();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(configWithoutMetadata)) {
+      insertBatch(configWithoutMetadata, client, savepointCommit, HoodieTimeline.INIT_INSTANT_TS, numRecords, SparkRDDWriteClient::insert,
+          false, true, numRecords, numRecords, 1, Option.empty(), INSTANT_GENERATOR);
+      client.savepoint("user1", "Savepoint for 1st commit");
+      insertBatch(configWithoutMetadata, client, WriteClientTestUtils.createNewInstantTime(), savepointCommit, numRecords,
+          SparkRDDWriteClient::insert, false, true, numRecords, numRecords * 2, 1, Option.empty(), INSTANT_GENERATOR);
+    }
+    syncTableMetadata(configWithMetadata);
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(configWithMetadata)) {
+      assertFalse(client.deleteMdtIfNecessaryBeforeRestore(savepointCommit));
+      client.restoreToSavepoint(savepointCommit);
+      assertRowNumberEqualsTo(numRecords);
+    }
+  }
+
+  /**
+   * Before table version 8 a metadata table built after the restore target has no base file before the target. When it
+   * also holds a delta commit of a data table instant, a restore that keeps it is refused.
+   */
+  @Test
+  void testRestoreToInstantRefusesAMetadataTableWithDeltaCommitsAndNoBaseFileBeforeTheTarget() throws Exception {
+    HoodieWriteConfig configWithoutMetadata = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(HoodieTableVersion.SIX.versionCode())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .build();
+    HoodieWriteConfig configWithMetadata = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .withAutoUpgradeVersion(false)
+        .withWriteTableVersion(HoodieTableVersion.SIX.versionCode())
+        .build();
+    initMetaClient(HoodieTableType.COPY_ON_WRITE, configWithMetadata.getProps());
+    final int numRecords = 10;
+    String savepointCommit = WriteClientTestUtils.createNewInstantTime();
+    String secondCommit = WriteClientTestUtils.createNewInstantTime();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(configWithoutMetadata)) {
+      insertBatch(configWithoutMetadata, client, savepointCommit, HoodieTimeline.INIT_INSTANT_TS, numRecords, SparkRDDWriteClient::insert,
+          false, true, numRecords, numRecords, 1, Option.empty(), INSTANT_GENERATOR);
+      client.savepoint("user1", "Savepoint for 1st commit");
+      insertBatch(configWithoutMetadata, client, secondCommit, savepointCommit, numRecords, SparkRDDWriteClient::insert,
+          false, true, numRecords, numRecords * 2, 1, Option.empty(), INSTANT_GENERATOR);
+    }
+    try (SparkRDDWriteClient client = getHoodieWriteClient(configWithMetadata)) {
+      insertBatch(configWithMetadata, client, WriteClientTestUtils.createNewInstantTime(), secondCommit, numRecords,
+          SparkRDDWriteClient::insert, false, true, numRecords, numRecords * 3, 1, Option.empty(), INSTANT_GENERATOR);
+      HoodieRestoreException e = assertThrows(HoodieRestoreException.class, () -> client.restoreToInstant(savepointCommit, true));
+      assertInstanceOf(HoodieMetadataException.class, e.getCause());
+      assertTrue(e.getCause().getMessage().contains("Please delete metadata table and retry"), e.getCause().getMessage());
+    }
+  }
+
+  @Test
+  void testRestoreToTheLatestCommitRollsBackNothing() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
+      final int numRecords = 10;
+      for (int i = 1; i <= 2; i++) {
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+            false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
+        prevInstant = newCommitTime;
+      }
+      client.savepoint("user1", "Savepoint for the latest commit");
+      client.restoreToSavepoint(prevInstant);
+      assertRowNumberEqualsTo(numRecords * 2);
+      HoodieTimeline timeline = HoodieTableMetaClient.reload(metaClient).getActiveTimeline();
+      HoodieInstant restore = timeline.getRestoreTimeline().filterCompletedInstants().lastInstant().get();
+      assertTrue(timeline.readRestoreMetadata(restore).getInstantsToRollback().isEmpty());
+    }
+  }
+
+  @Test
+  void testRestoreTargetWithoutInstantKeepsMetadataTable() throws Exception {
+    HoodieWriteConfig hoodieWriteConfig = getConfigBuilder(HoodieFailedWritesCleaningPolicy.LAZY)
+        .withRollbackUsingMarkers(true)
+        .build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(hoodieWriteConfig)) {
+      String prevInstant = HoodieTimeline.INIT_INSTANT_TS;
+      final int numRecords = 10;
+      for (int i = 1; i <= 2; i++) {
+        String newCommitTime = WriteClientTestUtils.createNewInstantTime();
+        insertBatch(hoodieWriteConfig, client, newCommitTime, prevInstant, numRecords, SparkRDDWriteClient::insert,
+            false, true, numRecords, numRecords * i, 1, Option.empty(), INSTANT_GENERATOR);
+        prevInstant = newCommitTime;
+      }
+      String timeWithoutInstant = WriteClientTestUtils.createNewInstantTime();
+      StoragePath metadataTablePath = new StoragePath(HoodieTableMetadata.getMetadataTableBasePath(hoodieWriteConfig.getBasePath()));
+      assertFalse(client.deleteMdtIfNecessaryBeforeRestore(timeWithoutInstant));
+      assertThrows(HoodieException.class, () -> client.restoreToSavepoint(timeWithoutInstant));
+      assertTrue(HoodieStorageUtils.getStorage(metadataTablePath, storageConf).exists(metadataTablePath));
     }
   }
 

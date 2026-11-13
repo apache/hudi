@@ -1079,4 +1079,36 @@ class TestHoodieTableMetadataUtil {
           engineContext, slices, 1, "test", metaClient, false).collectAsList().isEmpty());
     }
   }
+
+  @Test
+  void testHasOnlyInitializationDeltaCommits() {
+    String dataInstant = "20240101120000000";
+    assertTrue(hasOnlyInitializationDeltaCommits(HoodieTableVersion.NINE));
+    assertTrue(hasOnlyInitializationDeltaCommits(HoodieTableVersion.NINE, "00000000000000000", "00000000000000001"));
+    assertFalse(hasOnlyInitializationDeltaCommits(HoodieTableVersion.NINE, "00000000000000000", dataInstant));
+    assertFalse(hasOnlyInitializationDeltaCommits(HoodieTableVersion.NINE, dataInstant + "010"));
+    assertTrue(hasOnlyInitializationDeltaCommits(HoodieTableVersion.SIX));
+    assertTrue(hasOnlyInitializationDeltaCommits(HoodieTableVersion.SIX, "00000000000000010"));
+    assertTrue(hasOnlyInitializationDeltaCommits(HoodieTableVersion.SIX, dataInstant + "010", dataInstant + "011"));
+    assertFalse(hasOnlyInitializationDeltaCommits(HoodieTableVersion.SIX, dataInstant + "010", dataInstant));
+    assertFalse(hasOnlyInitializationDeltaCommits(HoodieTableVersion.SIX, dataInstant + "010", "20240101130000000003"));
+    assertFalse(hasOnlyInitializationDeltaCommits(HoodieTableVersion.SIX, dataInstant + "010", "20240101130000000005"));
+  }
+
+  private static boolean hasOnlyInitializationDeltaCommits(HoodieTableVersion tableVersion, String... deltaCommitTimes) {
+    HoodieTableMetaClient metadataMetaClient = mock(HoodieTableMetaClient.class);
+    HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    HoodieActiveTimeline activeTimeline = mock(HoodieActiveTimeline.class);
+    HoodieTimeline deltaCommitTimeline = mock(HoodieTimeline.class);
+    when(metadataMetaClient.getTableConfig()).thenReturn(tableConfig);
+    when(tableConfig.getTableVersion()).thenReturn(tableVersion);
+    when(metadataMetaClient.getActiveTimeline()).thenReturn(activeTimeline);
+    when(activeTimeline.getDeltaCommitTimeline()).thenReturn(deltaCommitTimeline);
+    when(deltaCommitTimeline.getInstantsAsStream()).thenReturn(Stream.of(deltaCommitTimes).map(time -> {
+      HoodieInstant instant = mock(HoodieInstant.class);
+      when(instant.requestedTime()).thenReturn(time);
+      return instant;
+    }));
+    return HoodieTableMetadataUtil.hasOnlyInitializationDeltaCommits(metadataMetaClient);
+  }
 }
