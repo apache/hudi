@@ -15,6 +15,7 @@ package io.trino.plugin.hudi.file;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.HoodieBaseFile;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -31,10 +32,20 @@ public class HudiBaseFile
 
     public static HudiBaseFile of(HoodieBaseFile baseFile)
     {
-        return of(baseFile, 0, baseFile.getFileSize());
+        return of((BaseFile) baseFile);
     }
 
     public static HudiBaseFile of(HoodieBaseFile baseFile, long start, long length)
+    {
+        return of((BaseFile) baseFile, start, length);
+    }
+
+    public static HudiBaseFile of(BaseFile baseFile)
+    {
+        return of(baseFile, 0, baseFile.getFileSize());
+    }
+
+    public static HudiBaseFile of(BaseFile baseFile, long start, long length)
     {
         return new HudiBaseFile(baseFile, start, length);
     }
@@ -55,7 +66,7 @@ public class HudiBaseFile
         this.length = length;
     }
 
-    private HudiBaseFile(HoodieBaseFile baseFile, long start, long length)
+    private HudiBaseFile(BaseFile baseFile, long start, long length)
     {
         checkArgument(baseFile != null, "baseFile is null");
         checkArgument(start >= 0, "start must be positive");
