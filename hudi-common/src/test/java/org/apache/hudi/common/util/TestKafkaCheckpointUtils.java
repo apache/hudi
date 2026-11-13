@@ -20,9 +20,11 @@
 package org.apache.hudi.common.util;
 
 import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.OffsetComparisonResult;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -106,75 +108,110 @@ public class TestKafkaCheckpointUtils {
   }
 
   @Test
-  public void testCalculateOffsetDifferenceBasic() {
+  public void testCompareOffsetsBasic() {
     String previous = "topic,0:100,1:200";
     String current = "topic,0:150,1:300";
 
     // (150-100) + (300-200) = 50 + 100 = 150
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
         CheckpointFormat.SPARK_KAFKA, previous, current);
-    assertEquals(150L, diff);
+    assertTrue(result.isExact());
+    assertEquals(150L, result.getKnownOffsetDifference());
   }
 
   @Test
-  public void testCalculateOffsetDifferenceNoChange() {
+  public void testCompareOffsetsNoChange() {
     String previous = "topic,0:100,1:200";
     String current = "topic,0:100,1:200";
 
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
         CheckpointFormat.SPARK_KAFKA, previous, current);
-    assertEquals(0L, diff);
+    assertTrue(result.isExact());
+    assertEquals(0L, result.getKnownOffsetDifference());
   }
 
   @Test
-  public void testCalculateOffsetDifferenceNewPartition() {
+  public void testCompareOffsetsNewPartition() {
     String previous = "topic,0:100";
     String current = "topic,0:150,1:200";
 
     // Partition 0: 150-100 = 50
     // Partition 1: new partition, skipped (start offset unknown)
     // Total: 50
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
         CheckpointFormat.SPARK_KAFKA, previous, current);
-    assertEquals(50L, diff);
+    assertFalse(result.isExact());
+    assertEquals(50L, result.getKnownOffsetDifference());
+    assertEquals(Collections.singleton(1), result.getAddedPartitions());
   }
 
   @Test
-  public void testCalculateOffsetDifferenceRemovedPartition() {
+  public void testCompareOffsetsRemovedPartition() {
     String previous = "topic,0:100,1:200";
     String current = "topic,0:150";
 
     // Only partition 0 exists in both: 150-100 = 50
     // Partition 1 ignored (not in current)
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
         CheckpointFormat.SPARK_KAFKA, previous, current);
-    assertEquals(50L, diff);
+    assertFalse(result.isExact());
+    assertEquals(50L, result.getKnownOffsetDifference());
+    assertEquals(Collections.singleton(1), result.getMissingPartitions());
   }
 
   @Test
-  public void testCalculateOffsetDifferenceNegativeOffset() {
+  public void testCompareOffsetsNegativeOffset() {
     // Simulate topic reset where offset goes back to 0
     String previous = "topic,0:1000";
     String current = "topic,0:100";
 
     // When current < previous (offset reset), partition is skipped
     // to avoid overcounting since start offset is unknown
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
         CheckpointFormat.SPARK_KAFKA, previous, current);
-    assertEquals(0L, diff);
+    assertFalse(result.isExact());
+    assertEquals(0L, result.getKnownOffsetDifference());
+    assertEquals(Collections.singleton(0), result.getResetPartitions());
   }
 
   @Test
-  public void testCalculateOffsetDifferenceMultiplePartitionsWithReset() {
+  public void testCompareOffsetsMultiplePartitionsWithReset() {
     String previous = "topic,0:1000,1:2000";
     String current = "topic,0:100,1:2500";
 
     // Partition 0: reset, skipped to avoid overcounting
     // Partition 1: normal increment = 2500-2000 = 500
     // Total: 500
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
         CheckpointFormat.SPARK_KAFKA, previous, current);
-    assertEquals(500L, diff);
+    assertFalse(result.isExact());
+    assertEquals(500L, result.getKnownOffsetDifference());
+    assertEquals(Collections.singleton(0), result.getResetPartitions());
+  }
+
+  @Test
+  public void testCompareFlinkOffsetsWithAddedPartitionIsIncomplete() {
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.FLINK_KAFKA,
+        "kafka_metadata%3Aevents%3A0:100",
+        "kafka_metadata%3Aevents%3A0:150;kafka_metadata%3Aevents%3A1:200");
+
+    assertFalse(result.isExact());
+    assertEquals(50L, result.getKnownOffsetDifference());
+    assertEquals(Collections.singleton(1), result.getAddedPartitions());
+  }
+
+  @Test
+  public void testCompareFlinkOffsetsWithoutPartitionOffsetsIsIncomplete() {
+    String clusterOnlyCheckpoint = "kafka_metadata%3Akafka_cluster%3Aevents%3A:cluster";
+
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.FLINK_KAFKA, clusterOnlyCheckpoint, clusterOnlyCheckpoint);
+
+    assertFalse(result.isExact());
+    assertFalse(result.hasPreviousCheckpointOffsets());
+    assertFalse(result.hasCurrentCheckpointOffsets());
+    assertEquals(0L, result.getKnownOffsetDifference());
   }
 
   @Test

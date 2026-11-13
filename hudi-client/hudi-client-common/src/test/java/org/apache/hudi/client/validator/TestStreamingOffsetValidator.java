@@ -57,8 +57,15 @@ public class TestStreamingOffsetValidator {
    * Mock implementation of StreamingOffsetValidator for testing.
    */
   private static class MockOffsetValidator extends StreamingOffsetValidator {
+    private boolean offsetConsistencyValidated;
+    private boolean offsetLowerBoundValidated;
+
     public MockOffsetValidator(TypedProperties config) {
-      super(config, CHECKPOINT_KEY, CheckpointFormat.SPARK_KAFKA);
+      this(config, CheckpointFormat.SPARK_KAFKA);
+    }
+
+    public MockOffsetValidator(TypedProperties config, CheckpointFormat checkpointFormat) {
+      super(config, CHECKPOINT_KEY, checkpointFormat);
     }
 
     // config is protected in BasePreCommitValidator (now in another package); expose for asserts
@@ -75,6 +82,30 @@ public class TestStreamingOffsetValidator {
     // Expose validateWithMetadata for testing
     public void testValidateWithMetadata(ValidationContext context) {
       validateWithMetadata(context);
+    }
+
+    @Override
+    protected void validateOffsetConsistency(long offsetDiff, long recordsWritten, long writeErrors,
+                                             String currentCheckpoint, String previousCheckpoint) {
+      offsetConsistencyValidated = true;
+      super.validateOffsetConsistency(offsetDiff, recordsWritten, writeErrors,
+          currentCheckpoint, previousCheckpoint);
+    }
+
+    @Override
+    protected void validateKnownOffsetLowerBound(long knownOffsetDiff, long recordsWritten, long writeErrors,
+                                                 String currentCheckpoint, String previousCheckpoint) {
+      offsetLowerBoundValidated = true;
+      super.validateKnownOffsetLowerBound(knownOffsetDiff, recordsWritten, writeErrors,
+          currentCheckpoint, previousCheckpoint);
+    }
+
+    boolean wasOffsetConsistencyValidated() {
+      return offsetConsistencyValidated;
+    }
+
+    boolean wasOffsetLowerBoundValidated() {
+      return offsetLowerBoundValidated;
     }
   }
 
@@ -136,12 +167,17 @@ public class TestStreamingOffsetValidator {
   }
 
   private MockOffsetValidator createValidator(double tolerance, ValidationFailurePolicy policy) {
+    return createValidator(tolerance, policy, CheckpointFormat.SPARK_KAFKA);
+  }
+
+  private MockOffsetValidator createValidator(double tolerance, ValidationFailurePolicy policy,
+                                              CheckpointFormat checkpointFormat) {
     TypedProperties config = new TypedProperties();
     config.setProperty(HoodiePreCommitValidatorConfig.STREAMING_OFFSET_TOLERANCE_PERCENTAGE.key(),
         String.valueOf(tolerance));
     config.setProperty(HoodiePreCommitValidatorConfig.VALIDATION_FAILURE_POLICY.key(),
         policy.name());
-    return new MockOffsetValidator(config);
+    return new MockOffsetValidator(config, checkpointFormat);
   }
 
   private HoodieWriteStat createWriteStat(long numInserts, long numUpdateWrites) {
@@ -379,6 +415,156 @@ public class TestStreamingOffsetValidator {
         Option.of(prevMetadata));
 
     assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertTrue(validator.wasOffsetConsistencyValidated());
+  }
+
+  @Test
+  public void testValidateWithMetadataSkipsInconclusiveAddedPartition() {
+    MockOffsetValidator validator = createValidator(0.0, ValidationFailurePolicy.FAIL);
+
+    HoodieCommitMetadata currentMetadata = new HoodieCommitMetadata();
+    currentMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:110,1:5");
+
+    HoodieCommitMetadata prevMetadata = new HoodieCommitMetadata();
+    prevMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:100");
+
+    // The known offset difference is 10, while all 15 source records were written. Comparing
+    // the partial difference with the full write count would incorrectly reject this commit.
+    HoodieWriteStat stat = createWriteStat(15, 0);
+    TestValidationContext context = new TestValidationContext(
+        "20260309120000",
+        Option.of(currentMetadata),
+        Option.of(Collections.singletonList(stat)),
+        false,
+        Option.of(prevMetadata));
+
+    assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertFalse(validator.wasOffsetConsistencyValidated());
+    assertFalse(validator.wasOffsetLowerBoundValidated());
+  }
+
+  @Test
+  public void testValidateWithMetadataDoesNotPassCompensatingAddedPartitionCount() {
+    MockOffsetValidator validator = createValidator(0.0, ValidationFailurePolicy.FAIL);
+
+    HoodieCommitMetadata currentMetadata = new HoodieCommitMetadata();
+    currentMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:110,1:5");
+
+    HoodieCommitMetadata prevMetadata = new HoodieCommitMetadata();
+    prevMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:100");
+
+    // A partial difference of 10 would match this aggregate write count even if records from
+    // partition 0 were lost and records from the new partition compensated for them. The
+    // comparison must remain inconclusive instead of being reported as validated.
+    HoodieWriteStat stat = createWriteStat(10, 0);
+    TestValidationContext context = new TestValidationContext(
+        "20260309120000",
+        Option.of(currentMetadata),
+        Option.of(Collections.singletonList(stat)),
+        false,
+        Option.of(prevMetadata));
+
+    assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertFalse(validator.wasOffsetConsistencyValidated());
+    assertFalse(validator.wasOffsetLowerBoundValidated());
+  }
+
+  @Test
+  public void testValidateWithMetadataFailsBelowKnownOffsetLowerBound() {
+    MockOffsetValidator validator = createValidator(0.0, ValidationFailurePolicy.FAIL);
+
+    HoodieCommitMetadata currentMetadata = new HoodieCommitMetadata();
+    currentMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:110,1:5");
+
+    HoodieCommitMetadata prevMetadata = new HoodieCommitMetadata();
+    prevMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:100");
+
+    // Ten offsets are known to have been consumed from partition 0. Even without knowing
+    // partition 1's contribution, writing only three records proves a shortfall of at least seven.
+    HoodieWriteStat stat = createWriteStat(3, 0);
+    TestValidationContext context = new TestValidationContext(
+        "20260309120000",
+        Option.of(currentMetadata),
+        Option.of(Collections.singletonList(stat)),
+        false,
+        Option.of(prevMetadata));
+
+    HoodieValidationException exception = assertThrows(HoodieValidationException.class,
+        () -> validator.testValidateWithMetadata(context));
+    assertTrue(exception.getMessage().contains("lower-bound validation failed"));
+    assertFalse(validator.wasOffsetConsistencyValidated());
+    assertTrue(validator.wasOffsetLowerBoundValidated());
+  }
+
+  @Test
+  public void testValidateWithMetadataAppliesToleranceToKnownOffsetLowerBound() {
+    MockOffsetValidator validator = createValidator(10.0, ValidationFailurePolicy.FAIL);
+
+    HoodieCommitMetadata currentMetadata = new HoodieCommitMetadata();
+    currentMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:110,1:5");
+
+    HoodieCommitMetadata prevMetadata = new HoodieCommitMetadata();
+    prevMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:100");
+
+    HoodieWriteStat stat = createWriteStat(9, 0);
+    TestValidationContext context = new TestValidationContext(
+        "20260309120000",
+        Option.of(currentMetadata),
+        Option.of(Collections.singletonList(stat)),
+        false,
+        Option.of(prevMetadata));
+
+    assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertFalse(validator.wasOffsetConsistencyValidated());
+    assertTrue(validator.wasOffsetLowerBoundValidated());
+  }
+
+  @Test
+  public void testValidateWithMetadataWarnsBelowKnownOffsetLowerBound() {
+    MockOffsetValidator validator = createValidator(0.0, ValidationFailurePolicy.WARN_LOG);
+
+    HoodieCommitMetadata currentMetadata = new HoodieCommitMetadata();
+    currentMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:110,1:5");
+
+    HoodieCommitMetadata prevMetadata = new HoodieCommitMetadata();
+    prevMetadata.addMetadata(CHECKPOINT_KEY, "topic,0:100");
+
+    HoodieWriteStat stat = createWriteStat(3, 0);
+    TestValidationContext context = new TestValidationContext(
+        "20260309120000",
+        Option.of(currentMetadata),
+        Option.of(Collections.singletonList(stat)),
+        false,
+        Option.of(prevMetadata));
+
+    assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertFalse(validator.wasOffsetConsistencyValidated());
+    assertTrue(validator.wasOffsetLowerBoundValidated());
+  }
+
+  @Test
+  public void testValidateWithMetadataSkipsFlinkCheckpointsWithoutPartitionOffsets() {
+    MockOffsetValidator validator = createValidator(
+        0.0, ValidationFailurePolicy.FAIL, CheckpointFormat.FLINK_KAFKA);
+    String clusterOnlyCheckpoint = "kafka_metadata%3Akafka_cluster%3Aevents%3A:cluster";
+
+    HoodieCommitMetadata currentMetadata = new HoodieCommitMetadata();
+    currentMetadata.addMetadata(CHECKPOINT_KEY, clusterOnlyCheckpoint);
+
+    HoodieCommitMetadata prevMetadata = new HoodieCommitMetadata();
+    prevMetadata.addMetadata(CHECKPOINT_KEY, clusterOnlyCheckpoint);
+
+    HoodieWriteStat stat = createWriteStat(5, 0);
+    TestValidationContext context = new TestValidationContext(
+        "20260309120000",
+        Option.of(currentMetadata),
+        Option.of(Collections.singletonList(stat)),
+        false,
+        Option.of(prevMetadata));
+
+    assertDoesNotThrow(() -> validator.testValidateWithMetadata(context));
+    assertFalse(validator.wasOffsetConsistencyValidated());
+    assertFalse(validator.wasOffsetLowerBoundValidated());
   }
 
   @Test
@@ -404,6 +590,7 @@ public class TestStreamingOffsetValidator {
 
     assertThrows(HoodieValidationException.class,
         () -> validator.testValidateWithMetadata(context));
+    assertTrue(validator.wasOffsetConsistencyValidated());
   }
 
   @Test
