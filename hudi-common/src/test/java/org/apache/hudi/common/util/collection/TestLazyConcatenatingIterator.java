@@ -29,6 +29,8 @@ import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class TestLazyConcatenatingIterator {
@@ -108,4 +110,82 @@ public class TestLazyConcatenatingIterator {
     }
   }
 
+  @Test
+  public void testFailedCloseOfExhaustedIteratorIsNotRepeated() {
+    CountingIterator first = new CountingIterator(Collections.singletonList(1), true);
+    CountingIterator second = new CountingIterator(Collections.singletonList(2), false);
+    LazyConcatenatingIterator<Integer> ci = new LazyConcatenatingIterator<>(Arrays.asList(() -> first, () -> second));
+
+    assertTrue(ci.hasNext());
+    assertEquals(1, ci.next());
+    assertThrows(IllegalStateException.class, ci::hasNext);
+    assertTrue(ci.hasNext());
+    assertEquals(2, ci.next());
+    assertFalse(ci.hasNext());
+    ci.close();
+
+    assertEquals(1, first.closeCount);
+    assertEquals(1, second.closeCount);
+  }
+
+  @Test
+  public void testFailedCloseStillClosesTheIterator() {
+    CountingIterator first = new CountingIterator(Arrays.asList(1, 2), true);
+    CountingIterator second = new CountingIterator(Collections.singletonList(3), false);
+    LazyConcatenatingIterator<Integer> ci = new LazyConcatenatingIterator<>(Arrays.asList(() -> first, () -> second));
+
+    assertEquals(1, ci.next());
+    assertThrows(IllegalStateException.class, ci::close);
+    ci.close();
+
+    assertFalse(ci.hasNext());
+    assertEquals(1, first.closeCount);
+    assertFalse(second.used);
+  }
+
+  @Test
+  public void testFailedSupplierDoesNotCloseThePreviousIteratorAgain() {
+    CountingIterator first = new CountingIterator(Collections.singletonList(1), false);
+    Supplier<ClosableIterator<Integer>> failing = () -> {
+      throw new IllegalStateException("cannot open");
+    };
+    LazyConcatenatingIterator<Integer> ci = new LazyConcatenatingIterator<>(Arrays.asList(() -> first, failing));
+
+    assertEquals(1, ci.next());
+    assertThrows(IllegalStateException.class, ci::hasNext);
+    ci.close();
+
+    assertEquals(1, first.closeCount);
+  }
+
+  private static class CountingIterator implements ClosableIterator<Integer> {
+    private final Iterator<Integer> iterator;
+    private final boolean failOnClose;
+    private boolean used;
+    private int closeCount;
+
+    CountingIterator(List<Integer> values, boolean failOnClose) {
+      this.iterator = values.iterator();
+      this.failOnClose = failOnClose;
+    }
+
+    @Override
+    public boolean hasNext() {
+      used = true;
+      return iterator.hasNext();
+    }
+
+    @Override
+    public Integer next() {
+      return iterator.next();
+    }
+
+    @Override
+    public void close() {
+      closeCount++;
+      if (failOnClose) {
+        throw new IllegalStateException("close failed");
+      }
+    }
+  }
 }
