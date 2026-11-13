@@ -127,6 +127,7 @@ class TestSortedKeyBasedFileGroupRecordBuffer extends BaseTestFileGroupRecordBuf
     properties.setProperty(DELETE_KEY, "counter");
     properties.setProperty(DELETE_MARKER, "3");
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
     when(tableConfig.getRecordKeyFields()).thenReturn(Option.of(new String[] {"record_key"}));
     when(tableConfig.getPartitionFields()).thenReturn(Option.empty());
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.current());
