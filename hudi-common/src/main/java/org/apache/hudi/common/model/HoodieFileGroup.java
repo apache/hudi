@@ -82,6 +82,16 @@ public class HoodieFileGroup implements Serializable {
     this.lastInstant = fileGroup.lastInstant;
   }
 
+  /**
+   * A copy of the file group whose getters work against the given timeline.
+   */
+  public HoodieFileGroup(HoodieFileGroup fileGroup, HoodieTimeline timeline) {
+    this.timeline = timeline;
+    this.fileGroupId = fileGroup.fileGroupId;
+    this.fileSlices = new TreeMap<>(fileGroup.fileSlices);
+    this.lastInstant = timeline.lastInstant();
+  }
+
   public HoodieFileGroup(String partitionPath, String id, HoodieTimeline timeline) {
     this(new HoodieFileGroupId(partitionPath, id), timeline);
   }

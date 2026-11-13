@@ -42,6 +42,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -97,7 +98,7 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       closeFileGroupsMapIfPresent();
       return (Map<String, List<HoodieFileGroup>>) (new ExternalSpillableMap<>(maxMemoryForFileGroupMap, baseStoreDir,
           new DefaultSizeEstimator(), new HoodieFileGroupSizeEstimator(),
-          diskMapType, new HoodieFileGroupSerializer(), isBitCaskDiskMapCompressionEnabled,
+          diskMapType, new HoodieFileGroupSerializer(this::getVisibleCommitsAndCompactionTimeline), isBitCaskDiskMapCompressionEnabled,
           getClass().getSimpleName() + "_partitionToFileGroups"));
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -184,8 +185,14 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
 
   @Override
   public Stream<HoodieFileGroup> getAllFileGroups() {
-    return ((ExternalSpillableMap) partitionToFileGroupsMap).valueStream()
-        .flatMap(fg -> ((List<HoodieFileGroup>) fg).stream());
+    try {
+      readLock.lock();
+      List<HoodieFileGroup> fileGroups = ((ExternalSpillableMap<String, List<HoodieFileGroup>>) partitionToFileGroupsMap).valueStream()
+          .flatMap(List::stream).collect(Collectors.toList());
+      return fileGroups.stream();
+    } finally {
+      readLock.unlock();
+    }
   }
 
   @Override
@@ -206,6 +213,12 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
   @Override
   public Stream<HoodieFileGroup> fetchAllStoredFileGroups() {
     return ((ExternalSpillableMap) partitionToFileGroupsMap).valueStream().flatMap(fg -> ((List<HoodieFileGroup>) fg).stream());
+  }
+
+  @Override
+  protected void rebindFileGroupTimelines(HoodieTimeline timeline) {
+    // partitions spilled to disk are read back bound to the current timeline by the serializer
+    rebindFileGroupTimelines(((ExternalSpillableMap<String, List<HoodieFileGroup>>) partitionToFileGroupsMap).inMemoryValues(), timeline);
   }
 
   @Override

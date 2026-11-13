@@ -156,6 +156,14 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   }
 
   /**
+   * Binds every stored file group to the given timeline, so that no earlier timeline stays referenced by a file group
+   * of a partition the latest instants did not touch. Called under the write lock; views that keep file groups outside
+   * the heap do nothing.
+   */
+  protected void rebindFileGroupTimelines(HoodieTimeline timeline) {
+  }
+
+  /**
    * Refresh the completion time query view.
    */
   protected void refreshCompletionTimeQueryView() {
@@ -751,7 +759,7 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
   public final Stream<HoodieBaseFile> getLatestBaseFiles() {
     try {
       readLock.lock();
-      return fetchLatestBaseFiles();
+      return fetchLatestBaseFiles().collect(Collectors.toList()).stream();
     } finally {
       readLock.unlock();
     }
@@ -842,7 +850,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
           .map(fileGroup -> Pair.of(fileGroup.getFileGroupId(), Option.fromJavaOptional(
               fileGroup.getAllBaseFiles().filter(baseFile -> commitsToReturn.contains(baseFile.getCommitTime())
                   && !isBaseFileDueToPendingCompaction(fileGroup.getPartitionPath(), baseFile) && !isBaseFileDueToPendingClustering(baseFile)).findFirst()))).filter(p -> p.getValue().isPresent())
-          .map(p -> addBootstrapBaseFileIfPresent(p.getKey(), p.getValue().get()));
+          .map(p -> addBootstrapBaseFileIfPresent(p.getKey(), p.getValue().get()))
+          .collect(Collectors.toList()).stream();
     } finally {
       readLock.unlock();
     }
@@ -1147,7 +1156,8 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
       readLock.lock();
       return fetchLatestFileSliceInRange(commitsToReturn)
           .filter(slice -> !isFileGroupReplacedBeforeAny(slice.getFileGroupId(), commitsToReturn))
-          .map(this::addBootstrapBaseFileIfPresent);
+          .map(this::addBootstrapBaseFileIfPresent)
+          .collect(Collectors.toList()).stream();
     } finally {
       readLock.unlock();
     }
