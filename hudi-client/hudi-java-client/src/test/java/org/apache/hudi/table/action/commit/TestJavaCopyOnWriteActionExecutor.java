@@ -23,7 +23,10 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.engine.EngineType;
+import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieKey;
@@ -38,9 +41,12 @@ import org.apache.hudi.common.testutils.Transformations;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.HoodieParquetInputFormat;
 import org.apache.hudi.hadoop.utils.HoodieHiveUtils;
+import org.apache.hudi.index.bloom.HoodieBloomIndex;
+import org.apache.hudi.index.bloom.ListBasedHoodieBloomIndexHelper;
 import org.apache.hudi.io.HoodieCreateHandle;
 import org.apache.hudi.io.HoodieWriteMergeHandle;
 import org.apache.hudi.io.MergeContext;
@@ -49,6 +55,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieJavaCopyOnWriteTable;
 import org.apache.hudi.table.HoodieJavaTable;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 import org.apache.hudi.testutils.MetadataMergeWriteStatus;
 
@@ -75,11 +82,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION;
+import static org.apache.hudi.common.table.timeline.HoodieTimeline.REPLACE_COMMIT_ACTION;
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
 import static org.apache.hudi.common.testutils.HoodieTestTable.makeNewCommitTime;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.createSimpleRecord;
 import static org.apache.hudi.common.testutils.SchemaTestUtil.getSchemaFromResource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -177,6 +186,90 @@ public class TestJavaCopyOnWriteActionExecutor extends HoodieJavaClientTestHarne
                                           TaskContextSupplier taskContextSupplier, Option<BaseKeyGenerator> keyGeneratorOpt) {
       super(config, instantTime, hoodieTable, mergeContext, partitionPath, fileId, taskContextSupplier, keyGeneratorOpt);
       RECORDED_NUM_UPDATES.set(mergeContext.getNumUpdates());
+    }
+  }
+
+  @Test
+  public void testIndexLocationsAreUpdatedOncePerWrite() throws Exception {
+    HoodieWriteConfig config = makeHoodieClientConfigBuilder()
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexClass(CountingIndex.class.getName()).build())
+        .build();
+    int startInstant = 1;
+    HoodieJavaWriteClient writeClient = getHoodieWriteClient(config);
+
+    List<HoodieRecord> records = Arrays.asList(
+        createSimpleRecord("9eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 1),
+        createSimpleRecord("9eb5b87b-1feu-4edd-87b4-6ec96dc405a0", "2016-02-01T03:16:41.415Z", 2),
+        createSimpleRecord("9eb5b87c-1fej-4edd-87b4-6ec96dc405a0", "2016-02-02T03:16:41.415Z", 3));
+
+    String insertTime = makeNewCommitTime(startInstant++, "%09d");
+    WriteClientTestUtils.startCommitWithTime(writeClient, insertTime);
+    CountingIndex.reset();
+    List<WriteStatus> inserted = writeClient.insert(records, insertTime);
+    assertIndexUpdatedOnce(3, inserted);
+    writeClient.commit(insertTime, inserted, Option.empty(), COMMIT_ACTION, Collections.emptyMap());
+
+    String upsertTime = makeNewCommitTime(startInstant++, "%09d");
+    WriteClientTestUtils.startCommitWithTime(writeClient, upsertTime);
+    CountingIndex.reset();
+    List<WriteStatus> upserted = writeClient.upsert(Arrays.asList(
+        createSimpleRecord("9eb5b87a-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 11),
+        createSimpleRecord("9eb5b87d-1feh-4edd-87b4-6ec96dc405a0", "2016-02-01T03:16:41.415Z", 4)), upsertTime);
+    assertIndexUpdatedOnce(2, upserted);
+    writeClient.commit(upsertTime, upserted, Option.empty(), COMMIT_ACTION, Collections.emptyMap());
+
+    String deleteTime = makeNewCommitTime(startInstant++, "%09d");
+    WriteClientTestUtils.startCommitWithTime(writeClient, deleteTime);
+    CountingIndex.reset();
+    List<WriteStatus> deleted = writeClient.delete(new ArrayList<>(Collections.singletonList(records.get(2).getKey())), deleteTime);
+    assertIndexUpdatedOnce(1, deleted);
+    writeClient.commit(deleteTime, deleted, Option.empty(), COMMIT_ACTION, Collections.emptyMap());
+
+    String overwriteTime = makeNewCommitTime(startInstant++, "%09d");
+    WriteClientTestUtils.startCommitWithTime(writeClient, overwriteTime, REPLACE_COMMIT_ACTION);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    CountingIndex.reset();
+    List<HoodieRecord> overwriteRecords = Collections.singletonList(
+        createSimpleRecord("9eb5b87e-1feh-4edd-87b4-6ec96dc405a0", "2016-01-31T03:16:41.415Z", 5));
+    HoodieTable table = HoodieJavaTable.create(config, context, metaClient);
+    HoodieWriteMetadata<List<WriteStatus>> overwritten = table.insertOverwrite(context, overwriteTime, overwriteRecords);
+    assertIndexUpdatedOnce(1, overwritten.getWriteStatuses());
+    assertTrue(overwritten.getIndexUpdateDuration().isPresent());
+    assertFalse(overwritten.getPartitionToReplaceFileIds().isEmpty(), "Insert overwrite must report the replaced file groups");
+  }
+
+  private static void assertIndexUpdatedOnce(int expectedStatuses, List<WriteStatus> returned) {
+    assertEquals(1, CountingIndex.CALLS.get(), "The index must be updated once per write");
+    assertEquals(expectedStatuses, CountingIndex.lastInput.size());
+    assertEquals(CountingIndex.lastOutput, returned, "The write must return the statuses the index returned");
+  }
+
+  /**
+   * A BLOOM index that counts location updates and returns the statuses in reverse order.
+   */
+  public static class CountingIndex extends HoodieBloomIndex {
+    static final AtomicLong CALLS = new AtomicLong();
+    static List<WriteStatus> lastInput = Collections.emptyList();
+    static List<WriteStatus> lastOutput = Collections.emptyList();
+
+    public CountingIndex(HoodieWriteConfig config) {
+      super(config, ListBasedHoodieBloomIndexHelper.getInstance());
+    }
+
+    static void reset() {
+      CALLS.set(0);
+      lastInput = Collections.emptyList();
+      lastOutput = Collections.emptyList();
+    }
+
+    @Override
+    public HoodieData<WriteStatus> updateLocation(HoodieData<WriteStatus> writeStatuses, HoodieEngineContext context, HoodieTable hoodieTable) {
+      CALLS.incrementAndGet();
+      lastInput = writeStatuses.collectAsList();
+      List<WriteStatus> reversed = new ArrayList<>(lastInput);
+      Collections.reverse(reversed);
+      lastOutput = reversed;
+      return HoodieListData.eager(reversed);
     }
   }
 
