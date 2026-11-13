@@ -23,13 +23,15 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.WriteOperationType;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieUpsertException;
+import org.apache.hudi.execution.bulkinsert.JavaBulkInsertInternalPartitionerFactory;
 import org.apache.hudi.io.AppendHandleFactory;
+import org.apache.hudi.io.CreateHandleFactory;
 import org.apache.hudi.io.HoodieAppendHandle;
 import org.apache.hudi.table.HoodieTable;
+import org.apache.hudi.table.WorkloadProfile;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.commit.JavaBulkInsertHelper;
 
@@ -57,6 +59,10 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDelta
   @Override
   public HoodieWriteMetadata<List<WriteStatus>> execute() {
     HoodieWriteMetadata<List<WriteStatus>> result = new HoodieWriteMetadata<>();
+    // The metadata table writer moves its instant to inflight before the write.
+    if (!table.getActiveTimeline().filterInflights().containsInstant(instantTime)) {
+      saveWorkloadProfileMetadataToInflight(new WorkloadProfile(buildProfile(preppedInputRecords), operationType, false), instantTime);
+    }
     // First group by target file id.
     HashMap<Pair<String, String>, List<HoodieRecord<T>>> recordsByFileId = new HashMap<>();
     List<HoodieRecord<T>> insertedRecords = new LinkedList<>();
@@ -88,9 +94,9 @@ public class JavaUpsertPreppedDeltaCommitActionExecutor<T> extends BaseJavaDelta
       });
 
       if (insertedRecords.size() > 0) {
-        HoodieWriteMetadata<List<WriteStatus>> insertResult = JavaBulkInsertHelper.newInstance()
-            .bulkInsert(insertedRecords, instantTime, table, config, this, false, Option.empty());
-        allWriteStatuses.addAll(insertResult.getWriteStatuses());
+        allWriteStatuses.addAll(JavaBulkInsertHelper.newInstance().bulkInsert(insertedRecords, instantTime, table, config, false,
+            JavaBulkInsertInternalPartitionerFactory.get(config.getBulkInsertSortMode()), false,
+            config.getBulkInsertShuffleParallelism(), new CreateHandleFactory(false)));
       }
     } catch (Throwable e) {
       if (e instanceof HoodieUpsertException) {
