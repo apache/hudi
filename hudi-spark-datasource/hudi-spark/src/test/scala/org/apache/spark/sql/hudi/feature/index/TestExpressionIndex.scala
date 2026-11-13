@@ -1866,7 +1866,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
     }
   }
 
-  test("Test Expression Index Reads Only Filters On Its Own Expression") {
+  test("Test Expression Index Reads Filters On Its Own Expression") {
     withTempDir { tmp =>
       val tableName = generateTableName
       spark.sql(
@@ -1891,6 +1891,7 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
            |""".stripMargin)
       spark.sql(s"CREATE INDEX ts_hour ON $tableName USING column_stats(ts) options(expr='hour')")
       spark.sql(s"CREATE INDEX rider_upper ON $tableName USING column_stats(rider) options(expr='upper')")
+      spark.sql(s"CREATE INDEX driver_lower ON $tableName USING bloom_filters(driver) options(expr='lower')")
 
       withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
         "spark.sql.adaptive.enabled" -> "false") {
@@ -1902,8 +1903,15 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         // Another function of ts, or ts itself, does not read the hour stats
         assertScan(tableName, "minute(ts) = 34", Seq("rider-E"), expectedFiles = 3)
         assertScan(tableName, "ts = '2023-09-21 16:34:26'", Seq("rider-E"), expectedFiles = 3)
-        // Ranges do not read an expression index yet (#20537)
-        assertScan(tableName, "hour(ts) > 12", Seq("rider-A", "rider-C", "rider-D", "rider-E"), expectedFiles = 3)
+        // Ranges read the column stats expression index
+        val afternoon = Seq("rider-A", "rider-C", "rider-D", "rider-E")
+        assertScan(tableName, "hour(ts) > 12", afternoon, expectedFiles = 1)
+        assertScan(tableName, "hour(ts) BETWEEN 12 AND 24", afternoon, expectedFiles = 1)
+        assertScan(tableName, "NOT hour(ts) <= 12", afternoon, expectedFiles = 1)
+        assertScan(tableName, "hour(ts) < 5", Seq("rider-I", "rider-J"), expectedFiles = 1)
+        assertScan(tableName, "hour(ts) + 1 >= 17", afternoon, expectedFiles = 1)
+        // A bloom filter answers = and IN only: a range is not a key lookup
+        assertScan(tableName, "lower(driver) > 'driver-p'", Seq("rider-G", "rider-I", "rider-J"), expectedFiles = 3)
       }
 
       spark.sql(s"CREATE INDEX ts_date ON $tableName USING column_stats(ts) options(expr='to_date')")
@@ -1916,6 +1924,10 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         // More than 10 values become an InSet, which does not read an expression index: its DATE values are ints
         val days = (1 to 11).map(day => f"DATE'2023-09-$day%02d'").mkString(", ")
         assertScan(tableName, s"date_add(ts, 1) IN ($days)", Seq.empty, expectedFiles = 3)
+        // Nor under NOT or OR, which reach the stats now that ranges do
+        assertScan(tableName, s"NOT date_add(ts, 1) IN ($days)",
+          Seq("rider-A", "rider-C", "rider-D", "rider-E", "rider-F", "rider-G", "rider-I", "rider-J"), expectedFiles = 3)
+        assertScan(tableName, s"date_add(ts, 1) IN ($days) OR to_date(ts) = DATE'2023-09-21'", Seq("rider-E"), expectedFiles = 3)
       }
     }
   }
