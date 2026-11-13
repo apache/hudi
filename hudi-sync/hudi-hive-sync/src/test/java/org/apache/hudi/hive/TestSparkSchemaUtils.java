@@ -260,6 +260,30 @@ public class TestSparkSchemaUtils {
   }
 
   @Test
+  public void testConvertUnionType() {
+    // A union of multiple non-null types is a struct of nullable "member<N>" fields, the same as spark reads it
+    StructType expected = new StructType(new StructField[] {
+        new StructField("f0", new StructType(new StructField[] {
+            new StructField("member0", IntegerType$.MODULE$, true, Metadata.empty()),
+            new StructField("member1", StringType$.MODULE$, true, Metadata.empty())}), true, Metadata.empty()),
+        new StructField("f1", new StructType(new StructField[] {
+            new StructField("member0", LongType$.MODULE$, true, Metadata.empty()),
+            new StructField("member1", new StructType(new StructField[] {
+                new StructField("name", StringType$.MODULE$, false, Metadata.empty())}), true, Metadata.empty())}),
+            false, Metadata.empty())
+    });
+    HoodieSchema schema = HoodieSchema.createRecord("root", null, null, false, Arrays.asList(
+        HoodieSchemaField.of("f0", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL),
+            HoodieSchema.create(HoodieSchemaType.INT), HoodieSchema.create(HoodieSchemaType.STRING)), null, null),
+        HoodieSchemaField.of("f1", HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.LONG),
+            HoodieSchema.createRecord("r", null, null, false, Collections.singletonList(
+                HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING), null, null)))), null, null)
+    ));
+    StructType converted = (StructType) StructType.fromJson(SparkSchemaUtils.convertToSparkSchemaJson(schema));
+    assertEquals(expected.json(), converted.json());
+  }
+
+  @Test
   public void testConvertSchemaSkipsNullTypeFields() {
     HoodieSchema nested = HoodieSchema.createRecord("nested", null, null, false, Arrays.asList(
         HoodieSchemaField.of("name", HoodieSchema.createNullable(HoodieSchemaType.STRING), null, null),

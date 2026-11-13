@@ -76,6 +76,11 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
 import org.apache.logging.log4j.core.config.Property;
+import org.apache.spark.sql.types.IntegerType$;
+import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.StringType$;
+import org.apache.spark.sql.types.StructField;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -1177,6 +1182,61 @@ public class TestHiveSyncTool {
     assertTrue(sparkSchema.contains("\"city\""), "spark schema should contain the nested field");
     assertFalse(sparkSchema.contains("clientpromotion"), "spark schema should not contain the null type field");
     assertFalse(sparkSchema.contains("nestedpromotion"), "spark schema should not contain the nested null type field");
+  }
+
+  @ParameterizedTest
+  @MethodSource("syncMode")
+  public void testSyncWithUnionFields(String syncMode) throws Exception {
+    hiveSyncProps.setProperty(HIVE_SYNC_MODE.key(), syncMode);
+    String commitTime = "100";
+    // The random data fixture cannot generate single-type unions, so they are only covered by TestHiveSchemaUtil
+    HoodieSchema schema = HoodieSchema.parse("{\"type\": \"record\", \"name\": \"User\", "
+        + "\"namespace\": \"example.avro\", \"fields\": ["
+        + "{\"name\": \"name\", \"type\": \"string\"},"
+        + "{\"name\": \"nullableunion\", \"type\": [\"null\", \"int\", \"string\"], \"default\": null},"
+        + "{\"name\": \"recordunion\", \"type\": [\"long\", {\"type\": \"record\", \"name\": \"Member\", \"fields\": ["
+        + "{\"name\": \"city\", \"type\": \"string\"},"
+        + "{\"name\": \"count\", \"type\": \"int\"}]}]},"
+        + "{\"name\": \"unionarray\", \"type\": {\"type\": \"array\", \"items\": [\"int\", \"boolean\"]}}]}");
+    HiveTestUtil.createCOWTableWithSchema(commitTime, schema);
+
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(commitTime, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
+    Map<String, String> hiveSchema = hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME);
+    assertEquals("struct<member0:int,member1:string>", normalizeHiveType(hiveSchema.get("nullableunion")));
+    assertEquals("struct<member0:bigint,member1:struct<city:string,count:int>>",
+        normalizeHiveType(hiveSchema.get("recordunion")));
+    assertEquals("array<struct<member0:int,member1:boolean>>", normalizeHiveType(hiveSchema.get("unionarray")));
+    String sparkSchema = getSparkSchemaProperty();
+    StructType sparkStruct = (StructType) StructType.fromJson(sparkSchema);
+    assertEquals(new StructType(new StructField[] {
+        new StructField("member0", IntegerType$.MODULE$, true, Metadata.empty()),
+        new StructField("member1", StringType$.MODULE$, true, Metadata.empty())}),
+        sparkStruct.apply("nullableunion").dataType());
+
+    // Resync with a new commit of the same schema: the union columns must not be reported as a schema change
+    String commitTime2 = "101";
+    HoodieCommitMetadata commitMetadata = new HoodieCommitMetadata();
+    commitMetadata.addMetadata(HoodieCommitMetadata.SCHEMA_KEY, schema.toString());
+    HiveTestUtil.createCommitFile(commitMetadata, commitTime2, basePath);
+    reInitHiveSyncClient();
+    reSyncHiveTable();
+    assertEquals(commitTime2, hiveClient.getLastCommitTimeSynced(HiveTestUtil.TABLE_NAME).get(),
+        "The last commit that was synced should be updated in the TBLPROPERTIES");
+    assertEquals(hiveSchema, hiveClient.getMetastoreSchema(HiveTestUtil.TABLE_NAME),
+        "Resync should not change the Hive schema");
+    assertEquals(sparkSchema, getSparkSchemaProperty(), "Resync should not change the spark schema");
+  }
+
+  private static String normalizeHiveType(String hiveType) {
+    return hiveType.replace(" ", "").replace("`", "").toLowerCase(Locale.ROOT);
+  }
+
+  private String getSparkSchemaProperty() throws Exception {
+    return IMetaStoreClientUtil.getMSC(getHiveConf())
+        .getTable(HiveTestUtil.DB_NAME, HiveTestUtil.TABLE_NAME).getParameters().get("spark.sql.sources.schema.part.0");
   }
 
   @ParameterizedTest
