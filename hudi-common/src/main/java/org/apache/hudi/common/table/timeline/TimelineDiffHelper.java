@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN;
 import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
@@ -81,20 +82,32 @@ public class TimelineDiffHelper {
               && instantPair.getValue().isCompleted())
           .map(Pair::getKey).collect(Collectors.toList());
 
-      newTimeline.getInstantsAsStream().filter(instant -> !oldTimelineInstants.contains(instant)).forEach(newInstants::add);
-
       List<Pair<HoodieInstant, HoodieInstant>> logCompactionInstants = getPendingActionTransitions(metaClient, oldTimeline.filterPendingLogCompactionTimeline(),
           newTimeline, HoodieTimeline.DELTA_COMMIT_ACTION, HoodieTimeline.LOG_COMPACTION_ACTION);
       List<HoodieInstant> finishedOrRemovedLogCompactionInstants = logCompactionInstants.stream()
           .filter(instantPair -> !instantPair.getKey().isCompleted()
               && (instantPair.getValue() == null || instantPair.getValue().isCompleted()))
           .map(Pair::getKey).collect(Collectors.toList());
+
+      // A pending compaction or log compaction that only changed state keeps the operations the view already holds.
+      Set<String> stillPendingInstants = Stream.concat(compactionInstants.stream(), logCompactionInstants.stream())
+          .filter(instantPair -> instantPair.getValue() != null && !instantPair.getValue().isCompleted())
+          .map(instantPair -> instantPair.getKey().requestedTime()).collect(Collectors.toSet());
+      newTimeline.getInstantsAsStream()
+          .filter(instant -> !oldTimelineInstants.contains(instant))
+          .filter(instant -> !(isPendingCompactionAction(instant) && stillPendingInstants.contains(instant.requestedTime())))
+          .forEach(newInstants::add);
       return new TimelineDiffResult(newInstants, finishedCompactionInstants, finishedOrRemovedLogCompactionInstants, true);
     } else {
       // One or more timelines is empty
       log.warn("One or more timelines is empty");
       return TimelineDiffResult.UNSAFE_SYNC_RESULT;
     }
+  }
+
+  private static boolean isPendingCompactionAction(HoodieInstant instant) {
+    return !instant.isCompleted()
+        && (HoodieTimeline.COMPACTION_ACTION.equals(instant.getAction()) || HoodieTimeline.LOG_COMPACTION_ACTION.equals(instant.getAction()));
   }
 
   private static List<Pair<HoodieInstant, HoodieInstant>> getPendingActionTransitions(HoodieTableMetaClient metaClient,
