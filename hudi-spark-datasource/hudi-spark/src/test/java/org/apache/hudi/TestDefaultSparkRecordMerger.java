@@ -36,12 +36,17 @@ import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestDefaultSparkRecordMerger {
@@ -151,6 +156,34 @@ class TestDefaultSparkRecordMerger {
     assertEquals(
         InternalRow.apply(newValue.toSeq()),
         result.getRecord());
+  }
+
+  static Stream<Arguments> storedNullOrderingValues() {
+    return Stream.of(Arguments.of((Comparable) null), Arguments.of(OrderingValues.getDefault()));
+  }
+
+  /**
+   * A stored record without an ordering value reaches the merger as null or as the default value, and loses to the
+   * incoming record on both merge paths.
+   */
+  @ParameterizedTest
+  @MethodSource("storedNullOrderingValues")
+  void testMergerWithStoredNullOrderingValue(Comparable storedOrderingValue) throws IOException {
+    HoodieKey key = new HoodieKey(ANY_KEY, ANY_PARTITION);
+    Row oldValue = getSpecificValue(key, "001", 1L, "file1", 1, "1");
+    Row newValue = getSpecificValue(key, "002", 2L, "file2", 2, "2");
+    HoodieSchema schema = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(SPARK_SCHEMA, ANY_NAME, ANY_NAMESPACE);
+    BufferedRecord<InternalRow> base = BufferedRecords.fromEngineRecord(InternalRow.apply(oldValue.toSeq()), ANY_KEY, schema, recordContext, Collections.singletonList(INT_COLUMN_NAME), null);
+    BufferedRecord<InternalRow> oldRecord = new BufferedRecord<>(ANY_KEY, storedOrderingValue, base.getRecord(), base.getSchemaId(), null);
+    BufferedRecord<InternalRow> newRecord = new BufferedRecord<>(ANY_KEY, 100L, InternalRow.apply(newValue.toSeq()), base.getSchemaId(), null);
+    BufferedRecord<InternalRow> newDelete = BufferedRecords.createDelete(ANY_KEY, 100L);
+
+    DefaultSparkRecordMerger merger = new DefaultSparkRecordMerger();
+    TypedProperties props = new TypedProperties();
+    props.setProperty(ORDERING_FIELDS.key(), INT_COLUMN_NAME);
+
+    assertEquals(InternalRow.apply(newValue.toSeq()), merger.merge(oldRecord, newRecord, recordContext, props).getRecord());
+    assertSame(newDelete, merger.partialMerge(oldRecord, newDelete, schema, recordContext, props));
   }
 
   static Row getSpecificValue(
