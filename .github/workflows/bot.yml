@@ -262,10 +262,10 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dtest="TestHoodieDeltaStreamer*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
           flags: utilities
@@ -871,10 +871,10 @@ jobs:
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests "$JAVA_UT_NON_FUNCTIONAL_FILTER" -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
           flags: spark-java-tests
@@ -932,10 +932,10 @@ jobs:
         run:
           mvn test -Pfunctional-tests-c -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
           flags: spark-java-tests
@@ -1162,10 +1162,10 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
           flags: spark-scala-tests
@@ -1223,10 +1223,10 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always()
+        if: always() && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
           flags: spark-scala-tests
@@ -1506,6 +1506,8 @@ jobs:
     needs: changes
     runs-on: ubuntu-24.04
     strategy:
+      # Keeps Java CI within the ASF cap of 20 jobs at once (2 of its 3 instances run at once); see java-ci-result.
+      max-parallel: 2
       matrix:
         include:
           # validate.sh only runs the Flink test on a Flink 2.x image (HUDI-8608), so the Spark,
@@ -1599,6 +1601,8 @@ jobs:
     needs: changes
     runs-on: ubuntu-24.04
     strategy:
+      # Keeps Java CI within the ASF cap of 20 jobs at once (its 3 instances run one after another); see java-ci-result.
+      max-parallel: 1
       matrix:
         include:
           - scalaProfile: 'scala-2.13'
@@ -1911,9 +1915,11 @@ jobs:
   # cancelled one. Adding or resharding a job means adding its id to `needs` below and
   # `needs: changes` and `if: *route` to the job, and nothing else. The ASF GitHub Actions policy
   # caps the jobs running at once in a workflow at 20 (15 recommended), counted across all
-  # matrices. The test jobs currently total 18 instances, and test-fork-ci-status.cjs checks that
-  # the total stays at or below 20. GitHub Actions has no workflow-level job cap, so a change that
-  # pushes the total past 20 must serialize jobs, for example through `needs`, and make that check
+  # matrices. The test jobs total 23 instances; `max-parallel` on validate-bundles and
+  # validate-bundle-spark4 holds back 3, so the test jobs can currently run 20 at once.
+  # test-fork-ci-status.cjs checks that number, counting `max-parallel`, and that no test job
+  # waits on another. GitHub Actions has no workflow-level job cap, so a change that pushes the
+  # number past 20 must lower `max-parallel` or serialize jobs through `needs`, and make that check
   # count only the jobs that can run at once. The skipped-job rule has two exceptions. On
   # FORK_PR every test job skips on purpose and the merge queue runs them before merge. On
   # merge_group every test job may skip for DOCS_ONLY: there the route skips no test job otherwise
@@ -1930,14 +1936,19 @@ jobs:
     permissions: {}
     needs:
       - test-spark-client-and-hadoop-common
-      - test-utilities
+      - test-utilities-streamer
+      - test-utilities-rest
       - test-common-and-other-modules
       - test-hudi-hadoop-mr-and-hudi-java-client
-      - test-spark-java17-java-tests-part1
-      - test-spark-java17-java-tests-part2
-      - test-spark-java17-java-tests-part3
-      - test-spark-java17-scala-dml-tests
-      - test-spark-java17-scala-other-tests
+      - test-spark-java17-ut-functional
+      - test-spark-java17-ut-other
+      - test-spark-java17-ut-fat-and-ftc
+      - test-spark-java17-fta
+      - test-spark-java17-ftb
+      - test-spark-java17-scala-dml-1
+      - test-spark-java17-scala-dml-2
+      - test-spark-java17-scala-other-1
+      - test-spark-java17-scala-other-2
       - test-flink-1
       - test-flink-2
       - validate-bundles
