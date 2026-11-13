@@ -516,9 +516,22 @@ test('the aggregate jobs accept a merge queue run in which every test job skippe
     for (const results of [['success', 'skipped'], ['skipped', 'failure'], ['skipped', 'cancelled'], ['failure', 'success'], ['success', 'cancelled']]) {
       assert.equal(aggregateFails(ci, queue, results), true, ci.file + ' ' + results.join());
     }
-    // A queue run cancelled before its test jobs started is not docs-only.
-    assert.equal(aggregateFails(ci, queue, ['skipped', 'skipped'], { cancelled: () => true }), true, ci.file);
+    // A queue run cancelled before its test jobs started is not docs-only: the test jobs still
+    // pending at the cancel report cancelled, not skipped.
+    assert.equal(aggregateFails(ci, queue, ['cancelled', 'cancelled', 'cancelled']), true, ci.file);
   }
+});
+// The docs-only skip relies on every queue entry passing its own run. Under HEADGREEN only the
+// head of a group must pass, so a docs-only entry there would merge the code entries ahead of it.
+test('the merge queue requires every entry to pass, which the docs-only skip relies on', () => {
+  const asf = JSON.parse(execFileSync('python3', [
+    '-c', 'import json, sys, yaml; print(json.dumps(yaml.safe_load(sys.stdin)))',
+  ], { input: readFileSync(path.join(__dirname, '../../../.asf.yaml')), encoding: 'utf8' }));
+  const queues = asf.github.rulesets.flatMap((ruleset) => ruleset.rules)
+    .filter((rule) => rule.type === 'merge_queue');
+  assert.equal(queues.length, 1);
+  assert.equal(queues[0].parameters.grouping_strategy, 'ALLGREEN',
+    'bot.yml and java_ci_engines.yml skip the tests of docs-only queue entries, which is safe only under ALLGREEN');
 });
 test('each aggregate job links the fork run of its own workflow on fork PRs', () => {
   for (const ci of javaCi) {

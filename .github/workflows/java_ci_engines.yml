@@ -715,8 +715,11 @@ jobs:
   # skipped-job rule has two exceptions. On FORK_PR every test job skips on purpose and the merge
   # queue runs them before merge. On merge_group every test job may skip for DOCS_ONLY: there the
   # route skips no test job otherwise and a failed `changes` job makes them run, so a queue run in
-  # which every test job skipped is docs-only, unless the run was cancelled. UPSTREAM_OTHER_PUSH
-  # skips this job too, since nothing ran that it could aggregate.
+  # which every test job skipped is docs-only. Skipping the tests of a docs-only entry is safe only
+  # because .asf.yaml sets the merge queue's grouping_strategy to ALLGREEN, so the entries ahead of
+  # it must pass their own runs; under HEADGREEN a docs-only entry at the head of a group would
+  # merge the code entries ahead of it on its own run. test-fork-ci-status.cjs pins ALLGREEN.
+  # UPSTREAM_OTHER_PUSH skips this job too, since nothing ran that it could aggregate.
   java-ci-engines-result:
     name: Java CI Engines result
     runs-on: ubuntu-slim
@@ -748,13 +751,15 @@ jobs:
             printf 'This upstream PR run skips the Java CI Engines test jobs. The merge queue runs them on ASF runners before merge.\n'
           } >> "$GITHUB_STEP_SUMMARY"
       # On merge_group, skipped jobs pass only when every job skipped, which means DOCS_ONLY; see
-      # the comment above this job. cancelled() keeps a queue run cancelled before its test jobs
-      # started from passing as docs-only.
+      # the comment above this job. A queue run cancelled before its test jobs started fails on the
+      # `cancelled` results of the test jobs still pending at the cancel. cancelled() cannot catch
+      # it: in a step it reads this job's own status, which stays success for an always() job that
+      # started after the cancel.
       - name: Fail unless every job succeeded
         if: >-
           ${{ env.FORK_PR == 'true' && (contains(needs.*.result, 'success') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
           || env.FORK_PR != 'true' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-          || contains(needs.*.result, 'skipped') && !(github.event_name == 'merge_group' && !cancelled() && !contains(needs.*.result, 'success'))) }}
+          || contains(needs.*.result, 'skipped') && !(github.event_name == 'merge_group' && !contains(needs.*.result, 'success'))) }}
         env:
           REQUIREMENT: ${{ env.FORK_PR == 'true' && 'Every job in Java CI Engines must be skipped on a fork PR to master.' || 'Every job in Java CI Engines must succeed, or every job must be skipped on a docs-only merge-queue run.' }}
         run: |
