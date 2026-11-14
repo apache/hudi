@@ -129,6 +129,33 @@ public class TestHoodieStreamerUtils extends UtilitiesTestBase {
     assertArrayEquals(expectedValues, columnValues);
   }
 
+  @Test
+  void testTimestampOrderingValueIgnoresConsistentLogicalTimestamp() {
+    HoodieSchema schema = HoodieSchema.parse("{\"type\": \"record\", \"name\": \"rec\", \"fields\": ["
+        + "{\"name\": \"ts\", \"type\": {\"type\": \"long\", \"logicalType\": \"timestamp-micros\"}},"
+        + "{\"name\": \"_row_key\", \"type\": \"string\"},"
+        + "{\"name\": \"partition_path\", \"type\": \"string\"}]}");
+    JavaRDD<GenericRecord> recordRdd = jsc.parallelize(Collections.singletonList(1)).map(i -> {
+      GenericRecord genericRecord = new GenericData.Record(schema.toAvroSchema());
+      genericRecord.put(0, 1_000_500L);
+      genericRecord.put(1, "key" + i);
+      genericRecord.put(2, "path" + i);
+      return genericRecord;
+    });
+    HoodieStreamer.Config cfg = new HoodieStreamer.Config();
+    cfg.payloadClassName = DefaultHoodieRecordPayload.class.getName();
+    cfg.sourceOrderingFields = "ts";
+    cfg.filterDupes = true;
+    TypedProperties props = new TypedProperties();
+    props.put(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    props.put(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    props.put(KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), "true");
+    List<HoodieRecord> records = HoodieStreamerUtils.createHoodieRecords(cfg, props, Option.of(recordRdd),
+        new SimpleSchemaProvider(jsc, schema, props), HoodieRecordType.AVRO, false, "000", Option.empty(), new HoodieTableConfig())
+        .get().collect();
+    assertEquals(1_000_500L, records.get(0).getOrderingValue(schema, props, new String[] {"ts"}));
+  }
+
   @ParameterizedTest
   @MethodSource("testCreateHoodieRecords")
   void testCreateHoodieRecordsWithError(

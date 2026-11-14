@@ -49,24 +49,24 @@ import static org.apache.hudi.common.avro.HoodieAvroUtils.extractLocalEpochMilli
 
 /**
  * Prebuilds a converter for each delete ordering field to match the comparison representation of
- * {@link HoodieAvroUtils#convertValueForAvroLogicalTypes(Schema, Object, boolean)}.
+ * {@link HoodieAvroUtils#convertValueForAvroLogicalTypes(Schema, Object, boolean)} without consistent logical timestamps.
  * Preserves null field values and converts strings to Avro's comparable representation.
  */
 public class AvroOrderingValueConverter {
   private final List<Function<Comparable, Comparable>> converters;
 
-  private AvroOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean consistentLogicalTimestampEnabled) {
+  private AvroOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
     this.converters = orderingFieldNames.stream()
         .map(field -> HoodieSchemaUtils.getNestedField(dataSchema, field)
             .map(Pair::getRight).map(HoodieSchemaField::getNonNullSchema)
             .orElseThrow(() -> new IllegalArgumentException("Ordering field '" + field + "' not found in table schema")))
-        .map(schema -> createConverter(schema.toAvroSchema(), consistentLogicalTimestampEnabled))
+        .map(schema -> createConverter(schema.toAvroSchema()))
         .map(converter -> (Function<Comparable, Comparable>) value -> value == null ? null : converter.apply(value))
         .collect(Collectors.toList());
   }
 
-  public static AvroOrderingValueConverter create(HoodieSchema dataSchema, List<String> orderingFieldNames, boolean consistentLogicalTimestampEnabled) {
-    return new AvroOrderingValueConverter(dataSchema, orderingFieldNames, consistentLogicalTimestampEnabled);
+  public static AvroOrderingValueConverter create(HoodieSchema dataSchema, List<String> orderingFieldNames) {
+    return new AvroOrderingValueConverter(dataSchema, orderingFieldNames);
   }
 
   public Comparable convert(Comparable value) {
@@ -78,20 +78,17 @@ public class AvroOrderingValueConverter {
         : converters.get(0).apply(value);
   }
 
-  private static Function<Comparable, Comparable> createConverter(Schema schema, boolean consistentLogicalTimestampEnabled) {
+  private static Function<Comparable, Comparable> createConverter(Schema schema) {
     LogicalType logicalType = schema.getLogicalType();
     if (logicalType == LogicalTypes.date()) {
       // Spark/Flink supply epoch days; Avro supplies LocalDate. Callers may supply java.sql.Date.
       return value -> value instanceof Date ? ((Date) value).toLocalDate() : LocalDate.ofEpochDay(extractEpochDay(value));
     }
     if (logicalType == LogicalTypes.timestampMillis()) {
-      return consistentLogicalTimestampEnabled
-          ? value -> new Timestamp(toEpochMillis(value)) : AvroOrderingValueConverter::toEpochMillis;
+      return AvroOrderingValueConverter::toEpochMillis;
     }
     if (logicalType == LogicalTypes.timestampMicros()) {
-      // Match the shared normalizer's millisecond truncation, including negative timestamps.
-      return consistentLogicalTimestampEnabled
-          ? value -> new Timestamp(toEpochMicros(value) / 1000) : AvroOrderingValueConverter::toEpochMicros;
+      return AvroOrderingValueConverter::toEpochMicros;
     }
     // A caller-supplied Timestamp represents wall-clock fields for a local timestamp schema.
     if (logicalType == LogicalTypes.localTimestampMillis()) {
@@ -126,7 +123,7 @@ public class AvroOrderingValueConverter {
   }
 
   private static long toEpochMillis(Comparable value) {
-    // Avro extraction with consistent logical timestamps enabled and wrapper decoding yield Timestamp.
+    // Delete ordering values decoded from wrappers can be Timestamp.
     return value instanceof Timestamp ? ((Timestamp) value).getTime() : extractEpochMillis(value);
   }
 

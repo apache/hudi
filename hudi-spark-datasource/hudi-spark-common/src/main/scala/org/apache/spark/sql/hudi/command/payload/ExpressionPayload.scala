@@ -27,7 +27,6 @@ import org.apache.hudi.common.util.{BinaryUtil, ConfigUtils, HoodieRecordUtils, 
 import org.apache.hudi.common.util.ValidationUtils.checkState
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.HoodieException
-import org.apache.hudi.keygen.constant.KeyGeneratorOptions
 import org.apache.hudi.util.JFunction
 
 import com.github.benmanes.caffeine.cache.{Cache, Caffeine}
@@ -184,14 +183,10 @@ class ExpressionPayload(@transient record: GenericRecord,
       if (orderingFields == null) {
         HOption.of(incomingRecord)
       } else {
-        val consistentLogicalTimestampEnabled = properties.getProperty(
-          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key,
-          KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue).toBoolean
         val orderingValue = OrderingValues.create(
           orderingFields,
           JFunction.toJavaFunction[String, Comparable[_]](
-            field => HoodieAvroUtils.getNestedFieldVal(incomingRecord, field, true,
-              consistentLogicalTimestampEnabled).asInstanceOf[Comparable[_]]))
+            field => HoodieAvroUtils.getNestedFieldVal(incomingRecord, field, true, false).asInstanceOf[Comparable[_]]))
         val incomingRecordPayload = HoodieRecordUtils.loadPayload(originalPayload, incomingRecord, orderingValue)
           .asInstanceOf[HoodieRecordPayload[_ <: HoodieRecordPayload[_]]]
         incomingRecordPayload.combineAndGetUpdateValue(existingRecord, schema.getAvroSchema, properties)

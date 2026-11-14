@@ -131,9 +131,6 @@ object HoodieCreateRecordUtils {
           }
           val keyGenerator : Option[BaseKeyGenerator] = if (usePreppedInsteadOfKeyGen) None else Some(HoodieSparkKeyGeneratorFactory.createKeyGenerator(keyGenProps).asInstanceOf[BaseKeyGenerator])
           val dataFileSchema = HoodieSchema.parse(dataFileSchemaStr)
-          val consistentLogicalTimestampEnabled = parameters.getOrElse(
-            DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(),
-            DataSourceWriteOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()).toBoolean
           val mergeProps = ConfigUtils.getMergeProps(config.getProps, args.tableConfig)
           val deleteContext = new DeleteContext(mergeProps, writerSchema).withReaderSchema(writerSchema);
 
@@ -154,8 +151,7 @@ object HoodieCreateRecordUtils {
               avroRecWithoutMeta
             }
             val hoodieRecord = if (shouldCombine && !orderingFields.isEmpty) {
-              val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey,
-                consistentLogicalTimestampEnabled, requiresOrderingValue)
+              val orderingVal = getOrderingValue(orderingFields, avroRec, hoodieKey.getRecordKey, requiresOrderingValue)
               HoodieRecordUtils.createHoodieRecord(processedRecord, orderingVal, hoodieKey,
                 config.getPayloadClass, null, recordLocation, isDelete)
             } else {
@@ -293,12 +289,11 @@ object HoodieCreateRecordUtils {
   private def getOrderingValue(orderingFields: java.util.List[String],
                                avroRec: GenericRecord,
                                recordKey: String,
-                               consistentLogicalTimestampEnabled: Boolean,
                                requiresOrderingValue: Boolean): Comparable[_] = {
     OrderingValues.create(
       orderingFields,
       JFunction.toJavaFunction[String, Comparable[_]](field => {
-        val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false, consistentLogicalTimestampEnabled)
+        val fieldVal = HoodieAvroUtils.getNestedFieldVal(avroRec, field, false, false)
         if (fieldVal == null) {
           if (requiresOrderingValue) {
             throw new IllegalArgumentException(
