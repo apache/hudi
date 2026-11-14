@@ -42,6 +42,7 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -53,6 +54,7 @@ import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -138,6 +140,34 @@ class TestFlinkWriteHelper {
     } else {
       assertTrue(actual.get(3).getData().isNullAt(2));
     }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"false", "true"})
+  void testDeduplicationPreservesDeleteOrdering(boolean sortedByRecordKey) {
+    HoodieReaderContext<RowData> readerContext = readerContext();
+    TypedProperties props = new TypedProperties();
+    HoodieSchema schema = HoodieSchema.parse(ROW_SCHEMA);
+    BufferedRecordMerger<RowData> merger = BufferedRecordMergerFactory.create(
+        readerContext, RecordMergeMode.EVENT_TIME_ORDERING, false,
+        Option.empty(), Option.empty(), schema, props, Option.empty());
+    List<HoodieRecord<RowData>> records = Arrays.asList(
+        row("a", 50, "older", HoodieOperation.INSERT),
+        row("a", 60, null, HoodieOperation.DELETE),
+        row("b", 50, "older", HoodieOperation.INSERT),
+        row("b", 60, null, HoodieOperation.DELETE),
+        row("b", 55, "obsolete-reinsert", HoodieOperation.INSERT));
+    List<HoodieRecord<RowData>> actual = CollectionUtils.toList(
+        rowWriteHelper.deduplicateSortedRecords(
+            records.iterator(), sortedByRecordKey, ROW_SCHEMA,
+            props, merger, readerContext, ORDERING_FIELDS));
+    assertEquals(2, actual.size());
+    DeleteContext deleteContext = DeleteContext.fromRecordSchema(props, schema);
+    assertAll(actual.stream().map(record -> (Executable) () ->
+        assertAll(record.getRecordKey(),
+            () -> assertEquals(60L, record.getOrderingValue(schema, props, ORDERING_FIELDS)),
+            () -> assertEquals(HoodieOperation.DELETE, record.getOperation()),
+            () -> assertTrue(record.isDelete(deleteContext, props)))));
   }
 
   @Test

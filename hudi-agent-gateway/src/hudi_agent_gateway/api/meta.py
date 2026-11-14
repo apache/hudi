@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import time
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Request, Response
 
@@ -46,11 +47,12 @@ async def ready(request: Request, response: Response) -> ReadyResponse:
     state = request.app.state
     checks: dict[str, DependencyStatus] = {}
 
-    trino_ok = await state.trino_client.ping()
-    checks["trino"] = DependencyStatus(
-        ok=trino_ok,
-        detail="reachable" if trino_ok else
-        f"cannot reach trino at {state.settings.trino_host}:{state.settings.trino_port}",
+    lakehouse_ok = await state.lakehouse_client.ping()
+    backend = state.settings.sql_backend
+    checks[backend] = DependencyStatus(
+        ok=lakehouse_ok,
+        detail="reachable" if lakehouse_ok else
+        f"cannot query {backend}; check connection settings, client driver, and server logs",
     )
 
     llm_ok, llm_detail = await state.llm_readiness.check()
@@ -86,14 +88,25 @@ async def models(request: Request) -> ModelsResponse:
 @router.get("/v1/info", response_model=InfoResponse, response_model_by_alias=True)
 async def info(request: Request) -> InfoResponse:
     s = request.app.state.settings
+    lakehouse_url = f"http://{s.trino_host}:{s.trino_port}"
+    if s.sql_backend == "spark-connect":
+        uri = urlparse("http" + s.spark_connect_uri[2:])
+        host = uri.hostname or ""
+        if ":" in host:
+            host = f"[{host}]"
+        lakehouse_url = f"sc://{host}:{uri.port or 15002}"
     return InfoResponse(
         name="hudi-agent-gateway",
         version=__version__,
         provider=s.llm_provider,
         model=s.llm_model,
-        catalog=s.trino_catalog,
-        schema=s.trino_schema,
-        trino_url=f"http://{s.trino_host}:{s.trino_port}",
-        trino_ui_url=f"http://{s.trino_host}:{s.trino_port}/ui/",
+        catalog=s.lakehouse_catalog,
+        schema=s.lakehouse_schema,
+        sql_backend=s.sql_backend,
+        lakehouse_url=lakehouse_url,
+        trino_url=f"http://{s.trino_host}:{s.trino_port}" if s.sql_backend == "trino" else "",
+        trino_ui_url=(
+            f"http://{s.trino_host}:{s.trino_port}/ui/" if s.sql_backend == "trino" else ""
+        ),
         mcp_enabled=s.mcp_enabled,
     )

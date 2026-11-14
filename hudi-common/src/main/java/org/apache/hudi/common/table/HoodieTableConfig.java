@@ -701,10 +701,28 @@ public class HoodieTableConfig extends HoodieConfig {
         hoodieConfig.setValue(POPULATE_META_FIELDS,
             Boolean.toString(metaFieldsMode.toLegacyPopulateMetaFields()));
       }
+      getMissingKeyGeneratorClass(hoodieConfig).ifPresent(
+          keyGeneratorClass -> hoodieConfig.setValue(KEY_GENERATOR_CLASS_NAME, keyGeneratorClass));
 
       dropInvalidConfigs(hoodieConfig);
       storeProperties(hoodieConfig.getProps(), outputStream, propertyPath);
     }
+  }
+
+  /**
+   * Returns the key generator class that a table below version 8 records only through its key generator type.
+   * Hudi 0.x reads only the class, so such a table must carry it as well.
+   */
+  public static Option<String> getMissingKeyGeneratorClass(HoodieConfig config) {
+    if (!getTableVersion(config).lesserThan(HoodieTableVersion.EIGHT)
+        || config.contains(KEY_GENERATOR_CLASS_NAME) || !config.contains(KEY_GENERATOR_TYPE)) {
+      return Option.empty();
+    }
+    String keyGeneratorType = config.getString(KEY_GENERATOR_TYPE);
+    return Option.fromJavaOptional(Arrays.stream(KeyGeneratorType.values())
+        .filter(type -> type != KeyGeneratorType.USER_PROVIDED && type.name().equals(keyGeneratorType))
+        .map(KeyGeneratorType::getClassName)
+        .findFirst());
   }
 
   public static long generateChecksum(Properties props) {

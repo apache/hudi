@@ -23,6 +23,7 @@ on:
       - 'release-*'
     paths:
       - 'hudi-agent-gateway/**'
+      - 'hudi-ai-operator/**'
       - 'hudi-lakehouse/**'
       - '.github/workflows/agent_gateway_ci.yml'
   pull_request:
@@ -30,6 +31,7 @@ on:
       - master
     paths:
       - 'hudi-agent-gateway/**'
+      - 'hudi-ai-operator/**'
       - 'hudi-lakehouse/**'
       - '.github/workflows/agent_gateway_ci.yml'
 
@@ -41,9 +43,27 @@ permissions:
   contents: read
 
 jobs:
+  superset-spark-connect-tests:
+    name: Superset Spark Connect dialect tests (PyArrow ${{ matrix.pyarrow }})
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        pyarrow: ['16.1.0', '18.1.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: hudi-lakehouse/superset-spark-connect/pyproject.toml
+      - name: Install adapter
+        run: pip install ./hudi-lakehouse/superset-spark-connect 'pyarrow==${{ matrix.pyarrow }}'
+      - name: Run offline dialect tests
+        run: python -m unittest discover -s hudi-lakehouse/superset-spark-connect -p 'test_dialect.py' -v
+
   gateway-tests:
     name: gateway pytest + lint (python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -59,35 +79,59 @@ jobs:
           cache: pip
           cache-dependency-path: hudi-agent-gateway/pyproject.toml
       - name: Install
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,spark-connect]"
       - name: Fetch pinned Hudi Architect baseline
         run: >-
           git fetch --no-tags --depth=1 origin
           refs/tags/release-1.2.0:refs/tags/release-1.2.0
       - name: Validate Hudi Architect references
         run: |
-          python skills/hudi-architect/validate_config_keys.py
-          python skills/hudi-architect/validate_flink_capabilities.py --verify-source
-          python skills/hudi-architect/validate_flink_design.py \
+          python ../hudi-ai-operator/skills/hudi-architect/validate_config_keys.py
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py --verify-source
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py \
             --input tests/fixtures/hudi_architect/flink_pr2/stable_key.json \
             --emit-sql > /dev/null
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py \
+            --input tests/fixtures/hudi_architect/flink_pr3/mutable_cow.json \
+            --emit-sql > /dev/null
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py \
+            --input tests/fixtures/hudi_architect/flink_pr4/mutable_mor.json \
+            --emit-sql > /dev/null
+          python ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py \
+            --input tests/fixtures/hudi_architect/flink_pr5/compatible_mutable_cow.json
       - name: Test
         run: python -m pytest tests -q
       - name: Lint
         run: >-
           ruff check src tests
-          skills/hudi-architect/redact_sensitive_values.py
-          skills/hudi-architect/validate_flink_capabilities.py
-          skills/hudi-architect/validate_flink_design.py
+          ../hudi-ai-operator/skills/hudi-architect/redact_sensitive_values.py
+          ../hudi-ai-operator/skills/hudi-architect/flink_writer_contract.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py
       - name: Type-check
         run: >-
           mypy src
-          skills/hudi-architect/validate_flink_capabilities.py
-          skills/hudi-architect/validate_flink_design.py
+          ../hudi-ai-operator/skills/hudi-architect/flink_writer_contract.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_capabilities.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_design.py
+          ../hudi-ai-operator/skills/hudi-architect/validate_flink_existing_table.py
+      - name: Test guardrails with minimum sqlglot
+        # Read the lower bound from project metadata so this test follows future bumps.
+        run: |
+          sqlglot_min_requirement=$(python - <<'PY'
+          import tomllib
+          with open("pyproject.toml", "rb") as f:
+              dependencies = tomllib.load(f)["project"]["dependencies"]
+          print(next(dep for dep in dependencies if dep.startswith("sqlglot>=")).replace(">=", "==", 1))
+          PY
+          )
+          python -m pip install "$sqlglot_min_requirement"
+          python -m pytest tests/test_guardrails.py -q
 
   flink-sql-fixtures:
     name: Hudi 1.2.0 / Flink 1.20.1 SQL fixtures
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -104,9 +148,16 @@ jobs:
 
   chart-lint:
     name: helm lint + template
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Spark Connect chart contract tests
+        run: |
+          pip install PyYAML==6.0.3
+          python -m unittest discover -s hudi-lakehouse/tests -v
       # helm is preinstalled on GitHub-hosted ubuntu runners. Do NOT add
       # azure/setup-helm or other third-party actions here: the apache org
       # allowlist only permits GitHub-created actions (actions/*) and a
@@ -124,3 +175,7 @@ jobs:
               helm template "$chart" > /dev/null
             fi
           done
+          helm lint hudi-lakehouse/charts/hudi-agent-gateway \
+            -f hudi-lakehouse/charts/hudi-agent-gateway/values-spark-connect.yaml
+          helm template hudi-lakehouse/charts/hudi-agent-gateway \
+            -f hudi-lakehouse/charts/hudi-agent-gateway/values-spark-connect.yaml > /dev/null

@@ -306,10 +306,9 @@ public class FileStatsIndex implements ColumnStatsIndex {
 
       List<Tuple3> columnStats = alignedColumnRowsMap.values().stream().map(row -> {
         if (row == null) {
-          // NOTE: Since we're assuming missing column to essentially contain exclusively
-          //       null values, we set null-count to be equal to value-count (this behavior is
-          //       consistent with reading non-existent columns from Parquet)
-          return Tuple3.of(null, null, valueCount);
+          // Missing statistics do not imply all-null data. A null null-count marks
+          // unknown statistics so the probe can conservatively retain this candidate.
+          return Tuple3.of(null, null, null);
         } else {
           GenericRowData gr = (GenericRowData) row;
           return Tuple3.of(gr.getField(ORD_MIN_VAL), gr.getField(ORD_MAX_VAL), gr.getField(ORD_NULL_CNT));

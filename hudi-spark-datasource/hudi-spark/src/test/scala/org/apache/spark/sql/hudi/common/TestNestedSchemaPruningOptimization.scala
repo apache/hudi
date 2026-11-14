@@ -344,7 +344,10 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
   test("Nested struct predicate pushdown with schema on read and a renamed nested column") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+        // NOTE: Row-based reads, since the vectorized reader cannot read a nested type change: the base file
+        //       keeps the old layout of item, so ParquetSchemaEvolutionUtils.getFileReadConf rejects the read
+        withSQLConf("hoodie.schema.on.read.enable" -> "true",
+          SQLConf.PARQUET_VECTORIZED_READER_ENABLED.key -> "false") {
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
 
@@ -373,9 +376,11 @@ class TestNestedSchemaPruningOptimization extends HoodieSparkSqlTestBase {
   test("Nested struct predicate pushdown with schema on read and quoted column names") {
     withTempDir { tmp =>
       Seq("cow", "mor").foreach { tableType =>
-        // NOTE: A top-level rename fails the incoming-schema check unless column drops are allowed
+        // NOTE: A top-level rename fails the incoming-schema check unless column drops are allowed. The nested
+        //       rename needs row-based reads, as in the renamed nested column test above.
         withSQLConf("hoodie.schema.on.read.enable" -> "true",
-          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true") {
+          "hoodie.datasource.write.schema.allow.auto.evolution.column.drop" -> "true",
+          SQLConf.PARQUET_VECTORIZED_READER_ENABLED.key -> "false") {
           val tableName = generateTableName
           val tablePath = s"${tmp.getCanonicalPath}/$tableName"
           // Names that are not plain identifiers reach the reader backtick-quoted (`名字`,

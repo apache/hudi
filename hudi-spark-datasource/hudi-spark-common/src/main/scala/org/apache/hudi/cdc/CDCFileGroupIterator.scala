@@ -248,7 +248,10 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     org.apache.hudi.common.util.Option.of(parquetSchema)
   }
 
-  private lazy val nativeCdcImageConverter = new InternalRowToJsonStringConverter(cdcDataSparkSchema)
+  private lazy val cdcImageConverter = new InternalRowToJsonStringConverter(cdcDataSparkSchema)
+
+  private lazy val inlineCdcImageDeserializer = sparkAdapter.createAvroDeserializer(
+    HoodieSchemaUtils.removeMetadataFields(schema), cdcDataSparkSchema)
 
   private def needLoadNextFile: Boolean = {
     !recordIter.hasNext &&
@@ -627,7 +630,7 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
   private def cdcRecordImageToJson(record: HoodieCDCLogRecord[_], ordinal: Int): UTF8String = {
     if (record.isNative) {
       val image = record.getEngineImage(ordinal, cdcDataSparkSchema.length).asInstanceOf[InternalRow]
-      if (image == null) null else nativeCdcImageConverter.convert(image)
+      if (image == null) null else cdcImageConverter.convert(image)
     } else {
       recordToJsonAsUTF8String(record.getAvroImage(ordinal).asInstanceOf[GenericRecord])
     }
@@ -664,7 +667,8 @@ class CDCFileGroupIterator(split: HoodieCDCFileGroupSplit,
     if (record == null) {
       null
     } else {
-      convertToUTF8String(HoodieCDCUtils.recordToJson(record))
+      val row = inlineCdcImageDeserializer.deserialize(record).get.asInstanceOf[InternalRow]
+      cdcImageConverter.convert(row)
     }
   }
 

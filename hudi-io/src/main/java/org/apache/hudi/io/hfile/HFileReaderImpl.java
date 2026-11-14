@@ -149,7 +149,7 @@ public class HFileReaderImpl implements HFileReader {
           currentDataBlockEntry = Option.of(floorEntry.getValue());
           currentDataBlock = Option.of(instantiateHFileDataBlock(currentDataBlockEntry.get()));
           cursor.setOffset(
-              (int) currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
+              currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
         }
       }
       if (!currentDataBlockEntry.get().getNextBlockFirstKey().isPresent()) {
@@ -170,7 +170,7 @@ public class HFileReaderImpl implements HFileReader {
       }
 
       return currentDataBlock.get()
-          .seekTo(cursor, key, (int) currentDataBlockEntry.get().getOffset());
+          .seekTo(cursor, key, currentDataBlockEntry.get().getOffset());
     }
     if (compareCurrent == 0) {
       return SEEK_TO_FOUND;
@@ -207,9 +207,9 @@ public class HFileReaderImpl implements HFileReader {
       return false;
     }
     // Move the current position to the beginning of the first data block
-    cursor.setOffset(dataBlockIndexEntryMap.firstKey().getOffset() + HFILEBLOCK_HEADER_SIZE);
-    cursor.unsetEof();
     currentDataBlockEntry = Option.of(dataBlockIndexEntryMap.firstEntry().getValue());
+    cursor.setOffset(currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
+    cursor.unsetEof();
     // The data block will be read when {@link #getKeyValue} is called
     currentDataBlock = Option.empty();
     return true;
@@ -221,7 +221,7 @@ public class HFileReaderImpl implements HFileReader {
       if (!currentDataBlock.isPresent()) {
         currentDataBlock = Option.of(instantiateHFileDataBlock(currentDataBlockEntry.get()));
       }
-      if (currentDataBlock.get().next(cursor, (int) currentDataBlockEntry.get().getOffset())) {
+      if (currentDataBlock.get().next(cursor, currentDataBlockEntry.get().getOffset())) {
         // The position is advanced by the data block instance
         return true;
       }
@@ -231,7 +231,7 @@ public class HFileReaderImpl implements HFileReader {
         cursor.setEof();
         return false;
       }
-      cursor.setOffset((int) currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
+      cursor.setOffset(currentDataBlockEntry.get().getOffset() + HFILEBLOCK_HEADER_SIZE);
       return true;
     }
     return false;
@@ -247,7 +247,7 @@ public class HFileReaderImpl implements HFileReader {
         }
         keyValue =
             Option.of(currentDataBlock.get().readKeyValue(
-                cursor.getOffset() - (int) currentDataBlockEntry.get().getOffset()));
+                (int) (cursor.getOffset() - currentDataBlockEntry.get().getOffset())));
         cursor.setKeyValue(keyValue.get());
       }
       return keyValue;

@@ -116,8 +116,9 @@ object DataSourceReadOptions {
     .sinceVersion("0.9.0")
     .withDocumentation("Required when `" + QUERY_TYPE.key() + "` is set to `" + QUERY_TYPE_INCREMENTAL_OPT_VAL + "`. "
       + "Represents the completion time to start incrementally pulling data from. The completion time here need not necessarily "
-      + "correspond to an instant on the timeline. New data written with completion_time >= START_COMMIT are fetched out. "
-      + "For e.g: ‘20170901080000’ will get all new data written on or after Sep 1, 2017 08:00AM.")
+      + "correspond to an instant on the timeline. New data written with completion_time > START_COMMIT are fetched out, "
+      + "i.e. the start is exclusive while `hoodie.datasource.read.end.instanttime` is inclusive. "
+      + "For e.g: ‘20170901080000’ will get all new data written after Sep 1, 2017 08:00AM.")
 
   val END_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.end.instanttime")
@@ -637,7 +638,9 @@ object DataSourceWriteOptions {
     .defaultValue("3")
     .markAdvanced()
     .sinceVersion("0.9.0")
-    .withDocumentation("Config to indicate how many times streaming job should retry for a failed micro batch.")
+    .withDocumentation("Config to indicate how many times streaming job should retry for a failed micro batch. "
+      + "When attempts are exhausted and failed batches are not ignored, the streaming query fails with an exception. "
+      + "The driver JVM remains running; the caller is responsible for restarting the query.")
 
   val STREAMING_RETRY_INTERVAL_MS: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.write.streaming.retry.interval.ms")
@@ -1110,7 +1113,7 @@ object DataSourceOptionsHelper {
       case (key, _) =>
         key.startsWith(SPARK_HOODIE_PREFIX) || (includeHoodiePrefix && key.startsWith(HOODIE_PREFIX))
     }
-    normalizeSparkHoodiePrefix(sparkConfs) ++ optParams
+    normalizeSparkHoodiePrefix(sparkConfs) ++ normalizeSparkHoodiePrefix(optParams)
   }
 
   /**

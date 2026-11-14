@@ -31,6 +31,7 @@ import org.apache.hudi.testutils.SparkClientFunctionalTestHarness
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{DataFrame, SaveMode}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -307,6 +308,33 @@ class TestIncrementalReadWithFileGroupReader extends SparkClientFunctionalTestHa
     assertFullTableScanRange(metaClient, useLegacyRdd, "000", c5Boundary, expectedThroughC5)
     assertFullTableScanRange(metaClient, useLegacyRdd, c3Boundary, c5Boundary,
       Set(("k1", 5), ("k2", 4), ("k3", 5), ("k4", 5)))
+  }
+
+  // MOR incremental scans never read vectorized. That decision belongs to the scan alone: it used to be
+  // written into spark.sql.parquet.enableVectorizedReader, so every later read in the session lost
+  // vectorization.
+  @Test
+  def testMorIncrementalReadDoesNotMutateVectorizedReaderSessionConf(): Unit = {
+    val vectorizedReaderConf = "spark.sql.parquet.enableVectorizedReader"
+    val previous = spark.conf.getOption(vectorizedReaderConf)
+    try {
+      spark.conf.set(vectorizedReaderConf, "true")
+      write(batches.head._1, "MERGE_ON_READ", 8, batches.head._2, SaveMode.Overwrite)
+
+      val metaClient = HoodieTableMetaClient.builder()
+        .setConf(storageConf().newInstance()).setBasePath(basePath()).build()
+      val instant = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
+        .lastInstant().get().getCompletionTime
+
+      assertEquals(batches.head._1.size, readIncremental(8, "000", instant).collect().length)
+      assertTrue(spark.conf.get(vectorizedReaderConf).toBoolean,
+        "MOR incremental read must preserve the session vectorized-reader setting")
+    } finally {
+      previous match {
+        case Some(value) => spark.conf.set(vectorizedReaderConf, value)
+        case None => spark.conf.unset(vectorizedReaderConf)
+      }
+    }
   }
 
   private def assertFullTableScanRange(metaClient: HoodieTableMetaClient,

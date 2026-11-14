@@ -165,8 +165,8 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
       // This log is important to indicate the consuming process,
       // there is only one log message for one data bucket.
       log.info("Processing input split : {}", split);
+      readMetrics.startSplit(String.valueOf(split.getSplitNumber()), split.getLatestCommit());
       format.open(split);
-      readMetrics.setSplitLatestCommit(split.getLatestCommit());
     }
 
     try {
@@ -196,6 +196,7 @@ public class StreamReadOperator extends AbstractStreamOperator<RowData>
       } else {
         // close the input format
         format.close();
+        readMetrics.finishSplit(String.valueOf(split.getSplitNumber()));
         // remove the split
         splits.poll();
         break;

@@ -200,6 +200,18 @@ class TestDataSourceOptions {
   }
 
   @Test
+  def testPrefixedExplicitOptionsOverrideSessionConfs(): Unit = {
+    val sqlContext = mock(classOf[SQLContext])
+    when(sqlContext.getAllConfs).thenReturn(Map(
+      "spark.hoodie.datasource.write.operation" -> "insert"
+    ))
+    val result = DataSourceOptionsHelper.collectSparkHoodieConfs(sqlContext, Map(
+      "spark.hoodie.datasource.write.operation" -> "delete"
+    ))
+    assertEquals(Map("hoodie.datasource.write.operation" -> "delete"), result)
+  }
+
+  @Test
   def testWriteDefaultsSupportSparkHoodieConfigs(): Unit = {
     val params = HoodieWriterUtils.parametersWithWriteDefaults(Map(
       "spark.hoodie.datasource.write.operation" -> "upsert"

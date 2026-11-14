@@ -55,6 +55,7 @@
     <module>packaging/hudi-gcp-bundle</module>
     <module>packaging/hudi-azure-bundle</module>
     <module>packaging/hudi-spark-bundle</module>
+    <module>packaging/hudi-spark-native-bundle</module>
     <module>packaging/hudi-presto-bundle</module>
     <module>packaging/hudi-utilities-bundle</module>
     <module>packaging/hudi-utilities-slim-bundle</module>
@@ -195,6 +196,7 @@
     <spark40.version>4.0.2</spark40.version>
     <spark41.version>4.1.1</spark41.version>
     <spark42.version>4.2.0</spark42.version>
+    <datafusion.comet.version>1.1.0</datafusion.comet.version>
     <hudi.spark.module>hudi-spark3.5.x</hudi.spark.module>
     <hudi.spark.common.module>hudi-spark3-common</hudi.spark.common.module>
     <avro.version>1.11.4</avro.version>
@@ -271,6 +273,8 @@
     <vortex.version>0.76.0</vortex.version>
     <vortex.spark.artifact>vortex-spark_${scala.binary.version}</vortex.spark.artifact>
     <vortex.skip.tests>false</vortex.skip.tests>
+    <!-- Spark-version specific sources of hudi-spark-common: Spark 3.4+ by default, overridden by the spark3.3 profile -->
+    <hudi.spark.common.version.source>src/main/scala-spark3.4plus</hudi.spark.common.version.source>
     <!-- The following properties are only used for Jacoco coverage report aggregation -->
     <copy.files>false</copy.files>
     <copy.files.target.dir>${maven.multiModuleProjectDirectory}</copy.files.target.dir>
@@ -2729,6 +2733,7 @@
         <lance.skip.tests>true</lance.skip.tests>
         <!-- Vortex: Skip tests for Spark 3.3 due to lack of support -->
         <vortex.skip.tests>true</vortex.skip.tests>
+        <hudi.spark.common.version.source>src/main/scala-spark3.3</hudi.spark.common.version.source>
         <!-- NOTE: Some Hudi modules require standalone Parquet/Orc/etc file-format dependency (hudi-hive-sync,
                    hudi-hadoop-mr, for ex). Since these Hudi modules might be used from w/in the execution engine(s)
                    bringing these file-formats as dependencies as well, we need to make sure that versions are

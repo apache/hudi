@@ -60,6 +60,14 @@ public class ColumnStatsProbe implements Serializable {
    * @return true if the index row should be considered as a candidate
    */
   public boolean test(RowData indexRow, RowType.RowField[] queryFields) {
+    // Retain candidates with missing column statistics rather than treating unknown values as nulls.
+    for (int i = 0; i < queryFields.length; i++) {
+      // The row starts with file name and value count, followed by (min, max, null count) per column.
+      // Skip the two leading fields and i triples, then use offset 2 to check this column's null count.
+      if (indexRow.isNullAt(2 + i * 3 + 2)) {
+        return true;
+      }
+    }
     Map<String, ColumnStats> columnStatsMap = convertColumnStats(indexRow, queryFields);
     for (ExpressionEvaluators.Evaluator evaluator : evaluators) {
       if (!evaluator.eval(columnStatsMap)) {

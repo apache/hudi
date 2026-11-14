@@ -142,12 +142,14 @@ public class ExpressionUtils {
   /**
    * Returns the value with given value literal expression.
    *
-   * <p>Returns null if the value can not parse as the output data type correctly,
-   * should call {@code ValueLiteralExpression.isNull} first to decide whether
-   * the literal is NULL.
+   * <p>Returns null for NULL literals or if the value cannot be parsed as the output data type.
+   * Use {@code ValueLiteralExpression.isNull} to distinguish a NULL literal from a conversion failure.
    */
   @Nullable
   public static Object getValueFromLiteral(ValueLiteralExpression expr) {
+    if (expr.isNull()) {
+      return null;
+    }
     LogicalType logicalType = expr.getOutputDataType().getLogicalType();
     switch (logicalType.getTypeRoot()) {
       case TIMESTAMP_WITHOUT_TIME_ZONE:

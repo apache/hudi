@@ -93,7 +93,7 @@ public class FileIndex implements Serializable, AutoCloseable {
     this.partitionPruner = Option.ofNullable(partitionPruner);
     this.fileStatsIndex = new FileStatsIndex(path.toString(), rowType, conf, metaClient);
     this.partitionBucketIdFunc = partitionBucketIdFunc;
-    List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
+    List<ExpressionEvaluators.Evaluator> evaluators = Option.ofNullable(this.colStatsProbe).map(ColumnStatsProbe::getEvaluators).orElse(Collections.emptyList());
     this.recordLevelIndex = BaseRecordLevelIndex.create(path.toString(), conf, metaClient, evaluators, rowType);
     this.metaClient = metaClient;
   }

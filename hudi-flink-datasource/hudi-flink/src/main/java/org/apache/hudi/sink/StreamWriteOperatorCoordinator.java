@@ -98,16 +98,21 @@ import static org.apache.hudi.util.StreamerUtil.initTableIfNotExists;
  *
  * <p>Task failover workflow:
  * <pre>
- *             task failover
- *                  |
- *           initially started ?
- *            /(yes)     \(no)
- *           /            \
- *       has pending      send an empty
- *     instant event ?    bootstrap event
- *        /(yes)  \(no)
- *       /         \
- *    resend      no-op
+ *                task failover
+ *                     |
+ *       restored pending instant event ?
+ *               /(yes)     \(no)
+ *              /            \
+ *       resend metadata     |
+ *       on every attempt    |
+ *              \           /
+ *               \         /
+ *               attempt > 0 ?
+ *               /(yes)     \(no)
+ *              /           \
+ *       send an empty      no-op
+ *       bootstrap event
+ *       to clear legacy events
  * </pre>
  *
  * @see StreamWriteFunction         for the data inputs checkpointing and semantics
@@ -422,11 +427,9 @@ public class StreamWriteOperatorCoordinator
     long checkpointId = request.getCheckpointId();
     // Existing instants must remain available while another checkpoint's creation is blocked.
     Pair<String, EventBuffer> instantTimeAndEventBuffer = this.eventBuffers.getInstantAndEventBuffer(checkpointId);
-    if (instantTimeAndEventBuffer == null && !instantRequestExecutor.hasRunningTasks()) {
+    if (instantTimeAndEventBuffer == null && !isInstantCreationBlocked(checkpointId) && !instantRequestExecutor.hasRunningTasks()) {
       instantRequestExecutor.execute(() -> {
-        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null) {
-          // Wait until previous instants are committed.
-          eventBuffers.awaitAllInstantsToCompleteIfNecessary();
+        if (this.eventBuffers.getInstantAndEventBuffer(checkpointId) == null && !isInstantCreationBlocked(checkpointId)) {
           this.eventBuffers.initNewEventBuffer(checkpointId, startInstant());
         }
       }, "request instant time");
@@ -434,6 +437,14 @@ public class StreamWriteOperatorCoordinator
     }
     String instantTime = instantTimeAndEventBuffer == null ? null : instantTimeAndEventBuffer.getLeft();
     return CompletableFuture.completedFuture(CoordinationResponseSerDe.wrap(Correspondent.InstantTimeResponse.getInstance(instantTime)));
+  }
+
+  /**
+   * Defers new instant creation while an earlier checkpoint has a pending instant, even without write metadata events.
+   * Later checkpoints belong to an abandoned attempt when a writer requests an earlier checkpoint after recovery.
+   */
+  private boolean isInstantCreationBlocked(long checkpointId) {
+    return OptionsResolver.isBlockingInstantGeneration(conf) && !eventBuffers.getPendingInstantsBefore(checkpointId).isEmpty();
   }
 
   private CompletableFuture<CoordinationResponse> handleInFlightInstantsRequest(Correspondent.InflightInstantsRequest request) {
@@ -464,8 +475,7 @@ public class StreamWriteOperatorCoordinator
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
-    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup());
-    this.hiveSyncMetrics.registerMetrics();
+    this.hiveSyncMetrics = FlinkHiveSyncMetrics.register(context.metricGroup(), hiveSyncContext.isDetailedMetricsEnabled());
   }
 
   private void syncHiveAsync() {
@@ -486,17 +496,37 @@ public class StreamWriteOperatorCoordinator
    */
   public void doSyncHive() {
     HoodieTimer timer = HoodieTimer.start();
-    try (HiveSyncTool syncTool = hiveSyncContext.hiveSyncTool()) {
+    try (HiveSyncTool syncTool = createHiveSyncTool()) {
       if (!syncTool.isSyncClientInitialized()) {
         hiveSyncMetrics.markSyncFailed(timer.endTimer());
         return;
       }
-      syncTool.syncHoodieTable();
+      try {
+        syncTool.syncHoodieTable();
+      } finally {
+        hiveSyncMetrics.updateSyncMetrics(syncTool.getSyncMetrics());
+      }
     } catch (Throwable t) {
       hiveSyncMetrics.markSyncFailed(timer.endTimer());
       throw t;
     }
     hiveSyncMetrics.markSyncSucceeded(timer.endTimer());
+  }
+
+  /**
+   * Builds the sync tool. With detailed metrics enabled, records how long that took even when it
+   * fails, as when the metastore cannot be reached.
+   */
+  private HiveSyncTool createHiveSyncTool() {
+    if (!hiveSyncContext.isDetailedMetricsEnabled()) {
+      return hiveSyncContext.hiveSyncTool();
+    }
+    HoodieTimer timer = HoodieTimer.start();
+    try {
+      return hiveSyncContext.hiveSyncTool();
+    } finally {
+      hiveSyncMetrics.updateInitDuration(timer.endTimer());
+    }
   }
 
   private void scheduleTableServices(Boolean committed) {
@@ -587,11 +617,17 @@ public class StreamWriteOperatorCoordinator
       this.eventBuffers.cleanLegacyEvents(event);
       return;
     }
-    EventBuffer eventBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
-    eventBuffer.addBootstrapEvent(event);
-    if (eventBuffer.allBootstrapEventsReceived()) {
+    // The writer may have observed a pending instant before its normal commit finished.
+    // Do not recreate the committed buffer when that bootstrap event arrives later.
+    if (this.eventBuffers.getEventBuffer(event.getCheckpointId()) == null
+        && this.metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(event.getInstantTime())) {
+      return;
+    }
+    EventBuffer bootstrapBuffer = this.eventBuffers.getOrCreateBootstrapBuffer(event);
+    bootstrapBuffer.addBootstrapEvent(event);
+    if (bootstrapBuffer.allBootstrapEventsReceived()) {
       // start to recommit the instant.
-      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), eventBuffer);
+      boolean committed = recommitInstant(event.getCheckpointId(), event.getInstantTime(), bootstrapBuffer);
       if (committed && tableState.isRecordLevelIndex) {
         context.failJob(new HoodieException("There are pending instants recommitted on job restart,"
             + "triggering a global failover so that RLI bootstrap operator can load the record level index completely."));

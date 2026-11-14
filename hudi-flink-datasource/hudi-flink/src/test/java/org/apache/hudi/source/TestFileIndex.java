@@ -29,6 +29,7 @@ import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.keygen.NonpartitionedAvroKeyGenerator;
 import org.apache.hudi.source.prune.ColumnStatsProbe;
 import org.apache.hudi.source.prune.PartitionPruners;
+import org.apache.hudi.source.stats.BaseRecordLevelIndex;
 import org.apache.hudi.source.stats.FileStatsIndex;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
@@ -89,6 +90,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.mockStatic;
@@ -353,6 +355,54 @@ public class TestFileIndex {
 
     List<String> p = fileIndex.getOrBuildPartitionPaths();
     assertEquals(Arrays.asList("par3"), p);
+  }
+
+  @Test
+  void testRecordLevelIndexRespectsDataSkipping() throws Exception {
+    DataType dataType = TestConfigurations.ROW_DATA_TYPE_WITH_ATOMIC_TYPES;
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath(), dataType);
+    conf.set(FlinkOptions.TABLE_TYPE, FlinkOptions.TABLE_TYPE_COPY_ON_WRITE);
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.RECORD_KEY_FIELD, "f_str");
+    conf.setString(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key(), "true");
+    TestData.writeData(TestData.DATA_SET_WITH_ATOMIC_TYPES, conf);
+
+    HoodieTableMetaClient metaClient = StreamerUtil.createMetaClient(conf);
+    CallExpression filter = CallExpression.permanent(
+        BuiltInFunctionDefinitions.EQUALS,
+        Arrays.asList(
+            new FieldReferenceExpression("f_str", DataTypes.STRING(), 0, 0),
+            new ValueLiteralExpression("str1", DataTypes.STRING().notNull())),
+        DataTypes.BOOLEAN());
+    ColumnStatsProbe probe = ColumnStatsProbe.newInstance(Collections.singletonList(filter));
+
+    for (boolean dataSkipping : new boolean[] {true, false}) {
+      conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, dataSkipping);
+      try (FileIndex fileIndex = FileIndex.builder()
+          .path(new StoragePath(tempFile.getAbsolutePath()))
+          .conf(conf)
+          .rowType((RowType) dataType.getLogicalType())
+          .metaClient(metaClient)
+          .columnStatsProbe(probe)
+          .build()) {
+        assertThat(getFilteredFileSlices(metaClient, fileIndex).size(), is(dataSkipping ? 1 : 3));
+      }
+    }
+
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_ENABLED, false);
+    try (MockedStatic<BaseRecordLevelIndex> recordIndex = mockStatic(BaseRecordLevelIndex.class, CALLS_REAL_METHODS);
+         FileIndex fileIndex = FileIndex.builder()
+             .path(new StoragePath(tempFile.getAbsolutePath()))
+             .conf(conf)
+             .rowType((RowType) dataType.getLogicalType())
+             .metaClient(metaClient)
+             .columnStatsProbe(probe)
+             .build()) {
+      recordIndex.verify(() -> BaseRecordLevelIndex.create(
+          eq(tempFile.getAbsolutePath()), eq(conf), eq(metaClient), eq(Collections.emptyList()), eq((RowType) dataType.getLogicalType())));
+      assertThat(getFilteredFileSlices(metaClient, fileIndex).size(), is(3));
+    }
   }
 
   @ParameterizedTest

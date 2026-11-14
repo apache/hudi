@@ -311,12 +311,12 @@ public class SparkClientFunctionalTestHarness implements SparkProvider, HoodieMe
     TableFileSystemView.BaseFileOnlyView roView =
         getHoodieTableFileSystemView(reloadedMetaClient,
             reloadedMetaClient.getCommitTimeline().filterCompletedInstants(), allFiles);
-    Stream<HoodieBaseFile> dataFilesToRead = roView.getLatestBaseFiles();
-    assertTrue(!dataFilesToRead.findAny().isPresent());
+    Stream<HoodieBaseFile> baseFilesToRead = roView.getLatestBaseFiles();
+    assertTrue(!baseFilesToRead.findAny().isPresent());
 
     roView = getHoodieTableFileSystemView(reloadedMetaClient, hoodieTable.getCompletedCommitsTimeline(), allFiles);
-    dataFilesToRead = roView.getLatestBaseFiles();
-    return dataFilesToRead;
+    baseFilesToRead = roView.getLatestBaseFiles();
+    return baseFilesToRead;
   }
 
   protected void updateRecordsInMORTable(HoodieTableMetaClient metaClient, List<HoodieRecord> records, SparkRDDWriteClient client, HoodieWriteConfig cfg, String commitTime) throws IOException {
