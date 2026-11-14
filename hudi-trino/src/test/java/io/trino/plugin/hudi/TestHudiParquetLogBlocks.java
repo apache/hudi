@@ -46,6 +46,8 @@ public class TestHudiParquetLogBlocks
     {
         return HudiQueryRunner.builder()
                 .setDataLoader(new ParquetLogBlockHudiTablesInitializer())
+                // A split scheduled on the coordinator reads through its metadata file cache, which skips the traced reads
+                .addConnectorProperty("hudi.metadata.cache.enabled", "false")
                 .build();
     }
 
