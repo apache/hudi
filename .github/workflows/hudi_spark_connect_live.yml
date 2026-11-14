@@ -11,10 +11,11 @@ jobs:
   live-acceptance:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    env:
-      KUBECONFIG: ${{ runner.temp }}/hudi-connect-kubeconfig
     steps:
       - uses: actions/checkout@v5
+      # The runner context is not available in job-level env, so set KUBECONFIG from a step.
+      - name: Set KUBECONFIG
+        run: echo "KUBECONFIG=$RUNNER_TEMP/hudi-connect-kubeconfig" >> "$GITHUB_ENV"
       - name: Check runner tools
         run: |
           set -euo pipefail
