@@ -122,6 +122,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     super.setupTest();
     TestErrorTable.commited = new HashMap<>();
     TestErrorTable.errorEvents = new ArrayList<>();
+    TestErrorTable.receivedErrorEvents = new ArrayList<>();
     useSchemaProvider = false;
     hasTransformer = false;
     withErrorTable = false;
@@ -358,6 +359,8 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
   public static class TestErrorTable extends BaseErrorTableWriter {
 
     public static List<JavaRDD> errorEvents = new ArrayList<>();
+    // Every error event handed to this writer, kept across upserts so a test can inspect the records.
+    public static List<JavaRDD> receivedErrorEvents = new ArrayList<>();
     public static Map<String,Option<JavaRDD>> commited = new HashMap<>();
     // This instant time is only used for separate upsert and commit calls
     // to maintain the instant time for the error table
@@ -371,6 +374,7 @@ public class TestHoodieDeltaStreamerSchemaEvolutionBase extends HoodieDeltaStrea
     @Override
     public void addErrorEvents(JavaRDD errorEvent) {
       errorEvents.add(errorEvent);
+      receivedErrorEvents.add(errorEvent);
     }
 
     @Override
