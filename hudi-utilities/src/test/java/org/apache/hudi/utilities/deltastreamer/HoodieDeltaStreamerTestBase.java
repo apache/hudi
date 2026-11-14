@@ -19,12 +19,15 @@
 
 package org.apache.hudi.utilities.deltastreamer;
 
+import org.apache.hudi.DefaultSparkRecordMerger;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.common.config.HoodieCommonConfig;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
@@ -40,9 +43,9 @@ import org.apache.hudi.common.util.TestAvroOrcUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
-import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
@@ -280,7 +283,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     props.setProperty("hoodie.streamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
 
     // Hive Configs
-    props.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), HiveTestService.HS2_JDBC_URL);
+    props.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
     props.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "hive_trips");
     props.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
@@ -321,7 +324,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   protected static void populateCommonHiveProps(TypedProperties props) {
     // Hive Configs
-    props.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), HiveTestService.HS2_JDBC_URL);
+    props.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
     props.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb2");
     props.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
     props.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
@@ -994,5 +997,51 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   protected void syncOnce(HoodieStreamer.Config cfg, Option<TypedProperties> properties) throws Exception {
     syncOnce(new HoodieStreamer(cfg, jsc, properties));
+  }
+
+  protected void addRecordMerger(HoodieRecordType type, List<String> hoodieConfig) {
+    if (type == HoodieRecordType.SPARK) {
+      Map<String, String> opts = new HashMap<>();
+      opts.put(HoodieWriteConfig.RECORD_MERGE_IMPL_CLASSES.key(), DefaultSparkRecordMerger.class.getName());
+      opts.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
+      opts.put(HoodieWriteConfig.RECORD_MERGE_MODE.key(), RecordMergeMode.EVENT_TIME_ORDERING.name());
+      for (Map.Entry<String, String> entry : opts.entrySet()) {
+        hoodieConfig.add(String.format("%s=%s", entry.getKey(), entry.getValue()));
+      }
+      hudiOpts.putAll(opts);
+    }
+  }
+
+  protected void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName) throws IOException {
+    prepareJsonKafkaDFSSource(propsFileName, autoResetValue, topicName, null, false);
+  }
+
+  protected void prepareJsonKafkaDFSSource(String propsFileName, String autoResetValue, String topicName, Map<String, String> extraProps, boolean shouldAddOffsets) throws IOException {
+    // Properties used for testing delta-streamer with JsonKafka source
+    TypedProperties props = new TypedProperties();
+    populateAllCommonProps(props, basePath, testUtils.brokerAddress());
+    props.setProperty("include", "base.properties");
+    props.setProperty("hoodie.embed.timeline.server", "false");
+    props.setProperty("hoodie.datasource.write.recordkey.field", "_row_key");
+    props.setProperty("hoodie.datasource.write.partitionpath.field", "driver");
+    props.setProperty("hoodie.streamer.source.dfs.root", JSON_KAFKA_SOURCE_ROOT);
+    props.setProperty("hoodie.streamer.source.kafka.topic", topicName);
+    props.setProperty("hoodie.streamer.source.kafka.checkpoint.type", kafkaCheckpointType);
+    props.setProperty("hoodie.streamer.schemaprovider.source.schema.file", basePath + "/source_uber.avsc");
+    props.setProperty("hoodie.streamer.schemaprovider.target.schema.file", basePath + "/target_uber.avsc");
+    props.setProperty("auto.offset.reset", autoResetValue);
+    if (extraProps != null && !extraProps.isEmpty()) {
+      extraProps.forEach(props::setProperty);
+    }
+    props.setProperty(HoodieStreamerConfig.KAFKA_APPEND_OFFSETS.key(),
+        Boolean.toString(shouldAddOffsets));
+    UtilitiesTestBase.Helpers.savePropsToDFS(props, storage, basePath + "/" + propsFileName);
+  }
+
+  protected void syncAndAssertRecordCount(HoodieDeltaStreamer.Config cfg, Integer expected, String tableBasePath, String metadata, Integer totalCommits) throws Exception {
+    syncOnce(cfg);
+    assertRecordCount(expected, tableBasePath, sqlContext);
+    assertDistanceCount(expected, tableBasePath, sqlContext);
+    TestHelpers.assertCommitMetadata(metadata, tableBasePath, totalCommits);
   }
 }
