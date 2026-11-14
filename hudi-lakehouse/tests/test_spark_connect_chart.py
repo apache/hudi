@@ -64,6 +64,19 @@ class ConnectChartTest(unittest.TestCase):
         self.assertFalse(pod["automountServiceAccountToken"])
         self.assertTrue(pod["securityContext"]["runAsNonRoot"])
 
+    def test_optional_sql_readiness_requires_safe_probe_table(self):
+        pod = render()["Deployment"]["spec"]["template"]["spec"]
+        self.assertEqual(pod["containers"][0]["readinessProbe"]["tcpSocket"]["port"], "connect")
+        config = {"readiness": {"sql": {"enabled": True, "schema": "probe_db", "table": "probe", "column": "id"}}}
+        pod = render(config)["Deployment"]["spec"]["template"]["spec"]
+        probe = pod["containers"][0]["readinessProbe"]
+        self.assertEqual(probe["exec"]["command"], ["python3", "/opt/spark/check-ready.py",
+                         "--schema", "probe_db", "--table", "probe", "--column", "id"])
+        self.assertEqual(probe["timeoutSeconds"], 30)
+        for invalid in ("", "bad;drop", "catalog.schema"):
+            config["readiness"]["sql"]["table"] = invalid
+            render(config, success=False)
+
     def test_scratch_volume_size_limit(self):
         for size, expected in (("", {}), ("20Gi", {"sizeLimit": "20Gi"})):
             with self.subTest(size=size):

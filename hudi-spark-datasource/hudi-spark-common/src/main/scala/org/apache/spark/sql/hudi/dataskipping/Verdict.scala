@@ -1,0 +1,84 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.spark.sql.hudi.dataskipping
+
+import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, IsNull, LessThan, LessThanOrEqual, Literal, Not, Or, PredicateHelper, StartsWith}
+import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
+import org.apache.spark.unsafe.types.UTF8String
+
+/**
+ * Stage 4 (Verdict): given the term's range in a file, could any row of the file pass `term OP value`?
+ *
+ * Invariant: TRUE whenever unsure. A negated op (NotEq / NotIn / NotStartsWith) only drops a file
+ * whose every value fails, which is NOT the negation of the positive verdict.
+ */
+object Verdict extends PredicateHelper {
+
+  def apply(leaf: Leaf, r: TermRange): Expression = leaf.op match {
+    case Op.Eq => mayContain(r, single(leaf))
+    // Only a file holding nothing but `value` fails `term != value`
+    case Op.NotEq => Not(onlyContains(r, single(leaf)))
+
+    case Op.Lt => LessThan(r.lo, single(leaf))
+    case Op.LtEq => LessThanOrEqual(r.lo, single(leaf))
+    case Op.Gt => GreaterThan(r.hi, single(leaf))
+    case Op.GtEq => GreaterThanOrEqual(r.hi, single(leaf))
+
+    case Op.In => anyOf(leaf.values.map(v => mayContain(r, v)))
+    case Op.InSet(values) => anyOf(values.toSeq.map(toLiteral).map(v => mayContain(r, v)))
+    case Op.NotIn => Not(anyOf(leaf.values.map(v => onlyContains(r, v))))
+
+    // Bug #20430: checks `lo <= p AND hi >= p`, which drops a file whose min extends `p` (min 'abcd' > 'abc')
+    case Op.StartsWith => mayContain(r, single(leaf))
+    case Op.NotStartsWith =>
+      val prefix = single(leaf)
+      Not(And(StartsWith(r.lo, prefix), StartsWith(r.hi, prefix)))
+
+    // A NULL null-count means the file holds no stats for the column, so it may hold NULLs
+    case Op.IsNull => r.nulls match {
+      case Some(nulls) => Or(IsNull(nulls), GreaterThan(nulls, Literal(0)))
+      case None => TrueLiteral
+    }
+    case Op.IsNotNull => (r.nulls, r.rows) match {
+      case (Some(nulls), Some(rows)) => Or(Or(IsNull(nulls), IsNull(rows)), LessThan(nulls, rows))
+      case _ => TrueLiteral
+    }
+  }
+
+  // A balanced OR, log2(n) deep. A left-deep `reduce(Or)` is one level per IN value, and Spark's
+  // analysis and codegen recurse over it: a few thousand values overflow the stack.
+  // Indexed because buildBalancedPredicate reads by position, quadratic on a Scala 2.13 List
+  private def anyOf(verdicts: Seq[Expression]): Expression =
+    buildBalancedPredicate(verdicts.toIndexedSeq, Or)
+
+  // Some value of the file may equal `v`: lo <= v <= hi
+  private def mayContain(r: TermRange, v: Expression): Expression =
+    And(LessThanOrEqual(r.lo, v), GreaterThanOrEqual(r.hi, v))
+
+  // Every value of the file equals `v`: lo = v = hi
+  private def onlyContains(r: TermRange, v: Expression): Expression =
+    And(EqualTo(r.lo, v), EqualTo(r.hi, v))
+
+  private def single(leaf: Leaf): Expression = leaf.values.head
+
+  // NOTE: [[Literal#apply]] does not accept [[UTF8String]], so strings are converted first
+  private def toLiteral(value: Any): Literal = value match {
+    case str: UTF8String => Literal(str.toString)
+    case _ => Literal(value)
+  }
+}

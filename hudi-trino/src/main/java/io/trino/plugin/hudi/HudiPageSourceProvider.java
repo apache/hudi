@@ -289,7 +289,8 @@ public class HudiPageSourceProvider
                 dataPageSource,
                 readColumnHandles,
                 prefilledColumnValues,
-                logPageSourceFactory);
+                logPageSourceFactory,
+                readerProps);
 
         Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), readColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         FileSlice fileSlice = convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath());

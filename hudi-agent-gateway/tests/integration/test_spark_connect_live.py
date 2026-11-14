@@ -22,6 +22,7 @@ GATEWAY_IT_LLM=1 also enables the real Agent loop. No fixture writes here.
 
 import json
 import os
+import uuid
 
 import pytest
 from fastmcp import Client
@@ -82,3 +83,48 @@ async def test_agent_on_connect(connect_registry):
         config={"configurable": {"thread_id": "connect-it"}},
     )
     assert any(getattr(m, "name", None) == "describe_table" for m in out["messages"])
+
+
+@pytest.mark.skipif(not os.environ.get("GATEWAY_IT_HTTP_URL"), reason="set GATEWAY_IT_HTTP_URL")
+async def test_http_mcp_on_connect():
+    base = os.environ["GATEWAY_IT_HTTP_URL"].rstrip("/")
+    schema, table = TABLE.split(".")
+    sql = f"SELECT count(*) AS rows FROM `{schema}`.`{table}`"
+    async with Client(base + "/mcp") as mcp:
+        result = await mcp.call_tool("query_lakehouse", {"sql": sql})
+        data = json.loads(result.content[0].text)
+        assert "error" not in data and data["rows"][0][0] > 0
+        result = await mcp.call_tool("query_lakehouse", {"sql": f"DELETE FROM {TABLE}"})
+        assert "read-only" in json.loads(result.content[0].text)["error"]
+
+
+@pytest.mark.skipif(
+    not os.environ.get("GATEWAY_IT_HTTP_URL") or os.environ.get("GATEWAY_IT_LLM") != "1",
+    reason="set GATEWAY_IT_HTTP_URL and GATEWAY_IT_LLM=1",
+)
+async def test_http_agent_on_connect():
+    import httpx
+
+    base = os.environ["GATEWAY_IT_HTTP_URL"].rstrip("/")
+    session_id = "connect-http-it-" + uuid.uuid4().hex
+    schema, table = TABLE.split(".")
+    sql = f"SELECT COUNT(*) AS rows FROM `{schema}`.`{table}`"
+    async with httpx.AsyncClient(timeout=180) as client:
+        response = await client.post(
+            base + "/v1/chat",
+            json={"message": f"Describe the columns of {TABLE} using your describe_table tool.",
+                  "session_id": session_id},
+        )
+        response.raise_for_status()
+        result = response.json()
+        assert any(call["name"] == "describe_table" and not call["is_error"]
+                   for call in result["tool_trace"])
+        response = await client.post(
+            base + "/v1/chat",
+            json={"message": f"Use query_lakehouse to run {sql}.", "session_id": session_id},
+        )
+        response.raise_for_status()
+        trace = response.json()["tool_trace"]
+        queries = [json.loads(call["result_preview"]) for call in trace
+                   if call["name"] == "query_lakehouse" and not call["is_error"]]
+        assert any(query["rows"][0][0] > 0 for query in queries if query.get("rows"))

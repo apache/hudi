@@ -475,8 +475,7 @@ public class StreamWriteOperatorCoordinator
         .threadFactory(getThreadFactory("hive-sync"))
         .waitForTasksFinish(true).build();
     this.hiveSyncContext = HiveSyncContext.create(conf, this.storageConf);
-    this.hiveSyncMetrics = new FlinkHiveSyncMetrics(context.metricGroup(), hiveSyncContext.isDetailedMetricsEnabled());
-    this.hiveSyncMetrics.registerMetrics();
+    this.hiveSyncMetrics = FlinkHiveSyncMetrics.register(context.metricGroup(), hiveSyncContext.isDetailedMetricsEnabled());
   }
 
   private void syncHiveAsync() {
