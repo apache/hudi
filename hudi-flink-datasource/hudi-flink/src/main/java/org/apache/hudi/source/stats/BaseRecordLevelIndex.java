@@ -50,6 +50,7 @@ import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -273,9 +274,8 @@ public abstract class BaseRecordLevelIndex implements FlinkMetadataIndex {
         value = decimal.scale() >= targetScale ? value : decimal.setScale(targetScale);
         break;
       case TIMESTAMP_WITHOUT_TIME_ZONE:
-        // the original value is extracted from literal by ExpressionUtils#getValueFromLiteral, which is epoch millis
-        // convert it back to TimestampData before reusing key generating logic in RowDataKeyGen.
-        value = TimestampData.fromEpochMillis((Long) value);
+        // Preserve literal precision when reusing the writer's key generating logic.
+        value = TimestampData.fromLocalDateTime((LocalDateTime) value);
         break;
       default:
         break;
