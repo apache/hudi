@@ -192,8 +192,10 @@ public class BootstrapExecutor implements Serializable {
         log.info("Target base path already exists, overwrite it");
         fs.delete(basePath, true);
       } else {
-        throw new HoodieException("target base path already exists at " + cfg.targetBasePath
-            + ". Cannot bootstrap data on top of an existing table");
+        if (fs.listLocatedStatus(basePath).hasNext()) {
+          throw new HoodieException("target base path already exists at " + cfg.targetBasePath
+              + ". Cannot bootstrap data on top of an existing table");
+        }
       }
     }
 
