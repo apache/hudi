@@ -31,7 +31,7 @@ permissions:
 jobs:
   delete-all-caches:
     if: github.repository == 'apache/hudi'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Delete Cache
         run: |
@@ -53,7 +53,7 @@ jobs:
           REPO: ${{ github.repository }}
   process-new-and-updated-prs:
     if: github.repository == 'apache/hudi'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2

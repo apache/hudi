@@ -36,6 +36,7 @@ import org.apache.hudi.common.table.log.NativeLogFooterMetadata;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock.HeaderMetadataType;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.common.util.collection.ArrayComparable;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
@@ -58,10 +59,12 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -198,6 +201,20 @@ public class TestHoodieNativeLogFormatWriter {
     writeDeleteLogFooterWithPositions(Option.empty(), record, schema, new ArrayList<>());
 
     verify(record, never()).getOrderingValue(eq(schema), any(), any());
+  }
+
+  @Test
+  public void testConvertsOrderingValueForDeleteLog() throws Exception {
+    assertArrayEquals(new Object[] {"stored-key-1", "stored-110"},
+        writeDeleteLogFieldValues(Collections.singletonList("ts"), "110"));
+  }
+
+  @Test
+  public void testConvertsEachOrderingValueForDeleteLog() throws Exception {
+    // The default ordering value stands for a null ordering field and is written as NULL.
+    assertArrayEquals(new Object[] {"stored-key-1", "stored-110", null, "stored-2"},
+        writeDeleteLogFieldValues(Arrays.asList("ts", "seq", "seq2"),
+            new ArrayComparable(new Comparable[] {"110", OrderingValues.getDefault(), "2"})));
   }
 
   @Test
@@ -523,6 +540,41 @@ public class TestHoodieNativeLogFormatWriter {
     ArgumentCaptor<Map<String, String>> footerCaptor = ArgumentCaptor.forClass(Map.class);
     verify(fileWriter).addFooterMetadata(footerCaptor.capture());
     return NativeLogFooterMetadata.fromFooterMetadata(footerCaptor.getValue());
+  }
+
+  private static Object[] writeDeleteLogFieldValues(List<String> orderingFieldNames, Comparable orderingValue) throws Exception {
+    String schemaString = "{\"type\":\"record\",\"name\":\"test\",\"fields\":[{\"name\":\"id\",\"type\":\"string\"},"
+        + "{\"name\":\"ts\",\"type\":\"string\"},{\"name\":\"seq\",\"type\":\"string\"},{\"name\":\"seq2\",\"type\":\"string\"}]}";
+    HoodieSchema schema = HoodieSchema.parse(schemaString);
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath("/tmp").withSchema(schemaString).build();
+    HoodieStorage storage = mock(HoodieStorage.class);
+    TaskContextSupplier taskContextSupplier = mock(TaskContextSupplier.class);
+    HoodieRecord record = mock(HoodieRecord.class);
+    when(record.getRecordKey()).thenReturn("key-1");
+    doReturn(orderingValue).when(record).getOrderingValue(eq(schema), any(), any());
+    RecordContext recordContext = mock(RecordContext.class);
+    when(recordContext.getEngineRecordType()).thenReturn(HoodieRecord.HoodieRecordType.AVRO);
+    // Marks every value that went through the conversion to the stored engine type.
+    when(recordContext.convertValueToEngineType(any())).thenAnswer(invocation -> "stored-" + invocation.getArgument(0));
+    when(recordContext.constructEngineRecord(any(HoodieSchema.class), any(Object[].class))).thenReturn(new Object());
+
+    try (MockedStatic<HoodieFileWriterFactory> writerFactory = mockStatic(HoodieFileWriterFactory.class)) {
+      writerFactory.when(() -> HoodieFileWriterFactory.getFileWriter(
+              eq("100"), any(StoragePath.class), eq(storage), eq(config), any(HoodieSchema.class),
+              eq(taskContextSupplier), eq(HoodieRecord.HoodieRecordType.AVRO)))
+          .thenReturn(mock(HoodieFileWriter.class));
+
+      try (HoodieNativeLogFormatWriter writer = new HoodieNativeLogFormatWriter(
+          4096, storage, new StoragePath("/tmp/partition"), "file-1", "100", 1, "1-0-1", 1024L,
+          new LogFileCreationCallback() {
+          }, HoodieTableVersion.current(), config, HoodieFileFormat.PARQUET, schema,
+          taskContextSupplier, recordContext, orderingFieldNames, Option.empty())) {
+        writer.appendDeleteRecord(record, schema);
+      }
+    }
+    ArgumentCaptor<Object[]> fieldValuesCaptor = ArgumentCaptor.forClass(Object[].class);
+    verify(recordContext).constructEngineRecord(any(HoodieSchema.class), fieldValuesCaptor.capture());
+    return fieldValuesCaptor.getValue();
   }
 
   private static void assertNoBufferedRecordPositions(HoodieNativeLogFormatWriter writer, String fieldName) throws Exception {

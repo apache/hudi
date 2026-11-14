@@ -301,7 +301,7 @@ class TestColumnStatsIndexWithSQL extends ColumnStatIndexTestBase {
 
   def translateIntoColStatsExprAndValidate(dataFilter: Expression, indexedCols: Seq[String], expectedExpr: Expression,
                                            expectTrueLiteral: Boolean): Unit = {
-    val transformedExpr = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(dataFilter, false, indexedCols)
+    val transformedExpr = DataSkippingUtils.translateIntoColumnStatsIndexFilterExpr(dataFilter, indexedCols)
     assertTrue(expectedExpr.equals(transformedExpr))
     if (expectTrueLiteral) {
       assertTrue(expectedExpr.equals(TrueLiteral))

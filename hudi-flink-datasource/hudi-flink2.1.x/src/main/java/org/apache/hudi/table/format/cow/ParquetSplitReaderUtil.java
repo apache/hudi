@@ -20,6 +20,7 @@ package org.apache.hudi.table.format.cow;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ValidationUtils;
+import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.table.format.cow.vector.HeapArrayVector;
 import org.apache.hudi.table.format.cow.vector.HeapDecimalVector;
 import org.apache.hudi.table.format.cow.vector.HeapMapColumnVector;
@@ -498,19 +499,24 @@ public class ParquetSplitReaderUtil {
    * matches {@code fieldType}; for ROW types missing physical fields are slotted with null-filled
    * vectors (sourced from {@link #createVectorFromConstant}) so that the Dremel assembler in
    * {@link NestedColumnReader} can pass them through unchanged.
+   *
+   * @param parentName name of the group that contains {@code physicalType}, which decides whether a
+   *     repeated group named {@code <parentName>_tuple} is a list element
    */
   public static WritableColumnVector createWritableColumnVector(
       int batchSize,
       LogicalType fieldType,
       Type physicalType,
+      String parentName,
       List<ColumnDescriptor> descriptors) {
-    return createWritableColumnVector(batchSize, fieldType, physicalType, descriptors, 0);
+    return createWritableColumnVector(batchSize, fieldType, physicalType, parentName, descriptors, 0);
   }
 
   private static WritableColumnVector createWritableColumnVector(
       int batchSize,
       LogicalType fieldType,
       Type physicalType,
+      String parentName,
       List<ColumnDescriptor> columns,
       int depth) {
     List<ColumnDescriptor> descriptors = filterDescriptors(depth, physicalType, columns);
@@ -570,26 +576,35 @@ public class ParquetSplitReaderUtil {
         return new HeapTimestampVector(batchSize);
       case DECIMAL:
         checkArgument(
-            (typeName == PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY
-                    || typeName == PrimitiveType.PrimitiveTypeName.BINARY)
-                && primitiveType.getOriginalType() == OriginalType.DECIMAL,
+            primitiveType.getOriginalType() == OriginalType.DECIMAL,
             getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
-        return new HeapDecimalVector(batchSize);
+        switch (typeName) {
+          case INT32:
+            return new HeapIntVector(batchSize);
+          case INT64:
+            return new HeapLongVector(batchSize);
+          case BINARY:
+          case FIXED_LEN_BYTE_ARRAY:
+            return new HeapDecimalVector(batchSize);
+          default:
+            throw new IllegalArgumentException(getPrimitiveTypeCheckFailureMessage(typeName, fieldType));
+        }
       case ARRAY:
         ArrayType arrayType = (ArrayType) fieldType;
+        Triple<Type, String, Integer> element = unwrapListElementType(physicalType, parentName, depth);
         return new HeapArrayVector(
             batchSize,
-            createWritableColumnVector(
-                batchSize, arrayType.getElementType(), physicalType, descriptors, depth));
+            createWritableColumnVector(batchSize, arrayType.getElementType(), element.getLeft(),
+                element.getMiddle(), descriptors, element.getRight()));
       case MAP: {
         MapType mapType = (MapType) fieldType;
         GroupType repeatedType = unwrapMapRepeatedType(physicalType);
         return new HeapMapColumnVector(
             batchSize,
-            createWritableColumnVector(
-                batchSize, mapType.getKeyType(), repeatedType.getType(0), descriptors, depth + 2),
-            createWritableColumnVector(
-                batchSize, mapType.getValueType(), repeatedType.getType(1), descriptors, depth + 2));
+            createWritableColumnVector(batchSize, mapType.getKeyType(), repeatedType.getType(0),
+                repeatedType.getName(), descriptors, depth + 2),
+            createWritableColumnVector(batchSize, mapType.getValueType(), repeatedType.getType(1),
+                repeatedType.getName(), descriptors, depth + 2));
       }
       case MULTISET: {
         MultisetType multisetType = (MultisetType) fieldType;
@@ -600,12 +615,14 @@ public class ParquetSplitReaderUtil {
                 batchSize,
                 multisetType.getElementType(),
                 repeatedType.getType(0),
+                repeatedType.getName(),
                 descriptors,
                 depth + 2),
             createWritableColumnVector(
                 batchSize,
                 new IntType(false),
                 repeatedType.getType(1),
+                repeatedType.getName(),
                 descriptors,
                 depth + 2));
       }
@@ -627,6 +644,7 @@ public class ParquetSplitReaderUtil {
                     batchSize,
                     rowType.getTypeAt(i),
                     groupType.getType(fieldIndex),
+                    groupType.getName(),
                     descriptors,
                     depth + 1);
           }
@@ -679,6 +697,46 @@ public class ParquetSplitReaderUtil {
     }
     throw new IllegalArgumentException(
         "Invalid Variant Parquet schema: missing binary field '" + fieldName + "'.");
+  }
+
+  /**
+   * Returns the element type of a LIST physical type, the name of the group that contains it and its
+   * depth, unwrapping it with the same backward-compatibility rules as {@link #getArrayElementColumn}
+   * so that the vectors line up with the {@code ParquetField} tree.
+   *
+   * @param parentName name of the group that contains {@code listType}
+   */
+  private static Triple<Type, String, Integer> unwrapListElementType(Type listType, String parentName, int depth) {
+    Type elementType = listType;
+    String elementParentName = parentName;
+    int elementDepth = depth;
+    while (!elementType.isPrimitive() && !elementType.isRepetition(REPEATED)) {
+      elementParentName = elementType.getName();
+      elementType = elementType.asGroupType().getType(0);
+      elementDepth++;
+    }
+    if (isThreeLevelListRepeatedType(elementType, elementParentName)) {
+      elementParentName = elementType.getName();
+      elementType = elementType.asGroupType().getType(0);
+      elementDepth++;
+    }
+    return Triple.of(elementType, elementParentName, elementDepth);
+  }
+
+  /**
+   * Returns whether the repeated type of a list is the synthetic wrapper of a three-level list,
+   * rather than the element itself. Shared by {@link #unwrapListElementType} and
+   * {@link #getArrayElementColumn}, so that the vectors and the {@code ParquetField} tree pick the
+   * same element.
+   *
+   * @param parentName name of the group that contains {@code repeatedType}
+   */
+  private static boolean isThreeLevelListRepeatedType(Type repeatedType, String parentName) {
+    return !repeatedType.isPrimitive()
+        && repeatedType.getLogicalTypeAnnotation() == null
+        && repeatedType.asGroupType().getFieldCount() == 1
+        && !repeatedType.getName().equals("array")
+        && !repeatedType.getName().equals(parentName + "_tuple");
   }
 
   /**
@@ -906,10 +964,7 @@ public class ParquetSplitReaderUtil {
 
     // Three-level list: skip the synthetic `element` / `list` wrapper when present.
     if (columnIO instanceof GroupColumnIO
-        && columnIO.getType().getLogicalTypeAnnotation() == null
-        && ((GroupColumnIO) columnIO).getChildrenCount() == 1
-        && !columnIO.getName().equals("array")
-        && !columnIO.getName().equals(columnIO.getParent().getName() + "_tuple")) {
+        && isThreeLevelListRepeatedType(columnIO.getType(), columnIO.getParent().getName())) {
       return ((GroupColumnIO) columnIO).getChild(0);
     }
     return columnIO;

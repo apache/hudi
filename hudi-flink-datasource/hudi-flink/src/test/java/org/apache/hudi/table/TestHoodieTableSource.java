@@ -236,6 +236,33 @@ public class TestHoodieTableSource {
     assertEquals(expectedPartitions, hoodieTableSource.getReadPartitions());
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"snapshot", "read_optimized", "incremental", "streaming"})
+  void testPartitionStatsPrunerForReadMode(String readMode) throws Exception {
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.READ_DATA_SKIPPING_ENABLED, true);
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key(), "true");
+    conf.setString(HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key(), "true");
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    if ("streaming".equals(readMode)) {
+      conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    } else {
+      conf.set(FlinkOptions.QUERY_TYPE, readMode);
+    }
+
+    HoodieTableSource tableSource = createHoodieTableSource(conf);
+    tableSource.applyFilters(Arrays.asList(
+        createLitEquivalenceExpr("age", 2, DataTypes.INT().notNull(), 18),
+        createLitEquivalenceExpr("partition", 4, DataTypes.STRING().notNull(), "par1")));
+    assertNotNull(tableSource.getColumnStatsProbe());
+    if ("incremental".equals(readMode) || "streaming".equals(readMode)) {
+      assertEquals(Collections.singletonList("par1"), tableSource.getReadPartitions());
+    } else {
+      assertTrue(tableSource.getReadPartitions().isEmpty());
+    }
+  }
+
   @Test
   void testDataSkippingWithMetaColumns() throws Exception {
     final String path = tempFile.getAbsolutePath();

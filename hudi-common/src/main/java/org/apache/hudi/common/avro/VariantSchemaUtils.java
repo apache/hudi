@@ -729,8 +729,10 @@ public class VariantSchemaUtils {
   /** Swaps at one schema position, returning the {@code base} instance when nothing changes. */
   private static HoodieSchema swapShreddedVariantsAt(HoodieSchema base, HoodieSchema other, boolean baseIsFile) {
     if (baseIsFile ? isShreddedVariantTarget(base, other) : isShreddedVariantTarget(other, base)) {
-      // Take the other side's schema wholesale, nullability included.
-      return other;
+      // Take the other side's schema, staying nullable when base is: the rebuilt field keeps base's
+      // null default, which a non-null schema cannot carry (#20349), and reading a REQUIRED column
+      // as nullable is a safe widening. A nullable other side is never narrowed.
+      return base.isNullable() && !other.isNullable() ? HoodieSchema.createNullable(other) : other;
     }
     boolean wasNullable = base.isNullable();
     HoodieSchema baseInner = wasNullable ? base.getNonNullType() : base;

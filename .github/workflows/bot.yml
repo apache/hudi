@@ -1,20 +1,58 @@
 name: Java CI
 
+# This filter replaces the former `changes` job. That job listed the changed files and every test
+# job waited on it through `needs`, which made each run wait for a shared runner twice: once for
+# the filter, once for the tests. GitHub evaluates `paths` before creating any job, so the same
+# decision now costs nothing. The filter applies to push only: pull_request and merge_group runs
+# must always report the aggregate check at the end of this file, and a required check whose
+# workflow the filter skipped never reports, so it would stay pending forever. A docs-only PR
+# therefore runs the full suite on pull_request. In the merge queue, the `changes` job below
+# applies the same patterns to the entry's diff instead, and the test jobs of a docs-only entry
+# skip; any other entry, including every fork PR to master, runs the full suite there.
+# yml/yaml files are deliberately NOT ignored, unlike the old filter: docker/compose/*.yml drives
+# the integration tests, several modules keep yml test resources, and the workflow files themselves
+# need CI to run when they change.
+#
+# Push covers every branch because forks run the full suite on their own runners for each branch
+# push; see "Pull requests from forks" in README.md. Upstream pushes to branches other than master,
+# release-* and branch-0.x skip every job: their PRs test them. Merge-queue branches
+# (gh-readonly-queue/...) are validated by merge_group, not push: a skipped aggregate job on a
+# queue-branch push would report success and could satisfy the gate early.
 on:
   push:
-    branches:
-      - master
-      - 'release-*'
-      - branch-0.x
+    branches-ignore:
+      - asf-site
+      - 'gh-readonly-queue/**'
+    paths:
+      - '**'
+      # Listed explicitly so the filter does not depend on '**' matching dot-prefixed paths.
+      - '.github/**'
+      - '!**.bmp'
+      - '!**.gif'
+      - '!**.jpg'
+      - '!**.jpeg'
+      - '!**.md'
+      - '!**.pdf'
+      - '!**.png'
+      - '!**.svg'
+      - '!.gitignore'
   pull_request:
     branches:
       - master
       - 'release-*'
       - branch-0.x
+  merge_group:
+    types: [checks_requested]
 
+# A group holds one running and one pending run, and a newer pending run replaces the older one
+# even when cancel-in-progress is false. Pushes to apache/hudi are therefore keyed by SHA, so a
+# burst of queue merges to master never replaces a pending master run. Pushes on a fork are keyed
+# by branch and cancel in progress, so a new push to a PR branch replaces the run of the older
+# head instead of spending fork runner time on it. merge_group refs are unique per queue entry
+# and merge_group runs never cancel in progress, so queue runs are never cancelled.
 concurrency:
-  group: ${{ github.ref }}
-  cancel-in-progress: ${{ !contains(github.ref, 'master') && !contains(github.ref, 'branch-0.x') && !contains(github.ref, 'release-') }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || (github.event_name == 'push' && github.repository == 'apache/hudi' && github.sha) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.repository != 'apache/hudi') }}
 
 env:
   # The retry/timeout knobs below are maven-resolver (aether.*) properties. Maven 3.9 resolves
@@ -31,88 +69,74 @@ env:
   FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
   FLINK_IT_FILTER2: -Dit.test=!ITTestHoodieDataSource
 
+# Three conditions route the jobs. GitHub expressions cannot be named, so the first test job
+# spells them out in full under the YAML anchor `route`, every other test job reuses it through
+# the alias `*route`, and the aggregate job at the end spells out the parts it needs.
+#
+# FORK_PR, a pull request from a fork to master:
+#   github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master'
+# Its test jobs already run on the fork's runners when the contributor pushes the branch, and
+# fork_ci_status.yml mirrors that run onto the PR as the informational `CI (fork)` check. The
+# merge queue then runs them on ASF runners against the proposed merge with master. The
+# event_name guard matters: on merge_group the pull_request fields are empty strings, and an empty
+# head repository differs from github.repository. Fork PRs to release-* and branch-0.x keep
+# upstream testing, since only master merges through the queue.
+#
+# UPSTREAM_OTHER_PUSH, a push to apache/hudi other than to master, release-* or branch-0.x:
+#   github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x'
+# Such branches back same-repository PRs, which test them through pull_request.
+#
+# DOCS_ONLY, a merge-queue entry that changes only docs and images:
+#   needs.changes.outputs.docs_only == 'true'
+# Every test job needs the `changes` job, which runs on merge_group only. On every other event it
+# is skipped, and a job whose need was skipped is skipped too unless its condition calls a status
+# function, so the route starts with `!cancelled()`. A failed `changes` job leaves the output
+# empty, so the test jobs run.
 jobs:
-  # [CI-TRIM] to revisit for CI improvement
-  validate-ci-baseline:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Confirm CI ran against the reduced matrix
-        run: echo "Ran against the reduced CI matrix."
-
+  # Decides on a merge-queue run whether the entry changes only docs and images, so that the test
+  # jobs can skip; see DOCS_ONLY above. The excluded patterns are the negated patterns of the push
+  # filter at the top of this file: `!**.md` becomes `**/*.md`, which also matches at the root, and
+  # `!.gitignore` stays root only. The job fetches the two commits without blobs instead of
+  # checking out the repository, and diffs their trees. .github/ci/scripts/test-fork-ci-status.cjs
+  # checks the patterns and runs the job.
   changes:
-    runs-on: ubuntu-latest
+    name: Detect docs-only changes
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
-      relevant: ${{ steps.filter.outputs.relevant }}
+      docs_only: ${{ steps.diff.outputs.docs_only }}
     steps:
-      - name: Detect relevant changes
-        id: filter
+      - name: List changed files other than docs and images
+        id: diff
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          EVENT: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = "pull_request" ]; then
-            FILES=$(gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files" --jq '.[].filename')
+          git init -q
+          git fetch -q --no-tags --depth=1 --filter=blob:none "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git" "$BASE_SHA" "$HEAD_SHA"
+          files=$(git diff --no-renames --name-only "$BASE_SHA" "$HEAD_SHA" -- . \
+            ':(exclude,glob)**/*.bmp' ':(exclude,glob)**/*.gif' ':(exclude,glob)**/*.jpg' \
+            ':(exclude,glob)**/*.jpeg' ':(exclude,glob)**/*.md' ':(exclude,glob)**/*.pdf' \
+            ':(exclude,glob)**/*.png' ':(exclude,glob)**/*.svg' ':(exclude).gitignore')
+          if [ -z "$files" ]; then
+            echo 'docs_only=true' >> "$GITHUB_OUTPUT"
+            echo 'Docs-only change: the test jobs are skipped.' >> "$GITHUB_STEP_SUMMARY"
           else
-            FILES=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA" --jq '.files[].filename')
+            echo 'docs_only=false' >> "$GITHUB_OUTPUT"
+            count=$(grep -c '' <<< "$files")
+            {
+              echo "Not docs-only: the test jobs run. Changed files other than docs and images ($count):"
+              echo
+              echo '```'
+              sed -n '1,50p' <<< "$files"
+              if [ "$count" -gt 50 ]; then echo "... and $((count - 50)) more"; fi
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "Changed files:"
-          printf '%s\n' "$FILES"
-          RELEVANT=false
-          while IFS= read -r f; do
-            [ -z "$f" ] && continue
-            case "$f" in
-              *.bmp|*.gif|*.jpg|*.jpeg|*.md|*.pdf|*.png|*.svg|*.yaml|*.yml|.gitignore) ;;
-              *) RELEVANT=true ;;
-            esac
-          done <<< "$FILES"
-          echo "Relevant: $RELEVANT"
-          echo "relevant=$RELEVANT" >> "$GITHUB_OUTPUT"
-
-  validate-source:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Set up JDK 11
-        uses: actions/setup-java@v5
-        with:
-          java-version: '11'
-          distribution: 'temurin'
-          architecture: x64
-          # No `cache: maven` on purpose. All jobs share one cache key and the first job to finish
-          # wins the write. This one only runs `mvn apache-rat:check`, finishes in well under a
-          # minute, and would seal a ~10 MB local repo that every build job then has to discard and
-          # re-download from Maven Central.
-      # Both checks describe the source release, not the git checkout, so they run inside the
-      # directory create_source_directory.sh produces - the same way validate_staged_release.sh
-      # runs them inside an extracted source tarball. On the raw checkout they would see the
-      # images under rfc/, docker/images/ and hudi-notebooks/, which the source release excludes.
-      #
-      # Stage the copy outside the workspace. `mvn apache-rat:check` in the RAT check step scans
-      # the filesystem from the repository root, so a copy of the tree left inside the workspace
-      # gets scanned too, and every root-anchored exclude in the root pom (such as `.github/**`)
-      # silently stops applying to it.
-      #
-      # hudi-trino needs no RAT exclude: its files carry AL headers that RAT's default matchers
-      # accept. The Trino-style header check (airbase's license-maven-plugin) runs only in the
-      # upstream trinodb/trino build; nothing in this repo runs it since RFC-105 dropped the
-      # trino-root parent.
-      - name: Create source release directory
-        run: ./scripts/release/create_source_directory.sh "${{ runner.temp }}/hudi-tmp-repo"
-      - name: Check Binary Files
-        run: |
-          cd "${{ runner.temp }}/hudi-tmp-repo"
-          ./scripts/release/validate_source_binary_files.sh
-      - name: Check Copyright
-        run: |
-          cd "${{ runner.temp }}/hudi-tmp-repo"
-          ./scripts/release/validate_source_copyright.sh
-      - name: RAT check
-        run: ./scripts/release/validate_source_rat.sh
 
   # hudi-cli rides along with hudi-spark-client here rather than joining the catch-all
   # module lists in test-common-and-other-modules: its functional suite starts a
@@ -121,8 +145,9 @@ jobs:
   # this job's build instead of paying for a second one. It stays listed in the catch-all
   # job's UT_MODULES/FT_MODULES exclusions so the tests are not run twice.
   test-spark-client-and-hadoop-common:
-    runs-on: ubuntu-latest
+    if: &route ${{ !cancelled() && !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master') && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') && needs.changes.outputs.docs_only != 'true' }}
     needs: changes
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     strategy:
       matrix:
@@ -132,10 +157,8 @@ jobs:
             flinkProfile: "flink2.2"
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -143,7 +166,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -151,7 +173,6 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-client/hudi-spark-client,hudi-cli
       - name: UT - hudi-hadoop-common
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -159,7 +180,6 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-hadoop-common $MVN_ARGS -Djacoco.skip=false
       - name: UT - hudi-client/hudi-spark-client
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -167,7 +187,6 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-client/hudi-spark-client $MVN_ARGS -Djacoco.skip=false
       - name: FT - hudi-client/hudi-spark-client
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -175,7 +194,6 @@ jobs:
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-client/hudi-spark-client $MVN_ARGS -Djacoco.skip=false
       - name: UT - hudi-cli
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -183,28 +201,29 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-cli $MVN_ARGS -Djacoco.skip=false
       - name: FT - hudi-cli
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -pl hudi-cli $MVN_ARGS -Djacoco.skip=false
+      # No coverage on merge-queue runs. Codecov files an upload from a gh-readonly-queue ref under
+      # master, for a commit that may never land, and a group that succeeds would upload the same
+      # commit twice: once from the queue run, once from the master push run.
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: spark-client-hadoop-common
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-utilities:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       matrix:
@@ -214,10 +233,8 @@ jobs:
             flinkProfile: "flink2.2"
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -225,7 +242,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -233,7 +249,6 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service -Pthrift-gen-source $MVN_ARGS -am -pl hudi-utilities
       - name: UT - hudi-utilities (TestHoodie*)
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -241,7 +256,6 @@ jobs:
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dtest="TestHoodie*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false
       - name: FT - hudi-utilities
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -249,20 +263,19 @@ jobs:
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: utilities
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-common-and-other-modules:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
       matrix:
@@ -278,10 +291,8 @@ jobs:
         !hudi-client/hudi-spark-client,!hudi-cli,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-spark,!hudi-spark-datasource/hudi-spark,!hudi-utilities
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -289,10 +300,8 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Docker image
-        if: needs.changes.outputs.relevant == 'true'
         run: docker build -t hudi-ci .
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -306,7 +315,6 @@ jobs:
             hudi-ci \
             /bin/bash -c "MAVEN_OPTS='-Xmx8g' mvn clean install -T 2 -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -Phudi-platform-service -Pthrift-gen-source -DskipTests=true -Dmaven.compiler.maxmem=8192m -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS"
       - name: UT - common and other modules
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -320,7 +328,6 @@ jobs:
             hudi-ci \
             /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $UT_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
       - name: UT - hudi-utilities (non-TestHoodie)
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -334,7 +341,6 @@ jobs:
             hudi-ci \
             /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Punit-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -Dtest='!TestHoodie*' -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
       - name: FT - common and other modules
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -348,21 +354,18 @@ jobs:
             hudi-ci \
             /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Pfunctional-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $FT_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: common-and-other-modules
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-java-tests-part1:
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -379,10 +382,8 @@ jobs:
 #            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK 11
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: '11'
@@ -390,7 +391,6 @@ jobs:
 #          architecture: x64
 #          cache: maven
 #      - name: Build Project
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -398,7 +398,6 @@ jobs:
 #        run:
 #          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Java UT 1 - Common & Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -406,10 +405,10 @@ jobs:
 #        run:
 #          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Generate merged coverage report
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
 #      - name: Upload coverage to Codecov
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 #        with:
 #          files: ./jacoco-report.xml
@@ -419,8 +418,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-java-tests-part2:
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -437,10 +435,8 @@ jobs:
 #            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK 11
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: '11'
@@ -448,7 +444,6 @@ jobs:
 #          architecture: x64
 #          cache: maven
 #      - name: Build Project
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -456,14 +451,12 @@ jobs:
 #        run:
 #          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Quickstart Test
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #        run:
 #          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS -Djacoco.skip=false
 #      - name: Java UT 2 - Common & Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -471,7 +464,6 @@ jobs:
 #        run:
 #          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Java FTA - Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -479,10 +471,10 @@ jobs:
 #        run:
 #          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Generate merged coverage report
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
 #      - name: Upload coverage to Codecov
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 #        with:
 #          files: ./jacoco-report.xml
@@ -492,8 +484,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-java-tests-part3:
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -510,10 +501,8 @@ jobs:
 #            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK 11
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: '11'
@@ -521,7 +510,6 @@ jobs:
 #          architecture: x64
 #          cache: maven
 #      - name: Build Project
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -529,7 +517,6 @@ jobs:
 #        run:
 #          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Java FTB - Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -537,7 +524,6 @@ jobs:
 #        run:
 #          mvn test -Pfunctional-tests-b -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Java FTC - Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -545,10 +531,10 @@ jobs:
 #        run:
 #          mvn test -Pfunctional-tests-c -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Generate merged coverage report
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
 #      - name: Upload coverage to Codecov
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 #        with:
 #          files: ./jacoco-report.xml
@@ -558,8 +544,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-scala-dml-tests:
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -576,10 +561,8 @@ jobs:
 #            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK 11
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: '11'
@@ -587,7 +570,6 @@ jobs:
 #          architecture: x64
 #          cache: maven
 #      - name: Build Project
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -595,7 +577,6 @@ jobs:
 #        run:
 #          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Scala UT - Common & Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -603,7 +584,6 @@ jobs:
 #        run:
 #          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Scala FT - Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -611,10 +591,10 @@ jobs:
 #        run:
 #          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Generate merged coverage report
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
 #      - name: Upload coverage to Codecov
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 #        with:
 #          files: ./jacoco-report.xml
@@ -624,8 +604,7 @@ jobs:
 
   # [CI-TRIM] to revisit for CI improvement
 #  test-spark-scala-other-tests:
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -642,10 +621,8 @@ jobs:
 #            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
 
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK 11
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: '11'
@@ -653,7 +630,6 @@ jobs:
 #          architecture: x64
 #          cache: maven
 #      - name: Build Project
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -661,7 +637,6 @@ jobs:
 #        run:
 #          mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
 #      - name: Scala UT - Common & Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -669,7 +644,6 @@ jobs:
 #        run:
 #          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Scala FT - Spark
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -677,10 +651,10 @@ jobs:
 #        run:
 #          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
 #      - name: Generate merged coverage report
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
 #      - name: Upload coverage to Codecov
-#        if: always() && needs.changes.outputs.relevant == 'true'
+#        if: always()
 #        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
 #        with:
 #          files: ./jacoco-report.xml
@@ -689,8 +663,9 @@ jobs:
 #          token: ${{ secrets.CODECOV_TOKEN }}
 
   test-hudi-hadoop-mr-and-hudi-java-client:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
       matrix:
@@ -700,10 +675,8 @@ jobs:
             flinkProfile: "flink2.2"
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -711,7 +684,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -719,7 +691,6 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true -Phudi-platform-service $MVN_ARGS -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client
       - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -727,20 +698,19 @@ jobs:
         run:
           mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: hadoop-mr-java-client
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-java-tests-part1:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -762,10 +732,8 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4-common,hudi-spark-datasource/hudi-spark4.2.x"
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
@@ -773,7 +741,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -781,7 +748,6 @@ jobs:
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Java UT 1 - Common & Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -789,20 +755,19 @@ jobs:
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: spark-java-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-java-tests-part2:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -821,10 +786,8 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
@@ -832,7 +795,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -840,14 +802,12 @@ jobs:
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Quickstart Test
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-examples/hudi-examples-spark $MVN_ARGS -Djacoco.skip=false
       - name: Java UT 2 - Common & Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -855,7 +815,6 @@ jobs:
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER2 -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Java FTA - Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -863,20 +822,19 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: spark-java-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-java-tests-part3:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -895,10 +853,8 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
@@ -906,7 +862,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -914,7 +869,6 @@ jobs:
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Java FTB - Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -922,7 +876,6 @@ jobs:
         run:
           mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Java FTC - Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -930,20 +883,19 @@ jobs:
         run:
           mvn test -Pfunctional-tests-c -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: spark-java-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-scala-dml-tests:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -962,10 +914,8 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
@@ -973,7 +923,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -981,7 +930,6 @@ jobs:
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Scala UT - Common & Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -989,7 +937,6 @@ jobs:
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Scala FT - Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -997,20 +944,19 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: spark-scala-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-spark-java17-scala-other-tests:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -1029,10 +975,8 @@ jobs:
             sparkModules: "hudi-spark-datasource/hudi-spark4.2.x"
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
@@ -1040,7 +984,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1048,7 +991,6 @@ jobs:
         run:
           mvn clean install -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES"
       - name: Scala UT - Common & Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1056,7 +998,6 @@ jobs:
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Scala FT - Spark
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1064,20 +1005,60 @@ jobs:
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: spark-scala-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
+  # [CI-TRIM] to revisit for CI improvement
+#  build-spark-java17:
+#    runs-on: ubuntu-24.04
+#    strategy:
+#      matrix:
+#        include:
+#          - scalaProfile: "scala-2.12"
+#            sparkProfile: "spark3.3"
+#            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
+
+#          - scalaProfile: "scala-2.12"
+#            sparkProfile: "spark3.4"
+#            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
+
+#          - scalaProfile: "scala-2.12"
+#            sparkProfile: "spark3.5"
+#            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
+
+#    steps:
+#      - uses: actions/checkout@v5
+#      - name: Set up JDK 17
+#        uses: actions/setup-java@v5
+#        with:
+#          java-version: '17'
+#          distribution: 'temurin'
+#          architecture: x64
+#          cache: maven
+#      - name: Build Project
+#        env:
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#          SPARK_MODULES: ${{ matrix.sparkModules }}
+#        run:
+#          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
+#      - name: Quickstart Test
+#        env:
+#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
+#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
+#        run:
+#          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
+
   test-flink-1:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -1098,10 +1079,8 @@ jobs:
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.15.2'
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -1109,7 +1088,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1118,7 +1096,6 @@ jobs:
         run:
           mvn clean install -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
       - name: Quickstart Test
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1132,25 +1109,27 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
-        if: ${{ endsWith(env.FLINK_PROFILE, '2.2') && needs.changes.outputs.relevant == 'true' }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '2.2') }}
         run: |
           mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER1 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+      # No coverage on merge-queue runs. Codecov files an upload from a gh-readonly-queue ref under
+      # master, for a commit that may never land, and a group that succeeds would upload the same
+      # commit twice: once from the queue run, once from the master push run.
       - name: Generate merged coverage report
-        if: always() && endsWith(matrix.flinkProfile, '2.2') && needs.changes.outputs.relevant == 'true'
+        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && endsWith(matrix.flinkProfile, '2.2') && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: flink-integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-flink-2:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -1158,10 +1137,8 @@ jobs:
             flinkAvroVersion: "1.11.4"
             flinkParquetVersion: '1.15.2'
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -1169,7 +1146,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SCALA_PROFILE: 'scala-2.12'
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1183,26 +1159,23 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
-        if: ${{ endsWith(env.FLINK_PROFILE, '2.2') && needs.changes.outputs.relevant == 'true' }}
+        if: ${{ endsWith(env.FLINK_PROFILE, '2.2') }}
         run: |
           mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && endsWith(matrix.flinkProfile, '2.2') && needs.changes.outputs.relevant == 'true'
+        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && endsWith(matrix.flinkProfile, '2.2') && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: flink-integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
   # [CI-TRIM] to revisit for CI improvement
 #  docker-java17-test:
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -1228,10 +1201,8 @@ jobs:
 #            sparkRuntime: 'spark4.2.0'
 
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK 17
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: '17'
@@ -1247,29 +1218,44 @@ jobs:
 #          SPARK_RUNTIME: ${{ matrix.sparkRuntime }}
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #        # Only support Spark 3.4 for now
-#        if: ${{ env.SPARK_PROFILE >= 'spark3.4' && needs.changes.outputs.relevant == 'true' }}
+#        if: ${{ env.SPARK_PROFILE >= 'spark3.4' }}
 #        run: |
 #          ./packaging/bundle-validation/run_docker_java17.sh
 
   validate-bundles:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
+          # validate.sh only runs the Flink test on a Flink 2.x image (HUDI-8608), so the Spark,
+          # utilities, CLI and native bundles are validated on the Flink 1.x entries.
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.9'
+          - scalaProfile: 'scala-2.12'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark3.5'
+            sparkRuntime: 'spark3.5.9'
           - scalaProfile: 'scala-2.12'
             flinkProfile: 'flink2.2'
             flinkAvroVersion: '1.11.4'
             flinkParquetVersion: '1.15.2'
             sparkProfile: 'spark3.5'
-            sparkRuntime: 'spark3.5.1'
+            sparkRuntime: 'spark3.5.9'
           # [CI-TRIM] to revisit for CI improvement
 #          - scalaProfile: 'scala-2.13'
 #            flinkProfile: 'flink1.19'
 #            flinkAvroVersion: '1.11.4'
 #            flinkParquetVersion: '1.13.1'
 #            sparkProfile: 'spark3.5'
-#            sparkRuntime: 'spark3.5.1'
+#            sparkRuntime: 'spark3.5.9'
 #          - scalaProfile: 'scala-2.12'
 #            flinkProfile: 'flink1.18'
 #            flinkAvroVersion: '1.11.4'
@@ -1284,10 +1270,8 @@ jobs:
 #            sparkRuntime: 'spark3.3.4'
 
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -1295,7 +1279,6 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1304,7 +1287,7 @@ jobs:
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
           if [ "$SCALA_PROFILE" == "scala-2.13" ]; then
-            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+            mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-spark-native-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
           else
             mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS
             # TODO remove the sudo below. It's a needed workaround as detailed in HUDI-5708.
@@ -1312,10 +1295,8 @@ jobs:
             mvn package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
           fi
       - name: Validate Bundle UI Assets
-        if: needs.changes.outputs.relevant == 'true'
         run: ./scripts/release/validate_bundle_ui_assets.sh
       - name: IT - Bundle Validation - OpenJDK 11
-        if: needs.changes.outputs.relevant == 'true'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1325,7 +1306,6 @@ jobs:
           HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
       - name: IT - Bundle Validation - OpenJDK 17
-        if: needs.changes.outputs.relevant == 'true'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1336,24 +1316,24 @@ jobs:
           ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   validate-bundle-spark4:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
-          # [CI-TRIM] to revisit for CI improvement
-#          - scalaProfile: 'scala-2.13'
-#            flinkProfile: 'flink1.20'
-#            flinkAvroVersion: '1.11.4'
-#            flinkParquetVersion: '1.13.1'
-#            sparkProfile: 'spark4.0'
-#            sparkRuntime: 'spark4.0.0'
-#          - scalaProfile: 'scala-2.13'
-#            flinkProfile: 'flink1.20'
-#            flinkAvroVersion: '1.11.4'
-#            flinkParquetVersion: '1.13.1'
-#            sparkProfile: 'spark4.1'
-#            sparkRuntime: 'spark4.1.1'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark4.0'
+            sparkRuntime: 'spark4.0.0'
+          - scalaProfile: 'scala-2.13'
+            flinkProfile: 'flink1.20'
+            flinkAvroVersion: '1.11.4'
+            flinkParquetVersion: '1.13.1'
+            sparkProfile: 'spark4.1'
+            sparkRuntime: 'spark4.1.1'
           - scalaProfile: 'scala-2.13'
             flinkProfile: 'flink1.20'
             flinkAvroVersion: '1.11.4'
@@ -1361,17 +1341,14 @@ jobs:
             sparkProfile: 'spark4.2'
             sparkRuntime: 'spark4.2.0'
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 17
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           architecture: x64
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1379,12 +1356,10 @@ jobs:
           FLINK_AVRO_VERSION: ${{ matrix.flinkAvroVersion }}
           FLINK_PARQUET_VERSION: ${{ matrix.flinkParquetVersion }}
         run: |
-          mvn clean package -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
+          mvn clean package -T 2 -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DdeployArtifacts=true -DskipTests=true $MVN_ARGS -pl packaging/hudi-hadoop-mr-bundle,packaging/hudi-spark-bundle,packaging/hudi-spark-native-bundle,packaging/hudi-utilities-bundle,packaging/hudi-utilities-slim-bundle,packaging/hudi-cli-bundle -am
       - name: Validate Bundle UI Assets
-        if: needs.changes.outputs.relevant == 'true'
         run: ./scripts/release/validate_bundle_ui_assets.sh
       - name: IT - Spark4 Bundle Validation - OpenJDK 17
-        if: needs.changes.outputs.relevant == 'true'
         env:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1397,8 +1372,7 @@ jobs:
   # [CI-TRIM] to revisit for CI improvement
 #  # flink 2.0/2.1 only support Java 11 and above version
 #  validate-bundles-java11:
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -1407,19 +1381,17 @@ jobs:
 #            flinkAvroVersion: '1.11.4'
 #            flinkParquetVersion: '1.14.4'
 #            sparkProfile: 'spark3.5'
-#            sparkRuntime: 'spark3.5.1'
+#            sparkRuntime: 'spark3.5.9'
 #          - scalaProfile: 'scala-2.12'
 #            flinkProfile: 'flink2.1'
 #            flinkAvroVersion: '1.11.4'
 #            flinkParquetVersion: '1.15.2'
 #            sparkProfile: 'spark3.5'
-#            sparkRuntime: 'spark3.5.1'
+#            sparkRuntime: 'spark3.5.9'
 
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK 11
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: '11'
@@ -1427,7 +1399,6 @@ jobs:
 #          architecture: x64
 #          cache: maven
 #      - name: Build Project
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          FLINK_PROFILE: ${{ matrix.flinkProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1437,10 +1408,8 @@ jobs:
 #        run: |
 #          mvn clean package -T 2 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -DskipTests=true $MVN_ARGS -pl packaging/hudi-flink-bundle -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION"
 #      - name: Validate Bundle UI Assets
-#        if: needs.changes.outputs.relevant == 'true'
 #        run: ./scripts/release/validate_bundle_ui_assets.sh
 #      - name: IT - Bundle Validation - OpenJDK 11
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          FLINK_PROFILE: ${{ matrix.flinkProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1450,7 +1419,6 @@ jobs:
 #          HUDI_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
 #          ./packaging/bundle-validation/ci_run.sh hudi_docker_java11 $HUDI_VERSION openjdk11
 #      - name: IT - Bundle Validation - OpenJDK 17
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          FLINK_PROFILE: ${{ matrix.flinkProfile }}
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -1461,8 +1429,9 @@ jobs:
 #          ./packaging/bundle-validation/ci_run.sh hudi_docker_java17 $HUDI_VERSION openjdk17
 
   integration-tests:
-    runs-on: ubuntu-latest
+    if: *route
     needs: changes
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -1470,10 +1439,8 @@ jobs:
             flinkProfile: 'flink2.2'
             sparkArchive: 'spark-3.5.9/spark-3.5.9-bin-hadoop3.tgz'
     steps:
-      - if: needs.changes.outputs.relevant == 'true'
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
       - name: Set up JDK 11
-        if: needs.changes.outputs.relevant == 'true'
         uses: actions/setup-java@v5
         with:
           java-version: '11'
@@ -1481,10 +1448,8 @@ jobs:
           architecture: x64
           cache: maven
       - name: Check disk space
-        if: needs.changes.outputs.relevant == 'true'
         run: df -h
       - name: 'Free space'
-        if: needs.changes.outputs.relevant == 'true'
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf /usr/local/lib/android
@@ -1492,10 +1457,8 @@ jobs:
           sudo rm -rf /usr/local/share/boost
           docker system prune --all --force --volumes
       - name: Check disk space after cleanup
-        if: needs.changes.outputs.relevant == 'true'
         run: df -h
       - name: Build Project
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1503,14 +1466,12 @@ jobs:
         run:
           mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true $MVN_ARGS -Ddocker.compose.skip=true
       - name: 'UT integ-test'
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SCALA_PROFILE: '-Dscala-2.12 -Dscala.binary.version=2.12'
         run:
           mvn test $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -DskipUTs=false -DskipITs=true -pl hudi-integ-test $MVN_ARGS -Djacoco.skip=false
       - name: 'IT'
-        if: needs.changes.outputs.relevant == 'true'
         env:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           SPARK_ARCHIVE: ${{ matrix.sparkArchive }}
@@ -1547,14 +1508,12 @@ jobs:
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
           mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
       - name: Generate merged coverage report
-        if: always() && needs.changes.outputs.relevant == 'true'
+        if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
       - name: Upload coverage to Codecov
-        if: always() && needs.changes.outputs.relevant == 'true'
-        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
         with:
-          files: ./jacoco-report.xml
-          disable_search: true
           flags: integration-tests
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -1564,8 +1523,7 @@ jobs:
 #    # (VECTOR, BLOB) and the Spark 4.0+ VARIANT type. Runs the integ2 testcontainers
 #    # suite (ITTestCustomTypeHiveSync) against a real Hive metastore on Spark 3.5.9,
 #    # 4.0.2, and 4.1.1 stacks.
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      fail-fast: false
 #      matrix:
@@ -1589,10 +1547,8 @@ jobs:
 #            composePrefix: 'docker-compose_hadoop340_hive2310_spark411'
 #            sparkAdhocImage: 'apachehudi/hudi-hadoop_3.4.0-hive_2.3.10-sparkadhoc_4.1.1:latest'
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK ${{ matrix.jdkVersion }}
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: ${{ matrix.jdkVersion }}
@@ -1600,7 +1556,6 @@ jobs:
 #          architecture: x64
 #          cache: maven
 #      - name: Free disk space
-#        if: needs.changes.outputs.relevant == 'true'
 #        run: |
 #          sudo rm -rf /usr/share/dotnet
 #          sudo rm -rf /usr/local/lib/android
@@ -1608,7 +1563,6 @@ jobs:
 #          sudo rm -rf /usr/local/share/boost
 #          docker system prune --all --force --volumes
 #      - name: Pre-pull compose images (fails fast if not published)
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SPARK_ADHOC_IMAGE: ${{ matrix.sparkAdhocImage }}
 #        run: |
@@ -1617,7 +1571,6 @@ jobs:
 #          # test time.
 #          docker pull "$SPARK_ADHOC_IMAGE"
 #      - name: Build and install Hudi artifacts
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1625,7 +1578,6 @@ jobs:
 #        run:
 #          mvn clean install -T 2 $SCALA_PROFILE -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Pintegration-tests -DskipTests=true -Ddocker.compose.skip=true $MVN_ARGS
 #      - name: Run integ2 testcontainers suite
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SPARK_PROFILE: ${{ matrix.sparkProfile }}
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
@@ -1642,55 +1594,8 @@ jobs:
 #            $MVN_ARGS
 
   # [CI-TRIM] to revisit for CI improvement
-#  build-spark-java17:
-#    runs-on: ubuntu-latest
-#    needs: changes
-#    strategy:
-#      matrix:
-#        include:
-#          - scalaProfile: "scala-2.12"
-#            sparkProfile: "spark3.3"
-#            sparkModules: "hudi-spark-datasource/hudi-spark3.3.x"
-
-#          - scalaProfile: "scala-2.12"
-#            sparkProfile: "spark3.4"
-#            sparkModules: "hudi-spark-datasource/hudi-spark3.4.x"
-
-#          - scalaProfile: "scala-2.12"
-#            sparkProfile: "spark3.5"
-#            sparkModules: "hudi-spark-datasource/hudi-spark3.5.x"
-
-#    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
-#      - name: Set up JDK 17
-#        if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/setup-java@v5
-#        with:
-#          java-version: '17'
-#          distribution: 'temurin'
-#          architecture: x64
-#          cache: maven
-#      - name: Build Project
-#        if: needs.changes.outputs.relevant == 'true'
-#        env:
-#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-#          SPARK_MODULES: ${{ matrix.sparkModules }}
-#        run:
-#          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DskipTests=true $MVN_ARGS -am -pl "hudi-examples/hudi-examples-spark,$SPARK_COMMON_MODULES,$SPARK_MODULES"
-#      - name: Quickstart Test
-#        if: needs.changes.outputs.relevant == 'true'
-#        env:
-#          SCALA_PROFILE: ${{ matrix.scalaProfile }}
-#          SPARK_PROFILE: ${{ matrix.sparkProfile }}
-#        run:
-#          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl hudi-examples/hudi-examples-spark $MVN_ARGS
-
-  # [CI-TRIM] to revisit for CI improvement
 #  build-flink-java17:
-#    runs-on: ubuntu-latest
-#    needs: changes
+#    runs-on: ubuntu-24.04
 #    strategy:
 #      matrix:
 #        include:
@@ -1699,10 +1604,8 @@ jobs:
 #            flinkAvroVersion: '1.11.4'
 #            flinkParquetVersion: '1.15.2'
 #    steps:
-#      - if: needs.changes.outputs.relevant == 'true'
-#        uses: actions/checkout@v5
+#      - uses: actions/checkout@v5
 #      - name: Set up JDK 17
-#        if: needs.changes.outputs.relevant == 'true'
 #        uses: actions/setup-java@v5
 #        with:
 #          java-version: '17'
@@ -1710,7 +1613,6 @@ jobs:
 #          architecture: x64
 #          cache: maven
 #      - name: Build Project
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          FLINK_PROFILE: ${{ matrix.flinkProfile }}
@@ -1719,10 +1621,100 @@ jobs:
 #        run:
 #          mvn clean install -T 2 -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
 #      - name: Quickstart Test
-#        if: needs.changes.outputs.relevant == 'true'
 #        env:
 #          SCALA_PROFILE: ${{ matrix.scalaProfile }}
 #          FLINK_PROFILE: ${{ matrix.flinkProfile }}
 #        run:
 #          mvn test -Punit-tests -Djava17 -Djava.version=17 -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-examples/hudi-examples-flink $MVN_ARGS
 
+  # One stable check name for branch protection and the merge queue. A skipped job reports success
+  # to a required check, so this check fails on a skipped job just as it does on a failed or
+  # cancelled one. Adding or resharding a job means adding its id to `needs` below and
+  # `needs: changes` and `if: *route` to the job, and nothing else. The ASF GitHub Actions policy
+  # caps the jobs running at once in a workflow at 20 (15 recommended), counted across all
+  # matrices. The test jobs currently total 18 instances, and test-fork-ci-status.cjs checks that
+  # the total stays at or below 20. GitHub Actions has no workflow-level job cap, so a change that
+  # pushes the total past 20 must serialize jobs, for example through `needs`, and make that check
+  # count only the jobs that can run at once. The skipped-job rule has two exceptions. On
+  # FORK_PR every test job skips on purpose and the merge queue runs them before merge. On
+  # merge_group every test job may skip for DOCS_ONLY: there the route skips no test job otherwise
+  # and a failed `changes` job makes them run, so a queue run in which every test job skipped is
+  # docs-only. Skipping the tests of a docs-only entry is safe only because .asf.yaml sets the
+  # merge queue's grouping_strategy to ALLGREEN, so the entries ahead of it must pass their own
+  # runs; under HEADGREEN a docs-only entry at the head of a group would merge the code entries
+  # ahead of it on its own run. test-fork-ci-status.cjs pins ALLGREEN. UPSTREAM_OTHER_PUSH skips
+  # this job too, since nothing ran that it could aggregate.
+  java-ci-result:
+    name: Java CI result
+    runs-on: ubuntu-slim
+    if: ${{ always() && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') }}
+    permissions: {}
+    needs:
+      - test-spark-client-and-hadoop-common
+      - test-utilities
+      - test-common-and-other-modules
+      - test-hudi-hadoop-mr-and-hudi-java-client
+      - test-spark-java17-java-tests-part1
+      - test-spark-java17-java-tests-part2
+      - test-spark-java17-java-tests-part3
+      - test-spark-java17-scala-dml-tests
+      - test-spark-java17-scala-other-tests
+      - test-flink-1
+      - test-flink-2
+      - validate-bundles
+      - validate-bundle-spark4
+      - integration-tests
+    env:
+      FORK_PR: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master' }}
+    steps:
+      - name: Summarize job results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: echo "$NEEDS"
+      # The upstream run of a fork PR tests nothing, so point the contributor at the fork run.
+      - name: Link to fork CI
+        if: env.FORK_PR == 'true'
+        env:
+          FORK_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            printf 'Full test results: [Java CI on %s](https://github.com/%s/actions/workflows/bot.yml).\n\n' "$FORK_REPOSITORY" "$FORK_REPOSITORY"
+            printf 'Look for commit `%s`. Enable Actions in your fork and push your branch if no run exists.\n\n' "$PR_HEAD_SHA"
+            printf 'This upstream PR run skips the Java CI test jobs. The merge queue runs them on ASF runners before merge.\n'
+          } >> "$GITHUB_STEP_SUMMARY"
+      # On merge_group, skipped jobs pass only when every job skipped, which means DOCS_ONLY; see
+      # the comment above this job. A queue run cancelled before its test jobs started fails on the
+      # `cancelled` results of the test jobs still pending at the cancel. cancelled() cannot catch
+      # it: in a step it reads this job's own status, which stays success for an always() job that
+      # started after the cancel.
+      - name: Fail unless every job succeeded
+        if: >-
+          ${{ env.FORK_PR == 'true' && (contains(needs.*.result, 'success') || contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled'))
+          || env.FORK_PR != 'true' && (contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+          || contains(needs.*.result, 'skipped') && !(github.event_name == 'merge_group' && !contains(needs.*.result, 'success'))) }}
+        env:
+          REQUIREMENT: ${{ env.FORK_PR == 'true' && 'Every job in Java CI must be skipped on a fork PR to master.' || 'Every job in Java CI must succeed, or every job must be skipped on a docs-only merge-queue run.' }}
+        run: |
+          echo "::error::$REQUIREMENT The summary step above lists each result."
+          exit 1
+
+  # Transitional. Before Java CI Engines was folded into this workflow, .asf.yaml required its
+  # `Java CI Engines result` context. Branch protection changes only after this change merges, and
+  # .asf.yaml applies have failed with HTTP 502 when many PRs are open, so this job keeps reporting
+  # that context with the result of `Java CI result`. Delete it in a follow-up once master's branch
+  # protection no longer lists the context.
+  java-ci-engines-result:
+    name: Java CI Engines result
+    runs-on: ubuntu-slim
+    if: ${{ always() && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') }}
+    permissions: {}
+    needs: java-ci-result
+    steps:
+      - name: Fail unless Java CI result succeeded
+        if: ${{ needs.java-ci-result.result != 'success' }}
+        env:
+          RESULT: ${{ needs.java-ci-result.result }}
+        run: |
+          echo "::error::Java CI result is $RESULT. This transitional check mirrors it; see Java CI result for details."
+          exit 1

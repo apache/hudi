@@ -22,6 +22,7 @@ import org.apache.hudi.client.HoodieFlinkWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieFlinkEngineContext;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
@@ -47,6 +48,7 @@ import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.MissingSchemaFieldException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.HoodieHiveSyncException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
@@ -63,9 +65,11 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.SharedCoordinatorMetricGroup;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Gauge;
@@ -95,6 +99,7 @@ import org.slf4j.Logger;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -104,6 +109,7 @@ import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.index.HoodieIndex.IndexType.GLOBAL_RECORD_LEVEL_INDEX;
@@ -708,9 +714,32 @@ public class TestStreamWriteOperatorCoordinator {
   }
 
   @Test
-  void testHiveSyncFailureUpdatesMetrics() throws Exception {
+  void testHiveSyncBreakdownMetricsNotRegisteredUnlessDetailedMetricsEnabled() throws Exception {
+    coordinator.close();
+    CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
+    coordinator = startCoordinator(getUnreachableMetastoreConf(), metricGroup);
+
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+
+    assertEquals(1, metricGroup.counters.get("hiveSyncFailureCount").getCount(),
+        "A failed sync is counted whether or not the detailed metrics are enabled");
+    assertNotNull(metricGroup.counters.get("hiveSyncSuccessCount"));
+    assertNotNull(metricGroup.histograms.get("hiveSyncDurationMs"));
+    assertNotNull(metricGroup.gauges.get("hiveSyncLastSuccessTimeMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncInitDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncSchemaReadDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncPartitionScanDurationMs"));
+    assertNull(metricGroup.histograms.get("hiveSyncRemainingDurationMs"));
+    assertNull(metricGroup.counters.get("hiveSyncPartitionsAddedCount"));
+    assertNull(metricGroup.counters.get("hiveSyncSchemaEvolvedCount"));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", "properties."})
+  void testHiveSyncFailureUpdatesMetrics(String keyPrefix) throws Exception {
     coordinator.close();
     Configuration conf = getUnreachableMetastoreConf();
+    conf.setString(keyPrefix + HiveSyncConfigHolder.HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
     CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
     coordinator = startCoordinator(conf, metricGroup);
 
@@ -723,6 +752,9 @@ public class TestStreamWriteOperatorCoordinator {
     assertEquals(2, metricGroup.counters.get("hiveSyncFailureCount").getCount());
     assertEquals(2, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
     assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+    assertEquals(2, metricGroup.histograms.get("hiveSyncInitDurationMs").getCount(),
+        "The time spent failing to build the sync tool is init time");
+    assertEquals(0, metricGroup.histograms.get("hiveSyncRemainingDurationMs").getCount());
   }
 
   @Test
@@ -730,6 +762,7 @@ public class TestStreamWriteOperatorCoordinator {
     coordinator.close();
     Configuration conf = getUnreachableMetastoreConf();
     conf.set(FlinkOptions.HIVE_SYNC_IGNORE_EXCEPTIONS, true);
+    conf.setString(HiveSyncConfigHolder.HIVE_SYNC_DETAILED_METRICS_ENABLED.key(), "true");
     CapturingCoordinatorMetricGroup metricGroup = new CapturingCoordinatorMetricGroup();
     coordinator = startCoordinator(conf, metricGroup);
 
@@ -739,6 +772,27 @@ public class TestStreamWriteOperatorCoordinator {
     assertEquals(1, metricGroup.counters.get("hiveSyncFailureCount").getCount());
     assertEquals(1, metricGroup.histograms.get("hiveSyncDurationMs").getCount());
     assertEquals(0L, metricGroup.gauges.get("hiveSyncLastSuccessTimeMs").getValue());
+    assertEquals(1, metricGroup.histograms.get("hiveSyncInitDurationMs").getCount(),
+        "The time spent failing to connect is init time");
+    assertEquals(0, metricGroup.histograms.get("hiveSyncRemainingDurationMs").getCount(),
+        "A sync that never ran records no remaining time");
+  }
+
+  @Test
+  void testHiveSyncMetricsReportSyncsAfterCoordinatorRestart() throws Exception {
+    coordinator.close();
+    Configuration conf = getUnreachableMetastoreConf();
+    SharedCoordinatorMetricGroup metricGroup = new SharedCoordinatorMetricGroup(new JobID().toString(), new OperatorID().toString());
+    coordinator = startCoordinator(conf, metricGroup);
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+    coordinator.close();
+
+    // a restart that rebuilds the execution graph creates a new coordinator on the same metric group
+    coordinator = startCoordinator(conf, metricGroup.newView());
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+
+    assertEquals(2, metricGroup.getCounter("hiveSyncFailureCount").getCount());
+    assertEquals(2, metricGroup.getHistogram("hiveSyncDurationMs").getCount());
   }
 
   private Configuration getUnreachableMetastoreConf() {
@@ -832,6 +886,48 @@ public class TestStreamWriteOperatorCoordinator {
     completedTimeline = metadataTableMetaClient.getActiveTimeline().filterCompletedAndCompactionInstants();
     assertThat("The pending compaction should be recommitted",
         completedTimeline.nthFromLastInstant(3).get(), is(compactionInstant));
+  }
+
+  @Test
+  void testSkipInlineMetadataTableServices() throws Exception {
+    coordinator.close();
+    reset();
+    Configuration conf = TestConfigurations.getDefaultConf(tempFile.getAbsolutePath());
+    int metadataCompactionDeltaCommits = 5;
+    conf.set(FlinkOptions.METADATA_ENABLED, true);
+    conf.set(FlinkOptions.METADATA_COMPACTION_DELTA_COMMITS, metadataCompactionDeltaCommits);
+    conf.setString(HoodieMetadataConfig.INLINE_TABLE_SERVICES_ENABLED.key(), "false");
+    coordinator = startCoordinator(conf, 1);
+
+    final String metadataTableBasePath = HoodieTableMetadata.getMetadataTableBasePath(tempFile.getAbsolutePath());
+    HoodieTableMetaClient metadataTableMetaClient = HoodieTestUtils.createMetaClient(
+        new HadoopStorageConfiguration(HadoopConfigurations.getHadoopConf(conf)), metadataTableBasePath);
+    List<HoodieInstant> before = metadataTableMetaClient.getActiveTimeline().getInstants();
+
+    // Commits past the compaction threshold only add their own deltacommits: no clean, compaction or archival.
+    List<String> instants = new ArrayList<>();
+    for (int ckp = 0; ckp <= metadataCompactionDeltaCommits; ckp++) {
+      instants.add(mockWriteWithMetadata(ckp));
+    }
+    List<HoodieInstant> afterWrites = metadataTableMetaClient.reloadActiveTimeline().getInstants();
+    assertTrue(afterWrites.containsAll(before), "nothing should have been archived");
+    List<HoodieInstant> added = afterWrites.stream().filter(i -> !before.contains(i)).collect(Collectors.toList());
+    assertTrue(added.stream().allMatch(i -> i.getAction().equals(HoodieTimeline.DELTA_COMMIT_ACTION)),
+        "unexpected metadata instants " + added);
+    assertEquals(instants, added.stream().map(HoodieInstant::requestedTime).collect(Collectors.toList()));
+
+    // Restarting the coordinator does not run them either.
+    coordinator.close();
+    coordinator = startCoordinator(conf, 1);
+    assertEquals(afterWrites, metadataTableMetaClient.reloadActiveTimeline().getInstants());
+
+    // The same restart with the services enabled compacts, so the checks above cannot pass vacuously.
+    coordinator.close();
+    conf.setString(HoodieMetadataConfig.INLINE_TABLE_SERVICES_ENABLED.key(), "true");
+    coordinator = startCoordinator(conf, 1);
+    assertTrue(metadataTableMetaClient.reloadActiveTimeline().getInstants().stream()
+            .anyMatch(i -> i.getAction().equals(HoodieTimeline.COMMIT_ACTION) && !afterWrites.contains(i)),
+        "a compaction was due and should have run");
   }
 
   @Test
@@ -1094,6 +1190,7 @@ public class TestStreamWriteOperatorCoordinator {
 
   @Test
   void testReadyInstantRemainsAvailableWhileAnotherCreationIsBlocked() throws Exception {
+    resetToMergeOnRead(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()));
     String existingInstant = requestInstantTime(1L);
     MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
     CountDownLatch gate = new CountDownLatch(1);
@@ -1115,6 +1212,130 @@ public class TestStreamWriteOperatorCoordinator {
     } finally {
       gate.countDown();
     }
+  }
+
+  @Test
+  void testEarlierPendingInstantDefersCreationUntilRetry() throws Exception {
+    String instant1 = requestInstantTime(1L);
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    NonThrownExecutor worker = Mockito.spy(NonThrownExecutor.builder(Mockito.mock(Logger.class))
+        .exceptionHook((errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)))
+        .build());
+    coordinator.setInstantRequestExecutor(worker);
+
+    // An earlier checkpoint with an empty event buffer still represents a pending instant.
+    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L))
+            .get(1, TimeUnit.SECONDS));
+    assertNull(pending.getInstant());
+    Mockito.verify(worker, Mockito.never()).execute(Mockito.any(), Mockito.eq("request instant time"));
+    assertEquals(instant1, requestInstantTime(1L), "Matching checkpoint requests must reuse the pending instant");
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, instant1, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, instant1, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(2L);
+    assertEquals(instant1, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertFalse(worker.hasRunningTasks(), "Commit completion must not create an instant for a previously deferred request");
+    assertNull(coordinator.getEventBuffer(2L));
+
+    assertNotEquals(instant1, requestInstantTime(2L), "A new task-side poll must create the next instant");
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(ctx.isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"regional", "global"})
+  void testRecoveredWriterReusesPendingInstantAndRetries(String failover) throws Exception {
+    String instant1 = requestInstantTime(1L);
+    Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+        coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L)).get(1, TimeUnit.SECONDS));
+    assertNull(pending.getInstant());
+
+    if ("regional".equals(failover)) {
+      coordinator.subtaskReset(0, 1L);
+    } else {
+      CompletableFuture<byte[]> checkpoint = new CompletableFuture<>();
+      coordinator.checkpointCoordinator(1L, checkpoint);
+      coordinator.resetToCheckpoint(1L, checkpoint.get());
+    }
+    assertEquals(instant1, requestInstantTime(1L));
+    assertNull(coordinator.getEventBuffer(2L));
+
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, instant1, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, instant1, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(2L);
+    assertNotEquals(instant1, requestInstantTime(2L));
+    assertEquals(0, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"regional", "global"})
+  void testRecoveredWriterRollsBackLaterInstantAndContinues(String failover) throws Exception {
+    CompletableFuture<byte[]> checkpoint = new CompletableFuture<>();
+    coordinator.checkpointCoordinator(1L, checkpoint);
+    String abandonedInstant = requestInstantTime(2L);
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 2L, abandonedInstant, "par2", false, true, 0.1));
+
+    if ("regional".equals(failover)) {
+      coordinator.subtaskReset(0, 1L);
+      coordinator.subtaskReset(1, 1L);
+    } else {
+      coordinator.resetToCheckpoint(1L, checkpoint.get());
+    }
+    // One restored writer requests its instant before the other writer clears its old metadata.
+    coordinator.handleEventFromOperator(0, WriteMetadataEvent.emptyBootstrap(0, 1L, false));
+
+    String recoveredInstant = requestInstantTime(1L);
+    assertNotEquals(abandonedInstant, recoveredInstant);
+    assertEquals(recoveredInstant, requestInstantTime(1L));
+    assertEquals(1, TestUtils.getCompletedInstantCount(tempFile.getAbsolutePath(), HoodieTimeline.ROLLBACK_ACTION));
+    assertEquals(recoveredInstant, TestUtils.getLastPendingInstant(tempFile.getAbsolutePath()));
+
+    coordinator.handleEventFromOperator(1, WriteMetadataEvent.emptyBootstrap(1, 1L, false));
+    coordinator.handleEventFromOperator(0, createOperatorEvent(0, 1L, recoveredInstant, "par1", false, true, 0.1));
+    coordinator.handleEventFromOperator(1, createOperatorEvent(1, 1L, recoveredInstant, "par2", false, true, 0.1));
+    coordinator.notifyCheckpointComplete(3L);
+    assertEquals(recoveredInstant, TestUtils.getLastCompleteInstant(tempFile.getAbsolutePath()));
+    assertNull(coordinator.getEventBuffer(2L), "Checkpoint completion must remove the abandoned empty buffer");
+    assertNotEquals(recoveredInstant, requestInstantTime(3L));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
+  }
+
+  @Test
+  void testInstantCreationRechecksPendingBuffersOnWorker() throws Exception {
+    MockOperatorCoordinatorContext ctx = (MockOperatorCoordinatorContext) coordinator.getContext();
+    CountDownLatch gate = new CountDownLatch(1);
+    NonThrownExecutor worker = new GatedInstantRequestExecutor(Mockito.mock(Logger.class),
+        (errMsg, t) -> ctx.failJob(new HoodieException(errMsg, t)), gate);
+    coordinator.setInstantRequestExecutor(worker);
+    try {
+      Correspondent.InstantTimeResponse pending = CoordinationResponseSerDe.unwrap(
+          coordinator.handleCoordinationRequest(Correspondent.InstantTimeRequest.getInstance(2L)).get(1, TimeUnit.SECONDS));
+      assertNull(pending.getInstant());
+      // Bootstrap can restore a pending buffer after admission but before the creation worker runs.
+      Field buffersField = StreamWriteOperatorCoordinator.class.getDeclaredField("eventBuffers");
+      buffersField.setAccessible(true);
+      EventBuffers buffers = (EventBuffers) buffersField.get(coordinator);
+      buffers.initNewEventBuffer(1L, "001");
+    } finally {
+      gate.countDown();
+    }
+    worker.executeSync(() -> { }, "drain instant requests");
+    assertNull(coordinator.getEventBuffer(2L));
+    assertNotNull(coordinator.getEventBuffer(1L));
+    assertFalse(ctx.isJobFailed());
+  }
+
+  @Test
+  void testNonblockingInstantGenerationAllowsPendingBuffers() throws Exception {
+    resetToMergeOnRead(TestConfigurations.getDefaultConf(tempFile.getAbsolutePath()));
+    String instant1 = requestInstantTime(1L);
+    assertNotEquals(instant1, requestInstantTime(2L));
+    assertNotNull(coordinator.getEventBuffer(1L));
+    assertNotNull(coordinator.getEventBuffer(2L));
+    assertFalse(((MockOperatorCoordinatorContext) coordinator.getContext()).isJobFailed());
   }
 
   // -------------------------------------------------------------------------

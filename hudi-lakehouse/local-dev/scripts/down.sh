@@ -24,6 +24,7 @@ NS=hudi-lakehouse
 kubectl -n "$NS" delete sparkapplications --all --timeout=120s 2>/dev/null || true
 
 helm uninstall hudi-trino -n "$NS" 2>/dev/null || true
+helm uninstall hudi-spark-connect -n "$NS" 2>/dev/null || true
 helm uninstall spark-kubernetes-operator -n "$NS" 2>/dev/null || true
 kubectl delete namespace "$NS" --ignore-not-found --timeout=300s
 echo ">>> local-dev lakehouse removed"

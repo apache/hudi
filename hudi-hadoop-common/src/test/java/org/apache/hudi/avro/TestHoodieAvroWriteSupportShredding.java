@@ -677,8 +677,7 @@ class TestHoodieAvroWriteSupportShredding {
     }
 
     @Override
-    public GenericRecord rebuildVariantRecord(GenericRecord shreddedVariant, Schema shreddedSchema,
-                                              Schema unshreddedSchema) {
+    public VariantRebuilder prepareRebuild(String columnPath, GroupType parquetVariantType, Schema unshreddedSchema) {
       throw new UnsupportedOperationException(
           "the round trip reads raw parquet; the read half is TestHoodieVariantReconstruction's");
     }

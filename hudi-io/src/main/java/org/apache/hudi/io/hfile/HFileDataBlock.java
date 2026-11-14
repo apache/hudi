@@ -94,6 +94,7 @@ public class HFileDataBlock extends HFileBlock {
    * lexicographically greater than the lookup key.
    */
   int seekTo(HFileCursor cursor, Key key, long blockStartOffsetInFile) {
+    // Safe cast: a block is under 2GB, so an offset within it fits an int.
     int relativeOffset = (int) (cursor.getOffset() - blockStartOffsetInFile);
     int lastRelativeOffset = relativeOffset;
     Option<KeyValue> lastKeyValue = cursor.getKeyValue();
@@ -159,6 +160,7 @@ public class HFileDataBlock extends HFileBlock {
    * @return {@code true} if there is next {@link KeyValue}; {code false} otherwise.
    */
   boolean next(HFileCursor cursor, long blockStartOffsetInFile) {
+    // Safe cast: a block is under 2GB, so an offset within it fits an int.
     int offset = (int) (cursor.getOffset() - blockStartOffsetInFile);
     Option<KeyValue> keyValue = cursor.getKeyValue();
     if (!keyValue.isPresent()) {

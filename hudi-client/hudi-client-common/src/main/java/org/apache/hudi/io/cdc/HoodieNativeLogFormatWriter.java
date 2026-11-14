@@ -193,11 +193,14 @@ public class HoodieNativeLogFormatWriter extends HoodieLogFormat.Writer {
     fieldValues[0] = recordContext.convertValueToEngineType(recordKey);
     if (!OrderingValues.isCommitTimeOrderingValue(orderingValue)) {
       if (orderingFieldNames.size() == 1) {
-        fieldValues[1] = orderingValue;
+        fieldValues[1] = recordContext.convertValueToEngineType(orderingValue);
       } else {
         List<Comparable> orderingValues = OrderingValues.getValues((ArrayComparable) orderingValue);
         for (int i = 0; i < orderingValues.size(); i++) {
-          fieldValues[i + 1] = orderingValues.get(i);
+          // A null ordering field comes as the default ordering value and is written as NULL.
+          Comparable value = orderingValues.get(i);
+          fieldValues[i + 1] = OrderingValues.isCommitTimeOrderingValue(value)
+              ? null : recordContext.convertValueToEngineType(value);
         }
       }
     }

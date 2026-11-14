@@ -23,6 +23,8 @@ import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.util.CustomizedThreadFactory;
+import org.apache.hudi.common.util.FutureUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -51,10 +53,18 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
 import static org.apache.hudi.utilities.config.HoodieSchemaProviderConfig.SCHEMA_REGISTRY_BASE_URL;
@@ -79,12 +89,19 @@ public class HoodieMultiTableStreamer {
   private transient JavaSparkContext jssc;
   private final Set<String> successTables;
   private final Set<String> failedTables;
+  @Getter(AccessLevel.NONE)
+  private final boolean failFastOnContinuousMode;
+  @Getter(AccessLevel.NONE)
+  private final boolean continuousMode;
 
   public HoodieMultiTableStreamer(Config config, JavaSparkContext jssc) throws IOException {
     this.tableExecutionContexts = new ArrayList<>();
-    this.successTables = new HashSet<>();
-    this.failedTables = new HashSet<>();
+    // In continuous mode tables are synced concurrently, so use thread-safe sets.
+    this.successTables = ConcurrentHashMap.newKeySet();
+    this.failedTables = ConcurrentHashMap.newKeySet();
     this.jssc = jssc;
+    this.failFastOnContinuousMode = config.failFastOnContinuousMode;
+    this.continuousMode = config.continuousMode;
     String commonPropsFile = config.propsFilePath;
     String configFolder = config.configFolder;
     ValidationUtils.checkArgument(!config.filterDupes || config.operation != WriteOperationType.UPSERT,
@@ -389,6 +406,10 @@ public class HoodieMultiTableStreamer {
         + " source-fetch -> Transform -> Hudi Write in loop")
     public Boolean continuousMode = false;
 
+    @Parameter(names = {"--fail-fast-on-continuous"},
+        description = "In continuous mode, stop all table syncs on the first table failure. Default: false")
+    public Boolean failFastOnContinuousMode = false;
+
     @Parameter(names = {"--min-sync-interval-seconds"},
         description = "the min sync interval of each sync in continuous mode")
     public Integer minSyncIntervalSeconds = 0;
@@ -461,28 +482,222 @@ public class HoodieMultiTableStreamer {
 
   /**
    * Creates actual HoodieDeltaStreamer objects for every table/topic and does incremental sync.
+   *
+   * <p>In continuous mode each table's sync blocks until it is shut down, so the tables are synced concurrently.
+   * Otherwise the tables are synced sequentially, one after another.
    */
   public void sync() {
+    try {
+      if (continuousMode) {
+        syncContinuously();
+      } else {
+        syncSequentially();
+      }
+    } finally {
+      log.info("Ingestion was successful for topics: {}", successTables);
+      if (!failedTables.isEmpty()) {
+        log.error("Ingestion failed for topics: {}", failedTables);
+      }
+    }
+  }
+
+  private void syncSequentially() {
     for (TableExecutionContext context : tableExecutionContexts) {
+      String table = Helpers.getTableWithDatabase(context);
       HoodieStreamer streamer = null;
       try {
         streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
         streamer.sync();
-        successTables.add(Helpers.getTableWithDatabase(context));
-        streamer.shutdownGracefully();
+        successTables.add(table);
       } catch (Exception e) {
-        log.error("error while running MultiTableDeltaStreamer for table: {}", context.getTableName(), e);
-        failedTables.add(Helpers.getTableWithDatabase(context));
+        log.error("error while running MultiTableDeltaStreamer for table: {}", table, e);
+        failedTables.add(table);
       } finally {
         if (streamer != null) {
-          streamer.shutdownGracefully();
+          shutdownQuietly(streamer, table);
         }
       }
     }
+  }
 
-    log.info("Ingestion was successful for topics: {}", successTables);
+  /**
+   * Syncs all tables concurrently, one thread per table. Used for continuous mode where each table's sync blocks
+   * indefinitely.
+   *
+   * <p>When {@code --fail-fast-on-continuous} is enabled, the first table failure tears the sibling streamers down
+   * at once. They are interrupted mid-round rather than allowed to finish it, so a table can be left with an inflight
+   * instant that is rolled back on the next run. Otherwise every table is synced independently and a single failure
+   * does not affect the others.
+   *
+   * <p>Either way, a {@link HoodieException} is thrown if the run ends with a failed table, so the job exits with a
+   * non-zero status. Note that the run only ends once every table has stopped: a table failing while the others keep
+   * running does not end it, and surfaces through that table's error log and metrics rather than the exit code.
+   *
+   * <p>Teardown runs in a {@code finally} rather than a catch so that it also covers an {@link Error}, which the
+   * workers do not catch, and it is a no-op once a table has shut its own ingestion service down. The siblings are
+   * interrupted first, then waited on, so this does not return while a table is still writing and {@code main()}
+   * stops the shared Spark context under it.
+   */
+  private void syncContinuously() {
+    if (tableExecutionContexts.isEmpty()) {
+      return;
+    }
+    warnIfSchedulerIsNotFair();
+    // Streamer instances are registered from worker threads, so a thread-safe list is required.
+    final List<HoodieStreamer> streamerInstances = new CopyOnWriteArrayList<>();
+    // Set once fail fast trips, so tasks that register their streamer afterwards stop before starting the sync.
+    final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+    final ExecutorService executor = Executors.newFixedThreadPool(tableExecutionContexts.size(),
+        new CustomizedThreadFactory("multi-table-streamer", true));
+    try {
+      final List<CompletableFuture<Void>> tableFutures = tableExecutionContexts.stream()
+          .map(context -> CompletableFuture.runAsync(
+              () -> runTableSync(context, streamerInstances, shutdownRequested), executor))
+          .collect(Collectors.toList());
+
+      if (failFastOnContinuousMode) {
+        log.info("Fail fast enabled in continuous mode. The whole job fails on any single table failure");
+        awaitFailFast(tableFutures);
+      } else {
+        CompletableFuture.allOf(tableFutures.toArray(new CompletableFuture[0])).join();
+      }
+    } finally {
+      // FutureUtils.allOf only cancels the futures, so the siblings are still ingesting on an abnormal exit.
+      shutdownRequested.set(true);
+      interruptAllIngestion(streamerInstances);
+      // Logs rather than throws. The failure path is already propagating its own exception.
+      shutdownExecutor(executor);
+    }
+    // Reached only when nothing was rethrown above. Continuous mode is not meant to end, so returning here with a
+    // failed table would exit 0 and tell an orchestrator that nothing is wrong while nothing is ingesting.
     if (!failedTables.isEmpty()) {
-      log.info("Ingestion failed for topics: {}", failedTables);
+      throw new HoodieException("Continuous mode ended with failed tables: " + failedTables);
+    }
+  }
+
+  /**
+   * Warns when several tables share a SparkContext that schedules FIFO, where one table's job holds the cluster
+   * until it finishes and the others wait behind it. FAIR has to be set at submit time to interleave them.
+   */
+  private void warnIfSchedulerIsNotFair() {
+    if (tableExecutionContexts.size() < 2) {
+      return;
+    }
+    String schedulerMode = jssc.getConf().get(SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY, "FIFO");
+    if (!SchedulerConfGenerator.SPARK_SCHEDULER_FAIR_MODE.equalsIgnoreCase(schedulerMode)) {
+      log.warn("Syncing {} tables concurrently on a SparkContext with {}={}. One table's job will hold the cluster "
+          + "until it completes while the others queue behind it; set {}=FAIR at submit time to interleave them.",
+          tableExecutionContexts.size(), SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY, schedulerMode,
+          SchedulerConfGenerator.SPARK_SCHEDULER_MODE_KEY);
+    }
+  }
+
+  /**
+   * Syncs one table on the calling worker thread. Rethrows only under fail fast; otherwise the failure is recorded
+   * in {@link #failedTables} and the sibling tables carry on.
+   */
+  private void runTableSync(TableExecutionContext context, List<HoodieStreamer> streamerInstances, AtomicBoolean shutdownRequested) {
+    String table = Helpers.getTableWithDatabase(context);
+    // The tables now log concurrently into one driver log, so name the worker after the table it is syncing.
+    Thread.currentThread().setName("multi-table-streamer-" + table);
+    HoodieStreamer streamer = null;
+    try {
+      streamer = new HoodieStreamer(context.getConfig(), jssc, Option.ofNullable(context.getProperties()));
+      streamerInstances.add(streamer);
+      // Register before checking the flag so a concurrent interruptAllIngestion() always sees this streamer.
+      if (shutdownRequested.get()) {
+        return;
+      }
+      streamer.sync();
+      // sync() also returns when fail fast stopped this table, so do not call that a success. The stop can arrive
+      // as a flag rather than an interrupt if it lands while the table is starting up; the ingestion loop reads the
+      // flag between rounds, so the table finishes any round already in flight and then stops.
+      if (!shutdownRequested.get()) {
+        successTables.add(table);
+      }
+    } catch (Exception e) {
+      log.error("error while running MultiTableDeltaStreamer for table: {}", table, e);
+      failedTables.add(table);
+      if (failFastOnContinuousMode) {
+        // Name the table so the thrown exception identifies the culprit, not the siblings torn down after it.
+        throw new HoodieException("Table sync failed in continuous mode for table: " + table, e);
+      }
+    } finally {
+      if (streamer != null) {
+        shutdownQuietly(streamer, table);
+      }
+    }
+  }
+
+  /**
+   * Waits until either every table sync finishes successfully or the first one fails. On the first failure, the
+   * remaining streamers are shut down and a {@link HoodieException} is thrown. {@link FutureUtils#allOf} only trips
+   * on an <em>exceptional</em> completion, so a table that terminates normally (e.g. via a
+   * {@link PostWriteTerminationStrategy}) does not abort its siblings.
+   */
+  private static void awaitFailFast(List<CompletableFuture<Void>> tableFutures) {
+    try {
+      FutureUtils.allOf(tableFutures).join();
+    } catch (CompletionException e) {
+      Throwable cause = unwrapCompletionException(e);
+      // An Error is rethrown as is rather than boxed, so the JVM-level failure reaches the caller unchanged.
+      if (cause instanceof Error) {
+        throw (Error) cause;
+      }
+      log.error("error while running MultiTableDeltaStreamer, shutting down remaining tables as fail fast is enabled", cause);
+      throw new HoodieException("Fail fast is enabled and a table sync failed in continuous mode.", cause);
+    }
+  }
+
+  /**
+   * Releases a streamer's resources, logging rather than propagating a failure to do so. Closing can throw, and this
+   * runs in a {@code finally} on the failure path where escaping would mask the table failure and, in
+   * {@link #syncSequentially()}, abort the tables not synced yet.
+   */
+  private static void shutdownQuietly(HoodieStreamer streamer, String table) {
+    try {
+      streamer.shutdownGracefully();
+    } catch (Exception e) {
+      log.warn("error while shutting down the streamer for table: {}", table, e);
+    }
+  }
+
+  // A worker failure reaches the waiter wrapped in CompletionException, and FutureUtils.allOf re-wraps it, so the
+  // real cause can sit under more than one layer.
+  private static Throwable unwrapCompletionException(CompletionException e) {
+    Throwable cause = e;
+    while (cause instanceof CompletionException && cause.getCause() != null) {
+      cause = cause.getCause();
+    }
+    return cause;
+  }
+
+  /**
+   * Waits for the per-table workers to unwind, bounded by {@link Constants#SHUTDOWN_TIMEOUT_SECONDS} so a stuck table
+   * cannot hang the job. The workers are not interrupted: their ingestion services have already been, and a worker
+   * only waits on its own service, so interrupting it would just make it abandon that wait and close its StreamSync
+   * while the ingestion thread is still writing. A table that does not stop is reported rather than thrown, since the
+   * caller is either already propagating a failure or has seen every worker return.
+   */
+  private static void shutdownExecutor(ExecutorService executor) {
+    executor.shutdown();
+    try {
+      if (!executor.awaitTermination(Constants.SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+        log.error("table ingestion workers did not terminate; ingestion may still be running");
+      }
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      log.error("interrupted while waiting for the table ingestion workers to terminate; ingestion may still be running");
+    }
+  }
+
+  private static void interruptAllIngestion(List<HoodieStreamer> streamerInstances) {
+    for (HoodieStreamer streamer : streamerInstances) {
+      try {
+        streamer.interruptIngestion();
+      } catch (Exception e) {
+        log.warn("error while interrupting the ingestion of a streamer instance for the table: {}", streamer.getConfig().targetTableName, e);
+      }
     }
   }
 
@@ -497,5 +712,7 @@ public class HoodieMultiTableStreamer {
     private static final String DELIMITER = ".";
     private static final String UNDERSCORE = "_";
     private static final String COMMA_SEPARATOR = ",";
+    // How long the executor shutdown waits for the running table syncs to terminate.
+    private static final long SHUTDOWN_TIMEOUT_SECONDS = 60;
   }
 }

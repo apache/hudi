@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+import re
 import subprocess
 import sys
 import tomllib
@@ -30,7 +31,7 @@ import pytest
 
 GATEWAY_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = GATEWAY_DIR.parent
-SKILL_DIR = GATEWAY_DIR / "skills" / "hudi-architect"
+SKILL_DIR = REPO_ROOT / "hudi-ai-operator" / "skills" / "hudi-architect"
 REFERENCES_DIR = SKILL_DIR / "references"
 CAPABILITY_MANIFEST = REFERENCES_DIR / "flink-1.20-hudi-1.2.0-capabilities.toml"
 GATE_FIXTURE = (
@@ -38,9 +39,13 @@ GATE_FIXTURE = (
 )
 FLINK_VALIDATOR = SKILL_DIR / "validate_flink_capabilities.py"
 FLINK_DESIGN_VALIDATOR = SKILL_DIR / "validate_flink_design.py"
+FLINK_EXISTING_TABLE_VALIDATOR = SKILL_DIR / "validate_flink_existing_table.py"
 PINNED_HUDI_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
 PR2_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr2"
 PR3_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr3"
+PR4_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr4"
+PR5_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr5"
+PR6_FIXTURE_DIR = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / "flink_pr6"
 ASF_LICENSE_MARKER = "Licensed to the Apache Software Foundation (ASF) under one"
 PR2_JAVA_FIXTURE = (
     GATEWAY_DIR
@@ -56,6 +61,10 @@ PR2_JAVA_FIXTURE = (
     / "architect"
     / "TestFlinkArchitectSqlFixtures.java"
 )
+PR6_JAVA_FIXTURE = PR2_JAVA_FIXTURE.with_name("TestFlinkArchitectCatalogFixtures.java")
+PR7_JAVA_FIXTURE = PR2_JAVA_FIXTURE.with_name(
+    "TestFlinkArchitectWriterContractFixtures.java"
+)
 
 FLINK_REFERENCES = (
     "flink-1.20-hudi-1.2.0-capabilities.md",
@@ -64,6 +73,9 @@ FLINK_REFERENCES = (
     "flink-decision-overrides.md",
     "flink-warnings.md",
     "flink-config-templates.md",
+    "flink-existing-table-reconciliation.md",
+    "flink-catalog-composition.md",
+    "flink-writer-contract.md",
 )
 
 
@@ -124,10 +136,251 @@ def _run_flink_design_validator(
     )
 
 
+def _run_flink_existing_table_validator(
+    input_path: Path, *args: str
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(FLINK_EXISTING_TABLE_VALIDATOR),
+            "--input",
+            str(input_path),
+            *args,
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+
 def _write_design(tmp_path: Path, design: dict) -> Path:
     input_path = tmp_path / "design.json"
     input_path.write_text(json.dumps(design), encoding="utf-8")
     return input_path
+
+
+def _pr6_profile(profile_id: str) -> dict:
+    profiles = _load_toml(PR6_FIXTURE_DIR / "catalog_profiles.toml")["profile"]
+    profile = next(item for item in profiles if item["id"] == profile_id)
+    base_path = GATEWAY_DIR / "tests" / "fixtures" / "hudi_architect" / profile[
+        "base_fixture"
+    ]
+    design = json.loads(_read(base_path))
+    catalog = json.loads(profile["catalog"])
+    design["catalog"] = catalog
+    design["safety"]["external_catalog"] = profile_id != "direct_sql_none"
+    if "source_table" in profile:
+        design["source"]["table"] = profile["source_table"]
+    if catalog["resolution_mode"] == "hudi_dfs_catalog":
+        design["table"]["path"] = (
+            f"{catalog['catalog_path']}/{catalog['database']}/{design['table']['name']}"
+        )
+    return design
+
+
+def _pr6_mor_profile(
+    resolution_mode: str, query_modes: list[str], *, hive_conf_source: str
+) -> dict:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["safety"]["external_catalog"] = True
+    design["read"]["query_modes"] = query_modes
+    design["read"]["read_optimized_freshness"] = (
+        "after_compaction" if "read_optimized" in query_modes else "NOT_APPLICABLE"
+    )
+    strategy = (
+        "ALL"
+        if set(query_modes) == {"snapshot", "read_optimized"}
+        else "RT" if query_modes == ["snapshot"] else "RO"
+    )
+    if resolution_mode == "direct_sql":
+        design["catalog"] = {
+            "contract_schema": 1,
+            "resolution_mode": "direct_sql",
+            "external_discovery": "hive_metastore",
+            "sync_owner": "flink_sink",
+            "data_lifecycle_owner": "application",
+            "database": "analytics",
+            "hive_configuration": {
+                "source": "metastore_uris",
+                "location": "thrift://hms.example:9083",
+            },
+            "mor_sync_strategy": strategy,
+        }
+    else:
+        hive_configuration = (
+            {"source": "classpath"}
+            if hive_conf_source == "classpath"
+            else {"source": "hive_conf_dir", "location": "/etc/hive/conf"}
+        )
+        design["catalog"] = {
+            "contract_schema": 1,
+            "resolution_mode": "hudi_hms_catalog",
+            "external_discovery": "hive_metastore",
+            "sync_owner": "hudi_hms_catalog",
+            "data_lifecycle_owner": "application",
+            "catalog_name": "production_hudi",
+            "database": "analytics",
+            "hive_configuration": hive_configuration,
+            "table_external": True,
+            "mor_sync_strategy": strategy,
+        }
+        design["source"]["table"] = (
+            f"default_catalog.default_database.{design['source']['table']}"
+        )
+    return design
+
+
+def _compatible_existing_envelope(design: dict) -> dict:
+    desired = copy.deepcopy(design)
+    desired["safety"]["table_lifecycle"] = "existing"
+    record_keys = desired["identity"]["record_key_fields"]
+    partitions = desired["table"]["partition_fields"]
+    if not partitions:
+        key_generator = "NON_PARTITION"
+    elif len(record_keys) <= 1 and len(partitions) <= 1:
+        key_generator = "TIMESTAMP_AVRO"
+    else:
+        key_generator = "COMPLEX"
+    writer_facts = {
+        "design_contract_schema": desired["contract_schema"],
+        "operation": desired["write"]["operation"],
+    }
+    if desired["contract_schema"] in (2, 3):
+        writer_facts.update(
+            {
+                "index_bootstrap_enabled": desired["write"]["index"]["bootstrap_enabled"],
+                "index_global": desired["write"]["index"]["global"],
+                "index_state_ttl_days": desired["write"]["index"]["state_ttl_days"],
+                "index_type": desired["write"]["index"]["type"],
+            }
+        )
+    if desired["contract_schema"] == 3:
+        writer_facts["compaction_owner"] = desired["table_services"]["compaction"]["owner"]
+    timestamp_settings = {
+        "timestamp_type": "SCALAR",
+        "input_time_unit": "DAYS",
+        "output_date_format": "yyyyMMdd",
+        "output_timezone": "UTC",
+    }
+    if partitions:
+        writer_facts["timestamp_key_generator"] = timestamp_settings
+    return {
+        "reconciliation_schema": 1,
+        "baseline_id": "hudi-1.2.0-flink-1.20",
+        "writer_transition": "cold_start_new_job",
+        "desired_contract": desired,
+        "evidence": [
+            {
+                "evidence_id": "table-config-1",
+                "kind": "hoodie_properties",
+                "table_path": desired["table"]["path"],
+                "observed_at": "2026-10-19T10:30:00+08:00",
+                "sha256": "1" * 64,
+                "facts": {
+                    "table_name": desired["table"]["name"],
+                    "table_type": desired["write"]["table_type"],
+                    "table_version": 9,
+                    "initial_table_version": 9,
+                    "timeline_layout_version": 2,
+                    "base_file_format": "PARQUET",
+                    "record_key_fields": record_keys,
+                    "ordering_fields": desired.get("ordering", {}).get("fields", []),
+                    "partition_fields": partitions,
+                    "key_generator_type": key_generator,
+                    "record_merge_mode": desired["write"].get(
+                        "record_merge_mode", "COMMIT_TIME_ORDERING"
+                    ),
+                    "hive_style_partitioning": False,
+                    "url_encode_partitioning": False,
+                },
+            },
+            {
+                "evidence_id": "table-schema-1",
+                "kind": "hudi_table_schema",
+                "table_path": desired["table"]["path"],
+                "observed_at": "2026-10-19T10:30:00+08:00",
+                "sha256": "2" * 64,
+                "facts": {"columns": desired["table"]["columns"]},
+            },
+            {
+                "evidence_id": "writers-1",
+                "kind": "writer_inventory",
+                "table_path": desired["table"]["path"],
+                "observed_at": "2026-10-19T10:31:00+08:00",
+                "sha256": "3" * 64,
+                "facts": {
+                    "concurrent_writers": False,
+                    "previous_writer_engine": "FLINK",
+                    "previous_writer_stopped": True,
+                },
+            },
+            {
+                "evidence_id": "timeline-1",
+                "kind": "timeline_summary",
+                "table_path": desired["table"]["path"],
+                "observed_at": "2026-10-19T10:31:00+08:00",
+                "sha256": "4" * 64,
+                "facts": {"pending_instants": []},
+            },
+            {
+                "evidence_id": "identity-1",
+                "kind": "hudi_table_identity",
+                "table_path": desired["table"]["path"],
+                "observed_at": "2026-10-19T10:30:00+08:00",
+                "sha256": "5" * 64,
+                "facts": {"table_path": desired["table"]["path"]},
+            },
+            {
+                "evidence_id": "writer-config-1",
+                "kind": "flink_writer_config",
+                "table_path": desired["table"]["path"],
+                "observed_at": "2026-10-19T10:30:00+08:00",
+                "sha256": "6" * 64,
+                "facts": {
+                    **writer_facts,
+                },
+            },
+        ],
+    }
+
+
+def _pr7_writer_contract(
+    concurrency_mode: str = "OPTIMISTIC_CONCURRENCY_CONTROL",
+) -> dict:
+    return {
+        "contract_schema": 1,
+        "primary_writer_id": "flink-orders-stream",
+        "additional_writers": [
+            {
+                "writer_id": "spark-orders-backfill",
+                "role": "BACKFILL",
+                "relationship_to_primary": "INDEPENDENT_CONCURRENT",
+                "engine": "SPARK",
+                "engine_version": "3.5",
+                "hudi_version": "1.2.0",
+                "operation": "BULK_INSERT",
+            }
+        ],
+        "ownership": {
+            "schema_evolution_owner_id": "flink-orders-stream",
+            "table_configuration_owner_id": "flink-orders-stream",
+        },
+        "observed_concurrency": {
+            "mode": concurrency_mode,
+            "lock_provider_class": (
+                "org.apache.hudi.client.transaction.lock."
+                "FileSystemBasedLockProvider"
+            ),
+            "lock_configuration_consistency": "CONSISTENT",
+        },
+    }
+
+
+def _pr7_design(fixture: Path, concurrency_mode: str) -> dict:
+    design = json.loads(_read(fixture))
+    design["safety"]["writer_model"] = "multi_writer"
+    design["writer_contract"] = _pr7_writer_contract(concurrency_mode)
+    return design
 
 
 def test_flink_references_exist_and_are_linked_from_skill() -> None:
@@ -170,7 +423,7 @@ def test_flink_baseline_has_bounded_append_and_mutable_contracts() -> None:
         "fixture_version": "1.20.1",
     }
     assert PINNED_HUDI_REVISION in capability
-    assert manifest["schema_version"] == 3
+    assert manifest["schema_version"] == 7
     assert manifest["fixture_artifacts"] == {
         "hudi_bundle": "org.apache.hudi:hudi-flink1.20-bundle:1.2.0",
         "flink_version": "1.20.1",
@@ -195,6 +448,62 @@ def test_flink_baseline_has_bounded_append_and_mutable_contracts() -> None:
         "checkpoint_interval_min_ms": 1000,
         "flink_checkpoint_interval_min_ms": 10,
     }
+    reconciliation = manifest["existing_table_reconciliation_contract"]
+    assert reconciliation["reconciliation_schema"] == 1
+    assert reconciliation["supported_design_contract_schemas"] == [1, 2, 3]
+    assert reconciliation["assessment_only"] is True
+    assert reconciliation["executable_sql"] is False
+    assert reconciliation["required_evidence_kinds"] == [
+        "hoodie_properties",
+        "hudi_table_identity",
+        "hudi_table_schema",
+        "timeline_summary",
+        "writer_inventory",
+    ]
+    assert reconciliation["comparison_results"] == [
+        "CONFLICT",
+        "MATCH",
+        "NOT_APPLICABLE",
+        "UNVERIFIED",
+    ]
+    assert reconciliation["reconciliation_results"] == [
+        "COMPATIBLE",
+        "CONFLICT",
+        "UNVERIFIED",
+    ]
+    assert reconciliation["change_dispositions"] == [
+        "DEPLOYMENT_CONFIGURATION_CHANGE",
+        "MIGRATION_REQUIRED",
+        "NO_CHANGE",
+        "UNVERIFIED",
+    ]
+    assert reconciliation["finding_status"][
+        "FLINK_EXISTING_WRITER_CONFIG_CONFLICT"
+    ] == "REVIEW_REQUIRED"
+    assert reconciliation["finding_status"][
+        "FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED"
+    ] == "REVIEW_REQUIRED"
+    catalog_contract = manifest["catalog_composition_contract"]
+    assert catalog_contract["contract_schema"] == 1
+    assert catalog_contract["supported_design_contract_schemas"] == [1, 2, 3]
+    assert catalog_contract["catalog_freshness"] == "post_commit_eventual"
+    writer_contract = manifest["multi_writer_contract"]
+    assert writer_contract["contract_schema"] == 1
+    assert writer_contract["supported_design_contract_schemas"] == [1, 2, 3]
+    assert writer_contract["assessment_only"] is True
+    assert writer_contract["executable_sql"] is False
+    assert writer_contract["capability_results"] == [
+        "NOT_APPLICABLE",
+        "UNVERIFIED",
+        "UNSUPPORTED",
+    ]
+    assert [profile["id"] for profile in manifest["catalog_profiles"]] == [
+        "direct_sql_none",
+        "direct_sql_hive_metastore",
+        "hudi_dfs_catalog_none",
+        "hudi_dfs_catalog_hive_metastore",
+        "hudi_hms_catalog_hive_metastore",
+    ]
     assert "first executable" in capability
     assert "`CONFIG_VALIDATED`" in decisions
     assert "Executable eligible: true" in output
@@ -215,11 +524,21 @@ def test_flink_capability_validation_emits_pinned_evidence() -> None:
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout) == {
         "baseline_id": "hudi-1.2.0-flink-1.20",
-        "capability_manifest_schema": 3,
+        "capability_manifest_schema": 7,
+        "catalog_contract_schema": 1,
+        "catalog_profile": "direct_sql_none",
         "design_contract_schema": 1,
         "flink_fixture_version": "1.20.1",
         "hudi_source_revision": PINNED_HUDI_REVISION,
-        "supported_design_contract_schemas": [1, 2],
+        "supported_catalog_profiles": [
+            "direct_sql_none",
+            "direct_sql_hive_metastore",
+            "hudi_dfs_catalog_none",
+            "hudi_dfs_catalog_hive_metastore",
+            "hudi_hms_catalog_hive_metastore",
+        ],
+        "supported_design_contract_schemas": [1, 2, 3],
+        "writer_contract_schema": 1,
     }
 
 
@@ -310,7 +629,11 @@ def test_flink_capability_manifest_records_executable_acceptance_contracts() -> 
         for node in ast.walk(ast.parse(_read(Path(__file__))))
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
     }
-    java_fixture = _read(PR2_JAVA_FIXTURE)
+    java_fixture = (
+        _read(PR2_JAVA_FIXTURE)
+        + _read(PR6_JAVA_FIXTURE)
+        + _read(PR7_JAVA_FIXTURE)
+    )
     effective_settings = {
         setting["applies_to"]: {
             candidate["key"]: candidate["value"]
@@ -348,6 +671,23 @@ def test_flink_capability_manifest_records_executable_acceptance_contracts() -> 
             "table.type": "COPY_ON_WRITE",
             "write.operation": "upsert",
         },
+        "pr4-mutable-mor": {
+            "changelog.enabled": False,
+            "clustering.async.enabled": False,
+            "clustering.schedule.enabled": False,
+            "compaction.async.enabled": True,
+            "compaction.delta_commits": 5,
+            "compaction.operation.execute.async.enabled": True,
+            "compaction.schedule.enabled": True,
+            "compaction.trigger.strategy": "num_commits",
+            "hoodie.write.record.merge.mode": "EVENT_TIME_ORDERING",
+            "index.bootstrap.enabled": True,
+            "index.global.enabled": True,
+            "index.state.ttl": 0.0,
+            "index.type": "FLINK_STATE",
+            "table.type": "MERGE_ON_READ",
+            "write.operation": "upsert",
+        },
     }
     assert implemented_checks == {
         "FLINK_APPEND_MODE_CLUSTERING_ENABLED": (
@@ -357,6 +697,18 @@ def test_flink_capability_manifest_records_executable_acceptance_contracts() -> 
         "FLINK_BINARY_ROUTING_FIELD_UNSUPPORTED": (
             "test_pr2_rejects_binary_routing_fields",
             "testPinnedBinaryValuesUseObjectIdentityForRouting",
+        ),
+        "FLINK_CATALOG_LIFECYCLE_UNRESOLVED": (
+            "test_pr6_hms_catalog_requires_external_table",
+            "testPinnedHmsCatalogExternalFlag",
+        ),
+        "FLINK_CATALOG_MODE_UNSUPPORTED": (
+            "test_pr6_rejects_unsupported_catalog_compositions",
+            "testPinnedCatalogFactoryRejectsUnknownMode",
+        ),
+        "FLINK_CATALOG_PATH_CONFLICT": (
+            "test_pr6_rejects_dfs_catalog_path_mismatch",
+            "testPinnedDfsCatalogPathDerivation",
         ),
         "FLINK_RECORD_KEY_FIELD_MISSING": (
             "test_pr2_rejects_record_key_missing_from_append_schema",
@@ -382,6 +734,10 @@ def test_flink_capability_manifest_records_executable_acceptance_contracts() -> 
             "test_pr2_enforces_checkpoint_interval_safety_floor",
             "testPinnedRuntimeCheckpointIntervalBoundary",
         ),
+        "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT": (
+            "test_pr5_property_and_schema_conflicts_are_blocked_and_preserved",
+            "testPinnedExistingTableTypeOverridesConflictingOption",
+        ),
         "FLINK_MUTABLE_SOURCE_CHANGELOG_UNSUPPORTED": (
             "test_pr3_rejects_unsupported_source_changelog",
             "testMutableCowSinkAndUpsertPlan",
@@ -397,6 +753,38 @@ def test_flink_capability_manifest_records_executable_acceptance_contracts() -> 
         "FLINK_MUTABLE_INDEX_BOOTSTRAP_REQUIRED": (
             "test_pr3_requires_index_bootstrap",
             "testPinnedMutableIndexBootstrapConfiguration",
+        ),
+        "FLINK_MOR_CLUSTERING_UNSUPPORTED": (
+            "test_pr4_rejects_clustering",
+            "testPinnedMorClusteringDisabled",
+        ),
+        "FLINK_MOR_APPEND_ONLY_UNSUPPORTED": (
+            "test_pr4_rejects_append_only_mor",
+            "testPinnedAppendOnlyMorDoesNotScheduleCompaction",
+        ),
+        "FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED": (
+            "test_pr4_rejects_incompatible_compaction_configuration",
+            "testPinnedMorCompactionConfiguration",
+        ),
+        "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED": (
+            "test_pr4_rejects_strict_read_optimized_freshness",
+            "testPinnedMorQuerySemantics",
+        ),
+        "FLINK_MOR_CATALOG_NAMING_UNVERIFIED": (
+            "test_pr6_rejects_mor_catalog_naming_drift",
+            "testPinnedMorHiveSyncNamingDefaults",
+        ),
+        "FLINK_PR4_WRITE_PATH_UNSUPPORTED": (
+            "test_pr4_valid_mutable_mor_design_renders_exact_executable_sql",
+            "testMutableMorSinkAndCompactionPlan",
+        ),
+        "FLINK_MULTI_WRITER_REVIEW": (
+            "test_pr7_complete_occ_contract_is_assessment_only",
+            "testPinnedMultiWriterModesRequireLazyFailedWritesPolicy",
+        ),
+        "FLINK_WRITER_COMBINATION_UNSUPPORTED": (
+            "test_pr7_nbcc_is_unsupported_for_existing_bounded_indexes",
+            "testPinnedNbccRejectsCowAndNonSimpleBucketIndex",
         ),
     }
     for check in manifest["implemented_acceptance_checks"]:
@@ -509,11 +897,21 @@ def test_pr2_valid_designs_render_exact_executable_sql(fixture_name: str) -> Non
     ).rstrip("\n")
     assert assessment["validation_evidence"] == {
         "baseline_id": "hudi-1.2.0-flink-1.20",
-        "capability_manifest_schema": 3,
+        "capability_manifest_schema": 7,
+        "catalog_contract_schema": 1,
+        "catalog_profile": "direct_sql_none",
         "design_contract_schema": 1,
         "flink_fixture_version": "1.20.1",
         "hudi_source_revision": PINNED_HUDI_REVISION,
-        "supported_design_contract_schemas": [1, 2],
+        "supported_catalog_profiles": [
+            "direct_sql_none",
+            "direct_sql_hive_metastore",
+            "hudi_dfs_catalog_none",
+            "hudi_dfs_catalog_hive_metastore",
+            "hudi_hms_catalog_hive_metastore",
+        ],
+        "supported_design_contract_schemas": [1, 2, 3],
+        "writer_contract_schema": 1,
     }
 
 
@@ -530,7 +928,2197 @@ def test_pr3_valid_mutable_design_renders_exact_executable_sql() -> None:
         PR3_FIXTURE_DIR / "mutable_cow.sql"
     ).rstrip("\n")
     assert assessment["validation_evidence"]["design_contract_schema"] == 2
-    assert assessment["validation_evidence"]["capability_manifest_schema"] == 3
+    assert assessment["validation_evidence"]["capability_manifest_schema"] == 7
+
+
+def test_pr4_valid_mutable_mor_design_renders_exact_executable_sql() -> None:
+    result = _run_flink_design_validator(PR4_FIXTURE_DIR / "mutable_mor.json")
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["executable_eligible"] is True
+    assert assessment["finding_codes"] == []
+    assert assessment["advisory_codes"] == []
+    assert assessment["artifacts"]["combined_sql"] == _read_sql_golden(
+        PR4_FIXTURE_DIR / "mutable_mor.sql"
+    ).rstrip("\n")
+    assert assessment["validation_evidence"] == {
+        "baseline_id": "hudi-1.2.0-flink-1.20",
+        "capability_manifest_schema": 7,
+        "catalog_contract_schema": 1,
+        "catalog_profile": "direct_sql_none",
+        "design_contract_schema": 3,
+        "flink_fixture_version": "1.20.1",
+        "hudi_source_revision": PINNED_HUDI_REVISION,
+        "supported_catalog_profiles": [
+            "direct_sql_none",
+            "direct_sql_hive_metastore",
+            "hudi_dfs_catalog_none",
+            "hudi_dfs_catalog_hive_metastore",
+            "hudi_hms_catalog_hive_metastore",
+        ],
+        "supported_design_contract_schemas": [1, 2, 3],
+        "writer_contract_schema": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    "profile_id",
+    [
+        "direct_sql_none",
+        "direct_sql_hive_metastore",
+        "hudi_dfs_catalog_none",
+        "hudi_dfs_catalog_hive_metastore",
+        "hudi_hms_catalog_hive_metastore",
+    ],
+)
+def test_pr6_supported_catalog_profiles_render_deterministically(
+    tmp_path: Path, profile_id: str
+) -> None:
+    design = _pr6_profile(profile_id)
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["catalog_profile"] == profile_id
+    assert assessment["catalog_contract_schema"] == 1
+    assert assessment["validation_evidence"]["catalog_profile"] == profile_id
+    expected_checks = {
+        "direct_sql_none": [],
+        "direct_sql_hive_metastore": [
+            "verify_hive_configuration_available",
+            "verify_hms_connectivity",
+            "verify_table_registration_after_commit",
+            "verify_partition_registration_after_commit",
+            "verify_external_engine_visibility",
+        ],
+        "hudi_dfs_catalog_none": [
+            "verify_catalog_dependencies",
+            "verify_catalog_path_exists",
+            "verify_catalog_path_permissions",
+            "verify_catalog_database_registration",
+        ],
+        "hudi_dfs_catalog_hive_metastore": [
+            "verify_catalog_dependencies",
+            "verify_catalog_path_exists",
+            "verify_catalog_path_permissions",
+            "verify_hive_configuration_available",
+            "verify_hms_connectivity",
+            "verify_catalog_database_registration",
+            "verify_table_registration_after_commit",
+            "verify_partition_registration_after_commit",
+            "verify_external_engine_visibility",
+        ],
+        "hudi_hms_catalog_hive_metastore": [
+            "verify_catalog_dependencies",
+            "verify_hive_configuration_available",
+            "verify_hms_connectivity",
+            "verify_catalog_database_registration",
+            "verify_table_registration_after_commit",
+            "verify_partition_registration_after_commit",
+            "verify_external_engine_visibility",
+        ],
+    }
+    assert assessment["catalog_deployment_checks"] == expected_checks[profile_id]
+    sql = assessment["artifacts"]["combined_sql"]
+    table_ddl = assessment["artifacts"]["table_ddl"]
+    assert sql.index("SET 'execution.runtime-mode'") < sql.index("CREATE TABLE")
+    if profile_id.startswith("hudi_dfs_catalog"):
+        assert "CREATE CATALOG `lake`" in sql
+        assert "'mode' = 'dfs'" in sql
+        assert "'path' =" not in table_ddl
+    elif profile_id == "hudi_hms_catalog_hive_metastore":
+        assert "CREATE CATALOG `production_hudi`" in sql
+        assert "'mode' = 'hms'" in sql
+        assert "'table.external' = 'true'" in sql
+        assert design["table"]["path"] in table_ddl
+        assert "'hive_sync." not in table_ddl
+    else:
+        assert assessment["catalog_setup_sql"] == ""
+        if profile_id == "direct_sql_none":
+            assert "'hive_sync.enabled'" not in table_ddl
+            assert sql == _read_sql_golden(PR2_FIXTURE_DIR / "stable_key.sql").rstrip(
+                "\n"
+            )
+        else:
+            assert "'hive_sync.enabled' = 'true'" in table_ddl
+    if assessment["catalog_setup_sql"]:
+        ordered_markers = [
+            "SET 'execution.runtime-mode'",
+            "CREATE CATALOG",
+            "USE CATALOG",
+            "CREATE DATABASE",
+            "USE `analytics`",
+            "CREATE TABLE",
+            "INSERT INTO",
+        ]
+        positions = [sql.index(marker) for marker in ordered_markers]
+        assert positions == sorted(positions)
+        assert (
+            "FROM `default_catalog`.`default_database`.`orders_mutable_source`;"
+            in assessment["artifacts"]["insert_sql"]
+        )
+    if design["catalog"]["external_discovery"] == "hive_metastore":
+        assert assessment["effective_catalog_configuration"][
+            "catalog_freshness"
+        ] == "post_commit_eventual"
+        effective_sync = assessment["effective_catalog_configuration"]["hive_sync"]
+        assert effective_sync["enabled"] is True
+        assert effective_sync["ignore_exceptions"] is False
+        assert effective_sync["skip_ro_suffix"] is False
+        assert effective_sync["snapshot_with_table_name"] is True
+        assert effective_sync["support_timestamp"] is True
+        assert "verify_hms_connectivity" in assessment["catalog_deployment_checks"]
+        if assessment["effective_catalog_configuration"]["sync_owner"] == "flink_sink":
+            rendered_sync_keys = re.findall(r"'hive_sync\.[^']+'", table_ddl)
+            assert rendered_sync_keys == [
+                "'hive_sync.enabled'",
+                "'hive_sync.mode'",
+                "'hive_sync.metastore.uris'",
+                "'hive_sync.db'",
+                "'hive_sync.table'",
+            ]
+
+
+@pytest.mark.parametrize(
+    "profile_id",
+    [
+        "hudi_dfs_catalog_none",
+        "hudi_dfs_catalog_hive_metastore",
+        "hudi_hms_catalog_hive_metastore",
+    ],
+)
+def test_pr6_catalog_managed_profiles_require_fully_qualified_source(
+    tmp_path: Path, profile_id: str
+) -> None:
+    design = _pr6_profile(profile_id)
+    design["source"]["table"] = "orders_mutable_source"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert assessment["status"] == "INCOMPLETE"
+    assert "FLINK_SOURCE_CONTRACT_REQUIRED" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    "profile_id",
+    [
+        "hudi_dfs_catalog_none",
+        "hudi_dfs_catalog_hive_metastore",
+        "hudi_hms_catalog_hive_metastore",
+    ],
+)
+def test_pr6_catalog_managed_profiles_reject_same_source_and_target(
+    tmp_path: Path, profile_id: str
+) -> None:
+    design = _pr6_profile(profile_id)
+    catalog = design["catalog"]
+    design["source"]["table"] = (
+        f"{catalog['catalog_name']}.{catalog['database']}.{design['table']['name']}"
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert assessment["status"] == "BLOCKED"
+    assert "FLINK_CATALOG_COMPOSITION_CONFLICT" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("partition_fields", "expected_status"),
+    [
+        (["partition_date", "region"], "CONFIG_VALIDATED"),
+        (["region", "partition_date"], "BLOCKED"),
+    ],
+)
+def test_pr6_hms_catalog_validates_physical_partition_order(
+    tmp_path: Path, partition_fields: list[str], expected_status: str
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    region = {"name": "region", "type": "STRING", "nullable": False}
+    design["table"]["columns"].append(region)
+    design["source"]["columns"].append(region)
+    design["table"]["partition_fields"] = partition_fields
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert assessment["status"] == expected_status
+    if expected_status == "CONFIG_VALIDATED":
+        assert result.returncode == 0
+        assert "FLINK_CATALOG_COMPOSITION_CONFLICT" not in assessment["finding_codes"]
+        assert (
+            "PARTITIONED BY (`partition_date`, `region`)"
+            in assessment["artifacts"]["table_ddl"]
+        )
+    else:
+        assert result.returncode == 1
+        assert "FLINK_CATALOG_COMPOSITION_CONFLICT" in assessment["finding_codes"]
+        assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("query_modes", "strategy", "registered_names"),
+    [
+        (["snapshot"], "RT", ["orders_mutable_mor_hudi"]),
+        (["read_optimized"], "RO", ["orders_mutable_mor_hudi"]),
+    ],
+)
+def test_pr6_direct_mor_hive_sync_derives_strategy_and_names(
+    tmp_path: Path,
+    query_modes: list[str],
+    strategy: str,
+    registered_names: list[str],
+) -> None:
+    design = _pr6_mor_profile(
+        "direct_sql", query_modes, hive_conf_source="metastore_uris"
+    )
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert f"'hive_sync.table.strategy' = '{strategy}'" in assessment["artifacts"][
+        "table_ddl"
+    ]
+    assert assessment["effective_catalog_configuration"]["hive_sync"][
+        "registered_table_names"
+    ] == registered_names
+
+
+def test_pr6_hms_mor_all_uses_fixed_registration_names(tmp_path: Path) -> None:
+    design = _pr6_mor_profile(
+        "hudi_hms_catalog",
+        ["snapshot", "read_optimized"],
+        hive_conf_source="classpath",
+    )
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["catalog_profile"] == "hudi_hms_catalog_hive_metastore"
+    assert "'hive_sync.table.strategy' = 'ALL'" in assessment["artifacts"][
+        "table_ddl"
+    ]
+    assert "'hive_sync.enabled'" not in assessment["artifacts"]["table_ddl"]
+    assert assessment["effective_catalog_configuration"]["hive_sync"][
+        "registered_table_names"
+    ] == [
+        "orders_mutable_mor_hudi_ro",
+        "orders_mutable_mor_hudi_rt",
+        "orders_mutable_mor_hudi",
+    ]
+
+
+def test_pr6_rejects_dfs_catalog_path_mismatch(tmp_path: Path) -> None:
+    design = _pr6_profile("hudi_dfs_catalog_none")
+    design["table"]["path"] = "file:///tmp/a-different-table"
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "BLOCKED"
+    assert "FLINK_CATALOG_PATH_CONFLICT" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("catalog_patch", "finding_code"),
+    [
+        (
+            {
+                "resolution_mode": "hudi_hms_catalog",
+                "external_discovery": "none",
+            },
+            "FLINK_CATALOG_COMPOSITION_CONFLICT",
+        ),
+        ({"resolution_mode": "iceberg_catalog"}, "FLINK_CATALOG_MODE_UNSUPPORTED"),
+        (
+            {"external_discovery": "aws_glue"},
+            "FLINK_GLUE_CATALOG_UNVERIFIED",
+        ),
+    ],
+)
+def test_pr6_rejects_unsupported_catalog_compositions(
+    tmp_path: Path, catalog_patch: dict, finding_code: str
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"].update(catalog_patch)
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert finding_code in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr6_hms_catalog_requires_external_table(tmp_path: Path) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"]["table_external"] = False
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "BLOCKED"
+    assert "FLINK_CATALOG_COMPOSITION_CONFLICT" in assessment["finding_codes"]
+
+
+def test_pr6_hms_catalog_requires_external_table_decision(tmp_path: Path) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"].pop("table_external")
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["finding_codes"] == ["FLINK_CATALOG_LIFECYCLE_UNRESOLVED"]
+
+
+def test_pr6_hms_catalog_rejects_malformed_external_table_decision(
+    tmp_path: Path,
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"]["table_external"] = []
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["finding_codes"] == ["FLINK_CATALOG_CONTRACT_INVALID"]
+
+
+def test_pr6_requires_explicit_dfs_lifecycle_acceptance(tmp_path: Path) -> None:
+    design = _pr6_profile("hudi_dfs_catalog_none")
+    design["catalog"].pop("data_lifecycle_owner")
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert "FLINK_CATALOG_LIFECYCLE_UNRESOLVED" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+def test_pr6_blocks_declined_dfs_lifecycle_ownership(tmp_path: Path) -> None:
+    design = _pr6_profile("hudi_dfs_catalog_none")
+    design["catalog"]["data_lifecycle_owner"] = "application"
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["finding_codes"] == ["FLINK_CATALOG_COMPOSITION_CONFLICT"]
+    assert "artifacts" not in assessment
+
+
+def test_pr6_rejects_mor_catalog_naming_drift(tmp_path: Path) -> None:
+    design = _pr6_mor_profile(
+        "direct_sql", ["snapshot", "read_optimized"], hive_conf_source="metastore_uris"
+    )
+    design["catalog"]["mor_sync_strategy"] = "RO"
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert "FLINK_MOR_CATALOG_NAMING_UNVERIFIED" in assessment["finding_codes"]
+
+
+def test_pr6_requires_catalog_contract_for_legacy_true_gate(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["safety"]["external_catalog"] = True
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["finding_codes"] == ["FLINK_CATALOG_CONTRACT_REQUIRED"]
+
+
+def test_pr6_blocks_catalog_gate_and_owner_conflicts(tmp_path: Path) -> None:
+    design = _pr6_profile("direct_sql_hive_metastore")
+    design["safety"]["external_catalog"] = False
+    design["catalog"]["sync_owner"] = "hudi_hms_catalog"
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["finding_codes"] == ["FLINK_CATALOG_COMPOSITION_CONFLICT"]
+
+
+@pytest.mark.parametrize(
+    "hive_configuration",
+    [
+        {
+            "source": "metastore_uris",
+            "location": "thrift://user:secret@hms.example:9083",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:9083?token=secret",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:9083/password=secret",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:9083;password=secret",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:9083/path",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:badport",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example",
+        },
+        {
+            "source": "metastore_uris",
+            "location": "thrift://hms.example:70000",
+        },
+        {"source": "metastore_uris", "location": "http://hms.example:9083"},
+    ],
+)
+def test_pr6_rejects_credentialed_or_non_thrift_metastore_uris(
+    tmp_path: Path, hive_configuration: dict
+) -> None:
+    design = _pr6_profile("direct_sql_hive_metastore")
+    design["catalog"]["hive_configuration"] = hive_configuration
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["executable_eligible"] is False
+    assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert hive_configuration["location"] not in json.dumps(assessment)
+    if "secret" in str(hive_configuration):
+        assert "FLINK_CATALOG_CREDENTIAL_REJECTED" in assessment["finding_codes"]
+
+
+def test_pr6_accepts_multiple_well_formed_metastore_uris(tmp_path: Path) -> None:
+    design = _pr6_profile("direct_sql_hive_metastore")
+    design["catalog"]["hive_configuration"]["location"] = (
+        "thrift://hms-a.example:9083,thrift://[::1]:9084"
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 0, result.stderr
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert (
+        "'hive_sync.metastore.uris' = "
+        "'thrift://hms-a.example:9083,thrift://[::1]:9084'"
+        in assessment["artifacts"]["table_ddl"]
+    )
+
+
+@pytest.mark.parametrize("catalog", [None, [], "hms"])
+def test_pr6_malformed_catalog_contract_fails_closed(
+    tmp_path: Path, catalog: object
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["safety"]["external_catalog"] = True
+    design["catalog"] = catalog
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert assessment["status"] == "INCOMPLETE"
+    assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert "FLINK_CATALOG_MODE_UNSUPPORTED" not in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("resolution_mode", []),
+        ("resolution_mode", {}),
+        ("external_discovery", []),
+        ("sync_owner", {}),
+        ("data_lifecycle_owner", []),
+    ],
+)
+def test_pr6_malformed_catalog_fields_fail_closed(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"][field] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr6_existing_table_malformed_catalog_field_fails_closed(
+    tmp_path: Path,
+) -> None:
+    design = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    design["catalog"]["resolution_mode"] = {}
+    envelope = _compatible_existing_envelope(design)
+    input_path = tmp_path / "existing-malformed-catalog.json"
+    input_path.write_text(json.dumps(envelope), encoding="utf-8")
+
+    result = _run_flink_existing_table_validator(input_path)
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert "Traceback" not in result.stderr
+    assert "FLINK_CATALOG_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("resolution_mode", "iceberg_catalog"),
+        ("external_discovery", "custom_metastore"),
+        ("sync_owner", "another_job"),
+        ("data_lifecycle_owner", "unknown"),
+    ],
+)
+def test_pr6_unknown_catalog_modes_and_owners_are_blocked(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    design = _pr6_profile("direct_sql_hive_metastore")
+    design["catalog"][field] = value
+
+    assessment = json.loads(
+        _run_flink_design_validator(_write_design(tmp_path, design)).stdout
+    )
+
+    assert assessment["status"] == "BLOCKED"
+    assert "FLINK_CATALOG_MODE_UNSUPPORTED" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+def test_pr6_malformed_mor_query_modes_fail_closed(tmp_path: Path) -> None:
+    design = _pr6_mor_profile(
+        "direct_sql", ["snapshot"], hive_conf_source="metastore_uris"
+    )
+    design["read"]["query_modes"] = [{}]
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert "FLINK_MOR_CATALOG_NAMING_UNVERIFIED" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+def test_pr6_existing_catalog_mutation_remains_unverified(tmp_path: Path) -> None:
+    desired = _pr6_profile("hudi_hms_catalog_hive_metastore")
+    envelope = _compatible_existing_envelope(desired)
+    input_path = tmp_path / "existing.json"
+    input_path.write_text(json.dumps(envelope), encoding="utf-8")
+
+    result = _run_flink_existing_table_validator(input_path)
+    assessment = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert "FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert assessment["catalog_contract_schema"] == 1
+    assert assessment["catalog_profile"] == "hudi_hms_catalog_hive_metastore"
+    assert assessment["catalog_setup_sql"] == ""
+    assert assessment["effective_catalog_configuration"]["catalog_freshness"] == (
+        "post_commit_eventual"
+    )
+    assert "verify_hms_connectivity" in assessment["catalog_deployment_checks"]
+
+
+def test_pr7_keeps_single_writer_contract_not_applicable_and_sql_stable() -> None:
+    result = _run_flink_design_validator(PR2_FIXTURE_DIR / "stable_key.json")
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert assessment["multi_writer_capability"] == "NOT_APPLICABLE"
+    assert assessment["normalized_writer_contract"] == {}
+    assert assessment["writer_capability_notes"] == []
+    assert assessment["writer_deployment_checks"] == []
+    assert assessment["artifacts"]["combined_sql"] == _read_sql_golden(
+        PR2_FIXTURE_DIR / "stable_key.sql"
+    ).rstrip("\n")
+
+
+def test_pr7_requires_contract_for_confirmed_multi_writer(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["safety"]["writer_model"] = "multi_writer"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "INCOMPLETE"
+    assert assessment["multi_writer_capability"] == "UNVERIFIED"
+    assert "FLINK_MULTI_WRITER_REVIEW" in assessment["finding_codes"]
+    assert "FLINK_WRITER_CONTRACT_REQUIRED" in assessment["finding_codes"]
+    assert "artifacts" not in assessment
+
+
+def test_pr7_complete_occ_contract_is_assessment_only(tmp_path: Path) -> None:
+    design = _pr7_design(
+        PR2_FIXTURE_DIR / "stable_key.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "COMPLETE"
+    assert assessment["multi_writer_capability"] == "UNVERIFIED"
+    assert assessment["normalized_writer_contract"]["primary_writer_facts"] == {
+        "engine": "FLINK",
+        "engine_version": "1.20.1",
+        "hudi_version": "1.2.0",
+        "operation": "INSERT",
+    }
+    assert [note["code"] for note in assessment["writer_capability_notes"]] == [
+        "FLINK_OCC_DEPLOYMENT_UNVERIFIED",
+        "FLINK_CROSS_ENGINE_WRITER_UNVERIFIED",
+    ]
+    assert len(assessment["writer_deployment_checks"]) == 6
+    assert assessment["finding_codes"] == ["FLINK_MULTI_WRITER_REVIEW"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr7_additional_flink_writer_version_drift_is_unverified(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR2_FIXTURE_DIR / "stable_key.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    additional_writer = design["writer_contract"]["additional_writers"][0]
+    additional_writer["engine"] = "FLINK"
+    additional_writer["engine_version"] = "1.19.1"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "COMPLETE"
+    assert "FLINK_VERSION_UNVERIFIED" in assessment["finding_codes"]
+    assert "FLINK_CROSS_ENGINE_WRITER_UNVERIFIED" not in {
+        note["code"] for note in assessment["writer_capability_notes"]
+    }
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_invalid_writer_fact_messages_are_deterministic(tmp_path: Path) -> None:
+    design = _pr7_design(
+        PR2_FIXTURE_DIR / "stable_key.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    design["writer_contract"]["additional_writers"] = [{}]
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    invalid = next(
+        finding
+        for finding in assessment["findings"]
+        if finding["code"] == "FLINK_WRITER_CONTRACT_INVALID"
+    )
+    assert invalid["message"] == (
+        "writer_contract.additional_writers[0].engine must be a non-empty string; "
+        "writer_contract.additional_writers[0].engine_version must be a non-empty string; "
+        "writer_contract.additional_writers[0].hudi_version must be a non-empty string; "
+        "writer_contract.additional_writers[0].operation must be a non-empty string; "
+        "writer_contract.additional_writers[0].relationship_to_primary must be a non-empty "
+        "string; writer_contract.additional_writers[0].role must be a non-empty string; "
+        "writer_contract.additional_writers[0].writer_id must be a non-empty string"
+    )
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    [
+        PR2_FIXTURE_DIR / "stable_key.json",
+        PR4_FIXTURE_DIR / "mutable_mor.json",
+    ],
+)
+def test_pr7_nbcc_is_unsupported_for_existing_bounded_indexes(
+    tmp_path: Path, fixture: Path
+) -> None:
+    design = _pr7_design(fixture, "NON_BLOCKING_CONCURRENCY_CONTROL")
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["writer_contract_result"] == "COMPLETE"
+    assert assessment["multi_writer_capability"] == "UNSUPPORTED"
+    assert "FLINK_WRITER_COMBINATION_UNSUPPORTED" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    "contract_patch",
+    [
+        {"contract_schema": True},
+        {"additional_writers": []},
+        {"unsupported_field": "value"},
+    ],
+)
+def test_pr7_malformed_writer_contract_fails_closed(
+    tmp_path: Path, contract_patch: dict
+) -> None:
+    design = _pr7_design(
+        PR2_FIXTURE_DIR / "stable_key.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    design["writer_contract"].update(contract_patch)
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == "INCOMPLETE"
+    assert assessment["multi_writer_capability"] == "UNVERIFIED"
+    assert assessment["normalized_writer_contract"] == {}
+    assert "FLINK_WRITER_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr7_unknown_writer_model_does_not_fabricate_contract(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["safety"]["writer_model"] = "unknown"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert assessment["multi_writer_capability"] == "NOT_APPLICABLE"
+    assert assessment["normalized_writer_contract"] == {}
+    assert assessment["writer_deployment_checks"] == []
+    assert assessment["finding_codes"] == ["FLINK_WRITER_MODEL_UNRESOLVED"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("writer_model", [[], {}])
+def test_pr7_non_string_writer_model_fails_closed(
+    tmp_path: Path, writer_model: object
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["safety"]["writer_model"] = writer_model
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert assessment["multi_writer_capability"] == "NOT_APPLICABLE"
+    assert assessment["finding_codes"] == ["FLINK_WRITER_MODEL_UNRESOLVED"]
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("writer_model", [[], {}])
+def test_pr7_existing_table_rejects_non_string_writer_model_without_traceback(
+    tmp_path: Path, writer_model: object
+) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    envelope = _compatible_existing_envelope(design)
+    envelope["desired_contract"]["safety"]["writer_model"] = writer_model
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert "FLINK_WRITER_MODEL_UNRESOLVED" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_single_writer_inventory_disagreement_stays_unverified(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["active_writers"] = ["writer1", "writer2"]
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert assessment["multi_writer_capability"] == "NOT_APPLICABLE"
+    assert "FLINK_MULTI_WRITER_REVIEW" in assessment["finding_codes"]
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" in assessment["finding_codes"]
+    comparison = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == "writer_inventory.active_writers"
+    )
+    assert comparison == {
+        "desired": {"maximum_count": 1},
+        "field": "writer_inventory.active_writers",
+        "observed": ["writer1", "writer2"],
+        "result": "UNVERIFIED",
+        "source_ids": ["writers-1"],
+    }
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_separate_inventory_snapshots_do_not_fabricate_internal_conflict(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    second_inventory = copy.deepcopy(inventory)
+    second_inventory["evidence_id"] = "writers-2"
+    second_inventory["sha256"] = "8" * 64
+    second_inventory["facts"] = {"active_writers": ["writer1", "writer2"]}
+    envelope["evidence"].append(second_inventory)
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert "FLINK_MULTI_WRITER_REVIEW" in assessment["finding_codes"]
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" not in assessment["finding_codes"]
+
+
+@pytest.mark.parametrize(
+    ("concurrency_mode", "expected_status", "expected_capability"),
+    [
+        ("OPTIMISTIC_CONCURRENCY_CONTROL", "REVIEW_REQUIRED", "UNVERIFIED"),
+        ("NON_BLOCKING_CONCURRENCY_CONTROL", "BLOCKED", "UNSUPPORTED"),
+    ],
+)
+def test_pr7_single_writer_concurrency_evidence_prevents_compatibility(
+    tmp_path: Path,
+    concurrency_mode: str,
+    expected_status: str,
+    expected_capability: str,
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    envelope = _compatible_existing_envelope(design)
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"].update(
+        {
+            "write_concurrency_mode": concurrency_mode,
+            "lock_configuration_consistency": "CONFLICTING",
+        }
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == expected_status
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["writer_contract_result"] == "NOT_APPLICABLE"
+    assert assessment["multi_writer_capability"] == expected_capability
+    assert "FLINK_MULTI_WRITER_REVIEW" in assessment["finding_codes"]
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" in assessment["finding_codes"]
+    if concurrency_mode == "NON_BLOCKING_CONCURRENCY_CONTROL":
+        assert "FLINK_WRITER_COMBINATION_UNSUPPORTED" in assessment["finding_codes"]
+    writer_fields = {
+        item["field"]: item for item in assessment["comparisons"]
+    }
+    assert writer_fields["writer_config.write_concurrency_mode"]["observed"] == (
+        concurrency_mode
+    )
+    assert writer_fields["writer_config.lock_configuration_consistency"][
+        "observed"
+    ] == "CONFLICTING"
+    assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize(
+    ("fact_name", "invalid_value"),
+    [
+        ("write_concurrency_mode", "MAGIC_CONCURRENCY"),
+        ("lock_configuration_consistency", "PARTIALLY_CONSISTENT"),
+    ],
+)
+def test_pr7_rejects_unbounded_concurrency_evidence_enums(
+    tmp_path: Path, fact_name: str, invalid_value: str
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    envelope = _compatible_existing_envelope(design)
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"][fact_name] = invalid_value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert "FLINK_EXISTING_EVIDENCE_INVALID" in assessment["finding_codes"]
+    assert not any(
+        item["field"] == f"writer_config.{fact_name}"
+        for item in assessment["comparisons"]
+    )
+
+
+def test_pr7_existing_table_matches_optional_writer_facts(tmp_path: Path) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"].update(
+        {
+            "active_writers": ["spark-orders-backfill", "flink-orders-stream"],
+            "concurrent_writers": True,
+            "schema_evolution_owner_id": "flink-orders-stream",
+        }
+    )
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"].update(
+        {
+            "write_concurrency_mode": "OPTIMISTIC_CONCURRENCY_CONTROL",
+            "lock_provider_class": (
+                "org.apache.hudi.client.transaction.lock."
+                "FileSystemBasedLockProvider"
+            ),
+            "lock_configuration_consistency": "CONSISTENT",
+        }
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["writer_contract_result"] == "COMPLETE"
+    assert assessment["multi_writer_capability"] == "UNVERIFIED"
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" not in assessment["finding_codes"]
+    writer_fields = {
+        item["field"]: item["result"]
+        for item in assessment["comparisons"]
+        if item["field"].startswith(("writer_inventory.", "writer_config."))
+    }
+    assert writer_fields["writer_inventory.active_writers"] == "MATCH"
+    assert writer_fields["writer_inventory.schema_evolution_owner_id"] == "MATCH"
+    assert writer_fields["writer_config.write_concurrency_mode"] == "MATCH"
+    assert writer_fields["writer_config.lock_provider_class"] == "MATCH"
+    assert writer_fields["writer_config.lock_configuration_consistency"] == "MATCH"
+    assert "confirm_single_writer" not in {
+        item["check"] for item in assessment["deployment_checks"]
+    }
+    assert "verify_concurrent_writer_inventory" in {
+        item["check"] for item in assessment["writer_deployment_checks"]
+    }
+
+
+def test_pr7_inactive_declared_writer_does_not_conflict_with_active_snapshot(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["active_writers"] = ["flink-orders-stream"]
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["writer_contract_result"] == "COMPLETE"
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" not in assessment["finding_codes"]
+    comparison = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == "writer_inventory.active_writers"
+    )
+    assert comparison == {
+        "desired": {
+            "allowed_writer_ids": [
+                "flink-orders-stream",
+                "spark-orders-backfill",
+            ]
+        },
+        "field": "writer_inventory.active_writers",
+        "observed": ["flink-orders-stream"],
+        "result": "MATCH",
+        "source_ids": ["writers-1"],
+    }
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+
+
+def test_pr7_undeclared_active_writer_conflicts_with_declared_topology(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"].update(
+        {
+            "active_writers": ["flink-orders-stream", "undeclared-writer"],
+            "concurrent_writers": True,
+        }
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == "CONFLICT"
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" in assessment["finding_codes"]
+    comparison = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == "writer_inventory.active_writers"
+    )
+    assert comparison["result"] == "UNVERIFIED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    ("fact_name", "fact_value", "expected_contract_result", "expected_capability"),
+    [
+        (
+            "write_concurrency_mode",
+            "NON_BLOCKING_CONCURRENCY_CONTROL",
+            "COMPLETE",
+            "UNSUPPORTED",
+        ),
+        (
+            "lock_configuration_consistency",
+            "CONFLICTING",
+            "CONFLICT",
+            "UNVERIFIED",
+        ),
+    ],
+)
+def test_pr7_assesses_concurrency_evidence_without_optional_contract_block(
+    tmp_path: Path,
+    fact_name: str,
+    fact_value: str,
+    expected_contract_result: str,
+    expected_capability: str,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    del design["writer_contract"]["observed_concurrency"]
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["concurrent_writers"] = True
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"][fact_name] = fact_value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == expected_contract_result
+    assert assessment["multi_writer_capability"] == expected_capability
+    expected_finding = (
+        "FLINK_WRITER_COMBINATION_UNSUPPORTED"
+        if fact_name == "write_concurrency_mode"
+        else "FLINK_WRITER_CONTRACT_CONFLICT"
+    )
+    assert expected_finding in assessment["finding_codes"]
+    assert "observed_concurrency" not in assessment["normalized_writer_contract"]
+    comparison = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == f"writer_config.{fact_name}"
+    )
+    assert comparison == {
+        "desired": None,
+        "field": f"writer_config.{fact_name}",
+        "observed": fact_value,
+        "result": "UNVERIFIED",
+        "source_ids": ["writer-config-1"],
+    }
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize("contract_state", ["missing", "invalid"])
+def test_pr7_assesses_nbcc_evidence_even_when_contract_is_incomplete(
+    tmp_path: Path, contract_state: str
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["safety"]["writer_model"] = "multi_writer"
+    if contract_state == "invalid":
+        design["writer_contract"] = []
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["concurrent_writers"] = True
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"]["write_concurrency_mode"] = (
+        "NON_BLOCKING_CONCURRENCY_CONTROL"
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["writer_contract_result"] == "INCOMPLETE"
+    assert assessment["multi_writer_capability"] == "UNSUPPORTED"
+    expected_contract_finding = (
+        "FLINK_WRITER_CONTRACT_REQUIRED"
+        if contract_state == "missing"
+        else "FLINK_WRITER_CONTRACT_INVALID"
+    )
+    assert expected_contract_finding in assessment["finding_codes"]
+    assert "FLINK_WRITER_COMBINATION_UNSUPPORTED" in assessment["finding_codes"]
+    assert assessment["normalized_writer_contract"] == {}
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_conflicting_lock_evidence_does_not_reclassify_missing_contract(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR3_FIXTURE_DIR / "mutable_cow.json"))
+    design["safety"]["writer_model"] = "multi_writer"
+    envelope = _compatible_existing_envelope(design)
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"]["lock_configuration_consistency"] = "CONFLICTING"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == "INCOMPLETE"
+    assert assessment["multi_writer_capability"] == "UNVERIFIED"
+    assert "FLINK_WRITER_CONTRACT_REQUIRED" in assessment["finding_codes"]
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" in assessment["finding_codes"]
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" not in assessment["finding_codes"]
+
+
+def test_pr7_evidence_nbcc_overrides_explicit_occ_capability_conservatively(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"]["concurrent_writers"] = True
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"]["write_concurrency_mode"] = (
+        "NON_BLOCKING_CONCURRENCY_CONTROL"
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["writer_contract_result"] == "CONFLICT"
+    assert assessment["multi_writer_capability"] == "UNSUPPORTED"
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" in assessment["finding_codes"]
+    assert "FLINK_WRITER_COMBINATION_UNSUPPORTED" in assessment["finding_codes"]
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr7_existing_writer_evidence_conflict_stays_unverified(
+    tmp_path: Path,
+) -> None:
+    design = _pr7_design(
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+    )
+    envelope = _compatible_existing_envelope(design)
+    inventory = next(
+        item for item in envelope["evidence"] if item["kind"] == "writer_inventory"
+    )
+    inventory["facts"].update(
+        {
+            "active_writers": ["flink-orders-stream", "spark-orders-backfill"],
+            "concurrent_writers": True,
+            "schema_evolution_owner_id": "flink-orders-stream",
+        }
+    )
+    writer_config = next(
+        item for item in envelope["evidence"] if item["kind"] == "flink_writer_config"
+    )
+    writer_config["facts"].update(
+        {
+            "write_concurrency_mode": "OPTIMISTIC_CONCURRENCY_CONTROL",
+            "lock_provider_class": (
+                "org.apache.hudi.client.transaction.lock."
+                "FileSystemBasedLockProvider"
+            ),
+            "lock_configuration_consistency": "CONSISTENT",
+        }
+    )
+    conflicting_config = copy.deepcopy(writer_config)
+    conflicting_config["evidence_id"] = "writer-config-2"
+    conflicting_config["sha256"] = "7" * 64
+    conflicting_config["facts"]["lock_provider_class"] = (
+        "org.apache.hudi.client.transaction.lock.ZookeeperBasedLockProvider"
+    )
+    envelope["evidence"].append(conflicting_config)
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["writer_contract_result"] == "CONFLICT"
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" in assessment["finding_codes"]
+    assert "FLINK_WRITER_CONTRACT_CONFLICT" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("schedule_enabled", False),
+        ("async_enabled", False),
+        ("operation_execute_async_enabled", False),
+        ("mode", "inline"),
+        ("trigger_strategy", "time_elapsed"),
+        ("delta_commits", 6),
+    ],
+)
+def test_pr4_rejects_incompatible_compaction_configuration(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["table_services"]["compaction"][field] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_MOR_COMPACTION_CONFIGURATION_UNSUPPORTED" in assessment["finding_codes"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("field", ["schedule_enabled", "async_enabled"])
+def test_pr4_rejects_clustering(tmp_path: Path, field: str) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["write"]["clustering"][field] = True
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_MOR_CLUSTERING_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+def test_pr4_rejects_strict_read_optimized_freshness(tmp_path: Path) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["read"]["read_optimized_freshness"] = "after_every_commit"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED"
+    ]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize("freshness", [None, "unknown"])
+def test_pr4_requires_resolved_read_optimized_freshness(
+    tmp_path: Path, freshness: object
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    if freshness is None:
+        design["read"].pop("read_optimized_freshness")
+    else:
+        design["read"]["read_optimized_freshness"] = freshness
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_MOR_QUERY_REQUIREMENT_UNRESOLVED"
+    ]
+    assert assessment["status"] == "INCOMPLETE"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("owner", "expected_code", "expected_status"),
+    [
+        (None, "FLINK_MOR_COMPACTION_OWNER_REQUIRED", "INCOMPLETE"),
+        ("standalone_service", "FLINK_MULTI_WRITER_REVIEW", "REVIEW_REQUIRED"),
+        ("unknown", "FLINK_WRITER_MODEL_UNRESOLVED", "REVIEW_REQUIRED"),
+    ],
+)
+def test_pr4_requires_same_job_compaction_owner(
+    tmp_path: Path, owner: object, expected_code: str, expected_status: str
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    if owner is None:
+        design["table_services"]["compaction"].pop("owner")
+    else:
+        design["table_services"]["compaction"]["owner"] = owner
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [expected_code]
+    assert assessment["status"] == expected_status
+    assert "artifacts" not in assessment
+
+
+def test_pr4_rejects_detailed_compaction_tuning(tmp_path: Path) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["table_services"]["compaction"]["tasks"] = 4
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_MOR_COMPACTION_TUNING_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+def test_pr4_preserves_combined_findings_and_withholds_artifacts(tmp_path: Path) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["table_services"]["compaction"].pop("owner")
+    design["write"]["clustering"]["schedule_enabled"] = True
+    design["read"]["read_optimized_freshness"] = "after_every_commit"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == [
+        "FLINK_MOR_CLUSTERING_UNSUPPORTED",
+        "FLINK_MOR_COMPACTION_OWNER_REQUIRED",
+        "FLINK_MOR_READ_OPTIMIZED_FRESHNESS_UNSUPPORTED",
+    ]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+def test_pr4_snapshot_only_contract_does_not_invent_read_optimized_freshness(
+    tmp_path: Path,
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design["read"] = {
+        "query_modes": ["snapshot"],
+        "read_optimized_freshness": "NOT_APPLICABLE",
+    }
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["finding_codes"] == []
+
+
+def test_pr4_rejects_append_only_mor(tmp_path: Path) -> None:
+    design = json.loads(_read(PR2_FIXTURE_DIR / "stable_key.json"))
+    design["write"]["table_type"] = "MERGE_ON_READ"
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_MOR_APPEND_ONLY_UNSUPPORTED"]
+    assert assessment["status"] == "BLOCKED"
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("table_services", []), ("table_services", None), ("read", []), ("read", None)],
+)
+def test_pr4_malformed_service_and_read_objects_fail_closed(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    design = json.loads(_read(PR4_FIXTURE_DIR / "mutable_mor.json"))
+    design[field] = value
+
+    result = _run_flink_design_validator(_write_design(tmp_path, design))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_DESIGN_CONTRACT_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+@pytest.mark.parametrize(
+    "design_path",
+    [
+        PR2_FIXTURE_DIR / "stable_key.json",
+        PR2_FIXTURE_DIR / "auto_key.json",
+        PR3_FIXTURE_DIR / "mutable_cow.json",
+        PR4_FIXTURE_DIR / "mutable_mor.json",
+    ],
+)
+def test_pr5_reconciles_all_bounded_design_schemas_without_rendering_sql(
+    tmp_path: Path, design_path: Path
+) -> None:
+    envelope = _compatible_existing_envelope(json.loads(_read(design_path)))
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["reconciliation_result"] == "COMPATIBLE"
+    assert assessment["reconciliation_complete"] is True
+    assert assessment["executable_eligible"] is False
+    assert assessment["finding_codes"] == []
+    assert assessment["change_disposition"] == "NO_CHANGE"
+    assert "artifacts" not in assessment
+    assert all(item["result"] == "MATCH" for item in assessment["comparisons"])
+    assert assessment["validation_evidence"]["reconciliation_schema"] == 1
+
+
+def test_pr5_checked_in_fixture_is_a_compatible_assessment_only_contract() -> None:
+    result = _run_flink_existing_table_validator(
+        PR5_FIXTURE_DIR / "compatible_mutable_cow.json"
+    )
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["reconciliation_result"] == "COMPATIBLE"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+    assert all(item["in_scope"] is True for item in assessment["evidence_summary"])
+    assert assessment["deployment_checks"] == [
+        {"check": "confirm_single_writer", "required": True},
+        {"check": "recheck_pending_instants", "required": True},
+        {"check": "verify_index_bootstrap_before_first_checkpoint", "required": True},
+    ]
+
+
+def test_pr5_does_not_expand_the_new_table_design_cli(tmp_path: Path) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+
+    result = _run_flink_design_validator(
+        _write_design(tmp_path, envelope["desired_contract"])
+    )
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["finding_codes"] == ["FLINK_EXISTING_TABLE_DEFERRED"]
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr5_existing_design_api_cannot_render_sql() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json, sys; from pathlib import Path; "
+            "sys.path.insert(0, sys.argv[1]); "
+            "from validate_flink_design import assess_design; "
+            "from validate_flink_capabilities import load_manifest, DEFAULT_MANIFEST; "
+            "desired = json.loads(Path(sys.argv[2]).read_text())['desired_contract']; "
+            "print(json.dumps(assess_design(desired, load_manifest(DEFAULT_MANIFEST), "
+            "expected_table_lifecycle='existing', render_sql=True)))",
+            str(SKILL_DIR),
+            str(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "CONFIG_VALIDATED"
+    assert assessment["executable_eligible"] is False
+    assert "artifacts" not in assessment
+
+
+def test_pr5_missing_evidence_is_incomplete_and_retains_every_reason(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"] = []
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["finding_codes"] == ["FLINK_EXISTING_EVIDENCE_REQUIRED"]
+    assert len(assessment["findings"][0]["message"].split("; ")) > 4
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr5_property_and_schema_conflicts_are_blocked_and_preserved(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    table_facts = envelope["evidence"][0]["facts"]
+    table_facts["table_type"] = "MERGE_ON_READ"
+    table_facts["record_key_fields"] = ["name"]
+    envelope["evidence"][1]["facts"]["columns"][0]["type"] = "BIGINT"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["reconciliation_result"] == "CONFLICT"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT",
+        "FLINK_EXISTING_SCHEMA_CONFLICT",
+    ]
+    assert sum(item["result"] == "CONFLICT" for item in assessment["comparisons"]) == 3
+    assert assessment["change_disposition"] == "MIGRATION_REQUIRED"
+
+
+def test_pr5_schema_reorder_is_unverified_not_silently_accepted(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    columns = envelope["evidence"][1]["facts"]["columns"]
+    columns[0], columns[1] = columns[1], columns[0]
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED"
+    ]
+
+
+def test_pr5_conflicting_sources_do_not_override_table_authority(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"].append(
+        {
+            "evidence_id": "ddl-1",
+            "kind": "flink_table_ddl",
+            "table_path": envelope["desired_contract"]["table"]["path"],
+            "observed_at": "2026-10-19T10:32:00+08:00",
+            "sha256": "5" * 64,
+            "facts": {"table_type": "MERGE_ON_READ"},
+        }
+    )
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["finding_codes"] == ["FLINK_EXISTING_EVIDENCE_CONFLICT"]
+    table_type = next(
+        item
+        for item in assessment["comparisons"]
+        if item["field"] == "table_config.table_type"
+    )
+    assert table_type["result"] == "MATCH"
+    assert table_type["source_ids"] == ["table-config-1"]
+
+
+def test_pr5_cross_engine_pending_timeline_and_property_conflict_keep_all_findings(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["writer_transition"] = "cross_engine_takeover"
+    envelope["evidence"][0]["facts"]["partition_fields"] = []
+    envelope["evidence"][2]["facts"]["previous_writer_engine"] = "SPARK"
+    envelope["evidence"][3]["facts"]["pending_instants"] = ["20261019103000000"]
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["reconciliation_result"] == "CONFLICT"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_TABLE_PROPERTY_CONFLICT",
+        "FLINK_EXISTING_ENGINE_TAKEOVER_UNVERIFIED",
+        "FLINK_EXISTING_TIMELINE_UNRESOLVED",
+    ]
+
+
+@pytest.mark.parametrize("bad_value", [None, [], {}, "2026-10-19"])
+def test_pr5_malformed_evidence_fails_closed_without_traceback(
+    tmp_path: Path, bad_value: object
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"][0]["observed_at"] = bad_value
+    envelope["evidence"][0]["facts"]["password"] = "must-not-appear"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1
+    assessment = json.loads(result.stdout)
+    assert "FLINK_EXISTING_EVIDENCE_INVALID" in assessment["finding_codes"]
+    assert assessment["executable_eligible"] is False
+    assert "must-not-appear" not in result.stdout
+    assert "must-not-appear" not in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("path", "bad_value"),
+    [
+        (("reconciliation_schema",), True),
+        (("evidence", 0, "kind"), []),
+        (("evidence", 0, "kind"), {}),
+        (("evidence", 0, "facts"), []),
+        (("evidence", 0, "observed_at"), "20261019T10:30:00+08:00"),
+        (("evidence", 0, "observed_at"), "2026-10-19 10:30:00+08:00"),
+        (("writer_transition",), []),
+        (("desired_contract", "identity"), None),
+        (("desired_contract", "table"), None),
+        (("desired_contract", "table", "columns"), None),
+        (("desired_contract", "table", "columns", 0, "name"), []),
+        (("desired_contract", "identity", "record_key_fields"), None),
+    ],
+)
+def test_pr5_malformed_contract_returns_a_report(
+    tmp_path: Path, path: tuple, bad_value: object
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    target = envelope
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = bad_value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["reconciliation_result"] != "COMPATIBLE"
+    assert assessment["executable_eligible"] is False
+    assert assessment["finding_codes"]
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("record_merge_mode", "COMMIT_TIME_ORDERING"),
+        ("hive_style_partitioning", True),
+        ("url_encode_partitioning", True),
+        ("key_generator_type", "SIMPLE"),
+    ],
+)
+def test_pr5_rejects_incompatible_merge_and_partition_semantics(
+    tmp_path: Path, field: str, value: object
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"][0]["facts"][field] = value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "BLOCKED"
+    assert assessment["reconciliation_result"] == "CONFLICT"
+    assert assessment["finding_codes"] == ["FLINK_EXISTING_TABLE_PROPERTY_CONFLICT"]
+
+
+@pytest.mark.parametrize("output_format", [None, "missing_field"])
+def test_pr5_requires_evidence_for_datetime_partition_format(
+    tmp_path: Path, output_format: str | None
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    config = envelope["evidence"][5]["facts"]
+    if output_format is None:
+        config.pop("timestamp_key_generator")
+    elif output_format == "missing_field":
+        config["timestamp_key_generator"].pop("output_date_format")
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "INCOMPLETE"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("timestamp_type", "UNIX_TIMESTAMP"),
+        ("input_time_unit", "HOURS"),
+        ("output_date_format", "yyyy-MM-dd"),
+        ("output_timezone", "Asia/Shanghai"),
+    ],
+)
+def test_pr5_timestamp_partition_layout_difference_is_not_deployment_only(
+    tmp_path: Path, field: str, value: str
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"][5]["facts"]["timestamp_key_generator"][field] = value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_TIMESTAMP_PARTITION_LAYOUT_UNVERIFIED"
+    ]
+
+
+def test_pr5_identity_path_disagreement_is_unverified_evidence_conflict(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"][4]["facts"]["table_path"] = "file:///tmp/another-table"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["finding_codes"] == ["FLINK_EXISTING_EVIDENCE_CONFLICT"]
+    comparison = next(
+        item for item in assessment["comparisons"]
+        if item["field"] == "table_identity.table_path"
+    )
+    assert comparison["desired"] == envelope["desired_contract"]["table"]["path"]
+    assert comparison["observed"] == "file:///tmp/another-table"
+    assert comparison["result"] == "UNVERIFIED"
+    assert comparison["source_ids"] == ["identity-1"]
+
+
+def test_pr5_excludes_another_tables_schema_from_authoritative_comparisons(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"][1]["table_path"] = "file:///tmp/a-different-table"
+    envelope["evidence"][1]["facts"]["columns"][0]["type"] = "BIGINT"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_EVIDENCE_CONFLICT",
+        "FLINK_EXISTING_EVIDENCE_REQUIRED",
+    ]
+    schema_comparison = next(
+        item for item in assessment["comparisons"] if item["field"] == "schema.columns"
+    )
+    assert schema_comparison["observed"] is None
+    assert schema_comparison["result"] == "UNVERIFIED"
+    assert schema_comparison["source_ids"] == []
+    schema_summary = next(
+        item
+        for item in assessment["evidence_summary"]
+        if item["evidence_id"] == "table-schema-1"
+    )
+    assert schema_summary["in_scope"] is False
+
+
+@pytest.mark.parametrize("recovery", [None, False, True])
+def test_pr5_same_job_restore_requires_recoverable_state(
+    tmp_path: Path, recovery: bool | None
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["writer_transition"] = "same_job_restore"
+    if recovery is not None:
+        envelope["evidence"][5]["facts"]["checkpoint_recovery_available"] = recovery
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == (0 if recovery else 1), result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == (
+        "CONFIG_VALIDATED" if recovery else "INCOMPLETE" if recovery is None else "REVIEW_REQUIRED"
+    )
+    assert assessment["executable_eligible"] is False
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [("operation", None), ("operation", "INSERT"), ("index_global", False)],
+)
+def test_pr5_same_job_restore_requires_matching_writer_state(
+    tmp_path: Path, field: str, bad_value: object
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["writer_transition"] = "same_job_restore"
+    writer_facts = envelope["evidence"][5]["facts"]
+    writer_facts["checkpoint_recovery_available"] = True
+    if bad_value is None:
+        writer_facts.pop(field)
+    else:
+        writer_facts[field] = bad_value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == (
+        "INCOMPLETE" if bad_value is None else "REVIEW_REQUIRED"
+    )
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == (
+        "UNVERIFIED" if bad_value is None else "DEPLOYMENT_CONFIGURATION_CHANGE"
+    )
+    assert assessment["executable_eligible"] is False
+
+
+def test_pr5_inventory_preserves_known_multi_writer_when_another_fact_is_missing(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    inventory = envelope["evidence"][2]["facts"]
+    inventory["concurrent_writers"] = True
+    inventory.pop("previous_writer_engine")
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["finding_codes"] == [
+        "FLINK_MULTI_WRITER_REVIEW",
+        "FLINK_EXISTING_EVIDENCE_REQUIRED",
+    ]
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+
+
+def test_pr5_nullable_column_addition_requires_schema_evolution_review(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    new_column = {"name": "optional_note", "type": "STRING", "nullable": True}
+    envelope["desired_contract"]["table"]["columns"].append(new_column)
+    envelope["desired_contract"]["source"]["columns"].append(new_column)
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED"
+    ]
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+
+
+def test_pr5_retains_schema_conflict_and_evolution_findings(tmp_path: Path) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    new_column = {"name": "optional_note", "type": "STRING", "nullable": True}
+    envelope["desired_contract"]["table"]["columns"].append(new_column)
+    envelope["desired_contract"]["source"]["columns"].append(new_column)
+    envelope["evidence"][1]["facts"]["columns"][0]["type"] = "INT"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "BLOCKED"
+    assert set(assessment["finding_codes"]) == {
+        "FLINK_EXISTING_SCHEMA_CONFLICT",
+        "FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED",
+    }
+
+
+def test_pr5_writer_mismatch_with_missing_evidence_is_not_deployment_only(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["writer_transition"] = "same_job_restore"
+    writer = envelope["evidence"][5]["facts"]
+    writer["checkpoint_recovery_available"] = True
+    writer["operation"] = "INSERT"
+    writer.pop("index_type")
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+    assert set(assessment["finding_codes"]) == {
+        "FLINK_EXISTING_WRITER_CONFIG_CONFLICT",
+        "FLINK_EXISTING_EVIDENCE_REQUIRED",
+    }
+
+
+def test_pr5_unknown_key_generator_is_unverified_not_a_proven_conflict(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"][0]["facts"]["key_generator_type"] = "USER_PROVIDED"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_TABLE_PROPERTY_UNVERIFIED"
+    ]
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
+    assert assessment["change_disposition"] == "UNVERIFIED"
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected_status", "expected_result"),
+    [
+        ("base_file_format", "ORC", "BLOCKED", "CONFLICT"),
+        ("initial_table_version", 8, "REVIEW_REQUIRED", "UNVERIFIED"),
+        ("table_version", 8, "REVIEW_REQUIRED", "UNVERIFIED"),
+        ("timeline_layout_version", 1, "REVIEW_REQUIRED", "UNVERIFIED"),
+    ],
+)
+def test_pr5_distinguishes_property_conflicts_from_unverified_versions(
+    tmp_path: Path,
+    field: str,
+    value: object,
+    expected_status: str,
+    expected_result: str,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["evidence"][0]["facts"][field] = value
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == expected_status
+    assert assessment["reconciliation_result"] == expected_result
+    assert assessment["change_disposition"] == (
+        "MIGRATION_REQUIRED" if expected_result == "CONFLICT" else "UNVERIFIED"
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_status", "expected_code"),
+    [
+        ("missing_required", "BLOCKED", "FLINK_EXISTING_SCHEMA_CONFLICT"),
+        ("incompatible_type", "BLOCKED", "FLINK_EXISTING_SCHEMA_CONFLICT"),
+        ("nullable_widening", "BLOCKED", "FLINK_EXISTING_SCHEMA_CONFLICT"),
+        (
+            "extra_physical_field",
+            "REVIEW_REQUIRED",
+            "FLINK_EXISTING_SCHEMA_EVOLUTION_UNVERIFIED",
+        ),
+    ],
+)
+def test_pr5_classifies_physical_schema_differences(
+    tmp_path: Path, mutation: str, expected_status: str, expected_code: str
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    columns = envelope["evidence"][1]["facts"]["columns"]
+    if mutation == "missing_required":
+        columns.pop(0)
+    elif mutation == "incompatible_type":
+        columns[0]["type"] = "BIGINT"
+    elif mutation == "nullable_widening":
+        columns[1]["nullable"] = False
+    else:
+        columns.append({"name": "legacy_note", "type": "STRING", "nullable": True})
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == expected_status
+    assert assessment["finding_codes"] == [expected_code]
+    assert assessment["reconciliation_result"] == (
+        "CONFLICT" if expected_status == "BLOCKED" else "UNVERIFIED"
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_fragment"),
+    [
+        ("duplicate_id", "unique non-empty string"),
+        ("bad_digest", "lowercase SHA-256"),
+        ("unknown_kind", "kind is not supported"),
+    ],
+)
+def test_pr5_rejects_invalid_evidence_identity_fields(
+    tmp_path: Path, mutation: str, expected_fragment: str
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    if mutation == "duplicate_id":
+        envelope["evidence"][1]["evidence_id"] = envelope["evidence"][0]["evidence_id"]
+    elif mutation == "bad_digest":
+        envelope["evidence"][0]["sha256"] = "not-a-digest"
+    else:
+        envelope["evidence"][0]["kind"] = "catalog_dump"
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "INCOMPLETE"
+    assert "FLINK_EXISTING_EVIDENCE_INVALID" in assessment["finding_codes"]
+    assert expected_fragment in next(
+        finding["message"]
+        for finding in assessment["findings"]
+        if finding["code"] == "FLINK_EXISTING_EVIDENCE_INVALID"
+    )
+
+
+def test_pr5_flink_takeover_requires_checkpoint_posture_and_stopped_writer(
+    tmp_path: Path,
+) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    envelope["writer_transition"] = "flink_writer_takeover"
+    envelope["evidence"][2]["facts"]["previous_writer_stopped"] = False
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert assessment["finding_codes"] == [
+        "FLINK_EXISTING_WRITER_TRANSITION_UNRESOLVED",
+        "FLINK_EXISTING_EVIDENCE_REQUIRED",
+    ]
+    assert "previous_writer_stopped" in assessment["findings"][0]["message"]
+    assert "checkpoint or savepoint" in assessment["findings"][1]["message"]
+
+
+def test_pr5_conflicting_property_sources_are_not_silently_merged(tmp_path: Path) -> None:
+    envelope = json.loads(_read(PR5_FIXTURE_DIR / "compatible_mutable_cow.json"))
+    duplicate = copy.deepcopy(envelope["evidence"][0])
+    duplicate["evidence_id"] = "table-config-2"
+    duplicate["facts"]["table_type"] = "MERGE_ON_READ"
+    envelope["evidence"].append(duplicate)
+
+    result = _run_flink_existing_table_validator(_write_design(tmp_path, envelope))
+
+    assert result.returncode == 1, result.stderr
+    assessment = json.loads(result.stdout)
+    assert assessment["status"] == "REVIEW_REQUIRED"
+    assert "FLINK_EXISTING_EVIDENCE_CONFLICT" in assessment["finding_codes"]
+    assert assessment["reconciliation_result"] == "UNVERIFIED"
 
 
 @pytest.mark.parametrize(
@@ -734,7 +3322,7 @@ def test_pr2_fails_closed_when_capability_manifest_is_malformed(tmp_path: Path) 
     assert "artifacts" not in assessment
 
 
-@pytest.mark.parametrize("contract_schema", [True, 1.0, 3])
+@pytest.mark.parametrize("contract_schema", [True, 1.0, 4, [], {}])
 def test_flink_design_rejects_non_exact_contract_schema(
     tmp_path: Path, contract_schema: object
 ) -> None:
@@ -745,6 +3333,7 @@ def test_flink_design_rejects_non_exact_contract_schema(
 
     assert result.returncode == 1
     assessment = json.loads(result.stdout)
+    assert "Traceback" not in result.stderr
     assert "FLINK_DESIGN_CONTRACT_INVALID" in assessment["finding_codes"]
     assert assessment["executable_eligible"] is False
     assert "artifacts" not in assessment
@@ -1316,7 +3905,9 @@ def test_safety_gate_order_is_stable() -> None:
         "## F7 — Physical table and source contract",
         "## F8 — Source changelog contract",
         "## F9 — Streaming checkpoint contract",
-        "## PR2/PR3 validation and completion",
+        "## F10 — Mutable table type, query freshness, and MOR ownership",
+        "## F11 — Existing-table evidence and writer transition",
+        "## PR2/PR3/PR4/PR5/PR6/PR7 validation and completion",
     ]
     offsets = [flow.index(heading) for heading in headings]
     assert offsets == sorted(offsets)

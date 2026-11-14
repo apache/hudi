@@ -395,7 +395,11 @@ public class SparkRDDWriteClient<T> extends
         if (writer.hasPartitionsStateChanged()) {
           metaClient.reloadTableConfig();
         }
-        writer.performTableServices(inFlightInstantTimestamp);
+        if (config.getMetadataConfig().isInlineTableServicesEnabled()) {
+          writer.performTableServices(inFlightInstantTimestamp);
+        } else {
+          log.info("Skipping metadata table services since inline metadata table services are disabled");
+        }
       }
     } catch (Exception e) {
       throw new HoodieException("Failed to instantiate Metadata table ", e);

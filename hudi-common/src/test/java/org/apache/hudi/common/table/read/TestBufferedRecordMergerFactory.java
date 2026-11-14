@@ -23,6 +23,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.engine.RecordContext;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -32,7 +33,12 @@ import org.apache.hudi.common.util.collection.Pair;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.time.LocalDate;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -66,6 +72,25 @@ class TestBufferedRecordMergerFactory {
     assertEquals("CustomPayloadRecordMerger", BufferedRecordMergerFactory.create(
         context, RecordMergeMode.CUSTOM, false, recordMerger, Option.of("payload.Class"), schema, props, Option.empty())
         .getClass().getSimpleName());
+  }
+
+  @Test
+  void testLegacyDeleteMergePreservesSentinelsBeforeConversion() throws IOException {
+    RecordContext<String> recordContext = mock(RecordContext.class, CALLS_REAL_METHODS);
+    when(recordContext.convertOrderingValueToEngineType(any())).thenAnswer(
+        invocation -> LocalDate.ofEpochDay(((Number) invocation.getArgument(0)).longValue()));
+    HoodieReaderContext<String> readerContext = mock(HoodieReaderContext.class);
+    when(readerContext.getRecordContext()).thenReturn(recordContext);
+    BufferedRecordMerger<String> merger = BufferedRecordMergerFactory.create(
+        readerContext, RecordMergeMode.EVENT_TIME_ORDERING, false, Option.empty(),
+        HoodieSchema.create(HoodieSchemaType.STRING), Option.empty(), new TypedProperties(), Option.empty());
+    BufferedRecord<String> existing = new BufferedRecord<>("key", LocalDate.ofEpochDay(10), "record", 0, null);
+
+    for (Comparable orderingValue : new Comparable[] {null, 0}) {
+      DeleteRecord delete = DeleteRecord.create("key", "", orderingValue);
+      assertEquals(Option.of(delete), merger.deltaMerge(delete, existing));
+    }
+    assertEquals(Option.empty(), merger.deltaMerge(DeleteRecord.create("key", "", 9), existing));
   }
 
   private static void assertMerger(String expected,

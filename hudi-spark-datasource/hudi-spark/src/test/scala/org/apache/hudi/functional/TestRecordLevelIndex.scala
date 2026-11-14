@@ -34,12 +34,14 @@ import org.apache.hudi.common.util.{Option => HOption}
 import org.apache.hudi.config.{HoodieCompactionConfig, HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.core.index.record.HoodieRecordIndex
 import org.apache.hudi.exception.{HoodieException, HoodieMetadataException}
-import org.apache.hudi.functional.TestRecordLevelIndex.TestPartitionedRecordLevelIndexTestCase
+import org.apache.hudi.functional.TestRecordLevelIndex.{TestPartitionedRecordLevelIndexTestCase, UnionDepthListener}
 import org.apache.hudi.index.HoodieIndex.IndexType.RECORD_LEVEL_INDEX
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
 import org.apache.hudi.storage.{StoragePath, StoragePathInfo}
 import org.apache.hudi.table.action.compact.strategy.UnBoundedCompactionStrategy
 
+import org.apache.spark.SparkContext
+import org.apache.spark.scheduler.{SparkListener, SparkListenerJobEnd, SparkListenerJobStart, SparkListenerStageSubmitted}
 import org.apache.spark.sql.{Row, SaveMode}
 import org.apache.spark.sql.functions.lit
 import org.junit.jupiter.api.{Tag, Test}
@@ -49,10 +51,12 @@ import org.junit.jupiter.params.provider.{Arguments, EnumSource, MethodSource, V
 
 import java.io.{PrintWriter, StringWriter}
 import java.util
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.stream.Collectors
 
 import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 @Tag("functional")
 class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMixin {
@@ -680,6 +684,67 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
     assertTrue(HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndexDefinitions.get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)))
   }
 
+  /**
+   * Partitioned RLI initialization builds one HoodieData of index records per data partition and
+   * unions them one at a time. JavaRDD.union does not flatten nested unions, so the lineage handed to
+   * the bulk commit becomes a chain of UnionRDDs as deep as the number of data partitions. Spark
+   * serializes task lineage recursively, so a table with enough partitions fails the initialization
+   * with a StackOverflowError. The union depth must stay flat regardless of the partition count.
+   */
+  @Test
+  def testPartitionedRecordLevelIndexInitializationUnionDepth(): Unit = {
+    val numDataPartitions = 50
+    initMetaClient(HoodieTableType.COPY_ON_WRITE)
+    val options = Map(HoodieWriteConfig.TBL_NAME.key -> "hoodie_test",
+      DataSourceWriteOptions.TABLE_TYPE.key -> HoodieTableType.COPY_ON_WRITE.name(),
+      RECORDKEY_FIELD.key -> "_row_key",
+      PARTITIONPATH_FIELD.key -> "data_partition_path",
+      HoodieTableConfig.ORDERING_FIELDS.key -> "timestamp",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.SECONDARY_INDEX_ENABLE_PROP.key() -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key() -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key() -> "false")
+    // One record per data partition: p0 .. p49
+    spark.range(numDataPartitions)
+      .selectExpr("cast(id as string) as _row_key", "id as timestamp",
+        "concat('p', cast(id as string)) as data_partition_path")
+      .write.format("hudi")
+      .options(options)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+    assertEquals(numDataPartitions, spark.read.format("hudi").load(basePath).count())
+
+    metaClient.reloadActiveTimeline()
+    val tableSchema = new TableSchemaResolver(metaClient).getTableSchemaFromLatestCommit(false).get().toString
+    val writeConfig = getWriteConfig(options ++ Map(
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key() -> "true",
+      HoodieWriteConfig.AVRO_SCHEMA_STRING.key() -> tableSchema))
+
+    // Initialize the partitioned RLI and record the lineage of every stage it runs.
+    val listener = new UnionDepthListener
+    spark.sparkContext.addSparkListener(listener)
+    val metadata = try {
+      val writer = metadataWriter(writeConfig)
+      listener.awaitDelivered(spark.sparkContext)
+      writer.getTableMetadata
+    } finally {
+      spark.sparkContext.removeSparkListener(listener)
+    }
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    assertTrue(HoodieRecordIndex.isPartitioned(metaClient.getIndexMetadata.get().getIndexDefinitions
+      .get(HoodieTableMetadataUtil.PARTITION_NAME_RECORD_INDEX)))
+    val locations = (0 until numDataPartitions).flatMap(i =>
+      readRecordIndex(metadata, util.Collections.singletonList(i.toString), HOption.of(s"p$i")))
+    assertEquals(numDataPartitions, locations.size)
+
+    val unionDepth = listener.maxUnionDepth
+    assertTrue(unionDepth <= 1,
+      s"Partitioned RLI initialization over $numDataPartitions data partitions built a UnionRDD "
+        + s"chain of depth $unionDepth; the depth must not grow with the number of data partitions")
+  }
+
   def readRecordIndex(metadata: HoodieBackedTableMetadata, recordKeys: java.util.List[String], dataTablePartition: HOption[String]): Map[String, HoodieRecordGlobalLocation] = {
     metadata.readRecordIndexLocationsWithKeys(HoodieListData.eager(recordKeys), dataTablePartition)
       .collectAsList().asScala.map(p => p.getKey -> p.getValue).toMap
@@ -930,6 +995,64 @@ class TestRecordLevelIndex extends RecordLevelIndexTestBase with SparkDatasetMix
 object TestRecordLevelIndex {
 
   case class TestPartitionedRecordLevelIndexTestCase(tableType: HoodieTableType, streamingWriteEnabled: Boolean)
+
+  /**
+   * Tracks the longest chain of directly nested UnionRDDs across the narrow lineage of every
+   * submitted stage.
+   */
+  class UnionDepthListener extends SparkListener {
+    private val sentinelGroup = "union-depth-listener-sentinel"
+    private val rddNames = mutable.Map[Int, String]()
+    private val rddParents = mutable.Map[Int, Seq[Int]]()
+    @volatile private var sentinelJobId = -1
+    private val sentinelDone = new CountDownLatch(1)
+
+    override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted): Unit = synchronized {
+      stageSubmitted.stageInfo.rddInfos.foreach { info =>
+        rddNames(info.id) = info.name
+        rddParents(info.id) = info.parentIds
+      }
+    }
+
+    override def onJobStart(jobStart: SparkListenerJobStart): Unit = {
+      if (Option(jobStart.properties).exists(p => sentinelGroup == p.getProperty("spark.jobGroup.id"))) {
+        sentinelJobId = jobStart.jobId
+      }
+    }
+
+    override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {
+      if (jobEnd.jobId == sentinelJobId) {
+        sentinelDone.countDown()
+      }
+    }
+
+    /**
+     * Runs a marker job and waits for its end event. The listener bus delivers events in order,
+     * so every stage submitted before the marker has been seen once this returns.
+     */
+    def awaitDelivered(sc: SparkContext): Unit = {
+      sc.setJobGroup(sentinelGroup, sentinelGroup)
+      try {
+        sc.parallelize(Seq(1), 1).count()
+      } finally {
+        sc.clearJobGroup()
+      }
+      assertTrue(sentinelDone.await(60, TimeUnit.SECONDS), "Timed out waiting for Spark listener events")
+    }
+
+    def maxUnionDepth: Int = synchronized {
+      // RDD ids grow monotonically, so parents are visited before children.
+      val depth = mutable.Map[Int, Int]()
+      rddNames.keys.toSeq.sorted.foreach { id =>
+        depth(id) = if (rddNames(id) == "UnionRDD") {
+          1 + (rddParents(id).map(p => depth.getOrElse(p, 0)) :+ 0).max
+        } else {
+          0
+        }
+      }
+      (depth.values.toSeq :+ 0).max
+    }
+  }
 
   def testArgsForPartitionedRecordLevelIndex: java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(

@@ -69,7 +69,7 @@ jobs:
     # the same pinned trinodb/trino commit (so server and connector always
     # match), and runs ITTestTrino* against the spark402 compose stack (the only
     # pair with the trinocoordinator service).
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Read Trino pin
@@ -114,11 +114,11 @@ jobs:
         run:
           mvn clean install -T 2 $SCALA_PROFILE -Dspark4.0 -Dflink1.20 -Pintegration-tests -DskipTests=true -Ddocker.compose.skip=true $MVN_ARGS
       - name: Set up JDK 25
+        # Restoring the Maven cache again would overwrite the Hudi artifacts installed above.
         uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: maven
       - name: Purge Trino artifacts from the local m2
         # Artifacts an older pin left behind carry the same SNAPSHOT coordinates as the current ones.
         run: rm -rf ~/.m2/repository/io/trino
