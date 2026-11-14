@@ -19,9 +19,10 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
-import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions}
+import org.apache.hudi.{DataSourceReadOptions, DataSourceWriteOptions, MergeOnReadIncrementalRelationV2}
 import org.apache.hudi.common.avro.HoodieAvroUtils
 import org.apache.hudi.common.config.{HoodieReaderConfig, HoodieStorageConfig, RecordMergeMode}
+import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieLogFile}
 import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaUtils}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
@@ -86,6 +87,10 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
     testPartialUpdateIncrementalQueryPartitioned("avro")
   }
 
+  test("Test partial update incremental query lists only the touched file group of a partition") {
+    testPartialUpdateIncrementalSkipsUntouchedFileGroup("avro")
+  }
+
   test("Test incremental query reflects event time ordering on a MOR table (no partial updates)") {
     testIncrementalEventTimeOrdering("avro")
   }
@@ -108,6 +113,10 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
 
   test("Test partial update incremental query merges a log file on a compacted base file") {
     testPartialUpdateIncrementalAfterCompaction("avro")
+  }
+
+  test("Test partial update incremental query merges a compaction scheduled in the window and run after it") {
+    testPartialUpdateIncrementalCompactionAfterWindow("avro")
   }
 
   test("Test incremental query on a COW table is unaffected by the MOR incremental change") {
@@ -244,6 +253,72 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         checkAnswer(readIncremental(basePath, firstCompletionTime, "id", "name", "price", "_ts", "description", "part"))(
           Seq(1, "a1", 12.0, 1001, "a1: desc1", "p1"),
           Seq(3, "a3", 25.0, 1260, "a3: desc3", "p2")
+        )
+      }
+    }
+  }
+
+  /**
+   * A partition holds two file groups and the window partially updates a record in one of them: the
+   * incremental listing returns only the touched file group, with its base file attached for the merge.
+   */
+  def testPartialUpdateIncrementalSkipsUntouchedFileGroup(logDataBlockFormat: String): Unit = {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = tmp.getCanonicalPath + "/" + tableName
+      withSQLConf(
+        HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key() -> "0",
+        DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key() -> "true",
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> logDataBlockFormat,
+        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> "true") {
+        spark.sql(
+          s"""
+             |create table $tableName (
+             | id int,
+             | name string,
+             | price double,
+             | _ts int,
+             | description string
+             |) using hudi
+             |tblproperties(
+             | type ='mor',
+             | primaryKey = 'id',
+             | recordMergeMode = '${RecordMergeMode.COMMIT_TIME_ORDERING.name()}',
+             | hoodie.parquet.small.file.limit = '0'
+             |)
+             |location '$basePath'
+        """.stripMargin)
+
+        // Each insert lands in its own file group of the same partition.
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'a1: desc1'), (2, 'a2', 20, 1200, 'a2: desc2')")
+        spark.sql(s"insert into $tableName values (3, 'a3', 30, 1250, 'a3: desc3')")
+        val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
+        val secondCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+        val fileIdOf = spark.sql(s"select id, _hoodie_file_name from $tableName").collect()
+          .map(row => row.getInt(0) -> FSUtils.getFileId(row.getString(1))).toMap
+        assertTrue(fileIdOf(1) != fileIdOf(3))
+
+        spark.sql(
+          s"""
+             |merge into $tableName t0
+             |using ( select 1 as id, 12.0 as price, 1001 as ts) s0
+             |on t0.id = s0.id
+             |when matched then update set price = s0.price, _ts = s0.ts
+             |""".stripMargin)
+
+        val metaClient = HoodieTableMetaClient.builder()
+          .setConf(HoodieTestUtils.getDefaultStorageConf).setBasePath(basePath).build()
+        val relation = MergeOnReadIncrementalRelationV2(spark.sqlContext, Map(
+          "path" -> basePath,
+          DataSourceReadOptions.QUERY_TYPE.key -> DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL,
+          DataSourceReadOptions.START_COMMIT.key -> secondCompletionTime), metaClient, None)
+        val slices = relation.listFileSplits(Seq.empty, Seq.empty).values.flatten.toSeq
+        assertEquals(Seq(fileIdOf(1)), slices.map(_.getFileId))
+        assertTrue(slices.head.getBaseFile.isPresent)
+        assertEquals(1, slices.head.getLogFiles.count())
+
+        checkAnswer(readIncremental(basePath, secondCompletionTime, "id", "name", "price", "_ts", "description"))(
+          Seq(1, "a1", 12.0, 1001, "a1: desc1")
         )
       }
     }
@@ -541,6 +616,54 @@ class TestPartialUpdateForMergeInto extends HoodieSparkSqlTestBase {
         // (from the compacted base), description d1v2 (from the log), name retained.
         checkAnswer(readIncremental(basePath, afterCompaction, "id", "name", "price", "_ts", "description"))(
           Seq(1, "a1", 11.0, 1002, "d1v2")
+        )
+      }
+    }
+  }
+
+  /**
+   * A compaction scheduled inside the window and completed after it folds the window's log file into a
+   * newer base file; the incremental query reads that base file and still returns the full row.
+   */
+  def testPartialUpdateIncrementalCompactionAfterWindow(logDataBlockFormat: String): Unit = {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      val basePath = tmp.getCanonicalPath + "/" + tableName
+      withSQLConf(
+        HoodieWriteConfig.MERGE_SMALL_FILE_GROUP_CANDIDATES_LIMIT.key() -> "0",
+        DataSourceWriteOptions.ENABLE_MERGE_INTO_PARTIAL_UPDATES.key() -> "true",
+        HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key() -> logDataBlockFormat,
+        HoodieReaderConfig.FILE_GROUP_READER_ENABLED.key() -> "true",
+        HoodieCompactionConfig.INLINE_COMPACT.key() -> "false",
+        HoodieCompactionConfig.INLINE_COMPACT_NUM_DELTA_COMMITS.key() -> "1") {
+        spark.sql(
+          s"""
+             |create table $tableName (id int, name string, price double, _ts int, description string)
+             |using hudi
+             |tblproperties(type ='mor', primaryKey = 'id', recordMergeMode = '${RecordMergeMode.COMMIT_TIME_ORDERING.name()}',
+             | hoodie.parquet.small.file.limit = '0')
+             |location '$basePath'
+        """.stripMargin)
+        val storage = HoodieTestUtils.getStorage(new StoragePath(basePath))
+
+        spark.sql(s"insert into $tableName values (1, 'a1', 10, 1000, 'd1')")
+        val firstCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+        spark.sql(s"merge into $tableName t0 using (select 1 as id, 12.0 as price, 1001 as ts) s0 " +
+          "on t0.id = s0.id when matched then update set price = s0.price, _ts = s0.ts")
+        spark.sql(s"schedule compaction on $tableName")
+        spark.sql(s"insert into $tableName values (2, 'a2', 20, 1200, 'd2')")
+        val windowEndCompletionTime = DataSourceTestUtils.latestCommitCompletionTime(storage, basePath)
+        spark.sql(s"run compaction on $tableName")
+        val metaClient = HoodieTableMetaClient.builder()
+          .setConf(HoodieTestUtils.getDefaultStorageConf).setBasePath(basePath).build()
+        val compactionCompletionTime = metaClient.getActiveTimeline.getCommitTimeline.filterCompletedInstants
+          .firstInstant.get.getCompletionTime
+        assertTrue(compactionCompletionTime > windowEndCompletionTime)
+
+        checkAnswer(readIncrementalBounded(basePath, firstCompletionTime, windowEndCompletionTime,
+          "id", "name", "price", "_ts", "description"))(
+          Seq(1, "a1", 12.0, 1001, "d1"),
+          Seq(2, "a2", 20.0, 1200, "d2")
         )
       }
     }

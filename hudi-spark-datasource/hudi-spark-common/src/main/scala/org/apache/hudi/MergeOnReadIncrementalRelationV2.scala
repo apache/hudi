@@ -19,7 +19,6 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.client.common.HoodieSparkEngineContext
-import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
@@ -91,7 +90,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       mergeType = mergeType,
       fileSplits = fileSplits,
       includedInstantTimeSet = Option(includedCommits.map(_.requestedTime).toSet),
-      instantRangeOpt = getInstantRange,
+      instantRangeOpt = if (fullTableScan) getInstantRange else windowEndInstantRange,
       optionalFilters = optionalFilters,
       metaClient = metaClient,
       options = optParams)
@@ -106,11 +105,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
       } else {
         val latestCommit = includedCommits.last.requestedTime
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata).asScala.toSeq
-        if (hasMissingAffectedFiles) {
-          legacyAffectedFileSlices(modifiedPartitions, latestCommit)
-        } else {
-          collectIncrementalFileSlices(modifiedPartitions, latestCommit)
-        }
+        collectIncrementalFileSlices(modifiedPartitions, latestCommit)
       }
 
       buildSplits(filterFileSlices(fileSlices, globPattern))
@@ -131,11 +126,7 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
         // every partition of the table.
         val partitionPaths = fileIndex.filterPartitionPaths(modifiedPartitions.asScala.toSeq,
           HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
-        if (hasMissingAffectedFiles) {
-          legacyAffectedFileSlices(partitionPaths, latestCommit)
-        } else {
-          collectIncrementalFileSlices(partitionPaths, latestCommit)
-        }
+        collectIncrementalFileSlices(partitionPaths, latestCommit)
       }
       filterFileSlices(fileSlices, globPattern)
     }
@@ -175,72 +166,75 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
   /**
    * Collects the incremental file slices for the given modified partitions.
    *
-   * Each returned file slice carries its base file plus all of its log files so the
-   * [[org.apache.hudi.common.table.read.HoodieFileGroupReader]] can perform a correct runtime merge.
-   * Resolving the current value of a record changed in the incremental window requires the full file
-   * slice, not just the files written within the window:
+   * The slices start from the files recorded in the window's commits (`affectedFilesInCommits`). On a
+   * MOR table, a slice whose base file was written before the window holds only the window's log files,
+   * yet resolving the current value of a record changed in the window needs the full file slice
+   * (HUDI #18943):
    *  - EVENT_TIME_ORDERING: a record written in the window may carry a lower ordering value than the
-   *    version already in the base/earlier-log, so the existing version wins; a window-only view
-   *    cannot determine the winner.
+   *    version already in the base/earlier-log, so the existing version wins.
    *  - Partial updates: a window log block holds only the changed columns, so the unchanged columns
    *    must be filled in from the base file.
-   * (HUDI #18943.)
+   * Such slices are replaced by the full slice of the same file group from a listing of their
+   * partitions (metadata-table-aware), so partitions whose touched file groups all have a base file in
+   * the window are not listed. The listing timeline is bounded to `latestCommit` so files written by
+   * later commits are not visible; the commit-time filter applied after the merge still restricts the
+   * returned records to the window.
    *
-   * The view is built from the (modified) partition listing (which includes the latest base file of
-   * each file group, honoring the metadata table when enabled) and scoped back to the file groups
-   * actually touched in the window (see [[affectedFileGroupIds]]) so untouched file groups are not
-   * read. The commit-time record filter applied during the scan still restricts the returned records
-   * to the incremental window.
-   *
-   * The view timeline is bounded to instants at or before `latestCommit` (the window's last commit)
-   * so that base/log files written by later commits are not visible. Without this bound a record
-   * updated again after the window would be merged with those later log files and its merged commit
-   * time would fall outside the window, dropping the in-window change from the result.
+   * A slice is replaced when the listing holds every log file the window recorded for it, or when
+   * those log files still exist but a compaction scheduled up to `latestCommit` has already folded them
+   * into a newer base file. When some were removed (e.g. by cleaning) and the full-table-scan fallback
+   * is disabled, the recorded slice is kept, so the scan fails early with a file-not-found error
+   * pointing the user at `hoodie.datasource.read.incr.fallback.fulltablescan.enable` instead of
+   * returning a partial result.
    */
   private def collectIncrementalFileSlices(partitionPaths: Seq[String], latestCommit: String): Seq[FileSlice] = {
-    val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext))
-    val fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(
-      engineContext, metaClient, fileIndex.getMetadataConfig, timeline.findInstantsBeforeOrEquals(latestCommit))
+    val affectedSlices = latestMergedFileSlices(new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits),
+      partitionPaths, latestCommit, _ => true)
+    val slicesWithoutBaseFile = affectedSlices.filter(slice => !slice.getBaseFile.isPresent)
+    if (metaClient.getTableType == HoodieTableType.COPY_ON_WRITE || slicesWithoutBaseFile.isEmpty) {
+      affectedSlices
+    } else {
+      val fileIdsWithoutBaseFile = slicesWithoutBaseFile.map(_.getFileId).toSet
+      val engineContext = new HoodieSparkEngineContext(new JavaSparkContext(sqlContext.sparkContext))
+      val fsView = FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(
+        engineContext, metaClient, fileIndex.getMetadataConfig, timeline.findInstantsBeforeOrEquals(latestCommit))
+      val fullSlices = latestMergedFileSlices(fsView, slicesWithoutBaseFile.map(_.getPartitionPath).distinct,
+        latestCommit, slice => fileIdsWithoutBaseFile.contains(slice.getFileId))
+        .map(slice => slice.getFileGroupId -> slice).toMap
+      affectedSlices.map { slice =>
+        fullSlices.get(slice.getFileGroupId)
+          .filter(fullSlice => logFileNames(slice).subsetOf(logFileNames(fullSlice)) || logFilesExist(slice))
+          .getOrElse(slice)
+      }
+    }
+  }
+
+  /** The latest merged file slices of `fsView` in the given partitions that satisfy `include`; closes the view. */
+  private def latestMergedFileSlices(fsView: HoodieTableFileSystemView, partitionPaths: Seq[String],
+                                     latestCommit: String, include: FileSlice => Boolean): Seq[FileSlice] = {
     try {
       partitionPaths.flatMap { relativePartitionPath =>
         fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
-          .filter(fs => affectedFileGroupIds.contains(fs.getFileId))
+          .filter(include)
       }
     } finally {
       fsView.close()
     }
   }
 
-  /**
-   * Builds the incremental file slices directly from the files recorded in the window's commits
-   * (`affectedFilesInCommits`), as the read path did before HUDI #18943.
-   *
-   * This is used only when [[hasMissingAffectedFiles]] is true and the full-table-scan fallback is
-   * disabled: some files referenced by the window have been removed (e.g. by cleaning), so there is
-   * no correct incremental result to produce. Listing from the recorded files (which include the
-   * missing paths) preserves the prior fail-early contract - the scan surfaces a file-not-found
-   * error pointing the user at `hoodie.datasource.read.incr.fallback.fulltablescan.enable` - instead
-   * of silently returning an empty/partial result from a fresh listing that no longer sees those
-   * files.
-   */
-  private def legacyAffectedFileSlices(partitionPaths: Seq[String], latestCommit: String): Seq[FileSlice] = {
-    val fsView = new HoodieTableFileSystemView(metaClient, timeline, affectedFilesInCommits)
-    try {
-      partitionPaths.flatMap { relativePartitionPath =>
-        fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
-      }
-    } finally {
-      fsView.close()
-    }
-  }
+  private def logFileNames(slice: FileSlice): Set[String] = slice.getLogFiles.iterator().asScala.map(_.getFileName).toSet
+
+  private def logFilesExist(slice: FileSlice): Boolean =
+    slice.getLogFiles.iterator().asScala.forall(logFile => metaClient.getStorage.exists(logFile.getPath))
 
   /**
-   * File group ids touched within the incremental window. Used to scope the partition-listing based
-   * view (which surfaces every file group in a modified partition) back to only the changed file
-   * groups, so we do not read and discard untouched file groups.
+   * Bounds the file-group merge of the legacy RDD read to the window end, so log blocks written after
+   * the window in a full file slice are not merged in.
    */
-  private lazy val affectedFileGroupIds: Set[String] =
-    affectedFilesInCommits.asScala.map(f => FSUtils.getFileIdFromFilePath(f.getPath)).toSet
+  private def windowEndInstantRange: HOption[InstantRange] =
+    includedCommits.lastOption.map(last => HOption.of(InstantRange.builder()
+      .rangeType(RangeType.CLOSED_CLOSED).nullableBoundary(true).endInstant(last.requestedTime).build()))
+      .getOrElse(HOption.empty[InstantRange]())
 
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {
     val filteredFileSlices = if (!StringUtils.isNullOrEmpty(pathGlobPattern)) {
