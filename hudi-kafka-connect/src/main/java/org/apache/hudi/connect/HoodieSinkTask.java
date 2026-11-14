@@ -53,6 +53,8 @@ public class HoodieSinkTask extends SinkTask {
 
   private final Map<TopicPartition, TransactionCoordinator> transactionCoordinators;
   private final Map<TopicPartition, TransactionParticipant> transactionParticipants;
+  // Secondary index for per-record routing in put(); avoids allocating a TopicPartition key per record.
+  private final Map<String, Map<Integer, TransactionParticipant>> participantsByTopicPartition;
   private KafkaConnectControlAgent controlKafkaClient;
   private KafkaConnectConfigs connectConfigs;
 
@@ -62,6 +64,7 @@ public class HoodieSinkTask extends SinkTask {
   public HoodieSinkTask() {
     transactionCoordinators = new HashMap<>();
     transactionParticipants = new HashMap<>();
+    participantsByTopicPartition = new HashMap<>();
   }
 
   @Override
@@ -93,11 +96,9 @@ public class HoodieSinkTask extends SinkTask {
   @Override
   public void put(Collection<SinkRecord> records) {
     for (SinkRecord record : records) {
-      String topic = record.topic();
-      int partition = record.kafkaPartition();
-      TopicPartition tp = new TopicPartition(topic, partition);
-
-      TransactionParticipant transactionParticipant = transactionParticipants.get(tp);
+      Map<Integer, TransactionParticipant> participantsForTopic = participantsByTopicPartition.get(record.topic());
+      TransactionParticipant transactionParticipant =
+          participantsForTopic == null ? null : participantsForTopic.get(record.kafkaPartition());
       if (transactionParticipant != null) {
         transactionParticipant.buffer(record);
       }
@@ -168,6 +169,13 @@ public class HoodieSinkTask extends SinkTask {
         }
       }
       TransactionParticipant worker = transactionParticipants.remove(partition);
+      Map<Integer, TransactionParticipant> participantsForTopic = participantsByTopicPartition.get(partition.topic());
+      if (participantsForTopic != null) {
+        participantsForTopic.remove(partition.partition());
+        if (participantsForTopic.isEmpty()) {
+          participantsByTopicPartition.remove(partition.topic());
+        }
+      }
       if (worker != null) {
         try {
           log.debug("Closing data writer due to task start failure.");
@@ -194,6 +202,7 @@ public class HoodieSinkTask extends SinkTask {
         }
         ConnectTransactionParticipant worker = new ConnectTransactionParticipant(connectConfigs, partition, controlKafkaClient, context);
         transactionParticipants.put(partition, worker);
+        participantsByTopicPartition.computeIfAbsent(partition.topic(), k -> new HashMap<>()).put(partition.partition(), worker);
         worker.start();
       } catch (HoodieException exception) {
         log.error("Fatal error initializing task {} for partition {}", taskId, partition.partition(), exception);
@@ -214,6 +223,7 @@ public class HoodieSinkTask extends SinkTask {
       }
     }
     transactionParticipants.clear();
+    participantsByTopicPartition.clear();
     transactionCoordinators.forEach((topic, transactionCoordinator) -> transactionCoordinator.stop());
     transactionCoordinators.clear();
   }
