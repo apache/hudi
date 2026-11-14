@@ -906,7 +906,7 @@ public class HoodieAvroUtils {
   // fastReaderEnabled=true), and return the canonical primitive for the same underlying bytes.
   // See the javadoc on convertValueForAvroLogicalTypes for context.
 
-  private static long extractEpochDay(Object fieldValue) {
+  static long extractEpochDay(Object fieldValue) {
     if (fieldValue instanceof LocalDate) {
       return ((LocalDate) fieldValue).toEpochDay();
     }
@@ -916,7 +916,7 @@ public class HoodieAvroUtils {
     return Long.parseLong(fieldValue.toString());
   }
 
-  private static long extractEpochMillis(Object fieldValue) {
+  static long extractEpochMillis(Object fieldValue) {
     if (fieldValue instanceof Instant) {
       return ((Instant) fieldValue).toEpochMilli();
     }
@@ -926,7 +926,7 @@ public class HoodieAvroUtils {
     return Long.parseLong(fieldValue.toString());
   }
 
-  private static long extractEpochMicros(Object fieldValue) {
+  static long extractEpochMicros(Object fieldValue) {
     if (fieldValue instanceof Instant) {
       Instant instant = (Instant) fieldValue;
       return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);
@@ -937,7 +937,7 @@ public class HoodieAvroUtils {
     return Long.parseLong(fieldValue.toString());
   }
 
-  private static long extractLocalEpochMillis(Object fieldValue) {
+  static long extractLocalEpochMillis(Object fieldValue) {
     if (fieldValue instanceof LocalDateTime) {
       return ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC).toEpochMilli();
     }
@@ -947,7 +947,7 @@ public class HoodieAvroUtils {
     return Long.parseLong(fieldValue.toString());
   }
 
-  private static long extractLocalEpochMicros(Object fieldValue) {
+  static long extractLocalEpochMicros(Object fieldValue) {
     if (fieldValue instanceof LocalDateTime) {
       Instant instant = ((LocalDateTime) fieldValue).toInstant(ZoneOffset.UTC);
       return Math.addExact(Math.multiplyExact(instant.getEpochSecond(), 1_000_000L), instant.getNano() / 1000L);

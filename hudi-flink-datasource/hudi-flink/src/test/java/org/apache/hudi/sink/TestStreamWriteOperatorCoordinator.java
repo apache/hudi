@@ -65,9 +65,11 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.util.StreamerUtil;
+import org.apache.hudi.utils.SharedCoordinatorMetricGroup;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Gauge;
@@ -774,6 +776,23 @@ public class TestStreamWriteOperatorCoordinator {
         "The time spent failing to connect is init time");
     assertEquals(0, metricGroup.histograms.get("hiveSyncRemainingDurationMs").getCount(),
         "A sync that never ran records no remaining time");
+  }
+
+  @Test
+  void testHiveSyncMetricsReportSyncsAfterCoordinatorRestart() throws Exception {
+    coordinator.close();
+    Configuration conf = getUnreachableMetastoreConf();
+    SharedCoordinatorMetricGroup metricGroup = new SharedCoordinatorMetricGroup(new JobID().toString(), new OperatorID().toString());
+    coordinator = startCoordinator(conf, metricGroup);
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+    coordinator.close();
+
+    // a restart that rebuilds the execution graph creates a new coordinator on the same metric group
+    coordinator = startCoordinator(conf, metricGroup.newView());
+    assertThrows(HoodieHiveSyncException.class, () -> coordinator.doSyncHive());
+
+    assertEquals(2, metricGroup.getCounter("hiveSyncFailureCount").getCount());
+    assertEquals(2, metricGroup.getHistogram("hiveSyncDurationMs").getCount());
   }
 
   private Configuration getUnreachableMetastoreConf() {

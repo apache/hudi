@@ -30,7 +30,34 @@
 
 ## Status
 
+Completed with a reduced scope; see [Scope outcome](#scope-outcome).
+
 Umbrella ticket: [HUDI-9730](https://issues.apache.org/jira/browse/HUDI-9730)
+
+## Scope outcome
+
+### Delivered
+
+- `HoodieSchema`, `HoodieSchemaField` and `HoodieSchemaType` in `hudi-common` as Hudi's schema API
+  ([#14265](https://github.com/apache/hudi/pull/14265)), and phase 1 schema consolidation of Avro `Schema` call sites
+  onto it ([#14263](https://github.com/apache/hudi/issues/14263)).
+- `VARIANT`, with unshredded and shredded storage; see [Variant Type Implementation](#variant-type-implementation).
+- `VECTOR` and `BLOB` as `HoodieSchemaType` logical types. The VECTOR layout is in
+  [vector-appendix.md](vector-appendix.md); BLOB semantics are owned by [RFC-100](../rfc-100/rfc-100.md).
+- The [Type Specification](#type-specification) and [Interoperability Mapping](#interoperability-mapping) tables
+  stay as the reference specification for each type and its mapping to other systems.
+
+### Moved out of this RFC
+
+| Item | New home |
+|------|----------|
+| Logical types not yet in `HoodieSchemaType`: TINYINT, SMALLINT, unsigned integers, FLOAT16, LARGE_STRING, LARGE_BINARY, DATE64, DURATION, DICTIONARY | [RFC-88](https://github.com/apache/hudi/pull/12795) (restructure proposed): a type lands together with its mappings to every engine, format and catalog, and their tests |
+| Translation layers to and from Avro, Parquet, Spark, Flink and other systems | RFC-88 |
+| Removing Avro from `HoodieSchema` internals | RFC-88 |
+| Type ids for schema evolution and their interplay with NBCC | [RFC-104](https://github.com/apache/hudi/pull/18661) |
+| Arrow-based in-memory representation | Future work; not planned in any open RFC |
+| Table schema tracked in the metadata table | Future work; not planned in any open RFC |
+| SQL extensions for Hudi-native type DDL | Future work; not planned in any open RFC |
 
 
 ## Abstract
@@ -188,12 +215,10 @@ The following table defines the canonical mapping from the proposed logical type
  
 ## Implementation
 
-A specific hudi core module "hudi-core-type" will define the above types. The translation layer to and from other type-systems such as Avro, Spark, Flink, Parquet,.. will reside in their own separate modules to keep the dependency clean. 
-
-The table schema itself will need to be tracked in metadata table.
-SQL Extensions needs to be added to define the table in a hudi type native way. 
-
-TODO: There is an open question regarding the need to maintain type ids to track schema evolution and how it would interplay with NBCC. 
+The types are defined by `HoodieSchemaType` in `hudi-common` rather than a separate `hudi-core-type` module, and
+`HoodieSchema` currently wraps an Avro `Schema`. The rest of the original plan (translation layers, Avro-free internals,
+table schema in the metadata table, SQL extensions and type ids under NBCC) moved as listed in
+[Scope outcome](#scope-outcome).
 
 ---
 

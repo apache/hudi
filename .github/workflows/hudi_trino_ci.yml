@@ -93,11 +93,11 @@ jobs:
         # they live behind the hudi-trino-tests profile but the test step needs them.
         run: mvn $MVN_ARGS install -pl :hudi-common,:hudi-hive-sync,:hudi-io,:hudi-sync-common,:hudi-client-common,:hudi-java-client -am -Dmaven.test.skip=true -Drat.skip -Dcheckstyle.skip
       - name: Set up JDK 25
+        # Restoring the Maven cache again would overwrite the Hudi artifacts installed above.
         uses: actions/setup-java@v5
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: maven
       - name: Purge Trino artifacts from the local m2
         # Artifacts an older pin left behind carry the same SNAPSHOT coordinates as the current ones.
         run: rm -rf ~/.m2/repository/io/trino

@@ -30,8 +30,9 @@ Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
 Baseline ID: hudi-1.2.0-flink-1.20
 Hudi source revision: f05c83f2b97732de7a558ff9b26959e1139c05f5
 Fixture version: Apache Flink 1.20.1
-Capability manifest schema: 6
+Capability manifest schema: 7
 Catalog contract schema: 1
+Writer contract schema: 1
 Catalog profile: <one pinned profile or unresolved>
 Design contract schema: <1 append-only COW | 2 mutable COW | 3 mutable MOR>
 
@@ -65,8 +66,9 @@ Use only the machine result from `validate_flink_existing_table.py`:
 Flink design status: <CONFIG_VALIDATED | INCOMPLETE | BLOCKED | REVIEW_REQUIRED>
 Reconciliation result: <COMPATIBLE | CONFLICT | UNVERIFIED>
 Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
-Capability manifest schema: 6
+Capability manifest schema: 7
 Catalog contract schema: 1
+Writer contract schema: 1
 Catalog profile: <direct_sql_none or requested non-legacy profile>
 Catalog setup SQL: <always empty for an existing table>
 Effective catalog configuration: <validator-produced mapping>
@@ -74,6 +76,8 @@ Reconciliation schema: 1
 Desired design contract schema: <1 | 2 | 3>
 Writer transition: <same_job_restore | cold_start_new_job | flink_writer_takeover |
 cross_engine_takeover | unknown>
+Writer contract result: <NOT_APPLICABLE | COMPLETE | INCOMPLETE | CONFLICT>
+Multi-writer capability: <NOT_APPLICABLE | UNVERIFIED | UNSUPPORTED>
 
 Evidence:
 - <evidence ID, kind, table path, in-scope flag, observation time, and digest; no raw secrets>
@@ -92,6 +96,8 @@ Deployment checks:
 - For a mutable cold start, verify index bootstrap before relying on the first checkpoint.
 - Retain the validator-produced catalog deployment checks for any non-legacy profile; these are
   observations to perform, not permission to mutate an existing registration.
+- Retain Writer Contract checks when applicable; they do not establish live lock or recovery
+  behavior.
 
 Executable output:
 - Withheld because PR5 is assessment-only, including for COMPATIBLE results.
@@ -112,8 +118,9 @@ Verified baseline: Apache Hudi 1.2.0 / Apache Flink 1.20
 Baseline ID: hudi-1.2.0-flink-1.20
 Hudi source revision: f05c83f2b97732de7a558ff9b26959e1139c05f5
 Fixture version: Apache Flink 1.20.1
-Capability manifest schema: 6
+Capability manifest schema: 7
 Catalog contract schema: 1
+Writer contract schema: 1
 Catalog profile: <direct_sql_none | direct_sql_hive_metastore | hudi_dfs_catalog_none |
 hudi_dfs_catalog_hive_metastore | hudi_hms_catalog_hive_metastore>
 Design contract schema: <1 append-only COW | 2 mutable COW | 3 mutable MOR>

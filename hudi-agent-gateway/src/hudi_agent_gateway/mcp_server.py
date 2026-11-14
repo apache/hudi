@@ -24,9 +24,9 @@ from hudi_agent_gateway import __version__
 from hudi_agent_gateway.tools.registry import ToolRegistry
 
 _INSTRUCTIONS = (
-    "Tools for querying an Apache Hudi lakehouse through Trino. Use list_tables "
+    "Tools for querying an Apache Hudi lakehouse. Use list_tables "
     "and describe_table to discover the schema, then query_lakehouse with a "
-    "single read-only SELECT statement (Trino SQL). Results are row-capped and "
+    "single read-only SELECT statement in the tool's SQL dialect. Results are row-capped and "
     "may be truncated (indicated in the payload)."
 )
 

@@ -44,7 +44,9 @@ Target Hudi version: **1.2.0**.
   an existing table backed by structured evidence. For new tables, those same design schemas can
   compose direct Hive sync, Hudi DFS Catalog, or external Hudi HMS Catalog through five pinned
   profiles. Glue, managed HMS, existing-table catalog mutation, and live connectivity claims
-  remain fail-closed.
+  remain fail-closed. A versioned PR7 Writer Contract can record independent writers and ownership,
+  but remains assessment-only: OCC is unverified, current schemas are incompatible with NBCC, and
+  no multi-writer SQL is emitted.
 
 ## How to invoke
 
@@ -93,6 +95,8 @@ Even without invoking as a Skill, the files in `references/` are readable design
   rules for the assessment-only existing-table path.
 - `flink-catalog-composition.md` — the five PR6 profiles, lifecycle/path rules, Hive sync ownership,
   MOR naming, freshness boundary, and deployment checks.
+- `flink-writer-contract.md` — the PR7 writer inventory, ownership, observed-concurrency, evidence,
+  and non-executable capability rules.
 
 The Skill itself is defined in `SKILL.md`.
 
@@ -136,6 +140,8 @@ The mutable MOR schema-3 fixture is
 `hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr4/mutable_mor.json`.
 PR6 profile inputs are recorded in
 `hudi-agent-gateway/tests/fixtures/hudi_architect/flink_pr6/catalog_profiles.toml`.
+PR7 source-backed concurrency fixtures are implemented in
+`hudi-agent-gateway/fixtures/hudi-architect-flink-1.20/src/test/java/org/apache/hudi/agent/architect/TestFlinkArchitectWriterContractFixtures.java`.
 
 Validate a structured existing-table reconciliation contract without rendering SQL:
 
@@ -160,18 +166,20 @@ This is **Milestone 1 of a longer arc** — meant to be shareable and playable, 
 4. **Read the ADR output.** Are the revisit conditions actually measurable? Do the durability tables cover the one-way decisions relevant to your workload?
 5. **Declare a second writer.** On the Spark route, check the selected lock provider, emitted block,
    and pre-launch checklist. On the Flink route, check that the result is `REVIEW_REQUIRED` and
-   that no concurrency-sensitive configuration is emitted.
+   that the Writer Contract is normalized without emitting concurrency-sensitive configuration.
 
 ## What's out of scope in Milestone 1
 
 - Flink append-only MOR, standalone compaction, detailed compaction tuning, clustering,
   existing-table SQL generation or catalog takeover, AWS Glue, managed/embedded HMS, live catalog
-  probing, multiple writers, alternative indexes, custom
+  probing, executable multi-writer operation, alternative indexes, custom
   mergers, retract normalization, partition movement, key-only deletes, full CDC history,
   DataStream API, `HoodieFlinkStreamer`, source connector generation, and submit/deploy commands.
   Those paths do not reuse the bounded SQL output as if it were generally applicable.
 
-- Multi-writer contention tuning — the mode, lock provider, and config bundle are derived, but retry/timeout tuning and early conflict detection stay at defaults (they depend on observed behavior, not design-time facts).
+- Multi-writer contention tuning — the Spark route may derive its established bundle; the Flink
+  Writer Contract records only observed mode/provider facts. Retry/timeout tuning and early
+  conflict detection depend on observed behavior, not design-time facts.
 - Benchmarking / scale-characterization — different flow shape, future revision.
 - CONSISTENT_HASHING bucket recommendations at design time.
 - Partial-update MERGE nudging (Spark SQL only).

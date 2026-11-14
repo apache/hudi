@@ -29,7 +29,9 @@ bounded append-only COW, mutable COW, and mutable MOR new-table, single-writer,
 streaming paths. New-table designs can optionally compose direct Hive sync, Hudi DFS Catalog, or
 external Hudi HMS Catalog through five pinned profiles. For an existing table, it can instead
 produce a read-only exact-match reconciliation report from provenance-bearing table, schema,
-writer, and timeline evidence; that report never contains SQL or mutation commands.
+writer, and timeline evidence; that report never contains SQL or mutation commands. For a
+confirmed independent writer, PR7 records a non-executable Writer Contract and deployment checks
+without selecting a concurrency mode, lock provider, or index.
 
 ---
 
@@ -155,6 +157,8 @@ explicit-column `INSERT INTO`. The assessment retains effective catalog configur
 deployment-check codes separately; generated SQL is never executed and deployment remains manual.
 An existing-table session emits comparisons, evidence provenance, findings, and deployment rechecks
 with executable eligibility `false`, including when the static result is `COMPATIBLE`.
+A multi-writer session additionally reports Writer Contract completeness and an `UNVERIFIED` or
+`UNSUPPORTED` capability. It never reports multi-writer support or emits SQL.
 
 Then: land a first commit in a staging path, run your real read patterns against it, and check the ADR's operational playbook section for what to monitor from day one (commit duration, pending compactions, active timeline size, small-file ratio).
 
@@ -166,12 +170,14 @@ Be aware of what the agent will *decline* to decide — it defers honestly rathe
   new-table, single-writer streaming SQL sinks are implemented, with five direct SQL / DFS Catalog
   / HMS Catalog compositions. Append-only MOR, standalone compaction, detailed compaction tuning,
   clustering, existing-table SQL or takeover, existing-table catalog mutation, AWS Glue, managed
-  or embedded HMS, live catalog probing, multiple writers, alternative indexes, custom mergers,
+  or embedded HMS, live catalog probing, executable multi-writer operation, alternative indexes,
+  custom mergers,
   retract normalization, partition movement, key-only deletes, full CDC history, DataStream API,
   `HoodieFlinkStreamer`, source connector generation, and submit/deploy commands remain out of
-  scope.
+  scope. PR7 can inventory multiple writers, but OCC remains unverified and NBCC is incompatible
+  with the current COW and FLINK_STATE-indexed MOR contracts.
 
-- **Multi-writer contention tuning** — on the Spark route, the agent asks whether anything else writes the table (every tier but the lightest), derives the concurrency mode, picks a lock provider, and emits a complete, runnable block. What it does *not* do is tune for observed contention: lock retry/timeout values, conflict-retry counts, and early conflict detection stay at their defaults, because the right values depend on measured behavior rather than design-time facts. That is Operations Agent territory. Two things remain yours to carry out: apply the emitted block to **every** writing job (the ADR's pre-launch checklist enumerates them), and confirm that writers using `INSERT`/`BULK_INSERT` have disjoint key spaces — concurrent inserts can duplicate even with dedup enabled. The current Flink path detects multiple writers but emits no concurrency configuration. Background: [Hudi concurrency docs](https://hudi.apache.org/docs/concurrency_control).
+- **Multi-writer contention tuning** — on the Spark route, the agent asks whether anything else writes the table (every tier but the lightest), derives the concurrency mode, picks a lock provider, and emits a complete, runnable block. What it does *not* do is tune for observed contention: lock retry/timeout values, conflict-retry counts, and early conflict detection stay at their defaults, because the right values depend on measured behavior rather than design-time facts. That is Operations Agent territory. Two things remain yours to carry out: apply the emitted block to **every** writing job (the ADR's pre-launch checklist enumerates them), and confirm that writers using `INSERT`/`BULK_INSERT` have disjoint key spaces — concurrent inserts can duplicate even with dedup enabled. The Flink Writer Contract records only explicit or observed facts and emits no concurrency configuration. Background: [Hudi concurrency docs](https://hudi.apache.org/docs/concurrency_control).
 - **Catalog / metastore sync beyond the common paths** — on the Spark route, the agent asks which engines query the table and derives sync config for Hive Metastore, AWS Glue, BigQuery, and DataHub, including the partition-extractor and MOR `_ro`/`_rt` consequences. The Flink route emits only the five pinned direct SQL / DFS Catalog / external HMS Catalog profiles and treats catalog visibility as post-commit eventual. Not covered: Glue execution, live HMS checks, existing-table registration/takeover, managed HMS, Polaris, Snowflake/Redshift-specific setup, or per-catalog auth (Kerberos, IAM policy documents, service-account keys) — those are environment concerns the flow deliberately never asks about. Background: [metastore](https://hudi.apache.org/docs/syncing_metastore), [Glue](https://hudi.apache.org/docs/syncing_aws_glue_data_catalog), [BigQuery](https://hudi.apache.org/docs/gcp_bigquery), [DataHub](https://hudi.apache.org/docs/syncing_datahub).
 - **Non-Kafka source configs** — Kafka sources get full source-class + schema-provider derivation; for DFS/JDBC/Pulsar/Kinesis sources you'll fill in the `--source-class` and source properties from Hudi docs.
 - **Cross-format interoperability (Apache XTable)** — explained and linked, not configured. XTable translates Hudi metadata so the same files can be read as Iceberg or Delta, but it is a separate incubating project: its config keys live in its codebase rather than Hudi's, so this skill cannot machine-verify them the way it verifies every `hoodie.*` key it emits. The agent names the one durable coupling — **XTable's FAQ lists MOR as unsupported, so cross-format interop argues for CoW**, worth confirming against their current docs since the project is incubating — and points you at [xtable.apache.org](https://xtable.apache.org), [the repo](https://github.com/apache/incubator-xtable), and [Hudi's page](https://hudi.apache.org/docs/syncing_xtable) to follow up.

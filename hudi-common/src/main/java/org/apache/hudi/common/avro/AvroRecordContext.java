@@ -19,6 +19,7 @@
 
 package org.apache.hudi.common.avro;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -30,8 +31,10 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.exception.HoodieException;
 
 import org.apache.avro.generic.GenericData;
@@ -40,6 +43,7 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.UnaryOperator;
@@ -57,15 +61,19 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   private final String payloadClass;
+  private final boolean consistentLogicalTimestampEnabled;
+  private AvroOrderingValueConverter orderingValueConverter;
 
-  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass) {
+  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, TypedProperties props) {
     super(tableConfig, new AvroJavaTypeConverter());
     this.payloadClass = payloadClass;
+    this.consistentLogicalTimestampEnabled = ConfigUtils.shouldKeepConsistentLogicalTimestamp(props);
   }
 
   public AvroRecordContext() {
     super(new AvroJavaTypeConverter());
     this.payloadClass = null;
+    this.consistentLogicalTimestampEnabled = false;
   }
 
   public static Object getFieldValueFromIndexedRecord(
@@ -105,6 +113,36 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public Object getValue(IndexedRecord record, HoodieSchema schema, String fieldName) {
     return getFieldValueFromIndexedRecord(record, fieldName);
+  }
+
+  @Override
+  public Comparable getOrderingValue(IndexedRecord record, HoodieSchema schema, List<String> orderingFieldNames) {
+    return OrderingValues.create(orderingFieldNames, field -> {
+      Object value = getOrderingValueFromIndexedRecord(record, field, consistentLogicalTimestampEnabled);
+      return value == null ? OrderingValues.getDefault() : ensureComparability(value);
+    });
+  }
+
+  @Override
+  public Comparable getOrderingValue(IndexedRecord record, HoodieSchema schema, String[] orderingFieldNames) {
+    return orderingFieldNames == null
+        ? OrderingValues.getDefault()
+        : OrderingValues.create(orderingFieldNames, field -> {
+          Object value = getOrderingValueFromIndexedRecord(record, field, consistentLogicalTimestampEnabled);
+          return value == null ? OrderingValues.getDefault() : ensureComparability(value);
+        });
+  }
+
+  /**
+   * Extracts an ordering field from a generic Avro record, normalizing its logical type.
+   *
+   * @param record the record to read; must be a {@link GenericRecord}
+   * @param fieldName the field name, which may be a nested path
+   * @param consistentLogicalTimestampEnabled whether to use consistent logical timestamp conversion
+   * @return the ordering value, or null if the field or its value is missing
+   */
+  public static Object getOrderingValueFromIndexedRecord(IndexedRecord record, String fieldName, boolean consistentLogicalTimestampEnabled) {
+    return HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, fieldName, true, consistentLogicalTimestampEnabled);
   }
 
   @Override
@@ -201,6 +239,18 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public UnaryOperator<IndexedRecord> projectRecord(HoodieSchema from, HoodieSchema to, Map<String, String> renamedColumns) {
     return record -> HoodieAvroUtils.rewriteRecordWithNewSchema(record, to.toAvroSchema(), renamedColumns);
+  }
+
+  /**
+   * Initializes schema-aware conversion so delete values use the same logical types as data records.
+   */
+  public void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
+    orderingValueConverter = AvroOrderingValueConverter.create(dataSchema, orderingFieldNames, consistentLogicalTimestampEnabled);
+  }
+
+  @Override
+  public Comparable convertOrderingValueToEngineType(Comparable value) {
+    return orderingValueConverter.convert(value);
   }
 
   @Override

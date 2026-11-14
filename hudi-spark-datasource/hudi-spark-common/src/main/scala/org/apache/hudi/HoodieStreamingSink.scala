@@ -72,6 +72,10 @@ class HoodieStreamingSink(sqlContext: SQLContext,
         Option.empty
     }
   }
+  // Validate captured flow settings before starting a query, including when its first batch
+  // is already committed and would otherwise bypass the writer's table identity validation.
+  metaClient.foreach(client => HoodieWriterUtils.validateTableConfig(sqlContext.sparkSession, options, client.getTableConfig))
+
   private val retryCnt = options.getOrElse(STREAMING_RETRY_CNT.key,
     STREAMING_RETRY_CNT.defaultValue).toInt
   private val retryIntervalMs = options.getOrElse(STREAMING_RETRY_INTERVAL_MS.key,
@@ -206,18 +210,18 @@ class HoodieStreamingSink(sqlContext: SQLContext,
     match {
       case Failure(e) =>
         if (!ignoreFailedBatch) {
-          log.error(s"Micro batch id=$batchId threw following expections," +
-            s"aborting streaming app to avoid data loss: ", e)
-          // spark sometimes hangs upon exceptions and keep on hold of the executors
-          // this is to force exit upon errors / exceptions and release all executors
-          // will require redeployment / supervise mode to restart the streaming
-          reset(true)
-          System.exit(1)
+          // retry has already reset this sink's resources. Let Spark fail the query and leave
+          // restart decisions to the caller without terminating other queries in the same JVM.
+          throw new HoodieException(s"Micro batch id=$batchId failed after exhausting write retries", e)
         }
       case Success(_) =>
         log.info(s"Micro batch id=$batchId succeeded")
     }
   }
+
+  private[hudi] def currentWriteClient: Option[SparkRDDWriteClient[_]] = writeClient
+
+  private[hudi] def currentTimelineService: Option[EmbeddedTimelineService] = embeddedTimelineService
 
   override def toString: String = s"HoodieStreamingSink[${options("path")}]"
 
@@ -315,8 +319,9 @@ class HoodieStreamingSink(sqlContext: SQLContext,
   }
 
   /**
-   * Each handoff waits for the service's current run before switching to the new client. Close the previous
-   * client only after both services have handed it back, without retaining clients until query termination.
+   * Same as HoodieStreamer on a schema change (StreamSync#reInitWriteClient and
+   * HoodieStreamer#onInitializingWriteClient): the async table services switch to the new client for their next
+   * runs, and the previous client is closed right away.
    */
   private def retireWriteClient(previousClient: SparkRDDWriteClient[_], newClient: SparkRDDWriteClient[_]): Unit = {
     if (asyncCompactorService != null) {

@@ -69,6 +69,9 @@ Within the Flink route, load the remaining references only when needed:
   table; use it to collect provenance-bearing evidence and produce the assessment-only PR5 report.
 - Load `references/flink-catalog-composition.md` only when the user needs named catalog resolution
   or external discovery; use its PR6 contract without changing design schema 1, 2, or 3.
+- Load `references/flink-writer-contract.md` only after F2 confirms an independent writer or
+  standalone service; collect its PR7 facts without selecting concurrency, locking, or index
+  settings.
 
 The verified Flink baseline is Apache Hudi 1.2.0 at source revision
 `f05c83f2b97732de7a558ff9b26959e1139c05f5` with Apache Flink 1.20; build and test fixtures use
@@ -80,7 +83,8 @@ another Hudi or Flink version, do not silently reuse the baseline: add a `REVIEW
 unless a separate verified capability reference exists.
 
 The Flink implementation includes the PR1 safety foundation, three bounded executable paths, one
-existing-table assessment path, and PR6 catalog/metastore composition. PR2 append-only COW, PR3
+existing-table assessment path, PR6 catalog/metastore composition, and the PR7 assessment-only
+multi-writer Writer Contract. PR2 append-only COW, PR3
 mutable COW, and PR4 mutable MOR all require a new table, confirmed single writer, streaming
 checkpointing, and `CONFIG_VALIDATED` from `validate_flink_design.py`. They retain direct SQL by
 default; PR6 may compose one of five pinned direct/DFS/HMS profiles without changing the table
@@ -93,8 +97,10 @@ or 3 desired contract with structured evidence from an existing table, but it ne
 authorizes mutation. PR6 supports new-table direct Hive sync, Hudi DFS Catalog, and external Hudi
 HMS Catalog composition; AWS Glue, managed HMS, existing-table catalog mutation, and live service
 claims fail closed. Append-only MOR, standalone table services, detailed compaction tuning,
-separate-writer or cross-engine takeover, multi-writer, alternative indexes, custom mergers,
-retract normalization, and full CDC history still fail closed.
+separate-writer or cross-engine takeover, multi-writer executable output, alternative indexes,
+custom mergers, retract normalization, and full CDC history still fail closed. A confirmed
+multi-writer topology can be recorded by PR7, but OCC remains unverified and the existing
+FLINK_STATE paths are incompatible with NBCC; the validator never chooses a replacement.
 
 ## Flow structure
 
@@ -104,7 +110,8 @@ The conversation has three parts:
 2. **Rounds 1-3** — workload questions, gated conditionally by tier.
 3. **Output** — engine-specific output: the established Spark artifacts, a non-executable Flink
   assessment, a PR5 existing-table reconciliation report, or bounded validator-rendered
-  PR2/PR3/PR4 SQL artifacts, optionally composed with validated PR6 catalog setup SQL.
+  PR2/PR3/PR4 SQL artifacts, optionally composed with validated PR6 catalog setup SQL. PR7 adds
+  only a non-executable Writer Contract assessment.
 
 Load `references/question-flow.md` for the full round-by-round question list with conditional gating.
 
@@ -224,6 +231,10 @@ When a catalog block is present, retain the validator's `catalog_setup_sql`, eff
 configuration, and deployment checks as separate machine fields; `--emit-sql` is only their
 canonical ordered composition. Catalog deployment checks never imply that a live service was
 probed, and the generated SQL is never executed by this skill.
+When F2 confirms another writer, add the version-1 `writer_contract` described by
+`flink-writer-contract.md`. Retain its normalized contract, capability notes, and deployment checks
+as assessment fields. Never turn `COMPLETE` into a support claim: multi-writer capability remains
+`UNVERIFIED` or `UNSUPPORTED`, and executable eligibility remains `false`.
 For an existing table, create the same explicit desired contract, collect and confirm evidence per
 `flink-existing-table-reconciliation.md`, and run `validate_flink_existing_table.py` instead. Emit
 its report and deployment checks exactly as assessment data; never reinterpret `COMPATIBLE` as
@@ -284,6 +295,8 @@ fact `INCOMPLETE`; do not ask the user to reveal the secret.
 - Hand-write, repair, or extend SQL after `validate_flink_design.py` renders it.
 - Claim catalog/commit atomicity, execute generated catalog SQL, probe live HMS/Glue, or emit
   existing-table catalog mutations.
+- Recommend or emit an OCC/NBCC mode, lock provider, alternative index, or multi-writer SQL from a
+  Writer Contract assessment.
 - Treat a successful `HoodieTableFactory` construction as proof that the source changelog is
   append-only.
 

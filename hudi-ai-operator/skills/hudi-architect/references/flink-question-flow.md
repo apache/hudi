@@ -84,11 +84,15 @@ An asynchronous table service that runs inside and is coordinated by the same Fl
 independent writer. A separately deployed compactor or clustering job is.
 
 - Confirmed single writer → record `SINGLE_WRITER` as a confirmed fact and continue.
-- Another independent writer → `REVIEW_REQUIRED` with `FLINK_MULTI_WRITER_REVIEW`.
+- Another independent writer → load `flink-writer-contract.md`, collect the version-1 Writer
+  Contract, and retain `REVIEW_REQUIRED` with `FLINK_MULTI_WRITER_REVIEW` even when the contract is
+  complete.
 - Not sure → `REVIEW_REQUIRED` with `FLINK_WRITER_MODEL_UNRESOLVED`.
 
+For a confirmed independent writer, collect identity, role, relationship, engine/version, Hudi
+version, operation, and ownership. Collect concurrency mode and lock class only as observed facts.
 Do not recommend OCC, NBCC, a lock provider, or an index/concurrency combination on this bounded
-path.
+path, and do not create a contract while the writer model is unknown.
 
 ## F3 — External catalog visibility
 
@@ -402,7 +406,7 @@ the report and deployment checks with executable eligibility `false`, and never 
 known table-property or schema conflict is `CONFLICT`; incomplete, contradictory, evolutionary,
 or unsupported evidence is `UNVERIFIED`.
 
-## PR2/PR3/PR4/PR5/PR6 validation and completion
+## PR2/PR3/PR4/PR5/PR6/PR7 validation and completion
 
 After all applicable questions, build a version-1 JSON contract for append-only COW, a version-2
 contract for mutable COW, or a version-3 contract for mutable MOR. All contain confirmed safety
@@ -419,6 +423,14 @@ and retain `external_catalog=false`; the validator normalizes the legacy direct 
 existing table, a non-legacy block is accepted only to report
 `FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED`; do not collect a new evidence kind or infer that
 registration already exists.
+
+When F2 confirms an independent writer, add Writer Contract schema 1 without changing design
+schema 1, 2, or 3. The contract records writer inventory, schema/table-configuration ownership,
+and optional observed concurrency facts. Run the same validator, retain
+`writer_contract_result`, `multi_writer_capability`, normalized facts, notes, and deployment
+checks, and withhold all SQL. A complete contract is assessment completeness, not an executable
+support claim. OCC remains `UNVERIFIED`; NBCC is `UNSUPPORTED` for the current COW and
+FLINK_STATE-indexed MOR paths.
 
 For a new table, run:
 
@@ -437,5 +449,6 @@ Executable eligible: true
 ```
 
 Any validation failure withholds all SQL and reports executable eligibility as `false`. Consult
-`flink-decision-overrides.md` for precedence, `flink-catalog-composition.md` for PR6 profiles, and
-`flink-config-templates.md` for both envelopes.
+`flink-decision-overrides.md` for precedence, `flink-catalog-composition.md` for PR6 profiles,
+`flink-writer-contract.md` for PR7 assessment rules, and `flink-config-templates.md` for both
+envelopes.

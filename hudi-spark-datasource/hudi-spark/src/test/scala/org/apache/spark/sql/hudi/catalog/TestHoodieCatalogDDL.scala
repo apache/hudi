@@ -18,13 +18,14 @@
 package org.apache.spark.sql.hudi.catalog
 
 import org.apache.hudi.HoodieSparkUtils
+import org.apache.hudi.common.model.HoodieRecord
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.HoodieCatalogTable
 import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog, TableChange}
 import org.apache.spark.sql.connector.catalog.TableCapability.{ACCEPT_ANY_SCHEMA, BATCH_READ, OVERWRITE_BY_FILTER, TRUNCATE, V1_BATCH_WRITE}
-import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.connector.expressions.{Expressions, Transform}
 import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils
 import org.apache.spark.sql.hudi.command.ShowHoodieCreateTableCommand
@@ -105,6 +106,103 @@ class TestHoodieCatalogDDL extends HoodieSparkSqlTestBase {
       assertFalse(catalog.tableExists(renamed))
       // HoodieCatalog.dropTable passes purge = false, so the external location survives the drop.
       assertTrue(existsPath(tablePath))
+    }
+  }
+
+  test("createTable rejects missing partition fields before creating Hudi metadata") {
+    withTempDir { tmp =>
+      val name = generateTableName
+      val ident = Identifier.of(Array("default"), name)
+      val path = s"${tmp.getCanonicalPath}/$name"
+      val error = intercept[HoodieAnalysisException] {
+        hoodieCatalog.createTable(ident, StructType(Seq(StructField("id", IntegerType))),
+          Array[Transform](Expressions.identity("missing_partition")),
+          Map("provider" -> "hudi", "primaryKey" -> "id", "location" -> path).asJava)
+      }
+      assertTrue(error.getMessage.contains("missing_partition"), error.getMessage)
+      assertFalse(hoodieCatalog.tableExists(ident))
+      assertFalse(new File(s"$path/.hoodie/hoodie.properties").exists())
+    }
+  }
+
+  test("createTable normalizes partition field spelling using the resolver") {
+    withSQLConf("spark.sql.caseSensitive" -> "false") {
+      withTempDir { tmp =>
+        val name = generateTableName
+        val ident = Identifier.of(Array("default"), name)
+        val path = s"${tmp.getCanonicalPath}/$name"
+        hoodieCatalog.createTable(ident,
+          StructType(Seq(StructField("id", IntegerType), StructField("part", StringType))),
+          Array[Transform](Expressions.identity("PART")),
+          Map("provider" -> "hudi", "primaryKey" -> "id", "location" -> path).asJava)
+        try {
+          spark.sql(s"INSERT INTO $name VALUES (1, 'a')")
+          checkAnswer(s"SELECT id, part FROM $name")(Seq(1, "a"))
+          val props = new java.util.Properties()
+          val stream = new java.io.FileInputStream(s"$path/.hoodie/hoodie.properties")
+          try props.load(stream) finally stream.close()
+          assertEquals("part", props.getProperty("hoodie.table.partition.fields"))
+        } finally {
+          hoodieCatalog.dropTable(ident)
+        }
+      }
+    }
+  }
+
+  Seq(false, true).foreach { operationMetadata =>
+    test(s"alterTable preserves metadata columns during repeated schema reconciliation, operation=$operationMetadata") {
+      withSQLConf("hoodie.schema.on.read.enable" -> "true") {
+        withTempDir { tmp =>
+          val catalog = hoodieCatalog
+          val tableName = generateTableName
+          val ident = Identifier.of(Array("default"), tableName)
+          catalog.createTable(ident, StructType(Seq(StructField("id", IntegerType, nullable = false))),
+            Array.empty[Transform], Map("provider" -> "hudi", "primaryKey" -> "id",
+              "hoodie.allow.operation.metadata.field" -> operationMetadata.toString,
+              "location" -> s"${tmp.getCanonicalPath}/$tableName").asJava)
+          spark.sql("select 1 as id").write.format("hudi")
+            .option("hoodie.table.name", tableName)
+            .option("hoodie.datasource.write.recordkey.field", "id")
+            .option("hoodie.allow.operation.metadata.field", operationMetadata.toString)
+            .option("hoodie.datasource.write.operation", "upsert")
+            .mode("append").save(s"${tmp.getCanonicalPath}/$tableName")
+          val schemaBefore = catalog.loadTable(ident).schema()
+          assertEquals(operationMetadata, schemaBefore.fieldNames.contains(HoodieRecord.OPERATION_METADATA_FIELD))
+          val deletes = schemaBefore.fieldNames.filter(_.startsWith("_hoodie_")).toSeq.map { name =>
+            TableChange.deleteColumn(Array(name), false)
+          }
+          (1 to 3).foreach { _ =>
+            catalog.alterTable(ident, (deletes ++ Seq(TableChange.setProperty("primaryKey", "id"),
+              TableChange.updateColumnNullability(Array("id"), false))): _*)
+            catalog.alterTable(ident, TableChange.updateColumnNullability(Array("id"), true))
+            assertEquals(schemaBefore, catalog.loadTable(ident).schema())
+          }
+
+          val unsupported = Seq(
+            TableChange.deleteColumn(Array("id"), false),
+            TableChange.deleteColumn(Array("_hoodie_custom"), false),
+            TableChange.deleteColumn(Array("nested", "_hoodie_record_key"), false),
+            TableChange.renameColumn(Array("id"), "renamed"),
+            TableChange.updateColumnNullability(Array("missing"), false),
+            TableChange.updateColumnPosition(Array("id"), TableChange.ColumnPosition.first()))
+          unsupported.foreach { change =>
+            val error = intercept[UnsupportedOperationException] {
+              catalog.alterTable(ident, TableChange.addColumn(Array("added"), StringType), change)
+            }
+            assertTrue(error.getMessage.contains(change.getClass.getName), error.getMessage)
+            assertEquals(schemaBefore, catalog.loadTable(ident).schema())
+          }
+          Seq(true, false).foreach { addFirst =>
+            val add = TableChange.addColumn(Array("added"), StringType)
+            val widen = TableChange.updateColumnType(Array("id"), LongType)
+            intercept[HoodieAnalysisException] {
+              catalog.alterTable(ident, (if (addFirst) Seq(add, widen) else Seq(widen, add)): _*)
+            }
+            assertEquals(schemaBefore, catalog.loadTable(ident).schema())
+          }
+          catalog.dropTable(ident)
+        }
+      }
     }
   }
 

@@ -71,7 +71,10 @@ the current checkout contains it.
 | Existing-table schema evolution or version upgrade | `REVIEW_REQUIRED`; no commands emitted |
 | Separate-writer or cross-engine takeover | `REVIEW_REQUIRED` |
 | Confirmed single-writer detection | Supported |
-| Multi-writer or unknown writer model | `REVIEW_REQUIRED`; deferred to PR7 |
+| Unknown writer model | `REVIEW_REQUIRED`; no contract is fabricated |
+| Multi-writer Writer Contract | Assessment-only through PR7; never executable |
+| OCC multi-writer capability | `UNVERIFIED`; deployment checks required |
+| NBCC on schemas 1–3 | `BLOCKED`; current COW/FLINK_STATE paths do not meet the simple-bucket requirement |
 | External-catalog requirement detection | Supported |
 | Five direct SQL / DFS Catalog / HMS Catalog profiles | Supported for new tables through PR6 |
 | Direct SQL or DFS Catalog with sink-owned HMS sync | Supported |
@@ -149,6 +152,30 @@ The released-bundle Java fixture selects DFS and HMS catalog implementations, re
 embedded modes, checks DFS path derivation and external HMS posture, exercises DFS Catalog DDL and
 an insert plan, and verifies Hive sync/naming defaults. It does not start HMS or Glue. Live
 connectivity and visibility are deployment checks rather than static status findings.
+
+## Implemented PR7 multi-writer Writer Contract
+
+PR7 adds Writer Contract schema 1 alongside design schemas 1, 2, and 3. It records the primary
+Flink writer, additional ingestion/backfill/cleanup or standalone-service writers, engine and Hudi
+versions, canonical write operations, and schema/table-configuration ownership. Primary engine,
+version, and operation facts come from the existing design contract rather than duplicate inputs.
+
+Observed concurrency mode, lock-provider class, and cross-writer lock consistency are optional
+facts, not configuration recommendations. The pinned `WriteConcurrencyMode` source recognizes OCC
+and NBCC as multi-writer modes, and `HoodieWriteConfig` makes LAZY failed-write handling effective
+for them. These static facts do not exercise concurrent commits, a lock service, or recovery, so
+OCC remains `UNVERIFIED`.
+
+Pinned Hudi 1.2.0 requires NBCC on MOR with simple bucket index (or the metadata table). Schemas 1
+and 2 are COW and schema 3 uses global `FLINK_STATE`, so PR7 reports those combinations
+`UNSUPPORTED` and blocks them without changing the index. Cross-engine and standalone-service
+contracts remain review-required.
+
+The PR5 evidence envelope may additionally report active writer IDs, schema-evolution owner,
+concurrency mode, lock provider, and lock consistency. Conflicting sources remain scoped and
+provenance-bearing; they produce an unverified reconciliation and Writer Contract `CONFLICT`, not
+an inferred migration. `COMPLETE` means only that the bounded inventory is present. PR7 never
+returns `SUPPORTED`, never emits multi-writer SQL, and never makes executable eligibility true.
 
 ## Implemented PR5 existing-table reconciliation contract
 

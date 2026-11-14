@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-schema_version = 6
+schema_version = 7
 baseline_id = "hudi-1.2.0-flink-1.20"
-validation_surface = "flink-sql-sink-existing-table-reconciliation-and-catalog-composition"
+validation_surface = "flink-sql-sink-existing-table-reconciliation-catalog-composition-and-multi-writer-contract"
 
 [hudi]
 version = "1.2.0"
@@ -125,6 +125,68 @@ FLINK_EXISTING_CATALOG_MUTATION_UNVERIFIED = "REVIEW_REQUIRED"
 FLINK_GLUE_CATALOG_UNVERIFIED = "REVIEW_REQUIRED"
 FLINK_MOR_CATALOG_NAMING_UNVERIFIED = "REVIEW_REQUIRED"
 
+[multi_writer_contract]
+contract_schema = 1
+supported_design_contract_schemas = [1, 2, 3]
+assessment_only = true
+executable_sql = false
+writer_contract_results = ["NOT_APPLICABLE", "COMPLETE", "INCOMPLETE", "CONFLICT"]
+capability_results = ["NOT_APPLICABLE", "UNVERIFIED", "UNSUPPORTED"]
+roles = [
+  "INGESTION",
+  "BACKFILL",
+  "CLEANUP",
+  "STANDALONE_COMPACTION",
+  "STANDALONE_CLUSTERING",
+  "OTHER",
+]
+relationships = ["INDEPENDENT_CONCURRENT", "MAY_OVERLAP"]
+engines = ["FLINK", "SPARK", "OTHER", "UNKNOWN"]
+operations = [
+  "INSERT",
+  "INSERT_PREPPED",
+  "UPSERT",
+  "UPSERT_PREPPED",
+  "BULK_INSERT",
+  "BULK_INSERT_PREPPED",
+  "DELETE",
+  "DELETE_PREPPED",
+  "BOOTSTRAP",
+  "INSERT_OVERWRITE",
+  "BUCKET_RESCALE",
+  "CLUSTER",
+  "DELETE_PARTITION",
+  "INSERT_OVERWRITE_TABLE",
+  "COMPACT",
+  "INDEX",
+  "ALTER_SCHEMA",
+  "LOG_COMPACT",
+  "UNKNOWN",
+]
+concurrency_modes = [
+  "SINGLE_WRITER",
+  "OPTIMISTIC_CONCURRENCY_CONTROL",
+  "NON_BLOCKING_CONCURRENCY_CONTROL",
+  "UNKNOWN",
+]
+lock_configuration_consistency = ["CONSISTENT", "CONFLICTING", "UNKNOWN"]
+deployment_checks = [
+  "verify_concurrent_writer_inventory",
+  "verify_uniform_concurrency_mode",
+  "verify_lock_provider_configuration",
+  "verify_lazy_failed_writes_cleaner_policy",
+  "verify_writer_recovery_procedure",
+  "verify_schema_evolution_ownership",
+]
+
+[multi_writer_contract.finding_status]
+FLINK_MULTI_WRITER_REVIEW = "REVIEW_REQUIRED"
+FLINK_WRITER_COMBINATION_UNSUPPORTED = "BLOCKED"
+FLINK_WRITER_CONTRACT_CONFLICT = "REVIEW_REQUIRED"
+FLINK_WRITER_CONTRACT_INVALID = "INCOMPLETE"
+FLINK_WRITER_CONTRACT_REQUIRED = "INCOMPLETE"
+FLINK_WRITER_OWNERSHIP_UNRESOLVED = "REVIEW_REQUIRED"
+
 [[catalog_profiles]]
 id = "direct_sql_none"
 resolution_mode = "direct_sql"
@@ -220,7 +282,12 @@ required_identity_facts = ["table_path"]
 required_schema_facts = ["columns"]
 required_timeline_facts = ["pending_instants"]
 required_writer_inventory_facts = ["concurrent_writers"]
-conditional_writer_inventory_facts = ["previous_writer_engine", "previous_writer_stopped"]
+conditional_writer_inventory_facts = [
+  "active_writers",
+  "previous_writer_engine",
+  "previous_writer_stopped",
+  "schema_evolution_owner_id",
+]
 comparison_fields = [
   "schema.columns",
   "table_config.base_file_format",
@@ -246,11 +313,16 @@ comparison_fields = [
   "writer_config.index_global",
   "writer_config.index_state_ttl_days",
   "writer_config.index_type",
+  "writer_config.lock_configuration_consistency",
+  "writer_config.lock_provider_class",
   "writer_config.operation",
   "writer_config.timestamp_key_generator",
+  "writer_config.write_concurrency_mode",
+  "writer_inventory.active_writers",
   "writer_inventory.concurrent_writers",
   "writer_inventory.previous_writer_engine",
   "writer_inventory.previous_writer_stopped",
+  "writer_inventory.schema_evolution_owner_id",
 ]
 comparison_results = ["CONFLICT", "MATCH", "NOT_APPLICABLE", "UNVERIFIED"]
 reconciliation_results = ["COMPATIBLE", "CONFLICT", "UNVERIFIED"]
@@ -345,6 +417,24 @@ id = "hoodie_record"
 path = "hudi-common/src/main/java/org/apache/hudi/common/model/HoodieRecord.java"
 sha256 = "11587947231d5a5727fea25169c986a20a3079d7f62787d3efe44c1f6e3f066e"
 purpose = "Canonical Hudi metadata field names reserved by the write path"
+
+[[source_anchors]]
+id = "write_concurrency_mode"
+path = "hudi-common/src/main/java/org/apache/hudi/common/model/WriteConcurrencyMode.java"
+sha256 = "13e8e5b91401c9a9e68d98cd19c2a44d450e691396c2ded4541b5479dd62b225"
+purpose = "Single-writer, optimistic, and non-blocking concurrency mode semantics"
+
+[[source_anchors]]
+id = "write_operation_type"
+path = "hudi-common/src/main/java/org/apache/hudi/common/model/WriteOperationType.java"
+sha256 = "0cced364652815143b7265c8ccd7ea9a6db87f9c4f9be28b05923adda9132c68"
+purpose = "Canonical Hudi 1.2.0 write operation names"
+
+[[source_anchors]]
+id = "hoodie_write_config"
+path = "hudi-client/hudi-client-common/src/main/java/org/apache/hudi/config/HoodieWriteConfig.java"
+sha256 = "359d69bcf5c8c442923d81544c15bec4e5ade91afca3dc71043271d1d2ee4d8c"
+purpose = "Multi-writer cleaner policy and non-blocking concurrency constraints"
 
 [[source_anchors]]
 id = "hoodie_table_config"
@@ -500,7 +590,7 @@ purpose = "Global-index record routing and partition-change behavior"
 id = "streamer_util"
 path = "hudi-flink-datasource/hudi-flink/src/main/java/org/apache/hudi/util/StreamerUtil.java"
 sha256 = "c771e137ebcd45c94a941857a246dc741e1dde2c0e0158900fd48fe8884f83e2"
-purpose = "Write-side record merge mode inference and table-property persistence"
+purpose = "Flink lock-provider resolution, record merge mode inference, and table-property persistence"
 
 # Catalog option types are tracked separately from table connector options.
 [[catalog_option_types]]
@@ -970,3 +1060,15 @@ id = "FLINK_MOR_CATALOG_NAMING_UNVERIFIED"
 requirement = "Pin MOR Hive registrations to RO, RT, or ALL names derived from query modes."
 python_test = "test_pr6_rejects_mor_catalog_naming_drift"
 java_test = "testPinnedMorHiveSyncNamingDefaults"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_MULTI_WRITER_REVIEW"
+requirement = "Keep recognized OCC and NBCC multi-writer modes assessment-only and require the pinned LAZY failed-writes policy."
+python_test = "test_pr7_complete_occ_contract_is_assessment_only"
+java_test = "testPinnedMultiWriterModesRequireLazyFailedWritesPolicy"
+
+[[implemented_acceptance_checks]]
+id = "FLINK_WRITER_COMBINATION_UNSUPPORTED"
+requirement = "Reject NBCC for the existing COW and FLINK_STATE-indexed MOR paths because Hudi 1.2.0 requires MOR with simple bucket index."
+python_test = "test_pr7_nbcc_is_unsupported_for_existing_bounded_indexes"
+java_test = "testPinnedNbccRejectsCowAndNonSimpleBucketIndex"

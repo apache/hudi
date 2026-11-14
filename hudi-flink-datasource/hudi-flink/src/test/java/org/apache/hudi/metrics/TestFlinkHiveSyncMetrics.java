@@ -20,11 +20,14 @@ package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.hive.HoodieHiveSyncStats;
+import org.apache.hudi.utils.SharedCoordinatorMetricGroup;
 
+import org.apache.flink.api.common.JobID;
 import org.apache.flink.metrics.Counter;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.Histogram;
 import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
+import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -48,7 +51,9 @@ import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SCHEMA_READ
 import static org.apache.hudi.metrics.FlinkHiveSyncMetrics.HIVE_SYNC_SUCCESS_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -233,6 +238,60 @@ class TestFlinkHiveSyncMetrics {
     assertEquals(syncsPerThread, successCount());
     assertEquals(syncsPerThread, failureCount());
     assertEquals(2L * syncsPerThread, duration().getCount());
+  }
+
+  @Test
+  void testRestartedCoordinatorUpdatesRegisteredMetrics() {
+    SharedCoordinatorMetricGroup group = new SharedCoordinatorMetricGroup(new JobID().toString(), new OperatorID().toString());
+    FlinkHiveSyncMetrics first = FlinkHiveSyncMetrics.register(group, true);
+    first.markSyncSucceeded(10L);
+
+    FlinkHiveSyncMetrics second = FlinkHiveSyncMetrics.register(group.newView(), true);
+    second.markSyncSucceeded(20L);
+    second.markSyncFailed(30L);
+    second.updateSyncMetrics(stats(Option.of(1L), Option.of(2L), Option.of(3L), 5, true));
+
+    assertSame(first, second);
+    assertEquals(2, group.getCounter(HIVE_SYNC_SUCCESS_COUNT).getCount());
+    assertEquals(1, group.getCounter(HIVE_SYNC_FAILURE_COUNT).getCount());
+    assertEquals(3, group.getHistogram(HIVE_SYNC_DURATION_MS).getCount());
+    assertTrue((Long) group.getGauge(HIVE_SYNC_LAST_SUCCESS_TIME_MS).getValue() > 0L);
+    assertEquals(5, group.getCounter(HIVE_SYNC_PARTITIONS_ADDED_COUNT).getCount());
+    assertEquals(1, group.getCounter(HIVE_SYNC_SCHEMA_EVOLVED_COUNT).getCount());
+  }
+
+  @Test
+  void testSharedMetricsRegisteredOnNewGroupOfSameOperator() {
+    String jobId = new JobID().toString();
+    String operatorId = new OperatorID().toString();
+    FlinkHiveSyncMetrics first = FlinkHiveSyncMetrics.register(new SharedCoordinatorMetricGroup(jobId, operatorId), true);
+    first.markSyncSucceeded(10L);
+
+    SharedCoordinatorMetricGroup newGroup = new SharedCoordinatorMetricGroup(jobId, operatorId);
+    FlinkHiveSyncMetrics second = FlinkHiveSyncMetrics.register(newGroup, true);
+
+    assertSame(first, second);
+    assertEquals(1, newGroup.getCounter(HIVE_SYNC_SUCCESS_COUNT).getCount());
+    assertNotNull(newGroup.getHistogram(HIVE_SYNC_INIT_DURATION_MS));
+  }
+
+  @Test
+  void testMetricsNotSharedAcrossOperatorsOrJobs() {
+    String jobId = new JobID().toString();
+    String operatorId = new OperatorID().toString();
+    FlinkHiveSyncMetrics metrics = FlinkHiveSyncMetrics.register(new SharedCoordinatorMetricGroup(jobId, operatorId), true);
+
+    assertNotSame(metrics,
+        FlinkHiveSyncMetrics.register(new SharedCoordinatorMetricGroup(jobId, new OperatorID().toString()), true));
+    assertNotSame(metrics,
+        FlinkHiveSyncMetrics.register(new SharedCoordinatorMetricGroup(new JobID().toString(), operatorId), true));
+  }
+
+  @Test
+  void testMetricsNotSharedWhenGroupDoesNotIdentifyOperator() {
+    CapturingMetricGroup group = new CapturingMetricGroup();
+
+    assertNotSame(FlinkHiveSyncMetrics.register(group, true), FlinkHiveSyncMetrics.register(group, true));
   }
 
   private long successCount() {

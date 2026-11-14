@@ -40,7 +40,7 @@ DEFAULT_MANIFEST = (
     SKILL_DIR / "references" / "flink-1.20-hudi-1.2.0-capabilities.toml"
 )
 
-EXPECTED_SCHEMA_VERSION = 6
+EXPECTED_SCHEMA_VERSION = 7
 EXPECTED_BASELINE_ID = "hudi-1.2.0-flink-1.20"
 EXPECTED_HUDI_VERSION = "1.2.0"
 EXPECTED_HUDI_SOURCE_REVISION = "f05c83f2b97732de7a558ff9b26959e1139c05f5"
@@ -333,6 +333,73 @@ EXPECTED_CATALOG_OPTION_TYPES = [
         "source_symbol": "TABLE_EXTERNAL",
     },
 ]
+EXPECTED_MULTI_WRITER_CONTRACT = {
+    "contract_schema": 1,
+    "supported_design_contract_schemas": [1, 2, 3],
+    "assessment_only": True,
+    "executable_sql": False,
+    "writer_contract_results": [
+        "NOT_APPLICABLE",
+        "COMPLETE",
+        "INCOMPLETE",
+        "CONFLICT",
+    ],
+    "capability_results": ["NOT_APPLICABLE", "UNVERIFIED", "UNSUPPORTED"],
+    "roles": [
+        "INGESTION",
+        "BACKFILL",
+        "CLEANUP",
+        "STANDALONE_COMPACTION",
+        "STANDALONE_CLUSTERING",
+        "OTHER",
+    ],
+    "relationships": ["INDEPENDENT_CONCURRENT", "MAY_OVERLAP"],
+    "engines": ["FLINK", "SPARK", "OTHER", "UNKNOWN"],
+    "operations": [
+        "INSERT",
+        "INSERT_PREPPED",
+        "UPSERT",
+        "UPSERT_PREPPED",
+        "BULK_INSERT",
+        "BULK_INSERT_PREPPED",
+        "DELETE",
+        "DELETE_PREPPED",
+        "BOOTSTRAP",
+        "INSERT_OVERWRITE",
+        "BUCKET_RESCALE",
+        "CLUSTER",
+        "DELETE_PARTITION",
+        "INSERT_OVERWRITE_TABLE",
+        "COMPACT",
+        "INDEX",
+        "ALTER_SCHEMA",
+        "LOG_COMPACT",
+        "UNKNOWN",
+    ],
+    "concurrency_modes": [
+        "SINGLE_WRITER",
+        "OPTIMISTIC_CONCURRENCY_CONTROL",
+        "NON_BLOCKING_CONCURRENCY_CONTROL",
+        "UNKNOWN",
+    ],
+    "lock_configuration_consistency": ["CONSISTENT", "CONFLICTING", "UNKNOWN"],
+    "deployment_checks": [
+        "verify_concurrent_writer_inventory",
+        "verify_uniform_concurrency_mode",
+        "verify_lock_provider_configuration",
+        "verify_lazy_failed_writes_cleaner_policy",
+        "verify_writer_recovery_procedure",
+        "verify_schema_evolution_ownership",
+    ],
+    "finding_status": {
+        "FLINK_MULTI_WRITER_REVIEW": "REVIEW_REQUIRED",
+        "FLINK_WRITER_COMBINATION_UNSUPPORTED": "BLOCKED",
+        "FLINK_WRITER_CONTRACT_CONFLICT": "REVIEW_REQUIRED",
+        "FLINK_WRITER_CONTRACT_INVALID": "INCOMPLETE",
+        "FLINK_WRITER_CONTRACT_REQUIRED": "INCOMPLETE",
+        "FLINK_WRITER_OWNERSHIP_UNRESOLVED": "REVIEW_REQUIRED",
+    },
+}
 EXPECTED_EXISTING_TABLE_RECONCILIATION_CONTRACT = {
     "reconciliation_schema": 1,
     "supported_design_contract_schemas": [1, 2, 3],
@@ -387,8 +454,10 @@ EXPECTED_EXISTING_TABLE_RECONCILIATION_CONTRACT = {
     "required_timeline_facts": ["pending_instants"],
     "required_writer_inventory_facts": ["concurrent_writers"],
     "conditional_writer_inventory_facts": [
+        "active_writers",
         "previous_writer_engine",
         "previous_writer_stopped",
+        "schema_evolution_owner_id",
     ],
     "comparison_fields": [
         "schema.columns",
@@ -415,11 +484,16 @@ EXPECTED_EXISTING_TABLE_RECONCILIATION_CONTRACT = {
         "writer_config.index_global",
         "writer_config.index_state_ttl_days",
         "writer_config.index_type",
+        "writer_config.lock_configuration_consistency",
+        "writer_config.lock_provider_class",
         "writer_config.operation",
         "writer_config.timestamp_key_generator",
+        "writer_config.write_concurrency_mode",
+        "writer_inventory.active_writers",
         "writer_inventory.concurrent_writers",
         "writer_inventory.previous_writer_engine",
         "writer_inventory.previous_writer_stopped",
+        "writer_inventory.schema_evolution_owner_id",
     ],
     "comparison_results": ["CONFLICT", "MATCH", "NOT_APPLICABLE", "UNVERIFIED"],
     "reconciliation_results": ["COMPATIBLE", "CONFLICT", "UNVERIFIED"],
@@ -534,6 +608,14 @@ EXPECTED_ACCEPTANCE_EVIDENCE = {
         "test_pr4_valid_mutable_mor_design_renders_exact_executable_sql",
         "testMutableMorSinkAndCompactionPlan",
     ),
+    "FLINK_MULTI_WRITER_REVIEW": (
+        "test_pr7_complete_occ_contract_is_assessment_only",
+        "testPinnedMultiWriterModesRequireLazyFailedWritesPolicy",
+    ),
+    "FLINK_WRITER_COMBINATION_UNSUPPORTED": (
+        "test_pr7_nbcc_is_unsupported_for_existing_bounded_indexes",
+        "testPinnedNbccRejectsCowAndNonSimpleBucketIndex",
+    ),
 }
 SHA1_PATTERN = re.compile(r"[0-9a-f]{40}")
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -555,7 +637,8 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
         "schema_version": EXPECTED_SCHEMA_VERSION,
         "baseline_id": EXPECTED_BASELINE_ID,
         "validation_surface": (
-            "flink-sql-sink-existing-table-reconciliation-and-catalog-composition"
+            "flink-sql-sink-existing-table-reconciliation-catalog-composition-"
+            "and-multi-writer-contract"
         ),
     }
     for key, expected in expected_scalars.items():
@@ -791,6 +874,12 @@ def validate_manifest(manifest: dict[str, Any]) -> list[str]:
                     f"catalog_option_types[{index}] references unknown source anchors: {unknown}"
                 )
 
+    multi_writer_contract = manifest.get("multi_writer_contract")
+    if multi_writer_contract != EXPECTED_MULTI_WRITER_CONTRACT:
+        errors.append(
+            "multi_writer_contract does not match the bounded PR7 assessment surface"
+        )
+
     physical_types = manifest.get("physical_types")
     if not isinstance(physical_types, dict):
         errors.append("physical_types must be a table")
@@ -877,6 +966,7 @@ def validation_evidence(
         "catalog_contract_schema": manifest["catalog_composition_contract"][
             "contract_schema"
         ],
+        "writer_contract_schema": manifest["multi_writer_contract"]["contract_schema"],
         "catalog_profile": catalog_profile,
         "design_contract_schema": (
             manifest["executable_contract"]["contract_schema"]

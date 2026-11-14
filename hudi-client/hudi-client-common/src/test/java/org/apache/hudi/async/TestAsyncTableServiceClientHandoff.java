@@ -24,35 +24,35 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.config.HoodieWriteConfig;
 
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.stubbing.Answer;
 
-import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TestAsyncTableServiceClientHandoff {
 
+  /**
+   * A compaction or clustering run can take a long time (e.g. waiting for cluster resources), so switching the
+   * client must not block the writer until the run completes. The running run keeps the client it started with,
+   * and the next run uses the new client.
+   */
   @ParameterizedTest
-  @CsvSource({"true,false", "false,false", "true,true", "false,true"})
-  void testHandoffWaitsForActiveRun(boolean compact, boolean failRun) throws Exception {
+  @ValueSource(booleans = {true, false})
+  void testHandoffDoesNotWaitForActiveRun(boolean compact) throws Exception {
     HoodieEngineContext context = mock(HoodieEngineContext.class);
     BaseHoodieWriteClient oldClient = mock(BaseHoodieWriteClient.class);
     BaseHoodieWriteClient newClient = mock(BaseHoodieWriteClient.class);
@@ -60,22 +60,20 @@ class TestAsyncTableServiceClientHandoff {
     when(oldClient.getConfig()).thenReturn(config);
     when(config.areTableServicesEnabled()).thenReturn(true);
     AtomicReference<BaseHoodieWriteClient> currentClient = new AtomicReference<>(oldClient);
+    AtomicReference<BaseHoodieWriteClient> firstRunClient = new AtomicReference<>();
+    AtomicReference<BaseHoodieWriteClient> secondRunClient = new AtomicReference<>();
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch finishRun = new CountDownLatch(1);
+    CountDownLatch firstRunDone = new CountDownLatch(1);
     CountDownLatch nextRun = new CountDownLatch(1);
-    CountDownLatch stopped = new CountDownLatch(1);
     Answer<Void> run = invocation -> {
-      BaseHoodieWriteClient capturedClient = currentClient.get();
       if ("001".equals(invocation.getArgument(0))) {
+        firstRunClient.set(currentClient.get());
         entered.countDown();
-        assertTrue(finishRun.await(10, TimeUnit.SECONDS));
-        assertSame(oldClient, capturedClient);
-        verify(oldClient, never()).close();
-        if (failRun) {
-          throw new IOException("Injected async operation failure");
-        }
+        assertTrue(finishRun.await(30, TimeUnit.SECONDS));
+        firstRunDone.countDown();
       } else {
-        assertSame(newClient, capturedClient);
+        secondRunClient.set(currentClient.get());
         nextRun.countDown();
       }
       return null;
@@ -114,34 +112,21 @@ class TestAsyncTableServiceClientHandoff {
 
     ExecutorService swapExecutor = Executors.newSingleThreadExecutor();
     try {
-      service.start(errored -> {
-        stopped.countDown();
-        return true;
-      });
+      service.start(errored -> true);
       service.enqueuePendingAsyncServiceInstant("001");
       assertTrue(entered.await(10, TimeUnit.SECONDS));
-      CountDownLatch swapping = new CountDownLatch(1);
-      Future<?> swap = swapExecutor.submit(() -> {
-        swapping.countDown();
-        handoff.accept(newClient);
-        oldClient.close();
-      });
-      assertTrue(swapping.await(10, TimeUnit.SECONDS));
-      assertThrows(TimeoutException.class, () -> swap.get(200, TimeUnit.MILLISECONDS));
-      verify(oldClient, never()).close();
+
+      // the handoff returns while the run is still active
+      swapExecutor.submit(() -> handoff.accept(newClient)).get(10, TimeUnit.SECONDS);
+      assertFalse(firstRunDone.await(0, TimeUnit.SECONDS), "the run must still be active after the handoff");
+      assertSame(oldClient, firstRunClient.get());
 
       finishRun.countDown();
-      swap.get(10, TimeUnit.SECONDS);
-      verify(oldClient).close();
-      if (failRun) {
-        assertTrue(stopped.await(10, TimeUnit.SECONDS));
-        assertTrue(service.hasError());
-      } else {
-        service.enqueuePendingAsyncServiceInstant("002");
-        assertTrue(nextRun.await(10, TimeUnit.SECONDS));
-        // An idle service must hand back the client promptly too, without waiting for another run.
-        swapExecutor.submit(() -> handoff.accept(oldClient)).get(10, TimeUnit.SECONDS);
-      }
+      assertTrue(firstRunDone.await(10, TimeUnit.SECONDS));
+      service.enqueuePendingAsyncServiceInstant("002");
+      assertTrue(nextRun.await(10, TimeUnit.SECONDS));
+      assertSame(newClient, secondRunClient.get());
+      assertFalse(service.hasError());
     } finally {
       finishRun.countDown();
       service.shutdown(true);
