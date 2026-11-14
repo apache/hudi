@@ -38,14 +38,15 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.storage.StoragePath;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
 import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
-import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -72,30 +73,21 @@ class TestHudiTrinoReaderContext
     }
 
     @ParameterizedTest
-    @CsvSource({"false, false", "true, false", "false, true", "true, true"})
-    void testTimestampOrderingConfiguration(boolean consistentTimestamp, boolean persistedProperty)
+    @ValueSource(booleans = {false, true})
+    void testTimestampOrderingKeepsStoredForm(boolean consistentTimestamp)
             throws IOException
     {
         HoodieSchema schema = schemaWithOrdering(LogicalTypes.timestampMicros().addToSchema(Schema.create(Schema.Type.LONG)));
-        HoodieTableConfig tableConfig = tableConfig();
         TypedProperties props = new TypedProperties();
-        String key = KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key();
-        if (persistedProperty) {
-            tableConfig.setValue(RECORD_MERGE_PROPERTY_PREFIX + key, Boolean.toString(consistentTimestamp));
-            // Persisted merge properties take precedence over the reader's value.
-            props.setProperty(key, Boolean.toString(!consistentTimestamp));
-        }
-        else {
-            props.setProperty(key, Boolean.toString(consistentTimestamp));
-        }
-        HudiTrinoReaderContext readerContext = createReaderContext(schema, tableConfig, props);
+        props.setProperty(KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.key(), Boolean.toString(consistentTimestamp));
+        HudiTrinoReaderContext readerContext = createReaderContext(schema, tableConfig(), props);
         GenericRecord record = new GenericData.Record(schema.toAvroSchema());
         record.put("id", "key");
         record.put("ordering", 1_234_567L);
-        Object expected = consistentTimestamp ? new Timestamp(1234) : 1_234_567L;
 
-        assertThat(readerContext.getRecordContext().getOrderingValue(record, schema, List.of("ordering"))).isEqualTo(expected);
-        assertThat(readDelete(readerContext, 1_234_567L).getOrderingValue()).isEqualTo(expected);
+        assertThat(readerContext.getRecordContext().getOrderingValue(record, schema, List.of("ordering"))).isEqualTo(1_234_567L);
+        assertThat(readDelete(readerContext, 1_234_567L).getOrderingValue()).isEqualTo(1_234_567L);
+        assertThat(readDelete(readerContext, Timestamp.from(Instant.ofEpochSecond(1, 234_567_000))).getOrderingValue()).isEqualTo(1_234_567L);
     }
 
     private static HoodieSchema schemaWithOrdering(Schema orderingSchema)
@@ -122,7 +114,7 @@ class TestHudiTrinoReaderContext
                 new TrinoStorageConfiguration(), tableConfig, new EmptyPageSource(), List.of(), null,
                 (path, start, length, projection) -> {
                     throw new AssertionError("Unexpected parquet read");
-                }, props);
+                });
         TypedProperties mergeProps = ConfigUtils.getMergeProps(props, tableConfig);
         readerContext.initRecordMerger(mergeProps);
         readerContext.setHasLogFiles(false);

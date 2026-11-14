@@ -19,7 +19,6 @@
 
 package org.apache.hudi.common.avro;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.RecordContext;
 import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
@@ -31,7 +30,6 @@ import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.util.AvroJavaTypeConverter;
-import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.OrderingValues;
@@ -61,19 +59,16 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   }
 
   private final String payloadClass;
-  private final boolean consistentLogicalTimestampEnabled;
   private AvroOrderingValueConverter orderingValueConverter;
 
-  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass, TypedProperties props) {
+  public AvroRecordContext(HoodieTableConfig tableConfig, String payloadClass) {
     super(tableConfig, new AvroJavaTypeConverter());
     this.payloadClass = payloadClass;
-    this.consistentLogicalTimestampEnabled = ConfigUtils.shouldKeepConsistentLogicalTimestamp(props);
   }
 
   public AvroRecordContext() {
     super(new AvroJavaTypeConverter());
     this.payloadClass = null;
-    this.consistentLogicalTimestampEnabled = false;
   }
 
   public static Object getFieldValueFromIndexedRecord(
@@ -118,7 +113,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
   @Override
   public Comparable getOrderingValue(IndexedRecord record, HoodieSchema schema, List<String> orderingFieldNames) {
     return OrderingValues.create(orderingFieldNames, field -> {
-      Object value = getOrderingValueFromIndexedRecord(record, field, consistentLogicalTimestampEnabled);
+      Object value = getOrderingValueFromIndexedRecord(record, field);
       return value == null ? OrderingValues.getDefault() : ensureComparability(value);
     });
   }
@@ -128,7 +123,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
     return orderingFieldNames == null
         ? OrderingValues.getDefault()
         : OrderingValues.create(orderingFieldNames, field -> {
-          Object value = getOrderingValueFromIndexedRecord(record, field, consistentLogicalTimestampEnabled);
+          Object value = getOrderingValueFromIndexedRecord(record, field);
           return value == null ? OrderingValues.getDefault() : ensureComparability(value);
         });
   }
@@ -138,11 +133,10 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
    *
    * @param record the record to read; must be a {@link GenericRecord}
    * @param fieldName the field name, which may be a nested path
-   * @param consistentLogicalTimestampEnabled whether to use consistent logical timestamp conversion
    * @return the ordering value, or null if the field or its value is missing
    */
-  public static Object getOrderingValueFromIndexedRecord(IndexedRecord record, String fieldName, boolean consistentLogicalTimestampEnabled) {
-    return HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, fieldName, true, consistentLogicalTimestampEnabled);
+  public static Object getOrderingValueFromIndexedRecord(IndexedRecord record, String fieldName) {
+    return HoodieAvroUtils.getNestedFieldVal((GenericRecord) record, fieldName, true, false);
   }
 
   @Override
@@ -245,7 +239,7 @@ public class AvroRecordContext extends RecordContext<IndexedRecord> {
    * Initializes schema-aware conversion so delete values use the same logical types as data records.
    */
   public void initOrderingValueConverter(HoodieSchema dataSchema, List<String> orderingFieldNames) {
-    orderingValueConverter = AvroOrderingValueConverter.create(dataSchema, orderingFieldNames, consistentLogicalTimestampEnabled);
+    orderingValueConverter = AvroOrderingValueConverter.create(dataSchema, orderingFieldNames);
   }
 
   @Override

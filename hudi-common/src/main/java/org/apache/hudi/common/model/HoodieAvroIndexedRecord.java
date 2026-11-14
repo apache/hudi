@@ -311,7 +311,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
     decodeRecord(recordSchema.toAvroSchema());
     return OrderingValues.create(
         orderingFields,
-        field -> (Comparable<?>) AvroRecordContext.getOrderingValueFromIndexedRecord(data, field, false));
+        field -> (Comparable<?>) AvroRecordContext.getOrderingValueFromIndexedRecord(data, field));
   }
 
   private void decodeRecord(Schema recordSchema) {
