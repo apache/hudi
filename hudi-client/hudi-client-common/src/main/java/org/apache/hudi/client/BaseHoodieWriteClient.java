@@ -70,6 +70,8 @@ import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.exception.HoodieSavepointException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.KeyGenUtils;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.internal.schema.InternalSchema;
 import org.apache.hudi.internal.schema.Type;
 import org.apache.hudi.internal.schema.action.InternalSchemaChangeApplier;
@@ -113,8 +115,6 @@ import java.util.stream.Collectors;
 import static org.apache.hudi.avro.AvroSchemaUtils.getAvroRecordQualifiedName;
 import static org.apache.hudi.common.model.HoodieCommitMetadata.SCHEMA_KEY;
 import static org.apache.hudi.common.util.StringUtils.getUTF8Bytes;
-import static org.apache.hudi.keygen.KeyGenUtils.getComplexKeygenErrorMessage;
-import static org.apache.hudi.keygen.KeyGenUtils.isComplexKeyGeneratorWithSingleRecordKeyField;
 import static org.apache.hudi.metadata.HoodieTableMetadata.getMetadataTableBasePath;
 
 /**
@@ -1315,6 +1315,9 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     doInitTable(operationType, metaClient, instantTime);
+    if (WriteOperationType.isInsert(operationType) || WriteOperationType.isChangingRecords(operationType)) {
+      ensureComplexKeyGenEncodingRecorded(metaClient);
+    }
     HoodieTable table = createTable(config, hadoopConf, metaClient);
 
     // Validate table properties
@@ -1340,6 +1343,40 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
     }
 
     return table;
+  }
+
+  /**
+   * A write that keys records needs {@link HoodieTableConfig#COMPLEX_KEYGEN_ENCODING} recorded, and must key them
+   * the way it says. Engines that key records outside the client (Spark, the streamer) record it when ingestion is
+   * set up, before this client exists; a client whose callers key records with the client's config records it here
+   * ({@link #recordsComplexKeyGenEncodingFromData}). A table without any commit records the encoding this
+   * client's config keys with, since no stored key can contradict it.
+   */
+  protected void ensureComplexKeyGenEncodingRecorded(HoodieTableMetaClient metaClient) {
+    if (!KeyGenUtils.requireComplexKeyGenEncodingTracked(metaClient.getTableConfig())) {
+      return;
+    }
+    if (!metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()) {
+      // an upgrade run by this initialization writes hoodie.properties without refreshing this meta client
+      metaClient.reloadTableConfig();
+    }
+    if (!metaClient.getTableConfig().getComplexKeyGenEncoding().isPresent()
+        && (recordsComplexKeyGenEncodingFromData() || !KeyGenUtils.hasCompletedCommits(metaClient))) {
+      KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, config);
+    }
+    ComplexKeyGenEncoding recorded = metaClient.getTableConfig().getComplexKeyGenEncoding()
+        .orElseThrow(() -> new HoodieException(KeyGenUtils.getComplexKeygenEncodingMissingMessage()));
+    if (KeyGenUtils.encodeSingleKeyFieldNameForComplexKeyGen(config.getProps()) != recorded.encodesFieldName()) {
+      throw new HoodieException(KeyGenUtils.getComplexKeygenEncodingMismatchMessage(recorded));
+    }
+  }
+
+  /**
+   * Whether this client records a missing complex key generator encoding from the table's data itself, for callers
+   * that key records with this client's config and have no ingestion setup that records it first.
+   */
+  protected boolean recordsComplexKeyGenEncodingFromData() {
+    return false;
   }
 
   /**
@@ -1409,10 +1446,6 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
           && !keyGenClass.equals("org.apache.hudi.keygen.ComplexKeyGenerator")) {
         throw new HoodieException("Only simple, non-partitioned or complex key generator are supported when meta-fields are disabled. Used: " + keyGenClass);
       }
-    }
-    if (config.enableComplexKeygenValidation()
-        && isComplexKeyGeneratorWithSingleRecordKeyField(tableConfig)) {
-      throw new HoodieException(getComplexKeygenErrorMessage("ingestion"));
     }
 
     //Check to make sure it's not a COW table with consistent hashing bucket index

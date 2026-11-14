@@ -51,6 +51,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.keygen.ComplexAvroKeyGenerator;
 import org.apache.hudi.keygen.SimpleAvroKeyGenerator;
+import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.schema.FilebasedSchemaProvider;
 import org.apache.hudi.sink.transform.ChainedTransformer;
 import org.apache.hudi.sink.transform.Transformer;
@@ -219,6 +220,7 @@ public class StreamerUtil {
           .setTableName(conf.getString(FlinkOptions.TABLE_NAME))
           .setDatabaseName(conf.getString(FlinkOptions.DATABASE_NAME))
           .setRecordKeyFields(conf.getString(FlinkOptions.RECORD_KEY_FIELD, null))
+          .setComplexKeyGenEncoding(OptionsResolver.getComplexKeygenEncoding(conf).orElse(null))
           .setPayloadClassName(conf.getString(FlinkOptions.PAYLOAD_CLASS_NAME))
           .setPreCombineField(OptionsResolver.getPreCombineField(conf))
           .setArchiveLogFolder(ARCHIVELOG_FOLDER.defaultValue())
@@ -498,5 +500,23 @@ public class StreamerUtil {
       LOG.info("Table option [{}] is reset to {} because record key or partition path has two or more fields",
           FlinkOptions.KEYGEN_CLASS_NAME.key(), ComplexAvroKeyGenerator.class.getName());
     }
+    setupComplexKeygenEncodingIfAbsent(conf);
+  }
+
+  /**
+   * Sets the record key encoding of a single-field complex key generator job that has none, i.e. whose table has
+   * not recorded one: the encoding {@code RowDataKeyGen} produces without it, which is what a new table records.
+   */
+  public static void setupComplexKeygenEncodingIfAbsent(Configuration conf) {
+    String encodingKey = HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key();
+    String keyGenClass = conf.getString(FlinkOptions.KEYGEN_CLASS_NAME);
+    boolean complexKeygen = ComplexAvroKeyGenerator.class.getName().equals(keyGenClass)
+        || "org.apache.hudi.keygen.ComplexKeyGenerator".equals(keyGenClass);
+    if (conf.containsKey(encodingKey) || !complexKeygen || conf.getString(FlinkOptions.RECORD_KEY_FIELD).split(",").length != 1) {
+      return;
+    }
+    boolean multiplePartitions = conf.getString(FlinkOptions.PARTITION_PATH_FIELD).split(",").length > 1;
+    boolean prefixed = multiplePartitions && !OptionsResolver.useComplexKeygenNewEncoding(conf);
+    conf.setString(encodingKey, (prefixed ? ComplexKeyGenEncoding.FIELD_PREFIXED : ComplexKeyGenEncoding.VALUE_ONLY).name());
   }
 }

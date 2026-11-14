@@ -31,6 +31,8 @@ import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieRecordPayload;
 import org.apache.hudi.common.model.HoodieSparkRecord;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
@@ -40,8 +42,10 @@ import org.apache.hudi.config.HoodiePayloadConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.keygen.KeyGenUtils;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.HoodieStorageUtils;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
 import org.apache.avro.generic.GenericRecord;
@@ -205,7 +209,33 @@ public class DataSourceUtils {
 
   public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
                                                        String tblName, Map<String, String> parameters) {
-    return new SparkRDDWriteClient<>(new HoodieSparkEngineContext(jssc), createHoodieConfig(schemaStr, basePath, tblName, parameters));
+    return createHoodieClient(jssc, schemaStr, basePath, tblName, parameters, false);
+  }
+
+  /**
+   * @param recordComplexKeyGenEncoding whether the client is about to key records, in which case a missing record key
+   *                                    encoding of a single-field complex key generator table is recorded first and
+   *                                    the table's encoding is put on the client's config. Clients for table services
+   *                                    and DDL do not key records and leave the table untouched.
+   */
+  public static SparkRDDWriteClient createHoodieClient(JavaSparkContext jssc, String schemaStr, String basePath,
+                                                       String tblName, Map<String, String> parameters,
+                                                       boolean recordComplexKeyGenEncoding) {
+    HoodieSparkEngineContext context = new HoodieSparkEngineContext(jssc);
+    HoodieWriteConfig writeConfig = createHoodieConfig(schemaStr, basePath, tblName, parameters);
+    // Only a single-field complex keygen table pays for loading the table config here; every other write skips it.
+    if (recordComplexKeyGenEncoding && KeyGenUtils.mayNeedComplexKeyGenEncodingRecorded(writeConfig)) {
+      HoodieStorage storage = HoodieStorageUtils.getStorage(basePath, context.getStorageConf());
+      if (TablePathUtils.isHoodieTablePath(storage, new StoragePath(basePath))) {
+        HoodieTableMetaClient metaClient = HoodieTableMetaClient.builder()
+            .setConf(context.getStorageConf().newInstance()).setBasePath(basePath).build();
+        KeyGenUtils.recordComplexKeygenEncodingIfMissing(metaClient, writeConfig);
+        // the table's encoding, not a write option of the same name, decides how this write keys its records
+        metaClient.getTableConfig().getComplexKeyGenEncoding().ifPresent(encoding ->
+            writeConfig.setValue(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING, encoding.name()));
+      }
+    }
+    return new SparkRDDWriteClient<>(context, writeConfig);
   }
 
   public static HoodieWriteResult doWriteOperation(SparkRDDWriteClient client, JavaRDD<HoodieRecord> hoodieRecords,
