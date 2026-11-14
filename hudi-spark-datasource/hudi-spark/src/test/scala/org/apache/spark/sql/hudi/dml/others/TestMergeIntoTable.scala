@@ -1929,4 +1929,44 @@ class TestMergeIntoTable extends HoodieSparkSqlTestBase with ScalaAssertionSuppo
       )
     }
   }
+
+  test("Test MergeInto with tinyint and smallint source columns assigned to int columns") {
+    withTempDir { tmp =>
+      val tableName = generateTableName
+      spark.sql(
+        s"""
+           |create table $tableName (
+           |  id int,
+           |  tiny int,
+           |  small int,
+           |  ts long
+           |) using hudi
+           | location '${tmp.getCanonicalPath}'
+           | tblproperties (
+           |  primaryKey = 'id',
+           |  preCombineField = 'ts'
+           | )
+         """.stripMargin)
+      spark.sql(s"insert into $tableName values (1, 1, 1, 1)")
+
+      // the matched record is updated and a new record is inserted, both from tinyint and smallint sources
+      spark.sql(
+        s"""
+           |merge into $tableName t
+           |using (
+           |  select 1 as id, cast(5 as tinyint) as tiny, cast(6 as smallint) as small, cast(2 as long) as ts
+           |  union all
+           |  select 2 as id, cast(7 as tinyint) as tiny, cast(8 as smallint) as small, cast(2 as long) as ts
+           |) s
+           |on t.id = s.id
+           |when matched and s.tiny > 3 and s.small > 3 then update set *
+           |when not matched then insert *
+         """.stripMargin)
+
+      checkAnswer(s"select id, tiny, small, ts from $tableName order by id")(
+        Seq(1, 5, 6, 2),
+        Seq(2, 7, 8, 2)
+      )
+    }
+  }
 }
