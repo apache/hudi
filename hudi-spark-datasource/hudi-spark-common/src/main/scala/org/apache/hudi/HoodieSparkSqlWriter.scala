@@ -1340,9 +1340,9 @@ object HoodieSparkSqlWriterInternal {
    * subsequent reads in the same Spark session reflect the new write.
    *
    * The table name is always qualified with the sync database ([[HIVE_DATABASE]] /
-   * `hoodie.datasource.hive_sync.database`) so a same-named table in another database - in
-   * particular the session's current/`default` database - is never resolved and refreshed by
-   * mistake (HUDI-18139).
+   * `hoodie.datasource.hive_sync.database`) so a same-named table in another database (in
+   * particular the session's current/`default` database) is never resolved and refreshed by
+   * mistake.
    *
    * Any failure is logged and swallowed: by this point the data has already been committed and
    * meta-synced successfully, so a cache-invalidation problem (a transient catalog error, or a
@@ -1352,7 +1352,7 @@ object HoodieSparkSqlWriterInternal {
     try {
       if (spark.catalog.databaseExists(syncDb)) {
         tableNames.foreach { name =>
-          val qualifiedTableName = String.join(".", syncDb, name)
+          val qualifiedTableName = s"$syncDb.$name"
           try {
             if (spark.catalog.tableExists(qualifiedTableName)) {
               spark.catalog.refreshTable(qualifiedTableName)
