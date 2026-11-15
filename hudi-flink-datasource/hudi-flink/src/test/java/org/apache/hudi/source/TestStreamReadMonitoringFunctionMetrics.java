@@ -31,6 +31,7 @@ import org.apache.hudi.util.StreamerUtil;
 import org.apache.hudi.utils.TestConfigurations;
 import org.apache.hudi.utils.TestUtils;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.MetricGroup;
@@ -61,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test cases for the metrics of {@link StreamReadMonitoringFunction}.
  */
+@Slf4j
 public class TestStreamReadMonitoringFunctionMetrics {
 
   private static final DateTimeFormatter UTC_INSTANT_FORMAT =
@@ -121,6 +123,7 @@ public class TestStreamReadMonitoringFunctionMetrics {
       }
 
       long delay = runtimeContext.gauge("issuedInstantDelay");
+      log.info("The issued instant delay is {} seconds for a commit made ten minutes ago", delay);
       assertTrue(delay >= 600 && delay < 660, "The commit was made ten minutes ago, but the delay is " + delay + " seconds");
       assertEquals(committedAt.getEpochSecond(), runtimeContext.gauge("issuedInstant"));
     }
