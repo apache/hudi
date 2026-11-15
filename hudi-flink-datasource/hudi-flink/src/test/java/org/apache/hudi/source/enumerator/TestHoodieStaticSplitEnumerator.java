@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.source.split.DefaultHoodieSplitProvider;
 import org.apache.hudi.source.split.GlobalHoodieSplitProvider;
@@ -65,7 +66,7 @@ public class TestHoodieStaticSplitEnumerator {
   public void setUp() {
     context = new MockSplitEnumeratorContext();
     splitProvider = new DefaultHoodieSplitProvider(new HoodieSplitNumberAssigner(2));
-    enumerator = new HoodieStaticSplitEnumerator("test-table", context, splitProvider);
+    enumerator = new HoodieStaticSplitEnumerator("test-table", HoodieTimelineTimeZone.LOCAL, context, splitProvider);
 
     split1 = createTestSplit(1, "file1");
     split2 = createTestSplit(2, "file2");
@@ -227,7 +228,7 @@ public class TestHoodieStaticSplitEnumerator {
   public void testConstructorWithNullMetricGroup() {
     MockSplitEnumeratorContext nullMetricContext = new MockSplitEnumeratorContext(true);
     HoodieStaticSplitEnumerator enumeratorWithNullMetrics =
-        new HoodieStaticSplitEnumerator("test-table", nullMetricContext, splitProvider);
+        new HoodieStaticSplitEnumerator("test-table", HoodieTimelineTimeZone.LOCAL, nullMetricContext, splitProvider);
 
     assertNotNull(enumeratorWithNullMetrics, "Enumerator should initialize without NPE when metricGroup is null");
 
@@ -260,7 +261,7 @@ public class TestHoodieStaticSplitEnumerator {
     // hand most of these to other subtasks and starve reader 0.
     GlobalHoodieSplitProvider globalProvider = new GlobalHoodieSplitProvider();
     HoodieStaticSplitEnumerator globalEnumerator =
-        new HoodieStaticSplitEnumerator("test-table", context, globalProvider);
+        new HoodieStaticSplitEnumerator("test-table", HoodieTimelineTimeZone.LOCAL, context, globalProvider);
     globalProvider.onDiscoveredSplits(Arrays.asList(split1, split2, split3));
     globalEnumerator.start();
 
@@ -282,7 +283,7 @@ public class TestHoodieStaticSplitEnumerator {
   public void testGlobalProviderSignalsNoMoreSplitsOnlyWhenPoolEmpty() {
     GlobalHoodieSplitProvider globalProvider = new GlobalHoodieSplitProvider();
     HoodieStaticSplitEnumerator globalEnumerator =
-        new HoodieStaticSplitEnumerator("test-table", context, globalProvider);
+        new HoodieStaticSplitEnumerator("test-table", HoodieTimelineTimeZone.LOCAL, context, globalProvider);
     globalProvider.onDiscoveredSplits(Collections.singletonList(split1)); // one split, two readers
     globalEnumerator.start();
 
@@ -308,7 +309,7 @@ public class TestHoodieStaticSplitEnumerator {
     // done, and never be read.
     GlobalHoodieSplitProvider globalProvider = new GlobalHoodieSplitProvider();
     HoodieStaticSplitEnumerator globalEnumerator =
-        new HoodieStaticSplitEnumerator("test-table", context, globalProvider);
+        new HoodieStaticSplitEnumerator("test-table", HoodieTimelineTimeZone.LOCAL, context, globalProvider);
     globalProvider.onDiscoveredSplits(Collections.singletonList(split1));
     globalEnumerator.start();
 

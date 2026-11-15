@@ -18,6 +18,7 @@
 
 package org.apache.hudi.source.enumerator;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.source.split.HoodieSourceSplit;
 import org.apache.hudi.source.split.HoodieSplitProvider;
 
@@ -29,8 +30,11 @@ import org.apache.flink.api.connector.source.SplitEnumeratorContext;
 public class HoodieStaticSplitEnumerator extends AbstractHoodieSplitEnumerator {
 
   public HoodieStaticSplitEnumerator(
-      String tableName, SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext, HoodieSplitProvider provider) {
-    super(tableName, enumeratorContext, provider);
+      String tableName,
+      HoodieTimelineTimeZone timelineTimeZone,
+      SplitEnumeratorContext<HoodieSourceSplit> enumeratorContext,
+      HoodieSplitProvider provider) {
+    super(tableName, timelineTimeZone, enumeratorContext, provider);
   }
 
   @Override

@@ -18,7 +18,9 @@
 
 package org.apache.hudi.source;
 
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.configuration.HadoopConfigurations;
@@ -54,12 +56,14 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE;
 import static org.apache.hudi.configuration.FlinkOptions.TABLE_TYPE_MERGE_ON_READ;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -222,6 +226,31 @@ public class TestStreamReadOperator {
       assertThat(TestData.rowDataToString(harness.extractOutputValues()),
           is(getSplitExpected(splits.subList(2, 4), EXPECTED)));
     }
+  }
+
+  @Test
+  void testTimelineTimeZoneIsReadOnceTheTableExists(@TempDir File lateTableDir) throws Exception {
+    Configuration lateConf = TestConfigurations.getDefaultConf(lateTableDir.getAbsolutePath());
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(TestConfigurations.ROW_TYPE);
+    MergeOnReadInputFormat format = MergeOnReadInputFormat.builder()
+        .config(lateConf)
+        .tableState(new MergeOnReadTableState<MergeOnReadInputSplit>(
+            TestConfigurations.ROW_TYPE, TestConfigurations.ROW_TYPE, schema.toString(), schema.toString(), Collections.emptyList()))
+        .fieldTypes(TestConfigurations.ROW_DATA_TYPE.getChildren())
+        .limit(1000L)
+        .emitDelete(true)
+        .build();
+
+    assertEquals(HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue(), format.getTimelineTimeZone(),
+        "The default timezone applies while there is no table");
+
+    HoodieTableMetaClient metaClient = StreamerUtil.initTableIfNotExists(lateConf);
+    Properties utcTimeline = new Properties();
+    utcTimeline.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), HoodieTimelineTimeZone.UTC.toString());
+    HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), utcTimeline);
+
+    assertEquals(HoodieTimelineTimeZone.UTC, format.getTimelineTimeZone(),
+        "The persisted timezone applies once the table exists");
   }
 
   private static String getSplitExpected(List<MergeOnReadInputSplit> splits, Map<String, String> expected) {

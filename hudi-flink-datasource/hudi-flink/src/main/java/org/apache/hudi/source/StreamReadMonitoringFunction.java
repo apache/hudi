@@ -19,6 +19,8 @@
 package org.apache.hudi.source;
 
 import org.apache.hudi.adapter.RichSourceFunctionAdapter;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.ValidationUtils;
@@ -333,8 +335,18 @@ public class StreamReadMonitoringFunction
 
   private void registerMetrics() {
     MetricGroup metrics = getRuntimeContext().getMetricGroup();
-    readMetrics = new FlinkStreamReadMetrics(metrics, tableName);
+    readMetrics = new FlinkStreamReadMetrics(metrics, tableName, this::getTimelineTimeZone);
     readMetrics.registerMetrics();
+  }
+
+  /**
+   * The metrics are registered before the table is guaranteed to exist, so the timezone comes from
+   * the meta client, which is created once the table does.
+   */
+  private HoodieTimelineTimeZone getTimelineTimeZone() {
+    return metaClient == null
+        ? HoodieTableConfig.TIMELINE_TIMEZONE.defaultValue()
+        : metaClient.getTableConfig().getTimelineTimezone();
   }
 
   private static class SplitState implements Serializable {
