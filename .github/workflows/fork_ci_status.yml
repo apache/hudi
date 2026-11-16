@@ -16,10 +16,12 @@
 # under the License.
 
 # Adapted from apache/arrow-rs .github/workflows/fork_ci_status.yml.
-# Mirror fork results as the informational CI (fork) check after upstream PR CI
-# completes and through scheduled polling for late runs and reruns. The check
-# reports the fork's Java CI (bot.yml) run for the PR head. Read fork runs and
-# write upstream checks using reviewed default-branch code.
+# Mirror fork results as the CI (fork) check after upstream PR CI completes and
+# through scheduled polling for late runs and reruns. The check reports the
+# fork's Java CI (bot.yml) run for the PR head, and asks for action when the
+# head has no run although the PR changes more than docs and images. It is not
+# a required check; committers queue a fork PR once it is green. Read fork runs
+# and write upstream checks using reviewed default-branch code.
 # No checkout, artifacts, or code from the pull request are used here.
 # Test with Python 3.11+, PyYAML, and Node.js 24:
 #   node --test .github/ci/scripts/test-fork-ci-status.cjs
@@ -71,6 +73,14 @@ jobs:
             const repository = upstream.owner + '/' + upstream.repo;
             const GUIDE = 'https://github.com/apache/hudi/blob/master/.github/workflows/README.md#pull-requests-from-forks';
             const SWEEP_SIZE = 25;
+            // The paths the push filter of bot.yml ignores, so a PR that changes only these has no fork
+            // run. test-fork-ci-status.cjs checks them against the filter.
+            const DOCS_EXTENSIONS = ['.bmp', '.gif', '.jpg', '.jpeg', '.md', '.pdf', '.png', '.svg'];
+            const DOCS_ROOT_FILES = ['.gitignore'];
+            const isDocs = (file) => DOCS_ROOT_FILES.includes(file) ||
+              DOCS_EXTENSIONS.some((extension) => file.endsWith(extension));
+            // The files API lists at most 3000 files; a longer PR counts as more than docs.
+            const MAX_LISTED_FILES = 3000;
             const listing = { ...upstream, state: 'open', base: 'master', sort: 'updated', direction: 'desc' };
             const isForkPr = (pr) => pr.state === 'open' && pr.head.repo &&
               pr.head.repo.full_name.toLowerCase() !== repository.toLowerCase() && pr.base.ref === 'master';
@@ -82,7 +92,7 @@ jobs:
             ];
             const conclusionOf = (run) => CONCLUSIONS.includes(run.conclusion) ? run.conclusion : 'failure';
             const UPDATE_NOTE =
-              'This check is informational: the contributor controls the fork workflow. ' +
+              'This check is not required, but committers queue a fork PR only once it is green. ' +
               'The upstream merge queue runs the required CI checks on the proposed merge result. ' +
               'Active or missing runs on recently updated PRs are polled every 15 minutes; ' +
               'a rotating sweep also discovers reruns on older PRs. Scheduled updates may be delayed.';
@@ -168,19 +178,33 @@ jobs:
                   })));
                 }
                 const disabled = states.some((workflow) => !workflow || workflow.state.startsWith('disabled'));
+                // A fork with Actions turned off in its settings still lists its workflows as active,
+                // so a missing run asks for action too, unless the PR changes only paths the push
+                // filter ignores. Renames count both paths.
+                let docsOnly = false;
+                if (!disabled) {
+                  const files = await github.paginate(github.rest.pulls.listFiles, {
+                    ...upstream, pull_number: pr.number, per_page: 100,
+                  });
+                  docsOnly = files.length > 0 && files.length < MAX_LISTED_FILES && files.every((file) =>
+                    isDocs(file.filename) && (!file.previous_filename || isDocs(file.previous_filename)));
+                }
                 const missing = WORKFLOWS.filter((workflow, index) => !runs[index]).map((workflow) => workflow.name);
                 const actions = 'https://github.com/' + pr.head.repo.full_name + '/actions';
                 payload = {
                   status: 'completed',
-                  conclusion: disabled ? 'action_required' : 'neutral',
+                  conclusion: docsOnly ? 'neutral' : 'action_required',
                   details_url: disabled ? actions : (runs.find(Boolean)?.html_url || actions),
                   output: {
-                    title: disabled ? 'Enable CI on your fork' : 'No fork CI run for this commit',
+                    title: disabled ? 'Enable CI on your fork' :
+                      docsOnly ? 'No fork CI run: docs-only change' : 'No fork CI run for this commit',
                     summary: [
                       'No ' + missing.join(' or ') + ' run was found for ' + sha + ' on ' + pr.head.repo.full_name + '.',
                       ...(runs.some(Boolean) ? [runList] : []),
-                      'Enable workflows in the Actions tab of your fork, sync/rebase onto master to include the fork CI workflows, ' +
-                      'then push your branch. A newly pushed run may take a moment to appear.',
+                      'Enable Actions on your fork (the Actions tab, and Settings > Actions > General) and ' +
+                      'sync/rebase onto master to include the fork CI workflows. Then push your branch, or run ' +
+                      'Java CI on it from the Actions tab of your fork (Run workflow): a push without file ' +
+                      'changes, such as an empty commit, starts no run. A new run may take a moment to appear.',
                       'A push that changes only docs or images is skipped by the path filter of bot.yml, ' +
                       'so no run exists for such a commit.',
                       UPDATE_NOTE,
