@@ -19,16 +19,23 @@ package org.apache.hudi
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, GreaterThan, GreaterThanOrEqual, If, In, InSet, IsNull, LeafExpression, LessThan, LessThanOrEqual, Literal, Log, Not, Or, StartsWith, TryEval, UnaryMinus}
+import org.apache.spark.sql.catalyst.expressions.{Abs, Add, And, AttributeReference, Cast, Coalesce, DateFormatClass, EqualNullSafe, EqualTo, Expression, FromUnixTime, GreaterThan, GreaterThanOrEqual, Hour, If, In, InSet, IsNull, LeafExpression, Length, LessThan, LessThanOrEqual, Literal, Log, Minute, Not, Or, StartsWith, TryEval, UnaryMinus, UnixTimestamp, Upper}
 import org.apache.spark.sql.catalyst.expressions.Literal.TrueLiteral
-import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, Increasing, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, Verdict}
+import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, Decreasing, ExpressionIndexSource, Increasing, IndexedExpression, Leaf, Op, RangeRule, StatsFilterCompiler, Step, TermRange, TimeZones, Verdict}
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering
 import org.apache.spark.sql.hudi.dataskipping.rules.DateTimeOrdering.Pattern
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.types.{DataType, DoubleType, IntegerType, StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types.{BinaryType, DataType, DateType, DoubleType, IntegerType, LongType, StringType, StructField, StructType, TimestampType}
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
+
+import java.time.{DayOfWeek, Duration, Instant, LocalDate, LocalTime, Month, ZoneId, ZoneOffset}
+import java.time.zone.{ZoneOffsetTransition, ZoneOffsetTransitionRule, ZoneRules}
+import java.time.zone.ZoneOffsetTransitionRule.TimeDefinition
+import java.util.Collections
+
+import scala.collection.JavaConverters._
 
 /**
  * Unit tests of the stages on their own: [[Leaf.parse]], [[Verdict]], [[Step.apply]] and
@@ -86,9 +93,8 @@ class TestDataSkippingStages {
     val struct = AttributeReference("st", StructType(Seq(StructField("f", IntegerType))))()
     val values: Set[Any] = Set(InternalRow(1), InternalRow(2))
     assertEquals(Some(Leaf(struct, Op.InSet(values), Nil)), Leaf.parse(InSet(struct, values)))
-    // An unindexed column has no range, so the leaf compiles to TRUE without building them (the
-    // resolution check is off, so that the leaf is reached)
-    assertEquals(TrueLiteral, StatsFilterCompiler.compile(InSet(struct, values), source, strictResolution = false))
+    // An unindexed column has no range, so Verdict never builds them
+    assertEquals(None, TermRange.derive(struct, source))
   }
 
   @Test
@@ -275,6 +281,101 @@ class TestDataSkippingStages {
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Expression index as a range source
+  // ---------------------------------------------------------------------------------------------
+
+  private val ts = AttributeReference("ts", StringType)()
+  // hour(ts) over a STRING ts, as Spark resolves it: the column is cast to a timestamp first
+  private val hourOfTs = Hour(Cast(ts, TimestampType, Some("UTC")), Some("UTC"))
+  private val hourIndex = ExpressionIndexSource(IndexedExpression("hour", "ts", Map("expr" -> "hour")))
+
+  @Test
+  def testExpressionIndexHoldsOnlyItsOwnExpression(): Unit = {
+    // The stats sit under the source column's name, like a column stats index on ts
+    assertEquals(ColumnStatsSource(Seq("ts")).rangeOf(ts), hourIndex.rangeOf(hourOfTs))
+    // The bare column, another function of it, or the function over another column
+    assertEquals(None, hourIndex.rangeOf(ts))
+    assertEquals(None, hourIndex.rangeOf(Minute(Cast(ts, TimestampType, Some("UTC")), Some("UTC"))))
+    assertEquals(None, hourIndex.rangeOf(Hour(Cast(AttributeReference("other", StringType)(), TimestampType, Some("UTC")), Some("UTC"))))
+  }
+
+  @Test
+  def testIndexedExpressionMatchesFunctionAndOptions(): Unit = {
+    val formatIndex = IndexedExpression("date_format", "ts", Map("format" -> "yyyy-MM-dd"))
+    val tsAsTimestamp = Cast(ts, TimestampType, Some("UTC"))
+    assertTrue(formatIndex.matches(DateFormatClass(tsAsTimestamp, Literal("yyyy-MM-dd"), Some("UTC"))))
+    assertFalse(formatIndex.matches(DateFormatClass(tsAsTimestamp, Literal("yyyy"), Some("UTC"))))
+    // Without a format option, from_unixtime is the default pattern
+    val seconds = AttributeReference("seconds", LongType)()
+    val fromUnixTimeIndex = IndexedExpression("from_unixtime", "seconds", Map.empty)
+    assertTrue(fromUnixTimeIndex.matches(FromUnixTime(seconds, Literal("yyyy-MM-dd HH:mm:ss"), Some("UTC"))))
+    assertFalse(fromUnixTimeIndex.matches(FromUnixTime(seconds, Literal("yyyy-MM-dd"), Some("UTC"))))
+    // An identity index holds the bare column only
+    val identityIndex = IndexedExpression("identity", "ts", Map.empty)
+    assertTrue(identityIndex.matches(ts))
+    assertFalse(identityIndex.matches(Upper(ts)))
+    assertFalse(identityIndex.matches(UnresolvedAttribute("ts")))
+  }
+
+  @Test
+  def testIndexedExpressionMatchesOnlyTheCastSparkAdds(): Unit = {
+    val lengthIndex = IndexedExpression("length", "name", Map.empty)
+    val name = AttributeReference("name", StringType)()
+    assertTrue(lengthIndex.matches(Length(name)))
+    // Spark casts a number to a string for length
+    assertTrue(lengthIndex.matches(Length(Cast(AttributeReference("name", IntegerType)(), StringType))))
+    // The query's own casts: the writer computed the length of the string, or of the binary column as is
+    assertFalse(lengthIndex.matches(Length(Cast(name, BinaryType))))
+    assertFalse(lengthIndex.matches(Length(Cast(AttributeReference("name", BinaryType)(), StringType))))
+
+    val instant = AttributeReference("ts", TimestampType)()
+    val defaultFormat = Literal("yyyy-MM-dd HH:mm:ss")
+    val unixTimestampIndex = IndexedExpression("unix_timestamp", "ts", Map.empty)
+    assertTrue(unixTimestampIndex.matches(UnixTimestamp(instant, defaultFormat, Some("UTC"))))
+    assertFalse(unixTimestampIndex.matches(UnixTimestamp(Cast(instant, DateType, Some("UTC")), defaultFormat, Some("UTC"))))
+  }
+
+  @Test
+  def testIndexedExpressionMatchesTheCastAFormatLessParseBecomes(): Unit = {
+    val toDateIndex = IndexedExpression("to_date", "ts", Map.empty)
+    val toTimestampIndex = IndexedExpression("to_timestamp", "ts", Map.empty)
+    val asDate = Cast(ts, DateType, Some("UTC"))
+    val asTimestamp = Cast(ts, TimestampType, Some("UTC"))
+    assertTrue(toDateIndex.matches(asDate))
+    assertTrue(toTimestampIndex.matches(asTimestamp))
+    assertFalse(toDateIndex.matches(asTimestamp))
+    assertFalse(toTimestampIndex.matches(asDate))
+    // An index with a format holds the parse with that format, which is not this cast
+    assertFalse(IndexedExpression("to_date", "ts", Map("format" -> "yyyy-MM-dd")).matches(asDate))
+    assertFalse(toDateIndex.matches(Cast(AttributeReference("other", StringType)(), DateType, Some("UTC"))))
+  }
+
+  @Test
+  def testExpressionIndexFilterReadsOnlyTheIndexedExpression(): Unit = {
+    def compile(filter: Expression): Expression = StatsFilterCompiler.compile(filter, hourIndex)
+    val stats = hourIndex.rangeOf(hourOfTs).get
+    val sixteen = Literal(16)
+    assertEquals(And(LessThanOrEqual(stats.lo, sixteen), GreaterThanOrEqual(stats.hi, sixteen)), compile(EqualTo(hourOfTs, sixteen)))
+    assertEquals(
+      Or(
+        And(LessThanOrEqual(stats.lo, sixteen), GreaterThanOrEqual(stats.hi, sixteen)),
+        And(LessThanOrEqual(stats.lo, Literal(19)), GreaterThanOrEqual(stats.hi, Literal(19)))),
+      compile(In(hourOfTs, Seq(sixteen, Literal(19)))))
+    // A rule step can still reach the indexed expression, for ex the cast Spark adds to compare with a BIGINT
+    assertFalse(compile(EqualTo(Cast(hourOfTs, LongType), Literal(16L))).equals(TrueLiteral))
+    // Another function of the column, or the bare column: every file is kept
+    assertEquals(TrueLiteral, compile(EqualTo(Minute(Cast(ts, TimestampType, Some("UTC")), Some("UTC")), sixteen)))
+    assertEquals(TrueLiteral, compile(EqualTo(ts, Literal("2023-09-21 16:34:26"))))
+  }
+
+  @Test
+  def testDeriveGivesNoRangeWhenTheSourceHasNoStatsForAnOffChainReference(): Unit = {
+    // length(ts) is off the chain and can only be re-bound to stats of ts, which an hour index does not hold
+    assertEquals(None, TermRange.derive(Add(hourOfTs, Length(ts)), hourIndex, stubRules))
+    assertTrue(TermRange.derive(Add(hourOfTs, Literal(1)), hourIndex, stubRules).isDefined)
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Stage 4: keeping the file on a NULL verdict
   // ---------------------------------------------------------------------------------------------
 
@@ -283,7 +384,7 @@ class TestDataSkippingStages {
    * NULLs. NULL drops the file, like FALSE.
    */
   private def overNullStats(filter: Expression, statsSource: ColumnStatsSource, statsType: DataType): Any =
-    StatsFilterCompiler.compile(filter, statsSource, strictResolution = true).transform {
+    StatsFilterCompiler.compile(filter, statsSource).transform {
       case stat: LeafExpression if !stat.isInstanceOf[Literal] => Literal(null, statsType)
     }.eval()
 
@@ -300,14 +401,20 @@ class TestDataSkippingStages {
     val ts = AttributeReference("ts", TimestampType)()
     val formatted = EqualTo(DateFormatClass(ts, Literal("yyyy-MM-dd"), Some("UTC")), Literal("2024-01-01"))
     assertEquals(true, overNullStats(formatted, ColumnStatsSource(Seq("ts")), TimestampType))
+    // A cast to the local date: unguarded in UTC, guarded where the local date has run backwards
+    // (America/St_Johns)
+    def castToDateIn(zone: String): Expression =
+      In(Cast(ts, DateType, Some(zone)), Seq(Literal(LocalDate.of(2009, 10, 31)), Literal(LocalDate.of(2009, 11, 1))))
+    assertEquals(null, overNullStats(castToDateIn("UTC"), ColumnStatsSource(Seq("ts")), TimestampType))
+    assertEquals(true, overNullStats(castToDateIn("America/St_Johns"), ColumnStatsSource(Seq("ts")), TimestampType))
   }
 
   @Test
   def testKeepOnNullWrapsOnlyPartialOrGuardedVerdicts(): Unit = {
-    assertEquals(LessThan(xRange.lo, ten), StatsFilterCompiler.compile(LessThan(x, ten), source, strictResolution = true))
+    assertEquals(LessThan(xRange.lo, ten), StatsFilterCompiler.compile(LessThan(x, ten), source))
     assertEquals(
       Coalesce(Seq(LessThan(TryEval(Log(xRange.lo)), ten), TrueLiteral)),
-      StatsFilterCompiler.compile(LessThan(Log(x), ten), source, strictResolution = true))
+      StatsFilterCompiler.compile(LessThan(Log(x), ten), source))
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -364,6 +471,61 @@ class TestDataSkippingStages {
     // A pattern off the allowlist, in any zone
     assertFalse(DateTimeOrdering.formatPreservesOrder(Literal("MM/dd/yyyy"), Some("UTC")))
     assertFalse(DateTimeOrdering.parsePreservesOrder(Literal("yyyy-M-d"), Some("UTC"), zoneDependent = true))
+  }
+
+  @Test
+  def testLocalDateReversals(): Unit = {
+    def reversals(zoneId: String): Option[Seq[Instant]] = TimeZones.localDateReversals(ZoneId.of(zoneId).getRules)
+
+    // America/St_Johns fell back across midnight every year from 1987 to 2010
+    val stJohns = reversals("America/St_Johns").get
+    assertTrue(stJohns.contains(Instant.parse("2009-11-01T02:31:00Z")))
+    assertEquals(Instant.parse("2010-11-07T02:31:00Z"), stJohns.last)
+    // Falling back at midnight itself (Asia/Beirut, or Pacific/Apia repeating a whole day in 1892) repeats the previous
+    // date without running backwards, and a fall-back within the day (America/New_York) does not change the date
+    Seq("Asia/Beirut", "Pacific/Apia", "America/New_York", "UTC").foreach { zoneId =>
+      assertEquals(Some(Seq.empty), reversals(zoneId), zoneId)
+    }
+
+    // A current rule falling back from 00:30 to 23:30 runs the date backwards every year, without bound
+    val (standard, summer) = (ZoneOffset.ofHours(-4), ZoneOffset.ofHours(-3))
+    val rules = ZoneRules.of(standard, standard,
+      Collections.emptyList[ZoneOffsetTransition](), Collections.emptyList[ZoneOffsetTransition](), Seq(
+        ZoneOffsetTransitionRule.of(Month.MARCH, 8, DayOfWeek.SUNDAY, LocalTime.of(2, 0), false, TimeDefinition.WALL,
+          standard, standard, summer),
+        ZoneOffsetTransitionRule.of(Month.NOVEMBER, 1, DayOfWeek.SUNDAY, LocalTime.of(0, 30), false, TimeDefinition.WALL,
+          standard, summer, standard)).asJava)
+    assertEquals(None, TimeZones.localDateReversals(rules))
+
+    // By zone id, resolved the way Spark evaluates it: the short id CNT is America/St_Johns
+    assertEquals(Some(stJohns), TimeZones.localDateReversals(Some("CNT")))
+    assertEquals(Some(Seq.empty), TimeZones.localDateReversals(Some("UTC")))
+    // No time zone (not analyzed) or an unknown one: no step
+    assertEquals(None, TimeZones.localDateReversals(None))
+    assertEquals(None, TimeZones.localDateReversals(Some("Not/A_Zone")))
+  }
+
+  @Test
+  def testNoLocalDateReversalGuard(): Unit = {
+    // America/Phoenix ran its date backwards at 06:01Z on 1944-01-01 and on 1944-10-01
+    val (first, last) = (Instant.parse("1944-01-01T06:01:00Z"), Instant.parse("1944-10-01T06:01:00Z"))
+    val guard = DateTimeOrdering.noLocalDateReversal(Seq(first, last), DateTimeOrdering.asTimestamp).get
+    // A bound of the file, None standing for one that failed to evaluate
+    def bound(instant: Option[Instant]): Expression =
+      instant.map(DateTimeOrdering.asTimestamp).getOrElse(Literal(null, TimestampType))
+    def overFile(lo: Option[Instant], hi: Option[Instant]): Any =
+      guard(TermRange(bound(lo), bound(hi), None, None, nullBoundIsUnknown = false)).eval()
+    val minute = Duration.ofMinutes(1)
+
+    // A file ending at an instant spans it, and one starting at it does not
+    assertEquals(false, overFile(Some(first.minus(minute)), Some(first)))
+    assertEquals(false, overFile(Some(last.minus(minute)), Some(last)))
+    assertEquals(true, overFile(Some(last), Some(last.plus(minute))))
+    assertEquals(true, overFile(Some(first), Some(last.minus(minute))))
+    // Without one bound, the file is known to span none only if the other bound alone rules them all out
+    assertEquals(true, overFile(None, Some(first.minus(minute))))
+    assertEquals(true, overFile(Some(last), None))
+    assertEquals(null, overFile(Some(first.minus(minute)), None))
   }
 
   @Test

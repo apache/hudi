@@ -464,12 +464,15 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
 
       HoodieTimer partitionInitTimer = HoodieTimer.start();
       clearExistingMetadataPartition(relativePartitionPath);
-      HoodieData<HoodieRecord> records = engineContext.emptyHoodieData();
+      List<HoodieData<HoodieRecord>> recordsPerDataPartition = new ArrayList<>();
       for (DataPartitionAndRecords dataPartitionAndRecords: initializationPlan.dataPartitionAndRecords()) {
         initializeFileGroups(dataMetaClient, partitionType, instantTimeForPartition,
             dataPartitionAndRecords.numFileGroups(), relativePartitionPath, dataPartitionAndRecords.dataPartition());
-        records = records.union(dataPartitionAndRecords.indexRecords());
+        recordsPerDataPartition.add(dataPartitionAndRecords.indexRecords());
       }
+      // Union once: on Spark, folding with HoodieData#union nests one UnionRDD per data partition,
+      // and the resulting lineage overflows the stack on tables with many partitions (partitioned RLI).
+      HoodieData<HoodieRecord> records = engineContext.union(recordsPerDataPartition);
 
       bulkCommit(instantTimeForPartition, relativePartitionPath, records, initializationPlan.indexParser());
 

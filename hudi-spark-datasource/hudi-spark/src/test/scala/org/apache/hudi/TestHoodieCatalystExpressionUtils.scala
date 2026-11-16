@@ -247,6 +247,8 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
       assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal(pattern), newYork)), pattern)
       assertEquals(Some(longAttr), matched(FromUnixTime(longAttr, Literal(pattern), newYork)), pattern)
     }
+    // In America/St_Johns the local date has run backwards, so a date-only pattern is guarded per file there.
+    assertEquals(Some(tsAttr), matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd"), Some("America/St_Johns"))))
     // PST resolves to America/Los_Angeles; Kolkata has no DST but historical offset changes.
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("PST"))))
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("Asia/Kolkata"))))
@@ -255,6 +257,7 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal(null, StringType), newYork)))
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), Some("Not/AZone"))))
     assertEquals(None, matched(DateFormatClass(tsAttr, Literal("yyyy-MM-dd HH:mm"), None)))
+    assertEquals(None, matched(FromUnixTime(longAttr, Literal("yyyy-MM-dd"), None)))
   }
 
   @Test
@@ -342,9 +345,13 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(None, matched(Cast(dateAttr, StringType)))
     assertEquals(None, matched(Cast(dateAttr, IntegerType)))
     assertEquals(None, matched(Cast(boolAttr, DecimalType(1, 1))))
-    // A date maps to the start of its day, and truncating a timestamp to its date is non-decreasing.
+    // A date maps to the start of its day.
     assertEquals(Some(dateAttr), matched(Cast(dateAttr, TimestampType)))
-    assertEquals(Some(tsAttr), matched(Cast(tsAttr, DateType)))
+    // A timestamp's local date runs backwards where the clocks fell back across midnight, so it is
+    // ranged with a per-file guard there (America/St_Johns), and not at all without a time zone.
+    assertEquals(Some(false), guarded(Cast(tsAttr, DateType, Some("UTC")), tsAttr))
+    assertEquals(Some(true), guarded(Cast(tsAttr, DateType, Some("America/St_Johns")), tsAttr))
+    assertEquals(None, matched(Cast(tsAttr, DateType)))
     // The default string and binary both compare by bytes.
     assertEquals(Some(binAttr), matched(Cast(binAttr, StringType)))
     // Boolean to bigint keeps false < true as 0 < 1, and an identity cast is always allowed.

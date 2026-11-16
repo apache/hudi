@@ -56,30 +56,36 @@ sealed trait RangeSource {
 
 /**
  * Column stats index: a column maps to its min / max / null-count / value-count columns.
- *
- * NOTE: Expression indexes go through this source too, but only with the bare column:
- *       `ExpressionIndexSupport` strips the indexed f(col) down to col before translating, so the
- *       stored f(col) bounds are compared as is
  */
 case class ColumnStatsSource(indexedCols: Seq[String]) extends RangeSource {
   override def rangeOf(term: Expression): Option[TermRange] = term match {
-    case column: AttributeReference =>
-      getTargetIndexedColumnName(column, indexedCols).map { colName =>
-        TermRange(
-          lo = statsColumn(getMinColumnNameFor(colName)),
-          hi = statsColumn(getMaxColumnNameFor(colName)),
-          nulls = Some(statsColumn(getNullCountColumnNameFor(colName))),
-          rows = Some(statsColumn(getValueCountColumnNameFor)),
-          nullBoundIsUnknown = false)
-      }
+    case column: AttributeReference => getTargetIndexedColumnName(column, indexedCols).map(TermRange.ofStatsColumns)
     case _ => None
   }
+}
 
-  /** A column of the transposed column stats table, for ex `qty_minValue`. */
-  private def statsColumn(name: String): Expression = sparkAdapter.getExpressionFromColumn(col(quoteIdentifier(name)))
+/**
+ * Expression index: the stats of one `f(col)`, stored under the source column's name. Only a term that is
+ * that `f(col)` has a range; any other term, including the bare column of a non-identity index, has none.
+ * A rule step may still reach the indexed `f(col)` as its child, for ex `CAST(hour(ts) AS BIGINT)`.
+ */
+case class ExpressionIndexSource(indexed: IndexedExpression) extends RangeSource {
+  override def rangeOf(term: Expression): Option[TermRange] =
+    if (indexed.matches(term)) Some(TermRange.ofStatsColumns(indexed.sourceColumn)) else None
 }
 
 object TermRange {
+
+  /** The range read from the transposed stats table, for ex `qty_minValue` / `qty_maxValue`. */
+  private[dataskipping] def ofStatsColumns(colName: String): TermRange =
+    TermRange(
+      lo = statsColumn(getMinColumnNameFor(colName)),
+      hi = statsColumn(getMaxColumnNameFor(colName)),
+      nulls = Some(statsColumn(getNullCountColumnNameFor(colName))),
+      rows = Some(statsColumn(getValueCountColumnNameFor)),
+      nullBoundIsUnknown = false)
+
+  private def statsColumn(name: String): Expression = sparkAdapter.getExpressionFromColumn(col(quoteIdentifier(name)))
 
   def derive(term: Expression, source: RangeSource): Option[TermRange] =
     derive(term, source, RangeRules.all)
@@ -98,7 +104,7 @@ object TermRange {
       if (chain.hasDecreasingStep && hasOffChainReferences(term, chain.range)) {
         None
       } else {
-        Some(rebindOffChainReferences(term, source, chain.range))
+        rebindOffChainReferences(term, source, chain.range)
       }
     }
 
@@ -140,16 +146,25 @@ object TermRange {
    * the days operand of `date_add(d, dayofmonth(d))`), matching the pre-stage translator. A [[Step]]
    * only rebuilds its chain slot, so the leftover references are re-bound to the same bound here.
    * Such terms are not order-preserving in general; kept as is so the output stays identical.
+   *
+   * No range when the source holds no stats for the bare column (an expression index holds only its
+   * `f(col)`): the bound would otherwise keep a column the stats table does not have.
    */
-  private def rebindOffChainReferences(term: Expression, source: RangeSource, r: TermRange): TermRange = {
-    if (term.references.size != 1) {
-      r
+  private def rebindOffChainReferences(term: Expression, source: RangeSource, r: TermRange): Option[TermRange] = {
+    if (!hasOffChainReferences(term, r)) {
+      Some(r)
     } else {
       val column = term.references.head.exprId
-      def rebind(bound: Expression, pick: TermRange => Expression): Expression = bound.transformDown {
-        case a: AttributeReference if a.exprId == column => source.rangeOf(a).map(pick).getOrElse(a)
+      val references = Seq(r.lo, r.hi).flatMap(_.collect { case a: AttributeReference if a.exprId == column => a })
+      val columnRanges = references.map(a => a -> source.rangeOf(a)).toMap
+      if (columnRanges.values.exists(_.isEmpty)) {
+        None
+      } else {
+        def rebind(bound: Expression, pick: TermRange => Expression): Expression = bound.transformDown {
+          case a: AttributeReference if a.exprId == column => pick(columnRanges(a).get)
+        }
+        Some(r.copy(lo = rebind(r.lo, _.lo), hi = rebind(r.hi, _.hi)))
       }
-      r.copy(lo = rebind(r.lo, _.lo), hi = rebind(r.hi, _.hi))
     }
   }
 }

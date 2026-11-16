@@ -18,7 +18,7 @@
 package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{And, DateFormatClass, Expression, FromUnixTime, GetTimestamp, GreaterThanOrEqual, LessThan, Literal, ToUnixTimestamp, UnixTimestamp}
-import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange}
+import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange, TimeZones}
 import org.apache.spark.sql.types.{DataType, DateType, LongType, StringType, TimestampNTZType, TimestampType}
 
 import java.time.{LocalDate, ZoneOffset}
@@ -32,11 +32,12 @@ import scala.util.Try
  *
  * Shared guard: [[DateTimeOrdering]] (allowlisted literal format, non-LEGACY parser policy, and for a
  * time-of-day pattern a fixed-offset time zone), plus a per-file guard on the values the format or
- * parse is sound for. No parsing step without a time zone: the analyzer sets one on every resolved
- * expression.
+ * parse is sound for. No parsing or formatting step without a time zone: the analyzer sets one on every
+ * resolved expression.
  *
  *  - Formatting (`DateFormatClass`, `FromUnixTime`): the instant lies in years 0001 to 9999 (see
- *    [[formattableInstants]]).
+ *    [[formattableInstants]]), and the file spans no instant at which the zone's local date runs
+ *    backwards (see [[DateTimeOrdering.noLocalDateReversal]]).
  *  - Parsing a string (`ToUnixTimestamp`, `UnixTimestamp`, `GetTimestamp`): every string of the file
  *    starts with a digit (see [[digitFirstStrings]]). Parsing is `partial`: an unparseable string is
  *    NULL, or throws under ANSI or the EXCEPTION parser policy; `Step` turns a throwing bound into NULL,
@@ -53,10 +54,16 @@ object DateTimeFormatRule extends RangeRule {
   override def steps(term: Expression): Seq[Step] = term match {
     case DateFormatClass(timestamp, format, timeZoneId)
       if dataTypeOf(timestamp).contains(TimestampType) && DateTimeOrdering.formatPreservesOrder(format, timeZoneId) =>
-      Seq(Step(term, timestamp, Increasing, fileGuard = Some(formattableInstants), partial = false))
+      TimeZones.localDateReversals(timeZoneId).toSeq.map { instants =>
+        Step(term, timestamp, Increasing, fileGuard = Step.andGuards(Some(formattableInstants),
+          DateTimeOrdering.noLocalDateReversal(instants, DateTimeOrdering.asTimestamp)), partial = false)
+      }
     case FromUnixTime(seconds, format, timeZoneId)
       if dataTypeOf(seconds).contains(LongType) && DateTimeOrdering.formatPreservesOrder(format, timeZoneId) =>
-      Seq(Step(term, seconds, Increasing, fileGuard = Some(formattableSeconds), partial = false))
+      TimeZones.localDateReversals(timeZoneId).toSeq.map { instants =>
+        Step(term, seconds, Increasing, fileGuard = Step.andGuards(Some(formattableSeconds),
+          DateTimeOrdering.noLocalDateReversal(instants, DateTimeOrdering.asEpochSeconds)), partial = false)
+      }
 
     // NOTE: `to_unix_timestamp` and `unix_timestamp` evaluate the same way, and take the same guards
     case ToUnixTimestamp(time, format, timeZoneId, _) =>

@@ -252,6 +252,7 @@ public class HoodieTableMetaClient implements Serializable {
    * @return true if index definition is updated.
    */
   public boolean buildIndexDefinition(HoodieIndexDefinition indexDefinition) {
+    reloadIndexMetadata();
     String indexName = indexDefinition.getIndexName();
     boolean updateIndexDefn = true;
     if (indexMetadataOpt.isPresent()) {
@@ -292,11 +293,30 @@ public class HoodieTableMetaClient implements Serializable {
    * @param indexName Name of the index
    */
   public void deleteIndexDefinition(String indexName) {
+    reloadIndexMetadata();
     checkState(indexMetadataOpt.isPresent(), "Index metadata is not present");
     indexMetadataOpt.get().getIndexDefinitions().remove(indexName);
     writeIndexMetadataToStorage();
     if (indexMetadataOpt.get().getIndexDefinitions().isEmpty()) {
       indexMetadataOpt = Option.empty();
+    }
+  }
+
+  /**
+   * Reloads the index definitions from storage before they are changed. The definitions are written as one file, so a
+   * change applied to the definitions this meta client loaded earlier would drop the definitions that another meta
+   * client of the table wrote since, for example the secondary index definition that the metadata writer registers
+   * during a commit before the commit updates the column stats index definition.
+   */
+  private void reloadIndexMetadata() {
+    StoragePath indexDefinitionPath = new StoragePath(getIndexDefinitionPath());
+    try {
+      Option<byte[]> bytesOpt = FileIOUtils.readDataFromPath(storage, indexDefinitionPath, true);
+      if (bytesOpt.isPresent()) {
+        indexMetadataOpt = Option.of(HoodieIndexMetadata.fromJson(fromUTF8Bytes(bytesOpt.get())));
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Could not load index definition at path: " + indexDefinitionPath, e);
     }
   }
 

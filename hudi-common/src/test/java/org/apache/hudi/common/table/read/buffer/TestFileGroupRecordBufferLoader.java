@@ -63,6 +63,7 @@ public class TestFileGroupRecordBufferLoader extends BaseTestFileGroupRecordBuff
         : FileGroupRecordBufferLoader.createStreamingRecordsBufferLoader();
     HoodieReadStats readStats = new HoodieReadStats();
     HoodieTableConfig tableConfig = mock(HoodieTableConfig.class);
+    when(tableConfig.getPayloadClassIfPresent()).thenReturn(Option.empty());
     when(tableConfig.getRecordMergeMode()).thenReturn(RecordMergeMode.COMMIT_TIME_ORDERING);
     when(tableConfig.getTableVersion()).thenReturn(HoodieTableVersion.NINE);
     when(tableConfig.getPartialUpdateMode()).thenReturn(Option.empty());

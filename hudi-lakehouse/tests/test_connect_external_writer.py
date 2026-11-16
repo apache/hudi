@@ -57,6 +57,11 @@ class ExternalWriterTest(unittest.TestCase):
         self.assertEqual(container["image"], self.template["containers"][0]["image"])
         self.assertTrue(any(v["name"] == "config" for v in pod["spec"]["volumes"]))
 
+    def test_writer_image_can_be_overridden(self):
+        pod = self.writer.writer_pod(self.template, "private-writer", "connect_smoke_test",
+                                     "commit-schema", image="spark35-writer:test")
+        self.assertEqual(pod["spec"]["containers"][0]["image"], "spark35-writer:test")
+
     def run_launch(self, failure=None):
         calls = []
 
@@ -84,6 +89,12 @@ class ExternalWriterTest(unittest.TestCase):
             else:
                 self.writer.launch("connect_smoke_test", "commit-schema")
         return [call[3:] for call in calls]
+
+    def test_launch_passes_image_override(self):
+        with patch.dict(self.writer.os.environ, {"EXTERNAL_WRITER_IMAGE": "spark35-writer:test"}), \
+                patch.object(self.writer, "writer_pod", wraps=self.writer.writer_pod) as pod:
+            self.run_launch()
+        self.assertEqual(pod.call_args.args[-1], "spark35-writer:test")
 
     def test_cleanup_only_deletes_resources_created_by_this_run(self):
         pod = ["delete", "pod", "connect-smoke-test-writer"]
