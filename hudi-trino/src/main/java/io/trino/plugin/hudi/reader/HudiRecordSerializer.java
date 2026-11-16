@@ -68,9 +68,11 @@ import static java.nio.charset.StandardCharsets.UTF_8;
  * log files. {@link #writeTrino} is the mapping from {@link HoodieSchemaType} to that object; a type it does not list
  * cannot be spilled in this representation and fails with the field type in the message.</li>
  * </ul>
- * Three details of a Trino object are not in {@link HoodieSchema} today. Tinyint and smallint are INT there, so they
- * are read back as {@link Integer}, the same as from an Avro log block. A {@link SqlDecimal}'s precision and scale
- * and a {@link SqlTimestamp}'s precision belong to the Trino column type, so they are written with the value.
+ * The Trino column types come from the metastore, so four details of a Trino object are not in {@link HoodieSchema}.
+ * Tinyint and smallint are INT there, so they are read back as {@link Integer}, the same as from an Avro log block.
+ * A {@link SqlDecimal}'s precision and scale and a {@link SqlTimestamp}'s precision are written with the value. So is
+ * whether a string or binary type is held as a {@link String} or a {@link SqlVarbinary}: Hive sync declares UUID and
+ * VECTOR as binary, for example. BLOB and VARIANT are structs in the metastore and are written as records.
  * <p>
  * Not thread-safe. The merge buffer of a file group writes and reads through a single instance.
  */
@@ -189,7 +191,19 @@ final class HudiRecordSerializer
     private void writeTrino(SliceOutput output, TypeNode node, Object value)
     {
         switch (node.type) {
-            case STRING, ENUM, UUID -> writeBytes(output, cast(String.class, node, value).getBytes(UTF_8));
+            case STRING, ENUM, UUID, BYTES, FIXED, VECTOR -> {
+                switch (value) {
+                    case String string -> {
+                        output.writeBoolean(false);
+                        writeBytes(output, string.getBytes(UTF_8));
+                    }
+                    case SqlVarbinary varbinary -> {
+                        output.writeBoolean(true);
+                        writeBytes(output, varbinary.getBytes());
+                    }
+                    default -> throw unsupported(node, value);
+                }
+            }
             // tinyint and smallint; HoodieSchema has no narrower integer than INT
             case INT -> output.writeInt(cast(Number.class, node, value).intValue());
             case DECIMAL -> {
@@ -205,7 +219,6 @@ final class HudiRecordSerializer
                 output.writeLong(timestamp.getEpochMicros());
                 output.writeInt(timestamp.getPicosOfMicros());
             }
-            case BYTES, FIXED -> writeBytes(output, cast(SqlVarbinary.class, node, value).getBytes());
             case ARRAY -> {
                 List<?> list = cast(List.class, node, value);
                 output.writeInt(list.size());
@@ -221,7 +234,7 @@ final class HudiRecordSerializer
                     writeValue(output, node.element(), entry.getValue());
                 }
             }
-            case RECORD -> {
+            case RECORD, BLOB, VARIANT -> {
                 List<?> row = cast(List.class, node, value);
                 TypeNode[] fields = node.fields();
                 checkState(row.size() == fields.length, "Row has %s fields, but %s has %s", row.size(), node.schema, fields.length);
@@ -229,14 +242,18 @@ final class HudiRecordSerializer
                     writeValue(output, fields[i], row.get(i));
                 }
             }
-            case LONG, FLOAT, DOUBLE, BOOLEAN, TIME, UNION, VARIANT, BLOB, VECTOR, NULL -> throw unsupported(node, value);
+            case LONG, FLOAT, DOUBLE, BOOLEAN, TIME, UNION, NULL -> throw unsupported(node, value);
         }
     }
 
     private Object readTrino(SliceInput input, TypeNode node)
     {
         return switch (node.type) {
-            case STRING, ENUM, UUID -> new String(readBytes(input), UTF_8);
+            case STRING, ENUM, UUID, BYTES, FIXED, VECTOR -> {
+                boolean binary = input.readBoolean();
+                byte[] bytes = readBytes(input);
+                yield binary ? new SqlVarbinary(bytes) : new String(bytes, UTF_8);
+            }
             case INT -> input.readInt();
             case DECIMAL -> {
                 BigInteger unscaledValue = new BigInteger(readBytes(input));
@@ -251,7 +268,6 @@ final class HudiRecordSerializer
                 int picosOfMicros = input.readInt();
                 yield SqlTimestamp.newInstance(precision, epochMicros, picosOfMicros);
             }
-            case BYTES, FIXED -> new SqlVarbinary(readBytes(input));
             case ARRAY -> {
                 int size = input.readInt();
                 List<Object> list = new ArrayList<>(size);
@@ -269,7 +285,7 @@ final class HudiRecordSerializer
                 }
                 yield map;
             }
-            case RECORD -> {
+            case RECORD, BLOB, VARIANT -> {
                 TypeNode[] fields = node.fields();
                 List<Object> row = new ArrayList<>(fields.length);
                 for (TypeNode field : fields) {
@@ -277,7 +293,7 @@ final class HudiRecordSerializer
                 }
                 yield row;
             }
-            case LONG, FLOAT, DOUBLE, BOOLEAN, TIME, UNION, VARIANT, BLOB, VECTOR, NULL ->
+            case LONG, FLOAT, DOUBLE, BOOLEAN, TIME, UNION, NULL ->
                     throw new IllegalStateException("No Trino object is spilled for " + node.schema);
         };
     }

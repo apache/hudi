@@ -40,6 +40,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -192,7 +193,12 @@ final class TestHudiTrinoReaderContext
                 kind(rowSchema, objectValue(RowType.from(List.of(field("name", VARCHAR), field("price", SHORT_DECIMAL))), builder -> ((RowBlockBuilder) builder).buildEntry(rowFields -> {
                     VARCHAR.writeString(rowFields.get(0), "nested");
                     writeShortDecimal(rowFields.get(1), 999);
-                }))));
+                }))),
+                // Hive sync declares UUID and VECTOR as binary, and BLOB and VARIANT as structs
+                kind(HoodieSchema.createUUID().toAvroSchema(), new SqlVarbinary(new byte[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})),
+                kind(HoodieSchema.createVector(2).toAvroSchema(), new SqlVarbinary(new byte[] {0, 0, -128, 63, 0, 0, 0, 64})),
+                kind(HoodieSchema.createBlob().toAvroSchema(), structOfNulls(HoodieSchema.createBlob(), "INLINE")),
+                kind(HoodieSchema.createVariant().toAvroSchema(), structOfNulls(HoodieSchema.createVariant(), new SqlVarbinary(new byte[] {1}))));
         assertThat(trinoKinds).extracting(kind -> (Object) kind.getValue().getClass())
                 .contains(String.class, SqlDecimal.class, SqlDate.class, SqlTimestamp.class, SqlVarbinary.class);
 
@@ -282,6 +288,14 @@ final class TestHudiTrinoReaderContext
             assertThatThrownBy(() -> map.put(buffered.getRecordKey(), buffered))
                     .hasStackTraceContaining("Cannot spill a merge buffer value of class java.lang.String for a field of type INT");
         }
+    }
+
+    // A Trino row for the struct: its first field set, the others null
+    private static List<Object> structOfNulls(HoodieSchema struct, Object firstField)
+    {
+        List<Object> row = new ArrayList<>(Collections.nCopies(struct.getFields().size(), null));
+        row.set(0, firstField);
+        return row;
     }
 
     private static Map.Entry<Schema, Object> kind(Schema avroType, Object value)
