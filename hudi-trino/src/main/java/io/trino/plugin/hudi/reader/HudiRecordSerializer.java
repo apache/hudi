@@ -27,11 +27,15 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumReader;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.IndexedRecord;
+import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.util.Utf8;
 import org.apache.hudi.common.avro.AvroRecordSerializer;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.serialization.RecordSerializer;
 
 import java.io.IOException;
@@ -51,43 +55,36 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 /**
  * Spill serializer for the records in the merge buffer of {@link HudiTrinoReaderContext}.
  * <p>
- * Field values come in two kinds. Rows read from native log files hold Trino objects from
- * {@code Type.getObjectValue} ({@link String}, {@link SqlDecimal}, {@link SqlDate}, {@link SqlTimestamp},
- * {@link SqlVarbinary}, {@link List}, {@link Map} and boxed primitives); rows decoded from Avro log blocks hold Avro
- * values ({@link Utf8}, {@link ByteBuffer}, and {@link GenericContainer}s such as fixed decimals and nested records).
- * Avro binary encoding cannot write the Trino kinds, so each value is written with a tag for its kind and read back
- * as the same kind. The record schema is not written: as in {@link AvroRecordSerializer}, it is resolved from the
- * buffered record's schema id on read.
+ * Values are written by the {@link HoodieSchemaType} of their field, so the record's {@link HoodieSchema} is the only
+ * type system here. The record schema itself is not written: as in {@link AvroRecordSerializer}, it is resolved from
+ * the buffered record's schema id on read.
  * <p>
- * Not thread-safe. The merge buffer of a file group writes and reads through a single instance, which keeps the
- * schemas of the Avro containers it has written.
+ * A field value comes in one of two representations, and a marker per value says which:
+ * <ul>
+ * <li>{@link #AVRO}: the Avro value of the type ({@link Utf8}, {@link ByteBuffer}, {@link GenericContainer}s, boxed
+ * {@code int}, {@code long}, {@code float}, {@code double} and {@code boolean}), as held by rows decoded from Avro log
+ * blocks. Written in Avro binary encoding with the field's schema.</li>
+ * <li>{@link #TRINO}: the object {@code Type.getObjectValue} returns for the type, as held by rows read from native
+ * log files. {@link #writeTrino} is the mapping from {@link HoodieSchemaType} to that object; a type it does not list
+ * cannot be spilled in this representation and fails with the field type in the message.</li>
+ * </ul>
+ * Three details of a Trino object are not in {@link HoodieSchema} today. Tinyint and smallint are INT there, so they
+ * are read back as {@link Integer}, the same as from an Avro log block. A {@link SqlDecimal}'s precision and scale
+ * and a {@link SqlTimestamp}'s precision belong to the Trino column type, so they are written with the value.
+ * <p>
+ * Not thread-safe. The merge buffer of a file group writes and reads through a single instance.
  */
 final class HudiRecordSerializer
         implements RecordSerializer<IndexedRecord>
 {
     private static final byte NULL = 0;
-    private static final byte BOOLEAN = 1;
-    private static final byte BYTE = 2;
-    private static final byte SHORT = 3;
-    private static final byte INTEGER = 4;
-    private static final byte LONG = 5;
-    private static final byte FLOAT = 6;
-    private static final byte DOUBLE = 7;
-    private static final byte STRING = 8;
-    private static final byte UTF8 = 9;
-    private static final byte BYTE_BUFFER = 10;
-    private static final byte AVRO_CONTAINER = 11;
-    private static final byte SQL_DECIMAL = 12;
-    private static final byte SQL_DATE = 13;
-    private static final byte SQL_TIMESTAMP = 14;
-    private static final byte SQL_VARBINARY = 15;
-    private static final byte LIST = 16;
-    private static final byte MAP = 17;
+    private static final byte AVRO = 1;
+    private static final byte TRINO = 2;
 
     private final IntFunction<Schema> schemaById;
-    // Avro containers are written with their own schema, referenced by its index in this list
-    private final List<Schema> containerSchemas = new ArrayList<>();
-    private final Map<Schema, Integer> containerSchemaIds = new IdentityHashMap<>();
+    private final Map<Schema, TypeNode[]> fieldTypes = new IdentityHashMap<>();
+    private BinaryEncoder encoder;
+    private BinaryDecoder decoder;
 
     HudiRecordSerializer(IntFunction<Schema> schemaById)
     {
@@ -97,11 +94,13 @@ final class HudiRecordSerializer
     @Override
     public byte[] serialize(IndexedRecord record)
     {
-        int fieldCount = record.getSchema().getFields().size();
-        DynamicSliceOutput output = new DynamicSliceOutput(64 * fieldCount);
-        output.writeInt(fieldCount);
-        for (int i = 0; i < fieldCount; i++) {
-            writeValue(output, record.get(i));
+        TypeNode[] fields = fieldTypesOf(record.getSchema());
+        DynamicSliceOutput output = new DynamicSliceOutput(64 * fields.length);
+        // The direct encoder does not buffer, so its writes interleave with writes to the output
+        encoder = EncoderFactory.get().directBinaryEncoder(output, encoder);
+        output.writeInt(fields.length);
+        for (int i = 0; i < fields.length; i++) {
+            writeValue(output, fields[i], record.get(i));
         }
         return output.slice().getBytes();
     }
@@ -110,146 +109,154 @@ final class HudiRecordSerializer
     public IndexedRecord deserialize(byte[] bytes, int schemaId)
     {
         Schema schema = schemaById.apply(schemaId);
+        TypeNode[] fields = fieldTypesOf(schema);
         SliceInput input = Slices.wrappedBuffer(bytes).getInput();
+        // The direct decoder does not read ahead, so its reads interleave with reads from the input
+        decoder = DecoderFactory.get().directBinaryDecoder(input, decoder);
         int fieldCount = input.readInt();
-        checkState(fieldCount == schema.getFields().size(), "Spilled record has %s fields, but its schema has %s", fieldCount, schema.getFields().size());
+        checkState(fieldCount == fields.length, "Spilled record has %s fields, but its schema has %s", fieldCount, fields.length);
         GenericData.Record record = new GenericData.Record(schema);
         for (int i = 0; i < fieldCount; i++) {
-            record.put(i, readValue(input));
+            record.put(i, readValue(input, fields[i]));
         }
         return record;
     }
 
-    private void writeValue(SliceOutput output, Object value)
+    private TypeNode[] fieldTypesOf(Schema recordSchema)
     {
-        switch (value) {
-            case null -> output.writeByte(NULL);
-            case Boolean bool -> {
-                output.writeByte(BOOLEAN);
-                output.writeBoolean(bool);
+        return fieldTypes.computeIfAbsent(recordSchema, schema -> HoodieSchema.fromAvroSchema(schema).getFields().stream()
+                .map(HoodieSchemaField::schema)
+                .map(TypeNode::new)
+                .toArray(TypeNode[]::new));
+    }
+
+    private void writeValue(SliceOutput output, TypeNode node, Object value)
+    {
+        if (value == null) {
+            output.writeByte(NULL);
+        }
+        else if (isTrinoObject(value)) {
+            output.writeByte(TRINO);
+            writeTrino(output, node, value);
+        }
+        else {
+            output.writeByte(AVRO);
+            try {
+                node.avroWriter().write(value, encoder);
             }
-            case Byte byteValue -> {
-                output.writeByte(BYTE);
-                output.writeByte(byteValue);
+            catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
-            case Short shortValue -> {
-                output.writeByte(SHORT);
-                output.writeShort(shortValue);
+        }
+    }
+
+    private Object readValue(SliceInput input, TypeNode node)
+    {
+        byte representation = input.readByte();
+        return switch (representation) {
+            case NULL -> null;
+            case TRINO -> readTrino(input, node);
+            case AVRO -> {
+                try {
+                    yield node.avroReader().read(null, decoder);
+                }
+                catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
             }
-            case Integer intValue -> {
-                output.writeByte(INTEGER);
-                output.writeInt(intValue);
-            }
-            case Long longValue -> {
-                output.writeByte(LONG);
-                output.writeLong(longValue);
-            }
-            case Float floatValue -> {
-                output.writeByte(FLOAT);
-                output.writeFloat(floatValue);
-            }
-            case Double doubleValue -> {
-                output.writeByte(DOUBLE);
-                output.writeDouble(doubleValue);
-            }
-            case String string -> {
-                output.writeByte(STRING);
-                writeBytes(output, string.getBytes(UTF_8));
-            }
-            case Utf8 utf8 -> {
-                output.writeByte(UTF8);
-                output.writeInt(utf8.getByteLength());
-                output.writeBytes(utf8.getBytes(), 0, utf8.getByteLength());
-            }
-            case ByteBuffer buffer -> {
-                output.writeByte(BYTE_BUFFER);
-                byte[] bytes = new byte[buffer.remaining()];
-                buffer.duplicate().get(bytes);
-                writeBytes(output, bytes);
-            }
-            case GenericContainer container -> {
-                output.writeByte(AVRO_CONTAINER);
-                int containerSchemaId = containerSchemaIds.computeIfAbsent(container.getSchema(), schema -> {
-                    containerSchemas.add(schema);
-                    return containerSchemas.size() - 1;
-                });
-                output.writeInt(containerSchemaId);
-                writeAvro(output, container);
-            }
-            case SqlDecimal decimal -> {
-                output.writeByte(SQL_DECIMAL);
+            default -> throw new IllegalStateException("Unknown merge buffer value representation " + representation);
+        };
+    }
+
+    /**
+     * Whether the value is one only Trino produces. Boxed {@code int}, {@code long}, {@code float}, {@code double} and
+     * {@code boolean} are the same object in both representations and take the Avro one.
+     */
+    private static boolean isTrinoObject(Object value)
+    {
+        return switch (value) {
+            case String _, SqlDecimal _, SqlDate _, SqlTimestamp _, SqlVarbinary _, Byte _, Short _ -> true;
+            // GenericData.Array is a List, and Avro maps are keyed by Utf8
+            case List<?> list -> !(list instanceof GenericContainer);
+            case Map<?, ?> map -> !map.isEmpty() && !(map.keySet().iterator().next() instanceof Utf8);
+            default -> false;
+        };
+    }
+
+    /**
+     * The Trino object of each {@link HoodieSchemaType}.
+     */
+    private void writeTrino(SliceOutput output, TypeNode node, Object value)
+    {
+        switch (node.type) {
+            case STRING, ENUM, UUID -> writeBytes(output, cast(String.class, node, value).getBytes(UTF_8));
+            // tinyint and smallint; HoodieSchema has no narrower integer than INT
+            case INT -> output.writeInt(cast(Number.class, node, value).intValue());
+            case DECIMAL -> {
+                SqlDecimal decimal = cast(SqlDecimal.class, node, value);
                 writeBytes(output, decimal.getUnscaledValue().toByteArray());
                 output.writeInt(decimal.getPrecision());
                 output.writeInt(decimal.getScale());
             }
-            case SqlDate date -> {
-                output.writeByte(SQL_DATE);
-                output.writeInt(date.getDays());
-            }
-            case SqlTimestamp timestamp -> {
-                output.writeByte(SQL_TIMESTAMP);
+            case DATE -> output.writeInt(cast(SqlDate.class, node, value).getDays());
+            case TIMESTAMP -> {
+                SqlTimestamp timestamp = cast(SqlTimestamp.class, node, value);
                 output.writeInt(timestamp.getPrecision());
                 output.writeLong(timestamp.getEpochMicros());
                 output.writeInt(timestamp.getPicosOfMicros());
             }
-            case SqlVarbinary varbinary -> {
-                output.writeByte(SQL_VARBINARY);
-                writeBytes(output, varbinary.getBytes());
-            }
-            case List<?> list -> {
-                output.writeByte(LIST);
+            case BYTES, FIXED -> writeBytes(output, cast(SqlVarbinary.class, node, value).getBytes());
+            case ARRAY -> {
+                List<?> list = cast(List.class, node, value);
                 output.writeInt(list.size());
                 for (Object element : list) {
-                    writeValue(output, element);
+                    writeValue(output, node.element(), element);
                 }
             }
-            case Map<?, ?> map -> {
-                output.writeByte(MAP);
+            case MAP -> {
+                Map<?, ?> map = cast(Map.class, node, value);
                 output.writeInt(map.size());
                 for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    writeValue(output, entry.getKey());
-                    writeValue(output, entry.getValue());
+                    writeBytes(output, cast(String.class, node, entry.getKey()).getBytes(UTF_8));
+                    writeValue(output, node.element(), entry.getValue());
                 }
             }
-            default -> throw new IllegalArgumentException("Cannot spill a merge buffer value of type " + value.getClass().getName());
+            case RECORD -> {
+                List<?> row = cast(List.class, node, value);
+                TypeNode[] fields = node.fields();
+                checkState(row.size() == fields.length, "Row has %s fields, but %s has %s", row.size(), node.schema, fields.length);
+                for (int i = 0; i < fields.length; i++) {
+                    writeValue(output, fields[i], row.get(i));
+                }
+            }
+            case LONG, FLOAT, DOUBLE, BOOLEAN, TIME, UNION, VARIANT, BLOB, VECTOR, NULL -> throw unsupported(node, value);
         }
     }
 
-    private Object readValue(SliceInput input)
+    private Object readTrino(SliceInput input, TypeNode node)
     {
-        byte tag = input.readByte();
-        return switch (tag) {
-            case NULL -> null;
-            case BOOLEAN -> input.readBoolean();
-            case BYTE -> input.readByte();
-            case SHORT -> input.readShort();
-            case INTEGER -> input.readInt();
-            case LONG -> input.readLong();
-            case FLOAT -> input.readFloat();
-            case DOUBLE -> input.readDouble();
-            case STRING -> new String(readBytes(input), UTF_8);
-            case UTF8 -> new Utf8(readBytes(input));
-            case BYTE_BUFFER -> ByteBuffer.wrap(readBytes(input));
-            case AVRO_CONTAINER -> readAvro(input, containerSchemas.get(input.readInt()));
-            case SQL_DECIMAL -> {
+        return switch (node.type) {
+            case STRING, ENUM, UUID -> new String(readBytes(input), UTF_8);
+            case INT -> input.readInt();
+            case DECIMAL -> {
                 BigInteger unscaledValue = new BigInteger(readBytes(input));
                 int precision = input.readInt();
                 int scale = input.readInt();
                 yield new SqlDecimal(unscaledValue, precision, scale);
             }
-            case SQL_DATE -> new SqlDate(input.readInt());
-            case SQL_TIMESTAMP -> {
+            case DATE -> new SqlDate(input.readInt());
+            case TIMESTAMP -> {
                 int precision = input.readInt();
                 long epochMicros = input.readLong();
                 int picosOfMicros = input.readInt();
                 yield SqlTimestamp.newInstance(precision, epochMicros, picosOfMicros);
             }
-            case SQL_VARBINARY -> new SqlVarbinary(readBytes(input));
-            case LIST -> {
+            case BYTES, FIXED -> new SqlVarbinary(readBytes(input));
+            case ARRAY -> {
                 int size = input.readInt();
                 List<Object> list = new ArrayList<>(size);
                 for (int i = 0; i < size; i++) {
-                    list.add(readValue(input));
+                    list.add(readValue(input, node.element()));
                 }
                 yield list;
             }
@@ -257,13 +264,36 @@ final class HudiRecordSerializer
                 int size = input.readInt();
                 Map<Object, Object> map = HashMap.newHashMap(size);
                 for (int i = 0; i < size; i++) {
-                    Object key = readValue(input);
-                    map.put(key, readValue(input));
+                    String key = new String(readBytes(input), UTF_8);
+                    map.put(key, readValue(input, node.element()));
                 }
                 yield map;
             }
-            default -> throw new IllegalStateException("Unknown merge buffer value tag " + tag);
+            case RECORD -> {
+                TypeNode[] fields = node.fields();
+                List<Object> row = new ArrayList<>(fields.length);
+                for (TypeNode field : fields) {
+                    row.add(readValue(input, field));
+                }
+                yield row;
+            }
+            case LONG, FLOAT, DOUBLE, BOOLEAN, TIME, UNION, VARIANT, BLOB, VECTOR, NULL ->
+                    throw new IllegalStateException("No Trino object is spilled for " + node.schema);
         };
+    }
+
+    private static <T> T cast(Class<T> expected, TypeNode node, Object value)
+    {
+        if (!expected.isInstance(value)) {
+            throw unsupported(node, value);
+        }
+        return expected.cast(value);
+    }
+
+    private static IllegalArgumentException unsupported(TypeNode node, Object value)
+    {
+        return new IllegalArgumentException("Cannot spill a merge buffer value of class %s for a field of type %s: %s"
+                .formatted(value.getClass().getName(), node.type, node.schema));
     }
 
     private static void writeBytes(SliceOutput output, byte[] bytes)
@@ -279,25 +309,58 @@ final class HudiRecordSerializer
         return bytes;
     }
 
-    private static void writeAvro(SliceOutput output, GenericContainer container)
+    /**
+     * A field, element or value type with its nullability removed, and what is derived from it on first use.
+     */
+    private static final class TypeNode
     {
-        try {
-            BinaryEncoder encoder = EncoderFactory.get().directBinaryEncoder(output, null);
-            new GenericDatumWriter<>(container.getSchema()).write(container, encoder);
-            encoder.flush();
-        }
-        catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
+        private final HoodieSchema schema;
+        private final HoodieSchemaType type;
+        private GenericDatumWriter<Object> avroWriter;
+        private GenericDatumReader<Object> avroReader;
+        private TypeNode element;
+        private TypeNode[] fields;
 
-    private static Object readAvro(SliceInput input, Schema schema)
-    {
-        try {
-            return new GenericDatumReader<>(schema).read(null, DecoderFactory.get().directBinaryDecoder(input, null));
+        TypeNode(HoodieSchema schema)
+        {
+            this.schema = schema.isNullable() ? schema.getNonNullType() : schema;
+            this.type = this.schema.getType();
         }
-        catch (IOException e) {
-            throw new UncheckedIOException(e);
+
+        GenericDatumWriter<Object> avroWriter()
+        {
+            if (avroWriter == null) {
+                avroWriter = new GenericDatumWriter<>(schema.toAvroSchema());
+            }
+            return avroWriter;
+        }
+
+        GenericDatumReader<Object> avroReader()
+        {
+            if (avroReader == null) {
+                avroReader = new GenericDatumReader<>(schema.toAvroSchema());
+            }
+            return avroReader;
+        }
+
+        // The element type of an ARRAY, or the value type of a MAP
+        TypeNode element()
+        {
+            if (element == null) {
+                element = new TypeNode(type == HoodieSchemaType.MAP ? schema.getValueType() : schema.getElementType());
+            }
+            return element;
+        }
+
+        TypeNode[] fields()
+        {
+            if (fields == null) {
+                fields = schema.getFields().stream()
+                        .map(HoodieSchemaField::schema)
+                        .map(TypeNode::new)
+                        .toArray(TypeNode[]::new);
+            }
+            return fields;
         }
     }
 }
