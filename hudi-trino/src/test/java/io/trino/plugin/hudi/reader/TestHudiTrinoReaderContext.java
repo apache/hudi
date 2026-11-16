@@ -101,6 +101,7 @@ import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_PROPERTY_PREFIX;
 import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Pins the merge buffer size estimator and spill serializer of {@link HudiTrinoReaderContext} through the same
@@ -254,12 +255,32 @@ final class TestHudiTrinoReaderContext
                 for (int i = 0; i < allValues.size(); i++) {
                     Object expectedValue = expected.getRecord().get(i);
                     Object actualValue = actual.getRecord().get(i);
+                    if (expectedValue instanceof Byte || expectedValue instanceof Short) {
+                        // HoodieSchema has no type narrower than INT, so tinyint and smallint come back as its Integer
+                        assertThat(actualValue).as("field %s", i).isEqualTo(((Number) expectedValue).intValue());
+                        continue;
+                    }
                     assertThat(actualValue).as("field %s", i).isEqualTo(expectedValue);
                     if (expectedValue != null && !(expectedValue instanceof List<?>) && !(expectedValue instanceof Map<?, ?>)) {
                         assertThat(actualValue).as("field %s", i).hasSameClassAs(expectedValue);
                     }
                 }
             }
+        }
+    }
+
+    @Test
+    void testSpillRejectsAValueItsFieldTypeDoesNotMap()
+    {
+        HoodieSchema schema = HoodieSchema.fromAvroSchema(SchemaBuilder.record("mismatch").fields().requiredInt("count").endRecord());
+        HudiTrinoReaderContext readerContext = readerContext();
+        GenericData.Record record = new GenericData.Record(schema.toAvroSchema());
+        record.put(0, "not an int");
+        BufferedRecord<IndexedRecord> buffered = BufferedRecords.fromEngineRecord(record, schema, readerContext.getRecordContext(), 1L, "key", false);
+
+        try (ExternalSpillableMap<Serializable, BufferedRecord<IndexedRecord>> map = spillableMap(readerContext, 1, readerContext.getRecordSizeEstimator())) {
+            assertThatThrownBy(() -> map.put(buffered.getRecordKey(), buffered))
+                    .hasStackTraceContaining("Cannot spill a merge buffer value of class java.lang.String for a field of type INT");
         }
     }
 
