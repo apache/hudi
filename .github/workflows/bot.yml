@@ -78,7 +78,8 @@ env:
   FLINK_IT_FILTER1: -Dit.test=ITTestHoodieDataSource
   # An include is required next to the exclusion: a bare exclusion replaces failsafe's IT*
   # include pattern with every test class, which ran hudi-flink's unit tests a second time here.
-  FLINK_IT_FILTER2: -Dit.test=ITTest*,!ITTestHoodieDataSource
+  # The include repeats the integration-tests profile's **/IT*.java, so no IT class is left out.
+  FLINK_IT_FILTER2: -Dit.test=IT*,!ITTestHoodieDataSource
 
 # Three conditions route the jobs. GitHub expressions cannot be named, so the first test job
 # spells them out in full under the YAML anchor `route`, every other test job reuses it through
