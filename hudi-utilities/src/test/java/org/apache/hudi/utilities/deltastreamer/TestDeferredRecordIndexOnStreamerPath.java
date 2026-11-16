@@ -133,8 +133,9 @@ public class TestDeferredRecordIndexOnStreamerPath extends HoodieDeltaStreamerTe
     new HoodieDeltaStreamer(upsertCfg, jsc).sync();
     assertTrue(isRecordIndexBuilt(tableBasePath), "Record index should be built by the second sync");
 
-    // The second sync carries 1000 records, 550 of them keys the first sync already wrote, so the table holds 1450
-    // records and one row per key. The same 1450 comes out with the deferral turned off, so this pins what the two
+    // The second sync carries 1000 records from the test source: 500 inserts, 450 updates and 50 deletes, so the
+    // 1000 the first sync wrote become 1450, one row per key, and the deletes make this cover a key removed through
+    // the fallback index as well. The same 1450 comes out with the deferral turned off, so this pins what the two
     // syncs write rather than anything the deferral does, and a row lost or duplicated across the switch from the
     // fallback index to the record index fails here.
     assertRecordCount(1450, tableBasePath, sqlContext);
