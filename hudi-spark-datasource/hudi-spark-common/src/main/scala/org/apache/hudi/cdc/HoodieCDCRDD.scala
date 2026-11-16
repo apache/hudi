@@ -208,6 +208,11 @@ class HoodieCDCRDD(
     private var logRecordIter: Iterator[(String, HoodieRecord[_])] = Iterator.empty
 
     /**
+     * The log file iterator that backs [[logRecordIter]], closed when the next CDC file is loaded.
+     */
+    private var logFileIterator: LogFileIterator = _
+
+    /**
      * Only one case where it will be used is that extract the change data from cdc log files.
      */
     private var cdcLogRecordIterator: HoodieCDCLogRecordIterator = _
@@ -397,6 +402,10 @@ class HoodieCDCRDD(
       // reset all the iterator first.
       recordIter = Iterator.empty
       logRecordIter = Iterator.empty
+      if (logFileIterator != null) {
+        logFileIterator.close()
+        logFileIterator = null
+      }
       beforeImageRecords.clear()
       afterImageRecords.clear()
       if (cdcLogRecordIterator != null) {
@@ -426,7 +435,7 @@ class HoodieCDCRDD(
             loadBeforeFileSliceIfNeeded(currentCDCFileSplit.getBeforeFileSlice.get)
             val absLogPath = new StoragePath(basePath, currentCDCFileSplit.getCdcFiles.get(0))
             val morSplit = HoodieMergeOnReadFileSplit(None, List(new HoodieLogFile(storage.getPathInfo(absLogPath))))
-            val logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
+            logFileIterator = new LogFileIterator(morSplit, originTableSchema, originTableSchema, tableState, conf)
             logRecordIter = logFileIterator.logRecordsPairIterator
           case AS_IS =>
             assert(currentCDCFileSplit.getCdcFiles != null && !currentCDCFileSplit.getCdcFiles.isEmpty)

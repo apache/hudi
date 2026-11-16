@@ -21,7 +21,8 @@ package org.apache.hudi
 import org.apache.hudi.HoodieBaseRelation.BaseFileReader
 import org.apache.hudi.HoodieConversionUtils.{toJavaOption, toScalaOption}
 import org.apache.hudi.HoodieDataSourceHelper.AvroDeserializerSupport
-import org.apache.hudi.LogFileIterator.{getPartitionPath, scanLog}
+import org.apache.hudi.LogFileIterator.{getMaxMemoryForLogMerge, getPartitionPath, scanLog}
+import org.apache.hudi.client.SparkTaskContextSupplier
 import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, TypedProperties}
 import org.apache.hudi.common.engine.{EngineType, HoodieLocalEngineContext}
 import org.apache.hudi.common.fs.FSUtils.getRelativePartitionPath
@@ -29,11 +30,13 @@ import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{HoodieAvroIndexedRecord, HoodieEmptyRecord, HoodieLogFile, HoodieOperation, HoodieRecord, HoodieSparkRecord}
 import org.apache.hudi.common.table.log.HoodieMergedLogRecordScanner
 import org.apache.hudi.common.util.HoodieRecordUtils
+import org.apache.hudi.common.util.collection.ExternalSpillableMap
 import org.apache.hudi.config.HoodiePayloadConfig
 import org.apache.hudi.hadoop.config.HoodieRealtimeConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.hadoop.utils.HoodieRealtimeRecordReaderUtils.getMaxCompactionMemoryInBytes
 import org.apache.hudi.internal.schema.InternalSchema
+import org.apache.hudi.io.IOUtils
 import org.apache.hudi.metadata.HoodieTableMetadata.getDataTableBasePathFromMetadataTable
 import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadata}
 import org.apache.hudi.storage.{HoodieStorageUtils, StoragePath}
@@ -43,6 +46,7 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericRecord
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapred.JobConf
+import org.apache.spark.TaskContext
 import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjection
 import org.apache.spark.sql.HoodieInternalRowUtils
 import org.apache.spark.sql.catalyst.InternalRow
@@ -53,7 +57,6 @@ import java.io.Closeable
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 /**
  * Provided w/ list of log files, iterates over all of the records stored in
@@ -66,7 +69,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
                       requiredAvroSchema: Schema,
                       tableState: HoodieTableState,
                       config: Configuration)
-  extends CachingIterator[InternalRow] with AvroDeserializerSupport {
+  extends CachingIterator[InternalRow] with AvroDeserializerSupport with Closeable {
 
   def this(logFiles: List[HoodieLogFile],
            partitionPath: StoragePath,
@@ -84,7 +87,7 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
            config: Configuration) {
     this(split.logFiles, getPartitionPath(split), tableSchema, requiredSchema, tableState, config)
   }
-  private val maxCompactionMemoryInBytes: Long = getMaxCompactionMemoryInBytes(new JobConf(config))
+  private val maxCompactionMemoryInBytes: Long = getMaxMemoryForLogMerge(config)
 
   protected val payloadProps: TypedProperties = tableState.preCombineFieldOpt
     .map { preCombineField =>
@@ -111,6 +114,19 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
       maxCompactionMemoryInBytes, config, internalSchema)
   }
 
+  // The log records may be backed by spill files on local disk, which are released on close.
+  // Not every caller closes the iterator, so close it when the task completes as well.
+  Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => close()))
+
+  private var closed = false
+
+  override def close(): Unit = {
+    if (!closed) {
+      closed = true
+      logRecords.close()
+    }
+  }
+
   private val (hasOperationField, operationFieldPos) = {
     val operationField = logFileReaderAvroSchema.getField(HoodieRecord.OPERATION_METADATA_FIELD)
     if (operationField != null) {
@@ -135,18 +151,17 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   }
 
   def logRecordsPairIterator(): Iterator[(String, HoodieRecord[_])] = {
-    logRecords.iterator
+    logRecords.iterator.map(record => (record.getRecordKey, record))
   }
 
   // NOTE: This have to stay lazy to make sure it's initialized only at the point where it's
   //       going to be used, since we modify `logRecords` before that and therefore can't do it any earlier
   private lazy val logRecordsIterator: Iterator[Option[HoodieRecord[_]]] =
     logRecords.iterator.map {
-      case (_, record: HoodieSparkRecord) => Option(record)
-      case (_, _: HoodieEmptyRecord[_]) => Option.empty
-      case (_, record) =>
+      case record: HoodieSparkRecord => Option(record)
+      case _: HoodieEmptyRecord[_] => Option.empty
+      case record =>
         toScalaOption(record.toIndexedRecord(logFileReaderAvroSchema, payloadProps))
-
     }
 
   protected def removeLogRecord(key: String): Option[HoodieRecord[_]] = logRecords.remove(key)
@@ -157,7 +172,14 @@ class LogFileIterator(logFiles: List[HoodieLogFile],
   //       that recursion is unfolded into a loop to avoid stack overflows while
   //       handling records
   @tailrec private def hasNextInternal: Boolean = {
-    logRecordsIterator.hasNext && {
+    if (closed) {
+      // Never touch the iterator of a closed (possibly disk-backed) record map
+      false
+    } else if (!logRecordsIterator.hasNext) {
+      // Release the spill files as soon as the log records are drained
+      close()
+      false
+    } else {
       logRecordsIterator.next() match {
         case Some(r: HoodieAvroIndexedRecord) =>
           val data = r.getData.asInstanceOf[GenericRecord]
@@ -334,7 +356,45 @@ class RecordMergingFileIterator(logFiles: List[HoodieLogFile],
   }
 }
 
+/**
+ * Merged log records of a file slice, keyed by record key.
+ *
+ * Records can be removed by key while the base file is merged, and the remaining ones are then
+ * iterated lazily. A disk-backed [[ExternalSpillableMap]] is iterated in place, so records it
+ * spilled to disk are never all loaded into the heap at once.
+ *
+ * @param records  the merged log records
+ * @param resource the resource backing `records`, released on [[close]]
+ */
+class LogRecords(records: java.util.Map[String, HoodieRecord[_]], resource: Option[Closeable]) extends Closeable {
+
+  def remove(key: String): Option[HoodieRecord[_]] = Option(records.remove(key))
+
+  def iterator: Iterator[HoodieRecord[_]] = records match {
+    // NOTE: ExternalSpillableMap#values copies every record, spilled ones included, into one list
+    case spillableMap: ExternalSpillableMap[_, _] => spillableMap.iterator().asScala.asInstanceOf[Iterator[HoodieRecord[_]]]
+    case _ => records.values().iterator().asScala
+  }
+
+  override def close(): Unit = resource.foreach(_.close())
+}
+
 object LogFileIterator extends SparkAdapterSupport {
+
+  /**
+   * Returns the memory the merged log records of one task may hold before spilling to disk: the
+   * fraction configured by [[HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP]] of the smaller of
+   * the map-task memory set in the Hadoop configuration and the executor memory available to one task.
+   *
+   * The Hadoop configuration rarely sets the map-task memory for Spark jobs, so on its own the cap
+   * falls back to the MapReduce default, independent of the executor heap.
+   */
+  def getMaxMemoryForLogMerge(hadoopConf: Configuration): Long = {
+    val fraction = hadoopConf.get(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION)
+    val mapTaskLimit = getMaxCompactionMemoryInBytes(new JobConf(hadoopConf))
+    val executorTaskLimit = IOUtils.getMaxMemoryAllowedForMerge(new SparkTaskContextSupplier(), fraction)
+    Math.min(mapTaskLimit, executorTaskLimit)
+  }
 
   def scanLog(logFiles: List[HoodieLogFile],
               partitionPath: StoragePath,
@@ -342,7 +402,7 @@ object LogFileIterator extends SparkAdapterSupport {
               tableState: HoodieTableState,
               maxCompactionMemoryInBytes: Long,
               hadoopConf: Configuration,
-              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): mutable.Map[String, HoodieRecord[_]] = {
+              internalSchema: InternalSchema = InternalSchema.getEmptyInternalSchema): LogRecords = {
     val tablePath = tableState.tablePath
     val storage = HoodieStorageUtils.getStorage(tablePath, HadoopFSUtils.getStorageConf(hadoopConf))
 
@@ -374,7 +434,9 @@ object LogFileIterator extends SparkAdapterSupport {
         logRecordReader.getRecords
       }
 
-      mutable.HashMap(recordList.asScala.map(r => (r.getRecordKey, r)).toSeq: _*)
+      val records = new java.util.HashMap[String, HoodieRecord[_]](recordList.size())
+      recordList.asScala.foreach(r => records.put(r.getRecordKey, r))
+      new LogRecords(records, None)
     } else {
       val logRecordScannerBuilder = HoodieMergedLogRecordScanner.newBuilder()
         .withStorage(storage)
@@ -409,11 +471,8 @@ object LogFileIterator extends SparkAdapterSupport {
         HoodieRecordUtils.createRecordMerger(tableState.tablePath, EngineType.SPARK, tableState.recordMergerImpls.asJava, tableState.recordMergerStrategy))
 
       val scanner = logRecordScannerBuilder.build()
-
-      closing(scanner) {
-        // NOTE: We have to copy record-map (by default immutable copy is exposed)
-        mutable.HashMap(scanner.getRecords.asScala.toSeq: _*)
-      }
+      // NOTE: The scanner stays open while its records are iterated, it is closed with the returned records
+      new LogRecords(scanner.getRecords.asInstanceOf[java.util.Map[String, HoodieRecord[_]]], Some(scanner))
     }
   }
 
