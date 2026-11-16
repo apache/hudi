@@ -346,10 +346,11 @@ jobs:
         !hudi-hadoop-common,!hudi-hadoop-mr,!hudi-client/hudi-java-client,!hudi-client/hudi-spark-client,!hudi-cli,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-k8s,!hudi-examples/hudi-examples-spark,!hudi-spark-datasource,!hudi-spark-datasource/hudi-spark,!hudi-spark-datasource/hudi-spark3.5.x,!hudi-spark-datasource/hudi-spark3-common,!hudi-spark-datasource/hudi-spark-common,!hudi-utilities
       FT_MODULES: >-
         !hudi-client/hudi-spark-client,!hudi-cli,!hudi-examples,!hudi-examples/hudi-examples-common,!hudi-examples/hudi-examples-flink,!hudi-examples/hudi-examples-java,!hudi-examples/hudi-examples-k8s,!hudi-examples/hudi-examples-spark,!hudi-spark-datasource/hudi-spark,!hudi-utilities
-      # The fifteen bundles of the default reactor. None has tests, validate-bundles shades and
-      # exercises every one, and nothing this job tests depends on them, so the build and the two
-      # test steps below all leave them out (a bundle left in a test reactor would try to resolve
-      # the modules the trimmed build no longer installs).
+      # Every bundle of the default reactor. None has tests, validate-bundles shades and exercises
+      # every one, and nothing this job tests depends on them, so the build and the two test steps
+      # below all leave them out (a bundle left in a test reactor would try to resolve the modules
+      # the trimmed build no longer installs). A new packaging/ module in the root pom's <modules>
+      # must be added here; .github/ci/scripts/test-fork-ci-status.cjs checks the two match.
       BUNDLE_MODULES: >-
         !packaging/hudi-hadoop-mr-bundle,!packaging/hudi-datahub-sync-bundle,!packaging/hudi-hive-sync-bundle,!packaging/hudi-aws-bundle,!packaging/hudi-gcp-bundle,!packaging/hudi-azure-bundle,!packaging/hudi-spark-bundle,!packaging/hudi-spark-native-bundle,!packaging/hudi-presto-bundle,!packaging/hudi-utilities-slim-bundle,!packaging/hudi-timeline-server-bundle,!packaging/hudi-flink-bundle,!packaging/hudi-kafka-connect-bundle,!packaging/hudi-cli-bundle,!packaging/hudi-utilities-bundle
       # Also skipped by the build: the metaserver bundle, which only exists under
