@@ -271,7 +271,8 @@ public class HoodieStorageConfig extends HoodieConfig {
       .markAdvanced()
       .sinceVersion("0.15.0")
       .withDocumentation("Control whether to write bloom filter or not. Default true. "
-          + "We can set to false in non bloom index cases for CPU resource saving.");
+          + "We can set to false in non bloom index cases for CPU resource saving. "
+          + "Native Parquet log files do not write record-key bloom filters.");
 
   public static final ConfigProperty<Boolean> PARQUET_VARIANT_WRITE_SHREDDING_ENABLED = ConfigProperty
       .key("hoodie.parquet.variant.write.shredding.enabled")

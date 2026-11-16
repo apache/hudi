@@ -102,7 +102,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
 
     Configuration conf = (Configuration) storageConfiguration.unwrapAs(Configuration.class);
-    BloomFilter filter = enableBloomFilter(metaFieldsMode, hoodieConfig) ? createBloomFilter(hoodieConfig) : null;
+    BloomFilter filter = enableParquetBloomFilter(metaFieldsMode, hoodieConfig, storagePath) ? createBloomFilter(hoodieConfig) : null;
     HoodieRowDataParquetWriteSupport writeSupport = (HoodieRowDataParquetWriteSupport) ReflectionUtils.loadClass(
         hoodieConfig.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
         new Class<?>[] {Configuration.class, HoodieSchema.class, BloomFilter.class},

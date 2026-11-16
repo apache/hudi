@@ -137,6 +137,13 @@ public class HoodieFileWriterFactory {
   }
 
   /**
+   * Disable Hudi record-key bloom filters for native Parquet logs: bloom indexes only probe base files.
+   */
+  protected static boolean enableParquetBloomFilter(MetaFieldsMode metaFieldsMode, HoodieConfig config, StoragePath path) {
+    return !FSUtils.isNativeLogFile(path.getName()) && enableBloomFilter(metaFieldsMode, config);
+  }
+
+  /**
    * Check if need to enable bloom filter.
    */
   public static boolean enableBloomFilter(MetaFieldsMode metaFieldsMode, HoodieConfig config) {

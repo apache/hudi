@@ -113,7 +113,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     }
 
     HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storageConfiguration, schema,
-        hoodieConfig, enableBloomFilter(metaFieldsMode, hoodieConfig));
+        hoodieConfig, enableParquetBloomFilter(metaFieldsMode, hoodieConfig, path));
     HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
         CompressionCodecName.fromConf(compressionCodecName),
         hoodieConfig.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),

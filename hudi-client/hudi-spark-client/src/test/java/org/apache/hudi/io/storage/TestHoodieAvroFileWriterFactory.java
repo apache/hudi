@@ -19,9 +19,13 @@
 package org.apache.hudi.io.storage;
 
 import org.apache.hudi.client.SparkTaskContextSupplier;
+import org.apache.hudi.common.avro.HoodieBloomFilterWriteSupport;
 import org.apache.hudi.common.config.HoodieStorageConfig;
+import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.MetaFieldsMode;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileWriter;
 import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
@@ -34,11 +38,18 @@ import org.apache.hudi.table.HoodieSparkTable;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.Map;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.HOODIE_SCHEMA;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -86,6 +97,31 @@ public class TestHoodieAvroFileWriterFactory extends HoodieClientTestBase {
           table.getStorage(), cfg.getStorageConfig(), HOODIE_SCHEMA, supplier, HoodieRecordType.AVRO);
     }, "should fail since log storage writer is not supported yet.");
     assertTrue(thrown.getMessage().contains("format not supported yet."));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"SIMPLE, true", "GLOBAL_BLOOM, false"})
+  void testNativeLogBloomPolicy(String indexType, boolean baseBloomEnabled) throws Exception {
+    HoodieSchema schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"_hoodie_record_key\",\"type\":\"string\"}]}");
+    HoodieWriteConfig config = getConfigBuilder().withSchema(schema.toString())
+        .withStorageConfig(HoodieStorageConfig.newBuilder().parquetBloomFilterEnable(baseBloomEnabled).build()).build();
+    config.setValue("hoodie.index.type", indexType);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+    record.put("_hoodie_record_key", "key-1");
+    for (String fileName : Arrays.asList("file-1_1-0-1_001.parquet",
+        "file-1_1-0-1_002_1.log.parquet", "file-1_1-0-1_002_1.deletes.parquet")) {
+      StoragePath path = new StoragePath(basePath, fileName);
+      try (HoodieFileWriter writer = HoodieFileWriterFactory.getFileWriter(
+          "002", path, storage, config, schema, new LocalTaskContextSupplier(), HoodieRecordType.AVRO)) {
+        writer.writeRow("key-1", record);
+      }
+      Map<String, String> footer = ParquetUtils.readMetadata(storage, path).getFileMetaData().getKeyValueMetaData();
+      boolean expectedBloom = fileName.equals("file-1_1-0-1_001.parquet");
+      assertEquals(expectedBloom, footer.containsKey(HoodieBloomFilterWriteSupport.HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY), fileName);
+      assertEquals(expectedBloom, footer.containsKey(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER), fileName);
+      assertEquals(expectedBloom, footer.containsKey(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER), fileName);
+    }
   }
 
   @Test
