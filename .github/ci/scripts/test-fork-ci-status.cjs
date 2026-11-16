@@ -452,6 +452,21 @@ test('the matrix-expanded test jobs stay within the ASF cap of 20 jobs at once',
   assert.equal(Number(stated?.[1]), total);
 });
 
+// test-common-and-other-modules builds and tests the default reactor minus its bundles. A bundle
+// missing from BUNDLE_MODULES stays in the reactor and fails to resolve the modules the trimmed
+// build no longer installs.
+test('BUNDLE_MODULES lists every bundle of the default reactor', () => {
+  const pom = readFileSync(path.join(__dirname, '../../../pom.xml'), 'utf8');
+  // The first <modules> block is the default reactor; profiles declare theirs later in the file.
+  const modules = [.../<modules>([\s\S]*?)<\/modules>/.exec(pom)[1].matchAll(/<module>([^<]+)<\/module>/g)]
+    .map((match) => match[1]);
+  const bundles = modules.filter((module) => module.startsWith('packaging/'));
+  assert.ok(bundles.length > 0);
+  const listed = ci.workflow.jobs['test-common-and-other-modules'].env.BUNDLE_MODULES.split(',')
+    .map((module) => module.replace(/^!/, ''));
+  assert.deepEqual([...listed].sort(), [...bundles].sort());
+});
+
 // [case, context, whether the test jobs run, whether the aggregate jobs run, the `changes` job]
 for (const [name, github, tests, aggregate, needs] of [
   ['fork PR to master', forkPr, false, true],
