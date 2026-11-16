@@ -89,7 +89,7 @@ class TestDeferredRecordIndexInit extends RecordLevelIndexTestBase with SparkDat
     assertFalse(isRecordIndexAvailable, "Record index should not be built by the first commit")
 
     // What the index should be sized from once it is built.
-    val rowsPerPartition = spark.read.format("hudi").load(basePath).groupBy("partition_path").count().collect()
+    val rowsPerPartition = spark.read.format("hudi").load(basePath).groupBy("_hoodie_partition_path").count().collect()
       .map(row => row.getString(0) -> row.getLong(1)).toMap
     val rowsBeforeBuild = rowsPerPartition.values.sum
 
@@ -135,7 +135,8 @@ class TestDeferredRecordIndexInit extends RecordLevelIndexTestBase with SparkDat
         .option(DataSourceWriteOptions.OPERATION.key, operation).mode(mode).save(basePath)
 
     val firstBatch = dataGen.generateInserts("001", 2000)
-    write(firstBatch.asInstanceOf[util.List[HoodieRecord[_]]], BULK_INSERT_OPERATION_OPT_VAL, SaveMode.Overwrite)
+    write(firstBatch.asInstanceOf[util.List[HoodieRecord[_]]], testCase.firstOperation, SaveMode.Overwrite)
+    assertTableVersion(testCase.tableVersion)
     assertFalse(isRecordIndexAvailable, "Record index should not be built by the first commit")
 
     // Commit 2 builds the record index and then replaces every partition the first commit wrote.
@@ -193,6 +194,7 @@ class TestDeferredRecordIndexInit extends RecordLevelIndexTestBase with SparkDat
          |  hoodie.metadata.enable = 'true',
          |  ${HoodieWriteConfig.WRITE_TABLE_VERSION.key} = '${testCase.tableVersion.versionCode()}',
          |  ${HoodieWriteConfig.AUTO_UPGRADE_VERSION.key} = 'false',
+         |  ${HoodieMetadataConfig.STREAMING_WRITE_ENABLED.key} = '${testCase.streamingWrites}',
          |  $indexEnableProp = 'true',
          |  hoodie.index.type = '$indexType',
          |  ${HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key} = 'true',
@@ -206,6 +208,9 @@ class TestDeferredRecordIndexInit extends RecordLevelIndexTestBase with SparkDat
     val sqlMetaClient = HoodieTableMetaClient.builder().setBasePath(tablePath).setConf(storageConf).build()
     val recordIndexBuilt = () => HoodieTableMetaClient.reload(sqlMetaClient).getTableConfig.getMetadataPartitions
       .contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+    val assertSqlTableVersion = () => assertEquals(testCase.tableVersion,
+      HoodieTableMetaClient.reload(sqlMetaClient).getTableConfig.getTableVersion,
+      "Table was written at an unexpected version")
     val rowsOf = (from: Int, to: Int, ts: Long, name: String) =>
       s"select cast(id as string) as id, ${ts}L as ts, '$name' as name, concat('p', cast(id % 3 as string)) as part from range($from, $to)"
 
@@ -215,6 +220,7 @@ class TestDeferredRecordIndexInit extends RecordLevelIndexTestBase with SparkDat
     } finally {
       spark.conf.unset("hoodie.spark.sql.insert.into.operation")
     }
+    assertSqlTableVersion()
     assertFalse(recordIndexBuilt(), "Record index should not be built by the first statement")
 
     // The index is sized from the rows the first statement wrote, so capture them before the merge adds more.

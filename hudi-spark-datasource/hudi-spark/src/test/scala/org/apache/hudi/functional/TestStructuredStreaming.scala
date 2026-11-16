@@ -43,7 +43,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, StreamingQueryException, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.{BeforeEach, Test}
+import org.junit.jupiter.api.{BeforeEach, Tag, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
@@ -233,6 +233,7 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
    * Deferred record index initialization through the streaming sink: the first micro-batch leaves the index unbuilt
    * and the second one builds it, with no duplicates across the switch from the fallback index.
    */
+  @Tag("functional")
   @ParameterizedTest
   @ValueSource(booleans = Array(false, true))
   def testRecordIndexDeferredUntilSecondMicroBatch(partitioned: Boolean): Unit = {

@@ -31,8 +31,6 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -122,10 +120,12 @@ public class TestDeferredRecordIndexOnStreamerPath extends HoodieDeltaStreamerTe
     assertFalse(isRecordIndexBuilt(tableBasePath), "Record index should not be built by the first sync");
 
     // The index is sized from the data the first sync left behind, so capture it before the second sync adds to it.
-    Dataset<Row> tableAfterFirstSync = sqlContext.read().format("hudi").load(tableBasePath);
-    Map<String, Long> rowsPerPartition = tableAfterFirstSync.groupBy("_hoodie_partition_path").count()
+    assertRecordCount(1000, tableBasePath, sqlContext);
+    sqlContext.clearCache();
+    Map<String, Long> rowsPerPartition = sqlContext.read().format("hudi").load(tableBasePath)
+        .groupBy("_hoodie_partition_path").count()
         .collectAsList().stream().collect(Collectors.toMap(row -> row.getString(0), row -> row.getLong(1)));
-    long rowsBeforeBuild = tableAfterFirstSync.count();
+    long rowsBeforeBuild = rowsPerPartition.values().stream().mapToLong(Long::longValue).sum();
 
     HoodieDeltaStreamer.Config upsertCfg =
         TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
@@ -133,9 +133,12 @@ public class TestDeferredRecordIndexOnStreamerPath extends HoodieDeltaStreamerTe
     new HoodieDeltaStreamer(upsertCfg, jsc).sync();
     assertTrue(isRecordIndexBuilt(tableBasePath), "Record index should be built by the second sync");
 
-    Dataset<Row> table = sqlContext.read().format("hudi").load(tableBasePath);
-    assertEquals(table.count(), table.select("_hoodie_record_key").distinct().count(),
-        "Tagging through the fallback index and then the record index must not duplicate keys");
+    // The second sync carries 1000 records, 550 of them keys the first sync already wrote, so the table holds 1450
+    // records and one row per key. The same 1450 comes out with the deferral turned off, so this pins what the two
+    // syncs write rather than anything the deferral does, and a row lost or duplicated across the switch from the
+    // fallback index to the record index fails here.
+    assertRecordCount(1450, tableBasePath, sqlContext);
+    assertDistinctRecordCount(1450, tableBasePath, sqlContext);
 
     List<String> fileGroupIds = recordIndexFileGroupIds(tableBasePath);
     if (partitioned) {
