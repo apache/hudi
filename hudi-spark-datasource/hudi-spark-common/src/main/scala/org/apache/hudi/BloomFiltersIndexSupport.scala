@@ -29,6 +29,8 @@ import org.apache.hudi.metadata.HoodieTableMetadataUtil
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions.Expression
 
+import scala.collection.JavaConverters._
+
 class BloomFiltersIndexSupport(spark: SparkSession,
                                metadataConfig: HoodieMetadataConfig,
                                metaClient: HoodieTableMetaClient) extends SparkBaseIndexSupport(spark, metadataConfig, metaClient) {
@@ -44,7 +46,12 @@ class BloomFiltersIndexSupport(spark: SparkSession,
     lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
     if (recordKeys.nonEmpty) {
       val prunedPartitionAndFileNames = getPrunedPartitionAndFileNames(prunedPartitionsAndFileSlices)
-      Option.apply(getCandidateFilesForSecondaryKeys(prunedPartitionAndFileNames, recordKeys))
+      // Metadata bloom filters only cover base files. Adding log filenames makes HoodieFileIndex
+      // retain each entire slice containing logs, including its base file if present.
+      // For read-optimized queries, the input slices contain no logs, so base bloom pruning still applies.
+      val logFileNames = prunedPartitionsAndFileSlices.flatMap(_._2)
+        .flatMap(_.getLogFiles.iterator().asScala.map(_.getFileName)).toSet
+      Option.apply(getCandidateFilesForSecondaryKeys(prunedPartitionAndFileNames, recordKeys) ++ logFileNames)
     } else {
       Option.empty
     }
@@ -56,6 +63,8 @@ class BloomFiltersIndexSupport(spark: SparkSession,
         case (Some(partitionPath), fileSlices) => fileSlices.map(fileSlice => (partitionPath.getPath, fileSlice))
         case (None, fileSlices) => fileSlices.map(fileSlice => ("", fileSlice))
       }
+      // Slices with logs are retained as a whole, so their base blooms cannot help prune them.
+      .filterNot { case (_, fileSlice) => fileSlice.hasLogFiles }
       .flatMap { case (partitionPath, fileSlice) =>
         val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
         baseFileOption.map(baseFile => (partitionPath, baseFile.getFileName))
