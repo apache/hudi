@@ -21,10 +21,17 @@ package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 
 import java.util.Iterator;
 import java.util.Map;
 
+/**
+ * Iterates the merged log records of a file slice that are left after the base file is merged.
+ *
+ * <p>A disk-backed {@link ExternalSpillableMap} is iterated in place, so the records it spilled to disk
+ * are read one at a time instead of all being loaded into the heap.
+ */
 public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
   HoodieMergedLogRecordScanner scanner;
   Map<String, HoodieRecord> records;
@@ -41,7 +48,10 @@ public class LogFileIterator<T> extends CachingIterator<HoodieRecord<T>> {
 
   private boolean hasNextInternal() {
     if (iterator == null) {
-      iterator = records.values().iterator();
+      // NOTE: ExternalSpillableMap#values copies every record, spilled ones included, into one list
+      iterator = records instanceof ExternalSpillableMap
+          ? ((ExternalSpillableMap<?, HoodieRecord>) records).iterator()
+          : records.values().iterator();
     }
     if (iterator.hasNext()) {
       nextRecord = iterator.next();
