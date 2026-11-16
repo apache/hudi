@@ -24,6 +24,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * Encapsulates all the needed information about a clustering file slice. This is needed because spark serialization
@@ -38,9 +39,24 @@ public class ClusteringOperation implements Serializable {
   private String bootstrapFilePath;
   private int version;
 
+  /**
+   * Creates a clustering operation from a slice of a clustering plan.
+   *
+   * <p>The delta file paths are ordered oldest first, which is the order in which the merged log
+   * record scanner must apply them. Plans scheduled before this ordering was enforced at planning
+   * time list the log files newest first, so the order is normalized here for every reader.
+   */
   public static ClusteringOperation create(HoodieSliceInfo sliceInfo) {
-    return new ClusteringOperation(sliceInfo.getDataFilePath(), new ArrayList<>(sliceInfo.getDeltaFilePaths()), sliceInfo.getFileId(),
+    return new ClusteringOperation(sliceInfo.getDataFilePath(), sortOldestFirst(sliceInfo.getDeltaFilePaths()), sliceInfo.getFileId(),
         sliceInfo.getPartitionPath(), sliceInfo.getBootstrapFilePath(), sliceInfo.getVersion());
+  }
+
+  private static List<String> sortOldestFirst(List<String> deltaFilePaths) {
+    return deltaFilePaths.stream()
+        .map(HoodieLogFile::new)
+        .sorted(HoodieLogFile.getLogFileComparator())
+        .map(logFile -> logFile.getPath().toString())
+        .collect(Collectors.toCollection(ArrayList::new));
   }
 
   // Only for serialization/de-serialization

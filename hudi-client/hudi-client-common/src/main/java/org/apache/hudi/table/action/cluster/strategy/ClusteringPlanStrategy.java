@@ -25,6 +25,7 @@ import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieFileGroupId;
+import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -149,13 +150,17 @@ public abstract class ClusteringPlanStrategy<T,I,K,O> implements Serializable {
 
   /**
    * Transform {@link FileSlice} to {@link HoodieSliceInfo}.
+   *
+   * <p>A {@link FileSlice} keeps its log files newest first, so they are re-sorted oldest first,
+   * the order in which they must be merged.
    */
   protected static List<HoodieSliceInfo> getFileSliceInfo(List<FileSlice> slices) {
     return slices.stream().map(slice -> new HoodieSliceInfo().newBuilder()
         .setPartitionPath(slice.getPartitionPath())
         .setFileId(slice.getFileId())
         .setDataFilePath(slice.getBaseFile().map(BaseFile::getPath).orElse(StringUtils.EMPTY_STRING))
-        .setDeltaFilePaths(slice.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toList()))
+        .setDeltaFilePaths(slice.getLogFiles().sorted(HoodieLogFile.getLogFileComparator())
+            .map(f -> f.getPath().toString()).collect(Collectors.toList()))
         .setBootstrapFilePath(slice.getBaseFile().map(bf -> bf.getBootstrapBaseFile().map(bbf -> bbf.getPath()).orElse(StringUtils.EMPTY_STRING)).orElse(StringUtils.EMPTY_STRING))
         .build()).collect(Collectors.toList());
   }

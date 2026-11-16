@@ -23,6 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -46,9 +47,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA;
@@ -229,6 +233,81 @@ class TestHoodieSparkMergeOnReadTableClustering extends SparkClientFunctionalTes
 
       // do the clustering and validate
       doClusteringAndValidate(client, clusteringCommitTime, metaClient, cfg, dataGen, clusteringAsRow);
+    }
+  }
+
+  /**
+   * Keys inserted into log files and deleted by a later delta commit must stay deleted after
+   * clustering. The clustering plan lists a file slice's log files, and the merged log record
+   * scanner applies them in the order given, so a newest-first order would apply the delete
+   * before the insert and write the deleted keys back.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void testClusteringKeepsKeysDeletedInLogFilesDeleted(boolean clusteringAsRow) throws Exception {
+    HoodieWriteConfig cfg = HoodieWriteConfig.newBuilder()
+        .forTable("test-trip-table")
+        .withPath(basePath())
+        .withSchema(TRIP_EXAMPLE_SCHEMA)
+        .withParallelism(2, 2)
+        .withDeleteParallelism(2)
+        .withAutoCommit(true)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .compactionSmallFileSize(10L)
+            .withInlineCompaction(false).withMaxNumDeltaCommitsBeforeCompaction(1).build())
+        .withStorageConfig(HoodieStorageConfig.newBuilder()
+            .parquetMaxFileSize(1024 * 1024 * 1024).build())
+        .withEmbeddedTimelineServerEnabled(true)
+        .withFileSystemViewConfig(new FileSystemViewStorageConfig.Builder()
+            .withEnableBackupForRemoteFileSystemView(false).build())
+        // INMEMORY index can index log files, so inserts go straight to the log files
+        .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.INMEMORY).build())
+        .withClusteringConfig(HoodieClusteringConfig.newBuilder()
+            .withClusteringMaxNumGroups(10)
+            .withClusteringTargetPartitions(0)
+            .withInlineClustering(false)
+            .build())
+        .withRollbackUsingMarkers(false)
+        .build();
+    HoodieTableMetaClient metaClient = getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, cfg.getProps());
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+
+    try (SparkRDDWriteClient client = getHoodieWriteClient(cfg)) {
+      String insertTime = "001";
+      client.startCommitWithTime(insertTime);
+      List<HoodieRecord> records = dataGen.generateInserts(insertTime, 100);
+      Stream<HoodieBaseFile> dataFiles = insertRecordsToMORTable(metaClient, records, client, cfg, insertTime);
+      assertTrue(!dataFiles.findAny().isPresent(), "should not have any base files");
+
+      List<HoodieKey> keysToDelete = records.subList(0, 10).stream().map(HoodieRecord::getKey).collect(Collectors.toList());
+      String deleteTime = "002";
+      client.startCommitWithTime(deleteTime);
+      client.delete(jsc().parallelize(keysToDelete, 1), deleteTime);
+
+      // the inserts and the delete must land in separate log files of the same file slice
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTable table = HoodieSparkTable.create(cfg, context(), metaClient);
+      table.getHoodieView().sync();
+      assertTrue(Arrays.stream(dataGen.getPartitionPaths())
+          .flatMap(p -> table.getSliceView().getLatestFileSlices(p))
+          .anyMatch(slice -> !slice.getBaseFile().isPresent() && slice.getLogFiles().count() > 1),
+          "expected a log-only file slice with more than one log file");
+
+      String clusteringCommitTime = client.scheduleClustering(Option.empty()).get().toString();
+      client.getConfig().setValue(DataSourceWriteOptions.ENABLE_ROW_WRITER(), Boolean.toString(clusteringAsRow));
+      client.cluster(clusteringCommitTime, true);
+
+      Set<String> expectedKeys = records.subList(10, records.size()).stream().map(HoodieRecord::getRecordKey).collect(Collectors.toSet());
+      // the write client does not record partition fields in the table config, so glob the 3-level partitions
+      Set<String> actualKeys = sqlContext().read().format("hudi").load(basePath() + "/*/*/*/*")
+          .select(HoodieRecord.RECORD_KEY_METADATA_FIELD).collectAsList().stream()
+          .map(row -> row.getString(0)).collect(Collectors.toSet());
+      assertEquals(expectedKeys, actualKeys);
+
+      metaClient = HoodieTableMetaClient.reload(metaClient);
+      HoodieTimeline timeline = metaClient.getCommitTimeline().filterCompletedInstants();
+      assertEquals(clusteringCommitTime, timeline.lastInstant().get().getTimestamp());
+      assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, timeline.lastInstant().get().getAction());
     }
   }
 
