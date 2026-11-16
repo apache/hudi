@@ -23,7 +23,7 @@ import org.apache.hudi.DataSourceWriteOptions._
 import org.apache.hudi.HoodieConversionUtils.toJavaOption
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.common.config.TimestampKeyGeneratorConfig.{TIMESTAMP_INPUT_DATE_FORMAT, TIMESTAMP_OUTPUT_DATE_FORMAT, TIMESTAMP_TIMEZONE_FORMAT, TIMESTAMP_TYPE_FIELD}
-import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig}
+import org.apache.hudi.common.config.{HoodieCommonConfig, HoodieMetadataConfig, HoodieStorageConfig}
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType
 import org.apache.hudi.common.model.{DefaultHoodieRecordPayload, HoodieRecord, HoodieRecordPayload, HoodieTableType, OverwriteWithLatestAvroPayload}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
@@ -350,6 +350,73 @@ class TestMORDataSource extends HoodieSparkClientTestBase with SparkDatasetMixin
       .load(basePath + "/*/*/*/*")
     assertEquals(100, hudiSnapshotDF1.count()) // still 100, since we only updated
     spark.sparkContext.hadoopConfiguration.set(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION)
+  }
+
+  /**
+   * A snapshot read must return the merged data when every merged log record spills to disk, for
+   * log-only file slices (INMEMORY index) as well as base file plus log file slices (BLOOM index).
+   * The spilled records are iterated in place instead of being copied onto the heap.
+   */
+  @ParameterizedTest
+  @CsvSource(Array("BITCASK,INMEMORY", "BITCASK,BLOOM", "ROCKS_DB,INMEMORY", "ROCKS_DB,BLOOM"))
+  def testSnapshotReadWithSpilledLogRecords(diskMapType: String, indexType: String): Unit = {
+    // AVRO records only: with the SPARK record merger, merging a delete block NPEs on its null ordering value
+    val (writeOpts, readOpts) = getWriterReaderOpts(HoodieRecordType.AVRO,
+      commonOpts ++ Map(HoodieIndexConfig.INDEX_TYPE.key -> indexType, "hoodie.compact.inline" -> "false"))
+
+    val inserts = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(dataGen.generateInserts("001", 100)).asScala, 2))
+    inserts.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .option(DataSourceWriteOptions.TABLE_TYPE.key, DataSourceWriteOptions.MOR_TABLE_TYPE_OPT_VAL)
+      .mode(SaveMode.Overwrite)
+      .save(basePath)
+
+    val updates = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(dataGen.generateUniqueUpdates("002", 50)).asScala, 2))
+    updates.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.UPSERT_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    val deletes = inserts.orderBy("_row_key").limit(10)
+    deletes.write.format("org.apache.hudi")
+      .options(writeOpts)
+      .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.DELETE_OPERATION_OPT_VAL)
+      .mode(SaveMode.Append)
+      .save(basePath)
+
+    // BLOOM merges base files with log files, INMEMORY writes inserts to log files and reads log-only slices
+    assertEquals(indexType == "BLOOM", !storage.globEntries(new StoragePath(basePath + "/*/*/*/*.parquet")).isEmpty,
+      "base files must exist only with the BLOOM index")
+
+    val columns = Seq("_row_key", "rider", "driver")
+    val deletedKeys = deletes.select("_row_key").collect().map(_.getString(0)).toSet
+    val updatedRows = updates.select(columns.map(col): _*).collect().map(r => r.getString(0) -> r).toMap
+    val expected = inserts.select(columns.map(col): _*).collect()
+      .filterNot(r => deletedKeys.contains(r.getString(0)))
+      .map(r => updatedRows.getOrElse(r.getString(0), r))
+      .map(r => (r.getString(0), r.getString(1), r.getString(2)))
+      .toSet
+
+    val hadoopConf = spark.sparkContext.hadoopConfiguration
+    try {
+      // a fraction this small leaves no room in memory, so every merged log record spills to disk
+      hadoopConf.set(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP, "0.00001")
+      hadoopConf.set(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key, diskMapType)
+      val actual = spark.read.format("org.apache.hudi")
+        .options(readOpts)
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL)
+        .load(basePath)
+        .select(columns.map(col): _*)
+        .collect()
+        .map(r => (r.getString(0), r.getString(1), r.getString(2)))
+      assertEquals(expected.size, actual.length, "no duplicates and no resurrected deletes")
+      assertEquals(expected, actual.toSet)
+    } finally {
+      hadoopConf.set(HoodieRealtimeConfig.COMPACTION_MEMORY_FRACTION_PROP, HoodieRealtimeConfig.DEFAULT_COMPACTION_MEMORY_FRACTION)
+      hadoopConf.unset(HoodieCommonConfig.SPILLABLE_DISK_MAP_TYPE.key)
+    }
   }
 
   @ParameterizedTest
