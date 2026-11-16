@@ -65,11 +65,13 @@ async function execute({
   event = 'schedule', checks = [], runs = [run()], workflowState = 'active',
   recent = [pr], slice = [pr], candidates = [pr], repo = 'hudi',
   owner = 'apache', runError, count = 1, notification = {}, checkErrors = {},
+  files = [{ filename: 'hudi-common/src/main/java/A.java' }],
 } = {}) {
   const writes = [], calls = [], failures = [];
   let sweepPage;
   const github = { rest: { checks: {}, actions: {}, pulls: {} } };
   github.rest.checks.listForRef = async () => {};
+  github.rest.pulls.listFiles = async () => {};
   github.rest.pulls.list = async (params) => {
     calls.push(['pulls', params]);
     if (params.per_page === 1) return {
@@ -101,6 +103,11 @@ async function execute({
       calls.push(['checks', params]);
       if (checkErrors[params.ref]) throw new Error(checkErrors[params.ref]);
       return checks;
+    }
+    if (fn === github.rest.pulls.listFiles) {
+      calls.push(['files', params]);
+      assert.deepEqual(params, { owner, repo, pull_number: 10, per_page: 100 });
+      return files;
     }
     assert.equal(fn, github.rest.pulls.list);
     assert.equal(params.head, 'contributor:feature');
@@ -164,23 +171,52 @@ test('only runs for the exact branch head on push/manual events are mirrored', a
   ] });
   assert.equal(result.writes[0].details_url, run(5).html_url);
 });
+// A fork with Actions turned off in its settings still lists bot.yml as active, so an active
+// workflow without a run asks for action as loudly as a disabled one.
 for (const [state, expected, title] of [
-  ['active', 'neutral', 'No fork CI run for this commit'],
+  ['active', 'action_required', 'No fork CI run for this commit'],
   ['disabled_manually', 'action_required', 'Enable CI on your fork'],
   ['disabled_fork', 'action_required', 'Enable CI on your fork'],
   [null, 'action_required', 'Enable CI on your fork'],
 ]) {
   test('missing run reports workflow state ' + state, async () => {
-    const { writes } = await execute({ runs: [], workflowState: state });
+    const { writes, calls } = await execute({ runs: [], workflowState: state });
     assert.equal(writes[0].conclusion, expected);
     assert.equal(writes[0].output.title, title);
     assert.equal(writes[0].details_url, 'https://github.com/contributor/hudi/actions');
     assert.match(writes[0].output.summary, /^No Java CI run was found for /);
-    assert.match(writes[0].output.summary, /Enable workflows/);
+    assert.match(writes[0].output.summary, /Enable Actions on your fork/);
     assert.match(writes[0].output.summary, /only docs or images is skipped by the path filter/);
     assert.deepEqual(JSON.parse(writes[0].output.text).runs.map((item) => item.run_id), [null]);
+    // Only an active workflow needs the PR's files to tell a docs-only change apart.
+    assert.equal(calls.some(([kind]) => kind === 'files'), state === 'active');
   });
 }
+// [case, PR files, whether the missing run is expected]
+for (const [name, files, docsOnly] of [
+  ['docs and images', [{ filename: 'README.md' }, { filename: 'rfc/rfc-1/a.png' }, { filename: '.gitignore' }], true],
+  ['a doc renamed from another doc', [{ filename: 'b.md', previous_filename: 'a.md' }], true],
+  ['a nested .gitignore', [{ filename: 'hudi-common/.gitignore' }], false],
+  ['a doc renamed from code', [{ filename: 'A.md', previous_filename: 'A.java' }], false],
+  ['docs and code', [{ filename: 'README.md' }, { filename: 'pom.xml' }], false],
+  ['no files', [], false],
+  ['the files API limit', Array.from({ length: 3000 }, (_, index) => ({ filename: index + '.md' })), false],
+]) {
+  test('a missing run on a PR with ' + name + ' ' + (docsOnly ? 'is expected' : 'asks for action'), async () => {
+    const { writes } = await execute({ runs: [], files });
+    assert.equal(writes[0].conclusion, docsOnly ? 'neutral' : 'action_required');
+    assert.equal(writes[0].output.title,
+      docsOnly ? 'No fork CI run: docs-only change' : 'No fork CI run for this commit');
+  });
+}
+test('the docs-only paths of the bridge are what the push filter of bot.yml ignores', () => {
+  const script = bridgeWorkflow.jobs.bridge.steps[0].with.script;
+  const list = (name) => JSON.parse(new RegExp('const ' + name + ' = (\\[[^\\]]*\\]);').exec(script)[1].replace(/'/g, '"'));
+  const ignored = ci.workflow.true.push.paths.filter((pattern) => pattern.startsWith('!')).map((pattern) => pattern.slice(1));
+  assert.deepEqual(
+    [...list('DOCS_EXTENSIONS').map((extension) => '**' + extension), ...list('DOCS_ROOT_FILES')].sort(),
+    [...ignored].sort());
+});
 test('a missing workflow endpoint is handled as missing CI', async () => {
   const { writes } = await execute({ runError: 404, workflowState: null });
   assert.equal(writes[0].conclusion, 'action_required');
@@ -245,7 +281,7 @@ test('a manual run can replace a failed push run', async () => {
 test('a deleted run clears its stale success result', async () => {
   const { writes } = await execute({ checks: [await existing()], runs: [] });
   assert.equal(writes[0].method, 'update');
-  assert.equal(writes[0].conclusion, 'neutral');
+  assert.equal(writes[0].conclusion, 'action_required');
 });
 test('unchanged results do not consume check write requests', async () => {
   const check = await existing();
