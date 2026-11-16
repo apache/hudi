@@ -15,6 +15,7 @@
 # limitations under the License.
 
 """Check the running gateway's real MCP -> Connect -> HMS -> MinIO path, without an LLM."""
+import argparse
 import asyncio
 import json
 import signal
@@ -23,7 +24,7 @@ import urllib.request
 from fastmcp import Client
 
 
-async def main():
+async def main(verify_sample=False):
     with urllib.request.urlopen("http://127.0.0.1:8000/ui/", timeout=10) as response:
         assert response.status == 200
     async with Client("http://127.0.0.1:8000/mcp/") as client:
@@ -38,16 +39,26 @@ async def main():
 
         tables = await call("list_tables", {})
         assert {"trips", "drivers"} <= {row[1] for row in tables["rows"]}, tables
-        schema = await call("describe_table", {"table": "trips"})
-        assert "trip_id" in {row[0] for row in schema["rows"]}, schema
-        result = await call("query_lakehouse", {"sql":
-            "SELECT d.home_city, count(*) AS trips FROM trips t "
-            "JOIN drivers d ON t.driver_id = d.driver_id "
-            "GROUP BY d.home_city ORDER BY d.home_city"})
-        assert result["rows"] == [["chennai", 3], ["san_francisco", 3], ["sao_paulo", 3]], result
-        print("PASS: chat UI, MCP discovery, schema and Hudi join through Spark Connect", flush=True)
+        for table in ('trips', 'drivers'):
+            schema = await call("describe_table", {"table": table})
+            assert schema['rows'], schema
+            # Probe readability without counting the whole table; empty tables are valid.
+            result = await call("query_lakehouse", {"sql": f"SELECT * FROM {table} LIMIT 1"})
+            assert len(result['rows']) <= 1, result
+        if verify_sample:
+            result = await call("query_lakehouse", {"sql":
+                "SELECT d.home_city, count(*) AS trips FROM trips t "
+                "JOIN drivers d ON t.driver_id = d.driver_id "
+                "GROUP BY d.home_city ORDER BY d.home_city"})
+            assert result["rows"] == [["chennai", 3], ["san_francisco", 3], ["sao_paulo", 3]], (
+                f'Demo JOIN results differ from the original dataset: {result}. Data was not modified.'
+            )
+        print("PASS: chat UI, MCP discovery, schemas and Hudi queries through Spark Connect", flush=True)
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--verify-sample', action='store_true')
+    args = parser.parse_args()
     signal.alarm(180)
-    asyncio.run(main())
+    asyncio.run(main(verify_sample=args.verify_sample))

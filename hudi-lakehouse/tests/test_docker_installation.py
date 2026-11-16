@@ -62,6 +62,7 @@ class ComposeContractTest(unittest.TestCase):
         self.assertEqual(env['GATEWAY_SQL_BACKEND'], 'spark-connect')
         self.assertEqual(env['GATEWAY_SPARK_CONNECT_CATALOG'], 'spark_catalog')
         self.assertEqual(services['seed']['image'], services['spark-connect']['image'])
+        self.assertTrue(services['seed']['init'])
 
     def test_images_match_existing_charts_and_build_contexts_exist(self):
         services = self.config('-f', str(DOCKER / 'compose.build.yaml'))
@@ -217,6 +218,7 @@ if 'port' in args:
         chat = next(i for i, call in enumerate(calls) if 'exec' in call and call[-1] == '-')
         self.assertLess(mcp, chat)
         self.assertFalse(any('--verify-only' in call for call in calls))
+        self.assertFalse(any('--verify-sample' in call for call in calls))
         self.assertFalse(any('pull' in call or 'build' in call for call in calls))
 
     def test_down_preserves_volumes_including_optional_profile(self):
@@ -226,14 +228,22 @@ if 'port' in args:
         self.assertIn('down', calls[-1])
         self.assertNotIn('--volumes', calls[-1])
 
-    def test_api_autodetection_warns_about_missing_model_without_exposing_keys(self):
-        result, calls = self.run_installer(environment={'OPENAI_API_KEY': 'test-secret'})
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('GATEWAY_LLM_MODEL', result.stderr)
-        self.assertNotIn('test-secret', result.stdout + result.stderr)
-        self.assertTrue(any('up' in call for call in calls))
-        self.assertTrue(any('/lakehouse/smoke-test.py' in call for call in calls))
-        self.assertFalse(any(call[-1:] == ['-'] for call in calls))
+    @unittest.skipUnless(shutil.which('docker'), 'Real Compose resolver required')
+    def test_ambient_api_keys_do_not_change_default_provider(self):
+        for settings in (
+            {'OPENAI_API_KEY': 'test-secret'},
+            {'ANTHROPIC_API_KEY': 'test-secret'},
+            {'OPENAI_API_KEY': 'test-secret', 'ANTHROPIC_API_KEY': 'test-secret',
+             'GATEWAY_LLM_MODEL': 'qwen3:8b'},
+        ):
+            with self.subTest(settings=list(settings)):
+                result, calls = self.run_installer(environment=settings)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(['resolved-config', 'hudi-lakehouse', '8000', 'ollama'], calls)
+                self.assertNotIn('Chat is unavailable', result.stderr)
+                self.assertNotIn('test-secret', result.stdout + result.stderr)
+                self.assertTrue(any('/lakehouse/smoke-test.py' in call for call in calls))
+                self.assertTrue(any(call[-1:] == ['-'] for call in calls))
 
     def test_local_llm_pulls_model_before_starting_gateway(self):
         result, calls = self.run_installer(['up', '--local-llm'])
@@ -254,6 +264,7 @@ if 'port' in args:
                               {'env_file': '\n'.join(f'{key}={value}' for key, value in settings.items())})
                     result, calls = self.run_installer(['up', '--build'], **config)
                     self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(['resolved-config', 'hudi-lakehouse', '8000', provider], calls)
                     self.assertIn('Set GATEWAY_LLM_MODEL', result.stderr)
                     self.assertIn('Chat is unavailable', result.stderr)
                     self.assertNotIn('test-secret', result.stdout + result.stderr)
@@ -320,6 +331,7 @@ if 'port' in args:
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(any('up' in call or 'run' in call for call in calls))
         self.assertTrue(any('--verify-only' in call for call in calls))
+        self.assertTrue(any('--verify-sample' in call for call in calls))
         self.assertFalse(any(call[-1:] == ['-'] for call in calls))
         self.assertIn('LLM readiness was not checked', result.stdout)
 

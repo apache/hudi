@@ -94,15 +94,6 @@ if [[ "$ACTION" == up ]]; then
     echo 'Allocate at least 8 GB of memory to Docker (more for containerized Ollama).' >&2
     exit 1
   fi
-  # Auto-select API credentials from the environment only when the user has not
-  # supplied a .env configuration or an explicit provider. Never persist API keys.
-  if [[ ! -f "$HERE/.env" && -z "${GATEWAY_LLM_PROVIDER:-}" ]]; then
-    if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-      export GATEWAY_LLM_PROVIDER=anthropic
-    elif [[ -n "${OPENAI_API_KEY:-}" ]]; then
-      export GATEWAY_LLM_PROVIDER=openai
-    fi
-  fi
   # Let Compose resolve .env interpolation and shell precedence. Read only the
   # provider/model; never eval or print this output because it can contain keys.
   CONFIG_ENV="$("${COMPOSE[@]}" config --environment)"
@@ -135,11 +126,13 @@ if [[ "$ACTION" == up ]]; then
     exit 1
   fi
 fi
-# up already verified the data in the seed dependency; test must not reseed it.
+# Startup validates newly created samples only; explicit tests never reseed data.
 if [[ "$ACTION" == test ]]; then
   "${COMPOSE[@]}" exec -T spark-connect python3 - --verify-only < "$HERE/scripts/seed.py"
+  "${COMPOSE[@]}" exec -T gateway python /lakehouse/smoke-test.py --verify-sample
+else
+  "${COMPOSE[@]}" exec -T gateway python /lakehouse/smoke-test.py
 fi
-"${COMPOSE[@]}" exec -T gateway python /lakehouse/smoke-test.py
 echo 'Lakehouse and MCP are ready.'
 if [[ "$ACTION" == up ]]; then
   if [[ -n "$CHAT_CONFIG_ERROR" ]]; then

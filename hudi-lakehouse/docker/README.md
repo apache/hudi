@@ -77,6 +77,8 @@ codex mcp add hudi --url http://localhost:8000/mcp/
 Start a new client session and ask it to query the lakehouse. The sample tables are
 `default.trips` (9 rows, partitioned by `trip_date`) and `default.drivers` (3 rows).
 The MCP tools `list_tables`, `describe_table` and `query_lakehouse` are read-only.
+The counts and expected query results below describe the initial demo dataset;
+they may differ after you modify data through Spark Connect.
 
 Try: “List the tables”, “Describe trips”, or “For completed trips, sum fare_amount
 plus tip_amount by city”. The last question should return:
@@ -135,17 +137,17 @@ docker compose -f hudi-lakehouse/docker/compose.yaml --profile local-llm exec ol
 
 ### API provider
 
-Export your key and model, then start the stack:
+Explicitly select your provider and export its key and model, then start the stack:
 
 ```bash
-export OPENAI_API_KEY=...  # or ANTHROPIC_API_KEY
+export GATEWAY_LLM_PROVIDER=openai  # or anthropic
+export OPENAI_API_KEY=...  # use ANTHROPIC_API_KEY for anthropic
 export GATEWAY_LLM_MODEL=...  # a model available to your provider/account
 ./hudi-lakehouse/docker/lakehouse.sh up
 ```
 
-Without a `.env` or explicit provider, the script selects Anthropic when
-`ANTHROPIC_API_KEY` is set, then OpenAI when `OPENAI_API_KEY` is set, otherwise
-host Ollama. Keys are passed to the container and are never written by the installer.
+The default provider is Ollama. API keys alone do not change the provider.
+Keys are passed to the container and are never written by the installer.
 
 ### Save chat configuration
 
@@ -165,15 +167,16 @@ configuration can prevent the service itself from starting.
 
 ## Manage the lakehouse
 
-- **Start:** `./hudi-lakehouse/docker/lakehouse.sh up` starts services and verifies
-  sample data in the seed job before starting the Gateway, then checks MCP and
-  reports chat readiness separately.
+- **Start:** `./hudi-lakehouse/docker/lakehouse.sh up` starts services, initializes
+  and validates missing demo tables, and preserves existing tables. It then checks
+  MCP query availability and reports chat readiness separately.
 - **Inspect status:** `./hudi-lakehouse/docker/lakehouse.sh status` lists the
   installation's containers and their state.
 - **View logs:** `./hudi-lakehouse/docker/lakehouse.sh logs` shows recent service logs.
-- **Verify data and queries:** `./hudi-lakehouse/docker/lakehouse.sh test` checks
-  stored data and queries the running Gateway over MCP without reseeding or
-  requiring an LLM.
+- **Verify demo data and queries:** `./hudi-lakehouse/docker/lakehouse.sh test`
+  strictly checks the original demo counts, totals and JOIN results without
+  modifying data or requiring an LLM. User changes can make this command fail
+  even when the lakehouse and MCP are working normally.
 - **Stop:** `./hudi-lakehouse/docker/lakehouse.sh down` removes containers and the
   network, preserving MinIO, HMS and Ollama volumes. Starting again with the same
   Compose project reuses them.
@@ -222,13 +225,13 @@ the existing Derby schema and restores the marker. A partial or invalid database
 preserved and startup stops with repair/restore guidance; it is never reinitialized
 in place.
 
-The seed container uses direct Spark Connect SQL to create the sample tables.
-Dates are yesterday at the first seed. Stable record keys and inserts filtered against
-existing keys make retries safe without overwriting existing demo rows. The seed
-verifies counts, partitions and totals before the Gateway starts. Reserve these demo
-table names: existing incompatible schemas or modified sample data fail validation
-rather than being dropped or reset. No semantic-layer service or catalog abstraction
-is added.
+The seed container creates, populates and validates missing demo tables through
+Spark Connect SQL. Existing tables are preserved, including user changes and empty
+tables. If a missing table's storage path is still occupied, initialization fails
+without overwriting its files.
+
+Startup checks MCP query availability. Use `lakehouse.sh test` for strict demo-data
+validation.
 
 ### Chat readiness checks
 
@@ -245,7 +248,7 @@ is added.
   not validate the key or make a paid inference call.
 - **Chat unavailable:** missing models and discovery failures produce warnings
   without failing installation. Chat routes remain exposed regardless of readiness.
-- **Installation failures:** service startup, sample-data validation and MCP
+- **Installation failures:** service startup, validation of newly created sample tables and MCP
   failures still return a nonzero exit status.
 
 ### Release images
@@ -280,7 +283,9 @@ docker compose -f hudi-lakehouse/docker/compose.yaml up -d --force-recreate --wa
 ```
 
 The opt-in `Hudi Lakehouse Docker live acceptance` GitHub Actions workflow builds
-the images, starts a clean installation, checks MCP, recreates containers without
-reseeding to check persistence, and repeats installation to check seed idempotency.
+the images, starts a clean installation, checks MCP, and recreates containers without
+reseeding to check persistence. It also checks repeat installation, preservation of
+user edits/deletions and empty tables across restarts, and strict demo validation
+rejecting modified data without changing it.
 It requires no LLM credentials. A real model chat can be tested separately through
 the UI using the sample question above.

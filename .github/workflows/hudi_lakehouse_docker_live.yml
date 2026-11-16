@@ -25,7 +25,23 @@ jobs:
           docker compose -f hudi-lakehouse/docker/compose.yaml up -d --no-deps --wait gateway
           ./hudi-lakehouse/docker/lakehouse.sh test
       - name: Verify repeat installation does not duplicate sample data
-        run: ./hudi-lakehouse/docker/lakehouse.sh up
+        run: |
+          ./hudi-lakehouse/docker/lakehouse.sh up
+          ./hudi-lakehouse/docker/lakehouse.sh test
+      - name: Preserve user edits, deletions and empty tables across restart
+        run: |
+          set -euo pipefail
+          docker compose -f hudi-lakehouse/docker/compose.yaml exec -T spark-connect python3 - modify < hudi-lakehouse/tests/docker_data_lifecycle.py
+          ./hudi-lakehouse/docker/lakehouse.sh down
+          ./hudi-lakehouse/docker/lakehouse.sh up
+          docker compose -f hudi-lakehouse/docker/compose.yaml exec -T spark-connect python3 - verify < hudi-lakehouse/tests/docker_data_lifecycle.py
+          if ./hudi-lakehouse/docker/lakehouse.sh test > /tmp/demo-validation.log 2>&1; then
+            echo 'Strict demo validation unexpectedly accepted modified data.' >&2
+            exit 1
+          fi
+          cat /tmp/demo-validation.log
+          grep -q 'no longer match' /tmp/demo-validation.log
+          docker compose -f hudi-lakehouse/docker/compose.yaml exec -T spark-connect python3 - verify < hudi-lakehouse/tests/docker_data_lifecycle.py
       - name: Diagnostics on failure
         if: failure()
         run: |
