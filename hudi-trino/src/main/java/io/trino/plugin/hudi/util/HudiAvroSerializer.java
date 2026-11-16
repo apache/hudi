@@ -84,6 +84,7 @@ import static io.trino.spi.type.Timestamps.MICROSECONDS_PER_SECOND;
 import static io.trino.spi.type.Timestamps.NANOSECONDS_PER_MICROSECOND;
 import static io.trino.spi.type.Timestamps.PICOSECONDS_PER_MICROSECOND;
 import static io.trino.spi.type.TinyintType.TINYINT;
+import static io.trino.spi.type.Varchars.truncateToLength;
 import static java.lang.Integer.parseInt;
 import static java.lang.Math.floorDiv;
 import static java.lang.Math.floorMod;
@@ -436,16 +437,9 @@ public class HudiAvroSerializer
 
     private static void writeSlice(BlockBuilder output, Type type, Object value)
     {
-        if (type instanceof VarcharType) {
-            if (value instanceof Utf8) {
-                type.writeSlice(output, utf8Slice(((Utf8) value).toString()));
-            }
-            else if (value instanceof String) {
-                type.writeSlice(output, utf8Slice((String) value));
-            }
-            else {
-                type.writeSlice(output, utf8Slice(value.toString()));
-            }
+        if (type instanceof VarcharType varcharType) {
+            Slice slice = utf8Slice(value.toString());
+            type.writeSlice(output, varcharType.isUnbounded() ? slice : truncateToLength(slice, varcharType));
         }
         else if (type instanceof VarbinaryType) {
             if (value instanceof ByteBuffer) {
@@ -471,8 +465,8 @@ public class HudiAvroSerializer
                 // Fallback: convert any other object to its string representation
                 stringValue = value.toString();
             }
-            // IMPORTANT: Char types may be padded with trailing "space" characters to make up for length if the contents are lesser than defined length.
-            // Need to trim out trailing spaces as Slice representing Char should not have trailing spaces
+            // Match Trino's Parquet CHAR reader: truncate to the declared length in code points, then strip
+            // trailing U+0020 padding only, keeping leading whitespace and trailing control characters
             type.writeSlice(output, truncateToLengthAndTrimSpaces(utf8Slice(stringValue), charType));
         }
         else {

@@ -24,12 +24,15 @@ import io.trino.spi.SplitWeight;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.CharType;
 import io.trino.spi.type.DecimalType;
+import io.trino.spi.type.VarcharType;
 import org.apache.avro.Conversions;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
+import org.apache.avro.util.Utf8;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -48,6 +51,53 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class TestHudiAvroSerializer
 {
+    @ParameterizedTest
+    @MethodSource("charValues")
+    void testAppendChar(String input, String expected)
+    {
+        CharType type = CharType.createCharType(5);
+        for (Object value : List.of(input, new Utf8(input))) {
+            BlockBuilder builder = type.createBlockBuilder(null, 1);
+            HudiAvroSerializer.appendTo(type, value, builder);
+            assertThat(type.getSlice(builder.build(), 0).toStringUtf8()).isEqualTo(expected);
+        }
+    }
+
+    private static Stream<Arguments> charValues()
+    {
+        return Stream.of(
+                Arguments.of(" ab  ", " ab"),
+                Arguments.of("     ", ""),
+                Arguments.of("\tab\t ", "\tab\t"),
+                Arguments.of(" a😀  ", " a😀"),
+                Arguments.of(" a😀😀😀x", " a😀😀😀"),
+                Arguments.of(" abcdef", " abcd"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("varcharValues")
+    void testAppendVarchar(VarcharType type, String input, String expected)
+    {
+        for (Object value : List.of(input, new Utf8(input), new StringBuilder(input))) {
+            BlockBuilder builder = type.createBlockBuilder(null, 1);
+            HudiAvroSerializer.appendTo(type, value, builder);
+            assertThat(type.getSlice(builder.build(), 0).toStringUtf8()).isEqualTo(expected);
+        }
+    }
+
+    private static Stream<Arguments> varcharValues()
+    {
+        VarcharType boundedType = VarcharType.createVarcharType(5);
+        return Stream.of(
+                Arguments.of(boundedType, " ab  ", " ab  "),
+                Arguments.of(boundedType, "\tab\t ", "\tab\t "),
+                Arguments.of(boundedType, " abcdef", " abcd"),
+                Arguments.of(boundedType, " a😀😀😀x", " a😀😀😀"),
+                Arguments.of(boundedType, "", ""),
+                Arguments.of(VARCHAR, " abcdef ", " abcdef "),
+                Arguments.of(VARCHAR, " a😀😀😀x ", " a😀😀😀x "));
+    }
+
     /**
      * A short decimal is stored in Trino as the unscaled value, which is exactly what Avro writes into the
      * fixed bytes, so the read is a plain big-endian two's complement decode. The cases below pin the parts
