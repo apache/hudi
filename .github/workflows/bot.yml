@@ -17,7 +17,9 @@ name: Java CI
 # push; see "Pull requests from forks" in README.md. Upstream pushes to branches other than master,
 # release-* and branch-0.x skip every job: their PRs test them. Merge-queue branches
 # (gh-readonly-queue/...) are validated by merge_group, not push: a skipped aggregate job on a
-# queue-branch push would report success and could satisfy the gate early.
+# queue-branch push would report success and could satisfy the gate early. workflow_dispatch lets
+# a contributor run the suite on a fork branch whose head no push run tested, such as after enabling
+# Actions: the path filter starts no run for a push without file changes, such as an empty commit.
 on:
   push:
     branches-ignore:
@@ -43,6 +45,7 @@ on:
       - branch-0.x
   merge_group:
     types: [checks_requested]
+  workflow_dispatch:
 
 # A group holds one running and one pending run, and a newer pending run replaces the older one
 # even when cancel-in-progress is false. Pushes to apache/hudi are therefore keyed by SHA, so a
@@ -76,7 +79,7 @@ env:
 # FORK_PR, a pull request from a fork to master:
 #   github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && github.base_ref == 'master'
 # Its test jobs already run on the fork's runners when the contributor pushes the branch, and
-# fork_ci_status.yml mirrors that run onto the PR as the informational `CI (fork)` check. The
+# fork_ci_status.yml mirrors that run onto the PR as the `CI (fork)` check. The
 # merge queue then runs them on ASF runners against the proposed merge with master. The
 # event_name guard matters: on merge_group the pull_request fields are empty strings, and an empty
 # head repository differs from github.repository. Fork PRs to release-* and branch-0.x keep
