@@ -62,8 +62,8 @@ import org.apache.hudi.storage.StoragePath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 
@@ -185,18 +185,35 @@ public class TestHoodieMetadataWriteUtils {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
-  public void testCreateMetadataWriteConfigPropagatesHFileBloomFilterSetting(boolean hfileBloomFilterEnabled) {
+  @CsvSource({"true,true,true", "true,false,false", "false,true,false", "false,false,false"})
+  public void testCreateMetadataWriteConfigPropagatesHFileBloomFilterSetting(boolean hfileBloomFilterEnabled,
+                                                                            boolean metadataBloomFilterEnabled,
+                                                                            boolean expected) {
+    Properties props = new Properties();
+    props.setProperty(HoodieMetadataConfig.BLOOM_FILTER_ENABLE.key(), String.valueOf(metadataBloomFilterEnabled));
     HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder()
         .withPath("/tmp/base_path/")
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .hfileBloomFilterEnable(hfileBloomFilterEnabled)
             .build())
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().fromProperties(props).build())
         .build();
 
     HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
         writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
-    assertEquals(hfileBloomFilterEnabled, metadataWriteConfig.hfileBloomFilterEnabled());
+    // The bloom filter is only written when metadata table lookups read it
+    assertEquals(expected, metadataWriteConfig.hfileBloomFilterEnabled());
+  }
+
+  @Test
+  public void testCreateMetadataWriteConfigSkipsHFileBloomFilterByDefault() {
+    HoodieWriteConfig writeConfig = HoodieWriteConfig.newBuilder().withPath("/tmp/base_path/").build();
+    // Data table HFiles keep writing the bloom filter
+    assertTrue(writeConfig.hfileBloomFilterEnabled());
+
+    HoodieWriteConfig metadataWriteConfig = HoodieMetadataWriteUtils.createMetadataWriteConfig(
+        writeConfig, HoodieFailedWritesCleaningPolicy.EAGER, HoodieTableVersion.EIGHT);
+    assertFalse(metadataWriteConfig.hfileBloomFilterEnabled());
   }
 
   @Test

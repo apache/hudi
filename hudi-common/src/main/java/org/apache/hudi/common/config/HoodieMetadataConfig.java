@@ -644,7 +644,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .defaultValue(false)
       .markAdvanced()
       .sinceVersion("1.1.0")
-      .withDocumentation("Whether to use bloom filter in the files for lookup in the metadata table.");
+      .withDocumentation("Whether to use bloom filter in the files for lookup in the metadata table. The bloom filter "
+          + "is only written into the metadata table HFiles when this is enabled.");
 
   // Configs that control the bloom filter that is written to the file footer
   public static final ConfigProperty<String> BLOOM_FILTER_TYPE = ConfigProperty
