@@ -35,11 +35,12 @@ import java.util.Comparator;
 
 /**
  * Helpers for the metadata table validator v2: the metadata table availability check, its
- * output-directory namespace, and the file-slice comparison rules it shares with v1.
+ * output-directory namespace, and the file-slice comparison rules v1 also applies.
  *
- * <p>{@link #assertBaseFilesEquality} and {@link FileSliceComparator} are the same rules
+ * <p>{@link #assertBaseFilesEquality} and {@link FileSliceComparator} are copies of the rules
  * {@link org.apache.hudi.utilities.HoodieMetadataTableValidator} applies to latest file slices, so
  * the two validators agree on what makes two slices' base files equal and how slices are ordered.
+ * Keep them in step with v1.
  */
 public class HoodieMetadataValidationUtils {
 
@@ -68,12 +69,16 @@ public class HoodieMetadataValidationUtils {
 
   /**
    * Whether the metadata table can be validated: it exists and has a completed instant. Returns
-   * false (skip) when neither table has a completed commit, or when the metadata table cannot be
-   * read yet; throws when the data table has completed commits but the metadata table has none.
-   * The same check {@code HoodieMetadataTableValidator} runs before validating.
+   * false, so the caller skips the run, when the metadata table is missing or cannot be read, and
+   * when it has no completed instant (logged as a failure when the data table does have completed
+   * commits).
+   *
+   * <p>A copy of {@code HoodieMetadataTableValidator#checkMetadataTableIsAvailable}, kept separate
+   * so that adding the v2 validator does not change v1; the two must be changed together.
    */
   public static boolean checkMetadataTableIsAvailable(JavaSparkContext jsc, String basePath,
-                                               HoodieTableMetaClient dataMetaClient, String taskLabels) {
+                                                      HoodieTableMetaClient dataMetaClient,
+                                                      String taskLabels) {
     try {
       HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
           .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
