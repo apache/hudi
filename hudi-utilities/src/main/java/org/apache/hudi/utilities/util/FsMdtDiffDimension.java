@@ -289,7 +289,7 @@ public final class FsMdtDiffDimension {
       // discardForRecompute classifies infrastructure failures BEFORE a recompute may discard this
       // failure. A lost executor is both the commonest cause of a recompute and an infrastructure
       // failure; checking recomputed() alone would let a preempted node report success instead of
-      // paging. Otherwise a finding raised while phase 1 was recomputed cannot be attributed to the
+      // failing. Otherwise a finding raised while phase 1 was recomputed cannot be attributed to the
       // pinned window and must not fail the run; it is discarded loudly with the original attached.
       if (phaseOne != null && phaseOne.baseline() != null
           && ValidationFailures.discardForRecompute(e, phaseOne.baseline().recomputed())) {

@@ -26,7 +26,7 @@ package org.apache.hudi.utilities.util;
  * and reports success, exhaustive refuses — so the branch that decides is shared, and what a cause
  * supplies is only how the outcome is *named* to a caller.
  *
- * <p><b>The marker is an alerting contract.</b> Each cause has its own, because on-call counts
+ * <p><b>The marker is an alerting contract.</b> Each cause has its own, because alerting may count
  * consecutive markers to tell a busy table from a broken one, and a run sanctioned for one reason
  * must never be counted against the other's threshold.
  */
