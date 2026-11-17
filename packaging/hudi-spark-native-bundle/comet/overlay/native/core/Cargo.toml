@@ -35,8 +35,14 @@ include = [
 publish = false
 
 [dependencies]
+# Delta deletion-vector decoding (feature = "delta")
+roaring = { version = "0.11", optional = true }
+crc32fast = { version = "1.5", optional = true }
 arrow = { workspace = true }
+pyo3 = { version = "0.28.3", optional = true, features = ["auto-initialize"] }
+libc = { version = "0.2", optional = true }
 base64 = "0.23.0"
+chrono-tz = { workspace = true }
 bytes = { workspace = true }
 parquet = { workspace = true, default-features = false, features = ["experimental", "arrow", "arrow_canonical_extension_types", "snap", "lz4", "zstd", "flate2-zlib-rs"] }
 futures = { workspace = true }
@@ -48,7 +54,7 @@ async-trait = { workspace = true }
 log = "0.4"
 log4rs = "1.4.0"
 prost = "0.14.3"
-jni = "0.22.4"
+jni = { workspace = true }
 rand = { workspace = true }
 num = { workspace = true }
 tempfile = "3.26.0"
@@ -64,6 +70,7 @@ datafusion-comet-spark-expr = { workspace = true }
 datafusion-comet-jni-bridge = { workspace = true }
 datafusion-comet-proto = { workspace = true }
 datafusion-comet-shuffle = { workspace = true }
+datafusion-comet-operators = { workspace = true }
 object_store = { workspace = true }
 url = { workspace = true }
 aws-config = { workspace = true }
@@ -79,8 +86,10 @@ comet-contrib-delta = { path = "../../contrib/delta/native", optional = true }
 comet-contrib-lance = { path = "../../contrib/lance/native", optional = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "http2"] }
 object_store_opendal = { version = "0.58.0", optional = true }
-hdfs-sys = {version = "0.3", optional = true, features = ["hdfs_3_3"]}
-opendal = { version = "0.58.1", optional = true, features = ["services-hdfs"] }
+hdfs-sys = {version = "0.3.1", optional = true, features = ["hdfs_3_3"]}
+# Not optional: the location-scoped Iceberg storage recognizes opendal's permission errors, and
+# iceberg-storage-opendal builds the crate anyway. `hdfs-opendal` adds its HDFS service.
+opendal = { version = "0.58.1" }
 iceberg = { workspace = true }
 hudi = { workspace = true }
 iceberg-storage-opendal = { workspace = true }
@@ -91,6 +100,8 @@ serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 typetag = "0.2"
 uuid = "1.23.3"
+libloading = "0.8"
+comet-udf-sdk = { path = "../comet-udf-sdk" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.18.0"
@@ -99,13 +110,15 @@ procfs = "0.18.0"
 hdrs = { version = "0.3.2", features = ["vendored"] }
 
 [dev-dependencies]
+crc32fast = "1.3.2"
 pprof = { version = "0.15", features = ["flamegraph"] }
 criterion = { version = "0.7", features = ["async", "async_tokio", "async_std"] }
-jni = { version = "0.22.4", features = ["invocation"] }
+jni = { workspace = true, features = ["invocation"] }
 lazy_static = "1.4"
 assertables = "10"
 hex = "0.4.3"
-datafusion-functions-nested = { version = "55.1.0" }
+datafusion-functions-nested = { version = "55.2.0" }
+comet-test-udfs = { path = "../comet-test-udfs" }
 # Test-only helpers for a hand-rolled in-memory HTTP client that exercises the web-identity STS
 # retry path without a socket, plus reqsign's SigV4 signer for the signing round-trip test. Already
 # in the dependency graph (transitive via aws-config and iceberg-storage-opendal).
@@ -115,13 +128,26 @@ reqsign-aws-v4 = "3"
 
 [features]
 backtrace = ["datafusion/backtrace"]
-default = ["hdfs-opendal"]
+default = ["hdfs-opendal", "delta"]
+python-udf = ["dep:pyo3", "dep:libc"]
 contrib-lance = ["dep:comet-contrib-lance"]
-hdfs-opendal = ["opendal", "object_store_opendal", "hdfs-sys"]
+hdfs-opendal = ["opendal/services-hdfs", "object_store_opendal", "hdfs-sys"]
 jemalloc = ["tikv-jemallocator", "tikv-jemalloc-ctl"]
-# Delta Lake integration. When enabled, links the `comet-contrib-delta` crate
-# into `libcomet` and activates the `OpStruct::DeltaScan` dispatcher arm.
-# Default builds carry zero Delta surface.
+# Native Delta Lake scan support for the JVM-planned path (contrib/delta-spark).
+# In the default set so trying the contrib needs only the jar and the config,
+# not a custom native build. It is inert at runtime unless the contrib jar is
+# on the classpath (ServiceLoader) AND spark.comet.scan.delta.enabled is set,
+# so it cannot affect non-Delta scans, and it adds no crate to the default
+# build: `roaring` and `crc32fast` are already in the tree through iceberg and
+# the shuffle crate, so the feature only promotes two transitive dependencies
+# to direct ones. dev/verify-contrib-delta-gate.sh measures and caps its
+# footprint. Opt out with --no-default-features for slim builds; the planner
+# arm then returns a clear "built without the delta feature" error.
+delta = ["dep:roaring", "dep:crc32fast"]
+# Delta Lake integration via delta-kernel-rs. When enabled, links the
+# `comet-contrib-delta` crate into `libcomet` and activates the contrib scan
+# dispatcher arm. Default builds carry zero delta-kernel surface; the `delta`
+# feature above has no kernel dependency.
 contrib-delta = ["dep:comet-contrib-delta"]
 
 # exclude optional packages from cargo machete verifications
@@ -142,9 +168,13 @@ name = "array_element_append"
 harness = false
 
 [[bench]]
-name = "explode"
+name = "iceberg_dictionary_chooser"
 harness = false
 
 [[bench]]
 name = "parquet_timestamp_conversion"
+harness = false
+
+[[bench]]
+name = "sort_row_partitions"
 harness = false

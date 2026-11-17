@@ -53,12 +53,17 @@ pub enum OperatorType {
     Limit,
     Sort,
     ShuffleWriter,
+    ShuffleScan,
     ParquetWriter,
     Expand,
     SortMergeJoin,
     HashJoin,
     Window,
     CsvScan,
+    MergeRows,
+    Explode,
+    BroadcastNestedLoopJoin,
+    WindowGroupLimit,
 }
 
 /// Global registry of operator builders
@@ -119,6 +124,13 @@ impl OperatorRegistry {
     /// Register all operator builders
     fn register_all_operators(&mut self) {
         self.register_projection_operators();
+        self.register_aggregate_operators();
+        self.register_join_operators();
+        self.register_window_operators();
+        self.register_shuffle_operators();
+        self.register_write_operators();
+        self.register_merge_rows_operators();
+        self.register_explode_operators();
     }
 
     /// Register projection operators
@@ -127,6 +139,76 @@ impl OperatorRegistry {
 
         self.builders
             .insert(OperatorType::Projection, Box::new(ProjectionBuilder));
+    }
+
+    /// Register aggregate operators
+    fn register_aggregate_operators(&mut self) {
+        use super::aggregate::HashAggBuilder;
+
+        self.builders
+            .insert(OperatorType::HashAgg, Box::new(HashAggBuilder));
+    }
+
+    /// Register join operators
+    fn register_join_operators(&mut self) {
+        use super::join::{BroadcastNestedLoopJoinBuilder, HashJoinBuilder, SortMergeJoinBuilder};
+
+        self.builders
+            .insert(OperatorType::HashJoin, Box::new(HashJoinBuilder));
+        self.builders
+            .insert(OperatorType::SortMergeJoin, Box::new(SortMergeJoinBuilder));
+        self.builders.insert(
+            OperatorType::BroadcastNestedLoopJoin,
+            Box::new(BroadcastNestedLoopJoinBuilder),
+        );
+    }
+
+    /// Register window operators
+    fn register_window_operators(&mut self) {
+        use super::window::{WindowBuilder, WindowGroupLimitBuilder};
+
+        self.builders
+            .insert(OperatorType::Window, Box::new(WindowBuilder));
+        self.builders.insert(
+            OperatorType::WindowGroupLimit,
+            Box::new(WindowGroupLimitBuilder),
+        );
+    }
+
+    /// Register shuffle operators
+    fn register_shuffle_operators(&mut self) {
+        use super::shuffle::{ShuffleScanBuilder, ShuffleWriterBuilder};
+
+        self.builders
+            .insert(OperatorType::ShuffleWriter, Box::new(ShuffleWriterBuilder));
+        self.builders
+            .insert(OperatorType::ShuffleScan, Box::new(ShuffleScanBuilder));
+    }
+
+    /// Register write operators
+    fn register_write_operators(&mut self) {
+        use super::write::{IcebergWriteBuilder, ParquetWriterBuilder};
+
+        self.builders
+            .insert(OperatorType::IcebergWrite, Box::new(IcebergWriteBuilder));
+        self.builders
+            .insert(OperatorType::ParquetWriter, Box::new(ParquetWriterBuilder));
+    }
+
+    /// Register row-level MERGE operators
+    fn register_merge_rows_operators(&mut self) {
+        use super::merge_rows::MergeRowsBuilder;
+
+        self.builders
+            .insert(OperatorType::MergeRows, Box::new(MergeRowsBuilder));
+    }
+
+    /// Register explode operators
+    fn register_explode_operators(&mut self) {
+        use super::explode::ExplodeBuilder;
+
+        self.builders
+            .insert(OperatorType::Explode, Box::new(ExplodeBuilder));
     }
 }
 
@@ -151,17 +233,20 @@ fn get_operator_type(spark_operator: &Operator) -> Option<OperatorType> {
         OpStruct::SortMergeJoin(_) => Some(OperatorType::SortMergeJoin),
         OpStruct::HashJoin(_) => Some(OperatorType::HashJoin),
         OpStruct::Window(_) => Some(OperatorType::Window),
-        OpStruct::Explode(_) => None, // Not yet in OperatorType enum
+        OpStruct::Explode(_) => Some(OperatorType::Explode),
         OpStruct::CsvScan(_) => Some(OperatorType::CsvScan),
-        OpStruct::ShuffleScan(_) => None, // Not yet in OperatorType enum
-        OpStruct::BroadcastNestedLoopJoin(_) => None,
+        OpStruct::ShuffleScan(_) => Some(OperatorType::ShuffleScan),
+        OpStruct::BroadcastNestedLoopJoin(_) => Some(OperatorType::BroadcastNestedLoopJoin),
+        OpStruct::RangeScan(_) => None,
         OpStruct::Sample(_) => None, // Not yet in OperatorType enum
+        OpStruct::MergeRows(_) => Some(OperatorType::MergeRows),
         // Generic extension point for out-of-tree contrib scans (Delta, Lance, ...); not in
         // OperatorType enum. The arm stays unconditional even in non-contrib builds because the
         // proto enum is generated regardless of cargo features and Rust requires an exhaustive
         // match. No contrib-specific logic lives here -- we just signal "no OperatorType mapping"
         // so the supports-mixed-codegen check skips it.
         OpStruct::ContribScan(_) => None,
-        OpStruct::WindowGroupLimit(_) => None, // Not yet in OperatorType enum
+        OpStruct::WindowGroupLimit(_) => Some(OperatorType::WindowGroupLimit),
+        OpStruct::ArrowPythonUdf(_) => None, // Built by the planner behind the python-udf feature
     }
 }

@@ -87,8 +87,8 @@ class HudiCometScanProvider extends CometExternalV1ScanProvider with SparkAdapte
           attr.dataType.isInstanceOf[MapType])) {
       return None
     }
-    // hudi-rs converts the whole table schema, projected or not, and has no
-    // Arrow mapping for Avro's local timestamps yet.
+    // hudi-rs converts the whole table schema, projected or not, and its
+    // mapping of Avro's local timestamps is not validated against the JVM read.
     if (relation.dataSchema.exists(_.dataType == TimestampNTZType)) {
       return None
     }

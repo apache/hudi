@@ -53,12 +53,13 @@ case class CometHudiNativeScanExec(
 
   override val nodeName: String = "CometHudiNativeScan"
 
-  // A fused native block takes its partition count from the leaf scan's output
-  // partitioning, so it must reflect the number of per-partition slice groups.
+  // One partition per slice group, the count Comet sizes the native RDD with
+  // from perPartitionData.
   override lazy val outputPartitioning: Partitioning =
     UnknownPartitioning(perPartitionBytes.length)
 
-  override def sourceKey: String = HudiScanDataKey.key(tableBaseUri, scanHashCode)
+  override def sourceKey: String =
+    HudiScanDataKey.key(tableBaseUri, scanHashCode, nativeOp.getPlanId)
 
   override def commonData: Array[Byte] = commonBytes
 
@@ -108,10 +109,12 @@ case class CometHudiNativeScanExec(
 
 /**
  * The key both the scan node and [[HudiPlanDataInjector]] derive, so per-partition planning data
- * lands on the right scan when a query reads the same table more than once.
+ * lands on the right scan when a query reads the same table more than once. Comet requires the
+ * key to be unique per scan node in a native plan, which the scan op's plan id provides.
  */
 object HudiScanDataKey {
-  def key(tableBaseUri: String, scanHashCode: Int): String = s"${tableBaseUri}_$scanHashCode"
+  def key(tableBaseUri: String, scanHashCode: Int, planId: Int): String =
+    PlanDataInjector.withPlanId(s"${tableBaseUri}_$scanHashCode", planId)
 }
 
 /**
@@ -131,7 +134,7 @@ class HudiPlanDataInjector extends PlanDataInjector {
 
   override def getKey(op: Operator): Option[String] = {
     val common = op.getHudiScan.getCommon
-    Some(HudiScanDataKey.key(common.getTableBaseUri, common.getScanHashCode))
+    Some(HudiScanDataKey.key(common.getTableBaseUri, common.getScanHashCode, op.getPlanId))
   }
 
   override def prepareCommon(commonBytes: Array[Byte]): Prepared =

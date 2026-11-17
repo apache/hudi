@@ -30,7 +30,7 @@ statically linked into `libcomet`.
 - `COMET_PIN` - the upstream Comet repository and commit, and the version the
   modified build installs as (upstream version plus a `-hudi-<n>` suffix, so the
   unmodified Central artifact can never satisfy the dependency by accident).
-  The hudi-rs revision is pinned in `overlay/native/Cargo.toml` and locked in
+  The hudi-rs release is pinned in `overlay/native/Cargo.toml` and locked in
   `overlay/native/Cargo.lock`.
 - `overlay/` - full copies of every Comet file the integration changes or adds,
   mirroring Comet's tree. Applied by copying over a clean checkout of the
@@ -61,7 +61,7 @@ The bundle then builds against the result with:
 
 ```bash
 mvn clean package -DskipTests -Dspark3.5 \
-  -Dcomet.hudi.build -Ddatafusion.comet.version=1.1.0-hudi-1 \
+  -Dcomet.hudi.build -Ddatafusion.comet.version=1.2.0-hudi-1 \
   -pl packaging/hudi-spark-native-bundle -am
 ```
 
@@ -81,6 +81,6 @@ one), then copy the changed files back into `overlay/` and refresh
 git -C <checkout> rev-parse <commit>:<path>   # blob SHA for a modified file
 ```
 
-Bumping `COMET_COMMIT` or the hudi-rs revision requires re-running the native
+Bumping `COMET_COMMIT` or the hudi-rs version requires re-running the native
 bundle validation with `NATIVE_HUDI_SCAN=1` (see
 `packaging/bundle-validation/spark_native/`).

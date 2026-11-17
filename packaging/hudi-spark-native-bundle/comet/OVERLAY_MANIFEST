@@ -13,14 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-00252bb43f623ddc211f513a31214cff0fcd5e03 native/Cargo.lock
-ff3c7f6d2b75ba410810d0aec4ca56bd44fc6ef7 native/Cargo.toml
-d8d94d899c54b900922a275b37508fa17eb7223b native/core/Cargo.toml
-d1a262cf4317c216c598e05491670e8b6f0a9e3b native/core/src/execution/jni_api.rs
-37f56fe1c5c92539cdf2fdc9e7e0c4d01b12426e native/core/src/execution/operators/mod.rs
-c2cd01f50e91da7a84c3661a1f7fd32e5c8db962 native/core/src/execution/planner.rs
-face6c3eb5e2580c132953df0caccbd781a5dfcd native/core/src/execution/planner/operator_registry.rs
-7b3a7aec0d271888ea087c6955a1b88dea0cba0a native/proto/src/proto/operator.proto
-b7bca2bf8c07eaca5a9af8494612f12142bf34c9 spark/src/main/scala/org/apache/comet/rules/CometScanRule.scala
+83b63fe46c6f1a16c0a05114459d8ad5b77112b1 native/Cargo.lock
+498e3c7414ea5190abccaae0ce8889795a0a948b native/Cargo.toml
+a01bbb7f829b345c595ed768c4d2960fb49168ff native/core/Cargo.toml
+621de42c8343113ab5df521142b2f7b94d485e98 native/core/src/execution/jni_api.rs
+49669c5831449a1c095a2ac14f32b52d85396bae native/core/src/execution/operators/mod.rs
+268f35570a6a59353b5f86608c007d89bcd99c7e native/core/src/execution/planner.rs
+c80a40a290cf1e03795d09782688d493cd69bfbe native/core/src/execution/planner/operator_registry.rs
+5bc1ac12aa742981256a828dc925a7b688174a96 native/proto/src/proto/operator.proto
+349a9dae3800930b6b2fc2c28cbbceb546b982eb spark/src/main/scala/org/apache/comet/rules/CometScanRule.scala
 new native/core/src/execution/operators/hudi_scan.rs
 new spark/src/main/scala/org/apache/comet/rules/CometExternalV1ScanProvider.scala

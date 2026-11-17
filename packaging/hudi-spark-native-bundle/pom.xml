@@ -157,8 +157,8 @@
 
   <profiles>
     <!-- One profile per Spark version Comet publishes comet-spark-spark<X.Y>_<scala> for. Spark 3.3
-         (dropped after Comet 0.7.0) and 4.2 (experimental in Comet, no published artifact) fall through to the skip above; Spark 3.4
-         is deprecated as of Comet 1.1.0 and goes the same way once Comet drops it. -->
+         (dropped after Comet 0.7.0) and 4.2 (published by Comet from 1.2.0, no profile here yet) fall through to the skip above; Spark 3.4
+         is deprecated as of Comet 1.0.0 and goes the same way once Comet drops it. -->
     <profile>
       <id>comet-spark3.4</id>
       <activation>

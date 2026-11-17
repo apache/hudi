@@ -16,27 +16,46 @@
 // under the License.
 
 //! Define JNI APIs which can be called from Java/Scala.
+//!
+//! An entry point is a thin JNI wrapper: it converts its JNI arguments into plain Rust values,
+//! calls a core function whose signature has no JNI types (e.g. `decode_shuffle_block`), and
+//! converts the result back. Errors and panics are raised as JVM exceptions by
+//! `try_unwrap_or_throw`, through the boundary error protocol in `errors::NativeError`.
+//!
+//! `createPlan`, `setShufflePartitionPusher`, `executePlan` and `releasePlan` also depend on
+//! upcalls into the JVM (input iterators, the task memory manager, metrics, UDFs and scalar
+//! subqueries). Their core functions (`create_execution_context`,
+//! `register_shuffle_partition_pusher`, `execute_plan` and `release_plan`) take the JVM objects as
+//! JNI global references held by the `ExecutionContext` (`PlanJvmRefs`), and the steps that need
+//! an `Env` as callbacks: the memory pool factory, the pusher factory, and `PublishMetrics`.
+//! `setOutputStream` registers a native write's output stream through the same
+//! `register_before_execution` check as the pusher.
 
 use super::{serde, utils::SparkArrowConvert};
 use crate::{
     errors::{try_unwrap_or_throw, CometError, CometResult},
     execution::{
-        metrics::utils::update_comet_metric, planner::PhysicalPlanner, serde::to_arrow_datatype,
-        shuffle::spark_unsafe::row::process_sorted_row_partition, sort::RdxSort,
+        metrics::utils::update_comet_metric,
+        planner::PhysicalPlanner,
+        row_partition_sort::sort_row_partitions,
+        serde::to_arrow_datatype,
+        shuffle::spark_unsafe::row::{process_sorted_partitions, process_sorted_row_partition},
     },
-    jvm_bridge::{JVMClasses, JavaShufflePartitionPusher, ShufflePartitionPusher},
+    jvm_bridge::{
+        JVMClasses, JavaOutputStreamSink, JavaShufflePartitionPusher, OutputStreamSink,
+        ShufflePartitionPusher,
+    },
 };
 use std::collections::HashSet;
 
 use arrow::array::{Array, RecordBatch};
 use arrow::datatypes::DataType as ArrowDataType;
 use datafusion::common::{DataFusionError, Result as DataFusionResult};
-use datafusion::execution::disk_manager::DiskManagerMode;
+use datafusion::config::SpillCompression;
 use datafusion::execution::memory_pool::MemoryPool;
 use datafusion::execution::runtime_env::RuntimeEnvBuilder;
 use datafusion::logical_expr::ScalarUDF;
 use datafusion::{
-    execution::disk_manager::DiskManagerBuilder,
     physical_plan::{display::DisplayableExecutionPlan, SendableRecordBatchStream},
     prelude::{SessionConfig, SessionContext},
 };
@@ -102,13 +121,17 @@ use std::{
 };
 use tokio::runtime::{Handle, Runtime};
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
-use crate::execution::memory_pools::{create_memory_pool, parse_memory_pool_config};
+use crate::execution::memory_pools::{
+    create_memory_pool, overcommit, parse_memory_pool_config, MemoryPoolConfig, PlanMemoryPool,
+};
 use crate::execution::operators::{ScanExec, ShuffleScanExec};
 use crate::execution::shuffle::{
     decode_remote_shuffle_batch, read_ipc_compressed, CompressionCodec, ShuffleWriterExec,
 };
 use crate::execution::spark_plan::SparkPlan;
+use crate::execution::spill_dirs::plan_disk_manager;
 
 use crate::execution::tracing::{
     get_thread_id, log_memory_usage, trace_begin, trace_end, with_trace, POOL_TOTAL_METRIC,
@@ -117,11 +140,13 @@ use crate::execution::tracing::{
 use crate::execution::memory_pools::logging_pool::LoggingMemoryPool;
 use crate::execution::spark_config::{
     SparkConfig, COMET_DEBUG_ENABLED, COMET_DEBUG_MEMORY,
-    COMET_EXEC_AGGREGATE_SKIP_PARTIAL_ENABLED, COMET_EXPLAIN_NATIVE_ENABLED,
-    COMET_MAX_TEMP_DIRECTORY_SIZE, COMET_PARQUET_ROW_FILTER_PUSHDOWN_ENABLED,
-    COMET_TRACING_ENABLED, SPARK_EXECUTOR_CORES,
+    COMET_EXEC_AGGREGATE_SKIP_PARTIAL_ENABLED, COMET_EXEC_SPILL_COMPRESSION_CODEC,
+    COMET_EXPLAIN_NATIVE_ENABLED, COMET_MAX_TEMP_DIRECTORY_SIZE,
+    COMET_PARQUET_PREFETCH_NEXT_FILE_METADATA_ENABLED, COMET_PARQUET_ROW_FILTER_PUSHDOWN_ENABLED,
+    COMET_STRICT_TIMESTAMP_LABELS, COMET_TRACING_ENABLED, SPARK_EXECUTOR_CORES,
 };
 use crate::parquet::encryption_support::{CometEncryptionFactory, ENCRYPTION_FACTORY_ID};
+use crate::parquet::parquet_exec::CometParquetScanOptions;
 use crate::parquet::parquet_support::CometObjectStoreRegistry;
 use datafusion_comet_proto::spark_operator::operator::OpStruct;
 use log::{info, warn};
@@ -260,6 +285,17 @@ fn sum_reserved(pools: &[Arc<dyn MemoryPool>]) -> usize {
     pools.iter().map(|pool| pool.reserved()).sum()
 }
 
+/// Bytes reserved across `pools`, less the part that Spark has not granted them; see
+/// [`MemoryUsage::pools_reserved`].
+fn sum_reserved_less_overcommit(pools: &[Arc<dyn MemoryPool>]) -> usize {
+    pools
+        .iter()
+        // The two figures are read at different moments, so a `grow` in between can leave the
+        // overcommit larger than the reservation read before it.
+        .map(|pool| pool.reserved().saturating_sub(overcommit(pool)))
+        .sum()
+}
+
 fn total_reserved_for_thread(thread_id: u64) -> usize {
     sum_reserved(&snapshot_registry(Some(thread_id)).thread_pools)
 }
@@ -307,7 +343,9 @@ struct MemoryUsage {
     /// Bytes handed out by the Rust global allocator, process-wide.
     native_allocated: usize,
     /// Bytes reserved across every live Comet memory pool, counting each pool once however many
-    /// plans share it.
+    /// plans share it, less any the pools recorded beyond what Spark granted them; see
+    /// [`overcommit`]. Spark's off-heap pool does not account for those bytes, so the log counts
+    /// them with the native memory that no pool tracks.
     pools_reserved: usize,
     /// Live memory pools. With the task-shared pool types, which include both defaults, that is one
     /// per task running native plans.
@@ -324,7 +362,7 @@ fn memory_usage() -> MemoryUsage {
     let snapshot = snapshot_registry(None);
     MemoryUsage {
         native_allocated: crate::alloc_accounting::current_balance(),
-        pools_reserved: sum_reserved(&snapshot.all_pools),
+        pools_reserved: sum_reserved_less_overcommit(&snapshot.all_pools),
         pools: snapshot.all_pools.len(),
         plans: snapshot.plans,
     }
@@ -417,14 +455,17 @@ pub fn get_runtime() -> Handle {
 
 /// Tears down the global Tokio runtime, if it has been initialized.
 ///
-/// The runtime is moved out of the global slot and shut down in the background so the
-/// calling (JNI) thread is not blocked waiting for worker threads to finish. Any handles
-/// previously returned by [`get_runtime`] will start failing their spawns once the runtime
-/// is gone, so this must only be called when no native execution is in flight.
+/// The runtime is moved out of the global slot, so the next [`init_runtime`] or
+/// [`get_runtime`] call builds a new one. Shutting it down blocks the calling (JNI) thread
+/// until the runtime's threads have stopped, for at most 3 seconds. Tasks still running on it
+/// are dropped at their next yield, and any handles previously returned by [`get_runtime`]
+/// will start failing their spawns, so this must only be called when no native execution is
+/// in flight.
 ///
 /// Must not be called from within the runtime's own worker threads, otherwise the shutdown
 /// would deadlock/panic.
 pub fn release_runtime() {
+    crate::execution::operators::clear_file_io_cache();
     let runtime = TOKIO_RUNTIME.lock().take();
     if let Some(runtime) = runtime {
         runtime.shutdown_timeout(Duration::from_secs(3));
@@ -459,8 +500,11 @@ fn op_name(op: &OpStruct) -> &'static str {
         OpStruct::ShuffleScan(_) => "ShuffleScan",
         OpStruct::BroadcastNestedLoopJoin(_) => "BroadcastNestedLoopJoin",
         OpStruct::Sample(_) => "Sample",
+        OpStruct::MergeRows(_) => "MergeRows",
+        OpStruct::RangeScan(_) => "RangeScan",
         OpStruct::ContribScan(_) => "ContribScan",
         OpStruct::WindowGroupLimit(_) => "WindowGroupLimit",
+        OpStruct::ArrowPythonUdf(_) => "ArrowPythonUdf",
     }
 }
 
@@ -505,10 +549,13 @@ struct ExecutionContext {
     pub input_sources: Vec<Arc<Global<JObject<'static>>>>,
     /// The record batch stream to pull results from
     pub stream: Option<SendableRecordBatchStream>,
-    /// Receives batches from a spawned tokio task (async I/O path)
-    pub batch_receiver: Option<mpsc::Receiver<DataFusionResult<RecordBatch>>>,
-    /// Native metrics
-    pub metrics: Arc<Global<JObject<'static>>>,
+    /// Runs the plan when it has no JVM input (async I/O path)
+    batch_producer: Option<BatchProducer>,
+    /// The pool every reservation the plan makes goes through
+    plan_memory: Arc<PlanMemoryPool>,
+    /// The JVM `CometMetricNode` the plan's metrics are published to. `None` only without a
+    /// JVM (unit tests).
+    pub metrics: Option<Arc<Global<JObject<'static>>>>,
     // The interval in milliseconds to update metrics
     pub metrics_update_interval: Option<Duration>,
     // The last update time of metrics
@@ -519,6 +566,8 @@ struct ExecutionContext {
     pub session_ctx: Arc<SessionContext>,
     /// Whether to enable additional debugging checks & messages
     pub debug_native: bool,
+    /// Whether boundaries fail on a relabelled timestamp instead of casting it (test-only)
+    pub strict_timestamp_labels: bool,
     /// Whether to write native plans with metrics to stdout
     pub explain_native: bool,
     /// Whether to log memory usage on each call to execute_plan
@@ -544,6 +593,10 @@ struct ExecutionContext {
     /// Task-owned remote shuffle callback, registered before native planning starts.
     /// The callback owns a JNI global reference and can safely run on Tokio workers.
     pub shuffle_partition_pusher: Option<Arc<dyn ShufflePartitionPusher>>,
+    /// The output stream of the file this plan's Parquet writer writes, registered before native
+    /// planning starts when the JVM created that file through Hadoop's FileSystem API. Like the
+    /// shuffle callback, it owns a JNI global reference and can run on any native thread.
+    pub output_stream: Option<Arc<dyn OutputStreamSink>>,
     /// Removes this context's tracing memory-pool entry on every exit path.
     memory_pool_registration: Option<ThreadMemoryPoolRegistration>,
 }
@@ -575,33 +628,16 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_createPlan(
     class_loader_obj: JObject,
 ) -> jlong {
     try_unwrap_or_throw(&e, |env| {
-        // Deserialize Spark configs
         let bytes = env.convert_byte_array(serialized_spark_configs)?;
-        let spark_configs = serde::deserialize_config(bytes.as_slice())?;
-        let spark_config: HashMap<String, String> = spark_configs.entries.into_iter().collect();
+        let settings = prepare_plan_settings(&bytes)?;
 
-        // Initialize the tokio runtime with spark.executor.cores as the default
-        // worker thread count, falling back to 1 if not set.
-        let executor_cores = spark_config.get_usize(SPARK_EXECUTOR_CORES, 1);
-        init_runtime(executor_cores);
-
-        // Access Comet configs
-        let debug_native = spark_config.get_bool(COMET_DEBUG_ENABLED);
-        let explain_native = spark_config.get_bool(COMET_EXPLAIN_NATIVE_ENABLED);
-        let tracing_enabled = spark_config.get_bool(COMET_TRACING_ENABLED);
-        let max_temp_directory_size =
-            spark_config.get_u64(COMET_MAX_TEMP_DIRECTORY_SIZE, 100 * 1024 * 1024 * 1024);
-        let logging_memory_pool = spark_config.get_bool(COMET_DEBUG_MEMORY);
-
-        with_trace("createPlan", tracing_enabled, || {
+        with_trace("createPlan", settings.tracing_enabled, || {
             // Init JVM classes
             JVMClasses::init(env);
 
             let start = Instant::now();
 
-            // Deserialize query plan
-            let bytes = env.convert_byte_array(serialized_query)?;
-            let spark_plan = serde::deserialize_op(bytes.as_slice())?;
+            let serialized_plan = env.convert_byte_array(serialized_query)?;
 
             let metrics = Arc::new(jni_new_global_ref!(env, metrics_node)?);
 
@@ -614,39 +650,10 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_createPlan(
                 input_sources.push(input_source);
             }
 
-            // Create DataFusion memory pool
             let task_memory_manager =
                 Arc::new(jni_new_global_ref!(env, comet_task_memory_manager_obj)?);
 
             let memory_pool_type = memory_pool_type.try_to_string(env)?;
-            let memory_pool_config = parse_memory_pool_config(
-                off_heap_mode != JNI_FALSE,
-                memory_pool_type,
-                memory_limit,
-            )?;
-            let memory_pool =
-                create_memory_pool(&memory_pool_config, task_memory_manager, task_attempt_id);
-
-            // Register the shared base pool before wrapping it for per-plan debug logging. The
-            // guard removes the entry if any later plan setup step fails.
-            //
-            // Registration is not conditional on this plan's tracing setting. `tracing.enabled` is
-            // a session config, so an executor can run a traced and an untraced plan at once,
-            // while the allocation counter a trace compares against is process-wide. Registering
-            // only traced plans would leave the untraced plan's reservation out of the total and
-            // report it as allocation held outside any pool.
-            let rust_thread_id = get_thread_id();
-            let memory_pool_registration = Some(ThreadMemoryPoolRegistration::new(
-                rust_thread_id,
-                id,
-                Arc::clone(&memory_pool),
-            ));
-
-            let memory_pool = if logging_memory_pool {
-                Arc::new(LoggingMemoryPool::new(task_attempt_id as u64, memory_pool))
-            } else {
-                memory_pool
-            };
 
             // Get local directories for storing spill files
             let num_local_dirs = local_dirs.len(env)?;
@@ -658,44 +665,11 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_createPlan(
                 local_dirs_vec.push(local_dir);
             }
 
-            // We need to keep the session context alive. Some session state like temporary
-            // dictionaries are stored in session context. If it is dropped, the temporary
-            // dictionaries will be dropped as well.
-            let session = prepare_datafusion_session_context(
-                batch_size as usize,
-                memory_pool,
-                local_dirs_vec,
-                max_temp_directory_size,
-                task_cpus as usize,
-                &spark_config,
-                &spark_plan,
-            )?;
-
-            let plan_creation_time = start.elapsed();
-
-            let metrics_update_interval = if metrics_update_interval > 0 {
-                Some(Duration::from_millis(metrics_update_interval as u64))
+            // Key unwrapper for encrypted files
+            let key_unwrapper = if !key_unwrapper_obj.is_null() {
+                Some(Arc::new(jni_new_global_ref!(env, key_unwrapper_obj)?))
             } else {
                 None
-            };
-
-            // Handle key unwrapper for encrypted files
-            if !key_unwrapper_obj.is_null() {
-                let encryption_factory = CometEncryptionFactory {
-                    key_unwrapper: Arc::new(jni_new_global_ref!(env, key_unwrapper_obj)?),
-                };
-                session.runtime_env().register_parquet_encryption_factory(
-                    ENCRYPTION_FACTORY_ID,
-                    Arc::new(encryption_factory),
-                );
-            }
-
-            let session = Arc::new(session);
-
-            let tracing_event_name = if tracing_enabled {
-                build_tracing_event_name(&spark_plan)
-            } else {
-                String::new()
             };
 
             // Capture the driving Spark task's TaskContext and context ClassLoader as JNI global
@@ -713,38 +687,227 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_createPlan(
                 None
             };
 
-            let exec_context = Box::new(ExecutionContext {
+            let inputs = PlanInputs {
                 id,
-                spark_plan,
+                settings,
+                serialized_plan,
                 partition_count: partition_count as usize,
-                root_op: None,
-                scans: vec![],
-                shuffle_scans: vec![],
-                input_sources,
-                stream: None,
-                batch_receiver: None,
-                metrics,
+                batch_size: batch_size as usize,
+                off_heap_mode: off_heap_mode != JNI_FALSE,
+                memory_pool_type,
+                memory_limit,
+                task_attempt_id,
+                task_cpus: task_cpus as usize,
+                local_dirs: local_dirs_vec,
                 metrics_update_interval,
-                metrics_last_update_time: Instant::now(),
-                plan_creation_time,
-                session_ctx: session,
-                debug_native,
-                explain_native,
-                tracing_enabled,
-                rust_thread_id,
-                tracing_memory_metric_name: format!(
-                    "thread_{rust_thread_id}_comet_memory_reserved"
-                ),
-                tracing_event_name,
-                task_context,
-                class_loader,
-                shuffle_partition_pusher: None,
-                memory_pool_registration,
-            });
+                start,
+                jvm: PlanJvmRefs {
+                    metrics: Some(metrics),
+                    input_sources,
+                    key_unwrapper,
+                    task_context,
+                    class_loader,
+                },
+            };
+            // The pool acquires memory from Spark's task memory manager.
+            let exec_context = create_execution_context(inputs, |config| {
+                create_memory_pool(config, task_memory_manager, task_attempt_id)
+            })?;
 
             Ok(Box::into_raw(exec_context) as i64)
         })
     })
+}
+
+/// What `createPlan` takes from the Spark configs.
+struct PlanSettings {
+    spark_config: HashMap<String, String>,
+    debug_native: bool,
+    strict_timestamp_labels: bool,
+    explain_native: bool,
+    tracing_enabled: bool,
+    max_temp_directory_size: u64,
+    logging_memory_pool: bool,
+}
+
+/// Deserializes the Spark configs of a plan and initializes the Tokio runtime from them. The
+/// first step of `Native.createPlan`, before its trace span opens.
+fn prepare_plan_settings(serialized_spark_configs: &[u8]) -> CometResult<PlanSettings> {
+    let spark_configs = serde::deserialize_config(serialized_spark_configs)?;
+    let spark_config: HashMap<String, String> = spark_configs.entries.into_iter().collect();
+
+    // Initialize the tokio runtime with spark.executor.cores as the default
+    // worker thread count, falling back to 1 if not set.
+    let executor_cores = spark_config.get_usize(SPARK_EXECUTOR_CORES, 1);
+    init_runtime(executor_cores);
+
+    // Access Comet configs
+    Ok(PlanSettings {
+        debug_native: spark_config.get_bool(COMET_DEBUG_ENABLED),
+        strict_timestamp_labels: spark_config.get_bool(COMET_STRICT_TIMESTAMP_LABELS),
+        explain_native: spark_config.get_bool(COMET_EXPLAIN_NATIVE_ENABLED),
+        tracing_enabled: spark_config.get_bool(COMET_TRACING_ENABLED),
+        max_temp_directory_size: spark_config
+            .get_u64(COMET_MAX_TEMP_DIRECTORY_SIZE, 100 * 1024 * 1024 * 1024),
+        logging_memory_pool: spark_config.get_bool(COMET_DEBUG_MEMORY),
+        spark_config,
+    })
+}
+
+/// The arguments of `Native.createPlan`, converted from JNI.
+struct PlanInputs {
+    id: i64,
+    settings: PlanSettings,
+    serialized_plan: Vec<u8>,
+    partition_count: usize,
+    batch_size: usize,
+    off_heap_mode: bool,
+    memory_pool_type: String,
+    memory_limit: i64,
+    task_attempt_id: i64,
+    task_cpus: usize,
+    local_dirs: Vec<String>,
+    /// In milliseconds; zero or less publishes metrics only when the plan is released.
+    metrics_update_interval: i64,
+    /// When plan creation started, the start of `ExecutionContext::plan_creation_time`.
+    start: Instant,
+    jvm: PlanJvmRefs,
+}
+
+/// The JVM objects a plan calls back into, as JNI global references. Each is `None` or empty
+/// only without a JVM (unit tests) or when Spark passes none.
+struct PlanJvmRefs {
+    metrics: Option<Arc<Global<JObject<'static>>>>,
+    input_sources: Vec<Arc<Global<JObject<'static>>>>,
+    key_unwrapper: Option<Arc<Global<JObject<'static>>>>,
+    task_context: Option<Arc<Global<JObject<'static>>>>,
+    class_loader: Option<Arc<Global<JObject<'static>>>>,
+}
+
+/// Creates the execution context of a native plan: deserializes the plan, sets up its memory
+/// pool and DataFusion session, and registers the pool for tracing. The plan's operators are
+/// created by the first `execute_plan`. Core of `Native.createPlan`.
+///
+/// `memory_pool_for` builds the pool every reservation of the plan goes through from its
+/// config; `Native.createPlan` builds one that acquires memory from Spark.
+fn create_execution_context(
+    inputs: PlanInputs,
+    memory_pool_for: impl FnOnce(&MemoryPoolConfig) -> Arc<dyn MemoryPool>,
+) -> CometResult<Box<ExecutionContext>> {
+    let PlanInputs {
+        id,
+        settings,
+        serialized_plan,
+        partition_count,
+        batch_size,
+        off_heap_mode,
+        memory_pool_type,
+        memory_limit,
+        task_attempt_id,
+        task_cpus,
+        local_dirs,
+        metrics_update_interval,
+        start,
+        jvm,
+    } = inputs;
+
+    // Deserialize query plan
+    let spark_plan = serde::deserialize_op(serialized_plan.as_slice())?;
+
+    // Create DataFusion memory pool
+    let memory_pool_config =
+        parse_memory_pool_config(off_heap_mode, memory_pool_type, memory_limit)?;
+    let memory_pool = memory_pool_for(&memory_pool_config);
+
+    // Register the shared base pool before wrapping it for per-plan debug logging. The
+    // guard removes the entry if any later plan setup step fails.
+    //
+    // Registration is not conditional on this plan's tracing setting. `tracing.enabled` is
+    // a session config, so an executor can run a traced and an untraced plan at once,
+    // while the allocation counter a trace compares against is process-wide. Registering
+    // only traced plans would leave the untraced plan's reservation out of the total and
+    // report it as allocation held outside any pool.
+    let rust_thread_id = get_thread_id();
+    let memory_pool_registration = Some(ThreadMemoryPoolRegistration::new(
+        rust_thread_id,
+        id,
+        Arc::clone(&memory_pool),
+    ));
+
+    let memory_pool = if settings.logging_memory_pool {
+        Arc::new(LoggingMemoryPool::new(task_attempt_id as u64, memory_pool))
+    } else {
+        memory_pool
+    };
+    let plan_memory = Arc::new(PlanMemoryPool::new(memory_pool));
+
+    // We need to keep the session context alive. Some session state like temporary
+    // dictionaries are stored in session context. If it is dropped, the temporary
+    // dictionaries will be dropped as well.
+    let session = prepare_datafusion_session_context(
+        batch_size,
+        Arc::clone(&plan_memory) as Arc<dyn MemoryPool>,
+        local_dirs,
+        settings.max_temp_directory_size,
+        task_cpus,
+        &settings.spark_config,
+        &spark_plan,
+    )?;
+
+    let plan_creation_time = start.elapsed();
+
+    let metrics_update_interval = if metrics_update_interval > 0 {
+        Some(Duration::from_millis(metrics_update_interval as u64))
+    } else {
+        None
+    };
+
+    // Handle key unwrapper for encrypted files
+    if let Some(key_unwrapper) = jvm.key_unwrapper {
+        let encryption_factory = CometEncryptionFactory { key_unwrapper };
+        session.runtime_env().register_parquet_encryption_factory(
+            ENCRYPTION_FACTORY_ID,
+            Arc::new(encryption_factory),
+        );
+    }
+
+    let session = Arc::new(session);
+
+    let tracing_event_name = if settings.tracing_enabled {
+        build_tracing_event_name(&spark_plan)
+    } else {
+        String::new()
+    };
+
+    Ok(Box::new(ExecutionContext {
+        id,
+        spark_plan,
+        partition_count,
+        root_op: None,
+        scans: vec![],
+        shuffle_scans: vec![],
+        input_sources: jvm.input_sources,
+        stream: None,
+        batch_producer: None,
+        plan_memory,
+        metrics: jvm.metrics,
+        metrics_update_interval,
+        metrics_last_update_time: Instant::now(),
+        plan_creation_time,
+        session_ctx: session,
+        debug_native: settings.debug_native,
+        strict_timestamp_labels: settings.strict_timestamp_labels,
+        explain_native: settings.explain_native,
+        tracing_enabled: settings.tracing_enabled,
+        rust_thread_id,
+        tracing_memory_metric_name: format!("thread_{rust_thread_id}_comet_memory_reserved"),
+        tracing_event_name,
+        task_context: jvm.task_context,
+        class_loader: jvm.class_loader,
+        shuffle_partition_pusher: None,
+        output_stream: None,
+        memory_pool_registration,
+    }))
 }
 
 /// Binds one task-owned shuffle callback before native execution is initialized.
@@ -766,22 +929,84 @@ pub extern "system" fn Java_org_apache_comet_Native_setShufflePartitionPusher(
         }
 
         let exec_context = get_execution_context(exec_context);
-        if exec_context.root_op.is_some() {
-            return Err(CometError::Internal(
-                "Remote shuffle callback cannot be registered after native execution starts"
-                    .to_string(),
+        register_shuffle_partition_pusher(exec_context, || {
+            Ok(Arc::new(JavaShufflePartitionPusher::try_new(
+                env, &callback,
+            )?))
+        })
+    })
+}
+
+/// Registers the plan's remote shuffle callback, built by `make_pusher` only once the plan
+/// is known to accept one: before execution starts, and once. Core of
+/// `Native.setShufflePartitionPusher`, whose pusher calls back into the JVM.
+fn register_shuffle_partition_pusher(
+    exec_context: &mut ExecutionContext,
+    make_pusher: impl FnOnce() -> CometResult<Arc<dyn ShufflePartitionPusher>>,
+) -> CometResult<()> {
+    register_before_execution(
+        exec_context.root_op.is_some(),
+        &mut exec_context.shuffle_partition_pusher,
+        "Remote shuffle callback",
+        make_pusher,
+    )
+}
+
+/// Registers one of a plan's task-owned JVM callbacks in `slot`, built by `make` only once the
+/// plan is known to accept it: before execution has `started`, and once. `what` names the callback
+/// in the errors.
+fn register_before_execution<T: ?Sized>(
+    started: bool,
+    slot: &mut Option<Arc<T>>,
+    what: &str,
+    make: impl FnOnce() -> CometResult<Arc<T>>,
+) -> CometResult<()> {
+    if started {
+        return Err(CometError::Internal(format!(
+            "{what} cannot be registered after native execution starts"
+        )));
+    }
+
+    if slot.is_some() {
+        return Err(CometError::Internal(format!(
+            "{what} has already been registered for this task"
+        )));
+    }
+
+    *slot = Some(make()?);
+    Ok(())
+}
+
+/// Binds the output stream of the file the plan's Parquet writer writes, for a file the JVM
+/// created itself, before native execution is initialized.
+///
+/// Separate from `createPlan` for the same reason as `setShufflePartitionPusher`: only native
+/// writes the JVM creates the file for need it, so every other caller keeps the existing ABI.
+#[no_mangle]
+pub extern "system" fn Java_org_apache_comet_Native_setOutputStream(
+    e: EnvUnowned,
+    _class: JClass,
+    exec_context: jlong,
+    output: JObject,
+) {
+    try_unwrap_or_throw(&e, |env| {
+        if exec_context == 0 {
+            return Err(CometError::NullPointer(
+                "A native write's output stream requires a valid native execution plan".to_string(),
             ));
         }
 
-        if exec_context.shuffle_partition_pusher.is_some() {
-            return Err(CometError::Internal(
-                "Remote shuffle callback has already been registered for this task".to_string(),
-            ));
-        }
-
-        let pusher = JavaShufflePartitionPusher::try_new(env, &callback)?;
-        exec_context.shuffle_partition_pusher = Some(Arc::new(pusher));
-        Ok(())
+        let exec_context = get_execution_context(exec_context);
+        register_before_execution(
+            exec_context.root_op.is_some(),
+            &mut exec_context.output_stream,
+            "A native write's output stream",
+            || {
+                let sink: Arc<dyn OutputStreamSink> =
+                    Arc::new(JavaOutputStreamSink::try_new(env, &output)?);
+                Ok(sink)
+            },
+        )
     })
 }
 
@@ -808,7 +1033,7 @@ fn configure_skip_partial_aggregation(config: &mut SessionConfig, plan: &Operato
                                 if count.children.len() == 1)
                         })
                 }
-                // PartialMerge is represented as native Partial, but consumes states, not rows.
+                // PartialMerge consumes states, not rows.
                 _ => false,
             },
             _ => true,
@@ -840,11 +1065,8 @@ fn prepare_datafusion_session_context(
     spark_plan: &Operator,
 ) -> CometResult<SessionContext> {
     let paths = local_dirs.into_iter().map(PathBuf::from).collect();
-    let disk_manager = DiskManagerBuilder::default()
-        .with_mode(DiskManagerMode::Directories(paths))
-        .with_max_temp_directory_size(max_temp_directory_size);
     let mut rt_config = RuntimeEnvBuilder::new()
-        .with_disk_manager_builder(disk_manager)
+        .with_disk_manager_builder(plan_disk_manager(paths, max_temp_directory_size))
         .with_object_store_registry(Arc::new(CometObjectStoreRegistry::default()));
     rt_config = rt_config.with_memory_pool(memory_pool);
 
@@ -869,6 +1091,31 @@ fn prepare_datafusion_session_context(
             session_config.set_str("datafusion.execution.parquet.reorder_filters", "true");
     }
 
+    // Native Parquet scan options that DataFusion has no setting for travel as a session config
+    // extension, which every scan in the plan reads.
+    session_config = session_config.with_extension(Arc::new(CometParquetScanOptions {
+        prefetch_next_file_metadata: spark_config
+            .get_bool(COMET_PARQUET_PREFETCH_NEXT_FILE_METADATA_ENABLED),
+    }));
+
+    // Translate Comet's spill codec into DataFusion's spill compression, which DataFusion
+    // otherwise leaves uncompressed. Set before the pass-through below for the same reason,
+    // so an explicit `spark.comet.datafusion.execution.spill_compression` still wins.
+    let spill_compression = match spark_config
+        .get(COMET_EXEC_SPILL_COMPRESSION_CODEC)
+        .map(String::as_str)
+    {
+        None | Some("lz4") => SpillCompression::Lz4Frame,
+        Some("zstd") => SpillCompression::Zstd,
+        Some("none") => SpillCompression::Uncompressed,
+        Some(codec) => {
+            return Err(CometError::Config(format!(
+                "Unsupported spill compression codec: {codec}"
+            )))
+        }
+    };
+    session_config = session_config.with_spill_compression(spill_compression);
+
     // Pass through DataFusion configs from Spark.
     // e.g: spark-shell --conf spark.comet.datafusion.sql_parser.parse_float_as_decimal=true
     // becomes datafusion.sql_parser.parse_float_as_decimal=true
@@ -879,6 +1126,11 @@ fn prepare_datafusion_session_context(
             session_config = session_config.set_str(&df_key, value);
         }
     }
+
+    // The planner reads this back to decide whether a plan may load a native UDF library.
+    session_config = session_config.with_extension(Arc::new(
+        crate::execution::c_udf::policy::NativeUdfPolicy::from_spark_config(spark_config),
+    ));
 
     configure_skip_partial_aggregation(
         &mut session_config,
@@ -950,13 +1202,25 @@ fn prepare_output(
     output_batch: RecordBatch,
     validate: bool,
 ) -> CometResult<jlong> {
-    let num_cols = array_addrs.len(env)?;
-
     let array_addrs = unsafe { array_addrs.get_elements(env, ReleaseMode::NoCopyBack)? };
-    let array_addrs = &*array_addrs;
-
     let schema_addrs = unsafe { schema_addrs.get_elements(env, ReleaseMode::NoCopyBack)? };
-    let schema_addrs = &*schema_addrs;
+    unsafe { export_batch(&array_addrs, &schema_addrs, output_batch, validate) }
+}
+
+/// Moves the columns of `output_batch` into the Arrow C Data Interface structs at `array_addrs`
+/// and `schema_addrs`, one pair per column, and returns the row count. With no addresses, which
+/// Spark passes when the results of a query are not used, only the row count is returned.
+///
+/// # Safety
+/// Each address must point to a writable `FFI_ArrowArray` / `FFI_ArrowSchema` the caller owns.
+/// Whatever the structs hold is overwritten without being released.
+unsafe fn export_batch(
+    array_addrs: &[i64],
+    schema_addrs: &[i64],
+    output_batch: RecordBatch,
+    validate: bool,
+) -> CometResult<i64> {
+    let num_cols = array_addrs.len();
 
     let output_schema = output_batch.schema();
     let results = output_batch.columns();
@@ -994,7 +1258,7 @@ fn prepare_output(
         }
     }
 
-    Ok(num_rows as jlong)
+    Ok(num_rows as i64)
 }
 
 /// Pull the next input from JVM. Note that we cannot pull input batches in
@@ -1076,6 +1340,114 @@ where
     .await
 }
 
+/// Runs a plan that has no JVM input on a Tokio task, which sends the plan's batches to the Spark
+/// task thread.
+struct BatchProducer {
+    batches: mpsc::Receiver<DataFusionResult<RecordBatch>>,
+    /// Set by the task once it has sent the stream's last batch. The channel closes whenever the
+    /// task ends, and a runtime that shuts down ends every task it has by cancelling it, so only
+    /// this tells the consumer that it has had every batch.
+    stream_ended: Arc<AtomicBool>,
+    /// The plan's stream, and with it every reservation the stream holds. The task locks it only
+    /// while polling it, so `stop` can take it whenever the task is waiting.
+    stream: Arc<Mutex<Option<SendableRecordBatchStream>>>,
+    task: JoinHandle<()>,
+}
+
+impl BatchProducer {
+    fn spawn(runtime: &Handle, stream: SendableRecordBatchStream) -> Self {
+        // Channel capacity of 2 allows the producer to work one batch
+        // ahead while the consumer processes the current one via JNI,
+        // without buffering excessive memory. Increasing this would
+        // trade memory for latency hiding if JNI/FFI overhead dominates;
+        // decreasing to 1 would serialize production and consumption.
+        let (tx, batches) = mpsc::channel(2);
+        let stream_ended = Arc::new(AtomicBool::new(false));
+        let ended = Arc::clone(&stream_ended);
+        let stream = Arc::new(Mutex::new(Some(stream)));
+        let polled = Arc::clone(&stream);
+        let task = runtime.spawn(async move {
+            let result = std::panic::AssertUnwindSafe(async {
+                // Ends once `stop` has taken the stream.
+                let next = || {
+                    poll_fn(|cx| match polled.lock().as_mut() {
+                        Some(stream) => stream.poll_next_unpin(cx),
+                        None => Poll::Ready(None),
+                    })
+                };
+                while let Some(batch) = next().await {
+                    if tx.send(batch).await.is_err() {
+                        return;
+                    }
+                }
+                ended.store(true, Ordering::Release);
+            })
+            .catch_unwind()
+            .await;
+
+            if let Err(panic) = result {
+                let msg = match panic.downcast_ref::<&str>() {
+                    Some(s) => s.to_string(),
+                    None => match panic.downcast_ref::<String>() {
+                        Some(s) => s.clone(),
+                        None => "unknown panic".to_string(),
+                    },
+                };
+                let _ = tx
+                    .send(Err(DataFusionError::Execution(format!(
+                        "native panic: {msg}"
+                    ))))
+                    .await;
+            }
+        });
+        Self {
+            batches,
+            stream_ended,
+            stream,
+            task,
+        }
+    }
+
+    /// Waits for the plan's next batch, and returns `None` once the stream has ended.
+    ///
+    /// A channel that closes before the stream has ended means the task was cancelled, and the
+    /// plan's output is incomplete. That is an error, or the Spark task would end successfully
+    /// with only the batches it has read so far.
+    fn next_batch(&mut self) -> CometResult<Option<RecordBatch>> {
+        match self.batches.blocking_recv() {
+            Some(batch) => Ok(Some(batch?)),
+            None if self.stream_ended.load(Ordering::Acquire) => Ok(None),
+            None => Err(CometError::Internal(
+                "The Tokio task running the native plan was cancelled before the plan produced \
+                 all of its output, for instance because Comet's Tokio runtime was shut down"
+                    .to_string(),
+            )),
+        }
+    }
+
+    /// Stops the task and drops the plan's stream on the calling thread.
+    ///
+    /// The stream is dropped here rather than by cancelling the task, because a cancellation only
+    /// runs once a Tokio worker is free, and every worker can be tied up, for instance waiting in
+    /// Spark's `acquireMemory` for the memory this stream holds. Taking the stream waits only for
+    /// a poll the task is already in, so at most for the work the stream does between two await
+    /// points.
+    fn stop(self) -> CometResult<()> {
+        let Self {
+            batches,
+            stream,
+            task,
+            ..
+        } = self;
+        drop(batches);
+        task.abort();
+        let stream = stream.lock().take();
+        // A panic here is reported as it is when `releasePlan` drops a JVM-fed plan's stream.
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(stream)))
+            .map_err(CometError::from)
+    }
+}
+
 /// Accept serialized query plan and the addresses of Arrow Arrays from Spark,
 /// then execute the query. Return addresses of arrow vector.
 /// # Safety
@@ -1106,126 +1478,8 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_executePlan(
         };
 
         let result = with_trace(tracing_label, tracing_enabled, || {
-            let exec_context_id = exec_context.id;
-
-            // Initialize the execution stream.
-            // Because we don't know if input arrays are dictionary-encoded when we create
-            // query plan, we need to defer stream initialization to first time execution.
-            if exec_context.root_op.is_none() {
-                let start = Instant::now();
-                let planner =
-                    PhysicalPlanner::new(Arc::clone(&exec_context.session_ctx), partition)
-                        .with_exec_id(exec_context_id)
-                        .with_sql_text_pool(&exec_context.spark_plan)
-                        .with_task_context(exec_context.task_context.clone())
-                        .with_class_loader(exec_context.class_loader.clone())
-                        .with_shuffle_partition_pusher(
-                            exec_context.shuffle_partition_pusher.clone(),
-                        );
-                let (scans, shuffle_scans, root_op) = planner.create_plan(
-                    &exec_context.spark_plan,
-                    &mut exec_context.input_sources.clone(),
-                    exec_context.partition_count,
-                )?;
-                let physical_plan_time = start.elapsed();
-
-                exec_context.plan_creation_time += physical_plan_time;
-                exec_context.scans = scans;
-                exec_context.shuffle_scans = shuffle_scans;
-
-                if exec_context.explain_native {
-                    let formatted_plan_str =
-                        DisplayableExecutionPlan::new(root_op.native_plan.as_ref()).indent(true);
-                    info!("Comet native query plan:\n{formatted_plan_str:}");
-                }
-
-                let task_ctx = exec_context.session_ctx.task_ctx();
-                // Each Comet native execution corresponds to a single Spark partition,
-                // so we should always execute partition 0.
-                let stream = root_op.native_plan.execute(0, task_ctx)?;
-
-                if exec_context.scans.is_empty() && exec_context.shuffle_scans.is_empty() {
-                    // No JVM data sources — spawn onto tokio so the executor
-                    // thread parks in blocking_recv instead of busy-polling.
-                    //
-                    // Channel capacity of 2 allows the producer to work one batch
-                    // ahead while the consumer processes the current one via JNI,
-                    // without buffering excessive memory. Increasing this would
-                    // trade memory for latency hiding if JNI/FFI overhead dominates;
-                    // decreasing to 1 would serialize production and consumption.
-                    let (tx, rx) = mpsc::channel(2);
-                    let mut stream = stream;
-                    get_runtime().spawn(async move {
-                        let result = std::panic::AssertUnwindSafe(async {
-                            while let Some(batch) = stream.next().await {
-                                if tx.send(batch).await.is_err() {
-                                    break;
-                                }
-                            }
-                        })
-                        .catch_unwind()
-                        .await;
-
-                        if let Err(panic) = result {
-                            let msg = match panic.downcast_ref::<&str>() {
-                                Some(s) => s.to_string(),
-                                None => match panic.downcast_ref::<String>() {
-                                    Some(s) => s.clone(),
-                                    None => "unknown panic".to_string(),
-                                },
-                            };
-                            let _ = tx
-                                .send(Err(DataFusionError::Execution(format!(
-                                    "native panic: {msg}"
-                                ))))
-                                .await;
-                        }
-                    });
-                    exec_context.batch_receiver = Some(rx);
-                } else {
-                    exec_context.stream = Some(stream);
-                }
-                exec_context.root_op = Some(root_op);
-            } else {
-                // Pull input batches
-                pull_input_batches(exec_context)?;
-            }
-
-            if let Some(rx) = &mut exec_context.batch_receiver {
-                match rx.blocking_recv() {
-                    Some(Ok(batch)) => {
-                        update_metrics(env, exec_context)?;
-                        return prepare_output(
-                            env,
-                            array_addrs,
-                            schema_addrs,
-                            batch,
-                            exec_context.debug_native,
-                        );
-                    }
-                    Some(Err(e)) => {
-                        return Err(e.into());
-                    }
-                    None => {
-                        log_plan_metrics(exec_context, stage_id, partition);
-                        return Ok(-1);
-                    }
-                }
-            }
-
-            // ScanExec path: JVM-fed scans return `Pending` until `pull_input_batches` refills
-            // them and wakes the stream. A poll that is still pending, with nothing having woken
-            // the stream by the end of the pull, waits on native I/O, and `next_batch` parks
-            // until it completes.
-            let mut stream = exec_context.stream.take().unwrap();
-            let next = get_runtime().block_on(next_batch(&mut stream, || {
-                pull_input_batches(exec_context)?;
-                update_metrics_on_interval(env, exec_context)
-            }));
-            exec_context.stream = Some(stream);
-            let next = next?;
-            update_metrics_on_interval(env, exec_context)?;
-            match next {
+            let mut publish_metrics = |ctx: &ExecutionContext| update_metrics(env, ctx);
+            match execute_plan(exec_context, stage_id, partition, &mut publish_metrics)? {
                 Some(batch) => prepare_output(
                     env,
                     array_addrs,
@@ -1233,10 +1487,7 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_executePlan(
                     batch,
                     exec_context.debug_native,
                 ),
-                None => {
-                    log_plan_metrics(exec_context, stage_id, partition);
-                    Ok(-1)
-                }
+                None => Ok(-1),
             }
         });
 
@@ -1261,6 +1512,105 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_executePlan(
     })
 }
 
+/// Publishes a plan's metrics to the JVM. The plan entry points pass one that calls into the JVM
+/// through their `Env`, so the core functions that drive a plan take no JNI types.
+type PublishMetrics<'a> = dyn FnMut(&ExecutionContext) -> CometResult<()> + 'a;
+
+/// Returns the plan's next output batch, or `None` once the plan has produced all of its output.
+/// The first call creates the plan's operators and starts its stream; a plan with no JVM input
+/// then runs on a Tokio task. Metrics are published through `publish_metrics` on the configured
+/// interval. Core of `Native.executePlan`; the JVM-fed scans call back into the JVM for their
+/// input.
+fn execute_plan(
+    exec_context: &mut ExecutionContext,
+    stage_id: i32,
+    partition: i32,
+    publish_metrics: &mut PublishMetrics,
+) -> CometResult<Option<RecordBatch>> {
+    let exec_context_id = exec_context.id;
+
+    // Initialize the execution stream.
+    // Because we don't know if input arrays are dictionary-encoded when we create
+    // query plan, we need to defer stream initialization to first time execution.
+    if exec_context.root_op.is_none() {
+        let start = Instant::now();
+        let planner = PhysicalPlanner::new(Arc::clone(&exec_context.session_ctx), partition)
+            .with_exec_id(exec_context_id)
+            .with_strict_timestamp_labels(exec_context.strict_timestamp_labels)
+            .with_sql_text_pool(&exec_context.spark_plan)
+            .with_task_context(exec_context.task_context.clone())
+            .with_class_loader(exec_context.class_loader.clone())
+            .with_shuffle_partition_pusher(exec_context.shuffle_partition_pusher.clone())
+            .with_output_stream(exec_context.output_stream.clone());
+        let (scans, shuffle_scans, root_op) = planner.create_plan(
+            &exec_context.spark_plan,
+            &mut exec_context.input_sources.clone(),
+            exec_context.partition_count,
+        )?;
+        let physical_plan_time = start.elapsed();
+
+        exec_context.plan_creation_time += physical_plan_time;
+        exec_context.scans = scans;
+        exec_context.shuffle_scans = shuffle_scans;
+
+        if exec_context.explain_native {
+            let formatted_plan_str =
+                DisplayableExecutionPlan::new(root_op.native_plan.as_ref()).indent(true);
+            info!("Comet native query plan:\n{formatted_plan_str:}");
+        }
+
+        let task_ctx = exec_context.session_ctx.task_ctx();
+        // Each Comet native execution corresponds to a single Spark partition,
+        // so we should always execute partition 0.
+        let stream = root_op.native_plan.execute(0, task_ctx)?;
+
+        if exec_context.scans.is_empty() && exec_context.shuffle_scans.is_empty() {
+            // No JVM data sources — spawn onto tokio so the executor
+            // thread parks in blocking_recv instead of busy-polling.
+            exec_context.batch_producer = Some(BatchProducer::spawn(&get_runtime(), stream));
+        } else {
+            exec_context.stream = Some(stream);
+        }
+        exec_context.root_op = Some(root_op);
+    } else {
+        // Pull input batches
+        pull_input_batches(exec_context)?;
+    }
+
+    if let Some(producer) = &mut exec_context.batch_producer {
+        return match producer.next_batch()? {
+            Some(batch) => {
+                // Publish on the configured interval, as the ScanExec path below does,
+                // since each publish walks the whole metric tree and calls into the JVM.
+                // `releasePlan` publishes the final values.
+                update_metrics_on_interval(exec_context, publish_metrics)?;
+                Ok(Some(batch))
+            }
+            None => {
+                log_plan_metrics(exec_context, stage_id, partition);
+                Ok(None)
+            }
+        };
+    }
+
+    // ScanExec path: JVM-fed scans return `Pending` until `pull_input_batches` refills
+    // them and wakes the stream. A poll that is still pending, with nothing having woken
+    // the stream by the end of the pull, waits on native I/O, and `next_batch` parks
+    // until it completes.
+    let mut stream = exec_context.stream.take().unwrap();
+    let next = get_runtime().block_on(next_batch(&mut stream, || {
+        pull_input_batches(exec_context)?;
+        update_metrics_on_interval(exec_context, publish_metrics)
+    }));
+    exec_context.stream = Some(stream);
+    let next = next?;
+    update_metrics_on_interval(exec_context, publish_metrics)?;
+    if next.is_none() {
+        log_plan_metrics(exec_context, stage_id, partition);
+    }
+    Ok(next)
+}
+
 #[no_mangle]
 /// Drop the native query plan object and context object.
 pub extern "system" fn Java_org_apache_comet_Native_releasePlan(
@@ -1277,33 +1627,74 @@ pub extern "system" fn Java_org_apache_comet_Native_releasePlan(
             "Comet execution context shouldn't be null!"
         );
 
-        // Reclaim ownership of the context up front so that it is always freed, even if updating
-        // metrics below fails. Dropping it releases the memory pool and every JNI global ref the
-        // context holds.
-        let mut execution_context: Box<ExecutionContext> =
+        // Reclaim ownership of the context up front so that it is always freed, even if a step
+        // below fails. Dropping it releases the memory pool and every JNI global ref the context
+        // holds.
+        let execution_context: Box<ExecutionContext> =
             Box::from_raw(exec_context as *mut ExecutionContext);
 
-        // Unregister this context's pool and, when tracing, emit the remaining total for the
-        // thread. Every context registers, but only a traced one writes counters, so the
-        // reservations are read only then.
-        drop(execution_context.memory_pool_registration.take());
-        if execution_context.tracing_enabled {
-            log_memory_usage(
-                &execution_context.tracing_memory_metric_name,
-                total_reserved_for_thread(execution_context.rust_thread_id) as u64,
-            );
-        }
-
-        // Flush metrics last, as it is the only fallible step here.
-        update_metrics(env, &mut execution_context)
+        release_plan(execution_context, &mut |ctx| update_metrics(env, ctx))
     })
 }
 
-/// Runs `update_metrics` once the configured interval has passed and, with tracing on, samples
+/// Releases a plan: stops it, publishes its final metrics through `publish_metrics`, drops it,
+/// and waits briefly for its memory reservations to be returned. The context is freed even if a
+/// step fails. Core of `Native.releasePlan`.
+fn release_plan(
+    mut execution_context: Box<ExecutionContext>,
+    publish_metrics: &mut PublishMetrics,
+) -> CometResult<()> {
+    // A plan with no JVM input runs on a Tokio task. Stop it and drop its stream first, so the
+    // stream's memory is returned before the Spark task can end, and the metrics flushed below
+    // include what the stream records as it is dropped.
+    let producer_stopped = execution_context
+        .batch_producer
+        .take()
+        .map_or(Ok(()), BatchProducer::stop);
+
+    // Unregister this context's pool and, when tracing, emit the remaining total for the
+    // thread. Every context registers, but only a traced one writes counters, so the
+    // reservations are read only then.
+    drop(execution_context.memory_pool_registration.take());
+    if execution_context.tracing_enabled {
+        log_memory_usage(
+            &execution_context.tracing_memory_metric_name,
+            total_reserved_for_thread(execution_context.rust_thread_id) as u64,
+        );
+    }
+
+    let metrics_flushed = publish_metrics(&execution_context);
+
+    // Once this returns the Spark task can end, and Spark hands whatever the task still holds
+    // to other tasks. Dropping the plan aborts the tasks its operators spawned, and they give
+    // back what they hold the next time they yield, so wait for them.
+    let id = execution_context.id;
+    let plan_memory = Arc::clone(&execution_context.plan_memory);
+    drop(execution_context);
+    let held = plan_memory.wait_until_released(Instant::now() + PLAN_MEMORY_RELEASE_TIMEOUT);
+    if held > 0 {
+        warn!(
+            "Native plan {id} still holds {held} bytes {PLAN_MEMORY_RELEASE_TIMEOUT:?} after \
+             it was released. They go back to Spark only when whatever holds them drops them, \
+             which can be after the Spark task has ended and its memory has been given to \
+             another task."
+        );
+    }
+
+    producer_stopped.and(metrics_flushed)
+}
+
+/// How long `releasePlan` waits for a released plan's reservations to be returned. The tasks
+/// holding them have been aborted and stop the next time they yield, so this is only reached if
+/// something keeps a reservation it never gives back, where waiting longer would only stall the
+/// Spark task.
+const PLAN_MEMORY_RELEASE_TIMEOUT: Duration = Duration::from_secs(1);
+
+/// Runs `publish_metrics` once the configured interval has passed and, with tracing on, samples
 /// this thread's pool reservation at the same cadence.
 fn update_metrics_on_interval(
-    env: &mut Env,
     exec_context: &mut ExecutionContext,
+    publish_metrics: &mut PublishMetrics,
 ) -> CometResult<()> {
     let Some(interval) = exec_context.metrics_update_interval else {
         return Ok(());
@@ -1312,7 +1703,7 @@ fn update_metrics_on_interval(
     if now - exec_context.metrics_last_update_time < interval {
         return Ok(());
     }
-    update_metrics(env, exec_context)?;
+    publish_metrics(exec_context)?;
     exec_context.metrics_last_update_time = now;
     if exec_context.tracing_enabled {
         log_memory_usage(
@@ -1323,12 +1714,13 @@ fn update_metrics_on_interval(
     Ok(())
 }
 
-fn update_metrics(env: &mut Env, exec_context: &mut ExecutionContext) -> CometResult<()> {
-    if let Some(native_query) = &exec_context.root_op {
-        let metrics = exec_context.metrics.as_obj();
-        update_comet_metric(env, metrics, native_query)
-    } else {
-        Ok(())
+/// Publishes the plan's metrics to its JVM `CometMetricNode`, once the plan has been created.
+fn update_metrics(env: &mut Env, exec_context: &ExecutionContext) -> CometResult<()> {
+    match (&exec_context.root_op, &exec_context.metrics) {
+        (Some(native_query), Some(metrics)) => {
+            update_comet_metric(env, metrics.as_obj(), native_query)
+        }
+        _ => Ok(()),
     }
 }
 
@@ -1386,41 +1778,8 @@ pub extern "system" fn Java_org_apache_comet_Native_getShufflePartitionOffsets(
 ) -> jlongArray {
     try_unwrap_or_throw(&e, |env| {
         let context = get_execution_context(exec_context);
-
-        let root_op = context.root_op.as_ref().ok_or_else(|| {
-            CometError::Internal(
-                "Cannot read shuffle partition offsets before the plan has been executed"
-                    .to_string(),
-            )
-        })?;
-
-        // `ExecutionPlan` has `Any` as a supertrait but no `as_any` method of its own, so upcast
-        // the trait object before downcasting to the writer.
-        let writer = (root_op.native_plan.as_ref() as &dyn std::any::Any)
-            .downcast_ref::<ShuffleWriterExec>()
-            .ok_or_else(|| {
-                CometError::Internal(
-                    "Shuffle partition offsets are only available on a native shuffle write plan"
-                        .to_string(),
-                )
-            })?;
-
-        let offsets = writer
-            .partition_offsets()
-            .ok_or_else(|| {
-                CometError::Internal(
-                    "Shuffle partition offsets are not published by a remote shuffle destination"
-                        .to_string(),
-                )
-            })?
-            .get()
-            .ok_or_else(|| {
-                CometError::Internal(
-                    "Shuffle writer has not published its partition offsets; the plan was not \
-                     drained to completion"
-                        .to_string(),
-                )
-            })?;
+        let root_plan = context.root_op.as_ref().map(|op| op.native_plan.as_ref());
+        let offsets = shuffle_partition_offsets(root_plan)?;
 
         let long_array = env.new_long_array(offsets.len())?;
         long_array.set_region(env, 0, offsets)?;
@@ -1428,7 +1787,49 @@ pub extern "system" fn Java_org_apache_comet_Native_getShufflePartitionOffsets(
     })
 }
 
-/// Used by Comet shuffle external sorter to write sorted records to disk.
+/// The partition offsets published by `root_plan`, which must be a native shuffle write plan that
+/// has been drained to completion. `root_plan` is `None` before the plan has been executed. Core
+/// of `Native.getShufflePartitionOffsets`.
+fn shuffle_partition_offsets(
+    root_plan: Option<&dyn datafusion::physical_plan::ExecutionPlan>,
+) -> CometResult<&[i64]> {
+    let root_plan = root_plan.ok_or_else(|| {
+        CometError::Internal(
+            "Cannot read shuffle partition offsets before the plan has been executed".to_string(),
+        )
+    })?;
+
+    // `ExecutionPlan` has `Any` as a supertrait but no `as_any` method of its own, so upcast
+    // the trait object before downcasting to the writer.
+    let writer = (root_plan as &dyn std::any::Any)
+        .downcast_ref::<ShuffleWriterExec>()
+        .ok_or_else(|| {
+            CometError::Internal(
+                "Shuffle partition offsets are only available on a native shuffle write plan"
+                    .to_string(),
+            )
+        })?;
+
+    let offsets = writer
+        .partition_offsets()
+        .ok_or_else(|| {
+            CometError::Internal(
+                "Shuffle partition offsets are not published by a remote shuffle destination"
+                    .to_string(),
+            )
+        })?
+        .get()
+        .ok_or_else(|| {
+            CometError::Internal(
+                "Shuffle writer has not published its partition offsets; the plan was not \
+                 drained to completion"
+                    .to_string(),
+            )
+        })?;
+    Ok(offsets)
+}
+
+/// Used by the bypass merge sort shuffle writer to write one partition's records to disk.
 /// # Safety
 /// This function is inherently unsafe since it deals with raw pointers passed from JNI.
 #[no_mangle]
@@ -1446,6 +1847,7 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_writeSortedFileNative
     current_checksum: jlong,
     compression_codec: JString,
     compression_level: jint,
+    offsets_as_lengths: jboolean,
     tracing_enabled: jboolean,
 ) -> jlongArray {
     try_unwrap_or_throw(&e, |env| unsafe {
@@ -1454,63 +1856,229 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_writeSortedFileNative
             tracing_enabled != JNI_FALSE,
             || {
                 let data_types = convert_datatype_arrays(env, serialized_datatypes)?;
-
-                let row_num = row_addresses.len(env)?;
                 let row_addresses = row_addresses.get_elements(env, ReleaseMode::NoCopyBack)?;
-
                 let row_sizes = row_sizes.get_elements(env, ReleaseMode::NoCopyBack)?;
-
-                let row_addresses_ptr = row_addresses.as_ptr();
-                let row_sizes_ptr = row_sizes.as_ptr();
-
                 let output_path: String = file_path.try_to_string(env).unwrap();
-
-                let current_checksum = if current_checksum == i64::MIN {
-                    // Initial checksum is not available.
-                    None
-                } else {
-                    Some(current_checksum as u32)
-                };
-
                 let compression_codec: String = compression_codec.try_to_string(env).unwrap();
 
-                let compression_codec = match compression_codec.as_str() {
-                    "zstd" => CompressionCodec::Zstd(compression_level),
-                    "lz4" => CompressionCodec::Lz4Frame,
-                    "snappy" => CompressionCodec::Snappy,
-                    _ => CompressionCodec::Lz4Frame,
-                };
-
-                let (written_bytes, checksum, encode_nanos) = process_sorted_row_partition(
-                    row_num,
-                    batch_size as usize,
-                    row_addresses_ptr,
-                    row_sizes_ptr,
+                let results = write_sorted_file(
+                    &row_addresses,
+                    &row_sizes,
                     &data_types,
                     output_path,
                     prefer_dictionary_ratio,
+                    batch_size as usize,
                     checksum_enabled,
                     checksum_algo,
                     current_checksum,
                     &compression_codec,
+                    compression_level,
+                    offsets_as_lengths != JNI_FALSE,
                 )?;
 
-                let checksum = if let Some(checksum) = checksum {
-                    checksum as i64
-                } else {
-                    // Spark checksums (CRC32 or Adler32) are both u32, so we use i64::MIN to indicate
-                    // checksum is not available.
-                    i64::MIN
-                };
-
-                // results[0] = bytes written, results[1] = checksum, results[2] = encode nanos
-                let long_array = env.new_long_array(3)?;
-                long_array.set_region(env, 0, &[written_bytes, checksum, encode_nanos])?;
+                let long_array = env.new_long_array(results.len())?;
+                long_array.set_region(env, 0, &results)?;
 
                 Ok(long_array.into_raw())
             },
         )
     })
+}
+
+/// Converts the Spark `UnsafeRow`s at `row_addresses`, with the sizes in `row_sizes`, into Arrow
+/// batches of `data_types` and writes them to `output_path`. Returns `[bytes written, checksum,
+/// encode nanos]`. Checksums cross the boundary as `i64`, with `i64::MIN` meaning none: Spark's
+/// CRC32 and Adler32 checksums are both `u32`. Core of `Native.writeSortedFileNative`.
+///
+/// # Safety
+/// Each address must point to a readable row of the corresponding size.
+#[allow(clippy::too_many_arguments)]
+unsafe fn write_sorted_file(
+    row_addresses: &[i64],
+    row_sizes: &[i32],
+    data_types: &[ArrowDataType],
+    output_path: String,
+    prefer_dictionary_ratio: f64,
+    batch_size: usize,
+    checksum_enabled: bool,
+    checksum_algo: i32,
+    current_checksum: i64,
+    compression_codec: &str,
+    compression_level: i32,
+    offsets_as_lengths: bool,
+) -> CometResult<[i64; 3]> {
+    if row_sizes.len() < row_addresses.len() {
+        return Err(CometError::Internal(format!(
+            "{} row sizes for {} row addresses",
+            row_sizes.len(),
+            row_addresses.len()
+        )));
+    }
+
+    let current_checksum = if current_checksum == i64::MIN {
+        // Initial checksum is not available.
+        None
+    } else {
+        Some(current_checksum as u32)
+    };
+
+    let compression_codec = jvm_shuffle_codec(compression_codec, compression_level);
+
+    // `process_sorted_row_partition` only reads through the pointers.
+    let (written_bytes, checksum, encode_nanos) = process_sorted_row_partition(
+        row_addresses.len(),
+        batch_size,
+        row_addresses.as_ptr() as *mut i64,
+        row_sizes.as_ptr() as *mut i32,
+        data_types,
+        output_path,
+        prefer_dictionary_ratio,
+        checksum_enabled,
+        checksum_algo,
+        current_checksum,
+        &compression_codec,
+        offsets_as_lengths,
+    )?;
+
+    let checksum = checksum.map_or(i64::MIN, |checksum| checksum as i64);
+    Ok([written_bytes, checksum, encode_nanos])
+}
+
+/// The codec `spark.comet.shuffle.compression.codec` names. Unknown names fall back to lz4.
+fn jvm_shuffle_codec(name: &str, level: i32) -> CompressionCodec {
+    match name {
+        "zstd" => CompressionCodec::Zstd(level),
+        "lz4" => CompressionCodec::Lz4Frame,
+        "snappy" => CompressionCodec::Snappy,
+        _ => CompressionCodec::Lz4Frame,
+    }
+}
+
+/// Used by Comet shuffle external sorter to write every partition of one sorted spill to disk.
+/// # Safety
+/// This function is inherently unsafe since it deals with raw pointers passed from JNI.
+#[no_mangle]
+pub unsafe extern "system" fn Java_org_apache_comet_Native_writeSortedPartitionsNative(
+    e: EnvUnowned,
+    _class: JClass,
+    record_pointers_addr: jlong,
+    num_records: jint,
+    page_addresses: JLongArray,
+    uao_size: jint,
+    serialized_datatypes: JObjectArray,
+    file_path: JString,
+    prefer_dictionary_ratio: jdouble,
+    batch_size: jint,
+    checksum_algo: jint,
+    partition_checksums: JLongArray,
+    partition_lengths: JLongArray,
+    compression_codec: JString,
+    compression_level: jint,
+    offsets_as_lengths: jboolean,
+    tracing_enabled: jboolean,
+) -> jlong {
+    try_unwrap_or_throw(&e, |env| unsafe {
+        with_trace(
+            "writeSortedPartitionsNative",
+            tracing_enabled != JNI_FALSE,
+            || {
+                let num_records = usize::try_from(num_records).map_err(|_| {
+                    CometError::Internal(format!("Negative record count {num_records}"))
+                })?;
+                let record_pointers: &[i64] = if num_records == 0 {
+                    &[]
+                } else {
+                    // SAFETY: JVM unsafe memory allocation is aligned with long.
+                    debug_assert!(
+                        record_pointers_addr != 0,
+                        "writeSortedPartitionsNative: null record pointers"
+                    );
+                    debug_assert_eq!(
+                        (record_pointers_addr as usize) % std::mem::align_of::<i64>(),
+                        0,
+                        "writeSortedPartitionsNative: record pointers not aligned to i64"
+                    );
+                    std::slice::from_raw_parts(record_pointers_addr as *const i64, num_records)
+                };
+                let data_types = convert_datatype_arrays(env, serialized_datatypes)?;
+                let mut pages = vec![0_i64; page_addresses.len(env)?];
+                page_addresses.get_region(env, 0, &mut pages)?;
+                let mut checksums = vec![0_i64; partition_checksums.len(env)?];
+                partition_checksums.get_region(env, 0, &mut checksums)?;
+                let mut lengths = vec![0_i64; partition_lengths.len(env)?];
+                let output_path: String = file_path.try_to_string(env)?;
+                let compression_codec: String = compression_codec.try_to_string(env)?;
+
+                let encode_nanos = write_sorted_partitions(
+                    record_pointers,
+                    &pages,
+                    uao_size,
+                    &data_types,
+                    &output_path,
+                    prefer_dictionary_ratio,
+                    batch_size,
+                    checksum_algo,
+                    &mut checksums,
+                    &mut lengths,
+                    &compression_codec,
+                    compression_level,
+                    offsets_as_lengths != JNI_FALSE,
+                )?;
+
+                partition_lengths.set_region(env, 0, &lengths)?;
+                partition_checksums.set_region(env, 0, &checksums)?;
+                Ok(encode_nanos)
+            },
+        )
+    })
+}
+
+/// Converts the rows of one sorted spill, every partition of it, into Arrow batches of
+/// `data_types` and appends them to `output_path` in partition order. `record_pointers` are the
+/// sorter's sorted Spark `PackedRecordPointer`s, whose page numbers index `page_addresses`.
+/// Fills `partition_lengths` and, when `checksum_algo` is not -1, continues each written
+/// partition's checksum in `partition_checksums`, where `i64::MIN` is a checksum not yet started.
+/// Returns the encode nanos. Core of `Native.writeSortedPartitionsNative`.
+///
+/// # Safety
+/// Each pointer must resolve, through `page_addresses`, to a readable record.
+#[allow(clippy::too_many_arguments)]
+unsafe fn write_sorted_partitions(
+    record_pointers: &[i64],
+    page_addresses: &[i64],
+    uao_size: i32,
+    data_types: &[ArrowDataType],
+    output_path: &str,
+    prefer_dictionary_ratio: f64,
+    batch_size: i32,
+    checksum_algo: i32,
+    partition_checksums: &mut [i64],
+    partition_lengths: &mut [i64],
+    compression_codec: &str,
+    compression_level: i32,
+    offsets_as_lengths: bool,
+) -> CometResult<i64> {
+    let uao_size = usize::try_from(uao_size)
+        .map_err(|_| CometError::Internal(format!("Unsupported record length size {uao_size}")))?;
+    let batch_size = usize::try_from(batch_size)
+        .map_err(|_| CometError::Internal(format!("Unsupported batch size {batch_size}")))?;
+    let checksum_algo = (checksum_algo != -1).then_some(checksum_algo);
+    let compression_codec = jvm_shuffle_codec(compression_codec, compression_level);
+
+    process_sorted_partitions(
+        record_pointers,
+        page_addresses,
+        uao_size,
+        data_types,
+        output_path,
+        prefer_dictionary_ratio,
+        batch_size,
+        checksum_algo,
+        partition_checksums,
+        partition_lengths,
+        &compression_codec,
+        offsets_as_lengths,
+    )
 }
 
 #[no_mangle]
@@ -1520,6 +2088,7 @@ pub extern "system" fn Java_org_apache_comet_Native_sortRowPartitionsNative(
     _class: JClass,
     address: jlong,
     size: jlong,
+    capacity: jlong,
     tracing_enabled: jboolean,
 ) {
     try_unwrap_or_throw(&e, |_| {
@@ -1527,17 +2096,29 @@ pub extern "system" fn Java_org_apache_comet_Native_sortRowPartitionsNative(
             "sortRowPartitionsNative",
             tracing_enabled != JNI_FALSE,
             || {
+                let size = usize::try_from(size).map_err(|_| {
+                    CometError::Internal(format!("sortRowPartitionsNative: negative size {size}"))
+                })?;
+                // The sort uses the `size` longs after the records as scratch space.
+                let capacity = usize::try_from(capacity)
+                    .ok()
+                    .filter(|capacity| capacity / 2 >= size)
+                    .ok_or_else(|| {
+                        CometError::Internal(format!(
+                            "sortRowPartitionsNative: an array of {capacity} longs has no room \
+                             for {size} longs of scratch space after {size} records"
+                        ))
+                    })?;
                 // SAFETY: JVM unsafe memory allocation is aligned with long.
                 debug_assert!(address != 0, "sortRowPartitionsNative: null address");
-                debug_assert!(size >= 0, "sortRowPartitionsNative: negative size {size}");
                 debug_assert_eq!(
                     (address as usize) % std::mem::align_of::<i64>(),
                     0,
                     "sortRowPartitionsNative: address not aligned to i64"
                 );
                 let array =
-                    unsafe { std::slice::from_raw_parts_mut(address as *mut i64, size as usize) };
-                array.rdxsort();
+                    unsafe { std::slice::from_raw_parts_mut(address as *mut i64, capacity) };
+                sort_row_partitions(array, size);
                 Ok(())
             },
         )
@@ -1559,7 +2140,7 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_decodeShuffleBlock(
 ) -> jlong {
     try_unwrap_or_throw(&e, |env| {
         with_trace("decodeShuffleBlock", tracing_enabled != JNI_FALSE, || {
-            decode_shuffle_block(env, byte_buffer, length, array_addrs, schema_addrs, None)
+            decode_shuffle_block_jni(env, byte_buffer, length, array_addrs, schema_addrs, None)
         })
     })
 }
@@ -1575,12 +2156,7 @@ pub extern "system" fn Java_org_apache_comet_Native_createRemoteShuffleDecoder(
 ) -> jlong {
     try_unwrap_or_throw(&e, |env| {
         let bytes = env.convert_byte_array(expected_schema)?;
-        let schema = ShuffleScan::decode(bytes.as_slice()).map_err(|error| {
-            CometError::Internal(format!("Invalid expected remote shuffle schema: {error}"))
-        })?;
-        let decoder = RemoteShuffleDecoder {
-            expected_types: schema.fields.iter().map(to_arrow_datatype).collect(),
-        };
+        let decoder = RemoteShuffleDecoder::try_new(&bytes)?;
         Ok(Box::into_raw(Box::new(decoder)) as jlong)
     })
 }
@@ -1588,6 +2164,19 @@ pub extern "system" fn Java_org_apache_comet_Native_createRemoteShuffleDecoder(
 /// Immutable decoding state owned by one JVM remote shuffle iterator, not shared across tasks.
 struct RemoteShuffleDecoder {
     expected_types: Vec<ArrowDataType>,
+}
+
+impl RemoteShuffleDecoder {
+    /// Parses the serialized `ShuffleScan` holding the expected schema. Core of
+    /// `Native.createRemoteShuffleDecoder`.
+    fn try_new(expected_schema: &[u8]) -> CometResult<Self> {
+        let schema = ShuffleScan::decode(expected_schema).map_err(|error| {
+            CometError::Internal(format!("Invalid expected remote shuffle schema: {error}"))
+        })?;
+        Ok(RemoteShuffleDecoder {
+            expected_types: schema.fields.iter().map(to_arrow_datatype).collect(),
+        })
+    }
 }
 
 #[no_mangle]
@@ -1630,7 +2219,7 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_decodeShuffleBlockWit
                 .ok_or_else(|| {
                     CometError::Internal("Remote shuffle decoder is not initialized".to_owned())
                 })?;
-            decode_shuffle_block(
+            decode_shuffle_block_jni(
                 env,
                 byte_buffer,
                 length,
@@ -1642,7 +2231,9 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_decodeShuffleBlockWit
     })
 }
 
-fn decode_shuffle_block(
+/// Converts the JNI arguments of the `decodeShuffleBlock` entry points for
+/// [`decode_shuffle_block`].
+fn decode_shuffle_block_jni(
     env: &mut Env,
     byte_buffer: JByteBuffer,
     length: jint,
@@ -1652,15 +2243,33 @@ fn decode_shuffle_block(
 ) -> CometResult<jlong> {
     let raw_pointer = env.get_direct_buffer_address(&byte_buffer)?;
     let length = length as usize;
-    let slice: &[u8] = unsafe { std::slice::from_raw_parts(raw_pointer, length) };
+    let block: &[u8] = unsafe { std::slice::from_raw_parts(raw_pointer, length) };
+    let array_addrs = unsafe { array_addrs.get_elements(env, ReleaseMode::NoCopyBack)? };
+    let schema_addrs = unsafe { schema_addrs.get_elements(env, ReleaseMode::NoCopyBack)? };
+    unsafe { decode_shuffle_block(block, &array_addrs, &schema_addrs, expected_types) }
+}
+
+/// Decodes one native shuffle block (codec header plus Arrow IPC stream) and exports its columns
+/// as in [`export_batch`], returning the row count. `expected_types` is set for a remote shuffle
+/// block, which is validated against it. Core of `Native.decodeShuffleBlock` and
+/// `Native.decodeShuffleBlockWithValidation`.
+///
+/// # Safety
+/// As for [`export_batch`].
+unsafe fn decode_shuffle_block(
+    block: &[u8],
+    array_addrs: &[i64],
+    schema_addrs: &[i64],
+    expected_types: Option<&[ArrowDataType]>,
+) -> CometResult<i64> {
     let batch = if let Some(expected_types) = expected_types {
         // Reject incompatible logical types, then decode dictionaries before JVM import. The
         // JVM importer supports fewer dictionary key/value layouts than the shuffle writer.
-        decode_remote_shuffle_batch(slice, expected_types)?
+        decode_remote_shuffle_batch(block, expected_types)?
     } else {
-        read_ipc_compressed(slice)?
+        read_ipc_compressed(block)?
     };
-    prepare_output(env, array_addrs, schema_addrs, batch, false)
+    export_batch(array_addrs, schema_addrs, batch, false)
 }
 
 #[no_mangle]
@@ -1792,50 +2401,12 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_columnarToRowConvert(
             .as_mut()
             .ok_or_else(|| CometError::Internal("Null columnar to row context".to_string()))?;
 
-        let num_cols = array_addrs.len(env)?;
-
         // Get array and schema addresses
-        let array_addrs_elements =
-            unsafe { array_addrs.get_elements(env, ReleaseMode::NoCopyBack)? };
-        let schema_addrs_elements =
-            unsafe { schema_addrs.get_elements(env, ReleaseMode::NoCopyBack)? };
+        let array_addrs = unsafe { array_addrs.get_elements(env, ReleaseMode::NoCopyBack)? };
+        let schema_addrs = unsafe { schema_addrs.get_elements(env, ReleaseMode::NoCopyBack)? };
 
-        // Import Arrow arrays from FFI
-        let mut arrays = Vec::with_capacity(num_cols);
-        for i in 0..num_cols {
-            let array_ptr = array_addrs_elements[i] as *mut FFI_ArrowArray;
-            let schema_ptr = schema_addrs_elements[i] as *mut FFI_ArrowSchema;
-
-            debug_assert!(
-                !array_ptr.is_null(),
-                "columnarToRowConvert: null array pointer at index {}",
-                i
-            );
-            debug_assert!(
-                !schema_ptr.is_null(),
-                "columnarToRowConvert: null schema pointer at index {}",
-                i
-            );
-
-            // Take ownership of the FFI structures
-            let ffi_array = unsafe { std::ptr::read(array_ptr) };
-            let ffi_schema = unsafe { std::ptr::read(schema_ptr) };
-
-            // Convert to Arrow ArrayData
-            let array_data = from_ffi(ffi_array, &ffi_schema)
-                .map_err(|e| CometError::Internal(format!("Failed to import array: {}", e)))?;
-
-            let imported = arrow::array::make_array(array_data);
-            arrays.push(decode_string_arrays(&imported)?);
-        }
-
-        // Convert columnar to row
-        debug_assert!(
-            num_rows >= 0,
-            "columnarToRowConvert: num_rows is negative: {}",
-            num_rows
-        );
-        let (buffer_ptr, offsets, lengths) = ctx.convert(&arrays, num_rows as usize)?;
+        let (buffer_ptr, offsets, lengths) =
+            unsafe { columnar_to_row_convert(ctx, &array_addrs, &schema_addrs, num_rows)? };
 
         // Create Java int arrays for offsets and lengths
         let offsets_array = env.new_int_array(offsets.len())?;
@@ -1859,6 +2430,67 @@ pub unsafe extern "system" fn Java_org_apache_comet_Native_columnarToRowConvert(
 
         Ok(info_obj.into_raw())
     })
+}
+
+/// Imports the columns at `array_addrs` and `schema_addrs` and converts their first `num_rows`
+/// rows to Spark `UnsafeRow`s in `ctx`'s buffer. Returns the buffer address and the offset and
+/// length of each row in it, valid until the next conversion. Core of
+/// `Native.columnarToRowConvert`.
+///
+/// # Safety
+/// Each address must point to an exported `FFI_ArrowArray` / `FFI_ArrowSchema`, whose ownership
+/// moves to this call.
+unsafe fn columnar_to_row_convert<'a>(
+    ctx: &'a mut ColumnarToRowContext,
+    array_addrs: &[i64],
+    schema_addrs: &[i64],
+    num_rows: i32,
+) -> CometResult<(*const u8, &'a [i32], &'a [i32])> {
+    if schema_addrs.len() != array_addrs.len() {
+        return Err(CometError::Internal(format!(
+            "{} schema addresses for {} array addresses",
+            schema_addrs.len(),
+            array_addrs.len()
+        )));
+    }
+    let num_cols = array_addrs.len();
+
+    // Import Arrow arrays from FFI
+    let mut arrays = Vec::with_capacity(num_cols);
+    for i in 0..num_cols {
+        let array_ptr = array_addrs[i] as *mut FFI_ArrowArray;
+        let schema_ptr = schema_addrs[i] as *mut FFI_ArrowSchema;
+
+        debug_assert!(
+            !array_ptr.is_null(),
+            "columnarToRowConvert: null array pointer at index {}",
+            i
+        );
+        debug_assert!(
+            !schema_ptr.is_null(),
+            "columnarToRowConvert: null schema pointer at index {}",
+            i
+        );
+
+        // Take ownership of the FFI structures
+        let ffi_array = unsafe { std::ptr::read(array_ptr) };
+        let ffi_schema = unsafe { std::ptr::read(schema_ptr) };
+
+        // Convert to Arrow ArrayData
+        let array_data = from_ffi(ffi_array, &ffi_schema)
+            .map_err(|e| CometError::Internal(format!("Failed to import array: {}", e)))?;
+
+        let imported = arrow::array::make_array(array_data);
+        arrays.push(decode_string_arrays(&imported)?);
+    }
+
+    // Convert columnar to row
+    debug_assert!(
+        num_rows >= 0,
+        "columnarToRowConvert: num_rows is negative: {}",
+        num_rows
+    );
+    ctx.convert(&arrays, num_rows as usize)
 }
 
 /// Close and release the native columnar to row converter.
@@ -1895,6 +2527,7 @@ mod tests {
     use datafusion::execution::FunctionRegistry;
     use datafusion::execution::TaskContext;
     use datafusion::logical_expr::ReturnFieldArgs;
+    use datafusion::physical_plan::stream::RecordBatchStreamAdapter;
     use datafusion::physical_plan::ExecutionPlan;
     use datafusion_comet_proto::spark_expression;
     use datafusion_comet_proto::spark_expression::{AggExpr, Count, Expr, Sum};
@@ -2229,6 +2862,37 @@ mod tests {
         drop(own_reservation);
     }
 
+    /// The memory usage log leaves overcommit out of the reservations it reports, because Spark's
+    /// off-heap pool does not account for it, so the log counts it with the native memory that no
+    /// pool tracks. Tracing's process total still reports everything the pools recorded.
+    #[test]
+    fn memory_usage_leaves_out_what_spark_did_not_grant() {
+        use crate::execution::memory_pools::{
+            create_memory_pool_with_fake_spark, MemoryPoolConfig, MemoryPoolType,
+        };
+
+        let _guard = serial();
+        let before = memory_usage();
+        let traced_before = total_reserved_across_threads();
+        // A task's pool as `greedy_unified` creates it, where Spark grants at most 4096 bytes.
+        let config = MemoryPoolConfig::new(MemoryPoolType::GreedyUnified, 0);
+        let pool = create_memory_pool_with_fake_spark(&config, -6101, 4096);
+        let _registration = ThreadMemoryPoolRegistration::new(21, -6101, Arc::clone(&pool));
+        let reservation = MemoryConsumer::new("spill reader").register(&pool);
+
+        // A spilled batch read back from disk is recorded in full, although Spark grants only 4096
+        // of its 6144 bytes.
+        reservation.grow(6144);
+        assert_eq!(total_reserved_across_threads() - traced_before, 6144);
+        assert_eq!(memory_usage().pools_reserved - before.pools_reserved, 4096);
+
+        // Freeing memory repays the overcommit before anything goes back to Spark.
+        reservation.shrink(2048);
+        assert_eq!(memory_usage().pools_reserved - before.pools_reserved, 4096);
+        reservation.shrink(1024);
+        assert_eq!(memory_usage().pools_reserved - before.pools_reserved, 3072);
+    }
+
     /// Stands in for a `CometFairMemoryPool` whose lock is held across a Spark acquire: it counts
     /// its reservation reads, and notes whether the registry lock was held during any of them.
     #[derive(Debug, Default)]
@@ -2337,6 +3001,7 @@ mod tests {
                         }],
                         return_type: None,
                         fail_on_error: false,
+                        null_short_circuit: false,
                     })),
                     query_context: None,
                     expr_id: None,
@@ -2478,5 +3143,1238 @@ mod tests {
             .unwrap();
         assert!(next.is_some());
         assert_eq!(pulls, 1);
+    }
+
+    fn empty_batch() -> RecordBatch {
+        RecordBatch::new_empty(Arc::new(Schema::empty()))
+    }
+
+    fn plan_stream(
+        stream: impl Stream<Item = DataFusionResult<RecordBatch>> + Send + 'static,
+    ) -> SendableRecordBatchStream {
+        Box::pin(RecordBatchStreamAdapter::new(
+            Arc::new(Schema::empty()),
+            stream,
+        ))
+    }
+
+    /// See issue #2453. A consumer that stops early can leave the producer waiting on its input,
+    /// still holding the stream.
+    #[test]
+    fn stopping_a_batch_producer_drops_its_stream_while_it_waits_on_input() {
+        let runtime = single_worker_runtime();
+        let pool: Arc<dyn MemoryPool> = Arc::new(UnboundedMemoryPool::default());
+        let reservation = MemoryConsumer::new("sort").register(&pool);
+        reservation.grow(4096);
+        let mut first = Some(empty_batch());
+        // Yields one batch, then waits for input that never arrives.
+        let stream = futures::stream::poll_fn(move |_| {
+            let _held = &reservation;
+            match first.take() {
+                Some(batch) => Poll::Ready(Some(Ok(batch))),
+                None => Poll::Pending,
+            }
+        });
+
+        let mut producer = BatchProducer::spawn(runtime.handle(), plan_stream(stream));
+        assert!(producer.next_batch().unwrap().is_some());
+        producer.stop().unwrap();
+        assert_eq!(pool.reserved(), 0, "the stream outlived its producer");
+    }
+
+    /// The producer can be in the middle of producing a batch, such as one evaluating a JVM UDF,
+    /// when the consumer stops.
+    #[test]
+    fn stopping_a_batch_producer_waits_for_the_poll_it_is_in() {
+        let runtime = single_worker_runtime();
+        let pool: Arc<dyn MemoryPool> = Arc::new(UnboundedMemoryPool::default());
+        let reservation = MemoryConsumer::new("sort").register(&pool);
+        reservation.grow(4096);
+        let (polling_tx, polling_rx) = std::sync::mpsc::channel();
+        let (finish_tx, finish_rx) = std::sync::mpsc::channel::<()>();
+        let mut polls = 0;
+        // Produces its second batch without yielding, until the test lets it finish.
+        let stream = futures::stream::poll_fn(move |_| {
+            let _held = &reservation;
+            polls += 1;
+            if polls == 2 {
+                polling_tx.send(()).unwrap();
+                finish_rx.recv().unwrap();
+            }
+            Poll::Ready(Some(Ok(empty_batch())))
+        });
+
+        let mut producer = BatchProducer::spawn(runtime.handle(), plan_stream(stream));
+        assert!(producer.next_batch().unwrap().is_some());
+        polling_rx.recv().unwrap();
+        let finished = Arc::new(AtomicBool::new(false));
+        let finishing = {
+            let finished = Arc::clone(&finished);
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(50));
+                finished.store(true, Ordering::Release);
+                finish_tx.send(()).unwrap();
+            })
+        };
+        producer.stop().unwrap();
+        assert!(
+            finished.load(Ordering::Acquire),
+            "stop returned while the producer was still polling the stream"
+        );
+        assert_eq!(pool.reserved(), 0, "the stream outlived its producer");
+        finishing.join().unwrap();
+    }
+
+    /// Dropping a JVM-fed plan's stream happens inside `releasePlan`, so a panic there reaches
+    /// the JVM. One in the producer's stream has to as well.
+    #[test]
+    fn stopping_a_batch_producer_returns_a_panic_from_dropping_its_stream() {
+        struct PanicOnDrop;
+        impl Drop for PanicOnDrop {
+            fn drop(&mut self) {
+                panic!("the stream failed to drop");
+            }
+        }
+
+        let runtime = single_worker_runtime();
+        let guard = PanicOnDrop;
+        let stream = futures::stream::poll_fn(move |_| {
+            let _guard = &guard;
+            Poll::<Option<DataFusionResult<RecordBatch>>>::Pending
+        });
+        let producer = BatchProducer::spawn(runtime.handle(), plan_stream(stream));
+        match producer.stop() {
+            Err(CometError::Panic { msg }) => assert!(msg.contains("the stream failed to drop")),
+            other => panic!("expected the panic, got {other:?}"),
+        }
+    }
+
+    /// A sort's merge reads each sorted run through a task it spawns, and dropping the merge only
+    /// aborts those tasks. Stopping the producer therefore does not return all of the plan's
+    /// memory, and `releasePlan` also waits on the plan's pool.
+    #[test]
+    fn a_task_the_plan_spawned_keeps_its_memory_until_it_next_yields() {
+        // One worker runs the spawned task, which blocks it, and the other polls the plan's stream.
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .build()
+            .unwrap();
+        let plan_memory = Arc::new(PlanMemoryPool::new(
+            Arc::new(UnboundedMemoryPool::default()),
+        ));
+        let pool = Arc::clone(&plan_memory) as Arc<dyn MemoryPool>;
+        let reservation = MemoryConsumer::new("sorted run").register(&pool);
+        reservation.grow(4096);
+        let (working_tx, working_rx) = std::sync::mpsc::channel();
+        let (finish_tx, finish_rx) = std::sync::mpsc::channel::<()>();
+        let mut runs = tokio::task::JoinSet::new();
+        runs.spawn_on(
+            async move {
+                let _held = reservation;
+                // Stands in for sorting the run, which does not yield.
+                working_tx.send(()).unwrap();
+                finish_rx.recv().unwrap();
+                futures::future::pending::<()>().await;
+            },
+            runtime.handle(),
+        );
+        working_rx.recv().unwrap();
+        // The plan's stream owns the task, and aborts it when dropped.
+        let stream = futures::stream::poll_fn(move |_| {
+            let _runs = &runs;
+            Poll::<Option<DataFusionResult<RecordBatch>>>::Pending
+        });
+
+        BatchProducer::spawn(runtime.handle(), plan_stream(stream))
+            .stop()
+            .unwrap();
+        assert_eq!(
+            plan_memory.wait_until_released(Instant::now()),
+            4096,
+            "the aborted task should still be sorting"
+        );
+        finish_tx.send(()).unwrap();
+        assert_eq!(
+            plan_memory.wait_until_released(Instant::now() + Duration::from_secs(10)),
+            0
+        );
+    }
+
+    /// Every Tokio worker can be tied up, for instance in Spark's `acquireMemory` waiting for
+    /// memory the stopped plan holds. Stopping the producer must not need a free worker then, or
+    /// neither task ever finishes.
+    #[test]
+    fn stopping_a_batch_producer_does_not_need_a_free_worker() {
+        let runtime = single_worker_runtime();
+        let pool: Arc<dyn MemoryPool> = Arc::new(UnboundedMemoryPool::default());
+        let reservation = MemoryConsumer::new("sort").register(&pool);
+        reservation.grow(4096);
+        let mut first = Some(empty_batch());
+        let stream = futures::stream::poll_fn(move |_| {
+            let _held = &reservation;
+            match first.take() {
+                Some(batch) => Poll::Ready(Some(Ok(batch))),
+                None => Poll::Pending,
+            }
+        });
+        let mut producer = BatchProducer::spawn(runtime.handle(), plan_stream(stream));
+        assert!(producer.next_batch().unwrap().is_some());
+
+        // Holds the only worker until the stopped plan's memory comes back, as another task
+        // waiting in `acquireMemory` does. It gives up eventually so a failure cannot hang the
+        // suite.
+        let (waiting_tx, waiting_rx) = std::sync::mpsc::channel();
+        let waiting_on = Arc::clone(&pool);
+        runtime.spawn(async move {
+            waiting_tx.send(()).unwrap();
+            let give_up = Instant::now() + Duration::from_secs(20);
+            while waiting_on.reserved() > 0 && Instant::now() < give_up {
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        });
+        waiting_rx.recv().unwrap();
+
+        let (stopped_tx, stopped_rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || stopped_tx.send(producer.stop()).unwrap());
+        stopped_rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("stopping the producer waited for a free worker")
+            .unwrap();
+        assert_eq!(pool.reserved(), 0, "the stream outlived its producer");
+    }
+
+    /// One uncompressed native shuffle block holding `batch`.
+    fn shuffle_block(batch: &RecordBatch) -> Vec<u8> {
+        let mut block = b"NONE".to_vec();
+        let mut writer =
+            arrow::ipc::writer::StreamWriter::try_new(&mut block, batch.schema_ref()).unwrap();
+        writer.write(batch).unwrap();
+        writer.finish().unwrap();
+        drop(writer);
+        block
+    }
+
+    fn int_batch() -> RecordBatch {
+        let schema = Arc::new(Schema::new(vec![Field::new("a", DataType::Int32, true)]));
+        RecordBatch::try_new(
+            schema,
+            vec![Arc::new(Int32Array::from(vec![Some(1), None, Some(3)]))],
+        )
+        .unwrap()
+    }
+
+    /// Decodes `block` into freshly allocated C Data structs and imports the single column back.
+    fn decode_one_column(
+        block: &[u8],
+        expected_types: Option<&[ArrowDataType]>,
+    ) -> CometResult<(i64, ArrayRef)> {
+        let mut ffi_array = Box::new(FFI_ArrowArray::empty());
+        let mut ffi_schema = Box::new(FFI_ArrowSchema::empty());
+        let array_addrs = [ffi_array.as_mut() as *mut FFI_ArrowArray as i64];
+        let schema_addrs = [ffi_schema.as_mut() as *mut FFI_ArrowSchema as i64];
+        let rows =
+            unsafe { decode_shuffle_block(block, &array_addrs, &schema_addrs, expected_types)? };
+        let data = unsafe { from_ffi(*ffi_array, &ffi_schema) }?;
+        Ok((rows, arrow::array::make_array(data)))
+    }
+
+    #[test]
+    fn decode_shuffle_block_exports_columns() {
+        let batch = int_batch();
+        let block = shuffle_block(&batch);
+
+        let (rows, column) = decode_one_column(&block, None).unwrap();
+        assert_eq!(rows, 3);
+        assert_eq!(column.as_ref(), batch.column(0).as_ref());
+
+        let (rows, column) = decode_one_column(&block, Some(&[DataType::Int32])).unwrap();
+        assert_eq!(rows, 3);
+        assert_eq!(column.as_ref(), batch.column(0).as_ref());
+    }
+
+    #[test]
+    fn decode_shuffle_block_without_output_columns_counts_rows() {
+        let block = shuffle_block(&int_batch());
+        let rows = unsafe { decode_shuffle_block(&block, &[], &[], None) }.unwrap();
+        assert_eq!(rows, 3);
+    }
+
+    #[test]
+    fn decode_shuffle_block_rejects_bad_input() {
+        let block = shuffle_block(&int_batch());
+        // A remote block whose column type differs from the expected schema.
+        assert!(decode_one_column(&block, Some(&[DataType::Utf8])).is_err());
+        // A truncated block.
+        assert!(decode_one_column(&block[..block.len() / 2], None).is_err());
+        // An expected schema that is not a serialized `ShuffleScan`.
+        let error = RemoteShuffleDecoder::try_new(&[0xff, 0xff, 0xff])
+            .err()
+            .expect("garbage schema is rejected");
+        assert!(error
+            .to_string()
+            .starts_with("Comet Internal Error: Invalid expected remote shuffle schema"));
+    }
+
+    /// See issue #6294. A runtime cancels every task it has when it shuts down, which Comet's does
+    /// when the executor stops. The producer's channel then closes as it does at the end of the
+    /// stream, and the consumer must fail rather than end with the batches it has read so far.
+    #[test]
+    fn a_batch_producer_cancelled_mid_stream_is_an_error_not_the_end() {
+        let runtime = single_worker_runtime();
+        let mut first = Some(empty_batch());
+        // Yields one batch, then waits for input that never arrives.
+        let stream = futures::stream::poll_fn(move |_| match first.take() {
+            Some(batch) => Poll::Ready(Some(Ok(batch))),
+            None => Poll::Pending,
+        });
+        let mut producer = BatchProducer::spawn(runtime.handle(), plan_stream(stream));
+        assert!(producer.next_batch().unwrap().is_some());
+
+        // Shuts the runtime down while the consumer waits for the next batch.
+        let shutting_down = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(50));
+            runtime.shutdown_timeout(Duration::from_secs(10));
+        });
+        match producer.next_batch() {
+            Err(CometError::Internal(msg)) => assert!(msg.contains("cancelled"), "{msg}"),
+            other => panic!("expected an error, got {other:?}"),
+        }
+        shutting_down.join().unwrap();
+        producer.stop().unwrap();
+    }
+
+    /// The channel also closes once the stream has ended, and the consumer has then had every
+    /// batch, even if the runtime shuts down before it takes the batches the producer sent.
+    #[test]
+    fn a_batch_producer_ends_cleanly_once_its_stream_has_ended() {
+        let runtime = single_worker_runtime();
+        let stream = futures::stream::iter([Ok(empty_batch()), Ok(empty_batch())]);
+        let mut producer = BatchProducer::spawn(runtime.handle(), plan_stream(stream));
+        // Both batches fit in the channel, so the task finishes without waiting for the consumer.
+        runtime.block_on(&mut producer.task).unwrap();
+        runtime.shutdown_timeout(Duration::from_secs(10));
+
+        assert!(producer.next_batch().unwrap().is_some());
+        assert!(producer.next_batch().unwrap().is_some());
+        assert!(producer.next_batch().unwrap().is_none());
+        producer.stop().unwrap();
+    }
+
+    #[test]
+    fn shuffle_partition_offsets_requires_an_executed_shuffle_write() {
+        let error = shuffle_partition_offsets(None).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("before the plan has been executed"),
+            "{error}"
+        );
+
+        let plan = datafusion::physical_plan::empty::EmptyExec::new(Arc::new(Schema::empty()));
+        let error = shuffle_partition_offsets(Some(&plan)).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("only available on a native shuffle write plan"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn shuffle_partition_offsets_after_the_write_is_drained() {
+        use datafusion::datasource::memory::MemorySourceConfig;
+        use datafusion::datasource::source::DataSourceExec;
+        use datafusion_comet_shuffle::{CometPartitioning, RoundRobinStrategy};
+
+        let batch = int_batch();
+        let num_partitions = 3;
+        let dir = tempfile::tempdir().unwrap();
+        let data_file = dir.path().join("data.out");
+        let writer = ShuffleWriterExec::try_new(
+            Arc::new(DataSourceExec::new(Arc::new(
+                MemorySourceConfig::try_new(&[vec![batch.clone()]], batch.schema(), None).unwrap(),
+            ))),
+            CometPartitioning::RoundRobin(num_partitions, RoundRobinStrategy::default()),
+            CompressionCodec::Zstd(1),
+            data_file.to_str().unwrap().to_string(),
+            false,
+            1024 * 1024,
+            None,
+        )
+        .unwrap();
+
+        let error = shuffle_partition_offsets(Some(&writer)).unwrap_err();
+        assert!(
+            error.to_string().contains("not drained to completion"),
+            "{error}"
+        );
+
+        let task_ctx = Arc::new(TaskContext::default());
+        let stream = writer.execute(0, task_ctx).unwrap();
+        Runtime::new()
+            .unwrap()
+            .block_on(datafusion::physical_plan::common::collect(stream))
+            .unwrap();
+
+        // One offset per partition plus the data file length.
+        let offsets = shuffle_partition_offsets(Some(&writer)).unwrap();
+        assert_eq!(offsets.len(), num_partitions + 1);
+        assert_eq!(offsets[0], 0);
+        assert!(offsets.windows(2).all(|pair| pair[0] <= pair[1]));
+        let file_len = std::fs::metadata(&data_file).unwrap().len() as i64;
+        assert_eq!(offsets[num_partitions], file_len);
+    }
+
+    /// Spark `UnsafeRow`s with one non-null `long` field each: an 8-byte null bitset, then the
+    /// value.
+    fn long_rows(values: &[i64]) -> Vec<[u8; 16]> {
+        values
+            .iter()
+            .map(|value| {
+                let mut row = [0_u8; 16];
+                row[8..].copy_from_slice(&value.to_le_bytes());
+                row
+            })
+            .collect()
+    }
+
+    /// Splits a shuffle data file into its blocks, each without the 8-byte length and the 8-byte
+    /// field count, so it starts at the codec tag as `read_ipc_compressed` expects.
+    fn shuffle_blocks(data: &[u8]) -> Vec<&[u8]> {
+        let mut blocks = Vec::new();
+        let mut pos = 0;
+        while pos < data.len() {
+            let length = u64::from_le_bytes(data[pos..pos + 8].try_into().unwrap()) as usize;
+            blocks.push(&data[pos + 16..pos + 8 + length]);
+            pos += 8 + length;
+        }
+        blocks
+    }
+
+    /// Writes `rows` (16-byte `long` rows) with `write_sorted_file` in batches of 2 rows,
+    /// checksummed with `checksum_algo` if set, and returns the results and the file contents.
+    fn write_long_rows(
+        rows: &[[u8; 16]],
+        sizes: &[i32],
+        path: &std::path::Path,
+        checksum_algo: Option<i32>,
+        current_checksum: i64,
+        codec: &str,
+    ) -> CometResult<([i64; 3], Vec<u8>)> {
+        let addresses: Vec<i64> = rows.iter().map(|row| row.as_ptr() as i64).collect();
+        let results = unsafe {
+            write_sorted_file(
+                &addresses,
+                sizes,
+                &[DataType::Int64],
+                path.to_str().unwrap().to_string(),
+                1.0,
+                2,
+                checksum_algo.is_some(),
+                checksum_algo.unwrap_or(0),
+                current_checksum,
+                codec,
+                1,
+                false,
+            )
+        }?;
+        Ok((results, std::fs::read(path).unwrap()))
+    }
+
+    #[test]
+    fn write_sorted_file_codecs() {
+        let values = [1_i64, 2, 3, 4, 5];
+        let rows = long_rows(&values);
+        let sizes = vec![16_i32; rows.len()];
+        let dir = tempfile::tempdir().unwrap();
+
+        // Unknown codec names fall back to lz4.
+        for (codec, tag) in [
+            ("lz4", b"LZ4_"),
+            ("zstd", b"ZSTD"),
+            ("snappy", b"SNAP"),
+            ("unknown", b"LZ4_"),
+        ] {
+            let path = dir.path().join(codec);
+            let ([written, checksum, _], data) =
+                write_long_rows(&rows, &sizes, &path, None, i64::MIN, codec).unwrap();
+            assert_eq!(written, data.len() as i64, "{codec}");
+            assert_eq!(checksum, i64::MIN, "no checksum without checksum_enabled");
+
+            let blocks = shuffle_blocks(&data);
+            assert_eq!(blocks.len(), 3, "{codec}: 5 rows in batches of 2");
+            let mut decoded = Vec::new();
+            for block in blocks {
+                assert_eq!(&block[..4], tag, "{codec}");
+                let batch = read_ipc_compressed(block).unwrap();
+                let column = arrow::array::AsArray::as_primitive::<arrow::datatypes::Int64Type>(
+                    batch.column(0),
+                );
+                decoded.extend(column.values().iter().copied());
+            }
+            assert_eq!(decoded, values, "{codec}");
+        }
+    }
+
+    /// Adler-32 of `data`, computed independently of the implementation under test.
+    fn adler32(data: &[u8]) -> u32 {
+        let (mut a, mut b) = (1_u32, 0_u32);
+        for &byte in data {
+            a = (a + byte as u32) % 65521;
+            b = (b + a) % 65521;
+        }
+        b << 16 | a
+    }
+
+    #[test]
+    fn write_sorted_file_checksums_the_written_bytes() {
+        let rows = long_rows(&[1, 2, 3, 4, 5]);
+        let sizes = vec![16_i32; rows.len()];
+        let dir = tempfile::tempdir().unwrap();
+
+        // CRC32 (0) starts from 0 but Adler-32 (1) from 1, so a missing current checksum
+        // (`i64::MIN`) must start a fresh checksum rather than continue one from 0. Spark seeds
+        // every partition with `Long.MIN_VALUE` and defaults to Adler-32.
+        let algorithms = [(0, crc32fast::hash as fn(&[u8]) -> u32), (1, adler32)];
+        for (algo, checksum_of) in algorithms {
+            // Without a current checksum the checksum starts afresh and covers the file.
+            let first_path = dir.path().join(format!("{algo}-first"));
+            let ([_, first, _], first_data) =
+                write_long_rows(&rows, &sizes, &first_path, Some(algo), i64::MIN, "lz4").unwrap();
+            assert_eq!(first, checksum_of(&first_data) as i64, "algorithm {algo}");
+
+            // A current checksum continues it, as across the spill files of one partition.
+            let second_path = dir.path().join(format!("{algo}-second"));
+            let ([_, second, _], second_data) =
+                write_long_rows(&rows, &sizes, &second_path, Some(algo), first, "lz4").unwrap();
+            let both = [first_data, second_data].concat();
+            assert_eq!(second, checksum_of(&both) as i64, "algorithm {algo}");
+        }
+    }
+
+    #[test]
+    fn write_sorted_file_rejects_missing_row_sizes() {
+        let rows = long_rows(&[1, 2]);
+        let dir = tempfile::tempdir().unwrap();
+        let error = write_long_rows(&rows, &[16], &dir.path().join("a"), None, i64::MIN, "lz4")
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("1 row sizes for 2 row addresses"),
+            "{error}"
+        );
+    }
+
+    /// The page numbers `SorterRecords` stores rows under. They are not contiguous, so that a
+    /// lookup that ignored the page number would read the wrong page.
+    const SORTER_PAGE_NUMBERS: [usize; 2] = [3, 1];
+
+    /// Rows stored the way Spark's sorter stores them: in pages, each record its length in 4
+    /// bytes, then the row's 4-byte big-endian size from `UnsafeRowSerializer`, then the row.
+    /// Rows alternate between two pages, and `pointers` holds the packed record pointer of
+    /// each row, sorted by partition as `sort_row_partitions` sorts them.
+    struct SorterRecords {
+        _pages: Vec<Vec<u64>>,
+        page_addresses: Vec<i64>,
+        pointers: Vec<i64>,
+    }
+
+    impl SorterRecords {
+        /// Each row must be whole 8-byte words, as an `UnsafeRow` is, so that every row stays
+        /// aligned in its page.
+        fn new<R: AsRef<[u8]>>(rows: &[R], partitions: &[usize]) -> Self {
+            let mut page_bytes: Vec<Vec<u8>> = vec![Vec::new(); SORTER_PAGE_NUMBERS.len()];
+            let mut pointers = Vec::new();
+            for (i, (row, &partition)) in rows.iter().zip(partitions).enumerate() {
+                let row = row.as_ref();
+                let page = i % SORTER_PAGE_NUMBERS.len();
+                let offset = page_bytes[page].len();
+                page_bytes[page].extend_from_slice(&(4 + row.len() as i32).to_ne_bytes());
+                page_bytes[page].extend_from_slice(&(row.len() as i32).to_be_bytes());
+                page_bytes[page].extend_from_slice(row);
+                pointers.push(
+                    (partition as i64) << 40
+                        | (SORTER_PAGE_NUMBERS[page] as i64) << 27
+                        | offset as i64,
+                );
+            }
+            let num_records = pointers.len();
+            pointers.resize(2 * num_records, 0);
+            sort_row_partitions(&mut pointers, num_records);
+            pointers.truncate(num_records);
+
+            // `u64` elements keep the rows 8-byte aligned, as in a Spark page.
+            let pages: Vec<Vec<u64>> = page_bytes
+                .iter()
+                .map(|bytes| {
+                    let mut page = vec![0_u64; bytes.len().div_ceil(8)];
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            bytes.as_ptr(),
+                            page.as_mut_ptr() as *mut u8,
+                            bytes.len(),
+                        )
+                    };
+                    page
+                })
+                .collect();
+            let mut page_addresses = vec![0_i64; SORTER_PAGE_NUMBERS.iter().max().unwrap() + 1];
+            for (page, &number) in pages.iter().zip(&SORTER_PAGE_NUMBERS) {
+                page_addresses[number] = page.as_ptr() as i64;
+            }
+            Self {
+                _pages: pages,
+                page_addresses,
+                pointers,
+            }
+        }
+
+        /// Writes the records with `write_sorted_partitions` in batches of 2 rows.
+        fn write(
+            &self,
+            path: &std::path::Path,
+            checksum_algo: i32,
+            partition_checksums: &mut [i64],
+            partition_lengths: &mut [i64],
+            codec: &str,
+        ) -> CometResult<i64> {
+            unsafe {
+                write_sorted_partitions(
+                    &self.pointers,
+                    &self.page_addresses,
+                    4,
+                    &[DataType::Int64],
+                    path.to_str().unwrap(),
+                    1.0,
+                    2,
+                    checksum_algo,
+                    partition_checksums,
+                    partition_lengths,
+                    codec,
+                    1,
+                    false,
+                )
+            }
+        }
+    }
+
+    /// The partition of row `i` of `long_rows(0..23)`: partitions 1, 3 and 6 of 7 get no rows,
+    /// and every other one more than one 2-row batch.
+    fn partition_of(i: usize) -> usize {
+        [0, 2, 4, 5, 2, 0, 4][i % 7]
+    }
+
+    #[test]
+    fn write_sorted_partitions_matches_writing_each_partition() {
+        let values: Vec<i64> = (0..23).collect();
+        let rows = long_rows(&values);
+        let partitions: Vec<usize> = (0..rows.len()).map(partition_of).collect();
+        let num_partitions = 7;
+        let records = SorterRecords::new(&rows, &partitions);
+        let dir = tempfile::tempdir().unwrap();
+
+        // Every codec and checksum algorithm, and no checksum (-1) with no checksum array.
+        for (codec, algo) in [("lz4", 1), ("zstd", 0), ("snappy", 2), ("lz4", -1)] {
+            let name = format!("{codec}-{algo}");
+            let path = dir.path().join(&name);
+            let mut checksums = vec![i64::MIN; if algo == -1 { 0 } else { num_partitions }];
+            let mut lengths = vec![0_i64; num_partitions];
+            records
+                .write(&path, algo, &mut checksums, &mut lengths, codec)
+                .unwrap();
+
+            // Writing each partition's rows, in the order the sorter keeps them, on its own.
+            let mut expected = Vec::new();
+            for partition in 0..num_partitions {
+                let partition_rows: Vec<[u8; 16]> = rows
+                    .iter()
+                    .zip(&partitions)
+                    .filter(|(_, &p)| p == partition)
+                    .map(|(row, _)| *row)
+                    .collect();
+                if partition_rows.is_empty() {
+                    assert_eq!(lengths[partition], 0, "{name}: partition {partition}");
+                    if algo != -1 {
+                        assert_eq!(checksums[partition], i64::MIN, "{name}: {partition}");
+                    }
+                    continue;
+                }
+                let sizes = vec![16_i32; partition_rows.len()];
+                let ([written, checksum, _], data) = write_long_rows(
+                    &partition_rows,
+                    &sizes,
+                    &dir.path().join(format!("{name}-{partition}")),
+                    (algo != -1).then_some(algo),
+                    i64::MIN,
+                    codec,
+                )
+                .unwrap();
+                assert_eq!(lengths[partition], written, "{name}: partition {partition}");
+                if algo != -1 {
+                    assert_eq!(checksums[partition], checksum, "{name}: {partition}");
+                }
+                expected.extend(data);
+            }
+            let data = std::fs::read(&path).unwrap();
+            assert_eq!(data, expected, "{name}");
+
+            // The blocks hold every row, partition by partition.
+            let mut decoded = Vec::new();
+            for block in shuffle_blocks(&data) {
+                decoded.extend(long_values(&read_ipc_compressed(block).unwrap()));
+            }
+            let mut expected_values = values.clone();
+            expected_values.sort_by_key(|&v| partition_of(v as usize));
+            assert_eq!(decoded, expected_values, "{name}");
+        }
+    }
+
+    /// Spark `UnsafeRow`s with one non-null string field each: an 8-byte null bitset, the
+    /// field's offset and size, then the string padded to a word.
+    fn string_rows(values: &[&str]) -> Vec<Vec<u8>> {
+        values
+            .iter()
+            .map(|value| {
+                let mut row = vec![0_u8; 16 + value.len().div_ceil(8) * 8];
+                row[8..16].copy_from_slice(&(16_i64 << 32 | value.len() as i64).to_le_bytes());
+                row[16..16 + value.len()].copy_from_slice(value.as_bytes());
+                row
+            })
+            .collect()
+    }
+
+    #[test]
+    fn write_sorted_partitions_matches_writing_each_partition_as_dictionaries_change() {
+        // With a dictionary ratio of 1.5, a 2-row batch of two equal strings stays
+        // dictionary-encoded and one of two different strings is written plain
+        // (`builder_to_array`). So the block schema changes within partitions 0 and 3 and from
+        // partition 0 to 2, and stays the same from partition 2 to 3, where the encoder keeps
+        // its block writer.
+        let inserted = [
+            ("a", 0),
+            ("e", 3),
+            ("a", 0),
+            ("d", 2),
+            ("e", 3),
+            ("b", 0),
+            ("d", 2),
+            ("f", 3),
+            ("c", 0),
+            ("g", 3),
+        ];
+        let (values, partitions): (Vec<&str>, Vec<usize>) = inserted.into_iter().unzip();
+        let rows = string_rows(&values);
+        let records = SorterRecords::new(&rows, &partitions);
+        let num_partitions = 4;
+        let mut expected_values = inserted.to_vec();
+        expected_values.sort_by_key(|&(_, partition)| partition);
+        let expected_values: Vec<&str> = expected_values.iter().map(|&(v, _)| v).collect();
+        let dir = tempfile::tempdir().unwrap();
+
+        // zstd stores the offsets of a plain string column as lengths, and of a dictionary one
+        // as offsets, so a block writer kept for the wrong schema writes different bytes.
+        for (codec, offsets_as_lengths) in [("lz4", false), ("zstd", true)] {
+            let path = dir.path().join(codec);
+            let mut checksums = vec![i64::MIN; num_partitions];
+            let mut lengths = vec![0_i64; num_partitions];
+            unsafe {
+                write_sorted_partitions(
+                    &records.pointers,
+                    &records.page_addresses,
+                    4,
+                    &[DataType::Utf8],
+                    path.to_str().unwrap(),
+                    1.5,
+                    2,
+                    1,
+                    &mut checksums,
+                    &mut lengths,
+                    codec,
+                    1,
+                    offsets_as_lengths,
+                )
+            }
+            .unwrap();
+
+            // Writing each partition's rows on its own, with an encoder of its own.
+            let mut expected = Vec::new();
+            for partition in 0..num_partitions {
+                let (addresses, sizes): (Vec<i64>, Vec<i32>) = rows
+                    .iter()
+                    .zip(&partitions)
+                    .filter(|(_, &p)| p == partition)
+                    .map(|(row, _)| (row.as_ptr() as i64, row.len() as i32))
+                    .unzip();
+                if addresses.is_empty() {
+                    assert_eq!(lengths[partition], 0, "{codec}: {partition}");
+                    continue;
+                }
+                let partition_path = dir.path().join(format!("{codec}-{partition}"));
+                let [written, checksum, _] = unsafe {
+                    write_sorted_file(
+                        &addresses,
+                        &sizes,
+                        &[DataType::Utf8],
+                        partition_path.to_str().unwrap().to_string(),
+                        1.5,
+                        2,
+                        true,
+                        1,
+                        i64::MIN,
+                        codec,
+                        1,
+                        offsets_as_lengths,
+                    )
+                }
+                .unwrap();
+                assert_eq!(lengths[partition], written, "{codec}: {partition}");
+                assert_eq!(checksums[partition], checksum, "{codec}: {partition}");
+                expected.extend(std::fs::read(&partition_path).unwrap());
+            }
+            let data = std::fs::read(&path).unwrap();
+            assert_eq!(data, expected, "{codec}");
+
+            let mut dictionaries = Vec::new();
+            let mut decoded = Vec::new();
+            for block in shuffle_blocks(&data) {
+                let batch = read_ipc_compressed(block).unwrap();
+                let column = batch.column(0);
+                dictionaries.push(matches!(column.data_type(), DataType::Dictionary(_, _)));
+                let strings = arrow::compute::cast(column, &DataType::Utf8).unwrap();
+                let strings = arrow::array::AsArray::as_string::<i32>(&strings);
+                decoded.extend(strings.iter().map(|s| s.unwrap().to_string()));
+            }
+            assert_eq!(dictionaries, [true, false, true, true, false], "{codec}");
+            assert_eq!(decoded, expected_values, "{codec}");
+        }
+    }
+
+    #[test]
+    fn write_sorted_partitions_continues_partition_checksums() {
+        let rows = long_rows(&(0..23).collect::<Vec<_>>());
+        let partitions: Vec<usize> = (0..rows.len()).map(partition_of).collect();
+        let num_partitions = 7;
+        let records = SorterRecords::new(&rows, &partitions);
+        let dir = tempfile::tempdir().unwrap();
+
+        // Two spills share the checksums, so after the second each partition's checksum covers
+        // its bytes in both files, as Spark checksums the merged partition.
+        let algorithms = [(0, crc32fast::hash as fn(&[u8]) -> u32), (1, adler32)];
+        for (algo, checksum_of) in algorithms {
+            let mut checksums = vec![i64::MIN; num_partitions];
+            let mut spills = Vec::new();
+            for spill in 0..2 {
+                let path = dir.path().join(format!("{algo}-{spill}"));
+                let mut lengths = vec![0_i64; num_partitions];
+                records
+                    .write(&path, algo, &mut checksums, &mut lengths, "lz4")
+                    .unwrap();
+                spills.push((std::fs::read(&path).unwrap(), lengths));
+            }
+
+            for partition in [0, 2, 4, 5] {
+                let mut bytes = Vec::new();
+                for (data, lengths) in &spills {
+                    let start = lengths[..partition].iter().sum::<i64>() as usize;
+                    bytes.extend_from_slice(&data[start..start + lengths[partition] as usize]);
+                }
+                assert_eq!(
+                    checksums[partition],
+                    checksum_of(&bytes) as i64,
+                    "algorithm {algo}, partition {partition}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn write_sorted_partitions_without_records() {
+        let records = SorterRecords::new::<[u8; 16]>(&[], &[]);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty");
+        let mut checksums = vec![i64::MIN; 3];
+        let mut lengths = vec![0_i64; 3];
+        records
+            .write(&path, 1, &mut checksums, &mut lengths, "lz4")
+            .unwrap();
+        assert_eq!(lengths, [0, 0, 0]);
+        assert_eq!(checksums, [i64::MIN; 3]);
+        assert!(std::fs::read(&path).unwrap().is_empty());
+    }
+
+    #[test]
+    fn write_sorted_partitions_rejects_bad_record_pointers() {
+        let rows = long_rows(&[1, 2, 3]);
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("bad");
+        let write = |records: &SorterRecords, num_partitions: usize| {
+            records
+                .write(&path, -1, &mut [], &mut vec![0; num_partitions], "lz4")
+                .unwrap_err()
+                .to_string()
+        };
+
+        let records = SorterRecords::new(&rows, &[0, 1, 2]);
+        let error = write(&records, 2);
+        assert!(error.contains("partition 2 of 2"), "{error}");
+
+        let mut unsorted = SorterRecords::new(&rows, &[0, 1, 2]);
+        unsorted.pointers.reverse();
+        let error = write(&unsorted, 3);
+        assert!(error.contains("not sorted by partition"), "{error}");
+
+        let mut missing_page = SorterRecords::new(&rows, &[0, 1, 2]);
+        missing_page.page_addresses[SORTER_PAGE_NUMBERS[1]] = 0;
+        let error = write(&missing_page, 3);
+        assert!(
+            error.contains(&format!("page {}", SORTER_PAGE_NUMBERS[1])),
+            "{error}"
+        );
+
+        let error = unsafe {
+            write_sorted_partitions(
+                &records.pointers,
+                &records.page_addresses,
+                2,
+                &[DataType::Int64],
+                path.to_str().unwrap(),
+                1.0,
+                2,
+                -1,
+                &mut [],
+                &mut [0; 3],
+                "lz4",
+                1,
+                false,
+            )
+        }
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("record length size 2"), "{error}");
+    }
+
+    /// Exports `columns` as Arrow C Data structs and converts them with `columnar_to_row_convert`,
+    /// returning the offsets, the lengths, and the row bytes.
+    fn convert_exported(
+        columns: &[ArrayRef],
+        num_rows: i32,
+    ) -> CometResult<(Vec<i32>, Vec<i32>, Vec<u8>)> {
+        let mut ffi_arrays: Vec<Box<FFI_ArrowArray>> = columns
+            .iter()
+            .map(|column| Box::new(FFI_ArrowArray::new(&column.to_data())))
+            .collect();
+        let mut ffi_schemas: Vec<Box<FFI_ArrowSchema>> = columns
+            .iter()
+            .map(|column| Box::new(FFI_ArrowSchema::try_from(column.data_type()).unwrap()))
+            .collect();
+        let array_addrs: Vec<i64> = ffi_arrays
+            .iter_mut()
+            .map(|array| array.as_mut() as *mut FFI_ArrowArray as i64)
+            .collect();
+        let schema_addrs: Vec<i64> = ffi_schemas
+            .iter_mut()
+            .map(|schema| schema.as_mut() as *mut FFI_ArrowSchema as i64)
+            .collect();
+        let types = columns.iter().map(|c| c.data_type().clone()).collect();
+
+        let mut ctx = ColumnarToRowContext::new(types, 8);
+        let converted =
+            unsafe { columnar_to_row_convert(&mut ctx, &array_addrs, &schema_addrs, num_rows) };
+        // The call takes ownership of the exported structs, so they must not be released again.
+        ffi_arrays.into_iter().for_each(std::mem::forget);
+        ffi_schemas.into_iter().for_each(std::mem::forget);
+
+        let (buffer, offsets, lengths) = converted?;
+        let total = offsets
+            .iter()
+            .zip(lengths)
+            .map(|(offset, length)| (offset + length) as usize)
+            .max()
+            .unwrap_or(0);
+        let rows = unsafe { std::slice::from_raw_parts(buffer, total) }.to_vec();
+        Ok((offsets.to_vec(), lengths.to_vec(), rows))
+    }
+
+    #[test]
+    fn columnar_to_row_convert_imports_and_converts() {
+        let columns: Vec<ArrayRef> = vec![
+            Arc::new(Int32Array::from(vec![Some(1), None, Some(3)])),
+            Arc::new(arrow::array::StringArray::from(vec![
+                Some("a"),
+                Some("a longer string"),
+                None,
+            ])),
+        ];
+        let (offsets, lengths, rows) = convert_exported(&columns, 3).unwrap();
+
+        let types = columns.iter().map(|c| c.data_type().clone()).collect();
+        let mut expected_ctx = ColumnarToRowContext::new(types, 8);
+        let (expected_buffer, expected_offsets, expected_lengths) =
+            expected_ctx.convert(&columns, 3).unwrap();
+        assert_eq!(offsets, expected_offsets);
+        assert_eq!(lengths, expected_lengths);
+        assert_eq!(rows, unsafe {
+            std::slice::from_raw_parts(expected_buffer, rows.len())
+        });
+        // The string column makes the rows variable-length.
+        assert_ne!(lengths[0], lengths[1]);
+    }
+
+    #[test]
+    fn columnar_to_row_convert_rejects_mismatched_addresses() {
+        let column: ArrayRef = Arc::new(Int32Array::from(vec![1, 2]));
+        let mut ffi_array = Box::new(FFI_ArrowArray::new(&column.to_data()));
+        let array_addrs = [ffi_array.as_mut() as *mut FFI_ArrowArray as i64];
+        let mut ctx = ColumnarToRowContext::new(vec![DataType::Int32], 8);
+        // Rejected before any struct is imported, so the export is still released on drop.
+        let error = unsafe { columnar_to_row_convert(&mut ctx, &array_addrs, &[], 2) }
+            .expect_err("mismatched addresses are rejected");
+        assert!(
+            error
+                .to_string()
+                .contains("0 schema addresses for 1 array addresses"),
+            "{error}"
+        );
+    }
+
+    /// A range of `num_elements` longs from 0, which needs no JVM input and reserves no memory.
+    fn range_operator(num_elements: i64) -> Operator {
+        use datafusion_comet_proto::spark_operator::RangeScan;
+
+        Operator {
+            plan_id: 1,
+            op_struct: Some(OpStruct::RangeScan(RangeScan {
+                start: 0,
+                step: 1,
+                num_elements,
+                num_slices: 1,
+            })),
+            ..Default::default()
+        }
+    }
+
+    fn range_plan(num_elements: i64) -> Vec<u8> {
+        use prost::Message;
+        range_operator(num_elements).encode_to_vec()
+    }
+
+    /// A range of `num_elements` longs sorted in descending order. The sort buffers its whole
+    /// input, so the plan holds a memory reservation while it emits its output.
+    fn sorted_range_plan(num_elements: i64) -> Vec<u8> {
+        use datafusion_comet_proto::spark_expression::{
+            self, expr::ExprStruct, NullOrdering, SortDirection,
+        };
+        use datafusion_comet_proto::spark_operator::Sort;
+        use prost::Message;
+
+        let column = Expr {
+            expr_struct: Some(ExprStruct::Bound(spark_expression::BoundReference {
+                index: 0,
+                // A Spark `long`.
+                datatype: Some(spark_expression::DataType {
+                    type_id: 4,
+                    type_info: None,
+                }),
+            })),
+            ..Default::default()
+        };
+        let descending = Expr {
+            expr_struct: Some(ExprStruct::SortOrder(Box::new(
+                spark_expression::SortOrder {
+                    child: Some(Box::new(column)),
+                    direction: SortDirection::Descending as i32,
+                    null_ordering: NullOrdering::NullsLast as i32,
+                },
+            ))),
+            ..Default::default()
+        };
+        Operator {
+            plan_id: 2,
+            children: vec![range_operator(num_elements)],
+            op_struct: Some(OpStruct::Sort(Sort {
+                sort_orders: vec![descending],
+                ..Default::default()
+            })),
+            ..Default::default()
+        }
+        .encode_to_vec()
+    }
+
+    fn long_values(batch: &RecordBatch) -> Vec<i64> {
+        arrow::array::AsArray::as_primitive::<arrow::datatypes::Int64Type>(batch.column(0))
+            .values()
+            .to_vec()
+    }
+
+    /// Creates a plan without a JVM: no metrics node or JVM input, and a memory pool backed by a
+    /// fake Spark.
+    fn create_test_plan(serialized_plan: Vec<u8>) -> CometResult<Box<ExecutionContext>> {
+        use crate::execution::memory_pools::create_memory_pool_with_fake_spark;
+        use datafusion_comet_proto::spark_config::ConfigMap;
+        use prost::Message;
+
+        let configs = ConfigMap {
+            entries: HashMap::from([(SPARK_EXECUTOR_CORES.to_string(), "2".to_string())]),
+        };
+        let inputs = PlanInputs {
+            id: -6201,
+            settings: prepare_plan_settings(&configs.encode_to_vec())?,
+            serialized_plan,
+            partition_count: 1,
+            batch_size: 4,
+            off_heap_mode: true,
+            memory_pool_type: "greedy_unified".to_string(),
+            memory_limit: 1 << 30,
+            task_attempt_id: -6201,
+            task_cpus: 1,
+            local_dirs: vec![std::env::temp_dir().to_str().unwrap().to_string()],
+            metrics_update_interval: 0,
+            start: Instant::now(),
+            jvm: PlanJvmRefs {
+                metrics: None,
+                input_sources: vec![],
+                key_unwrapper: None,
+                task_context: None,
+                class_loader: None,
+            },
+        };
+        create_execution_context(inputs, |config| {
+            create_memory_pool_with_fake_spark(config, -6201, 1 << 30)
+        })
+    }
+
+    #[test]
+    fn execute_plan_drains_a_plan() {
+        let _guard = serial();
+        let mut exec_context = create_test_plan(range_plan(10)).unwrap();
+        assert!(
+            exec_context.root_op.is_none(),
+            "operators are created on first execution"
+        );
+
+        let mut values = Vec::new();
+        while let Some(batch) = execute_plan(&mut exec_context, 0, 0, &mut |_| Ok(())).unwrap() {
+            assert!(
+                batch.num_rows() <= 4,
+                "batches follow the configured batch size"
+            );
+            values.extend(long_values(&batch));
+        }
+        assert_eq!(values, (0..10).collect::<Vec<i64>>());
+        assert!(
+            exec_context.batch_producer.is_some(),
+            "a plan without JVM input runs on a Tokio task"
+        );
+        release_plan(exec_context, &mut |_| Ok(())).unwrap();
+    }
+
+    /// The sort holds a reservation while it emits its 10,000 sorted rows, 4 at a time.
+    const SORTED_ROWS: i64 = 10_000;
+
+    #[test]
+    fn release_plan_returns_the_plans_memory() {
+        let _guard = serial();
+        let mut exec_context = create_test_plan(sorted_range_plan(SORTED_ROWS)).unwrap();
+
+        // Without an update interval, metrics are published only when the plan is released.
+        let mut publishes = 0;
+        let batch = execute_plan(&mut exec_context, 0, 0, &mut |_| {
+            publishes += 1;
+            Ok(())
+        })
+        .unwrap()
+        .expect("the sort emits a first batch");
+        assert_eq!(long_values(&batch), [9999, 9998, 9997, 9996]);
+        assert_eq!(publishes, 0);
+
+        // Released mid-stream, as when Spark stops reading early, with the sort still holding
+        // its buffered input.
+        let plan_memory = Arc::clone(&exec_context.plan_memory);
+        assert!(plan_memory.reserved() > 0, "the sort holds a reservation");
+        release_plan(exec_context, &mut |ctx| {
+            assert!(
+                ctx.root_op.is_some(),
+                "the final metrics are of the executed plan"
+            );
+            publishes += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(publishes, 1);
+        assert_eq!(plan_memory.reserved(), 0);
+    }
+
+    #[test]
+    fn release_plan_reports_a_failed_metrics_publish() {
+        let _guard = serial();
+        let mut exec_context = create_test_plan(sorted_range_plan(SORTED_ROWS)).unwrap();
+        execute_plan(&mut exec_context, 0, 0, &mut |_| Ok(())).unwrap();
+        let plan_memory = Arc::clone(&exec_context.plan_memory);
+        assert!(plan_memory.reserved() > 0, "the sort holds a reservation");
+
+        let error = release_plan(exec_context, &mut |_| {
+            Err(CometError::Internal("metrics node is gone".to_string()))
+        })
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("metrics node is gone"),
+            "{error}"
+        );
+        // The plan is still released.
+        assert_eq!(plan_memory.reserved(), 0);
+    }
+
+    #[test]
+    fn create_execution_context_rejects_bad_input() {
+        let _guard = serial();
+        let error = create_test_plan(vec![0xff, 0xff, 0xff])
+            .err()
+            .expect("a malformed plan is rejected");
+        assert!(error.to_string().contains("deserialize"), "{error}");
+    }
+
+    struct NoopPusher;
+
+    impl ShufflePartitionPusher for NoopPusher {
+        fn push_partition_data(
+            &self,
+            _partition_id: i32,
+            _data: &[u8],
+        ) -> datafusion::common::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn register_shuffle_partition_pusher_once_before_execution() {
+        let _guard = serial();
+        let mut exec_context = create_test_plan(range_plan(3)).unwrap();
+        register_shuffle_partition_pusher(&mut exec_context, || Ok(Arc::new(NoopPusher))).unwrap();
+        assert!(exec_context.shuffle_partition_pusher.is_some());
+
+        // The pusher is built only once the plan is known to accept it.
+        let error = register_shuffle_partition_pusher(&mut exec_context, || {
+            panic!("a rejected pusher must not be built")
+        })
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("already been registered"),
+            "{error}"
+        );
+
+        let mut exec_context = create_test_plan(range_plan(3)).unwrap();
+        execute_plan(&mut exec_context, 0, 0, &mut |_| Ok(())).unwrap();
+        let error = register_shuffle_partition_pusher(&mut exec_context, || {
+            panic!("a rejected pusher must not be built")
+        })
+        .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("cannot be registered after native execution starts"),
+            "{error}"
+        );
+        release_plan(exec_context, &mut |_| Ok(())).unwrap();
     }
 }

@@ -68,7 +68,10 @@ message Operator {
     Sample sample = 118;
     WindowGroupLimit window_group_limit = 119;
     IcebergWrite iceberg_write = 120;
-    HudiScan hudi_scan = 121;
+    RangeScan range_scan = 121;
+    MergeRows merge_rows = 122;
+    ArrowPythonUdf arrow_python_udf = 123;
+    HudiScan hudi_scan = 124;
     // Extension point for optional, out-of-tree contrib scans (Delta, Lance, ...). The concrete
     // scan message (e.g. `DeltaScan`) is packed into this envelope on the JVM side and dispatched
     // by `type_url` on the native side. Using a single permanent field -- rather than a new oneof
@@ -155,10 +158,10 @@ message NativeScanCommon {
   bool encryption_enabled = 11;
   string source = 12;
   repeated spark.spark_expression.DataType fields = 13;
-  // SPARK-53535 (Spark 4.1+): when reading a struct whose requested fields are all
-  // missing in the Parquet file, true returns the entire struct as null (legacy
-  // pre-4.1 behavior); false preserves the parent struct's nullness from the file
-  // so non-null parents return a struct of all-null fields.
+  // SPARK-53535 (Spark 4.1+): when none of the requested leaves of a struct, list or
+  // map exist in the Parquet file, true returns the entire value as null (legacy
+  // pre-4.1 behavior); false preserves the parent's nullness from the file, so
+  // non-null parents keep their structure with all-null leaves.
   bool return_null_struct_if_all_fields_missing = 14;
   // True when spark.sql.parquet.fieldId.read.enabled is set and the requested
   // schema actually carries parquet.field.id metadata. When false the native
@@ -192,11 +195,82 @@ message NativeScan {
   // Single partition's file list (injected at execution time)
   SparkFilePartition file_partition = 2;
 
-  // Hash half of the key under which this scan's planning data is stored and looked up at
-  // execution time; the other half is common.source. Derived once on the driver
-  // (CometNativeScanExec) so executors rebuild the key instead of hashing the common per task.
+  // Hash part of the key under which this scan's planning data is stored and looked up at
+  // execution time; the other parts are common.source and the operator's plan_id. Derived once
+  // on the driver (CometNativeScanExec) so executors rebuild the key instead of hashing the
+  // common per task.
   // JVM-consumed only; the native side ignores it.
   optional int32 source_key_hash = 3;
+}
+
+// Delta-table-wide data shared by all partitions (sent once at planning).
+// Produced by the contrib Delta module; the native handler is compiled only
+// when the `delta` Cargo feature is enabled.
+message DeltaSparkScanCommon {
+  // Table root URL, used to resolve relative deletion-vector paths.
+  string table_root = 1;
+  // Column mapping mode: "none", "name", or "id".
+  string column_mapping_mode = 2;
+  // Key for split-mode plan-data injection. Derived from (table root, snapshot
+  // version, scan hash) so two scans of the same table in one plan (self-join,
+  // MERGE) don't collide -- same lesson as IcebergScan's
+  // (metadata_location, scan_hash_code) key.
+  string source_key = 3;
+  // Effective datetime rebase read modes (LegacyBehaviorPolicy values of
+  // spark.sql.parquet.datetimeRebaseModeInRead / int96RebaseModeInRead, resolved
+  // through ParquetOptions so per-relation options win, exactly as
+  // ParquetFileFormat.buildReaderWithPartitionValues resolves them). Consulted
+  // only for files whose footer metadata does not decide the rebase policy on
+  // its own (no org.apache.spark.version key), mirroring
+  // DataSourceUtils.getRebaseSpec's modeByConfig fallback. Empty (an older
+  // producer) is read as EXCEPTION, the conservative refuse-ancient posture.
+  string datetime_rebase_mode_in_read = 4;
+  string int96_rebase_mode_in_read = 5;
+}
+
+// Descriptor for a Delta deletion vector, derived from the Delta protocol's
+// DeletionVectorDescriptor. The JVM side (which has delta-spark on the
+// classpath) resolves UUID-relative paths to absolute URLs and Z85-decodes
+// inline bitmaps, so the native side needs neither codec. Executors fetch
+// on-disk bitmaps with a single ranged object-store read; only this small
+// descriptor crosses JNI.
+message DeltaSparkDvDescriptor {
+  // Original storage form, for diagnostics: "u" (UUID-relative), "i"
+  // (inline), "p" (absolute path).
+  string storage_type = 1;
+  // Absolute URL of the DV file (on-disk forms). At descriptor.offset the
+  // file holds [i32 BE size][bitmap data][i32 BE CRC32-of-data].
+  optional string absolute_path = 2;
+  // The bitmap data (magic + RoaringBitmapArray), already unframed and
+  // Z85-decoded (inline form).
+  optional bytes inline_data = 3;
+  // Byte offset of the size-prefixed bitmap within the DV file.
+  optional int32 offset = 4;
+  // Length of the bitmap data (excluding the size/CRC framing).
+  int32 size_in_bytes = 5;
+  // Number of deleted rows encoded in the bitmap.
+  int64 cardinality = 6;
+}
+
+// A data file plus its optional deletion vector.
+message DeltaSparkPartitionedFile {
+  SparkPartitionedFile file = 1;
+  optional DeltaSparkDvDescriptor dv = 2;
+}
+
+// Single partition's Delta file list (injected at execution time).
+// Field name matches SparkFilePartition.partitioned_file for consistency.
+message DeltaSparkFilePartition {
+  repeated DeltaSparkPartitionedFile partitioned_file = 1;
+}
+
+message DeltaSparkScan {
+  // Reuses the parquet scan's common data (schemas, filters, projections,
+  // object-store options, reader flags) -- the Delta read path delegates to
+  // the same native parquet machinery as NativeScan.
+  NativeScanCommon common = 1;
+  DeltaSparkScanCommon delta_common = 2;
+  DeltaSparkFilePartition file_partition = 3;
 }
 
 message CsvScan {
@@ -387,8 +461,8 @@ message IcebergScanCommon {
 
   // Iceberg's SparkScan.hashCode() (folds in pushed filters, snapshot, branch, and read schema).
   // A self-join/self-merge can read the same table (same metadata_location) twice with different
-  // projections or filters, so PlanDataInjector keys planning data by
-  // (metadata_location, scan_hash_code) rather than metadata_location alone.
+  // projections or filters, so PlanDataInjector keys planning data by metadata_location,
+  // scan_hash_code and the operator's plan_id rather than metadata_location alone.
   int32 scan_hash_code = 15;
 }
 
@@ -817,7 +891,7 @@ message IcebergWriteCommon {
 }
 
 // Single Iceberg write operator. Per-task fields are populated by the JVM exec wrapper at task
-// launch (matching how `ParquetWriter.task_attempt_id` is filled in `CometNativeWriteExec`).
+// launch (matching how `ParquetWriter.output_path` is filled in by the Parquet write execs).
 message IcebergWrite {
   IcebergWriteCommon common = 1;
 
@@ -833,14 +907,44 @@ message Projection {
   repeated spark.spark_expression.Expr project_list = 1;
 }
 
+// Spark 4.1+ scalar @arrow_udf evaluation. The input columns pass through, and
+// one result column is appended for each function in order.
+message ArrowPythonUdf {
+  repeated ArrowPythonFunction functions = 1;
+  // Spark's Arrow writer splits input batches before calling a scalar Arrow UDF.
+  // A non-positive value disables the limit.
+  int32 max_records_per_batch = 2;
+  // Spark also stops a batch once its Arrow input buffers reach this size.
+  int64 max_bytes_per_batch = 3;
+  // Spark 4.2 accepts any result that pyarrow.RecordBatch.from_arrays accepts,
+  // such as a list or NumPy array. Spark 4.1 requires a pyarrow.Array.
+  bool accept_array_like_results = 4;
+}
+
+message ArrowPythonFunction {
+  // Spark's pickled (function, returnType) command. Broadcast-backed commands
+  // are rejected by the JVM planner until broadcast support is implemented.
+  bytes command = 1;
+  repeated spark.spark_expression.Expr args = 2;
+  spark.spark_expression.DataType return_type = 3;
+  string return_name = 4;
+  // Empty string for a positional argument, otherwise Python keyword name.
+  repeated string arg_names = 5;
+  string python_version = 6;
+}
+
 message Filter {
   spark.spark_expression.Expr predicate = 1;
+  // Explicit opt-in for a deterministic residual. Absent metadata preserves the safe default.
+  bool allow_runtime_filter_pushdown = 2;
 }
 
 message Sort {
   repeated spark.spark_expression.Expr sort_orders = 1;
   optional int32 fetch = 3;
   optional int32 skip = 4;
+  // Attach this TopK execution's live threshold to an eligible native reader.
+  bool dynamic_filter_enabled = 5;
 }
 
 message HashAggregate {
@@ -858,6 +962,10 @@ message HashAggregate {
   // Offset in the child's output where aggregate buffer attributes start.
   // Used by PartialMerge to locate state fields in the input.
   int32 initial_input_buffer_offset = 7;
+  // Set for Spark's SortAggregateExec, which reports its output as ordered by the grouping
+  // keys (ascending, nulls first). The native planner sorts the aggregate output on the
+  // grouping columns unless the aggregate already emits its groups in that order.
+  bool ordered_by_grouping_keys = 9;
 }
 
 message Limit {
@@ -873,6 +981,17 @@ message Sample {
   double upper_bound = 2;
   // Seed before the partition index is added, which happens on the native side.
   int64 seed = 3;
+}
+
+// Spark's `RangeExec`, which produces the rows of `spark.range` and SQL `range()`. The native side
+// computes its partition's values from these fields and the partition index, the way Spark's
+// `RangeExec` does.
+message RangeScan {
+  int64 start = 1;
+  int64 step = 2;
+  // Spark's element count. Comet sends only ranges whose count fits in a long.
+  int64 num_elements = 3;
+  int32 num_slices = 4;
 }
 
 enum CompressionCodec {
@@ -932,30 +1051,25 @@ message ShuffleWriter {
   uint64 max_buffer_bytes = 10;
   // Explicit output destination. When absent, use the legacy output file fields.
   PartitionWriter partition_writer = 11;
+  // Store the offsets of variable-width columns as lengths in local shuffle blocks, which compress
+  // better. The native writer applies it only with zstd for now.
+  bool offsets_as_lengths = 12;
 }
 
 message ParquetWriter {
-  // Where this task writes. Two shapes, selected by whether `work_dir` is set:
-  //
-  //  - Spark 4.0+ (CometWriteFilesExec): `work_dir` is unset and `output_path` is the
-  //    fully-qualified path of the Parquet file to write, set per task from
-  //    FileCommitProtocol.newTaskTempFile. Naming and staging are owned by Spark's commit
-  //    protocol so that task-attempt isolation, speculative execution, and committers that track
-  //    individual files (S3A magic, streaming manifest) all behave as they do for Spark's own
-  //    writer. The native writer uses this path verbatim.
-  //  - Spark 3.x (CometNativeWriteExec): `work_dir` is set and the native writer derives the file
-  //    name from it, the partition id and the task attempt id. `output_path` is the write's
-  //    output directory and is unused natively. Goes away with Spark 3.x support.
+  // The fully-qualified path of the Parquet file this task writes, set per task from
+  // FileCommitProtocol.newTaskTempFile by CometWriteFilesExec (Spark 4.0+) or
+  // CometNativeWriteExec (Spark 3.x). Naming and staging are owned by Spark's commit protocol so
+  // that task-attempt isolation, speculative execution, and committers that track individual
+  // files (S3A magic, streaming manifest) all behave as they do for Spark's own writer. The native
+  // writer uses this path verbatim, and creates the file itself unless `jvm_output_stream` is set.
   string output_path = 1;
   CompressionCodec compression = 2;
   repeated string column_names = 4;
-  // Working directory for temporary files (used by FileCommitProtocol). Spark 3.x only; see
-  // output_path above.
-  optional string work_dir = 5;
-  // Job ID for tracking this write operation
-  optional string job_id = 6;
-  // Task attempt ID for this specific task
-  optional int32 task_attempt_id = 7;
+  // Formerly work_dir, job_id and task_attempt_id, which let the native writer name its own file
+  // under a working directory.
+  reserved 5, 6, 7;
+  reserved "work_dir", "job_id", "task_attempt_id";
   // Options for configuring object stores such as AWS S3, GCS, etc. The key-value pairs are taken
   // from Hadoop configuration for compatibility with Hadoop FileSystem implementations of object
   // stores.
@@ -966,6 +1080,13 @@ message ParquetWriter {
   // Catalyst's target schema, including top-level nullability and Parquet field IDs.
   // Nested collection field IDs are carried by the corresponding DataType messages.
   repeated SparkStructField output_schema = 9;
+  // Whether the JVM has already created `output_path` through Hadoop's FileSystem API and
+  // registered its output stream with the plan (Native.setOutputStream). The native writer then
+  // writes the file's bytes to that stream instead of opening the path itself, and the JVM closes
+  // the file afterwards. Set per task by CometWriteFilesExec.writeFile, which both write
+  // operators call, for every file that is neither local nor on HDFS. See HadoopFileOutput for
+  // why.
+  bool jvm_output_stream = 10;
 }
 
 enum AggregateMode {
@@ -977,6 +1098,53 @@ enum AggregateMode {
 message Expand {
   repeated spark.spark_expression.Expr project_list = 1;
   int32 num_expr_per_project = 3;
+}
+
+// Native counterpart of Spark's `MergeRowsExec` (row-level MERGE dispatch). Mirrors the real
+// Spark 4.x bytecode shape: `isSourceRowPresent` / `isTargetRowPresent` are predicates (not
+// column ordinals), and each instruction is uniformly `condition + outputs`, where the number
+// of output row projections (0/1/2) distinguishes Discard/Keep/Split -- there is no separate
+// instruction-kind enum on the Spark side, so we don't invent one here either.
+message MergeRows {
+  spark.spark_expression.Expr is_source_row_present = 1;
+  spark.spark_expression.Expr is_target_row_present = 2;
+
+  repeated MergeInstruction matched_instructions = 3;
+  repeated MergeInstruction not_matched_instructions = 4;
+  repeated MergeInstruction not_matched_by_source_instructions = 5;
+
+  // Ordinal (into the child row) of the target row-id column used for cardinality dedup.
+  // Mirrors `MergeRowsExec.checkCardinality`: present iff the check is on, in which case
+  // MERGE_CARDINALITY_VIOLATION is raised if a target row matches more than one source row.
+  optional int32 row_id_ordinal = 6;
+
+  // Schema of the emitted rows, matching `MergeRowsExec.output`.
+  repeated spark.spark_expression.DataType output_types = 7;
+
+  // True when every Keep instruction must retain its Spark action context so the native
+  // operator can populate Spark 4.1+'s semantic MERGE counters.
+  bool semantic_metrics_required = 8;
+}
+
+enum MergeActionContext {
+  MERGE_ACTION_CONTEXT_UNSPECIFIED = 0;
+  MERGE_ACTION_COPY = 1;
+  MERGE_ACTION_DELETE = 2;
+  MERGE_ACTION_INSERT = 3;
+  MERGE_ACTION_UPDATE = 4;
+}
+
+message MergeInstruction {
+  // Always present on the Spark side (Keep/Discard/Split.condition are non-optional).
+  spark.spark_expression.Expr condition = 1;
+  // 0 output rows = Discard, 1 = Keep, 2 = Split.
+  repeated MergeOutputRow outputs = 2;
+  // Present only for a one-row Keep. Required when semantic_metrics_required is true.
+  optional MergeActionContext context = 3;
+}
+
+message MergeOutputRow {
+  repeated spark.spark_expression.Expr exprs = 1;
 }
 
 message Explode {
@@ -1002,6 +1170,11 @@ message HashJoin {
   // Opt-in completed-build filtering of probe batches and eligible native Parquet readers.
   // Older serialized plans leave it false.
   bool dynamic_filter_enabled = 10;
+  // The streamed side's sort order, or the longest prefix of it Comet can express, as
+  // `SortOrder` expressions over its output, when Spark reports that order for the join and the
+  // native join keeps it only if the probe input declares it: a left outer join built on the
+  // right, or a right outer join built on the left. Empty otherwise.
+  repeated spark.spark_expression.Expr streamed_sort_orders = 11;
 }
 
 message SortMergeJoin {
@@ -1025,6 +1198,7 @@ enum JoinType {
   FullOuter = 3;
   LeftSemi = 4;
   LeftAnti = 5;
+  Existence = 6;
 }
 
 enum BuildSide {
