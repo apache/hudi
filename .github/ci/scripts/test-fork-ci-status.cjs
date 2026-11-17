@@ -33,10 +33,9 @@ function workflow(name) {
   }));
 }
 const bridgeWorkflow = workflow('fork_ci_status.yml');
-// The Java CI workflow the bridge mirrors, with the id of its aggregate job and of the transitional
-// job that reports the former Java CI Engines context.
+// The Java CI workflow the bridge mirrors, with the id of its aggregate job.
 const ci = {
-  file: 'bot.yml', name: 'Java CI', aggregate: 'java-ci-result', transitional: 'java-ci-engines-result',
+  file: 'bot.yml', name: 'Java CI', aggregate: 'java-ci-result',
   workflow: workflow('bot.yml'),
 };
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -388,7 +387,7 @@ const skippedChanges = { changes: { result: 'skipped', outputs: {} } };
 const jobIf = (job, github, needs = skippedChanges) =>
   interpolate(ci.workflow.jobs[job].if, { github: withName(github), needs, ...functions });
 const testJobs = Object.keys(ci.workflow.jobs).filter((job) =>
-  ![ci.aggregate, ci.transitional, 'changes'].includes(job));
+  ![ci.aggregate, 'changes'].includes(job));
 // GitHub expressions resolve absent properties to an empty string.
 function context({
   event_name, repository = 'apache/hudi', ref = 'refs/heads/feature', sha = 'first',
@@ -467,7 +466,7 @@ test('BUNDLE_MODULES lists every bundle of the default reactor', () => {
   assert.deepEqual([...listed].sort(), [...bundles].sort());
 });
 
-// [case, context, whether the test jobs run, whether the aggregate jobs run, the `changes` job]
+// [case, context, whether the test jobs run, whether the aggregate job runs, the `changes` job]
 for (const [name, github, tests, aggregate, needs] of [
   ['fork PR to master', forkPr, false, true],
   ['fork PR to release-1.2', { ...forkPr, base_ref: 'release-1.2' }, true, true],
@@ -490,7 +489,6 @@ for (const [name, github, tests, aggregate, needs] of [
   test('routes ' + name, () => {
     for (const job of testJobs) assert.equal(jobIf(job, github, needs), tests, job);
     assert.equal(jobIf(ci.aggregate, github, needs), aggregate, ci.aggregate);
-    assert.equal(jobIf(ci.transitional, github, needs), aggregate, ci.transitional);
     // The selector runs on merge_group only; GitHub evaluates an `if` without ${{ }} as an expression.
     assert.equal(evaluate(ci.workflow.jobs.changes.if, { github }), github.event_name === 'merge_group');
   });
@@ -545,27 +543,6 @@ test('the aggregate job links the fork run of bot.yml on fork PRs', () => {
   assert.ok(step.run.includes('/actions/workflows/' + ci.file + ')'));
   assert.doesNotMatch(step.run, /\$\{\{/);
 });
-// Branch protection required `Java CI Engines result` before Java CI Engines was folded into
-// bot.yml, so a transitional job reports that context with the result of the aggregate job.
-test('the transitional job reports the result of the aggregate job as Java CI Engines result', () => {
-  const job = ci.workflow.jobs[ci.transitional];
-  const aggregate = ci.workflow.jobs[ci.aggregate];
-  assert.equal(job.name, 'Java CI Engines result');
-  assert.equal(job.needs, ci.aggregate);
-  assert.equal(job.if, aggregate.if);
-  assert.equal(job['runs-on'], 'ubuntu-slim');
-  assert.deepEqual(job.permissions, {});
-  assert.equal(job.steps.length, 1);
-  const [step] = job.steps;
-  for (const result of ['success', 'failure', 'skipped', 'cancelled']) {
-    const needs = { [ci.aggregate]: { result } };
-    assert.equal(interpolate(step.if, { needs, ...functions }), result !== 'success', result);
-  }
-  assert.match(step.run, /::error::/);
-  assert.match(step.run, /exit 1/);
-  assert.doesNotMatch(step.run, /\$\{\{/);
-});
-
 // The docs-only selector, the `changes` job.
 const changesJob = ci.workflow.jobs.changes;
 const changesStep = changesJob.steps.find((item) => item.id === 'diff');
