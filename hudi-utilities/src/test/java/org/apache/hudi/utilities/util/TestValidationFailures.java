@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * failure must win over a recompute, even when phase 1 genuinely recomputed, because a lost
  * executor is simultaneously the commonest cause of a recompute and exactly what {@link
  * ValidationFailures} exists to tell apart from real data corruption. Getting this backwards would
- * make a preempted node report success with {@code MDT_VALIDATOR_RECOMPUTE_SKIPPED} instead of paging
+ * make a preempted node report success with {@code MDT_VALIDATOR_RECOMPUTE_SKIPPED} instead of failing
  * as infrastructure -- the regression this test guards against.
  */
 class TestValidationFailures {
