@@ -357,9 +357,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     public boolean skipDataFilesForCleaning = false;
 
     @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file "
-        + "slices for all partitions. Read by the v1 validator only: with --use-validator-v2, latest "
-        + "file slices are always validated, and --validate-fs-mdt-diff and "
-        + "--validate-duplicate-base-files select what is checked.", required = false)
+        + "slices for all partitions. Read by the v1 validator only: with --use-validator-v2 this "
+        + "flag is ignored, and --validate-fs-mdt-diff and --validate-duplicate-base-files select "
+        + "what is checked.", required = false)
     public boolean validateLatestFileSlices = false;
 
     @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.", required = false)
