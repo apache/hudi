@@ -61,6 +61,7 @@ import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Triple;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -673,6 +674,14 @@ public class HoodieTableConfig extends HoodieConfig {
     HoodieConfig hoodieConfig = HoodieConfig.copy(properties);
     StoragePath propertyPath = new StoragePath(metadataFolder, HOODIE_PROPERTIES_FILE);
     HoodieTableVersion tableVersion = getTableVersion(hoodieConfig);
+    List<String> orderingFields = StringUtils.split(hoodieConfig.getProps().getProperty(ORDERING_FIELDS.key()), ",");
+    // readers of tables below version 9 take the deprecated precombine key as one field name, so such a table is refused
+    // before hoodie.properties is created or overwritten
+    if (orderingFields.size() > 1 && tableVersion.lesserThan(HoodieTableVersion.NINE)) {
+      throw new HoodieNotSupportedException(String.format("Table version %d does not support several ordering fields %s; "
+          + "use a single ordering field or table version %d and above", tableVersion.versionCode(), orderingFields,
+          HoodieTableVersion.NINE.versionCode()));
+    }
     try (OutputStream outputStream = storage.create(propertyPath)) {
       if (!hoodieConfig.contains(NAME)) {
         throw new IllegalArgumentException(NAME.key() + " property needs to be specified");

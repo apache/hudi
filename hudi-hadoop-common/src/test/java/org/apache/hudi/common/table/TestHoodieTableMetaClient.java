@@ -33,6 +33,7 @@ import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.keygen.constant.ComplexKeyGenEncoding;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -583,18 +584,24 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
   }
 
   /**
-   * Readers of a table below version 9 take the deprecated precombine key as one field name, so a table ordered on
-   * several fields records them only under {@code hoodie.table.ordering.fields}.
+   * Readers of a table below version 9 take the deprecated precombine key as one field name and cannot order on several
+   * fields, so such a table is refused on creation, while a table at version 9 keeps them.
    */
   @ParameterizedTest
-  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
-  void testMultipleOrderingFieldsStayOffLegacyKey(HoodieTableVersion version) throws IOException {
-    Properties props = orderingFieldsTableBuilder(version)
-        .setOrderingFields("ts,seq")
-        .initTable(this.metaClient.getStorageConf(), tempDir.toAbsolutePath() + Path.SEPARATOR + "multi-ordering-v" + version.versionCode())
-        .getTableConfig().getProps();
-    assertEquals("ts,seq", props.getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
-    assertFalse(props.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key()), "precombine key at version " + version.versionCode());
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "SEVEN", "EIGHT", "NINE"})
+  void testSeveralOrderingFieldsRefusedBelowVersionNine(HoodieTableVersion version) throws IOException {
+    String path = tempDir.toAbsolutePath() + Path.SEPARATOR + "multi-ordering-v" + version.versionCode();
+    HoodieTableMetaClient.TableBuilder builder = orderingFieldsTableBuilder(version).setOrderingFields("ts,seq");
+    if (version.greaterThanOrEquals(HoodieTableVersion.NINE)) {
+      Properties props = builder.initTable(this.metaClient.getStorageConf(), path).getTableConfig().getProps();
+      assertEquals("ts,seq", props.getProperty(HoodieTableConfig.ORDERING_FIELDS.key()));
+      assertFalse(props.containsKey(HoodieTableConfig.PRECOMBINE_FIELD.key()));
+      return;
+    }
+    assertThrows(HoodieNotSupportedException.class, () -> builder.initTable(this.metaClient.getStorageConf(), path));
+    // a retry with a fixed config must not find a table with an empty hoodie.properties
+    assertFalse(this.metaClient.getStorage().exists(
+        new StoragePath(path + Path.SEPARATOR + HoodieTableMetaClient.METAFOLDER_NAME, HoodieTableConfig.HOODIE_PROPERTIES_FILE)));
   }
 
   /**
@@ -603,8 +610,7 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
    */
   @ParameterizedTest
   @CsvSource(delimiter = '|', nullValues = "null", value = {
-      "SIX|_event_seq|_event_seq", "EIGHT|_event_seq|_event_seq", "SIX|ts|ts", "EIGHT|ts|ts",
-      "SIX|_event_bin_file,_event_pos|null", "EIGHT|_event_bin_file,_event_pos|null", "SIX|null|null", "EIGHT|null|null"})
+      "SIX|_event_seq|_event_seq", "EIGHT|_event_seq|_event_seq", "SIX|ts|ts", "EIGHT|ts|ts", "SIX|null|null", "EIGHT|null|null"})
   void testMySqlDebeziumPayloadLegacyKeyFollowsDeclaredOrderingField(HoodieTableVersion version, String orderingFields, String legacyOrderingField) throws IOException {
     Properties props = orderingFieldsTableBuilder(version)
         .setPayloadClass(MySqlDebeziumAvroPayload.class)
