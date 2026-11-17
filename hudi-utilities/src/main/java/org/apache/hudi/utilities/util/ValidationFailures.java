@@ -47,8 +47,8 @@ public final class ValidationFailures {
    * or an executor being torn down, decommissioned or killed — as opposed to a divergence between
    * the metadata table and storage. Matched anywhere in the cause chain.
    *
-   * <p>The distinction is not cosmetic: the validation job maps a {@link HoodieValidationException}
-   * to a critical data-correctness page and everything else to an infrastructure alert. A preempted
+   * <p>The distinction is not cosmetic: a caller can map a {@link HoodieValidationException}
+   * to a data-correctness alert and everything else to an infrastructure alert. A preempted
    * node reported as corruption sends someone to rebuild a metadata table that was never broken.
    */
   private static final List<String> INFRA_FAILURE_SIGNATURES = Collections.unmodifiableList(
@@ -134,7 +134,7 @@ public final class ValidationFailures {
    * therefore classified <b>first</b>; only when {@code failure} does not match an infrastructure
    * signature is {@code recomputed} consulted. Discarding for a recompute before classifying would
    * let an infra-preempted node report success with {@code MDT_VALIDATOR_RECOMPUTE_SKIPPED} in the
-   * log instead of paging as infrastructure -- the exact inversion this method exists to prevent.
+   * log instead of failing as infrastructure -- the exact inversion this method exists to prevent.
    *
    * @param failure    the exception the catch site caught
    * @param recomputed the sealed {@link RecomputeProbe.Baseline#recomputed()} reading for the same

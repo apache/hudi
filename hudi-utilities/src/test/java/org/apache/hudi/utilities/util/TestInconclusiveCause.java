@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * The two causes a v2 run can reach no verdict for, and what each one tells a caller.
  *
- * <p>The archival cause's strings are an alerting contract that predates this enum, so they are
+ * <p>The archival cause's strings are an alerting contract, so they are
  * asserted literally rather than derived: a refactor that changed them would silence every alert
  * keyed on them without failing anything else.
  */
