@@ -275,14 +275,6 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   /**
-   * Returns list of Throwable which were encountered during validation. This method is useful
-   * when ignoreFailed parameter is set to true.
-   */
-  public List<Throwable> getThrowables() {
-    return throwables;
-  }
-
-  /**
    * Returns true if there is a validation failure encountered during validation.
    * This method is useful when ignoreFailed parameter is set to true.
    */
