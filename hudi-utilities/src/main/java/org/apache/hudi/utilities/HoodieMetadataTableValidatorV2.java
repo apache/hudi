@@ -1188,7 +1188,7 @@ public class HoodieMetadataTableValidatorV2 implements Serializable {
   }
 
   /**
-   * Decides what a failure means, which decides whether someone is paged for corruption. In order:
+   * Decides what a failure means: data corruption or an infrastructure failure. In order:
    * a {@link HoodieValidationException} anywhere in the cause chain wins, since an observed
    * divergence must not be buried by a later teardown; else an infrastructure signature yields a
    * {@link HoodieException} that {@link #hasValidationFailure()} does not count; else the failure
