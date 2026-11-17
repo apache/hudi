@@ -23,7 +23,9 @@ import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.FileSlice
 import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.config.HoodieIndexConfig
 import org.apache.hudi.core.read.BaseHoodieTableFileIndex
+import org.apache.hudi.index.HoodieIndex.IndexType
 import org.apache.hudi.metadata.HoodieTableMetadataUtil
 
 import org.apache.spark.sql.SparkSession
@@ -35,6 +37,18 @@ class BloomFiltersIndexSupport(spark: SparkSession,
                                metadataConfig: HoodieMetadataConfig,
                                metaClient: HoodieTableMetaClient) extends SparkBaseIndexSupport(spark, metadataConfig, metaClient) {
 
+  // Like bucket pruning, trust the declared reader index type to match the writer. These Spark
+  // indexes write new keys to base files. A custom class overrides the type and has no such guarantee.
+  // Do not infer the writer's default SIMPLE index when the reader has not declared a type.
+  private val canPruneLogSlices = {
+    val indexType = metadataConfig.getStringOrDefault(HoodieIndexConfig.INDEX_TYPE, "")
+    metadataConfig.getStringOrDefault(HoodieIndexConfig.INDEX_CLASS_NAME, "").isEmpty &&
+      BloomFiltersIndexSupport.BASE_BLOOM_COVERED_INDEX_TYPES.exists(_.name().equalsIgnoreCase(indexType))
+  }
+
+  private def mustRetainSlice(fileSlice: FileSlice): Boolean =
+    fileSlice.hasLogFiles && (fileSlice.getBaseFile.isEmpty || !canPruneLogSlices)
+
   override def getIndexName: String = BloomFiltersIndexSupport.INDEX_NAME
 
   override def computeCandidateFileNames(fileIndex: HoodieFileIndex,
@@ -43,46 +57,27 @@ class BloomFiltersIndexSupport(spark: SparkSession,
                                          prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])],
                                          shouldPushDownFilesFilter: Boolean
                                         ): Option[Set[String]] = {
-    lazy val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
-    if (recordKeys.nonEmpty) {
-      val prunedPartitionAndFileNames = getPrunedPartitionAndFileNames(prunedPartitionsAndFileSlices)
-      // Metadata bloom filters only cover base files. Adding log filenames makes HoodieFileIndex
-      // retain each entire slice containing logs, including its base file if present.
-      // For read-optimized queries, the input slices contain no logs, so base bloom pruning still applies.
-      val logFileNames = prunedPartitionsAndFileSlices.flatMap(_._2)
-        .flatMap(_.getLogFiles.iterator().asScala.map(_.getFileName)).toSet
-      Option.apply(getCandidateFilesForSecondaryKeys(prunedPartitionAndFileNames, recordKeys) ++ logFileNames)
+    val (_, recordKeys) = filterQueriesWithRecordKey(queryFilters)
+    if (recordKeys.isEmpty) {
+      None
     } else {
-      Option.empty
+      val candidateFileNames = prunedPartitionsAndFileSlices.flatMap { case (partition, fileSlices) =>
+        val partitionPath = partition.map(_.getPath).getOrElse("")
+        fileSlices.flatMap { slice =>
+          if (mustRetainSlice(slice)) {
+            // A log filename retains the entire slice without querying its base bloom.
+            slice.getLogFiles.iterator().asScala.map(_.getFileName).toSeq
+          } else {
+            toScalaOption(slice.getBaseFile).filter { baseFile =>
+              // A missing bloom cannot rule out a match.
+              toScalaOption(metadataTable.getBloomFilter(partitionPath, baseFile.getFileName))
+                .forall(bloom => recordKeys.exists(bloom.mightContain))
+            }.map(_.getFileName).toSeq
+          }
+        }
+      }.toSet
+      Some(candidateFileNames)
     }
-  }
-
-  private def getPrunedPartitionAndFileNames(prunedPartitionsAndFileSlices: Seq[(Option[BaseHoodieTableFileIndex.PartitionPath], Seq[FileSlice])]): Seq[(String, String)] = {
-    prunedPartitionsAndFileSlices
-      .flatMap {
-        case (Some(partitionPath), fileSlices) => fileSlices.map(fileSlice => (partitionPath.getPath, fileSlice))
-        case (None, fileSlices) => fileSlices.map(fileSlice => ("", fileSlice))
-      }
-      // Slices with logs are retained as a whole, so their base blooms cannot help prune them.
-      .filterNot { case (_, fileSlice) => fileSlice.hasLogFiles }
-      .flatMap { case (partitionPath, fileSlice) =>
-        val baseFileOption = Option(fileSlice.getBaseFile.orElse(null))
-        baseFileOption.map(baseFile => (partitionPath, baseFile.getFileName))
-      }
-  }
-
-  private def getCandidateFilesForSecondaryKeys(prunedPartitionAndFileNames: Seq[(String, String)], recordKeys: List[String]): Set[String] = {
-    val candidateFiles = prunedPartitionAndFileNames.filter { partitionAndFileName =>
-      val bloomFilterOpt = toScalaOption(metadataTable.getBloomFilter(partitionAndFileName._1, partitionAndFileName._2))
-      bloomFilterOpt match {
-        case Some(bloomFilter) =>
-          recordKeys.exists(bloomFilter.mightContain)
-        case None =>
-          true // If bloom filter is empty or undefined, assume the file might contain the record key
-      }
-    }.map(_._2).toSet
-
-    candidateFiles
   }
 
   override def isIndexAvailable: Boolean = {
@@ -98,4 +93,12 @@ class BloomFiltersIndexSupport(spark: SparkSession,
 
 object BloomFiltersIndexSupport {
   val INDEX_NAME = "BLOOM_FILTERS"
+
+  // These Spark writer indexes write new keys to base files, so base blooms also cover keys in update logs.
+  // canIndexLogFiles() == false is not sufficient: SIMPLE bucket tagging assigns new keys to existing
+  // file groups, routing them through handleUpdate() into logs despite canIndexLogFiles() returning false.
+  // Keep an explicit whitelist; other index types require conservative retention of slices with logs.
+  private val BASE_BLOOM_COVERED_INDEX_TYPES = Set(
+    IndexType.SIMPLE, IndexType.GLOBAL_SIMPLE, IndexType.BLOOM, IndexType.GLOBAL_BLOOM,
+    IndexType.RECORD_INDEX, IndexType.RECORD_LEVEL_INDEX, IndexType.GLOBAL_RECORD_LEVEL_INDEX)
 }

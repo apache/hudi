@@ -184,6 +184,65 @@ class TestBloomFiltersIndexSupport extends HoodieSparkClientTestBase {
     assertEquals(Set.empty[String], query(Seq("b", "d"), readOptimized = true))
   }
 
+  @Test
+  def testBloomPruningWithDeclaredIndexType(): Unit = {
+    val session = spark
+    import session.implicits._
+
+    val opts = commonOpts ++ Map(
+      TABLE_TYPE.key -> MOR_TABLE_TYPE_OPT_VAL,
+      HoodieIndexConfig.BUCKET_QUERY_INDEX.key -> "false",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",
+      HoodieMetadataConfig.RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_COLUMN_STATS.key -> "false",
+      HoodieMetadataConfig.ENABLE_METADATA_INDEX_PARTITION_STATS.key -> "false",
+      "hoodie.compact.inline" -> "false",
+      "hoodie.compact.schedule.inline" -> "false",
+      "hoodie.parquet.small.file.limit" -> "0",
+      DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true")
+    val writeOpts = opts + (HoodieIndexConfig.INDEX_TYPE.key -> "SIMPLE")
+
+    // SIMPLE writes new keys into bases; updating a appends a log whose key is covered by its base bloom.
+    Seq(("a", "base-and-log", 1L), ("c", "base-only", 1L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(writeOpts)
+      .option(OPERATION.key, INSERT_OPERATION_OPT_VAL).mode(SaveMode.Overwrite).save(basePath)
+    Seq(("a", "base-and-log", 2L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(writeOpts)
+      .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+    // Even with a declared safe type, a slice without a base must never be pruned by base blooms.
+    Seq(("d", "log-only", 2L)).toDF("_row_key", "partition", "timestamp")
+      .write.format("hudi").options(opts)
+      .option(HoodieIndexConfig.INDEX_TYPE.key, "INMEMORY")
+      .option(OPERATION.key, INSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+
+    val safeTypes = Seq("SIMPLE", "GLOBAL_SIMPLE", "BLOOM", "GLOBAL_BLOOM",
+      "RECORD_INDEX", "RECORD_LEVEL_INDEX", "GLOBAL_RECORD_LEVEL_INDEX", "simple")
+    val cases = safeTypes.map(indexType => (Map(HoodieIndexConfig.INDEX_TYPE.key -> indexType), true)) ++ Seq(
+      (Map.empty[String, String], false),
+      (Map(HoodieIndexConfig.INDEX_TYPE.key -> "BUCKET"), false),
+      (Map(HoodieIndexConfig.INDEX_TYPE.key -> "INMEMORY"), false),
+      (Map(HoodieIndexConfig.INDEX_TYPE.key -> "UNKNOWN"), false),
+      (Map(HoodieIndexConfig.INDEX_TYPE.key -> "SIMPLE",
+        HoodieIndexConfig.INDEX_CLASS_NAME.key -> "example.CustomIndex"), false))
+    val missingKey = EqualTo(attribute("_row_key"), Literal("missing"))
+    cases.foreach { case (indexOptions, canPruneLogs) =>
+      val readOpts = opts ++ indexOptions + ("path" -> basePath)
+      val fileIndex = HoodieFileIndex(spark, metaClient, None, readOpts, includeLogFiles = true)
+      val retained = fileIndex.filterFileSlices(Seq(missingKey), Seq.empty).flatMap(_._2)
+      val expected = if (canPruneLogs) Set("log-only") else Set("base-and-log", "log-only")
+      assertEquals(expected, retained.map(_.getPartitionPath).toSet, indexOptions.toString)
+      // Read-optimized strips logs before pruning, regardless of the declared index configuration.
+      val readOptimizedIndex = HoodieFileIndex(spark, metaClient, None, readOpts, includeLogFiles = false)
+      assertTrue(readOptimizedIndex.filterFileSlices(Seq(missingKey), Seq.empty).flatMap(_._2).isEmpty, indexOptions.toString)
+    }
+
+    // A positive base bloom retains the whole slice, so the updated log value wins; log-only d survives too.
+    val rows = spark.read.format("hudi").options(writeOpts).load(basePath)
+      .filter(col("_row_key").isin("a", "d")).select("_row_key", "timestamp").as[(String, Long)].collect().toSet
+    assertEquals(Set(("a", 2L), ("d", 2L)), rows)
+  }
+
   private def createTempTable(hudiOpts: Map[String, String]): Unit = {
     val readDf = spark.read.format("hudi").options(hudiOpts).load(basePath)
     readDf.createOrReplaceTempView(sqlTempTable)
