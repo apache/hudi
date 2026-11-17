@@ -33,10 +33,9 @@ package org.apache.hudi.utilities.util;
 public enum InconclusiveCause {
 
   /**
-   * The archiver moved the account of the window mid-run; see {@link ArchivalProbe}. Its marker
-   * and beacons predate this enum and are reproduced exactly; the message names the FS-MDT
-   * comparison as the dimension that reached no verdict, because the duplicate-base-file dimension
-   * had already concluded and its findings are still published.
+   * The archiver moved the account of the window mid-run; see {@link ArchivalProbe}. The message
+   * names the FS-MDT comparison as the dimension that reached no verdict, because the
+   * duplicate-base-file dimension had already concluded and its findings are still published.
    */
   ARCHIVAL_RAN(
       "MDT_VALIDATOR_ARCHIVAL_SKIPPED",

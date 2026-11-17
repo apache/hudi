@@ -332,8 +332,8 @@ public final class DuplicateBaseFileDimension {
       return baseline.recomputed() ? recomputedResult(ctx, baseline) : phaseTwo;
     } catch (Exception e) {
       // Infrastructure must be classified before a recompute may discard the failure: a lost
-      // executor both causes recomputes and must surface as an infrastructure failure. Do not replace this with
-      // baseline.recomputed() alone.
+      // executor both causes recomputes and must surface as an infrastructure failure. Do not
+      // replace this with baseline.recomputed() alone.
       if (baseline != null && ValidationFailures.discardForRecompute(e, baseline.recomputed())) {
         // A finding raised while phase 1 recomputed may rest on storage listed after T_aftD, so it
         // is unattributable and discarded, logged with the original exception.

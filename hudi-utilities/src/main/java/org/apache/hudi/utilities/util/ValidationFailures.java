@@ -67,7 +67,8 @@ public final class ValidationFailures {
   }
 
   /**
-   * Decides what a failure means, which is what decides whether someone is paged for corruption.
+   * Decides what a failure means: data corruption ({@link HoodieValidationException}) or an
+   * infrastructure failure.
    *
    * <p>Order matters and is deliberate:
    *
