@@ -19,6 +19,8 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceWriteOptions, HoodieStreamingSink}
 import org.apache.hudi.common.testutils.HoodieTestUtils
+import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.sync.common.HoodieSyncTool
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql.{DataFrame, SQLContext}
@@ -30,7 +32,9 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
 import java.net.{InetSocketAddress, Socket}
+import java.util.Properties
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 
@@ -71,7 +75,82 @@ class RecoveryTestSink(context: SQLContext, options: Map[String, String], partit
   }
 }
 
+/** The real writer invokes this only after publishing its data commit. */
+class FailingStreamingSyncTool(properties: Properties) extends HoodieSyncTool(properties) {
+  override def syncHoodieTable(): Unit = {
+    FailingStreamingSyncTool.attempts.incrementAndGet()
+    throw new HoodieException("injected post-commit meta sync failure")
+  }
+}
+
+object FailingStreamingSyncTool {
+  val attempts = new AtomicInteger()
+}
+
 class TestStreamingSinkRecovery extends HoodieSparkClientTestBase {
+  @ParameterizedTest
+  @CsvSource(Array("COPY_ON_WRITE,false", "MERGE_ON_READ,false", "COPY_ON_WRITE,true", "MERGE_ON_READ,true"))
+  def testPostCommitFailureDoesNotRetryWrite(tableType: String, existingTable: Boolean): Unit = {
+    val spark = sqlContext.sparkSession
+    val source = s"$basePath/source"
+    val target = s"$basePath/target"
+    val checkpoint = s"$basePath/checkpoint"
+    val input = spark.sql("select 1 as id, 10L as ts, 'first' as value")
+    val options = Map(
+      "hoodie.table.name" -> "post_commit_recovery",
+      "hoodie.datasource.write.table.type" -> tableType,
+      "hoodie.datasource.write.recordkey.field" -> "id",
+      "hoodie.datasource.write.precombine.field" -> "ts",
+      "hoodie.datasource.write.partitionpath.field" -> "",
+      "hoodie.datasource.write.operation" -> "insert",
+      "hoodie.metadata.enable" -> "false",
+      "hoodie.insert.shuffle.parallelism" -> "1",
+      DataSourceWriteOptions.STREAMING_DISABLE_COMPACTION.key -> "true",
+      DataSourceWriteOptions.STREAMING_RETRY_CNT.key -> "3",
+      DataSourceWriteOptions.STREAMING_RETRY_INTERVAL_MS.key -> "1",
+      "checkpointLocation" -> checkpoint)
+    val seed = spark.sql("select 0 as id, 0L as ts, 'seed' as value")
+    if (existingTable) {
+      seed.write.format("hudi").options(options).save(target)
+    }
+    input.coalesce(1).write.json(source)
+    FailingStreamingSyncTool.attempts.set(0)
+    val query = spark.readStream.schema(input.schema).json(source).writeStream.format("hudi")
+      .options(options ++ Map("hoodie.datasource.meta.sync.enable" -> "true",
+        DataSourceWriteOptions.META_SYNC_CLIENT_TOOL_CLASS_NAME.key -> classOf[FailingStreamingSyncTool].getName))
+      .trigger(Trigger.AvailableNow()).start(target)
+    try {
+      val error = assertThrows(classOf[StreamingQueryException], () => query.awaitTermination(60000))
+      val causes = Iterator.iterate[Throwable](error)(_.getCause).takeWhile(_ != null)
+        .map(_.getMessage).mkString("\n")
+      assertTrue(causes.contains("already committed"), causes)
+      assertTrue(causes.contains("injected post-commit meta sync failure"), causes)
+      assertEquals(1, FailingStreamingSyncTool.attempts.get(), "Post-commit failure retried the data write")
+      assertFalse(new java.io.File(s"$checkpoint/commits/0").exists())
+    } finally {
+      query.stop()
+    }
+    def commits: Seq[String] = HoodieTestUtils.createMetaClient(storage, target).getActiveTimeline
+      .getCommitsTimeline.filterCompletedInstants().getInstants.asScala.map(_.requestedTime()).toSeq
+    val before = commits
+    assertEquals(if (existingTable) 2 else 1, before.size)
+    val expected = if (existingTable) seed.union(input) else input
+    def checkRows(): Unit = assertEquals(expected.orderBy("id").collect().toSeq,
+      spark.read.format("hudi").load(target).select("id", "ts", "value").orderBy("id").collect().toSeq)
+    checkRows()
+    // The failed sync is external to the data transaction; disable the injected tool after repair.
+    val replay = spark.readStream.schema(input.schema).json(source).writeStream.format("hudi")
+      .options(options).trigger(Trigger.AvailableNow()).start(target)
+    try {
+      assertTrue(replay.awaitTermination(60000))
+    } finally {
+      replay.stop()
+    }
+    assertEquals(before, commits, "Restart recommitted a completed Hudi batch")
+    assertTrue(new java.io.File(s"$checkpoint/commits/0").exists())
+    checkRows()
+  }
+
   // This covers Spark checkpoint replay, not failures inside the sink retry loop (tracked by #20406).
   @ParameterizedTest
   @CsvSource(Array("available-now,COPY_ON_WRITE", "stop,COPY_ON_WRITE", "failure,COPY_ON_WRITE",
