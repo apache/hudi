@@ -457,7 +457,10 @@ public class HoodieMetrics {
   }
 
   public void updateTableServiceInstantMetrics(final HoodieActiveTimeline activeTimeline) {
-    updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_CLUSTERING_INSTANT_STR, HoodieTimeline.CLUSTERING_ACTION);
+    if (!config.isMetricsOn()) {
+      return;
+    }
+    updatePendingClusteringInstantMetrics(activeTimeline);
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_COMPACTION_INSTANT_STR, HoodieTimeline.COMPACTION_ACTION);
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_CLEAN_INSTANT_STR, HoodieTimeline.CLEAN_ACTION);
     updateEarliestPendingInstant(activeTimeline, EARLIEST_PENDING_ROLLBACK_INSTANT_STR, HoodieTimeline.ROLLBACK_ACTION);
@@ -467,7 +470,6 @@ public class HoodieMetrics {
     updateLatestCompletedInstant(activeTimeline, LATEST_COMPLETED_CLEAN_INSTANT_STR, HoodieTimeline.CLEAN_ACTION);
     updateLatestCompletedInstant(activeTimeline, LATEST_COMPLETED_ROLLBACK_INSTANT_STR, HoodieTimeline.ROLLBACK_ACTION);
 
-    updatePendingInstantCount(activeTimeline, PENDING_CLUSTERING_INSTANT_COUNT_STR, HoodieTimeline.CLUSTERING_ACTION);
     updatePendingInstantCount(activeTimeline, PENDING_COMPACTION_INSTANT_COUNT_STR, HoodieTimeline.COMPACTION_ACTION);
     updatePendingInstantCount(activeTimeline, PENDING_CLEAN_INSTANT_COUNT_STR, HoodieTimeline.CLEAN_ACTION);
     updatePendingInstantCount(activeTimeline, PENDING_ROLLBACK_INSTANT_COUNT_STR, HoodieTimeline.ROLLBACK_ACTION);
@@ -489,6 +491,29 @@ public class HoodieMetrics {
     if (hoodieInstantOption.isPresent()) {
       updateTimestampMetric(metricName, action, hoodieInstantOption);
     }
+  }
+
+  /**
+   * Pending clustering carries CLUSTERING_ACTION on timeline layout 2 but REPLACE_COMMIT_ACTION on layout 1, where
+   * insert_overwrite and delete_partition share the action and are separated by the requested replace metadata's
+   * operationType. {@link HoodieTimeline#filterPendingClusteringTimeline()} resolves that per layout, so it is read
+   * once here for both clustering metrics.
+   */
+  private void updatePendingClusteringInstantMetrics(final HoodieActiveTimeline activeTimeline) {
+    HoodieTimeline pendingClustering;
+    try {
+      pendingClustering = activeTimeline.filterPendingClusteringTimeline();
+    } catch (Exception e) {
+      // postCommit does not catch, so an unreadable requested replace metadata must not fail the commit.
+      log.debug("Failed to read pending clustering instants, reporting none", e);
+      updateMetric(HoodieTimeline.CLUSTERING_ACTION, PENDING_CLUSTERING_INSTANT_COUNT_STR, 0);
+      return;
+    }
+    Option<HoodieInstant> earliestPending = pendingClustering.firstInstant();
+    if (earliestPending.isPresent()) {
+      updateTimestampMetric(EARLIEST_PENDING_CLUSTERING_INSTANT_STR, HoodieTimeline.CLUSTERING_ACTION, earliestPending);
+    }
+    updateMetric(HoodieTimeline.CLUSTERING_ACTION, PENDING_CLUSTERING_INSTANT_COUNT_STR, pendingClustering.countInstants());
   }
 
   private void updateTimestampMetric(String metricName, String action, Option<HoodieInstant> hoodieInstantOption) {
