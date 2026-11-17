@@ -40,10 +40,9 @@ import java.util.stream.Collectors;
  * Compiles <b>every</b> disagreement between a partition's latest file slices as the metadata
  * table reports them and as a storage listing reports them.
  *
- * <p>The exhaustive counterpart to {@link HoodieMetadataValidationUtils#validateFileSlices}, which
- * throws at the first difference. It keys by file group so it survives the first difference, but
- * shares {@link HoodieMetadataValidationUtils#assertBaseFilesEquality} so the base-file rule cannot
- * drift between the two.
+ * <p>The exhaustive counterpart to v1's {@code HoodieMetadataTableValidator#validateFileSlices}, which
+ * throws at the first difference. It keys by file group so it survives the first difference, and
+ * applies the same base-file rule as v1 ({@link HoodieMetadataValidationUtils#assertBaseFilesEquality}).
  *
  * <p>Records carry no verdict: phase 2 adjudicates against the pinned timeline. This class supplies
  * the writing instant while the file is in hand. A file whose instant cannot be attributed (command
