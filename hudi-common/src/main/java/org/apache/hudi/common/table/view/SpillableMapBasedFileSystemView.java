@@ -232,9 +232,10 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     //
     // The maps must be closed BEFORE super.closeResources(), which nulls the six fields below. Each
     // close is guarded on its own (RocksDBDAO.close() throws when it cannot delete its directory), so
-    // one failing map neither leaks the others nor skips super.closeResources(); the first failure
-    // is rethrown once everything has been released.
-    RuntimeException mapFailure = null;
+    // one failing map neither leaks the others nor skips super.closeResources(). A map that fails to
+    // close is logged rather than rethrown: closing this view never threw while the maps were left
+    // open, and a caller closing several views (FileSystemViewManager.close()) must not stop at the
+    // first one that cannot clean up its spill directory.
     for (Runnable closeMap : Arrays.<Runnable>asList(this::closeFileGroupsMapIfPresent,
         this::closePendingClusteringMapIfPresent, this::closePendingCompactionMapIfPresent,
         this::closePendingLogCompactionMapIfPresent, this::closeBootstrapFileMapIfPresent,
@@ -242,24 +243,10 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
       try {
         closeMap.run();
       } catch (RuntimeException e) {
-        if (mapFailure == null) {
-          mapFailure = e;
-        } else {
-          mapFailure.addSuppressed(e);
-        }
+        log.warn("Failed to close a spillable map of the file system view; continuing with the rest", e);
       }
     }
-    try {
-      super.closeResources();
-    } catch (Exception e) {
-      if (mapFailure == null) {
-        throw e;
-      }
-      mapFailure.addSuppressed(e);
-    }
-    if (mapFailure != null) {
-      throw mapFailure;
-    }
+    super.closeResources();
   }
 
   private void closeReplaceInstantsMapIfPresent() {

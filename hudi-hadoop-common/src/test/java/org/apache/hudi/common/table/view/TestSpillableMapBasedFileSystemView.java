@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.FileCreateUtils;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
-import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metadata.FileSystemBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
@@ -38,6 +37,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -146,13 +146,15 @@ public class TestSpillableMapBasedFileSystemView extends TestHoodieTableFileSyst
         "the view found no file group, so nothing was spilled");
     assertFalse(filesUnder(spillDir).isEmpty(), "the view did not spill to " + spillDir);
 
-    // Read-only directories make RocksDBDAO.close() fail to delete its store and throw.
+    // Read-only directories make RocksDBDAO.close() fail to delete its store and throw. That failure
+    // is logged, not rethrown: closing a view never threw before the maps were actually closed, and
+    // a caller such as FileSystemViewManager.close() would otherwise stop at the first such view.
     List<File> dirs = directoriesUnder(spillDir);
     dirs.forEach(dir -> assertTrue(dir.setWritable(false), "could not make " + dir + " read-only"));
     try {
       // A read-only directory does not stop a root user from deleting it.
       assumeFalse(Files.isWritable(spillDir), "running as a user that ignores directory permissions");
-      assertThrows(HoodieException.class, view::close);
+      assertDoesNotThrow(view::close);
     } finally {
       dirs.forEach(dir -> dir.setWritable(true));
     }
