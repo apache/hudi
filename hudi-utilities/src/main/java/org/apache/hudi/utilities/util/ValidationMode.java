@@ -24,14 +24,16 @@ import java.util.stream.Collectors;
 /**
  * How much of a partition's divergence the v2 validator reports.
  *
- * <p>The verdict is the same in both modes — a table that fails one fails the other. What differs
- * is how much is known about why.
+ * <p>A difference that fails validation fails the run in both modes; what differs is how much is
+ * known about why. The modes differ on a run that reaches no verdict (the metadata snapshot could
+ * not be pinned, archival overlapped the run, or phase 1 was recomputed): fail-fast logs a marker
+ * and passes unless the duplicate base file check failed; exhaustive fails, because a report built
+ * on an incomplete timeline delta would read as a clean table.
  */
 public enum ValidationMode {
 
   /**
-   * Report the first mismatch in a partition and stop, which is what the validator has always
-   * done. Cheapest, and its exception text is relied on by existing consumers.
+   * Report the first mismatch in a partition and stop. Cheapest; writes nothing.
    */
   FAIL_FAST("fail-fast"),
 
