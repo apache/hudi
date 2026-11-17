@@ -42,9 +42,9 @@ public class MismatchRecord implements Serializable, Comparable<MismatchRecord> 
   /**
    * Where {@link MismatchRecord#instantTime} came from.
    *
-   * <p>A base file's name carries the instant that wrote it. A log file's name carries the base
-   * commit time of the slice it belongs to — <em>not</em> the delta commit that wrote it — so its
-   * instant has to be read out of the first log block's header instead.
+   * <p>A base file's name carries the instant that wrote it. A log file's name does not reliably
+   * name the delta commit that wrote it — below table version 8 it carries the base commit time of
+   * the slice it belongs to — so its instant is read out of the first log block's header instead.
    */
   public enum InstantSource {
     /** Parsed from the file name; base files only. */
@@ -79,9 +79,10 @@ public class MismatchRecord implements Serializable, Comparable<MismatchRecord> 
      */
     DUPLICATE_BASE_FILE,
     /**
-     * A log file the timeline does not obviously vouch for. Its name carries the base commit of the
-     * slice rather than the delta commit that wrote it, so establishing the writing instant costs a
-     * read of the first log block's header — which is why this reason is exhaustive-mode only.
+     * A log file the timeline does not obviously vouch for. Its name does not reliably name the delta
+     * commit that wrote it (below table version 8 it carries the slice's base commit), so
+     * establishing the writing instant costs a read of the first log block's header — which is why
+     * this reason is exhaustive-mode only.
      */
     UNREFERENCED_LOG_FILE
   }
