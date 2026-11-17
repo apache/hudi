@@ -206,6 +206,7 @@ test('names, SHAs, flags, expired and oversized artifacts are validated', async 
   const valid = [
     artifact(coverage('test-flink-1', 'flink-integration-tests')),
     artifact(coverage('test-spark-java17-java-tests-part1', 'spark-java-tests'), { size_in_bytes: 50 * MB }),
+    artifact(coverage('test-utilities-rest-hadoop-mr-java-client', 'utilities,hadoop-mr-java-client')),
   ];
   const { artifacts } = await executeSelect({ artifacts: { 1: [
     ...valid,
@@ -216,13 +217,17 @@ test('names, SHAs, flags, expired and oversized artifacts are validated', async 
     artifact('x' + coverage('test-utilities', 'utilities')),
     artifact(coverage('test-utilities', 'utilities', 'b'.repeat(40))),
     artifact(coverage('test-utilities', 'made-up-flag')),
+    artifact(coverage('test-utilities', 'utilities,made-up-flag')),
+    artifact(coverage('test-utilities', 'utilities,')),
+    artifact(coverage('test-utilities', 'utilities, spark-java-tests')),
     artifact(coverage('test-common', 'common-and-other-modules'), { expired: true }),
     artifact(coverage('test-hadoop', 'hadoop-mr-java-client'), { size_in_bytes: 50 * MB + 1 }),
     artifact(coverage('test-scala', 'spark-scala-tests'), { size_in_bytes: undefined }),
     artifact('jacoco'),
   ] } });
   assert.deepEqual(artifacts.map((item) => item.artifact_id), valid.map((item) => item.id));
-  assert.deepEqual(artifacts.map((item) => item.flags), ['flink-integration-tests', 'spark-java-tests']);
+  assert.deepEqual(artifacts.map((item) => item.flags),
+    ['flink-integration-tests', 'spark-java-tests', 'utilities,hadoop-mr-java-client']);
 });
 test('a rerun job uploads the same name again and only the newest is kept', async () => {
   const name = coverage('test-utilities', 'utilities');
