@@ -102,7 +102,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
 
     Configuration conf = (Configuration) storageConfiguration.unwrapAs(Configuration.class);
-    BloomFilter filter = enableParquetBloomFilter(metaFieldsMode, hoodieConfig, storagePath) ? createBloomFilter(hoodieConfig) : null;
+    BloomFilter filter = enableBloomFilter(metaFieldsMode, hoodieConfig, storagePath) ? createBloomFilter(hoodieConfig) : null;
     HoodieRowDataParquetWriteSupport writeSupport = (HoodieRowDataParquetWriteSupport) ReflectionUtils.loadClass(
         hoodieConfig.getStringOrDefault(HoodieStorageConfig.HOODIE_PARQUET_FLINK_ROW_DATA_WRITE_SUPPORT_CLASS),
         new Class<?>[] {Configuration.class, HoodieSchema.class, BloomFilter.class},
@@ -121,7 +121,7 @@ public class HoodieRowDataFileWriterFactory extends HoodieFileWriterFactory {
       TaskContextSupplier taskContextSupplier) {
     MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
     boolean withOperation = config.getBooleanOrDefault(HoodieWriteConfig.ALLOW_OPERATION_METADATA_FIELD);
-    Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(metaFieldsMode, config)
+    Option<org.apache.hudi.common.bloom.BloomFilter> bloomFilter = enableBloomFilter(metaFieldsMode, config, path)
         ? Option.of(createBloomFilter(config)) : Option.empty();
     return new HoodieRowDataLanceWriter(
         path,

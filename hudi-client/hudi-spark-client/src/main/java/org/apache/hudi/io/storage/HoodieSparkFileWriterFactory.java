@@ -113,7 +113,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     }
 
     HoodieRowParquetWriteSupport writeSupport = getHoodieRowParquetWriteSupport(storageConfiguration, schema,
-        hoodieConfig, enableParquetBloomFilter(metaFieldsMode, hoodieConfig, path));
+        hoodieConfig, enableBloomFilter(metaFieldsMode, hoodieConfig, path));
     HoodieRowParquetConfig parquetConfig = new HoodieRowParquetConfig(writeSupport,
         CompressionCodecName.fromConf(compressionCodecName),
         hoodieConfig.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
@@ -166,7 +166,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
     boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    boolean enableBloomFilter = enableBloomFilter(metaFieldsMode, config);
+    boolean enableBloomFilter = enableBloomFilter(metaFieldsMode, config, path);
     Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     long maxFileSize = config.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE);
     long allocatorSize = config.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES);
@@ -192,7 +192,7 @@ public class HoodieSparkFileWriterFactory extends HoodieFileWriterFactory {
     MetaFieldsMode metaFieldsMode = MetaFieldsMode.resolve(config);
     boolean populateMetaFields = metaFieldsMode.toLegacyPopulateMetaFields();
     StructType structType = HoodieInternalRowUtils.getCachedSchema(schema);
-    boolean enableBloomFilter = enableBloomFilter(metaFieldsMode, config);
+    boolean enableBloomFilter = enableBloomFilter(metaFieldsMode, config, path);
     Option<BloomFilter> bloomFilter = enableBloomFilter ? Option.of(createBloomFilter(config)) : Option.empty();
     long maxFileSize = config.getLongOrDefault(HoodieStorageConfig.VORTEX_MAX_FILE_SIZE);
     long allocatorSize = config.getLongOrDefault(HoodieStorageConfig.VORTEX_WRITE_ALLOCATOR_SIZE_BYTES);

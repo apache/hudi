@@ -137,17 +137,11 @@ public class HoodieFileWriterFactory {
   }
 
   /**
-   * Disable Hudi record-key bloom filters for native Parquet logs: bloom indexes only probe base files.
+   * Check whether to enable Hudi record-key bloom filters, excluding native logs since bloom indexes only probe base files.
    */
-  protected static boolean enableParquetBloomFilter(MetaFieldsMode metaFieldsMode, HoodieConfig config, StoragePath path) {
-    return !FSUtils.isNativeLogFile(path.getName()) && enableBloomFilter(metaFieldsMode, config);
-  }
-
-  /**
-   * Check if need to enable bloom filter.
-   */
-  public static boolean enableBloomFilter(MetaFieldsMode metaFieldsMode, HoodieConfig config) {
-    return metaFieldsMode.isRecordKeyPopulated()
+  public static boolean enableBloomFilter(MetaFieldsMode metaFieldsMode, HoodieConfig config, StoragePath path) {
+    return !FSUtils.isNativeLogFile(path.getName())
+        && metaFieldsMode.isRecordKeyPopulated()
         && (config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED)
         // HoodieIndexConfig is located in the package hudi-client-common, and the package hudi-client-common depends on the package hudi-common,
         // so the class HoodieIndexConfig cannot be accessed in hudi-common, otherwise there will be a circular dependency problem

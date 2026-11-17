@@ -43,6 +43,7 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -124,34 +125,39 @@ public class TestHoodieAvroFileWriterFactory extends HoodieClientTestBase {
     }
   }
 
-  @Test
-  public void testEnableBloomFilter() {
+  @ParameterizedTest
+  @ValueSource(strings = {"parquet", "lance", "vortex"})
+  public void testEnableBloomFilter(String format) {
+    StoragePath path = new StoragePath(basePath, "file-1_1-0-1_001." + format);
+    StoragePath dataLogPath = new StoragePath(basePath, "file-1_1-0-1_002_1.log." + format);
+    StoragePath deleteLogPath = new StoragePath(basePath, "file-1_1-0-1_002_1.deletes." + format);
     HoodieWriteConfig config = getConfig(IndexType.BLOOM);
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
-    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.NONE, config));
-    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.COMMIT_TIME_ONLY, config));
-    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.FILE_NAME_ONLY, config));
-    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME, config));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, dataLogPath));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, deleteLogPath));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, path));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.NONE, config, path));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.COMMIT_TIME_ONLY, config, path));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.FILE_NAME_ONLY, config, path));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.COMMIT_TIME_AND_FILE_NAME, config, path));
 
     config = getConfig(IndexType.SIMPLE);
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
-
-    config = getConfig(IndexType.SIMPLE);
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, path));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, dataLogPath));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, deleteLogPath));
 
     config = getConfigBuilder(IndexType.BLOOM)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetBloomFilterEnable(false).build()).build();
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, path));
 
     config = getConfigBuilder(IndexType.SIMPLE)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetBloomFilterEnable(true).build()).build();
-    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
+    assertTrue(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, path));
 
     config = getConfigBuilder(IndexType.SIMPLE)
         .withStorageConfig(HoodieStorageConfig.newBuilder()
             .parquetBloomFilterEnable(false).build()).build();
-    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config));
+    assertFalse(HoodieFileWriterFactory.enableBloomFilter(MetaFieldsMode.ALL, config, path));
   }
 }
