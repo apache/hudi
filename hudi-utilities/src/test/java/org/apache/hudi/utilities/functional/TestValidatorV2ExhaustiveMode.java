@@ -31,7 +31,6 @@ import org.apache.hudi.utilities.util.ValidationMode;
 import org.apache.hudi.utilities.util.ValidationRunReports;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -803,33 +802,6 @@ public class TestValidatorV2ExhaustiveMode extends ValidatorV2FunctionalTestBase
         "and the partition the operator has to go and look at: " + raised.getMessage());
     assertFalse(storage.exists(new StoragePath(basePath, OUTPUT_DIR)),
         "fail-fast persists nothing, on this path as on every other");
-  }
-
-  /**
-   * A healthy MOR table's log files are all suspects — nothing has been checked against a timeline
-   * — and none of them fails the run. The alternative fails every MOR table in a fleet the moment
-   * exhaustive mode is switched on.
-   */
-  @Disabled("Log files are no longer part of the duplicate-base-file dimension at all. The "
-      + "detector that dimension uses is DuplicateBaseFileDetector, which reports duplicate base "
-      + "files and nothing else; the log-file branch that emitted one UNREFERENCED_LOG_FILE suspect "
-      + "per log file in the listing has been removed, not switched off. This case asserts a "
-      + "healthy MOR table produces recordCount > 0 from that population, which is now empty by "
-      + "design. Whether a log file is referenced is the FS-MDT comparison's question and is "
-      + "covered end to end by TestValidatorV2Reconciliation at both table versions.")
-  @Test
-  void healthyMorTableRecordsItsLogFilesAsSuspectsWithoutFailing() throws Exception {
-    writeTable("MERGE_ON_READ");
-
-    assertTrue(runValidator(ValidationMode.EXHAUSTIVE), "a healthy MOR table must still pass");
-
-    JsonNode suspects = readSuspects();
-    assertTrue(suspects.get("recordCount").asLong() > 0, "every log file is a suspect");
-    assertEquals(0, suspects.get("failingRecordCount").asLong(),
-        "a log-file suspect is recorded and tolerated; only a duplicate set fails the run");
-    for (JsonNode record : suspects.get("records")) {
-      assertEquals("UNREFERENCED_LOG_FILE", record.get("suspectReason").asText());
-    }
   }
 
   /**
