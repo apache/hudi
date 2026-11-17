@@ -18,7 +18,9 @@
 
 package org.apache.hudi.source.split;
 
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
@@ -36,8 +38,18 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Test cases for {@link DefaultHoodieSplitDiscover}.
@@ -269,7 +281,147 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     assertNotNull(result.getSplits(), "Splits should not be null");
   }
 
+  @Test
+  void testLagInfoComesFromTheCommitsThatWroteTheFileGroup() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    // the second commit only writes par1
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT.subList(0, 2), conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+    List<HoodieInstant> commits = getCompletedCommits();
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+    Collection<HoodieSourceSplit> splits = discover.discoverSplits(commits.get(0).getCompletionTime()).getSplits();
+
+    Map<String, HoodieSourceSplitLagInfo> lagInfos = discover.getLagInfo(splits);
+
+    assertFalse(splits.isEmpty());
+    Map<String, Long> expectedRecords = getWrittenRecords(commits.subList(1, 3));
+    for (HoodieSourceSplit split : splits) {
+      HoodieSourceSplitLagInfo lagInfo = lagInfos.get(split.splitId());
+      boolean par1 = split.getPartitionPath().equals("par1");
+      assertEquals(par1 ? Arrays.asList(commits.get(1).requestedTime(), commits.get(2).requestedTime())
+          : Collections.singletonList(commits.get(2).requestedTime()), lagInfo.getReadCommits());
+      assertEquals((par1 ? commits.get(1) : commits.get(2)).getCompletionTime(), lagInfo.getOldestCommitCompletionTime());
+      assertEquals(expectedRecords.get(split.getFileId()), lagInfo.getEstimatedRecords());
+      assertEquals(new File(new StoragePath(split.getBasePath().get()).toUri().getPath()).length(), lagInfo.getEstimatedBytes());
+    }
+  }
+
+  @Test
+  void testLagInfoOfSplitsOfTheSameFileGroupFromSeveralBatches() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_COMMITS_LIMIT, 1);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    List<HoodieInstant> commits = getCompletedCommits();
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+    HoodieContinuousSplitBatch firstBatch = discover.discoverSplits(commits.get(0).getCompletionTime());
+    HoodieContinuousSplitBatch secondBatch = discover.discoverSplits(firstBatch.getOffset());
+    List<HoodieSourceSplit> splits = new ArrayList<>(firstBatch.getSplits());
+    splits.addAll(secondBatch.getSplits());
+
+    Map<String, HoodieSourceSplitLagInfo> lagInfos = discover.getLagInfo(splits);
+
+    for (HoodieSourceSplit split : firstBatch.getSplits()) {
+      assertEquals(Collections.singletonList(commits.get(1).requestedTime()), lagInfos.get(split.splitId()).getReadCommits());
+    }
+    for (HoodieSourceSplit split : secondBatch.getSplits()) {
+      assertEquals(Collections.singletonList(commits.get(2).requestedTime()), lagInfos.get(split.splitId()).getReadCommits());
+    }
+  }
+
+  @Test
+  void testLagInfoOfSnapshotSplitsReadTheirLatestCommit() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_START_COMMIT, FlinkOptions.START_COMMIT_EARLIEST);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    HoodieInstant commit = getCompletedCommits().get(0);
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+    Collection<HoodieSourceSplit> splits = discover.discoverSplits(null).getSplits();
+
+    Map<String, HoodieSourceSplitLagInfo> lagInfos = discover.getLagInfo(splits);
+
+    assertFalse(splits.isEmpty());
+    for (HoodieSourceSplit split : splits) {
+      assertEquals(new HoodieSourceSplitLagInfo(Collections.singletonList(commit.requestedTime()), commit.getCompletionTime(), 0L, 0L),
+          lagInfos.get(split.splitId()));
+    }
+  }
+
+  @Test
+  void testGetUndiscoveredCommitsAfterACommitsLimitedDiscovery() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    conf.set(FlinkOptions.READ_COMMITS_LIMIT, 1);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    List<HoodieInstant> commits = getCompletedCommits();
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+    HoodieContinuousSplitBatch result = discover.discoverSplits(commits.get(0).getCompletionTime());
+
+    List<String> undiscovered = discover.getUndiscoveredCommits(result.getOffset(), false);
+
+    assertEquals(commits.get(1).getCompletionTime(), result.getOffset());
+    assertEquals(Collections.singletonList(commits.get(2).getCompletionTime()), undiscovered);
+  }
+
+  @Test
+  void testGetUndiscoveredCommitsReloadsTheTimeline() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+    String offset = getCompletedCommits().get(0).getCompletionTime();
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+
+    List<String> undiscovered = discover.getUndiscoveredCommits(offset, true);
+
+    assertEquals(Collections.singletonList(getCompletedCommits().get(1).getCompletionTime()), undiscovered);
+  }
+
+  @Test
+  void testGetUndiscoveredCommitsWithoutOffsetReturnsNothing() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+
+    List<String> undiscovered = discover.getUndiscoveredCommits(null, true);
+
+    assertTrue(undiscovered.isEmpty());
+  }
+
   // Helper methods
+
+  private List<HoodieInstant> getCompletedCommits() {
+    metaClient.reloadActiveTimeline();
+    return metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().getInstants();
+  }
+
+  /**
+   * Returns the inserts plus updates written by the commits, keyed by file id.
+   */
+  private Map<String, Long> getWrittenRecords(List<HoodieInstant> commits) throws Exception {
+    Map<String, Long> records = new HashMap<>();
+    for (HoodieInstant commit : commits) {
+      HoodieCommitMetadata metadata = metaClient.getActiveTimeline().readCommitMetadata(commit);
+      for (HoodieWriteStat writeStat : metadata.getWriteStats()) {
+        records.merge(writeStat.getFileId(), writeStat.getNumInserts() + writeStat.getNumUpdateWrites(), Long::sum);
+      }
+    }
+    return records;
+  }
 
   private HoodieScanContext createScanContext(Configuration conf) throws Exception {
     return createScanContextWithSkipOptions(conf, false, false, false);

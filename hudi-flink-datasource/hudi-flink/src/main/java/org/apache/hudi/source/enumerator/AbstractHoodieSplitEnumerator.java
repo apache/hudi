@@ -33,6 +33,7 @@ import org.apache.flink.api.connector.source.SupportsHandleExecutionAttemptSourc
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -100,6 +101,7 @@ abstract class AbstractHoodieSplitEnumerator
       SplitRequestEvent splitRequestEvent = (SplitRequestEvent) sourceEvent;
       log.info("Received request split event from subtask {}", subtaskId);
       splitProvider.onCompletedSplits(splitRequestEvent.finishedSplitIds());
+      onSplitsFinished(splitRequestEvent.finishedSplitIds());
       readersAwaitingSplit.put(subtaskId, splitRequestEvent.requesterHostname());
       assignSplits();
     } else {
@@ -116,6 +118,7 @@ abstract class AbstractHoodieSplitEnumerator
   public void addSplitsBack(List<HoodieSourceSplit> splits, int subtaskId) {
     log.info("Add {} splits back to the split provider for failed subtask {}", splits.size(), subtaskId);
     splitProvider.onUnassignedSplits(splits);
+    onSplitsAddedBack(splits);
     assignSplits();
   }
 
@@ -176,6 +179,18 @@ abstract class AbstractHoodieSplitEnumerator
   }
 
   abstract boolean shouldWaitForMoreSplits();
+
+  /**
+   * Called when a reader finished the splits, after the split provider is notified.
+   */
+  void onSplitsFinished(Collection<String> finishedSplitIds) {
+  }
+
+  /**
+   * Called when the splits of a failed reader are added back, after the split provider is notified.
+   */
+  void onSplitsAddedBack(List<HoodieSourceSplit> splits) {
+  }
 
   private synchronized void registerCallbackFromSplitProvider() {
     if (availableFuture.get() != null) {

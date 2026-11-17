@@ -20,6 +20,14 @@ package org.apache.hudi.source.split;
 
 import org.apache.flink.annotation.Internal;
 
+import javax.annotation.Nullable;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 /**
  * Interface for continuously discover new splits from active timeline.
  */
@@ -28,4 +36,22 @@ public interface HoodieContinuousSplitDiscover {
 
   /** Discover the files appended between {@code lastInstant} and the last commit of current table */
   HoodieContinuousSplitBatch discoverSplits(String lastInstant);
+
+  /**
+   * Returns the completion times of the completed commits in the active timeline after {@code offset},
+   * which the next discoveries are going to read, in ascending order.
+   *
+   * @param offset         the consumption offset issued so far, nothing is returned if null
+   * @param reloadTimeline whether to reload the timeline, otherwise the one of the last discovery is used
+   */
+  default List<String> getUndiscoveredCommits(@Nullable String offset, boolean reloadTimeline) {
+    return Collections.emptyList();
+  }
+
+  /**
+   * Returns the lag info of the splits, keyed by split id, using the timeline of the last discovery.
+   */
+  default Map<String, HoodieSourceSplitLagInfo> getLagInfo(Collection<HoodieSourceSplit> splits) {
+    return splits.stream().collect(Collectors.toMap(HoodieSourceSplit::splitId, HoodieSourceSplitLagInfo::of, (first, second) -> first));
+  }
 }
