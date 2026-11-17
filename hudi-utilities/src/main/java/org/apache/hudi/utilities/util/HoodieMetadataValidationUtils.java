@@ -99,6 +99,7 @@ public class HoodieMetadataValidationUtils {
       return false;
     }
   }
+
   /**
    * Whether two file slices carry the same base file (name, file id and size), or both carry none.
    */
