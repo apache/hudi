@@ -336,8 +336,8 @@ public final class FileSliceMismatchAnalyzer {
   }
 
   /**
-   * Reads an FS-exclusive log file's writing instant from its first block header, since a log file's
-   * name carries only its slice's base commit time. Dropped and counted: a
+   * Reads an FS-exclusive log file's writing instant from its first block header, since below table
+   * version 8 a log file's name carries only its slice's base commit time. Dropped and counted: a
    * {@link HoodieLogBlock.HoodieLogBlockType#COMMAND_BLOCK} (a rollback marker, which must never be
    * adjudicated because deleting it resurrects rolled-back data) and an unreadable instant.
    *

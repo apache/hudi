@@ -31,8 +31,8 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
- * Reads the instant that wrote a log file from its first block's {@code INSTANT_TIME} header (the
- * file name carries the slice's base commit time, not the writing delta commit).
+ * Reads the instant that wrote a log file from its first block's {@code INSTANT_TIME} header (below
+ * table version 8 the file name carries the slice's base commit time, not the writing delta commit).
  *
  * <p>The same read reports whether that block is a rollback command block, detected by block type
  * or by a {@code COMMAND_BLOCK_TYPE} header. Its instant header is whatever instant was last on the
