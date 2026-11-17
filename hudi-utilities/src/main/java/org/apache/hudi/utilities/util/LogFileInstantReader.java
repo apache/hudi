@@ -23,7 +23,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.io.util.FileIOUtils;
-import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.slf4j.Logger;
@@ -137,7 +136,6 @@ public final class LogFileInstantReader {
    * the command-block refusal could never fire. A block header can be read with a null schema.
    */
   public static Result read(HoodieTableMetaClient metaClient, StoragePath logFilePath) {
-    HoodieStorage storage = metaClient.getStorage();
     HoodieLogFile logFile = new HoodieLogFile(logFilePath);
     HoodieLogFormat.Reader reader = null;
     try {
