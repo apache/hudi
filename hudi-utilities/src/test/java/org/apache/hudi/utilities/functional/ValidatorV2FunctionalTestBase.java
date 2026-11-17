@@ -107,7 +107,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  * than one.
  *
  * <p>Every table here is written through the Spark datasource at an explicit
- * {@link HoodieWriteConfig#WRITE_TABLE_VERSION}, because the layouts differ in ways this milestone
+ * {@link HoodieWriteConfig#WRITE_TABLE_VERSION}, because the layouts differ in ways this validator
  * depends on: where the archive lives and whether it exists before the first archival, and what
  * instant a log file's name carries.
  */
@@ -830,7 +830,7 @@ abstract class ValidatorV2FunctionalTestBase extends HoodieSparkClientTestBase {
    * is not cosmetic. {@code writeCowTableWithASupersededSlice} upserts through
    * {@code dataGen.generateUpdates}, which picks its records <b>at random</b>, so only some groups
    * come back with a second base file and which ones varies per run. Returning the first other group
-   * regardless of its slice count — as this helper did until 2026-08-15 — makes the finding
+   * regardless of its slice count would make the finding
    * {@code MDT_EXCLUSIVE_FILE_GROUP} when that group happened to get no update and
    * {@code MDT_EXCLUSIVE_FILE_SLICE} when it did. That flakiness reached CI as a red
    * {@code exhaustiveAtTheProductDefaultStillWritesItsReportsBeforeFailing} that passed on every

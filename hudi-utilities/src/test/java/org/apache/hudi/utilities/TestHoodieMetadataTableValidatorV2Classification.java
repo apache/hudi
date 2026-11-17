@@ -83,7 +83,7 @@ import static org.mockito.Mockito.when;
  * How {@link HoodieMetadataTableValidatorV2} classifies a failure decides which alert fires.
  *
  * <p>The validation job maps a {@link HoodieValidationException} to a critical data-correctness
- * page and everything else to an infrastructure alert. Misclassifying a torn-down node as a
+ * alert and everything else to an infrastructure alert. Misclassifying a torn-down node as a
  * validation failure sends someone to rebuild a metadata table that was never broken; misclassifying
  * real divergence as infrastructure hides corruption. Both directions are asserted here.
  *
@@ -112,7 +112,7 @@ public class TestHoodieMetadataTableValidatorV2Classification {
     RuntimeException classified = HoodieMetadataTableValidatorV2.classifyFailure(fromSpark);
     assertFalse(classified instanceof HoodieValidationException,
         "an infrastructure failure classified as a validation failure raises a data-correctness "
-            + "page for a node that was simply reclaimed: " + classified);
+            + "alert for a node that was simply reclaimed: " + classified);
     assertTrue(classified.getMessage().contains("MDT_VALIDATOR_INFRA_FAILURE"),
         "the marker alerting keys on must be present: " + classified.getMessage());
   }
@@ -364,7 +364,7 @@ public class TestHoodieMetadataTableValidatorV2Classification {
    * <p>The throw must stay a {@link HoodieIOException} the whole way down: an empty report is
    * indistinguishable from a partition that was checked and found nothing, so absorbing the fault
    * would let a run in which every listing errored out report success for this dimension — while
-   * classifying it as a {@link HoodieValidationException} would page someone for corruption that was
+   * classifying it as a {@link HoodieValidationException} would raise a corruption alert for something that was
    * never established.
    */
   @Test
@@ -600,7 +600,7 @@ public class TestHoodieMetadataTableValidatorV2Classification {
   /**
    * The recompute cause reaches the same two arms and must be distinguishable in every channel an
    * operator reads: a run sanctioned for a recompute counted against the archival threshold would
-   * page the wrong person about the wrong table property.
+   * alert about the wrong table property.
    */
   @Test
   void failFastReturnsSuccessWithItsOwnMarkerWhenPhaseOneRecomputed() {

@@ -304,8 +304,8 @@ public class HoodieMetadataTableValidatorV2 implements Serializable {
             DuplicateBaseFileDimension.Result.none(), allPartitions.size());
       }
       // Fail-fast still runs dimension B: its window is its own and guarded by the same probes, so
-      // it cannot be misled by what disturbed dimension A, and a real finding there pages this run.
-      // Exhaustive does not, because a usable handle is what a mitigation job acts on, and a run
+      // it cannot be misled by what disturbed dimension A, and a real finding there fails this run.
+      // Exhaustive does not, because a usable handle is what a caller acts on, and a run
       // missing dimension A's verdict must not publish one.
       skipInconclusiveDuplicateDimension(inconclusive);
       duplicates = DuplicateBaseFileDimension.Result.none();

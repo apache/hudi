@@ -129,13 +129,13 @@ public class TestValidatorV2ExhaustiveMode extends ValidatorV2FunctionalTestBase
     // A new log VERSION, not just a new write token. Two log files differing only in write token
     // collapse inside the file slice the same way duplicate base files do, so a copy under a new
     // token is invisible to both sides and produces no finding at all -- the latest-slice blind
-    // spot this milestone does not attempt to close.
+    // spot this validator does not attempt to close.
     StoragePath copy = withLogVersion(original, 9);
     copyFile(original, copy);
 
     assertFalse(runValidator(ValidationMode.EXHAUSTIVE),
-        "a log file under a completed commit that does not name it is a retry orphan, and the "
-            + "tolerance this design removes is what used to let it pass");
+        "a log file under a completed commit that does not name it is a retry orphan, and must "
+            + "not be tolerated");
 
     JsonNode record = recordFor(readDiff(), copy.getName());
     assertEquals("DANGLING", record.get("verdict").asText(),

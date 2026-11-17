@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The dangling-file dimension end to end, on real Spark-written tables, at <b>both table versions
  * a fleet actually holds</b>.
  *
- * <p>Every other suite in this milestone builds its inputs by hand or with Mockito, and two defects
+ * <p>Every other suite for this validator builds its inputs by hand or with Mockito, and two defects
  * were found exactly where a hand-built shape and a real table's shape diverged. So each case here
  * damages a table the Spark datasource wrote, runs the whole job, and reads the reports back off
  * storage — and each is parameterised on {@code hoodie.write.table.version}, because the two
@@ -253,7 +253,7 @@ public class TestValidatorV2DanglingFiles extends ValidatorV2FunctionalTestBase 
    * not a divergence — a concurrent writer's half-written output must not fail a validation run.
    * The dangling detector does its own listing and would see the file, but a single base file under
    * a single file id breaks no cardinality invariant, so it is not a suspect either. Nothing in
-   * this milestone reaches it.
+   * this validator reaches it.
    *
    * <p>This is asserted here because it is not visible from any of the unit suites — every one of
    * them hands the analyzer a file list directly and so skips the visibility filter entirely — and

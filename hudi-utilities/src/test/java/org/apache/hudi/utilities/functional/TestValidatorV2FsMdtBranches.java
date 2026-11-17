@@ -802,7 +802,7 @@ public class TestValidatorV2FsMdtBranches extends ValidatorV2FunctionalTestBase 
    * <p>A clean pending at {@code T_prev} is the shape the service-activity delta cannot see — its
    * state never changes during the run, so it contributes nothing to a state diff while having
    * already deleted files the metadata table still names. The pair with the row above is the
-   * difference between a healthy table with a table service in progress and a page-out.
+   * difference between a healthy table with a table service in progress and a broken one.
    */
   @Test
   void deletionAPendingCleanPlannedIsSanctioned() throws Exception {
@@ -835,8 +835,8 @@ public class TestValidatorV2FsMdtBranches extends ValidatorV2FunctionalTestBase 
    * corruption once that race is over.
    *
    * <p>This is still the guard that keeps the fatal MDT-exclusive row honest.
-   * {@code OUTBOUND_DELETION} pages someone; reaching it because one clean plan happened to be
-   * corrupt would page them about a healthy table. The plan is corrupted by overwriting the
+   * {@code OUTBOUND_DELETION} fails the run; reaching it because one clean plan happened to be
+   * corrupt would fail it on a healthy table. The plan is corrupted by overwriting the
    * requested instant file with bytes that are neither valid avro nor a valid plan, which is what an
    * interrupted plan write leaves behind.
    */
@@ -885,7 +885,7 @@ public class TestValidatorV2FsMdtBranches extends ValidatorV2FunctionalTestBase 
             Branch.FDA_MDT_PREV_DONE_AFT_DONE_SANCTIONED);
     assertEquals("NOT_SETTLED", recordFor(readDiff(), victim.getName()).get("verdict").asText(),
         "a clean plan already promoted past .requested that still cannot be read is genuine "
-            + "corruption, and a verdict reached by exclusion would page someone about a healthy "
+            + "corruption, and a verdict reached by exclusion would fail a healthy "
             + "table");
     assertTrue(run.passed(), "refusing is never fatal: " + run.thrown());
   }

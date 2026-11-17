@@ -132,7 +132,7 @@ public class TestValidatorV2RecomputeBranches extends ValidatorV2FunctionalTestB
   /**
    * The case the whole catch-path check exists for: a real duplicate on the table, fail-fast, and a
    * recompute in the same action that raised. The finding may rest on a listing taken after the
-   * window closed, so it is unattributable — and an unattributable finding must not page anyone.
+   * window closed, so it is unattributable — and an unattributable finding must not fail the run.
    */
   @Test
   void failFastDiscardsAFindingItCannotAttribute() throws IOException {

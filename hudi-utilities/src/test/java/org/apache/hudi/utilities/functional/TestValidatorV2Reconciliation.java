@@ -83,7 +83,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p><b>Real timeline surgery, not hand-built instants.</b> Every pending service here is written
  * through {@link HoodieActiveTimeline}'s own transitions with a real plan behind it, so the naming,
  * the layout and the plan encoding are the writer's on both table versions rather than this test's
- * guess at them — which is the difference that made two of this milestone's defects visible only
+ * guess at them — which is the difference that made two defects visible only
  * against a real table.
  */
 @Tag("functional")
@@ -266,9 +266,8 @@ public class TestValidatorV2Reconciliation extends ValidatorV2FunctionalTestBase
    * reason to keep this: any ordinary slice with more than one log version exercises the version
    * arm, so it is not this case that protects it.
    *
-   * <p>This case predates the retry one and, until 2026-08-16, carried a comment claiming a
-   * new log version was <em>necessary</em> because a write-token pair would collapse inside the file
-   * slice. That claim was false — see the retry case's doc for the code that disproves it.
+   * <p>A new log version is not <em>necessary</em> for this case: a write-token pair does not
+   * collapse inside the file slice — see the retry case's doc for the code that shows it.
    */
   @ParameterizedTest
   @ValueSource(ints = {6, 9})
@@ -493,7 +492,7 @@ public class TestValidatorV2Reconciliation extends ValidatorV2FunctionalTestBase
    * file gone from storage that a completed commit's metadata table still lists — and the opposite
    * verdict, because a rollback plan requested before the run had already undertaken to delete it.
    * {@code OUTBOUND_DELETION} is fatal, so this is the difference between a healthy table with a
-   * table service in progress and a page-out alert.
+   * table service in progress and a failed run.
    *
    * <p>A rollback <em>pending at both reads</em> is deliberately the shape used, because it is the
    * one {@code ServiceActivityDelta} cannot see: its state never changes during the run, so it contributes

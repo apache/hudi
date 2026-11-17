@@ -350,9 +350,6 @@ public class HoodieMetadataTableValidator implements Serializable {
      *
      * <p>Hidden by convention, and outside {@code .hoodie/}, which belongs to the timeline and is
      * read by every Hudi reader there is.
-     * Deliberately names no product and no company: these reports describe a Hudi table and are
-     * read by a Hudi job, and a vendor directory sitting in a table anyone can open records who
-     * happened to run the tool rather than anything about the table.
      */
     public static final String DEFAULT_VALIDATION_OUTPUT_DIR =
         HoodieMetadataValidationUtils.TOOLING_DIR_PREFIX + "/table_validation_job";
@@ -368,11 +365,9 @@ public class HoodieMetadataTableValidator implements Serializable {
     public boolean skipDataFilesForCleaning = false;
 
     @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file "
-        + "slices for all partitions. Read by the v1 validator only and ignored entirely by the v2 "
-        + "validator (--use-validator-v2), which always compares latest file slices unless that "
-        + "dimension is switched off with --validate-fs-mdt-diff -- use that flag under v2. This "
-        + "one defaults to false, so wiring v2 to it would turn v2's primary check off for every "
-        + "run that did not name it.", required = false)
+        + "slices for all partitions. Read by the v1 validator only: with --use-validator-v2, latest "
+        + "file slices are always validated, and --validate-fs-mdt-diff and "
+        + "--validate-duplicate-base-files select what is checked.", required = false)
     public boolean validateLatestFileSlices = false;
 
     @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.", required = false)
@@ -420,49 +415,16 @@ public class HoodieMetadataTableValidator implements Serializable {
         + "partition's expected file slices remotely. Scoped strictly to latest file slice validation.")
     public boolean useValidatorV2 = false;
 
-    @Parameter(names = {"--validation-mode"}, description = "How much of a partition's divergence the "
-        + "v2 validator reports: 'fail-fast' (default) stops at the first mismatch, as it always has; "
-        + "'exhaustive' compiles every mismatching file in every partition, writes them under "
-        + "--validation-output-root/--validation-output-dir alongside the dangling-file suspects and the "
-        + "reconciled answer, and then fails the validation the same way. The verdict is identical either "
-        + "way; only the evidence differs. Fail-fast writes nothing at all."
-        + "\n"
-        + "\nSCOPE OF THE DANGLING-FILE FINDINGS -- read this before acting on them. Exhaustive mode is "
-        + "NOT a general orphan finder, and an empty dangling_files report is not a statement that the "
-        + "table has no orphans."
-        + "\n  * TWO verdicts reach the adjudicated DANGLING_FILES category, and both are reachable on "
-        + "EVERY table version: (a) a completed commit does write to the file's file group and its own "
-        + "record of what it wrote does not name the file -- the retry copy a failed attempt leaves "
-        + "behind; and (b) the file's instant is inside the active timeline's window and completed no "
-        + "commit at all. (b) is not version-restricted: the in-window clause of the absence check is "
-        + "decided before the table version is looked at."
-        + "\n  * What bounds the findings is VISIBILITY, not those verdicts. Only two passes put a file "
-        + "in front of the adjudication, and both are confined to directories carrying "
-        + "'.hoodie_partition_metadata'. The dangling pass lists storage raw and flags exactly one "
-        + "shape: a file id plus instant carrying TWO OR MORE base files. The slice comparison sees only "
-        + "the LATEST slice per file group, and only files the committed-file filter admits -- so a "
-        + "write that never completed inside the window is filtered out of it. Consequence: a LONE "
-        + "in-window orphan (one base file under one file id) is invisible to both at once and is never "
-        + "reported, while the same failed write leaving a DUPLICATE base-file set IS caught, and every "
-        + "member of that set is condemned, on any version."
-        + "\n  * A file older than the whole active timeline is provable on table version 6 ONLY, and "
-        + "there only when the archive is absent or empty. On v8 and v9 the absence of a referencing "
-        + "commit is not trustworthy, so such a file is reported unsettled rather than dangling -- "
-        + "which blocks a downstream rebuild instead of deleting anything. That is the safe direction "
-        + "and it is deliberate."
-        + "\n  * BELOW TABLE VERSION 8, one refusal cannot fire: a rollback command block is appended to "
-        + "an existing log file whose first block is a data block instead of getting a file of its own, "
-        + "so the check that declines to adjudicate a log file starting with a command block has nothing "
-        + "to match on there. On v6/v7, read a clean dangling report as 'nothing was proven'."
-        + "\n  * LOG FILES are excluded from the dangling dimension entirely -- no log file is ever "
-        + "condemned by that route. The slice comparison is a separate route and does still reach them: "
-        + "a log file that storage holds and the metadata table's matching slice does not can be reported "
-        + "and adjudicated exactly like a base file. That path is deliberate and tested. A log file can "
-        + "only ever be condemned by (a); an absence never proves anything about one."
-        + "\n  * Anything the timeline could not settle is DROPPED from the adjudicated report rather "
-        + "than carried with a cautious verdict; it stays in the raw reports, which is where a human "
-        + "looks. And only storage-side findings are adjudicated at all, so a file the metadata table "
-        + "names and storage does not can never become a delete candidate.")
+    @Parameter(names = {"--validation-mode"}, description = "v2 validator only. 'fail-fast' "
+        + "(default) fails at the first difference that fails validation and writes nothing. "
+        + "'exhaustive' adjudicates every difference in every partition, writes the findings under "
+        + "--validation-output-root/--validation-output-dir, and then fails the run the same way. "
+        + "The pass/fail outcome is the same in both modes; only the evidence differs. A difference "
+        + "the timeline cannot settle does not fail the run; exhaustive mode keeps it in the raw "
+        + "reports only. "
+        + "An empty dangling-files report does not mean the table has no orphan files: only "
+        + "duplicate base files and files that differ between storage and the metadata table's "
+        + "latest file slices are examined.")
     public String validationMode = ValidationMode.FAIL_FAST.getFlagValue();
 
     @Parameter(names = {"--validation-output-root"}, description = "Where exhaustive mode writes its "
@@ -484,29 +446,19 @@ public class HoodieMetadataTableValidator implements Serializable {
     public String validationRunId = "";
 
     @Parameter(names = {"--validate-duplicate-base-files"}, arity = 1, description = "v2 validator "
-        + "only. Fail a partition holding a committed file slice with two or more base files. Costs "
-        + "one extra LIST per partition per run, on healthy tables too, roughly doubling the job's "
-        + "LIST calls on a wide table on object storage; set false to turn the dimension off "
-        + "without giving up the file-slice comparison. On the v2 validator, that LIST failing now "
-        + "aborts the whole run (HoodieIOException, not a validation failure) -- v1 never reads this "
-        + "flag, so the abort does not apply there -- and this is also the on-call escape hatch "
-        + "for a partition that persistently fails to list -- set false to keep the run going until "
-        + "the underlying listing problem is fixed. Turning it off also stops exhaustive mode "
-        + "producing a dangling_files report, since that report is what this listing feeds.")
+        + "only. Fail a partition holding a file slice with two or more base files. Costs one extra "
+        + "storage listing per partition per run. A partition that cannot be listed fails the run "
+        + "with an I/O error rather than a validation failure; set false to skip this check, which "
+        + "also stops exhaustive mode writing a dangling-files report.")
     public boolean validateDuplicateBaseFiles = true;
 
     @Parameter(names = {"--validate-fs-mdt-diff"}, arity = 1, description = "v2 validator only. "
-        + "Compare the latest file slices the metadata table reports against the ones on storage, "
-        + "which is the dimension that finds a file the metadata table names and storage no longer "
-        + "has, and the reverse. This is the expensive half of the run -- it pins a metadata "
-        + "snapshot, stands up a timeline server and runs the diff DAG across every partition -- so "
-        + "set false to turn the dimension off without giving up duplicate base file detection. "
-        + "Turning it off stops exhaustive mode producing the fs_mdt_diff/ documents entirely, and "
-        + "no FS-MDT verdict is reached for any file: the run then validates duplicate base files "
-        + "alone, which is a complete run of that dimension and not a partial run of both. Note "
-        + "that an absent fs_mdt_diff/ says nobody looked, which is a different fact from a run "
-        + "that looked and found nothing. Distinct from --validate-latest-file-slices, which the "
-        + "v1 validator reads and the v2 validator does not.")
+        + "Compare the latest file slices the metadata table reports with those on storage, in both "
+        + "directions. This is the more expensive check: it pins a metadata table snapshot and hosts "
+        + "the metadata table file system view on the driver. Set false to validate duplicate base "
+        + "files alone; exhaustive mode then writes no fs_mdt_diff/ reports, which means the "
+        + "comparison did not run, not that it found nothing. At least one of "
+        + "--validate-fs-mdt-diff and --validate-duplicate-base-files must be true.")
     public boolean validateFsMdtDiff = true;
 
     @Parameter(names = {"--fs-view-storage-type"}, description = "Storage type for the driver-hosted "
