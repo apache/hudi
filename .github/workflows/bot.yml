@@ -2145,23 +2145,3 @@ jobs:
         run: |
           echo "::error::$REQUIREMENT The summary step above lists each result."
           exit 1
-
-  # Transitional. Before Java CI Engines was folded into this workflow, .asf.yaml required its
-  # `Java CI Engines result` context. Branch protection changes only after this change merges, and
-  # .asf.yaml applies have failed with HTTP 502 when many PRs are open, so this job keeps reporting
-  # that context with the result of `Java CI result`. Delete it in a follow-up once master's branch
-  # protection no longer lists the context.
-  java-ci-engines-result:
-    name: Java CI Engines result
-    runs-on: ubuntu-slim
-    if: ${{ always() && !(github.event_name == 'push' && github.repository == 'apache/hudi' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/heads/release-') && github.ref != 'refs/heads/branch-0.x') }}
-    permissions: {}
-    needs: java-ci-result
-    steps:
-      - name: Fail unless Java CI result succeeded
-        if: ${{ needs.java-ci-result.result != 'success' }}
-        env:
-          RESULT: ${{ needs.java-ci-result.result }}
-        run: |
-          echo "::error::Java CI result is $RESULT. This transitional check mirrors it; see Java CI result for details."
-          exit 1
