@@ -295,11 +295,13 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
     StoragePath uncommittedLogFile = null;
     if (includeUncommittedLogFiles) {
-      // add an uncommitted log file to a data partition to simulate a task retry; the listing is
-      // recursive, so the metadata table's own log files are skipped explicitly
+      // add uncommitted log file to simulate task retry. For v2 the copy must land in a data
+      // partition, so the metadata table's own log files are skipped there; the v1 case keeps
+      // upstream's input unchanged.
       for (StoragePathInfo storagePathInfo : storage.listFiles(new StoragePath(basePath))) {
         StoragePath path = storagePathInfo.getPath();
-        if (FSUtils.isLogFile(path) && !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME)) {
+        if (FSUtils.isLogFile(path)
+            && (!useValidatorV2 || !path.toString().contains(HoodieTableMetaClient.METAFOLDER_NAME))) {
           String modifiedPath = useValidatorV2
               ? retryCopyOf(path).toString()
               : path.toString().substring(0, path.toString().lastIndexOf("-") + 1) + "000";
@@ -309,7 +311,9 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
           break;
         }
       }
-      assertNotNull(uncommittedLogFile, "the table has no data log file to copy");
+      if (useValidatorV2) {
+        assertNotNull(uncommittedLogFile, "the table has no data log file to copy");
+      }
     }
 
     // validate MDT
