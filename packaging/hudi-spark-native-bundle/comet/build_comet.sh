@@ -34,8 +34,7 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=/dev/null
-source <(grep -E '^(COMET_REPO|COMET_COMMIT|COMET_VERSION)=' "$DIR/COMET_PIN")
+eval "$(grep -E '^(COMET_REPO|COMET_COMMIT|COMET_VERSION)=' "$DIR/COMET_PIN")"
 
 BUILD_DIR="${COMET_BUILD_DIR:-$DIR/target/comet-build}"
 SPARK_PROFILE="${COMET_SPARK_PROFILE:-spark-3.5}"
