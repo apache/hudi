@@ -27,7 +27,10 @@ python hudi-integ-test/spark-pipelines/keyed_flows.py \
   --bundle /path/to/candidate-hudi-spark4.1-bundle.jar
 ```
 
-The generated SQL defines partitioned COW tables with `primaryKey=id`,
+Pass `--table-type mor` to run the same matrix with MOR; the default is COW.
+Run each table type separately with isolated targets and checkpoints.
+
+The generated SQL defines partitioned tables with `primaryKey=id`,
 `preCombineField=ts`, and `hoodie.record.merge.mode=EVENT_TIME_ORDERING`.
 A boolean `_hoodie_is_deleted` carries deletes. The scenario checks a newly
 created target and a pre-existing catalog table, then restarts each through the
@@ -46,7 +49,11 @@ Metadata indexing is disabled. This is delete input carried by a flow, not CDC
 propagation of upstream deletes. It does not cover full refresh, table chaining,
 fan-in or failure between commit and checkpoint (separate recovery coverage).
 
-MOR log-merge coverage remains deferred under #20408; this matrix covers COW only.
+For MOR, inline and asynchronous compaction are disabled. After the newer update,
+the test requires log files and verifies that read-optimized base-file output differs
+from the exact snapshot result. This proves the snapshot must merge logs. Subsequent
+late updates, deletes and reinsertion must also produce exact snapshots. Both table
+types verify that an unchanged restart adds no completed commit.
 The flows rely on the default streaming upsert operation, without a session override.
 The catalog regression uses `PARTITIONED BY (PART)` against schema field `part`
 to verify case-insensitive normalization. The SDP scenario uses exact spelling
