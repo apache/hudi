@@ -222,6 +222,9 @@ jobs:
       # No coverage on merge-queue runs. Codecov files an upload from a gh-readonly-queue ref under
       # master, for a commit that may never land, and a group that succeeds would upload the same
       # commit twice: once from the queue run, once from the master push run.
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -267,6 +270,9 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dtest="TestHoodieDeltaStreamer*" -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -319,6 +325,9 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -410,6 +419,9 @@ jobs:
             -w /hudi \
             hudi-ci \
             /bin/bash -c "MAVEN_OPTS='-Xmx4g' mvn test -Pfunctional-tests -D$SCALA_PROFILE -D$SPARK_PROFILE -D$FLINK_PROFILE -fae -pl $FT_MODULES,$BUNDLE_MODULES -Dcheckstyle.skip=true -Drat.skip=true $MVN_ARGS -Djacoco.skip=false"
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -461,6 +473,9 @@ jobs:
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
 #          mvn test -Punit-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests $JAVA_UT_FILTER1 -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+#      - name: Test timing summary
+#        if: always()
+#        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
 #      - name: Generate merged coverage report
 #        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -527,6 +542,9 @@ jobs:
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
 #          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+#      - name: Test timing summary
+#        if: always()
+#        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
 #      - name: Generate merged coverage report
 #        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -587,6 +605,9 @@ jobs:
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
 #          mvn test -Pfunctional-tests-c -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+#      - name: Test timing summary
+#        if: always()
+#        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
 #      - name: Generate merged coverage report
 #        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -647,6 +668,9 @@ jobs:
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
 #          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+#      - name: Test timing summary
+#        if: always()
+#        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
 #      - name: Generate merged coverage report
 #        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -707,6 +731,9 @@ jobs:
 #          SPARK_MODULES: ${{ matrix.sparkModules }}
 #        run:
 #          mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+#      - name: Test timing summary
+#        if: always()
+#        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
 #      - name: Generate merged coverage report
 #        if: always()
 #        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -754,6 +781,9 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Punit-tests -fae -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -pl hudi-hadoop-mr,hudi-client/hudi-java-client $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -827,6 +857,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests "$JAVA_UT_FUNCTIONAL_FILTER" -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -891,6 +924,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Punit-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -DwildcardSuites=skipScalaTests "$JAVA_UT_NON_FUNCTIONAL_FILTER" -Dsurefire.failIfNoSpecifiedTests=false -pl "hudi-common,$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -952,6 +988,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Pfunctional-tests-c -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1006,6 +1045,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1060,6 +1102,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Pfunctional-tests-b -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1121,6 +1166,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1182,6 +1230,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_DML2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1279,6 +1330,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS1_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1340,6 +1394,9 @@ jobs:
           SPARK_MODULES: ${{ matrix.sparkModules }}
         run:
           mvn test -Pfunctional-tests -Pjava17 -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -Dtest=skipJavaTests $SCALA_TEST_OTHERS2_FILTER -Dsurefire.failIfNoSpecifiedTests=false -pl "$SPARK_COMMON_MODULES,$SPARK_MODULES" $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1486,6 +1543,9 @@ jobs:
       # No coverage on merge-queue runs. Codecov files an upload from a gh-readonly-queue ref under
       # master, for a commit that may never land, and a group that succeeds would upload the same
       # commit twice: once from the queue run, once from the master push run.
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1533,6 +1593,9 @@ jobs:
         run: |
           mvn clean install -T 2 -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -pl hudi-flink-datasource/hudi-flink -am -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" -DskipTests=true $MVN_ARGS
           mvn verify -Pintegration-tests -D"$SCALA_PROFILE" -D"$FLINK_PROFILE" -Davro.version="$FLINK_AVRO_VERSION" -Dparquet.version="$FLINK_PARQUET_VERSION" $FLINK_IT_FILTER2 -pl hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && endsWith(matrix.flinkProfile, '2.2') && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
@@ -1881,6 +1944,9 @@ jobs:
           export SPARK_HOME=$GITHUB_WORKSPACE/${SPARK_ARCHIVE_BASENAME%.*}
           rm -f $GITHUB_WORKSPACE/$SPARK_ARCHIVE
           mvn verify $SCALA_PROFILE -D"$SPARK_PROFILE" -Pintegration-tests -pl !hudi-flink-datasource/hudi-flink $MVN_ARGS -Djacoco.skip=false
+      - name: Test timing summary
+        if: always()
+        run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
       - name: Generate merged coverage report
         if: always() && github.event_name != 'merge_group'
         run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
