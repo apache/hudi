@@ -39,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -228,13 +229,37 @@ public class SpillableMapBasedFileSystemView extends HoodieTableFileSystemView {
     // by AbstractTableFileSystemView.close(). This prevents a race where a concurrent reader
     // holding readLock could be mid-call in RocksDBDAO.put() when the handles are cleared,
     // causing a NullPointerException at RocksDB.put(null_handle, ...).
-    super.closeResources();
-    closeFileGroupsMapIfPresent();
-    closePendingClusteringMapIfPresent();
-    closePendingCompactionMapIfPresent();
-    closePendingLogCompactionMapIfPresent();
-    closeBootstrapFileMapIfPresent();
-    closeReplaceInstantsMapIfPresent();
+    //
+    // The maps must be closed BEFORE super.closeResources(), which nulls the six fields below. Each
+    // close is guarded on its own (RocksDBDAO.close() throws when it cannot delete its directory), so
+    // one failing map neither leaks the others nor skips super.closeResources(); the first failure
+    // is rethrown once everything has been released.
+    RuntimeException mapFailure = null;
+    for (Runnable closeMap : Arrays.<Runnable>asList(this::closeFileGroupsMapIfPresent,
+        this::closePendingClusteringMapIfPresent, this::closePendingCompactionMapIfPresent,
+        this::closePendingLogCompactionMapIfPresent, this::closeBootstrapFileMapIfPresent,
+        this::closeReplaceInstantsMapIfPresent)) {
+      try {
+        closeMap.run();
+      } catch (RuntimeException e) {
+        if (mapFailure == null) {
+          mapFailure = e;
+        } else {
+          mapFailure.addSuppressed(e);
+        }
+      }
+    }
+    try {
+      super.closeResources();
+    } catch (Exception e) {
+      if (mapFailure == null) {
+        throw e;
+      }
+      mapFailure.addSuppressed(e);
+    }
+    if (mapFailure != null) {
+      throw mapFailure;
+    }
   }
 
   private void closeReplaceInstantsMapIfPresent() {

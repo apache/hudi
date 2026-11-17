@@ -244,8 +244,21 @@ public class EmbeddedTimelineService {
         RUNNING_SERVICES.remove(timelineServiceIdentifier);
       }
     }
+    // Releasing the table's view must not be able to skip closing the server below. The call reaches
+    // FileSystemViewManager.clearFileSystemView -> view.close(), and AbstractTableFileSystemView
+    // wraps anything that goes wrong there in a HoodieException -- a metadata-table close against
+    // object storage being the realistic thrower. Left to propagate it took the Jetty server, its
+    // thread pool and the server-count metric with it: the service stayed listening for the life of
+    // the JVM with no reference left to stop it. Logged and swallowed instead, because the view is
+    // this table's alone while the server is shared, and losing one table's view is the smaller
+    // failure.
     if (this.server != null) {
-      this.server.unregisterBasePath(basePath);
+      try {
+        this.server.unregisterBasePath(basePath);
+      } catch (Exception e) {
+        log.warn("Failed to release the file system view for base path {}; continuing with the "
+            + "timeline server shutdown", basePath, e);
+      }
     }
     // continue rest of shutdown outside of the synchronized block to avoid excess blocking
     if (basePaths.isEmpty() && null != server) {

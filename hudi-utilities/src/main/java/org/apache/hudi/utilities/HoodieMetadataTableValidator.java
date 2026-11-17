@@ -22,10 +22,8 @@ import org.apache.hudi.DataSourceReadOptions;
 import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.PartitionStatsIndexSupport;
 import org.apache.hudi.async.HoodieAsyncService;
-import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
 import org.apache.hudi.avro.model.HoodieMetadataRecord;
-import org.apache.hudi.avro.model.HoodieRollbackPlan;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.bloom.BloomFilter;
 import org.apache.hudi.common.config.HoodieCommonConfig;
@@ -40,24 +38,18 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.BaseFile;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieFileGroup;
-import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodiePartitionMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
-import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
-import org.apache.hudi.common.table.log.HoodieLogFormat;
-import org.apache.hudi.common.table.log.block.HoodieLogBlock;
-import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.InstantComparison;
@@ -66,7 +58,6 @@ import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
-import org.apache.hudi.common.util.CleanerUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.HoodieDataUtils;
 import org.apache.hudi.common.util.Option;
@@ -84,7 +75,6 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.exception.TableNotFoundException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
-import org.apache.hudi.io.util.FileIOUtils;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
@@ -95,6 +85,8 @@ import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.util.BloomFilterData;
+import org.apache.hudi.utilities.util.HoodieMetadataValidationUtils;
+import org.apache.hudi.utilities.util.ValidationMode;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
@@ -151,6 +143,10 @@ import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_CO
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLocationFromRecordIndexInfo;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getLogFileColumnRangeMetadata;
+import static org.apache.hudi.utilities.util.HoodieMetadataValidationUtils.FileSliceComparator;
+import static org.apache.hudi.utilities.util.HoodieMetadataValidationUtils.filterFileSliceBasedOnInflightCleaning;
+import static org.apache.hudi.utilities.util.HoodieMetadataValidationUtils.getBaseFilesForCleaning;
+import static org.apache.hudi.utilities.util.HoodieMetadataValidationUtils.validateFileSlices;
 
 /**
  * A validator with spark-submit to compare information, such as partitions, file listing, index, etc.,
@@ -223,6 +219,8 @@ public class HoodieMetadataTableValidator implements Serializable {
   private final TypedProperties props;
 
   private Option<HoodieTableMetaClient> metaClientOpt = Option.empty();
+  // When the caller injected a freshly-built meta client, skip the redundant timeline reload.
+  private boolean skipTimelineReload = false;
 
   protected transient Option<AsyncMetadataTableValidateService> asyncMetadataTableValidateService;
 
@@ -252,6 +250,30 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
     this.taskLabels = generateValidationTaskLabels();
+  }
+
+  /**
+   * Variant that reuses a meta client whose active timeline the caller has just loaded, so a
+   * single-shot validation does not list the timeline again.
+   */
+  public HoodieMetadataTableValidator(JavaSparkContext jsc, Config cfg, HoodieTableMetaClient metaClient) {
+    this.jsc = jsc;
+    this.cfg = cfg;
+    this.props = cfg.propsFilePath == null
+        ? UtilHelpers.buildProperties(cfg.configs)
+        : readConfigFromFileSystem(jsc, cfg);
+    this.metaClientOpt = Option.of(metaClient);
+    this.skipTimelineReload = true;
+    this.asyncMetadataTableValidateService = cfg.continuous ? Option.of(new AsyncMetadataTableValidateService()) : Option.empty();
+    this.taskLabels = generateValidationTaskLabels();
+  }
+
+  /**
+   * Returns list of Throwable which were encountered during validation. This method is useful
+   * when ignoreFailed parameter is set to true.
+   */
+  public List<Throwable> getThrowables() {
+    return throwables;
   }
 
   /**
@@ -310,6 +332,25 @@ public class HoodieMetadataTableValidator implements Serializable {
   }
 
   public static class Config implements Serializable {
+
+    /**
+     * Where a run's three reports go, relative to {@code --validation-output-root}.
+     *
+     * <p>Derived from {@link HoodieMetadataValidationUtils#TOOLING_DIR_PREFIX} rather than restated,
+     * so the default and the namespace the validator names in its warnings cannot drift apart:
+     * concatenating the two makes the coupling hold at compile time instead of relying on a test to
+     * notice. The prefix is a naming convention and nothing skips a listing on the strength of it —
+     * see that constant for what actually keeps these reports from being read as table data.
+     *
+     * <p>Hidden by convention, and outside {@code .hoodie/}, which belongs to the timeline and is
+     * read by every Hudi reader there is.
+     * Deliberately names no product and no company: these reports describe a Hudi table and are
+     * read by a Hudi job, and a vendor directory sitting in a table anyone can open records who
+     * happened to run the tool rather than anything about the table.
+     */
+    public static final String DEFAULT_VALIDATION_OUTPUT_DIR =
+        HoodieMetadataValidationUtils.TOOLING_DIR_PREFIX + "/table_validation_job";
+
     @Parameter(names = {"--base-path", "-sp"}, description = "Base path for the table", required = true)
     public String basePath = null;
 
@@ -320,7 +361,12 @@ public class HoodieMetadataTableValidator implements Serializable {
     @Parameter(names = {"--skip-data-files-for-cleaning"}, description = "Skip to compare the data files which are under deletion by cleaner", required = false)
     public boolean skipDataFilesForCleaning = false;
 
-    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file slices for all partitions.", required = false)
+    @Parameter(names = {"--validate-latest-file-slices"}, description = "Validate latest file "
+        + "slices for all partitions. Read by the v1 validator only and ignored entirely by the v2 "
+        + "validator (--use-validator-v2), which always compares latest file slices unless that "
+        + "dimension is switched off with --validate-fs-mdt-diff -- use that flag under v2. This "
+        + "one defaults to false, so wiring v2 to it would turn v2's primary check off for every "
+        + "run that did not name it.", required = false)
     public boolean validateLatestFileSlices = false;
 
     @Parameter(names = {"--validate-latest-base-files"}, description = "Validate latest base files for all partitions.", required = false)
@@ -362,6 +408,129 @@ public class HoodieMetadataTableValidator implements Serializable {
         description = "Number of error samples to show for record index validation",
         required = false)
     public int numRecordIndexErrorSamples = 100;
+
+    @Parameter(names = {"--use-validator-v2"}, description = "Use the v2 validator: the driver hosts the "
+        + "metadata-table file system view behind an embedded timeline server and executors fetch their "
+        + "partition's expected file slices remotely. Scoped strictly to latest file slice validation.")
+    public boolean useValidatorV2 = false;
+
+    @Parameter(names = {"--validation-mode"}, description = "How much of a partition's divergence the "
+        + "v2 validator reports: 'fail-fast' (default) stops at the first mismatch, as it always has; "
+        + "'exhaustive' compiles every mismatching file in every partition, writes them under "
+        + "--validation-output-root/--validation-output-dir alongside the dangling-file suspects and the "
+        + "reconciled answer, and then fails the validation the same way. The verdict is identical either "
+        + "way; only the evidence differs. Fail-fast writes nothing at all."
+        + "\n"
+        + "\nSCOPE OF THE DANGLING-FILE FINDINGS -- read this before acting on them. Exhaustive mode is "
+        + "NOT a general orphan finder, and an empty dangling_files report is not a statement that the "
+        + "table has no orphans."
+        + "\n  * TWO verdicts reach the adjudicated DANGLING_FILES category, and both are reachable on "
+        + "EVERY table version: (a) a completed commit does write to the file's file group and its own "
+        + "record of what it wrote does not name the file -- the retry copy a failed attempt leaves "
+        + "behind; and (b) the file's instant is inside the active timeline's window and completed no "
+        + "commit at all. (b) is not version-restricted: the in-window clause of the absence check is "
+        + "decided before the table version is looked at."
+        + "\n  * What bounds the findings is VISIBILITY, not those verdicts. Only two passes put a file "
+        + "in front of the adjudication, and both are confined to directories carrying "
+        + "'.hoodie_partition_metadata'. The dangling pass lists storage raw and flags exactly one "
+        + "shape: a file id plus instant carrying TWO OR MORE base files. The slice comparison sees only "
+        + "the LATEST slice per file group, and only files the committed-file filter admits -- so a "
+        + "write that never completed inside the window is filtered out of it. Consequence: a LONE "
+        + "in-window orphan (one base file under one file id) is invisible to both at once and is never "
+        + "reported, while the same failed write leaving a DUPLICATE base-file set IS caught, and every "
+        + "member of that set is condemned, on any version."
+        + "\n  * A file older than the whole active timeline is provable on table version 6 ONLY, and "
+        + "there only when the archive is absent or empty. On v8 and v9 the absence of a referencing "
+        + "commit is not trustworthy, so such a file is reported unsettled rather than dangling -- "
+        + "which blocks a downstream rebuild instead of deleting anything. That is the safe direction "
+        + "and it is deliberate."
+        + "\n  * BELOW TABLE VERSION 8, one refusal cannot fire: a rollback command block is appended to "
+        + "an existing log file whose first block is a data block instead of getting a file of its own, "
+        + "so the check that declines to adjudicate a log file starting with a command block has nothing "
+        + "to match on there. On v6/v7, read a clean dangling report as 'nothing was proven'."
+        + "\n  * LOG FILES are excluded from the dangling dimension entirely -- no log file is ever "
+        + "condemned by that route. The slice comparison is a separate route and does still reach them: "
+        + "a log file that storage holds and the metadata table's matching slice does not can be reported "
+        + "and adjudicated exactly like a base file. That path is deliberate and tested. A log file can "
+        + "only ever be condemned by (a); an absence never proves anything about one."
+        + "\n  * Anything the timeline could not settle is DROPPED from the adjudicated report rather "
+        + "than carried with a cautious verdict; it stays in the raw reports, which is where a human "
+        + "looks. And only storage-side findings are adjudicated at all, so a file the metadata table "
+        + "names and storage does not can never become a delete candidate.")
+    public String validationMode = ValidationMode.FAIL_FAST.getFlagValue();
+
+    @Parameter(names = {"--validation-output-root"}, description = "Where exhaustive mode writes its "
+        + "findings: <root>/<dir>/<timestamp>/{files_mismatch,dangling_files,adjudicated}/. Defaults to "
+        + "the table's base path. Nothing is written when a run finds nothing.")
+    public String validationOutputRoot = "";
+
+    @Parameter(names = {"--validation-output-dir"}, description = "The directory, relative to "
+        + "--validation-output-root, that one run's three reports are written under. Defaults to '"
+        + DEFAULT_VALIDATION_OUTPUT_DIR + "'. Must be hidden — a leading dot, so a storage listing of "
+        + "the table never takes it for data — and must not live under '.hoodie/', which belongs to the "
+        + "timeline.")
+    public String validationOutputDir = DEFAULT_VALIDATION_OUTPUT_DIR;
+
+    @Parameter(names = {"--validation-run-id"}, description = "Names the directory one run's "
+        + "reports are written under, inside --validation-output-dir. Defaults to the run's UTC "
+        + "start time. Supply it when a caller must know the path before the run finishes, or to "
+        + "resume into a previous run's directory. A single path segment: no '/', no '..'.")
+    public String validationRunId = "";
+
+    @Parameter(names = {"--validate-duplicate-base-files"}, arity = 1, description = "v2 validator "
+        + "only. Fail a partition holding a committed file slice with two or more base files. Costs "
+        + "one extra LIST per partition per run, on healthy tables too, roughly doubling the job's "
+        + "LIST calls on a wide table on object storage; set false to turn the dimension off "
+        + "without giving up the file-slice comparison. On the v2 validator, that LIST failing now "
+        + "aborts the whole run (HoodieIOException, not a validation failure) -- v1 never reads this "
+        + "flag, so the abort does not apply there -- and this is also the on-call escape hatch "
+        + "for a partition that persistently fails to list -- set false to keep the run going until "
+        + "the underlying listing problem is fixed. Turning it off also stops exhaustive mode "
+        + "producing a dangling_files report, since that report is what this listing feeds.")
+    public boolean validateDuplicateBaseFiles = true;
+
+    @Parameter(names = {"--validate-fs-mdt-diff"}, arity = 1, description = "v2 validator only. "
+        + "Compare the latest file slices the metadata table reports against the ones on storage, "
+        + "which is the dimension that finds a file the metadata table names and storage no longer "
+        + "has, and the reverse. This is the expensive half of the run -- it pins a metadata "
+        + "snapshot, stands up a timeline server and runs the diff DAG across every partition -- so "
+        + "set false to turn the dimension off without giving up duplicate base file detection. "
+        + "Turning it off stops exhaustive mode producing the fs_mdt_diff/ documents entirely, and "
+        + "no FS-MDT verdict is reached for any file: the run then validates duplicate base files "
+        + "alone, which is a complete run of that dimension and not a partial run of both. Note "
+        + "that an absent fs_mdt_diff/ says nobody looked, which is a different fact from a run "
+        + "that looked and found nothing. Distinct from --validate-latest-file-slices, which the "
+        + "v1 validator reads and the v2 validator does not.")
+    public boolean validateFsMdtDiff = true;
+
+    @Parameter(names = {"--fs-view-storage-type"}, description = "Storage type for the driver-hosted "
+        + "file system view used by the v2 validator: SPILLABLE_DISK (on-heap up to the configured fraction "
+        + "of spark execution memory, then disk) or EMBEDDED_KV_STORE (RocksDB).")
+    public String fsViewStorageType = "SPILLABLE_DISK";
+
+    @Parameter(names = {"--fs-view-memory-fraction"}, description = "Fraction of the driver's "
+        + "Spark execution memory pool granted to the v2 validator's spillable view before it spills to disk.")
+    public double fsViewMemoryFraction = 0.5;
+
+    @Parameter(names = {"--partitions-per-task"}, description = "How many partitions the "
+        + "v2 validator packs into one Spark task. Each task builds one remote view and filters the "
+        + "timeline once, so batching amortises that over the partitions it validates.")
+    public int partitionsPerTask = 10;
+
+    @Parameter(names = {"--partition-threads"}, description = "Threads per task used to "
+        + "validate partitions concurrently. The per-partition work is a storage listing, so this "
+        + "parallelises I/O rather than CPU.")
+    public int partitionThreads = 10;
+
+    @Parameter(names = {"--max-files-per-round"}, description = "Cap on the number of "
+        + "files (as reported by the metadata table) validated concurrently within a task. Partitions "
+        + "are submitted in rounds that stay under this cap, bounding peak executor memory when "
+        + "partitions are large.")
+    public int maxFilesPerRound = 1000;
+
+    @Parameter(names = {"--fs-view-base-store-path"}, description = "Local directory on the driver "
+        + "for the v2 validator's spill / RocksDB files.")
+    public String fsViewBaseStorePath = "/tmp/hoodie_mdt_validator_v2_view";
 
     @Parameter(names = {"--view-storage-type-fs-listing"},
         description = "View storage type to use for File System based listing. "
@@ -519,7 +688,47 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
+  /**
+   * Where a v2 run stops to let a caller act on the table, or {@link Option#empty()} for none.
+   *
+   * <p>Only reachable through {@link #setV2PhaseObserver}, and only used on the v2 path. It lives
+   * here rather than being handed to a directly-constructed
+   * {@link HoodieMetadataTableValidatorV2} so that a test observing the phases still goes through
+   * the same entry point every other test uses: the props resolution and the meta-client injection
+   * below are part of what a run is, and a suite that bypassed them would be testing a different
+   * assembly of the validator from the one production runs.
+   */
+  private Option<HoodieMetadataTableValidatorV2.PhaseObserver> v2PhaseObserver = Option.empty();
+
+  /**
+   * Installs the observer a v2 run stops at each of its three phase seams.
+   *
+   * @param observer never null; see {@link HoodieMetadataTableValidatorV2.PhaseObserver}
+   */
+  @VisibleForTesting
+  public void setV2PhaseObserver(HoodieMetadataTableValidatorV2.PhaseObserver observer) {
+    ValidationUtils.checkArgument(observer != null, "the phase observer must not be null");
+    this.v2PhaseObserver = Option.of(observer);
+  }
+
   public boolean run() {
+    if (cfg.useValidatorV2) {
+      log.info("Delegating to HoodieMetadataTableValidatorV2 (two dimensions: the FS-MDT file "
+          + "slice comparison, switched with --validate-fs-mdt-diff, and duplicate base file "
+          + "detection, switched with --validate-duplicate-base-files; both on by default)");
+      // Hand over the resolved --props/--hoodie-conf overrides and the meta client whose active
+      // timeline is already loaded: constructing v2 with (jsc, cfg) alone made it rebuild both, so
+      // an injected meta client was ignored and the timeline was read twice. metaClientOpt may be
+      // empty (missing data table) and v2 treats that as a skip, exactly as the v1 path does.
+      HoodieMetadataTableValidatorV2 v2 =
+          new HoodieMetadataTableValidatorV2(jsc, cfg, props, metaClientOpt);
+      if (v2PhaseObserver.isPresent()) {
+        v2.setPhaseObserver(v2PhaseObserver.get());
+      }
+      boolean result = v2.run();
+      throwables.addAll(v2.getThrowables());
+      return result;
+    }
     if (!metaClientOpt.isPresent()) {
       log.warn("Data table is not available to read for now, skip current validation for: {}", cfg.basePath);
       return true;
@@ -580,7 +789,13 @@ public class HoodieMetadataTableValidator implements Serializable {
       return true;
     }
     HoodieTableMetaClient metaClient = this.metaClientOpt.get();
-    metaClient.reloadActiveTimeline();
+    if (skipTimelineReload) {
+      // Injected meta client was built with the timeline loaded moments ago; the flag is
+      // one-shot so continuous mode still reloads.
+      skipTimelineReload = false;
+    } else {
+      metaClient.reloadActiveTimeline();
+    }
     StoragePath basePath = metaClient.getBasePath();
     Set<String> baseFilesForCleaning = Collections.emptySet();
 
@@ -590,27 +805,7 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
 
     if (cfg.skipDataFilesForCleaning) {
-      HoodieTimeline inflightCleaningTimeline = metaClient.getActiveTimeline().getCleanerTimeline().filterInflights();
-
-      baseFilesForCleaning = inflightCleaningTimeline.getInstantsAsStream().flatMap(instant -> {
-        try {
-          // convert inflight instant to requested and get clean plan
-          instant = metaClient.createNewInstant(HoodieInstant.State.REQUESTED, instant.getAction(),
-              instant.requestedTime());
-          HoodieCleanerPlan cleanerPlan = CleanerUtils.getCleanerPlan(metaClient, instant);
-
-          return cleanerPlan.getFilePathsToBeDeletedPerPartition().values().stream().flatMap(cleanerFileInfoList ->
-            cleanerFileInfoList.stream().map(fileInfo -> new Path(fileInfo.getFilePath()).getName())
-          );
-
-        } catch (IOException e) {
-          throw new HoodieIOException("Error reading cleaner metadata for " + instant);
-        }
-        // only take care of base files here.
-      }).filter(path -> {
-        String fileExtension = FSUtils.getFileExtension(path);
-        return HoodieFileFormat.BASE_FILE_EXTENSIONS.contains(fileExtension);
-      }).collect(Collectors.toSet());
+      baseFilesForCleaning = getBaseFilesForCleaning(metaClient);
     }
 
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
@@ -715,30 +910,8 @@ public class HoodieMetadataTableValidator implements Serializable {
    * If not we will log.warn and skip current validation.
    */
   private boolean checkMetadataTableIsAvailable() {
-    try {
-      HoodieTableMetaClient mdtMetaClient = HoodieTableMetaClient.builder()
-          .setConf(HadoopFSUtils.getStorageConfWithCopy(jsc.hadoopConfiguration()))
-          .setBasePath(new Path(cfg.basePath, HoodieTableMetaClient.METADATA_TABLE_FOLDER_PATH).toString())
-          .setLoadActiveTimelineOnLoad(true)
-          .build();
-      int finishedInstants = mdtMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants();
-      if (finishedInstants == 0) {
-        if (metaClientOpt.get().getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
-          log.info("There is no completed commit in both metadata table and corresponding data table: {}", taskLabels);
-          return false;
-        } else {
-          throw new HoodieValidationException("There is no completed instant for metadata table: " + cfg.basePath);
-        }
-      }
-      return true;
-    } catch (TableNotFoundException tbe) {
-      // Suppress the TableNotFound exception if Metadata table is not available to read for now
-      log.warn("Metadata table is not found for table: {}. Skip current validation.", cfg.basePath);
-      return false;
-    } catch (Exception ex) {
-      log.warn("Metadata table is not available to read for now for table: {}, ", cfg.basePath, ex);
-      return false;
-    }
+    return HoodieMetadataValidationUtils.checkMetadataTableIsAvailable(
+        jsc, cfg.basePath, metaClientOpt.get(), taskLabels);
   }
 
   /**
@@ -952,7 +1125,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     validateFileSlices(
         allFileSlicesFromMeta, allFileSlicesFromFS, partitionPath,
-        fsBasedContext.getMetaClient(), "all file groups");
+        fsBasedContext.getMetaClient(), "all file groups", cfg.basePath, cfg.logDetailMaxLength);
   }
 
   /**
@@ -999,18 +1172,7 @@ public class HoodieMetadataTableValidator implements Serializable {
 
     validateFileSlices(
         latestFileSlicesFromMetadataTable, latestFileSlicesFromFS, partitionPath,
-        fsBasedContext.getMetaClient(), "latest file slices");
-  }
-
-  private static List<FileSlice> filterFileSliceBasedOnInflightCleaning(List<FileSlice> sortedLatestFileSliceList, Set<String> baseDataFilesForCleaning) {
-    return sortedLatestFileSliceList.stream()
-        .filter(fileSlice -> {
-          if (!fileSlice.getBaseFile().isPresent()) {
-            return true;
-          } else {
-            return !baseDataFilesForCleaning.contains(fileSlice.getBaseFile().get().getFileName());
-          }
-        }).collect(Collectors.toList());
+        fsBasedContext.getMetaClient(), "latest file slices", cfg.basePath, cfg.logDetailMaxLength);
   }
 
   private List<HoodieBaseFile> filterBaseFileBasedOnInflightCleaning(List<HoodieBaseFile> sortedBaseFileList, Set<String> baseDataFilesForCleaning) {
@@ -1034,7 +1196,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     HoodieSparkEngineContext engineContext = new HoodieSparkEngineContext(jsc);
     HoodieData<HoodieMetadataColumnStats> partitionStatsUsingColStats = getPartitionStatsUsingColStats(metadataTableBasedContext,
         baseDataFilesForCleaning, allPartitions, engineContext);
-
 
     PartitionStatsIndexSupport partitionStatsIndexSupport = new PartitionStatsIndexSupport(engineContext.getSqlContext().sparkSession(),
         HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(metadataTableBasedContext.getSchema()),
@@ -1506,273 +1667,6 @@ public class HoodieMetadataTableValidator implements Serializable {
     }
   }
 
-  void validateFileSlices(
-      List<FileSlice> fileSliceListFromMetadataTable, List<FileSlice> fileSliceListFromFS,
-      String partitionPath, HoodieTableMetaClient metaClient, String label) {
-    boolean mismatch = false;
-    String errorDetails = "";
-    if (fileSliceListFromMetadataTable.size() != fileSliceListFromFS.size()) {
-      errorDetails = String.format(
-          "Number of file slices based on the file system does not match that based on the "
-              + "metadata table. File system-based listing: %d & MDT-based listing: %d. %s",
-          fileSliceListFromFS.size(),
-          fileSliceListFromMetadataTable.size(),
-          computeDiffSummary(fileSliceListFromMetadataTable, fileSliceListFromFS, metaClient, cfg.logDetailMaxLength));
-      mismatch = true;
-    } else if (!fileSliceListFromMetadataTable.equals(fileSliceListFromFS)) {
-      // In-memory cache for the set of committed files of commits of interest
-      Map<String, Set<String>> committedFilesMap = new HashMap<>();
-      for (int i = 0; i < fileSliceListFromMetadataTable.size(); i++) {
-        FileSlice fileSlice1 = fileSliceListFromMetadataTable.get(i);
-        FileSlice fileSlice2 = fileSliceListFromFS.get(i);
-        if (!Objects.equals(fileSlice1.getFileGroupId(), fileSlice2.getFileGroupId())
-            || !Objects.equals(fileSlice1.getBaseInstantTime(), fileSlice2.getBaseInstantTime())) {
-          errorDetails = String.format("File group ID (missing a file group in MDT) "
-                  + "or base instant time mismatches. File slice from file system-based listing: %s; "
-                  + "File slice from MDT-based listing: %s.",
-              fileSlice2, fileSlice1);
-          mismatch = true;
-          break;
-        }
-        if (!assertBaseFilesEquality(fileSlice1, fileSlice2)) {
-          errorDetails = String.format("Base files mismatch. "
-                  + "File slice from file system-based listing: %s; "
-                  + "File slice from MDT-based listing: %s.",
-              fileSlice2, fileSlice1);
-          mismatch = true;
-          break;
-        }
-        // test for log files equality
-        Pair<Boolean, String> matchingResult = areFileSliceCommittedLogFilesMatching(
-            fileSlice1, fileSlice2, metaClient, committedFilesMap);
-        if (Boolean.FALSE.equals(matchingResult.getLeft())) {
-          errorDetails = "Log files mismatch (first file slice based on MDT, "
-              + "second file slice based on the file system). "
-              + matchingResult.getRight();
-          mismatch = true;
-          break;
-        } else {
-          log.info("There are uncommitted log files in the latest file slices but the committed log files match: {} {}", fileSlice1, fileSlice2);
-        }
-      }
-    }
-
-    if (mismatch) {
-      String message = String.format("Validation of %s for partition %s failed for table: %s. %s",
-          label, partitionPath, cfg.basePath, errorDetails);
-      log.error(message);
-      throw new HoodieValidationException(message);
-    } else {
-      log.info("Validation of {} succeeded for partition {} for table: {}", label, partitionPath, cfg.basePath);
-    }
-  }
-
-  static String computeDiffSummary(List<FileSlice> fileSliceListFromMetadataTable, List<FileSlice> fileSliceListFromFS,
-                                    HoodieTableMetaClient metaClient, int logDetailMaxLength) {
-    Set<HoodieFileGroupId> fileGroupIdsFromFS = fileSliceListFromFS.stream()
-        .map(FileSlice::getFileGroupId).collect(Collectors.toSet());
-    Set<HoodieFileGroupId> fileGroupIdsFromMetadataTable = fileSliceListFromMetadataTable.stream()
-        .map(FileSlice::getFileGroupId).collect(Collectors.toSet());
-    List<FileSlice> fileSlicesInFileSystemOnly = fileSliceListFromFS.stream()
-        .filter(fileSlice -> !fileGroupIdsFromMetadataTable.contains(fileSlice.getFileGroupId()))
-        .collect(Collectors.toList());
-    List<FileSlice> fileSlicesInMetadataTableOnly = fileSliceListFromMetadataTable.stream()
-        .filter(fileSlice -> !fileGroupIdsFromFS.contains(fileSlice.getFileGroupId()))
-        .collect(Collectors.toList());
-    if (!fileSlicesInFileSystemOnly.isEmpty()) {
-      HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline();
-      Set<String> activeInstantTimes = activeTimeline.getInstantsAsStream().map(HoodieInstant::requestedTime).collect(Collectors.toSet());
-      // find if the files in the file system belong to missing commits
-      Set<String> nonActiveInstantTimes = fileSlicesInFileSystemOnly.stream().map(FileSlice::getBaseInstantTime).filter(instant -> !activeInstantTimes.contains(instant)).collect(Collectors.toSet());
-      if (!nonActiveInstantTimes.isEmpty()) {
-        String maxInstant = nonActiveInstantTimes.stream().max(Comparator.naturalOrder()).orElse(null);
-        String minInstant = nonActiveInstantTimes.stream().min(Comparator.naturalOrder()).orElse(null);
-        Set<String> archivedInstants = metaClient.getArchivedTimeline()
-            .findInstantsInRange(minInstant, maxInstant)
-            .getInstantsAsStream()
-            .map(HoodieInstant::requestedTime)
-            .collect(Collectors.toSet());
-        // truncate start instant since range is not
-        Set<String> missingCommits = nonActiveInstantTimes.stream().filter(instant -> !archivedInstants.contains(instant)).collect(Collectors.toSet());
-        if (!missingCommits.isEmpty()) {
-          log.warn("File slices in file system belong to missing commits: {}", String.join(",", missingCommits));
-          activeTimeline.getRollbackTimeline().getInstantsAsStream().forEach(instant -> {
-            HoodieInstant requestedInstant = metaClient.getInstantGenerator().getRollbackRequestedInstant(instant);
-            try {
-              HoodieRollbackPlan rollbackPlan = activeTimeline.readInstantContent(requestedInstant, HoodieRollbackPlan.class);
-              if (missingCommits.contains(rollbackPlan.getInstantToRollback().getCommitTime())) {
-                log.warn("Missing commit ({}) is part of rollback plan: {}", rollbackPlan.getInstantToRollback().getCommitTime(), rollbackPlan);
-              }
-            } catch (IOException ex) {
-              log.warn("Failed to deserialize rollback plan for instant: {}", requestedInstant, ex);
-            }
-          });
-        }
-      }
-    }
-    return "File Slices in file system only: ["
-        + toStringWithThreshold(fileSlicesInFileSystemOnly, logDetailMaxLength)
-        + "]; File Slices in metadata table only: ["
-        + toStringWithThreshold(fileSlicesInMetadataTableOnly, logDetailMaxLength)
-        + "]";
-  }
-
-  private boolean assertBaseFilesEquality(FileSlice fileSlice1, FileSlice fileSlice2) {
-    if (fileSlice1.getBaseFile().isPresent() && fileSlice2.getBaseFile().isPresent()) {
-      HoodieBaseFile baseFile1 = fileSlice1.getBaseFile().get();
-      HoodieBaseFile baseFile2 = fileSlice2.getBaseFile().get();
-      return baseFile1.getFileName().equals(baseFile2.getFileName()) && baseFile1.getFileId().equals(baseFile2.getFileId())
-          && baseFile1.getFileSize() == baseFile2.getFileSize();
-    } else {
-      return fileSlice1.getBaseFile().isPresent() == fileSlice2.getBaseFile().isPresent();
-    }
-  }
-
-  /**
-   * Compares committed log files from two file slices.
-   *
-   * @param fs1               File slice 1
-   * @param fs2               File slice 2
-   * @param metaClient        {@link HoodieTableMetaClient} instance
-   * @param committedFilesMap In-memory map for caching committed files of commits
-   * @return {@code true} if matching; {@code false} and the error message otherwise.
-   */
-  private Pair<Boolean, String> areFileSliceCommittedLogFilesMatching(
-      FileSlice fs1,
-      FileSlice fs2,
-      HoodieTableMetaClient metaClient,
-      Map<String, Set<String>> committedFilesMap) {
-    Set<String> fs1LogPathSet =
-        fs1.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toSet());
-    Set<String> fs2LogPathSet =
-        fs2.getLogFiles().map(f -> f.getPath().toString()).collect(Collectors.toSet());
-    Set<String> commonLogPathSet = new HashSet<>(fs1LogPathSet);
-    commonLogPathSet.retainAll(fs2LogPathSet);
-    // Only keep log file paths that differ
-    fs1LogPathSet.removeAll(commonLogPathSet);
-    fs2LogPathSet.removeAll(commonLogPathSet);
-    // Check if the remaining log files are uncommitted.  If there is any log file
-    // that is committed, the committed log files of two file slices are different
-    HoodieStorage storage = metaClient.getStorage();
-
-    Pair<Boolean, String> checkResult =
-        hasCommittedLogFiles(storage, fs1LogPathSet, metaClient, committedFilesMap);
-    if (Boolean.TRUE.equals(checkResult.getLeft())) {
-      return Pair.of(false, String.format(
-          "The first file slice has committed log files that cause mismatching: %s"
-              + "; Different log files are: %s. Details: %s.",
-          fs1, fs1LogPathSet, checkResult.getRight()));
-    }
-    checkResult =
-        hasCommittedLogFiles(storage, fs2LogPathSet, metaClient, committedFilesMap);
-    if (Boolean.TRUE.equals(checkResult.getLeft())) {
-      return Pair.of(false, String.format(
-          "The second file slice has committed log files that cause mismatching: %s"
-              + "; Different log files are: %s.  Details: %s.",
-          fs2, fs2LogPathSet, checkResult.getRight()));
-    }
-    return Pair.of(true, "");
-  }
-
-  Pair<Boolean, String> hasCommittedLogFiles(
-      HoodieStorage storage,
-      Set<String> logFilePathSet,
-      HoodieTableMetaClient metaClient,
-      Map<String, Set<String>> committedFilesMap) {
-    if (logFilePathSet.isEmpty()) {
-      return Pair.of(false, "");
-    }
-
-    String basePath = metaClient.getBasePath().toString();
-    HoodieTimeline commitsTimeline = metaClient.getCommitsTimeline();
-    HoodieTimeline completedInstantsTimeline = commitsTimeline.filterCompletedInstants();
-    HoodieTimeline inflightInstantsTimeline = commitsTimeline.filterInflights();
-
-    for (String logFilePathStr : logFilePathSet) {
-      HoodieLogFormat.Reader reader = null;
-      try {
-        HoodieSchema readerSchema = TableSchemaResolver.readSchemaFromLogFile(metaClient, new StoragePath(logFilePathStr));
-        if (readerSchema == null) {
-          log.warn("Cannot read schema from log file {}. Skip the check as it's likely being written by an inflight instant.", logFilePathStr);
-          continue;
-        }
-        reader =
-            HoodieLogFormat.newReader(metaClient, new HoodieLogFile(logFilePathStr), readerSchema, false);
-        // read the avro blocks
-        if (reader.hasNext()) {
-          HoodieLogBlock block = reader.next();
-          final String instantTime = block.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME);
-          if (completedInstantsTimeline.containsInstant(instantTime)) {
-            // The instant is completed, in active timeline
-            // Checking commit metadata only as log files can only be written by COMMIT or DELTA_COMMIT
-            if (!committedFilesMap.containsKey(instantTime)) {
-              HoodieInstant instant = completedInstantsTimeline.filter(i -> i.requestedTime().equals(instantTime))
-                  .firstInstant().get();
-              HoodieCommitMetadata commitMetadata =
-                  completedInstantsTimeline.readCommitMetadata(instant);
-              committedFilesMap.put(
-                  instantTime,
-                  commitMetadata.getWriteStats().stream()
-                      .map(HoodieWriteStat::getPath).collect(Collectors.toSet())
-              );
-            }
-
-            // Here we check if the commit metadata contains the log file.
-            // Note that, a log file may be written by a successful write transaction
-            // leading to a delta commit, but such a log file can be uncommitted and
-            // not be part of any snapshot, due to Spark task retries for example.
-            // In such a case, the log file can stay in the file system, but the metadata
-            // table does not contain the log file for file listing, which is an expected
-            // behavior.
-            String relativeLogFilePathStr = getRelativePath(basePath, logFilePathStr);
-            if (committedFilesMap.get(instantTime).contains(relativeLogFilePathStr)) {
-              return Pair.of(true, String.format(
-                  "Log file is committed in an instant in active timeline: instantTime=%s %s",
-                  instantTime, logFilePathStr));
-            } else {
-              log.warn("Log file is uncommitted in a completed instant, likely due to retry: instantTime={} {}", instantTime, logFilePathStr);
-            }
-          } else if (completedInstantsTimeline.isBeforeTimelineStarts(instantTime)) {
-            // The instant is in archived timeline
-            return Pair.of(true, String.format(
-                "Log file is committed in an instant in archived timeline: instantTime=%s %s",
-                instantTime, logFilePathStr));
-          } else if (inflightInstantsTimeline.containsInstant(instantTime)) {
-            // The instant is inflight in active timeline
-            // hit an uncommitted block possibly from a failed write
-            log.warn("Log file is uncommitted because of an inflight instant: instantTime={} {}", instantTime, logFilePathStr);
-          } else {
-            // The instant is after the start of the active timeline,
-            // but it cannot be found in the active timeline
-            log.warn("Log file is uncommitted because the instant is after the start of the active timeline but absent or in requested in the active timeline: instantTime={} {}",
-                instantTime, logFilePathStr);
-          }
-        } else {
-          log.warn("There is no log block in {}", logFilePathStr);
-        }
-      } catch (IOException e) {
-        log.warn("Cannot read log file {}. Skip the check as it's likely being written by an inflight instant.",
-            logFilePathStr, e);
-      } finally {
-        FileIOUtils.closeQuietly(reader);
-      }
-    }
-    return Pair.of(false, "");
-  }
-
-  private String getRelativePath(String basePath, String absoluteFilePath) {
-    String basePathStr = new StoragePath(basePath).getPathWithoutSchemeAndAuthority().toString();
-    String absoluteFilePathStr = new StoragePath(absoluteFilePath).getPathWithoutSchemeAndAuthority().toString();
-
-    if (!absoluteFilePathStr.startsWith(basePathStr)) {
-      throw new IllegalArgumentException("File path does not belong to the base path! basePath="
-          + basePathStr + " absoluteFilePathStr=" + absoluteFilePathStr);
-    }
-
-    String relativePathStr = absoluteFilePathStr.substring(basePathStr.length());
-    return relativePathStr.startsWith("/") ? relativePathStr.substring(1) : relativePathStr;
-  }
-
   public class AsyncMetadataTableValidateService extends HoodieAsyncService {
     private final transient ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -1800,15 +1694,6 @@ public class HoodieMetadataTableValidator implements Serializable {
           }
         }
       }, executor), executor);
-    }
-  }
-
-  public static class FileSliceComparator implements Comparator<FileSlice>, Serializable {
-
-    @Override
-    public int compare(FileSlice o1, FileSlice o2) {
-      return (o1.getPartitionPath() + o1.getFileId() + o1.getBaseInstantTime())
-          .compareTo(o2.getPartitionPath() + o2.getFileId() + o2.getBaseInstantTime());
     }
   }
 
