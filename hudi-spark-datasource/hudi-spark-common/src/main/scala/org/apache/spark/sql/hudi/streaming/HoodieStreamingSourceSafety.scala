@@ -39,7 +39,7 @@ private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSuppor
 
   // Spark re-plans the last committed batch on restart and discards it. Delay only safety
   // rejections; healthy scans must remain visible to column pruning and predicate pushdown.
-  def deferRejection(sqlContext: SQLContext, schema: StructType)(batch: => DataFrame): DataFrame = {
+  def deferRejection(sqlContext: SQLContext, schema: => StructType)(batch: => DataFrame): DataFrame = {
     try {
       batch
     } catch {

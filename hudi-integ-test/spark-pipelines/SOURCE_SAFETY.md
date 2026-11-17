@@ -17,6 +17,15 @@ limitations under the License.
 
 # Hudi streaming source recovery
 
+The streaming source supports insert/upsert/delete plus compaction and clustering.
+`INSERT OVERWRITE` (table or partition), `delete_partition` writes and partition
+TTL on an upstream table require recovery for downstream consumers and fail by
+default. This includes TTL run inline with `hoodie.partition.ttl.inline`, which
+writes `DELETE_PARTITION` replace commits. `READ_LATEST` drops the overwrite's
+new rows along with the unread range; `READ_UPTO_LATEST_COMMIT` replays the whole
+table, including unaffected partitions. Latest-state reads do not propagate hard
+deletes to downstream tables.
+
 `hoodie.datasource.read.streaming.recovery.strategy` defaults to `FAIL` for
 latest-state structured-streaming readers, including SDP. It replaces the
 unreleased boolean guard. An unreadable saved offset (archived or cleaned
@@ -77,6 +86,12 @@ at that batch's last included write. If that snapshot cannot be reconstructed
 ordering cannot be represented by the requested-time snapshot), rebuild tables
 and checkpoints together. Concurrent destructive operations must still be
 coordinated: validation and execution are not atomic.
+
+If an overwrite completes after a restarted uncommitted batch's recorded end,
+`READ_UPTO_LATEST_COMMIT` can replay two full snapshots: the pre-reset snapshot
+for that batch (if reconstructible), then the post-reset snapshot when the next
+batch includes the replace commit. Append targets can therefore receive the
+whole table twice.
 
 Retain sufficient active history for the slowest consumer with
 `hoodie.keep.min.commits` / `hoodie.keep.max.commits`. An archived checkpoint

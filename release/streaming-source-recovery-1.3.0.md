@@ -17,6 +17,15 @@ limitations under the License.
 
 # Structured-streaming source recovery: 1.3.0 migration note
 
+The streaming source supports insert/upsert/delete plus compaction and clustering.
+`INSERT OVERWRITE` (table or partition), `delete_partition` writes and partition
+TTL on an upstream table require recovery for downstream consumers and fail by
+default. This includes TTL run inline with `hoodie.partition.ttl.inline`, which
+writes `DELETE_PARTITION` replace commits. `READ_LATEST` drops the overwrite's
+new rows along with the unread range; `READ_UPTO_LATEST_COMMIT` replays the whole
+table, including unaffected partitions. Latest-state reads do not propagate hard
+deletes to downstream tables.
+
 Latest-state Hudi structured-streaming readers now default to **failing** when a
 saved offset cannot be read safely because history was archived/cleaned or the
 upstream table was reset/recreated. This affects plain `readStream` users as well

@@ -19,7 +19,7 @@ package org.apache.hudi.functional
 
 import org.apache.hudi.{DataSourceReadOptions, HoodieSparkUtils, SparkAdapterSupport}
 import org.apache.hudi.DataSourceReadOptions.{START_OFFSET, STREAMING_READ_TABLE_VERSION}
-import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, RECORDKEY_FIELD, TABLE_TYPE}
+import org.apache.hudi.DataSourceWriteOptions.{ORDERING_FIELDS, PARTITIONPATH_FIELD, RECORDKEY_FIELD, TABLE_TYPE}
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.fs.FSUtils
 import org.apache.hudi.common.model.HoodieTableType
@@ -653,6 +653,47 @@ class TestStreamingSource extends StreamTest with SparkAdapterSupport {
 
   Seq(COPY_ON_WRITE, MERGE_ON_READ).foreach { tableType =>
     Seq(false, true).foreach { completionTime =>
+      test(s"guarded source requires recovery after partition overwrite: $tableType completionTime=$completionTime") {
+        withTempDir { dir =>
+          val tablePath = s"${dir.getCanonicalPath}/partitioned"
+          val options = commonOptions ++ Map(
+            PARTITIONPATH_FIELD.key -> "name", TBL_NAME.key -> "partitioned",
+            TABLE_TYPE.key -> tableType.name())
+          Seq(("1", "reloaded", "10", "001"), ("2", "retained", "20", "001"))
+            .toDF(columns: _*).write.format("hudi").options(options).mode(SaveMode.Append).save(tablePath)
+          val metaClient = HoodieTableMetaClient.builder()
+            .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()))
+            .setBasePath(tablePath).build()
+          def source(strategy: String = "FAIL"): org.apache.spark.sql.execution.streaming.Source = {
+            val readOptions = options ++ Map("path" -> tablePath,
+              DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> strategy)
+            val checkpoint = s"${dir.getCanonicalPath}/checkpoint"
+            if (completionTime) {
+              new org.apache.spark.sql.hudi.streaming.HoodieStreamSourceV2(spark.sqlContext,
+                metaClient, checkpoint, None, readOptions,
+                org.apache.spark.sql.hudi.streaming.HoodieEarliestOffsetRangeLimit, HoodieTableVersion.current())
+            } else {
+              new org.apache.spark.sql.hudi.streaming.HoodieStreamSourceV1(spark.sqlContext,
+                metaClient, checkpoint, None, readOptions,
+                org.apache.spark.sql.hudi.streaming.HoodieEarliestOffsetRangeLimit, HoodieTableVersion.current())
+            }
+          }
+          val reader = source()
+          val saved = reader.getOffset.get
+          Seq(("3", "reloaded", "30", "002")).toDF(columns: _*).write.format("hudi")
+            .options(options).option("hoodie.datasource.write.operation", "insert_overwrite")
+            .mode(SaveMode.Append).save(tablePath)
+          val end = reader.getOffset.get
+          val error = intercept[org.apache.hudi.exception.HoodieException] {
+            batchIds(reader.getBatch(Some(saved), end))
+          }
+          assert(error.getMessage.contains("logical reset"))
+          // Snapshot recovery includes the untouched partition; skip recovery drops the new row too.
+          assert(batchIds(source("READ_UPTO_LATEST_COMMIT").getBatch(Some(saved), end)) == Seq("2", "3"))
+          assert(batchIds(source("READ_LATEST").getBatch(Some(saved), end)).isEmpty)
+        }
+      }
+
       test(s"guarded source rejects resets and recreation: $tableType completionTime=$completionTime") {
         withTempDir { dir =>
           val tablePath = s"${dir.getCanonicalPath}/guarded"

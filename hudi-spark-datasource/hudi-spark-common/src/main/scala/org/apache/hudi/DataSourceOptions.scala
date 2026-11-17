@@ -136,6 +136,10 @@ object DataSourceReadOptions {
     .withValidValues("FAIL", "READ_UPTO_LATEST_COMMIT", "READ_LATEST")
     .sinceVersion("1.3.0")
     .withDocumentation("Recovery when a saved latest-state streaming offset is archived, cleaned, or reset. "
+      + "The source supports insert/upsert/delete plus compaction and clustering. INSERT OVERWRITE (table or partition), "
+      + "delete_partition writes and partition TTL (including hoodie.partition.ttl.inline) on an upstream table "
+      + "require recovery for downstream consumers. READ_LATEST drops the overwrite's new rows; "
+      + "READ_UPTO_LATEST_COMMIT replays the whole table, including unaffected partitions. "
       + "FAIL stops with an actionable error and requires sinks to propagate execution errors; keep "
       + "hoodie.datasource.write.streaming.ignore.failed.batch=false for Hudi sinks. "
       + "READ_UPTO_LATEST_COMMIT reads a single full snapshot at the "
