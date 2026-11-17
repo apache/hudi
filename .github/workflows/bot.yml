@@ -1879,7 +1879,8 @@ jobs:
       # The only modules with integration-test classes besides hudi-flink, whose ITs run in the
       # flink jobs. The build below builds these and what they depend on (-am) and the IT step
       # verifies just these, instead of building and re-packaging all 66 modules. A module that
-      # adds an IT class must be listed here, or its ITs stop running in CI.
+      # adds an IT class must be listed here, or its ITs stop running in CI;
+      # .github/ci/scripts/test-fork-ci-status.cjs checks the list against the IT classes.
       IT_MODULES: hudi-cli,hudi-integ-test,hudi-aws,hudi-azure,packaging/hudi-gcp-bundle
     steps:
       - uses: actions/checkout@v5

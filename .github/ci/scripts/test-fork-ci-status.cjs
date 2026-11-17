@@ -466,6 +466,34 @@ test('BUNDLE_MODULES lists every bundle of the default reactor', () => {
   assert.deepEqual([...listed].sort(), [...bundles].sort());
 });
 
+test('IT_MODULES lists every module with integration-test classes but hudi-flink', () => {
+  const root = path.join(__dirname, '../../..');
+  // The integration-tests profile of the root pom runs **/IT*.java; hudi-flink's ITs run in the
+  // flink jobs.
+  const modules = new Set();
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.name === 'target' || entry.name === 'node_modules') {
+        continue;
+      }
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(file);
+      } else if (/^IT.*\.java$/.test(entry.name)) {
+        const relative = path.relative(root, file).split(path.sep).join('/');
+        const module = /^(.+?)\/src\/test\//.exec(relative);
+        if (module) {
+          modules.add(module[1]);
+        }
+      }
+    }
+  };
+  walk(root);
+  assert.ok(modules.delete('hudi-flink-datasource/hudi-flink'));
+  const listed = ci.workflow.jobs['integration-tests'].env.IT_MODULES.split(',');
+  assert.deepEqual([...listed].sort(), [...modules].sort());
+});
+
 // [case, context, whether the test jobs run, whether the aggregate job runs, the `changes` job]
 for (const [name, github, tests, aggregate, needs] of [
   ['fork PR to master', forkPr, false, true],
