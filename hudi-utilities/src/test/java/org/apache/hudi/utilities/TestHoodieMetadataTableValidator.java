@@ -344,7 +344,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
 
   /**
    * A stale metadata table missing the newest log file must fail validation under both validators:
-   * they share the latest-file-slice comparison and its log-file tolerance logic.
+   * v1's latest-file-slice comparison sees a log file storage has and the metadata table does not,
+   * and so does v2's FS-MDT comparison.
    */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
