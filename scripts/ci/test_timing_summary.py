@@ -15,10 +15,11 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""Summarise test timings from surefire and scalatest XML reports.
+"""Summarise test timings from surefire, failsafe and scalatest XML reports.
 
-Scans every target/surefire-reports/TEST-*.xml under the given root (both surefire and the
-scalatest-maven-plugin write that layout) and prints, as Markdown, the slowest test classes and
+Scans every target/surefire-reports/TEST-*.xml and target/failsafe-reports/TEST-*.xml under the
+given root (surefire and the scalatest-maven-plugin write the first, failsafe's integration tests
+the second) and prints, as Markdown, the slowest test classes and
 the slowest individual tests. CI appends the output to the job's step summary so the long tail
 of a job is visible on the run page without opening logs; run it locally after `mvn test` to
 see the same for a module.
@@ -31,20 +32,22 @@ import os
 import sys
 import xml.etree.ElementTree as ET
 
+REPORT_DIRS = ("surefire-reports", "failsafe-reports")
+
 
 def scan(root):
     classes = collections.defaultdict(lambda: [0.0, 0, 0])  # time, tests, failed
     tests = []
     files = 0
     for dirpath, dirnames, filenames in os.walk(root):
-        # Reports live at <module>/target/surefire-reports. Prune everything else so the walk
-        # stays cheap on a built checkout, where target/ holds thousands of class directories.
+        # Reports live at <module>/target/{surefire,failsafe}-reports. Prune everything else so the
+        # walk stays cheap on a built checkout, where target/ holds thousands of class directories.
         base = os.path.basename(dirpath)
         if base == "target":
-            dirnames[:] = [d for d in dirnames if d == "surefire-reports"]
-        elif base != "surefire-reports":
+            dirnames[:] = [d for d in dirnames if d in REPORT_DIRS]
+        elif base not in REPORT_DIRS:
             dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules", "src")]
-        if base != "surefire-reports":
+        if base not in REPORT_DIRS:
             continue
         for name in filenames:
             if not (name.startswith("TEST-") and name.endswith(".xml")):
