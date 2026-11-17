@@ -110,6 +110,15 @@ object DataSourceReadOptions {
     .withDocumentation("Start offset to pull data from hoodie streaming source. allow earliest, latest, and " +
       "specified start instant time")
 
+  val STREAMING_MAX_COMMITS_PER_TRIGGER: ConfigProperty[String] = ConfigProperty
+    .key("hoodie.datasource.read.streaming.max.commits.per.trigger")
+    .noDefaultValue()
+    .sinceVersion("1.3.0")
+    .withDocumentation("Maximum completed write commits per streaming micro-batch. Must be a positive integer. "
+      + "Unset means unbounded. AvailableNow pins its end offset and drains the backlog in capped batches; "
+      + "Trigger.Once reads all available data. Clean and rollback actions do not count. Commits sharing a completion "
+      + "time cannot be split. This is not a row/byte limit and does not split snapshot fallback or recovery reads.")
+
   val START_COMMIT: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.begin.instanttime")
     .noDefaultValue()

@@ -35,7 +35,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.util.HadoopInputFile
 import org.apache.spark.sql.{DataFrame, Row, SaveMode}
-import org.apache.spark.sql.streaming.StreamTest
+import org.apache.spark.sql.streaming.{StreamTest, Trigger}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 
 class TestStreamingSource extends StreamTest with SparkAdapterSupport {
@@ -57,6 +57,48 @@ class TestStreamingSource extends StreamTest with SparkAdapterSupport {
       .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
       .set("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
       .set("spark.sql.extensions", "org.apache.spark.sql.hudi.HoodieSparkSessionExtension")
+  }
+
+  for (tableType <- Seq(COPY_ON_WRITE, MERGE_ON_READ); version <- Seq(HoodieTableVersion.SIX, HoodieTableVersion.EIGHT)) {
+    test(s"admission control drains pinned AvailableNow backlog for $tableType version $version") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/source"
+        val checkpoint = s"${dir.getCanonicalPath}/checkpoint"
+        HoodieTableMetaClient.newTableBuilder()
+          .setTableType(tableType).setTableName(getTableName(tablePath)).setTableVersion(version)
+          .setRecordKeyFields("id").setOrderingFields("ts")
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+        (1 to 5).foreach(i => addData(tablePath, Seq((i.toString, s"a$i", "10", "000")), tableVersion = version))
+        val batches = scala.collection.mutable.ArrayBuffer.empty[Seq[String]]
+        val input = spark.readStream.format("hudi")
+          .option(STREAMING_READ_TABLE_VERSION.key, version.versionCode().toString)
+          .option(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key, "2")
+          .load(tablePath).select("id")
+        def run(addDuringRun: Boolean): Unit = {
+          val query = input.writeStream.option("checkpointLocation", checkpoint)
+            .foreachBatch { (batch: DataFrame, _: Long) =>
+              batches += batch.collect().map(_.getString(0)).sorted.toSeq
+              if (addDuringRun && batches.size == 1) {
+                addData(tablePath, Seq(("6", "late", "10", "000")), tableVersion = version)
+              }
+              ()
+            }.trigger(Trigger.AvailableNow()).start()
+          try {
+            assertTrue(query.awaitTermination(60000))
+          } finally {
+            query.stop()
+          }
+        }
+        run(addDuringRun = true)
+        assertEquals(Seq(Seq("1", "2"), Seq("3", "4"), Seq("5")), batches.toSeq)
+        batches.clear()
+        run(addDuringRun = false)
+        assertEquals(Seq(Seq("6")), batches.toSeq, "Restart must resume and consume only the post-pin commit")
+        batches.clear()
+        run(addDuringRun = false)
+        assertTrue(batches.isEmpty, "Quiescent restart replayed data")
+      }
+    }
   }
 
   test("test cow stream source") {
