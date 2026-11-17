@@ -410,8 +410,8 @@ public class TestHoodieMetadataTableValidator extends HoodieSparkClientTestBase 
    *
    * <p>Only the latest-file-slice half of {@code testAdditionalFilesInMetadata} is exercised
    * against both: the rest of that test drives --validate-all-file-groups and
-   * --validate-last-n-file-slices, which v2 does not implement and skips with a warning, so
-   * running it through v2 would assert nothing.
+   * --validate-last-n-file-slices, which v2 does not implement and rejects in its config
+   * validation.
    */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
