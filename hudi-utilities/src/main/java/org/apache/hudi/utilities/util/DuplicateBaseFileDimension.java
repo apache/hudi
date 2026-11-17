@@ -332,7 +332,7 @@ public final class DuplicateBaseFileDimension {
       return baseline.recomputed() ? recomputedResult(ctx, baseline) : phaseTwo;
     } catch (Exception e) {
       // Infrastructure must be classified before a recompute may discard the failure: a lost
-      // executor both causes recomputes and must page as infrastructure. Do not replace this with
+      // executor both causes recomputes and must surface as an infrastructure failure. Do not replace this with
       // baseline.recomputed() alone.
       if (baseline != null && ValidationFailures.discardForRecompute(e, baseline.recomputed())) {
         // A finding raised while phase 1 recomputed may rest on storage listed after T_aftD, so it
@@ -628,7 +628,7 @@ public final class DuplicateBaseFileDimension {
    * One partition's duplicate-base-file listing.
    *
    * <p>Must not catch: a listing failure is a {@link HoodieIOException} (a check that did not run),
-   * and catching it here would promote it into a {@link HoodieValidationException} page.
+   * and catching it here would promote it into a {@link HoodieValidationException}.
    */
   private static List<MismatchRecord> detectInOnePartition(
       String partitionPath, Context ctx, AtomicLong taskValidationMs, AtomicLong taskFilesSeen) {
