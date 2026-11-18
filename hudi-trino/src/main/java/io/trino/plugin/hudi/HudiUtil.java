@@ -23,8 +23,6 @@ import io.trino.cache.EvictableCacheBuilder;
 import io.trino.filesystem.FileIterator;
 import io.trino.filesystem.Location;
 import io.trino.filesystem.TrinoFileSystem;
-import io.trino.hive.formats.avro.AvroTypeException;
-import io.trino.hive.formats.avro.NativeLogicalTypesAvroTypeBlockHandler;
 import io.trino.metastore.Column;
 import io.trino.metastore.HivePartition;
 import io.trino.metastore.HiveType;
@@ -36,6 +34,7 @@ import io.trino.plugin.hive.avro.AvroHiveFileUtils;
 import io.trino.plugin.hive.util.HiveTypeTranslator;
 import io.trino.plugin.hudi.storage.HudiTrinoStorage;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.SchemaTableName;
@@ -43,6 +42,7 @@ import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.type.Type;
+import io.trino.spi.type.TypeOperators;
 import io.trino.spi.type.TypeManager;
 import io.trino.spi.type.VarcharType;
 import org.apache.avro.Schema;
@@ -127,8 +127,8 @@ public final class HudiUtil
             CollectionUtils.createImmutableList(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD);
 
     private static final Logger log = Logger.get(HudiUtil.class);
-    // Maps Avro schemas (incl. logical types) to Trino types for toColumnHandle. Stateless, so shared.
-    private static final NativeLogicalTypesAvroTypeBlockHandler AVRO_TYPE_HANDLER = new NativeLogicalTypesAvroTypeBlockHandler();
+    // Maps Hudi schemas directly to Trino types for toColumnHandle. Stateless, so shared.
+    private static final TrinoTypeMapper TRINO_TYPE_MAPPER = new TrinoTypeMapper(new TypeOperators());
     private static final Cache<Schema, Map<String, Schema.Field>> SCHEMA_FIELD_CACHE =
             EvictableCacheBuilder.newBuilder()
                     .maximumWeight(10L * 1000L * 1024L) // 10MB
@@ -367,7 +367,7 @@ public final class HudiUtil
     }
 
     /**
-     * Builds a {@link HiveColumnHandle} for a table-schema field, typing it from the field's Avro schema.
+     * Builds a {@link HiveColumnHandle} for a table-schema field, typing it directly from the field's Hudi schema.
      * Used to resolve columns the file-group reader requires for merging but the connector projection does
      * not carry (e.g. {@code _hoodie_commit_time} or a delete-marker column on a narrow query).
      * <p>
@@ -384,11 +384,11 @@ public final class HudiUtil
     {
         Type trinoType;
         try {
-            trinoType = AVRO_TYPE_HANDLER.typeFor(field.schema().toAvroSchema());
+            trinoType = TRINO_TYPE_MAPPER.toTypeSystem(field.schema());
         }
-        catch (AvroTypeException e) {
+        catch (TrinoException e) {
             throw new TrinoException(HUDI_SCHEMA_ERROR,
-                    "Failed to map Avro type of column " + field.name() + " to a Trino type", e);
+                    "Failed to map Hudi type of column " + field.name() + " to a Trino type", e);
         }
         return new HiveColumnHandle(
                 field.name(),
