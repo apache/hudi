@@ -30,6 +30,7 @@ import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_INDEX_WAIT_TIMEO
 import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_MERGER_IMPLS;
 import static io.trino.plugin.hudi.HudiSessionProperties.RECORD_LEVEL_INDEX_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.RESOLVE_COLUMN_NAME_CASING_ENABLED;
+import static io.trino.plugin.hudi.HudiSessionProperties.SCHEMA_COLUMN_TYPES_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.SECONDARY_INDEX_ENABLED;
 import static io.trino.plugin.hudi.HudiSessionProperties.SECONDARY_INDEX_WAIT_TIMEOUT;
 import static io.trino.plugin.hudi.HudiSessionProperties.TABLE_STATISTICS_ENABLED;
@@ -160,5 +161,10 @@ public class SessionBuilder
     public SessionBuilder withResolveColumnNameCasingEnabled(boolean enabled)
     {
         return setCatalogProperty(RESOLVE_COLUMN_NAME_CASING_ENABLED, String.valueOf(enabled));
+    }
+
+    public SessionBuilder withSchemaColumnTypesEnabled(boolean enabled)
+    {
+        return setCatalogProperty(SCHEMA_COLUMN_TYPES_ENABLED, String.valueOf(enabled));
     }
 }
