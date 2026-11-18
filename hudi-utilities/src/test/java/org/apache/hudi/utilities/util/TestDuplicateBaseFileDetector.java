@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -253,5 +254,16 @@ class TestDuplicateBaseFileDetector {
         reportedNames(suspects),
         "the unparseable name contributes nothing and does not derail the rest");
     assertEquals(2, failingCount(suspects));
+  }
+
+  @Test
+  void singleUnderscoreNameDoesNotJoinGeneratedBaseFileSlice() {
+    List<StoragePathInfo> files = new ArrayList<>(ONE_DUPLICATE_PAIR);
+    files.add(file("fg1_1005.parquet", 12L));
+    AtomicLong dropped = new AtomicLong();
+
+    assertEquals(Arrays.asList("fg1_0-1-0_1005.parquet", "fg1_0-2-0_1005.parquet"),
+        reportedNames(DuplicateBaseFileDetector.detectSuspects(files, PARTITION, dropped)));
+    assertEquals(1L, dropped.get());
   }
 }

@@ -53,8 +53,10 @@ import java.io.Serializable;
  *
  * <p>{@link #get()} deserializes once per deserialized instance and caches -- a broadcast value
  * is deserialized once per executor and shared by its tasks, so the cost is one deserialization
- * per executor, same as the raw broadcast had. {@code get()} is synchronized because those tasks
- * share the instance; it is called once per partition, so the lock is uncontended in practice.
+ * per executor, same as the raw broadcast had. The constructor retains only the bytes, so driver
+ * broadcast sizing does not walk the value's transient object graph. {@code get()} is synchronized
+ * because those tasks share the instance; it is called once per partition, so the lock is
+ * uncontended in practice.
  */
 public final class JavaSerializedPayload<T extends Serializable> implements Serializable {
 
@@ -64,7 +66,6 @@ public final class JavaSerializedPayload<T extends Serializable> implements Seri
   private transient T value;
 
   public JavaSerializedPayload(T value) {
-    this.value = value;
     ByteArrayOutputStream buffer = new ByteArrayOutputStream();
     try (ObjectOutputStream out = new ObjectOutputStream(buffer)) {
       out.writeObject(value);

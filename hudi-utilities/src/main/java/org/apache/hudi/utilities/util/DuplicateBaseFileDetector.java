@@ -23,11 +23,15 @@ import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Finds duplicate base files in one partition's raw storage listing.
@@ -57,12 +61,13 @@ import java.util.Map;
  * {@code HoodieDataTableValidator} use &mdash; is unrelated to this class and always was; it is not
  * used here.
  *
- * <p>File names are never parsed by hand here: grouping keys and instants come from
- * {@link FSUtils#isBaseFile} and {@link HoodieBaseFile} &mdash; the same code the rest of Hudi uses
- * to read a file name &mdash; so this class cannot come to disagree with them about what a file is
- * called.
+ * <p>Grouping keys and instants come from {@link HoodieBaseFile}. A path accepted by
+ * {@link FSUtils#isBaseFile} still needs a generated base-file name before it can join a slice:
+ * the parser also accepts single-underscore names that Hudi did not generate.
  */
 public final class DuplicateBaseFileDetector {
+
+  private static final Logger LOG = LoggerFactory.getLogger(DuplicateBaseFileDetector.class);
 
   private DuplicateBaseFileDetector() {
   }
@@ -74,8 +79,19 @@ public final class DuplicateBaseFileDetector {
    */
   public static List<MismatchRecord> detectSuspects(List<StoragePathInfo> partitionFiles,
                                                     String partitionPath) {
+    AtomicLong droppedNames = new AtomicLong();
+    List<MismatchRecord> suspects = detectSuspects(partitionFiles, partitionPath, droppedNames);
+    if (droppedNames.get() > 0) {
+      LOG.warn("Dropped {} non-generated base-file names from duplicate check in partition {}",
+          droppedNames.get(), partitionPath);
+    }
+    return suspects;
+  }
+
+  static List<MismatchRecord> detectSuspects(List<StoragePathInfo> partitionFiles,
+                                             String partitionPath, AtomicLong droppedNames) {
     List<MismatchRecord> suspects = new ArrayList<>();
-    for (List<HoodieBaseFile> duplicateSet : baseFilesBySlice(partitionFiles).values()) {
+    for (List<HoodieBaseFile> duplicateSet : baseFilesBySlice(partitionFiles, droppedNames).values()) {
       if (duplicateSet.size() < 2) {
         BranchBeacon.hit(Branch.DUP_SLICE_HOLDS_ONE_BASE_FILE);
         continue;
@@ -97,7 +113,7 @@ public final class DuplicateBaseFileDetector {
    * count of slices. Insertion ordered, so the grouping does not reorder what the listing returned.
    */
   private static Map<String, List<HoodieBaseFile>> baseFilesBySlice(
-      List<StoragePathInfo> partitionFiles) {
+      List<StoragePathInfo> partitionFiles, AtomicLong droppedNames) {
     Map<String, List<HoodieBaseFile>> baseFilesBySlice = new LinkedHashMap<>();
     for (StoragePathInfo pathInfo : partitionFiles) {
       StoragePath path = pathInfo.getPath();
@@ -105,10 +121,27 @@ public final class DuplicateBaseFileDetector {
         continue;
       }
       HoodieBaseFile baseFile = new HoodieBaseFile(pathInfo);
+      if (!isHudiGeneratedBaseFileName(baseFile.getFileName(), baseFile.getCommitTime())) {
+        droppedNames.incrementAndGet();
+        continue;
+      }
       String key = baseFile.getFileId() + ":" + baseFile.getCommitTime();
       baseFilesBySlice.computeIfAbsent(key, ignored -> new ArrayList<>()).add(baseFile);
     }
     return baseFilesBySlice;
+  }
+
+  /** Keep the generated-name boundary used by the later FS-MDT analyzer on strict lines. */
+  private static boolean isHudiGeneratedBaseFileName(String fileName, String commitTime) {
+    if (commitTime == null || commitTime.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < commitTime.length(); i++) {
+      if (!Character.isDigit(commitTime.charAt(i))) {
+        return false;
+      }
+    }
+    return fileName.indexOf('_') != fileName.lastIndexOf('_');
   }
 
   private static MismatchRecord duplicateBaseFileSuspect(HoodieBaseFile baseFile,
