@@ -322,6 +322,10 @@ public final class FileSliceMismatchAnalyzer {
                                                   DiffTally tally) {
     try {
       String instant = FSUtils.getCommitTime(fileName);
+      if (!isHudiGeneratedBaseFileName(fileName, instant)) {
+        throw new IllegalArgumentException(
+            "base file name " + fileName + " does not name an instant this validator can adjudicate");
+      }
       builder.withWritingInstant(instant, MismatchRecord.InstantSource.FILE_NAME);
       return true;
     } catch (Exception e) {
@@ -333,6 +337,19 @@ public final class FileSliceMismatchAnalyzer {
       builder.withUnresolvedInstant(MismatchRecord.InstantUnresolvedReason.NAME_NOT_PARSEABLE);
       return true;
     }
+  }
+
+  /** Require a write token and a numeric instant, beyond what the permissive parser accepts. */
+  private static boolean isHudiGeneratedBaseFileName(String fileName, String commitTime) {
+    if (commitTime == null || commitTime.isEmpty()) {
+      return false;
+    }
+    for (int i = 0; i < commitTime.length(); i++) {
+      if (!Character.isDigit(commitTime.charAt(i))) {
+        return false;
+      }
+    }
+    return fileName.indexOf('_') != fileName.lastIndexOf('_');
   }
 
   /**
