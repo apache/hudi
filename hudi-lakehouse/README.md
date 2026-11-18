@@ -20,6 +20,10 @@ limitations under the License.
 Packaging for running a Hudi lakehouse: Docker Compose for local use, deployable
 Helm charts for Kubernetes, and a laptop environment to develop against.
 
+For the local Kubernetes package with Spark Connect, Chat UI and MCP, see
+[the minikube installation guide](local-dev/INSTALL.md). Application images can
+be built from this checkout or reused locally; published images are not assumed.
+
 ## Docker Compose (Docker only)
 
 ```bash

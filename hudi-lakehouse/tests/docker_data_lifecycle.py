@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Live acceptance helper: run only against a disposable Docker installation."""
+"""Live acceptance helper: run only against a disposable installation."""
 import argparse
 import signal
 
@@ -24,9 +24,10 @@ def main():
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['modify', 'verify'])
+    parser.add_argument('--connect-uri', default='sc://spark-connect:15002')
     args = parser.parse_args()
     signal.alarm(180)
-    spark = SparkSession.builder.remote('sc://spark-connect:15002').getOrCreate()
+    spark = SparkSession.builder.remote(args.connect_uri).getOrCreate()
 
     def sql(query):
         return spark.sql(query).collect()

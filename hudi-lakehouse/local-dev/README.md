@@ -29,7 +29,14 @@ Kubernetes cluster (minikube) for **development only**:
 | `charts/hudi-spark-connect` (optional) | Spark Connect + Hudi, for direct ADBC SQL clients | enabled with `--spark-connect`; reuses MinIO/HMS |
 | `example/` | copy-me template to submit any Spark job | see its README |
 
-## Quickstart
+## Packaged Spark Connect + Chat UI/MCP installation
+
+For the RFC-117 local minikube experience, see [the installation guide](INSTALL.md).
+Run `./hudi-lakehouse/local-dev/lakehouse.sh up --build` from the repository root;
+subsequent runs can reuse local images. The dedicated profile keeps the original
+Trino development environment separate.
+
+## Developer quickstart (Trino)
 
 ```bash
 # 1. build jars + images (from the repo root)
@@ -51,7 +58,7 @@ kubectl -n hudi-lakehouse exec deploy/hudi-trino -- \
 # or run 2-4 plus assertions in one shot:
 ./hudi-lakehouse/local-dev/scripts/smoke-test.sh
 
-# tear down
+# stop workloads (preserves namespace, Helm releases and PVCs)
 ./hudi-lakehouse/local-dev/scripts/down.sh
 ```
 

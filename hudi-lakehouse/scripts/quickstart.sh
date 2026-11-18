@@ -222,12 +222,12 @@ The local Hudi lakehouse is up. Useful commands:
   kubectl -n hudi-lakehouse port-forward svc/hudi-trino 8080:8080   # Trino UI
   kubectl -n hudi-lakehouse port-forward svc/minio 9001:9001        # MinIO (admin/password)
 
-  # tear everything down
+  # stop workloads (preserves data)
   ./hudi-lakehouse/local-dev/scripts/down.sh
 EOF
 else
   echo "MinIO, Hive Metastore, and Spark Connect are up."
-  echo "Tear down the whole local-dev namespace: ./hudi-lakehouse/local-dev/scripts/down.sh"
+  echo "Stop local-dev workloads (preserves data): ./hudi-lakehouse/local-dev/scripts/down.sh"
 fi
 
 if [[ "$SPARK_CONNECT" == 1 ]]; then

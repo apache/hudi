@@ -24,10 +24,11 @@ import urllib.request
 from fastmcp import Client
 
 
-async def main(verify_sample=False):
-    with urllib.request.urlopen("http://127.0.0.1:8000/ui/", timeout=10) as response:
+async def main(verify_sample=False, gateway_url="http://127.0.0.1:8000"):
+    gateway_url = gateway_url.rstrip("/")
+    with urllib.request.urlopen(gateway_url + "/ui/", timeout=10) as response:
         assert response.status == 200
-    async with Client("http://127.0.0.1:8000/mcp/") as client:
+    async with Client(gateway_url + "/mcp/") as client:
         tools = {tool.name for tool in await client.list_tools()}
         assert {"list_tables", "describe_table", "query_lakehouse"} <= tools, tools
 
@@ -59,6 +60,7 @@ async def main(verify_sample=False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--verify-sample', action='store_true')
+    parser.add_argument('--gateway-url', default='http://127.0.0.1:8000')
     args = parser.parse_args()
     signal.alarm(180)
-    asyncio.run(main(verify_sample=args.verify_sample))
+    asyncio.run(main(verify_sample=args.verify_sample, gateway_url=args.gateway_url))

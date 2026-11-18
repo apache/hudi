@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 {{- $g := .Values.gateway }}
+{{- if not (has .Values.readinessPath (list "/ready" "/health")) }}
+{{- fail "readinessPath must be /ready or /health" }}
+{{- end }}
 {{- if not (has .Values.sqlBackend (list "trino" "spark-connect")) }}
 {{- fail "sqlBackend must be trino or spark-connect" }}
 {{- end }}
@@ -128,7 +131,7 @@ spec:
             failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /ready
+              path: {{ .Values.readinessPath | quote }}
               port: http
             periodSeconds: 10
             # /ready's own dependency checks budget up to ~8s (5s lakehouse ping +

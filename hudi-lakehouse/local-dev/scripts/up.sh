@@ -28,30 +28,57 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
+MANIFESTS="${LOCAL_DEV_MANIFEST_DIR:-$HERE/manifests}"
 NS=hudi-lakehouse
+# Explicit context for the installer; direct developer calls retain current-context behavior.
+kubectl() {
+  if [[ -n "${HUDI_KUBE_CONTEXT:-}" ]]; then
+    command kubectl --context "$HUDI_KUBE_CONTEXT" "$@"
+  else
+    command kubectl "$@"
+  fi
+}
+helm() {
+  if [[ -n "${HUDI_KUBE_CONTEXT:-}" ]]; then
+    command helm --kube-context "$HUDI_KUBE_CONTEXT" "$@"
+  else
+    command helm "$@"
+  fi
+}
 SPARK_OPERATOR_VERSION="${SPARK_OPERATOR_VERSION:-1.7.0}"
 SPARK_CONNECT=0
 WITH_SPARK_OPERATOR=0
+WITH_AGENT_GATEWAY=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --with-agent-gateway) WITH_AGENT_GATEWAY=1; shift ;;
     --spark-connect) SPARK_CONNECT=1; shift ;;
     --with-spark-operator) WITH_SPARK_OPERATOR=1; shift ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
 
+if [[ "$WITH_AGENT_GATEWAY" == 1 && "$SPARK_CONNECT" != 1 ]]; then
+  echo "--with-agent-gateway requires --spark-connect" >&2; exit 2
+fi
+
 echo ">>> Applying local-dev manifests (MinIO, Hive Metastore)"
 # A previous down.sh may have left the namespace terminating; wait it out.
-while [ "$(kubectl get namespace "$NS" -o jsonpath='{.status.phase}' 2>/dev/null)" = "Terminating" ]; do
+for attempt in {1..60}; do
+  [ "$(kubectl get namespace "$NS" -o jsonpath='{.status.phase}' 2>/dev/null)" = "Terminating" ] || break
   echo "waiting for namespace $NS to finish terminating..."; sleep 5
 done
-kubectl apply -f "$HERE/manifests/namespace.yaml"
-kubectl apply -f "$HERE/manifests/minio.yaml"
-kubectl apply -f "$HERE/manifests/hive-metastore.yaml"
+kubectl apply -f "$MANIFESTS/namespace.yaml"
+kubectl apply -f "$MANIFESTS/minio.yaml"
+kubectl -n "$NS" create configmap hive-metastore-bootstrap \
+  --from-file=start-metastore.sh="$ROOT/docker/scripts/start-metastore.sh" \
+  --from-file=hive-site.xml="$ROOT/docker/conf/hive-site.xml" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl apply -f "$MANIFESTS/hive-metastore.yaml"
 # Jobs are immutable: delete any previous run so re-applying converges
 # (the job itself is a no-op when the bucket already exists).
 kubectl -n "$NS" delete job minio-make-bucket --ignore-not-found
-kubectl apply -f "$HERE/manifests/minio-bucket-job.yaml"
+kubectl apply -f "$MANIFESTS/minio-bucket-job.yaml"
 
 if [[ "$SPARK_CONNECT" == 0 || "$WITH_SPARK_OPERATOR" == 1 ]]; then
   echo ">>> Installing Apache Spark Kubernetes Operator (chart ${SPARK_OPERATOR_VERSION})"
@@ -107,11 +134,25 @@ kubectl -n "$NS" wait --for=condition=complete job/minio-make-bucket --timeout=3
 
 if [[ "$SPARK_CONNECT" == 1 ]]; then
   echo ">>> Installing hudi-spark-connect chart with local-dev values"
-  kubectl apply -f "$HERE/manifests/spark-connect-secret.yaml"
+  kubectl apply -f "$MANIFESTS/spark-connect-secret.yaml"
   helm upgrade --install hudi-spark-connect "$ROOT/charts/hudi-spark-connect" \
     --namespace "$NS" \
     -f "$ROOT/charts/hudi-spark-connect/values-local-dev.yaml" \
+    ${SPARK_CONNECT_VALUES:+-f "$SPARK_CONNECT_VALUES"} \
+    ${SPARK_CONNECT_IMAGE_VALUES:+-f "$SPARK_CONNECT_IMAGE_VALUES"} \
     --wait --timeout 10m
+fi
+
+if [[ "$WITH_AGENT_GATEWAY" == 1 ]]; then
+  echo ">>> Installing Agent Gateway with Spark Connect backend"
+  helm upgrade --install hudi-agent-gateway "$ROOT/charts/hudi-agent-gateway" \
+    --namespace "$NS" \
+    -f "$ROOT/charts/hudi-agent-gateway/values-local-dev.yaml" \
+    -f "$ROOT/charts/hudi-agent-gateway/values-spark-connect.yaml" \
+    ${GATEWAY_VALUES:+-f "$GATEWAY_VALUES"} \
+    ${GATEWAY_IMAGE_VALUES:+-f "$GATEWAY_IMAGE_VALUES"} \
+    --set readinessPath=/health --set sqlBackend=spark-connect \
+    --wait --timeout 5m
 fi
 
 echo ">>> local-dev lakehouse is up:"

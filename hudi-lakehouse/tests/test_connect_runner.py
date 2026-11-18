@@ -187,7 +187,7 @@ if name == 'kubectl' and 'exec' in args:
         self.assertEqual(len(helm_calls), 1)
         self.assertEqual(helm_calls[0][:4], ["helm", "upgrade", "--install", "hudi-spark-connect"])
         manifests = [pathlib.Path(call[-1]).name for call in calls if call[:3] == ["kubectl", "apply", "-f"]]
-        self.assertEqual(manifests, ["namespace.yaml", "minio.yaml", "hive-metastore.yaml",
+        self.assertEqual(manifests, ["namespace.yaml", "minio.yaml", "-", "hive-metastore.yaml",
                                      "minio-bucket-job.yaml", "spark-connect-secret.yaml"])
         for workload in ("deploy/minio", "deploy/hive-metastore", "job/minio-make-bucket"):
             wait = next(call for call in calls if workload in call)

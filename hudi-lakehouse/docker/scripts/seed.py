@@ -86,6 +86,7 @@ def main():
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--verify-only', action='store_true')
+    parser.add_argument('--connect-uri', default='sc://spark-connect:15002')
     args = parser.parse_args()
 
     def timed_out(signum, frame):
@@ -95,7 +96,7 @@ def main():
     signal.signal(signal.SIGALRM, timed_out)
     signal.alarm(600)
     try:
-        spark = SparkSession.builder.remote("sc://spark-connect:15002").getOrCreate()
+        spark = SparkSession.builder.remote(args.connect_uri).getOrCreate()
         if args.verify_only:
             verify(spark)
         else:

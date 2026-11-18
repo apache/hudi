@@ -24,6 +24,7 @@ metadata:
     app.kubernetes.io/part-of: hudi-lakehouse
 spec:
   backoffLimit: 6
+  activeDeadlineSeconds: 300
   template:
     metadata:
       labels:
@@ -33,6 +34,7 @@ spec:
       containers:
         - name: mc
           image: cgr.dev/chainguard/minio-client:latest-dev
+          imagePullPolicy: IfNotPresent
           command:
             - /bin/sh
             - -c

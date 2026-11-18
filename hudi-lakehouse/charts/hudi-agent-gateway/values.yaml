@@ -85,6 +85,10 @@ sessions:
   maxSessions: 1000
   maxMessagesPerSession: 40
 
+# /health keeps MCP routable without an LLM; installers must verify SQL separately.
+# Preserve dependency readiness for existing chart users.
+readinessPath: /ready
+
 mcpEnabled: true
 logLevel: INFO
 
