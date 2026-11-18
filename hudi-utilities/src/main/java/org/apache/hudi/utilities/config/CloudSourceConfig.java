@@ -54,8 +54,8 @@ public class CloudSourceConfig extends HoodieConfig {
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.meta.batch.size")
       .markAdvanced()
       .withDocumentation("Number of metadata messages to pull in one API call to the cloud events queue. "
-          + "Multiple API calls with this batch size are sent to cloud events queue, until we consume hoodie.streamer.source.cloud.meta.max.num.messages.per.sync"
-          + "from the queue or hoodie.streamer.source.cloud.meta.max.fetch.time.per.sync.ms amount of time has passed or queue is empty. ");
+          + "Multiple API calls with this batch size are sent to cloud events queue, until we consume hoodie.streamer.source.cloud.meta.max.num.messages.per.sync "
+          + "from the queue or hoodie.streamer.source.cloud.meta.max.fetch.time.per.sync.secs amount of time has passed or queue is empty. ");
 
   public static final ConfigProperty<Integer> META_EVENTS_PER_PARTITION = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.meta.events.per.partition")
@@ -124,7 +124,7 @@ public class CloudSourceConfig extends HoodieConfig {
       .withAlternatives(DELTA_STREAMER_CONFIG_PREFIX + "source.cloud.data.datasource.options")
       .markAdvanced()
       .withDocumentation("A JSON string passed to the Spark DataFrameReader while loading the dataset. "
-          + "Example: `hoodie.streamer.gcp.spark.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}`\n");
+          + "Example: `hoodie.streamer.source.cloud.data.datasource.options={\"header\":\"true\",\"encoding\":\"UTF-8\"}`\n");
 
   public static final ConfigProperty<String> CLOUD_DATAFILE_EXTENSION = ConfigProperty
       .key(STREAMER_CONFIG_PREFIX + "source.cloud.data.select.file.extension")
