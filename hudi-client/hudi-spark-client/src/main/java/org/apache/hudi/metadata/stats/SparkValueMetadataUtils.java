@@ -22,6 +22,7 @@ package org.apache.hudi.metadata.stats;
 import org.apache.hudi.SparkAdapterSupport$;
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
+import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.types.BinaryType;
 import org.apache.spark.sql.types.BooleanType;
 import org.apache.spark.sql.types.ByteType;
@@ -41,7 +42,6 @@ import org.apache.spark.sql.types.TimestampType;
 import org.apache.spark.sql.types.VarcharType;
 
 import java.sql.Date;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -143,11 +143,16 @@ public class SparkValueMetadataUtils {
    * If true, we need to return java.time.Instant and java.time.LocalDate for timestamp and date, otherwise
    * we need to return java.sql.Timestamp and java.sql.Date
    *
+   * <p>Spark reads a java.sql.Timestamp in the hybrid Julian / Gregorian calendar, while an Instant is in the
+   * proleptic Gregorian calendar, so the Instant goes through Spark's own conversion, which keeps its
+   * microseconds. {@code Timestamp.from} would shift instants before 1582-10-15 by days (for ex, 0001-01-01T00:00Z
+   * would read back 2 days later), and data skipping would drop files holding matching rows. A java.sql.Date keeps
+   * the year, month and day of the LocalDate, which Spark reads back as the same day.
    */
   public static Object convertJavaTypeToSparkType(Object javaVal, boolean useJava8api) {
     if (!useJava8api) {
       if (javaVal instanceof Instant) {
-        return Timestamp.from((Instant) javaVal);
+        return DateTimeUtils.toJavaTimestamp(DateTimeUtils.instantToMicros((Instant) javaVal));
       } else if (javaVal instanceof LocalDate) {
         return Date.valueOf((LocalDate) javaVal);
       }

@@ -21,6 +21,7 @@ package org.apache.hudi.metadata.stats;
 
 import org.apache.hudi.metadata.HoodieIndexVersion;
 
+import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Decimal;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -176,6 +178,33 @@ class TestSparkValueMetadataUtils {
 
     // With the java8 API enabled the Instant is passed through untouched.
     assertSame(instant, SparkValueMetadataUtils.convertJavaTypeToSparkType(instant, true));
+  }
+
+  /**
+   * Spark reads a java.sql.Timestamp in the hybrid Julian / Gregorian calendar, while an Instant is proleptic
+   * Gregorian, so the legacy value must read back as the same microseconds. Before 1582-10-15 the calendars
+   * differ by days (for ex, 0001-01-01T00:00Z would read back 2 days later, and 1500-03-05T00:00Z 9 days
+   * earlier), and data skipping would drop files holding matching rows.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"0001-01-01T00:00:00Z", "0001-01-01T00:00:00.123456Z", "1500-03-05T00:00:00Z",
+      "1582-10-04T12:00:00Z", "1582-10-15T12:00:00Z", "-0044-03-15T00:00:00Z", "2022-06-01T00:00:00.000001Z"})
+  void convertJavaTypeToSparkTypeKeepsTheInstantWhenLegacyApi(String instantText) {
+    Instant instant = Instant.parse(instantText);
+    Timestamp legacy = (Timestamp) SparkValueMetadataUtils.convertJavaTypeToSparkType(instant, false);
+    assertEquals(DateTimeUtils.instantToMicros(instant), DateTimeUtils.fromJavaTimestamp(legacy));
+  }
+
+  /**
+   * A java.sql.Date holds its local date in the hybrid calendar, which keeps the year, month and day, so the
+   * legacy value reads back as the same day in the proleptic Gregorian calendar.
+   */
+  @ParameterizedTest
+  @ValueSource(strings = {"0001-01-01", "1500-03-05", "1582-10-04", "1582-10-15", "-0044-03-15", "2022-06-01"})
+  void convertJavaTypeToSparkTypeKeepsTheLocalDateWhenLegacyApi(String dateText) {
+    LocalDate date = LocalDate.parse(dateText);
+    Date legacy = (Date) SparkValueMetadataUtils.convertJavaTypeToSparkType(date, false);
+    assertEquals(date.toEpochDay(), DateTimeUtils.fromJavaDate(legacy));
   }
 
   @Test
