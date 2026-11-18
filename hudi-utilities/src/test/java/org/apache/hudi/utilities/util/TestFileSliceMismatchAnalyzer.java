@@ -231,6 +231,17 @@ class TestFileSliceMismatchAnalyzer {
     assertEquals(Long.valueOf(1L), tally.getDropCounts().get("NAME_NOT_PARSEABLE"));
   }
 
+  @Test
+  void singleUnderscoreFsBaseFileNameIsDroppedAndCounted() {
+    List<FileSlice> fs = Collections.singletonList(
+        sliceWithBaseFile("fg1", "1000", "fg1_1000.parquet", 10L));
+
+    DiffTally tally = analyze(Collections.emptyList(), fs);
+
+    assertTrue(tally.getRecords().isEmpty(), "non-generated name must not reach adjudication");
+    assertEquals(Long.valueOf(1L), tally.getDropCounts().get("NAME_NOT_PARSEABLE"));
+  }
+
   /** Order in, order out: the comparison keys by file group, so shuffled inputs agree. */
   @Test
   void theResultDoesNotDependOnInputOrder() {
