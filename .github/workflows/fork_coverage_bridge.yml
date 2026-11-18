@@ -73,8 +73,7 @@ jobs:
             // until each has a completed run and its check records all of them.
             const WORKFLOWS = ['bot.yml'];
             // The flags of the upload steps in bot.yml. A fork cannot add flags of its own to
-            // apache/hudi's Codecov reports. A step can list several, comma-separated, when one
-            // job's report covers the modules of more than one flag.
+            // apache/hudi's Codecov reports.
             const FLAGS = new Set([
               'common-and-other-modules', 'flink-integration-tests', 'hadoop-mr-java-client',
               'integration-tests', 'spark-client-hadoop-common', 'spark-java-tests',
@@ -132,7 +131,7 @@ jobs:
               if (checks.some((item) =>
                 item.app?.slug === 'github-actions' && item.external_id === externalId(pr, runs))) return null;
 
-              const pattern = new RegExp('^coverage-' + sha + '__([A-Za-z0-9_-]+)__([a-z0-9-]+(?:,[a-z0-9-]+)*)$');
+              const pattern = new RegExp('^coverage-' + sha + '__([A-Za-z0-9_-]+)__([a-z0-9-]+)$');
               const artifacts = [];
               for (const run of runs) {
                 const listed = await optional(() => github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
@@ -142,7 +141,7 @@ jobs:
                 const newest = new Map();
                 for (const artifact of listed) {
                   const match = pattern.exec(artifact.name);
-                  if (!match || !match[2].split(',').every((flag) => FLAGS.has(flag)) || artifact.expired ||
+                  if (!match || !FLAGS.has(match[2]) || artifact.expired ||
                       !(artifact.size_in_bytes <= MAX_BYTES)) continue;
                   if (!(newest.get(artifact.name)?.artifact_id > artifact.id)) {
                     newest.set(artifact.name, {

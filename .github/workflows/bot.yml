@@ -305,6 +305,7 @@ jobs:
           architecture: x64
           cache: maven
       - name: Build Project
+        id: build
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -325,7 +326,9 @@ jobs:
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run:
           mvn test -Pfunctional-tests -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -fae -Dsurefire.failIfNoSpecifiedTests=false -pl hudi-utilities $MVN_ARGS -Djacoco.skip=false
+      # These modules had a job of their own, so a hudi-utilities test failure must not skip them.
       - name: UT - hudi-hadoop-mr and hudi-client/hudi-java-client
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
           SCALA_PROFILE: ${{ matrix.scalaProfile }}
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
@@ -335,14 +338,25 @@ jobs:
       - name: Test timing summary
         if: always()
         run: python3 scripts/ci/test_timing_summary.py --title "${{ github.job }}"
-      - name: Generate merged coverage report
+      # One report per flag, each from its own modules' exec files, so each flag keeps the coverage
+      # of its own tests. Each report is uploaded before the next call replaces it.
+      - name: Generate hudi-utilities coverage report
         if: always() && github.event_name != 'merge_group'
-        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE
-      - name: Upload coverage to Codecov
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE $GITHUB_WORKSPACE/hudi-utilities
+      - name: Upload hudi-utilities coverage to Codecov
         if: always() && github.event_name != 'merge_group'
         uses: ./.github/actions/upload-coverage
         with:
-          flags: utilities,hadoop-mr-java-client
+          flags: utilities
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Generate hudi-hadoop-mr and hudi-java-client coverage report
+        if: always() && github.event_name != 'merge_group'
+        run: ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE $GITHUB_WORKSPACE/hudi-hadoop-mr $GITHUB_WORKSPACE/hudi-client/hudi-java-client
+      - name: Upload hudi-hadoop-mr and hudi-java-client coverage to Codecov
+        if: always() && github.event_name != 'merge_group'
+        uses: ./.github/actions/upload-coverage
+        with:
+          flags: hadoop-mr-java-client
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-common-and-other-modules:
