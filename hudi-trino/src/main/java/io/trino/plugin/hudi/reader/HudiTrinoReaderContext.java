@@ -16,8 +16,10 @@ package io.trino.plugin.hudi.reader;
 import com.google.common.collect.ImmutableSet;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hudi.HudiUtil;
+import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer;
 import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ConnectorPageSource;
@@ -54,10 +56,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.Set;
 
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static java.lang.String.format;
+import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
 
 public class HudiTrinoReaderContext
@@ -69,6 +73,8 @@ public class HudiTrinoReaderContext
     private final LogFileParquetPageSourceFactory logPageSourceFactory;
     private final Map<String, HiveColumnHandle> colNameToHandle;
     private final Set<String> baseProjectionNames;
+    // Present when hudi.schema-column-types.enabled is on: the projection then carries TrinoTypeMapper types
+    private final Optional<TrinoTypeMapper> schemaTypeMapper;
 
     /**
      * Factory for building a Trino parquet page source over a native (RFC-103) delta-log file on demand.
@@ -80,6 +86,16 @@ public class HudiTrinoReaderContext
         ConnectorPageSource create(String path, long start, long length, List<HiveColumnHandle> projection);
     }
 
+    /**
+     * Turns one page position into a record carrying the file-group reader's required schema; lets the record
+     * iterator work with either serializer.
+     */
+    @FunctionalInterface
+    private interface RecordSerializer
+    {
+        IndexedRecord serialize(Page page, int position);
+    }
+
     public HudiTrinoReaderContext(
             StorageConfiguration storageConfiguration,
             HoodieTableConfig tableConfig,
@@ -89,12 +105,26 @@ public class HudiTrinoReaderContext
             LogFileParquetPageSourceFactory logPageSourceFactory,
             TypedProperties props)
     {
+        this(storageConfiguration, tableConfig, pageSource, columnHandles, prefilledColumnValues, logPageSourceFactory, props, Optional.empty());
+    }
+
+    public HudiTrinoReaderContext(
+            StorageConfiguration storageConfiguration,
+            HoodieTableConfig tableConfig,
+            ConnectorPageSource pageSource,
+            List<HiveColumnHandle> columnHandles,
+            PrefilledColumnValues prefilledColumnValues,
+            LogFileParquetPageSourceFactory logPageSourceFactory,
+            TypedProperties props,
+            Optional<TrinoTypeMapper> schemaTypeMapper)
+    {
         super(storageConfiguration, tableConfig, Option.empty(), Option.empty(),
                 new AvroRecordContext(tableConfig, tableConfig.getPayloadClass(), ConfigUtils.getMergeProps(props, tableConfig)));
         this.pageSource = pageSource;
         this.prefilledColumnValues = prefilledColumnValues;
         this.columnHandles = columnHandles;
         this.logPageSourceFactory = logPageSourceFactory;
+        this.schemaTypeMapper = requireNonNull(schemaTypeMapper, "schemaTypeMapper is null");
         this.colNameToHandle = new HashMap<>();
         for (HiveColumnHandle handle : columnHandles) {
             colNameToHandle.put(handle.getBaseColumnName().toLowerCase(Locale.ROOT), handle);
@@ -161,8 +191,7 @@ public class HudiTrinoReaderContext
             }
             List<HiveColumnHandle> logProjection = buildRequiredColumnHandles(requiredSchema);
             ConnectorPageSource logSource = logPageSourceFactory.create(path.toString(), start, length, logProjection);
-            HudiAvroSerializer logSerializer = new HudiAvroSerializer(logProjection, prefilledColumnValues, requiredSchema.toAvroSchema());
-            return createRecordIterator(logSource, logSerializer);
+            return createRecordIterator(logSource, recordSerializer(logProjection, requiredSchema));
         }
         // The base read reuses the pre-built page source, so it can only satisfy requiredSchema fields the
         // read projection carries. The connector predicts the file-group reader's demands up front
@@ -182,7 +211,15 @@ public class HudiTrinoReaderContext
         // Every requiredSchema field is in the base projection (checked above) and every projected column is
         // a requiredSchema field (the file-group reader's required schema always contains the full requested
         // schema), so the by-name channel mapping resolves in both directions.
-        return createRecordIterator(pageSource, new HudiAvroSerializer(columnHandles, prefilledColumnValues, requiredSchema.toAvroSchema()));
+        return createRecordIterator(pageSource, recordSerializer(columnHandles, requiredSchema));
+    }
+
+    private RecordSerializer recordSerializer(List<HiveColumnHandle> projection, HoodieSchema requiredSchema)
+    {
+        if (schemaTypeMapper.isPresent()) {
+            return new HoodieSchemaAvroSerializer(projection, prefilledColumnValues, requiredSchema.toAvroSchema())::serialize;
+        }
+        return new HudiAvroSerializer(projection, prefilledColumnValues, requiredSchema.toAvroSchema())::serialize;
     }
 
     /**
@@ -204,12 +241,12 @@ public class HudiTrinoReaderContext
             // which serialize() stamps with the table casing.
             handles.add(colNameToHandle.computeIfAbsent(
                     field.name().toLowerCase(Locale.ROOT),
-                    _ -> HudiUtil.toColumnHandle(field)));
+                    _ -> HudiUtil.toColumnHandle(field, schemaTypeMapper)));
         }
         return handles;
     }
 
-    private ClosableIterator<IndexedRecord> createRecordIterator(ConnectorPageSource source, HudiAvroSerializer serializer)
+    private ClosableIterator<IndexedRecord> createRecordIterator(ConnectorPageSource source, RecordSerializer serializer)
     {
         return new ClosableIterator<>()
         {

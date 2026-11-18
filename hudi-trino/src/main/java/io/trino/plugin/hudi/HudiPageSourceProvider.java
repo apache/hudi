@@ -35,10 +35,14 @@ import io.trino.parquet.reader.RowGroupInfo;
 import io.trino.plugin.base.metrics.FileFormatDataSourceStats;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HiveColumnProjectionInfo;
+import io.trino.plugin.hive.TransformConnectorPageSource;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
+import io.trino.plugin.hudi.util.ParquetReadConversions;
+import io.trino.plugin.hudi.util.ParquetReadConversions.ReadConversion;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorPageSource;
@@ -52,6 +56,7 @@ import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.connector.EmptyPageSource;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.TypeManager;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.config.RecordMergeMode;
@@ -91,6 +96,7 @@ import static io.trino.parquet.predicate.PredicateUtils.getFilteredRowGroups;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.ParquetReaderProvider;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createDataSource;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.createParquetPageSource;
+import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getColumnType;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getParquetMessageType;
 import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getParquetTupleDomain;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
@@ -103,6 +109,7 @@ import static io.trino.plugin.hudi.HudiSessionProperties.getRecordMergerImpls;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetIgnoreStatistics;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetUseColumnIndex;
 import static io.trino.plugin.hudi.HudiSessionProperties.isParquetVectorizedDecodingEnabled;
+import static io.trino.plugin.hudi.HudiSessionProperties.isSchemaColumnTypesEnabled;
 import static io.trino.plugin.hudi.HudiSessionProperties.shouldUseParquetColumnNames;
 import static io.trino.plugin.hudi.HudiSessionProperties.useParquetBloomFilter;
 import static io.trino.plugin.hudi.HudiUtil.appendMissingMergeRequiredColumns;
@@ -130,17 +137,20 @@ public class HudiPageSourceProvider
     private final TrinoFileSystemFactory fileSystemFactory;
     private final FileFormatDataSourceStats dataSourceStats;
     private final ParquetReaderOptions options;
+    private final TrinoTypeMapper typeMapper;
     private final DateTimeZone timeZone = DateTimeZone.forID("UTC");
 
     @Inject
     public HudiPageSourceProvider(
             TrinoFileSystemFactory fileSystemFactory,
             FileFormatDataSourceStats dataSourceStats,
-            ParquetReaderConfig parquetReaderConfig)
+            ParquetReaderConfig parquetReaderConfig,
+            TypeManager typeManager)
     {
         this.fileSystemFactory = requireNonNull(fileSystemFactory, "fileSystemFactory is null");
         this.dataSourceStats = requireNonNull(dataSourceStats, "dataSourceStats is null");
         this.options = requireNonNull(parquetReaderConfig, "parquetReaderConfig is null").toParquetReaderOptions();
+        this.typeMapper = new TrinoTypeMapper(requireNonNull(typeManager, "typeManager is null").getTypeOperators());
     }
 
     @Override
@@ -236,6 +246,8 @@ public class HudiPageSourceProvider
                 Optional.ofNullable(hudiTableHandle.getTableSchema())
                         .orElseGet(() -> getLatestTableSchema(metaClient, hudiTableHandle.getTableName()));
         TypedProperties readerProps = buildReaderProperties(session, metaClient);
+        // Handles synthesized from schema fields must be typed the way the planner typed the projection
+        Optional<TrinoTypeMapper> schemaTypeMapper = isSchemaColumnTypesEnabled(session) ? Optional.of(typeMapper) : Optional.empty();
 
         // A non-projection-compatible CUSTOM merger makes the file-group reader demand the FULL table
         // schema as requiredSchema for this split (it has log files), for the base and log reads alike.
@@ -245,13 +257,13 @@ public class HudiPageSourceProvider
         if (requiresFullSchemaRead(metaClient.getTableConfig(), readerProps)) {
             log.debug("Expanding the read projection of %s to the full table schema: the resolved record merger is not projection compatible",
                     hudiTableHandle.getSchemaTableName());
-            readColumnHandles = appendMissingSchemaColumns(dataSchema, hudiMetaAndDataColumnHandles);
+            readColumnHandles = appendMissingSchemaColumns(dataSchema, hudiMetaAndDataColumnHandles, schemaTypeMapper);
         }
         else {
             // The metastore may lack merge-required columns the table schema carries (e.g. hive sync with
             // omit_metadata_fields=true drops _hoodie_operation); recover them from the already-resolved
             // schema so the base read is not starved of them.
-            readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, metaClient.getTableConfig(), readerProps);
+            readColumnHandles = appendMissingMergeRequiredColumns(dataSchema, hudiMetaAndDataColumnHandles, metaClient.getTableConfig(), readerProps, schemaTypeMapper);
         }
 
         ConnectorPageSource dataPageSource =
@@ -280,7 +292,8 @@ public class HudiPageSourceProvider
                 readColumnHandles,
                 prefilledColumnValues,
                 logPageSourceFactory,
-                readerProps);
+                readerProps,
+                schemaTypeMapper);
 
         Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), readColumnHandles.stream().map(HiveColumnHandle::getName).toList());
         FileSlice fileSlice = convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath());
@@ -303,7 +316,8 @@ public class HudiPageSourceProvider
                 dataPageSource,
                 fileGroupReader,
                 hiveColumnHandles,
-                prefilledColumnValues);
+                prefilledColumnValues,
+                schemaTypeMapper.isPresent());
     }
 
     private ConnectorPageSource createBaseFilePageSource(
@@ -447,7 +461,15 @@ public class HudiPageSourceProvider
                     Optional.of(parquetPredicate),
                     Optional.empty(),
                     parquetMetadata.getDecryptionContext());
-            return createParquetPageSource(columns, fileSchema, messageColumn, useColumnNames, parquetReaderProvider);
+
+            // Off, no column would need a conversion anyway (metastore types never contain uuid, and metastore arrays
+            // map to parquet LIST groups); the gate keeps that path visibly untouched.
+            if (!isSchemaColumnTypesEnabled(session)) {
+                return createParquetPageSource(columns, fileSchema, messageColumn, useColumnNames, parquetReaderProvider);
+            }
+            List<Optional<ReadConversion>> readConversions = readConversions(columns, fileSchema, useColumnNames);
+            ConnectorPageSource pageSource = createParquetPageSource(withReadTypes(columns, readConversions), fileSchema, messageColumn, useColumnNames, parquetReaderProvider);
+            return toColumnTypes(pageSource, readConversions);
         }
         catch (IOException | RuntimeException e) {
             try {
@@ -466,6 +488,64 @@ public class HudiPageSourceProvider
             String message = "Error opening Hudi split %s (offset=%s, length=%s): %s".formatted(path, start, length, e.getMessage());
             throw new TrinoException(HUDI_CANNOT_OPEN_SPLIT, message, e);
         }
+    }
+
+    /**
+     * The conversion each column needs from the type the parquet reader can produce for it to its column type, see
+     * {@link ParquetReadConversions}. Only base data columns are considered: this connector never pushes a
+     * dereference down, and the page source is only ever asked for data columns.
+     */
+    private static List<Optional<ReadConversion>> readConversions(List<HiveColumnHandle> columns, MessageType fileSchema, boolean useColumnNames)
+    {
+        ImmutableList.Builder<Optional<ReadConversion>> conversions = ImmutableList.builderWithExpectedSize(columns.size());
+        for (HiveColumnHandle column : columns) {
+            if (!column.isBaseColumn() || column.getColumnType() != HiveColumnHandle.ColumnType.REGULAR) {
+                conversions.add(Optional.empty());
+                continue;
+            }
+            Optional<Type> parquetType = getColumnType(column, fileSchema, useColumnNames);
+            conversions.add(parquetType.flatMap(type -> ParquetReadConversions.forColumn(column.getType(), type)));
+        }
+        return conversions.build();
+    }
+
+    /**
+     * The handles the parquet reader decodes with: {@code createParquetPageSource} reads each column as its handle's
+     * base type, so a column that needs a conversion is read as the conversion's read type.
+     */
+    private static List<HiveColumnHandle> withReadTypes(List<HiveColumnHandle> columns, List<Optional<ReadConversion>> readConversions)
+    {
+        ImmutableList.Builder<HiveColumnHandle> readColumns = ImmutableList.builderWithExpectedSize(columns.size());
+        for (int i = 0; i < columns.size(); i++) {
+            HiveColumnHandle column = columns.get(i);
+            readColumns.add(readConversions.get(i)
+                    .map(conversion -> new HiveColumnHandle(
+                            column.getBaseColumnName(),
+                            column.getBaseHiveColumnIndex(),
+                            column.getBaseHiveType(),
+                            conversion.readType(),
+                            column.getHiveColumnProjectionInfo(),
+                            column.getColumnType(),
+                            column.getComment()))
+                    .orElse(column));
+        }
+        return readColumns.build();
+    }
+
+    /**
+     * Wraps {@code pageSource} so the blocks it returns are of the column types; channels without a conversion pass
+     * through untouched.
+     */
+    private static ConnectorPageSource toColumnTypes(ConnectorPageSource pageSource, List<Optional<ReadConversion>> readConversions)
+    {
+        if (readConversions.stream().allMatch(Optional::isEmpty)) {
+            return pageSource;
+        }
+        TransformConnectorPageSource.Builder transforms = TransformConnectorPageSource.builder();
+        for (int channel = 0; channel < readConversions.size(); channel++) {
+            transforms.column(channel, readConversions.get(channel).map(ReadConversion::toColumnType));
+        }
+        return transforms.build(pageSource);
     }
 
     private static TrinoException handleException(ParquetDataSourceId dataSourceId, Exception exception)

@@ -36,14 +36,22 @@ import io.trino.plugin.hive.avro.AvroHiveFileUtils;
 import io.trino.plugin.hive.util.HiveTypeTranslator;
 import io.trino.plugin.hudi.storage.HudiTrinoStorage;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.NullableValue;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.MapType;
+import io.trino.spi.type.RowType;
+import io.trino.spi.type.TimeType;
+import io.trino.spi.type.TimestampWithTimeZoneType;
 import io.trino.spi.type.Type;
 import io.trino.spi.type.TypeManager;
+import io.trino.spi.type.TypeOperators;
+import io.trino.spi.type.UuidType;
 import io.trino.spi.type.VarcharType;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -109,6 +117,9 @@ import static io.trino.plugin.hudi.HudiErrorCode.HUDI_FILESYSTEM_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_META_CLIENT_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_UNSUPPORTED_FILE_FORMAT;
+import static io.trino.spi.type.BigintType.BIGINT;
+import static io.trino.spi.type.IntegerType.INTEGER;
+import static io.trino.spi.type.TimestampType.createTimestampType;
 import static java.lang.Math.toIntExact;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
@@ -127,6 +138,8 @@ public final class HudiUtil
             CollectionUtils.createImmutableList(RECORD_KEY_METADATA_FIELD, PARTITION_PATH_METADATA_FIELD);
 
     private static final Logger log = Logger.get(HudiUtil.class);
+    // Only builds the map types toMetadataHiveType translates and throws away, so no shared instance is needed
+    private static final TypeOperators METADATA_TYPE_OPERATORS = new TypeOperators();
     // Maps Avro schemas (incl. logical types) to Trino types for toColumnHandle. Stateless, so shared.
     private static final NativeLogicalTypesAvroTypeBlockHandler AVRO_TYPE_HANDLER = new NativeLogicalTypesAvroTypeBlockHandler();
     private static final Cache<Schema, Map<String, Schema.Field>> SCHEMA_FIELD_CACHE =
@@ -401,6 +414,106 @@ public final class HudiUtil
     }
 
     /**
+     * {@link #toColumnHandle(HoodieSchemaField)} when {@code schemaTypeMapper} is empty, otherwise
+     * {@link #toSchemaTypedColumnHandle}: with {@code hudi.schema-column-types.enabled} on, a handle synthesized
+     * from a schema field must carry the same type the planner gives that column.
+     */
+    public static HiveColumnHandle toColumnHandle(HoodieSchemaField field, Optional<TrinoTypeMapper> schemaTypeMapper)
+    {
+        return schemaTypeMapper
+                .map(typeMapper -> toSchemaTypedColumnHandle(field, typeMapper))
+                .orElseGet(() -> toColumnHandle(field));
+    }
+
+    /**
+     * Builds a {@link HiveColumnHandle} for a table-schema field that has no metastore column, typed with
+     * {@link TrinoTypeMapper}. The index is a placeholder, as in {@link #toColumnHandle(HoodieSchemaField)}.
+     * <p>
+     * The Hive type is metadata only: the category matters for predicate pushdown
+     * ({@code ParquetPageSourceFactory.getParquetTupleDomain} skips non-primitive categories), the Trino type
+     * drives decoding. See {@link #toMetadataHiveType}.
+     */
+    public static HiveColumnHandle toSchemaTypedColumnHandle(HoodieSchemaField field, TrinoTypeMapper typeMapper)
+    {
+        Type trinoType = typeMapper.toTypeSystem(field.schema());
+        return new HiveColumnHandle(
+                field.name(),
+                0,
+                toMetadataHiveType(trinoType),
+                trinoType,
+                Optional.empty(),
+                HiveColumnHandle.ColumnType.REGULAR,
+                Optional.empty());
+    }
+
+    /**
+     * The Hive type a schema-typed handle carries when no metastore column supplies one. Trino types Hive cannot
+     * declare are replaced, at any depth, by the type the metastore holds for them after a Hive sync:
+     * timestamp with time zone by timestamp, time(3) by int, time(6) by bigint and uuid by string. Metadata only:
+     * the category matters for predicate pushdown, the Trino type drives decoding.
+     */
+    @VisibleForTesting
+    static HiveType toMetadataHiveType(Type type)
+    {
+        return HiveTypeTranslator.toHiveType(toHiveDeclarableType(type));
+    }
+
+    private static Type toHiveDeclarableType(Type type)
+    {
+        if (type instanceof TimestampWithTimeZoneType timestampWithTimeZoneType) {
+            return createTimestampType(timestampWithTimeZoneType.getPrecision());
+        }
+        if (type instanceof TimeType timeType) {
+            return timeType.getPrecision() <= 3 ? INTEGER : BIGINT;
+        }
+        if (type instanceof UuidType) {
+            return VarcharType.VARCHAR;
+        }
+        if (type instanceof ArrayType arrayType) {
+            return new ArrayType(toHiveDeclarableType(arrayType.getElementType()));
+        }
+        if (type instanceof MapType mapType) {
+            return new MapType(toHiveDeclarableType(mapType.getKeyType()), toHiveDeclarableType(mapType.getValueType()), METADATA_TYPE_OPERATORS);
+        }
+        if (type instanceof RowType rowType) {
+            return RowType.from(rowType.getFields().stream()
+                    .map(field -> new RowType.Field(field.getName(), toHiveDeclarableType(field.getType())))
+                    .toList());
+        }
+        return type;
+    }
+
+    /**
+     * Returns {@code handles} with every data (REGULAR) handle whose name matches a {@code tableSchema} field
+     * (case-insensitively) retyped with {@link TrinoTypeMapper}. Name, index, comment and the METASTORE Hive type
+     * are kept: the column set, order and names still come from the metastore, only the Trino type changes.
+     * Partition keys, hidden columns and data columns the schema does not carry keep their metastore-derived
+     * handles. A field the mapper has no Trino type for fails with its NOT_SUPPORTED error rather than being
+     * dropped.
+     */
+    public static List<HiveColumnHandle> withSchemaColumnTypes(List<HiveColumnHandle> handles, HoodieSchema tableSchema, TrinoTypeMapper typeMapper)
+    {
+        Map<String, HoodieSchemaField> schemaFields = tableSchema.getFields().stream()
+                .collect(Collectors.toMap(field -> field.name().toLowerCase(Locale.ROOT), field -> field, (first, second) -> first));
+        ImmutableList.Builder<HiveColumnHandle> typedHandles = ImmutableList.builderWithExpectedSize(handles.size());
+        for (HiveColumnHandle handle : handles) {
+            HoodieSchemaField field = schemaFields.get(handle.getBaseColumnName().toLowerCase(Locale.ROOT));
+            if (handle.getColumnType() != REGULAR || !handle.isBaseColumn() || field == null) {
+                typedHandles.add(handle);
+                continue;
+            }
+            typedHandles.add(createBaseColumn(
+                    handle.getBaseColumnName(),
+                    handle.getBaseHiveColumnIndex(),
+                    handle.getBaseHiveType(),
+                    typeMapper.toTypeSystem(field.schema()),
+                    REGULAR,
+                    handle.getComment()));
+        }
+        return typedHandles.build();
+    }
+
+    /**
      * Resolves the merge mode and merge strategy id the file-group reader will use for this table,
      * applying hudi-common's version-gated inference: the merge MODE is inferred for any table below
      * version 9 ({@code FileGroupReaderSchemaHandler.generateRequiredSchema}), while the STRATEGY ID
@@ -483,6 +596,15 @@ public final class HudiUtil
      */
     public static List<HiveColumnHandle> appendMissingSchemaColumns(HoodieSchema dataSchema, List<HiveColumnHandle> projection)
     {
+        return appendMissingSchemaColumns(dataSchema, projection, Optional.empty());
+    }
+
+    /**
+     * {@link #appendMissingSchemaColumns(HoodieSchema, List)} with the missing fields typed by
+     * {@link #toColumnHandle(HoodieSchemaField, Optional)}.
+     */
+    public static List<HiveColumnHandle> appendMissingSchemaColumns(HoodieSchema dataSchema, List<HiveColumnHandle> projection, Optional<TrinoTypeMapper> schemaTypeMapper)
+    {
         Set<String> existingColumns = projection.stream()
                 .map(handle -> handle.getName().toLowerCase(Locale.ROOT))
                 .collect(Collectors.toCollection(HashSet::new));
@@ -490,7 +612,7 @@ public final class HudiUtil
         List<HiveColumnHandle> columns = new ArrayList<>(projection);
         for (HoodieSchemaField field : dataSchema.getFields()) {
             if (existingColumns.add(field.name().toLowerCase(Locale.ROOT))) {
-                columns.add(toColumnHandle(field));
+                columns.add(toColumnHandle(field, schemaTypeMapper));
             }
         }
         return columns;
@@ -686,6 +808,20 @@ public final class HudiUtil
             HoodieTableConfig tableConfig,
             TypedProperties readerProps)
     {
+        return appendMissingMergeRequiredColumns(dataSchema, projection, tableConfig, readerProps, Optional.empty());
+    }
+
+    /**
+     * {@link #appendMissingMergeRequiredColumns(HoodieSchema, List, HoodieTableConfig, TypedProperties)} with the
+     * recovered fields typed by {@link #toColumnHandle(HoodieSchemaField, Optional)}.
+     */
+    public static List<HiveColumnHandle> appendMissingMergeRequiredColumns(
+            HoodieSchema dataSchema,
+            List<HiveColumnHandle> projection,
+            HoodieTableConfig tableConfig,
+            TypedProperties readerProps,
+            Optional<TrinoTypeMapper> schemaTypeMapper)
+    {
         Pair<RecordMergeMode, String> mergeModeAndStrategyId = resolveMergeModeAndStrategyId(tableConfig);
         LinkedHashSet<String> requiredNames = mergeRequiredColumnNames(tableConfig, mergeModeAndStrategyId.getLeft());
         // A CUSTOM merger can declare mandatory fields of its own (getMandatoryFieldsForMerging); ask the
@@ -712,7 +848,7 @@ public final class HudiUtil
         for (String name : requiredNames) {
             HoodieSchemaField field = schemaFields.get(name.toLowerCase(Locale.ROOT));
             if (field != null && existingColumns.add(field.name().toLowerCase(Locale.ROOT))) {
-                columns.add(toColumnHandle(field));
+                columns.add(toColumnHandle(field, schemaTypeMapper));
             }
         }
         return columns;

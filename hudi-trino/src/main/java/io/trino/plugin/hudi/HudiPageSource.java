@@ -14,6 +14,7 @@
 package io.trino.plugin.hudi;
 
 import io.trino.plugin.hive.HiveColumnHandle;
+import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer;
 import io.trino.plugin.hudi.util.HudiAvroSerializer;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.Page;
@@ -30,6 +31,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.BiConsumer;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.base.Throwables.getCausalChain;
@@ -42,19 +44,24 @@ public class HudiPageSource
     // Reads flow through fileGroupReader; pageSource is kept for stats/isBlocked delegation
     private final ConnectorPageSource pageSource;
     private final PageBuilder pageBuilder;
-    private final HudiAvroSerializer avroSerializer;
+    private final BiConsumer<PageBuilder, IndexedRecord> recordAppender;
     private final ClosableIterator<IndexedRecord> recordIterator;
 
     public HudiPageSource(
             ConnectorPageSource pageSource,
             HoodieFileGroupReader<IndexedRecord> fileGroupReader,
             List<HiveColumnHandle> columnHandles,
-            PrefilledColumnValues prefilledColumnValues)
+            PrefilledColumnValues prefilledColumnValues,
+            boolean schemaColumnTypes)
     {
         this.pageSource = pageSource;
         this.fileGroupReader = fileGroupReader;
         this.pageBuilder = new PageBuilder(columnHandles.stream().map(HiveColumnHandle::getType).toList());
-        this.avroSerializer = new HudiAvroSerializer(columnHandles, prefilledColumnValues);
+        // The columns carry TrinoTypeMapper types when schema column types are on, which only the HoodieSchema-driven
+        // serializer writes
+        this.recordAppender = schemaColumnTypes
+                ? new HoodieSchemaAvroSerializer(columnHandles, prefilledColumnValues)::buildRecordInPage
+                : new HudiAvroSerializer(columnHandles, prefilledColumnValues)::buildRecordInPage;
         try {
             this.recordIterator = fileGroupReader.getClosableIterator();
         }
@@ -117,7 +124,7 @@ public class HudiPageSource
     {
         checkState(pageBuilder.isEmpty(), "PageBuilder is not empty at the beginning of a new page");
         while (recordIterator.hasNext()) {
-            avroSerializer.buildRecordInPage(pageBuilder, recordIterator.next());
+            recordAppender.accept(pageBuilder, recordIterator.next());
         }
 
         Page newPage = pageBuilder.build();

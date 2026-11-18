@@ -22,6 +22,13 @@ import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.ArrayType;
+import io.trino.spi.type.MapType;
+import io.trino.spi.type.RowType;
+import io.trino.spi.type.TimeType;
+import io.trino.spi.type.TimestampWithTimeZoneType;
+import io.trino.spi.type.Type;
+import io.trino.spi.type.UuidType;
 import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieRecordGlobalLocation;
@@ -48,7 +55,9 @@ import java.util.stream.Collectors;
 
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static io.trino.plugin.hudi.HudiSessionProperties.getRecordIndexWaitTimeout;
+import static io.trino.plugin.hudi.HudiSessionProperties.isSchemaColumnTypesEnabled;
 import static io.trino.plugin.hudi.HudiUtil.collectAsMap;
+import static io.trino.spi.type.UuidType.trinoUuidToJavaUuid;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class HudiRecordLevelIndexSupport
@@ -66,6 +75,7 @@ public class HudiRecordLevelIndexSupport
     {
         super(log, schemaTableName, lazyMetaClient);
         this.recordIndexWaitTimeout = getRecordIndexWaitTimeout(session);
+        boolean schemaColumnTypes = isSchemaColumnTypesEnabled(session);
         if (regularColumnPredicates.isAll()) {
             log.debug("Predicates cover all data, skipping record level index lookup.");
             this.relevantFileIdsFuture = CompletableFuture.completedFuture(Optional.empty());
@@ -84,7 +94,7 @@ public class HudiRecordLevelIndexSupport
                 TupleDomain<String> filteredDomains = extractPredicatesForColumns(regularColumnPredicates, recordKeyFields);
 
                 // Construct the actual record keys based on the filtered predicates using Hudi's encoding scheme
-                List<String> recordKeys = constructRecordKeys(filteredDomains, recordKeyFields);
+                List<String> recordKeys = constructRecordKeys(filteredDomains, recordKeyFields, schemaColumnTypes);
 
                 if (recordKeys.isEmpty()) {
                     // If key construction fails (e.g., incompatible predicates not caught by canApply, or placeholder issue)
@@ -237,6 +247,17 @@ public class HudiRecordLevelIndexSupport
      */
     public static List<String> constructRecordKeys(TupleDomain<String> recordKeyDomains, List<String> recordKeyFields)
     {
+        return constructRecordKeys(recordKeyDomains, recordKeyFields, false);
+    }
+
+    /**
+     * {@link #constructRecordKeys(TupleDomain, List)} for columns typed with {@code hudi.schema-column-types.enabled}:
+     * a uuid value keys as its canonical text, and a key part whose Trino type has no string form that matches the
+     * record key Hudi wrote (timestamp with time zone, time, array, map, row) yields no keys, so no pruning, rather
+     * than a key that cannot match.
+     */
+    public static List<String> constructRecordKeys(TupleDomain<String> recordKeyDomains, List<String> recordKeyFields, boolean schemaColumnTypes)
+    {
         // TODO: Move this to TupleDomainUtils
         // If no recordKeys or no recordKeyDomains, return empty list
         if (recordKeyFields == null || recordKeyFields.isEmpty() || recordKeyDomains.isAll()) {
@@ -252,6 +273,9 @@ public class HudiRecordLevelIndexSupport
 
         // Extract the domain mappings from the tuple domain
         Map<String, Domain> domains = recordKeyDomains.getDomains().get();
+        if (schemaColumnTypes && recordKeyFields.stream().anyMatch(field -> !hasRecordKeyForm(domains.get(field).getType()))) {
+            return Collections.emptyList();
+        }
 
         // Case 1: Not a complex key (single record key)
         if (recordKeyFields.size() == 1) {
@@ -259,7 +283,7 @@ public class HudiRecordLevelIndexSupport
 
             // Extract value for this key
             Domain domain = domains.get(recordKey);
-            return extractStringValues(domain);
+            return extractStringValues(domain, schemaColumnTypes);
         }
         // Case 2: Complex/Composite key (multiple record keys)
         else {
@@ -270,7 +294,7 @@ public class HudiRecordLevelIndexSupport
             for (String recordKeyField : recordKeyFields) {
                 // Extract value for this key
                 Domain domain = domains.get(recordKeyField);
-                List<String> values = extractStringValues(domain);
+                List<String> values = extractStringValues(domain, schemaColumnTypes);
                 // First iteration: initialize the queue
                 if (results.isEmpty()) {
                     values.forEach(v -> results.offer(recordKeyField + DEFAULT_COLUMN_VALUE_SEPARATOR + v));
@@ -297,22 +321,44 @@ public class HudiRecordLevelIndexSupport
      * Extract string values from a domain, handle EQUAL and IN domains only.
      * Note: Actual implementation depends on your Domain class structure.
      */
-    private static List<String> extractStringValues(Domain domain)
+    private static List<String> extractStringValues(Domain domain, boolean schemaColumnTypes)
     {
         List<String> values = new ArrayList<>();
 
         if (domain.isSingleValue()) {
             // Handle EQUAL condition (single value domain)
             Object value = domain.getSingleValue();
-            values.add(convertToString(value));
+            values.add(convertToString(domain.getType(), value, schemaColumnTypes));
         }
         else if (domain.getValues().isDiscreteSet()) {
             // Handle IN condition (set of discrete values)
             for (Object value : domain.getValues().getDiscreteSet()) {
-                values.add(convertToString(value));
+                values.add(convertToString(domain.getType(), value, schemaColumnTypes));
             }
         }
         return values;
+    }
+
+    /**
+     * Whether values of a schema-typed column can be keyed. These Trino types only appear with
+     * {@code hudi.schema-column-types.enabled}, and their native values print as nothing Hudi writes into a key.
+     */
+    private static boolean hasRecordKeyForm(Type type)
+    {
+        return !(type instanceof TimestampWithTimeZoneType
+                || type instanceof TimeType
+                || type instanceof ArrayType
+                || type instanceof MapType
+                || type instanceof RowType);
+    }
+
+    private static String convertToString(Type type, Object value, boolean schemaColumnTypes)
+    {
+        if (schemaColumnTypes && type instanceof UuidType) {
+            // Hudi keys a UUID on its canonical text form
+            return trinoUuidToJavaUuid((Slice) value).toString();
+        }
+        return convertToString(value);
     }
 
     private static String convertToString(Object value)
