@@ -949,17 +949,65 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
   }
 
   /**
-   * Validates that columns with secondary indexes are not evolved in an incompatible way.
+   * Ensure that the current writerSchema, the new schema of an explicit schema change such as {@code ALTER TABLE},
+   * does not evolve, rename or drop a column that has a secondary index.
    *
-   * @param tableSchema the current table schema
-   * @param writerSchema the new writer schema
-   * @param indexMetadata the index metadata containing all index definitions
-   * @throws SchemaCompatibilityException if a secondary index column has incompatible evolution
+   * Unlike {@link #validateSchema()}, the writerSchema is not checked for compatibility with the latest schema of
+   * this dataset: a schema change renames or drops columns on purpose. So this check does not depend on
+   * {@link HoodieWriteConfig#SCHEMA_ALLOW_AUTO_EVOLUTION_COLUMN_DROP} or {@link HoodieWriteConfig#AVRO_SCHEMA_VALIDATE_ENABLE}.
+   */
+  public void validateAlterSchema() throws SchemaCompatibilityException {
+    Option<HoodieIndexMetadata> indexMetadata = metaClient.getIndexMetadata();
+    if (indexMetadata.isEmpty()
+        || getActiveTimeline().getCommitsTimeline().filterCompletedInstants().empty()
+        || StringUtils.isNullOrEmpty(config.getSchema())
+    ) {
+      // Check not required
+      return;
+    }
+
+    try {
+      TableSchemaResolver schemaResolver = new TableSchemaResolver(getMetaClient());
+      Option<HoodieSchema> existingTableSchemaOpt = schemaResolver.getTableSchemaIfPresent(false);
+      if (existingTableSchemaOpt.isEmpty()) {
+        return;
+      }
+
+      HoodieSchema writerSchema = HoodieSchemaUtils.createHoodieWriteSchema(config.getSchema(), false);
+      HoodieSchema tableSchema = HoodieSchemaUtils.addMetadataFields(existingTableSchemaOpt.get());
+      validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata.get(), false);
+    } catch (SchemaCompatibilityException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new SchemaCompatibilityException("Failed to read schema/check compatibility for base path " + metaClient.getBasePath(), e);
+    }
+  }
+
+  /**
+   * Same as {@link #validateSecondaryIndexSchemaEvolution(HoodieSchema, HoodieSchema, HoodieIndexMetadata, boolean)},
+   * with secondary index columns allowed to be missing from the writer schema.
    */
   static void validateSecondaryIndexSchemaEvolution(
       HoodieSchema tableSchema,
       HoodieSchema writerSchema,
       HoodieIndexMetadata indexMetadata) throws SchemaCompatibilityException {
+    validateSecondaryIndexSchemaEvolution(tableSchema, writerSchema, indexMetadata, true);
+  }
+
+  /**
+   * Validates that columns with secondary indexes are not evolved in an incompatible way.
+   *
+   * @param tableSchema the current table schema
+   * @param writerSchema the new writer schema
+   * @param indexMetadata the index metadata containing all index definitions
+   * @param allowMissingColumns whether a secondary index column may be missing from the writer schema
+   * @throws SchemaCompatibilityException if a secondary index column has incompatible evolution
+   */
+  static void validateSecondaryIndexSchemaEvolution(
+      HoodieSchema tableSchema,
+      HoodieSchema writerSchema,
+      HoodieIndexMetadata indexMetadata,
+      boolean allowMissingColumns) throws SchemaCompatibilityException {
     
     // Filter for secondary index definitions
     List<HoodieIndexDefinition> secondaryIndexDefs = indexMetadata.getIndexDefinitions().values().stream()
@@ -999,6 +1047,13 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       // Use HoodieSchemaCompatibility's field lookup logic to handle aliases
       HoodieSchemaField writerField = HoodieSchemaCompatibility.lookupWriterField(writerSchema, tableField);
       
+      if (writerField == null && !allowMissingColumns) {
+        throw new SchemaCompatibilityException(String.format(
+            "Column '%s' has secondary index '%s' and cannot be renamed or dropped. "
+            + "Please drop the secondary index before renaming or dropping the column.",
+            columnName, indexName));
+      }
+
       if (writerField != null && !tableField.schema().equals(writerField.schema())) {
         // Check if this is just making the field nullable/non-nullable, which is safe from SI perspective
         HoodieSchema nonNullTableField = tableField.schema().getNonNullType();

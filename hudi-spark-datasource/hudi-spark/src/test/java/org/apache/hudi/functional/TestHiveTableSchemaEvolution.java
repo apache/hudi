@@ -99,7 +99,6 @@ public class TestHiveTableSchemaEvolution {
     String path = new Path(basePath.toAbsolutePath().toString()).toUri().toString();
 
     spark.sql("set hoodie.schema.on.read.enable=true");
-    spark.sql("set hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true");
 
     spark.sql(String.format("create table %s (col0 int, col1 float, col2 string, col3 timestamp) using hudi "
             + "tblproperties (type='mor', primaryKey='col0', orderingFields='col1', "
@@ -146,7 +145,6 @@ public class TestHiveTableSchemaEvolution {
     String path = new Path(basePath.toAbsolutePath().toString()).toUri().toString();
 
     spark.sql("set hoodie.schema.on.read.enable=true");
-    spark.sql("set hoodie.datasource.write.schema.allow.auto.evolution.column.drop=true");
     spark.sql(String.format("create table %s (col0 int, col1 float, col2 string) using hudi "
             + "tblproperties (type='%s', primaryKey='col0', orderingFields='col1', "
             + "hoodie.compaction.payload.class='org.apache.hudi.common.model.OverwriteWithLatestAvroPayload') location '%s'",
