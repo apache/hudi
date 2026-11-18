@@ -36,11 +36,14 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.keygen.BaseKeyGenerator;
 import org.apache.hudi.metadata.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.avro.AvroReadSupport;
 import org.apache.parquet.avro.AvroSchemaConverter;
 import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
@@ -69,6 +72,7 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.METADATA_FIELD_SCH
 import static org.apache.hudi.metadata.HoodieIndexVersion.V1;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -76,6 +80,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * Tests parquet utils.
  */
 public class TestParquetUtils extends HoodieCommonTestHarness {
+
+  // AvroReadSupport.AVRO_READ_SCHEMA is private in the parquet-avro versions Hudi builds against.
+  private static final String AVRO_READ_SCHEMA_KEY = "parquet.avro.read.schema";
 
   private ParquetUtils parquetUtils;
 
@@ -248,6 +255,37 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
 
     assertEquals(123, parquetUtils.getRowCount(
         HoodieTestUtils.getStorage(filePath), new StoragePath(filePath)));
+  }
+
+  @Test
+  public void testReadAvroRecordsLeavesCallerConfUntouched() throws Exception {
+    String filePath = Paths.get(basePath, "test.parquet").toUri().toString();
+    HoodieSchema fileSchema = getSchemaWithFields(
+        Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD));
+    writeParquetFile(BloomFilterTypeCode.SIMPLE.name(), filePath, Arrays.asList("k1", "k2"), fileSchema, true, "p1");
+    HoodieSchema evolvedSchema = getSchemaWithFields(
+        Arrays.asList(HoodieRecord.RECORD_KEY_METADATA_FIELD, HoodieRecord.PARTITION_PATH_METADATA_FIELD, "extra_field"));
+    HoodieSchema keyOnlySchema = getSchemaWithFields(Collections.singletonList(HoodieRecord.RECORD_KEY_METADATA_FIELD));
+
+    // One storage, so every read sees the same Configuration, like readers sharing a SparkContext's.
+    HoodieStorage storage = HoodieTestUtils.getStorage(filePath);
+    StoragePath storagePath = new StoragePath(filePath);
+    Configuration conf = storage.getConf().unwrapAs(Configuration.class);
+
+    // A read with a schema applies it to its own records only.
+    List<GenericRecord> evolved = parquetUtils.readAvroRecords(storage, storagePath, evolvedSchema);
+    assertEquals(2, evolved.size());
+    assertEquals(3, evolved.get(0).getSchema().getFields().size());
+    assertNull(conf.get(AVRO_READ_SCHEMA_KEY));
+
+    // A schema-less read uses the file schema even if another caller left a read schema or projection behind.
+    AvroReadSupport.setAvroReadSchema(conf, keyOnlySchema.toAvroSchema());
+    AvroReadSupport.setRequestedProjection(conf, keyOnlySchema.toAvroSchema());
+    List<GenericRecord> full = parquetUtils.readAvroRecords(storage, storagePath);
+    assertEquals(2, full.size());
+    assertEquals(2, full.get(0).getSchema().getFields().size());
+    assertEquals("p1", full.get(0).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString());
+    assertEquals(keyOnlySchema.toAvroSchema().toString(), conf.get(AVRO_READ_SCHEMA_KEY));
   }
 
   @Test

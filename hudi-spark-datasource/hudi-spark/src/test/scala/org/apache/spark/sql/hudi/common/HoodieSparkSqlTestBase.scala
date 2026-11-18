@@ -191,6 +191,12 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
       val toDrop = if (sharedSessionEnabled) tables.filter(table => ownsTable(table.table)) else tables
       toDrop.foreach(table => catalog.dropTable(table, true, true))
     }
+    if (sharedSessionEnabled) {
+      // Global temp views live in the shared state, outside listDatabases, and would otherwise outlive the suite.
+      catalog.globalTempViewManager.listViewNames("*")
+        .filter(name => name.startsWith(tableNamePrefix))
+        .foreach(name => catalog.dropGlobalTempView(name))
+    }
   }
 
   /** Shared mode: a table is this suite's if generateTableName produced it, or if no suite's generateTableName could have. */
