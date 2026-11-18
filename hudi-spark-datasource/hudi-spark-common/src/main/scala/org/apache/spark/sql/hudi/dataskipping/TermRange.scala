@@ -115,7 +115,7 @@ object TermRange {
 
   /**
    * The source first; otherwise the first rule step whose child derives a range. Several steps
-   * only arise for operators accepted on either side (for ex, `BitwiseOr`), tried in today's order.
+   * only arise for operators accepted on either side (for ex, `Add`), tried in today's order.
    */
   private def viaRules(term: Expression, source: RangeSource, rules: Seq[RangeRule]): Option[Chain] =
     source.rangeOf(term).map(r => Chain(r, hasDecreasingStep = false)).orElse(
@@ -143,7 +143,7 @@ object TermRange {
 
   /**
    * Re-binds EVERY reference to the column, including ones in operands off the rule chain (for ex,
-   * the days operand of `date_add(d, dayofmonth(d))`), matching the pre-stage translator. A [[Step]]
+   * the length operand of `left(s, length(s))`), matching the pre-stage translator. A [[Step]]
    * only rebuilds its chain slot, so the leftover references are re-bound to the same bound here.
    * Such terms are not order-preserving in general; kept as is so the output stays identical.
    *

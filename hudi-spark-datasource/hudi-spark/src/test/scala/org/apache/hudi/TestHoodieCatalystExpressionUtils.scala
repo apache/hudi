@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, Divide, Exp, Expression, FromUnixTime, FromUTCTimestamp, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, Sqrt, ToUnixTimestamp, ToUTCTimestamp, UnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, Exp, Expression, FromUnixTime, FromUTCTimestamp, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, ShiftRight, Sqrt, ToUnixTimestamp, ToUTCTimestamp, TruncDate, UnaryMinus, UnixTimestamp, Upper}
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -73,8 +73,15 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(dblAttr), matched(Multiply(dblAttr, Literal(2.0d))))
     assertEquals(Some(dblAttr), matched(Multiply(Literal(2.0d), dblAttr)))
     assertEquals(Some(intAttr), matched(Divide(intAttr, Literal(2))))
-    assertEquals(Some(intAttr), matched(BitwiseOr(intAttr, Literal(1))))
-    assertEquals(Some(intAttr), matched(BitwiseOr(Literal(1), intAttr)))
+    assertEquals(Some(longAttr), matched(ShiftRight(longAttr, Literal(2))))
+  }
+
+  @Test
+  def testBitwiseOrDoesNotPreserveOrdering(): Unit = {
+    // 1 < 2, but 1 | 2 = 3 > 2 | 2 = 2, whichever side the constant is on.
+    assertEquals(None, matched(BitwiseOr(intAttr, Literal(2))))
+    assertEquals(None, matched(BitwiseOr(Literal(2), intAttr)))
+    assertEquals(None, matched(BitwiseOr(intAttr, intAttr)))
   }
 
   @Test
@@ -164,6 +171,24 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(dateAttr), matched(DateSub(dateAttr, Literal(1))))
     // DateDiff(end, start) = end - start preserves the ordering of its end date.
     assertEquals(Some(dateAttr), matched(DateDiff(dateAttr, Literal(java.sql.Date.valueOf("2022-03-07")))))
+  }
+
+  @Test
+  def testDateArithmeticAndShiftRightRequireConstantOtherOperand(): Unit = {
+    // date_add(d, dayofmonth(d)) maps 2024-01-31 to 2024-03-02, past the 2024-02-02 of the later
+    // 2024-02-01, so an operand referencing the column must not match.
+    assertEquals(None, matched(DateAdd(dateAttr, DayOfMonth(dateAttr))))
+    assertEquals(None, matched(DateSub(dateAttr, UnaryMinus(DayOfMonth(dateAttr)))))
+    assertEquals(None, matched(DateDiff(dateAttr, TruncDate(dateAttr, Literal("MM")))))
+    // A bigint shifts by the low 6 bits of the amount: shiftright(64, 64) = 64 > shiftright(65, 65) = 32.
+    assertEquals(None, matched(ShiftRight(longAttr, longAttr)))
+    // Data skipping re-evaluates the operand against the min/max bounds, so it must be a constant.
+    assertEquals(None, matched(DateAdd(dateAttr, Cast(Rand(Literal(0L)), IntegerType))))
+    assertEquals(None, matched(ShiftRight(longAttr, Cast(Rand(Literal(0L)), IntegerType))))
+    // A foldable operand is accepted, as the optimizer would fold it into a literal.
+    assertEquals(Some(dateAttr), matched(DateAdd(dateAttr, Add(Literal(1), Literal(2)))))
+    assertEquals(Some(dateAttr), matched(DateSub(dateAttr, Add(Literal(1), Literal(2)))))
+    assertEquals(Some(longAttr), matched(ShiftRight(longAttr, Add(Literal(1), Literal(2)))))
   }
 
   @Test

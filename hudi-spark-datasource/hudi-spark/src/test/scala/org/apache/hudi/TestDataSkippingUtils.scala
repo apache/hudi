@@ -565,6 +565,12 @@ object TestDataSkippingUtils {
   private val NyFallBackEdt0130 = new Timestamp(1793511000000L) // 2026-11-01 05:30Z
   private val NyFallBackEst0110 = new Timestamp(1793513400000L) // 2026-11-01 06:10Z
 
+  // The last day of a month and the first day of the next: dayofmonth drops from 31 to 1
+  private val fileAcrossMonthEnd = IndexRow("file_1", valueCount = 2,
+    C_minValue = new Timestamp(1706702400000L), // 2024-01-31 12:00Z
+    C_maxValue = new Timestamp(1706788800000L), // 2024-02-01 12:00Z
+    C_nullCount = 0)
+
   def dottedColumnStatsPredicates(): java.util.stream.Stream[Arguments] = {
     val cases = Seq(
       ("A >= 0 AND `profile.name` = 'alice'", Set("missing", "matching"), false),
@@ -1465,6 +1471,58 @@ object TestDataSkippingUtils {
           IndexRow("file_2", valueCount = 2,
             C_minValue = new Timestamp(1793491200000L), // 2026-11-01 00:00Z
             C_maxValue = new Timestamp(1793494800000L), // 2026-11-01 01:00Z
+            C_nullCount = 0)
+        ),
+        Seq("file_1")),
+      // BitwiseOr is not order-preserving, even with a constant: 1 | 2 = 3, but the larger 2 | 2 = 2.
+      // Re-applying it over min/max stats would wrongly prune file_1 even though its row 1 matches; must
+      // fall back to always-true, keeping the file
+      arguments(
+        "(A | 2) = 3",
+        Seq(IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0)),
+        Seq("file_1")),
+      arguments(
+        "(2 | A) = 3",
+        Seq(IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 2, A_nullCount = 0)),
+        Seq("file_1")),
+      // A bigint shifts by the low 6 bits of the amount, so shiftright(A, A) maps 64 to 64, but the larger
+      // 65 to 32. Re-applying it over min/max stats would wrongly prune file_1 even though its row 64
+      // matches; must fall back to always-true, keeping the file
+      arguments(
+        "shiftright(A, A) = 64",
+        Seq(IndexRow("file_1", valueCount = 2, A_minValue = 64, A_maxValue = 65, A_nullCount = 0)),
+        Seq("file_1")),
+      // date_add(d, dayofmonth(d)) maps 2024-01-31 to 2024-03-02, but the later 2024-02-01 to 2024-02-02.
+      // Re-applying it over min/max stats would wrongly prune file_1 even though its 2024-01-31 row matches;
+      // must fall back to always-true, keeping the file. Same for date_sub and datediff with an operand
+      // that depends on the column
+      arguments(
+        "date_add(CAST(C AS DATE), dayofmonth(C)) = DATE'2024-03-02'",
+        Seq(fileAcrossMonthEnd),
+        Seq("file_1")),
+      arguments(
+        "date_sub(CAST(C AS DATE), -dayofmonth(C)) = DATE'2024-03-02'",
+        Seq(fileAcrossMonthEnd),
+        Seq("file_1")),
+      arguments(
+        "datediff(CAST(C AS DATE), trunc(CAST(C AS DATE), 'MM')) = 30",
+        Seq(fileAcrossMonthEnd),
+        Seq("file_1")),
+      // With a constant operand, they still translate and prune
+      arguments(
+        "shiftright(A, 1) > 10",
+        Seq(
+          IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = 20, A_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, A_minValue = 30, A_maxValue = 40, A_nullCount = 0)
+        ),
+        Seq("file_2")),
+      arguments(
+        "datediff(CAST(C AS DATE), DATE'2024-01-01') = 30",
+        Seq(
+          fileAcrossMonthEnd,
+          IndexRow("file_2", valueCount = 2,
+            C_minValue = new Timestamp(1709294400000L), // 2024-03-01 12:00Z
+            C_maxValue = new Timestamp(1709380800000L), // 2024-03-02 12:00Z
             C_nullCount = 0)
         ),
         Seq("file_1"))

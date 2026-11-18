@@ -361,6 +361,57 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
     }
   }
 
+  test("Data skipping keeps files for terms that are not order-preserving in the column") {
+    Seq(false, true).foreach { partitionStats =>
+      withTempDir { tmp =>
+        val tableName = generateTableName
+        withSQLConf(
+          "hoodie.metadata.enable" -> "true",
+          "hoodie.metadata.index.column.stats.enable" -> "true",
+          "hoodie.metadata.index.partition.stats.enable" -> partitionStats.toString,
+          "hoodie.metadata.index.column.stats.column.list" -> "a,d",
+          "hoodie.enable.data.skipping" -> "false",
+          "hoodie.fileIndex.dataSkippingFailureMode" -> "strict"
+        ) {
+          spark.sql(
+            s"""
+               |create table $tableName (id int, a bigint, d date, ts long, dt string) using hudi
+               | tblproperties (primaryKey = 'id', orderingFields = 'ts', type = 'cow')
+               | partitioned by (dt)
+               | location '${tmp.getCanonicalPath}'
+               |""".stripMargin)
+          // One file per partition, so that each file's min and max come from two rows
+          spark.sql(s"insert into $tableName values (1, 1, date'2024-01-31', 1, 'par1'), " +
+            "(2, 2, date'2024-02-01', 1, 'par1')")
+          spark.sql(s"insert into $tableName values (3, 64, date'2024-05-10', 1, 'par2'), " +
+            "(4, 65, date'2024-05-11', 1, 'par2')")
+          assert(spark.sql(s"select input_file_name() from $tableName").collect().map(_.getString(0)).toSet.size == 2)
+          // Each term maps the min of its file above the max: 1 | 2 = 3 > 2 | 2 = 2, a bigint shifts by
+          // the low 6 bits of the amount (64 >> 64 = 64 > 65 >> 65 = 32), and dayofmonth drops from 31 to
+          // 1 at the end of January
+          val queries = Seq(
+            "(a | 2) = 3" -> 1,
+            "(2 | a) = 3" -> 1,
+            "shiftright(a, a) = 64" -> 3,
+            "date_add(d, dayofmonth(d)) = date'2024-03-02'" -> 1,
+            "date_sub(d, -dayofmonth(d)) = date'2024-03-02'" -> 1,
+            "datediff(d, trunc(d, 'MM')) = 30" -> 1)
+          def checkQueries(): Unit = queries.foreach { case (filter, id) =>
+            withClue(s"$filter: ") {
+              checkAnswer(s"select id from $tableName where $filter")(Seq(id))
+            }
+          }
+          checkQueries()
+          withSQLConf("hoodie.enable.data.skipping" -> "true") {
+            spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
+            spark.catalog.refreshTable(tableName)
+            checkQueries()
+          }
+        }
+      }
+    }
+  }
+
   test("Partition statistics survive MOR delete-only inline log appends") {
     withTempDir { tmp =>
       val tableName = generateTableName

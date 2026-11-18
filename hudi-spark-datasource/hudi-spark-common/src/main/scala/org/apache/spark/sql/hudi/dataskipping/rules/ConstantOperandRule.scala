@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hudi.dataskipping.rules
 
-import org.apache.spark.sql.catalyst.expressions.{Add, And, BitwiseOr, DateAdd, DateDiff, DateSub, Divide, Expression, GreaterThanOrEqual, LessThanOrEqual, Literal, Multiply, ShiftLeft, ShiftRight}
+import org.apache.spark.sql.catalyst.expressions.{Add, And, DateAdd, DateDiff, DateSub, Divide, Expression, GreaterThanOrEqual, LessThanOrEqual, Literal, Multiply, ShiftLeft, ShiftRight}
 import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange}
 import org.apache.spark.sql.types.{ByteType, DataType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType}
 
@@ -25,7 +25,7 @@ import scala.util.Try
 
 /**
  * Binary operators with the column on one side and a constant on the other:
- * `Add`, `Multiply`, `Divide`, `DateAdd`, `DateSub`, `DateDiff`, `ShiftLeft`, `ShiftRight`, `BitwiseOr`.
+ * `Add`, `Multiply`, `Divide`, `DateAdd`, `DateSub`, `DateDiff`, `ShiftLeft`, `ShiftRight`.
  *
  * Shared guard: the other operand is constant. Today that is enforced per function:
  *  - `Add`: float / double result and a finite constant, or decimal or integral result and a constant
@@ -35,12 +35,16 @@ import scala.util.Try
  *  - `Divide`: the divisor is a positive numeric literal (column as dividend only)
  *  - Decimal `Add`, `Multiply` and `Divide` steps are `partial`: an overflowing bound is NULL and the
  *    file is kept
- *  - `ShiftLeft`: the shift amount is constant
- *  - `DateAdd`, `DateSub`, `DateDiff` (end only), `ShiftRight`, `BitwiseOr`: ANY second operand is
- *    accepted today, constant or not
+ *  - `ShiftLeft`, `ShiftRight`: the shift amount is constant
+ *  - `DateAdd`, `DateSub`: the number of days is constant
+ *  - `DateDiff` (end only): the start date is constant
  *
- * NOTE: A column-referencing other operand could reverse the ordering (for ex, A + A * -2 = -A), and a
+ * NOTE: A column-referencing other operand could reverse the ordering (for ex, A + A * -2 = -A, and
+ *       date_add(d, dayofmonth(d)) maps 2024-01-31 to 2024-03-02 but 2024-02-01 to 2024-02-02), and a
  *       non-deterministic one is re-evaluated against the min/max bounds (for ex, A + rand())
+ *
+ * NOTE: `BitwiseOr` is not matched: it is not monotonic, even with a constant (for ex, 1 < 2 but
+ *       1 | 2 = 3 > 2 | 2 = 2), #20449
  *
  * NOTE: Integral `Add`, `Multiply` and `ShiftLeft` wrap around on overflow, so the max can map below
  *       the min (for ex, Long.MaxValue * 2 = -2). `Add` and `Multiply` throw instead in ANSI mode, while
@@ -53,11 +57,11 @@ import scala.util.Try
 object ConstantOperandRule extends RangeRule {
 
   override def steps(term: Expression): Seq[Step] = term match {
-    case DateAdd(start, _) => Seq(Step(term, start, Increasing, fileGuard = None, partial = false))
-    case DateSub(start, _) => Seq(Step(term, start, Increasing, fileGuard = None, partial = false))
+    case DateAdd(start, days) if days.foldable => Seq(Step(term, start, Increasing, fileGuard = None, partial = false))
+    case DateSub(start, days) if days.foldable => Seq(Step(term, start, Increasing, fileGuard = None, partial = false))
     // NOTE: DateDiff(end, start) is end - start, so it reverses the ordering of its start date,
     //       which hence must not be matched
-    case DateDiff(end, _) => Seq(Step(term, end, Increasing, fileGuard = None, partial = false))
+    case DateDiff(end, start) if start.foldable => Seq(Step(term, end, Increasing, fileGuard = None, partial = false))
 
     case Add(left, right, _) if hasFloatingPointResult(term) =>
       Seq(
@@ -101,18 +105,12 @@ object ConstantOperandRule extends RangeRule {
     case Divide(dividend, divisor, _) if isPositiveNumericLiteral(divisor) =>
       Seq(Step(term, dividend, Increasing, fileGuard = None, partial = hasDecimalResult(term)))
 
-    // NOTE: BitwiseOr is not monotonic (for ex, 1 < 2 but 1 | 2 = 3 > 2 | 2 = 2), #20449
-    case BitwiseOr(left, right) =>
-      Seq(
-        Step(term, left, Increasing, fileGuard = None, partial = false),
-        Step(term, right, Increasing, fileGuard = None, partial = false))
-
     // NOTE: Spark only shifts int and bigint values, by an int amount
     case ShiftLeft(value, amount) =>
       IntegralLimits.of(term).filter(t => t.dataType == IntegerType || t.dataType == LongType).toSeq.flatMap { t =>
         integralConstant(amount).map(n => guardedStep(term, value, t.shiftLeftFits(n)))
       }
-    case ShiftRight(value, _) => Seq(Step(term, value, Increasing, fileGuard = None, partial = false))
+    case ShiftRight(value, amount) if amount.foldable => Seq(Step(term, value, Increasing, fileGuard = None, partial = false))
 
     case _ => Nil
   }
