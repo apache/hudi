@@ -18,6 +18,7 @@
 
 package org.apache.hudi.common.table;
 
+import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieIndexDefinition;
 import org.apache.hudi.common.model.HoodieIndexMetadata;
@@ -634,6 +635,27 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
         .fromProperties(created.getTableConfig().getProps())
         .initTable(this.metaClient.getStorageConf(), path);
     assertOrderingFieldsKeys(version, reInitialised.getTableConfig());
+  }
+
+  /**
+   * A writer backfills the precombine key of a table below version 9 that records a single ordering field only under
+   * {@code hoodie.table.ordering.fields}, and leaves a precombine key the table already carries as it is.
+   */
+  @ParameterizedTest
+  @CsvSource(delimiter = '|', nullValues = "null", value = {
+      "SIX|ts|null|ts", "EIGHT|ts|null|ts", "EIGHT|_event_seq|null|_event_seq", "NINE|ts|null|null",
+      "SIX|ts,seq|null|null", "EIGHT|ts,seq|null|null", "SIX|null|null|null", "SIX|ts|seq|null", "EIGHT|ts|ts|null"})
+  void testGetMissingPrecombineField(HoodieTableVersion version, String orderingFields, String precombineField,
+                                     String expectedMissingPrecombineField) {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(version.versionCode()));
+    if (orderingFields != null) {
+      config.setValue(HoodieTableConfig.ORDERING_FIELDS, orderingFields);
+    }
+    if (precombineField != null) {
+      config.setValue(HoodieTableConfig.PRECOMBINE_FIELD, precombineField);
+    }
+    assertEquals(Option.ofNullable(expectedMissingPrecombineField), HoodieTableConfig.getMissingPrecombineField(config));
   }
 
   private static HoodieTableMetaClient.TableBuilder orderingFieldsTableBuilder(HoodieTableVersion version) {

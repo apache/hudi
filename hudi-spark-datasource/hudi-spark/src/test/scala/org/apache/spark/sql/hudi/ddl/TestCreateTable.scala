@@ -155,6 +155,15 @@ class TestCreateTable extends HoodieSparkSqlTestBase with ExtendedParserTestHelp
       val expectedTableVersion = tableVersion.getOrElse(
         HoodieTableVersion.fromVersionCode(HoodieWriteConfig.WRITE_TABLE_VERSION.defaultValue()))
       assertTableConfigs(metaClient.getStorage, tablePath, expectedTableConfigs(tableName, expectedTableVersion).asJava)
+
+      // the next write backfills the precombine key of a table created without it
+      HoodieTableConfig.delete(metaClient.getStorage, metaClient.getMetaPath,
+        java.util.Collections.singleton(HoodieTableConfig.PRECOMBINE_FIELD.key))
+      spark.sql(s"insert into $tableName values (1, 'a1', 10.0, 1000, '2021-01-05')")
+      val tableConfig = createMetaClient(spark, tablePath).getTableConfig
+      assertResult(expectedTableVersion)(tableConfig.getTableVersion)
+      assertResult(expectedTableConfigs(tableName, expectedTableVersion).get(HoodieTableConfig.PRECOMBINE_FIELD.key))(
+        Option(tableConfig.getProps.getProperty(HoodieTableConfig.PRECOMBINE_FIELD.key)))
     }
   }
 

@@ -37,6 +37,7 @@ import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.HoodieTable;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,8 +62,10 @@ import static org.apache.hudi.common.table.HoodieTableConfig.BOOTSTRAP_INDEX_TYP
 import static org.apache.hudi.common.table.HoodieTableConfig.INITIAL_VERSION;
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_CLASS_NAME;
 import static org.apache.hudi.common.table.HoodieTableConfig.KEY_GENERATOR_TYPE;
+import static org.apache.hudi.common.table.HoodieTableConfig.ORDERING_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PARTITION_FIELDS;
 import static org.apache.hudi.common.table.HoodieTableConfig.PAYLOAD_CLASS_NAME;
+import static org.apache.hudi.common.table.HoodieTableConfig.PRECOMBINE_FIELD;
 import static org.apache.hudi.common.table.HoodieTableConfig.RECORD_MERGE_MODE;
 import static org.apache.hudi.common.table.HoodieTableConfig.TABLE_METADATA_PARTITIONS;
 import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage;
@@ -196,6 +199,53 @@ class TestEightToSevenDowngradeHandler {
     EightToSevenDowngradeHandler.downgradeKeyGeneratorType(tableConfig, tablePropsToAdd);
     assertFalse(tablePropsToAdd.containsKey(KEY_GENERATOR_TYPE));
     assertFalse(tablePropsToAdd.containsKey(KEY_GENERATOR_CLASS_NAME));
+  }
+
+  /**
+   * A version 8 table that a 1.x writer created without the legacy precombine key gets it on the way down to 0.x,
+   * which reads only that key; a key already present and a table ordered on several fields are left as they are.
+   */
+  @ParameterizedTest
+  @CsvSource(delimiter = '|', nullValues = "null", value = {
+      "ts|null|ts", "_event_seq|null|_event_seq", "ts|ts|null", "ts,seq|null|null", "null|null|null"})
+  void testDowngradePrecombineField(String orderingFields, String precombineField, String expectedPrecombineField) {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.EIGHT.versionCode()));
+    if (orderingFields != null) {
+      tableConfig.setValue(ORDERING_FIELDS, orderingFields);
+    }
+    if (precombineField != null) {
+      tableConfig.setValue(PRECOMBINE_FIELD, precombineField);
+    }
+    Map<ConfigProperty, String> tablePropsToAdd = new HashMap<>();
+    EightToSevenDowngradeHandler.downgradePrecombineField(tableConfig, tablePropsToAdd);
+    assertEquals(expectedPrecombineField, tablePropsToAdd.get(PRECOMBINE_FIELD));
+  }
+
+  /**
+   * The 7 to 6 downgrade applies the same step, so a version 7 table brought down from version 8 before that step
+   * recorded the legacy precombine key still reaches 0.x with it; a key already present is left as it is.
+   */
+  @ParameterizedTest
+  @CsvSource(delimiter = '|', nullValues = "null", value = {"null|ts", "ts|null"})
+  void testSevenToSixDowngradeRecordsMissingPrecombineField(String precombineField, String expectedPrecombineField) {
+    HoodieTableConfig tableConfig = new HoodieTableConfig();
+    tableConfig.setValue(HoodieTableConfig.VERSION, String.valueOf(HoodieTableVersion.SEVEN.versionCode()));
+    tableConfig.setValue(ORDERING_FIELDS, "ts");
+    if (precombineField != null) {
+      tableConfig.setValue(PRECOMBINE_FIELD, precombineField);
+    }
+    when(metaClient.getTableConfig()).thenReturn(tableConfig);
+    HoodieTable table = mock(HoodieTable.class);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    when(upgradeDowngradeHelper.getTable(config, context)).thenReturn(table);
+
+    try (MockedStatic<UpgradeDowngradeUtils> utils = mockStatic(UpgradeDowngradeUtils.class)) {
+      UpgradeDowngrade.TableConfigChangeSet changeSet =
+          new SevenToSixDowngradeHandler().downgrade(config, context, "001", upgradeDowngradeHelper);
+      assertEquals(expectedPrecombineField, changeSet.propertiesToUpdate().get(PRECOMBINE_FIELD));
+      assertTrue(changeSet.propertiesToDelete().isEmpty());
+    }
   }
 
   @ParameterizedTest

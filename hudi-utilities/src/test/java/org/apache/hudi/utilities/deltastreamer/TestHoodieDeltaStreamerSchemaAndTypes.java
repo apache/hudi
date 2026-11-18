@@ -102,8 +102,10 @@ import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -188,9 +190,9 @@ public class TestHoodieDeltaStreamerSchemaAndTypes extends HoodieDeltaStreamerTe
     assertTableConfigs(storage, tablePath, expectedTableConfigs(expectedVersion));
     deltaStreamer.shutdownGracefully();
 
-    // the next write backfills the key generator class of a table created without it
+    // the next write backfills the key generator class and the precombine key of a table created without them
     HoodieTableConfig.delete(storage, new StoragePath(tablePath, HoodieTableMetaClient.METAFOLDER_NAME),
-        Collections.singleton(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key()));
+        new HashSet<>(Arrays.asList(HoodieTableConfig.KEY_GENERATOR_CLASS_NAME.key(), HoodieTableConfig.PRECOMBINE_FIELD.key())));
     deltaStreamer = new HoodieDeltaStreamer(cfg, jsc);
     deltaStreamer.getIngestionService().ingestOnce();
     assertTableConfigs(storage, tablePath, expectedTableConfigs(expectedVersion));
