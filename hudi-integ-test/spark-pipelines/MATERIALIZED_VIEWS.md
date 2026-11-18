@@ -39,10 +39,13 @@ Keyless aggregate materialized views remain deferred under #20405.
 Land this scenario after the #20453 harness dependency. Checks remain active under
 `python -O`, and SIGTERM unwinds the harness for server and temporary-directory cleanup.
 
-This is Phase 2 coverage on today's purge-style truncate. History retention,
-atomic refresh and timeline-preserving truncate are intentionally outside this
-scenario and remain Phase 4 work. Metadata indexing is disabled. The test does
-not establish streaming-table chaining or full-refresh behavior.
+This is Phase 2 coverage on today's purge-style truncate. See the
+[truncate and full-refresh limitations](ACCEPTANCE.md#truncate-and-full-refresh-limitations)
+for history loss, the non-atomic refresh window, and downstream rebuild requirements.
+Timeline-preserving truncate and checkpoint-generation isolation are deferred
+together beyond this release under #20404; atomic refresh is also out of scope.
+Metadata indexing is disabled. The test does not establish streaming-table
+chaining or streaming-table full-refresh behavior.
 
 The harness bounds each client/CLI process and removes its temporary data.
 Logs and generated pipeline definitions remain under `target/mv-acceptance-logs`.

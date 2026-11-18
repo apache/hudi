@@ -67,6 +67,52 @@ fan-in, chaining, or commit/checkpoint failure injection.
 The generated source, SQL and pipeline specification are retained in the logs as
 runnable examples within the harness's isolated filesystem layout.
 
+## Truncate and full-refresh limitations
+
+The release scope agreed in [#20404](https://github.com/apache/hudi/issues/20404)
+retains the existing full-table truncate behavior. Timeline-preserving truncate
+and streaming checkpoint-generation isolation are deferred together; they are
+not prerequisites for this release's SDP integration.
+
+| Operation | Current behavior |
+| --- | --- |
+| `TRUNCATE TABLE t` | Deletes the table directory and re-initializes the table from its properties. Data, timeline history, savepoints, metadata table, and stored sink batch IDs are lost. |
+| `TRUNCATE TABLE t PARTITION (...)` | Uses a `delete_partition` replace commit; it does not purge and re-initialize the whole table. |
+| SDP full refresh of a streaming table | Purges the target and restarts the flow from a fresh SDP-managed checkpoint. Old sink batch IDs are removed with the table, so they cannot suppress replay starting at batch 0. |
+| Ordinary streaming restart | Reuses the existing checkpoint and sink identifier to skip batches already committed to Hudi. |
+
+Full-table truncate is non-transactional. Do not run it while another writer is
+active. Deletion and table re-initialization can fail independently; a failed
+truncate does not guarantee that the previous snapshot survives. SDP's
+truncate–alter–append sequence is also non-atomic: a failure after truncation
+can leave an empty table, and a failure during replay can leave only the batches
+committed so far. A successful refresh with empty input leaves an empty table.
+Savepoints and retention settings cannot preserve history across this physical
+purge, and the old metadata table is not retained.
+
+Incremental/streaming reader offsets into the old table history become invalid.
+Downstream consumers are **not reset automatically** when their source is
+truncated or recreated. Stop affected consumers before the reset, then refresh
+or rebuild downstream tables and their checkpoints in dependency order along
+with the upstream table. This applies to chained SDP flows and to HoodieStreamer
+using `HoodieIncrSource`. Do not assume a downstream reader will detect the reset
+and fail safely; default failure on source recreation is follow-up work.
+
+Keep the checkpoint and sink identifier on ordinary restarts. Deleting a
+checkpoint in place while retaining the target's sink metadata is unsupported:
+batch IDs restart at zero and can be skipped against an old high-water mark.
+Checkpoint relocation requires an explicit rebuild/migration; changing a path
+alone does not isolate a new generation in the current sink. SDP full refresh
+coordinates the target purge with a fresh checkpoint. Replay requires the source
+data needed to rebuild the target to remain available.
+
+These are operational limitations, not additional acceptance-test results.
+Timeline-preserving truncate (the proposal in
+[#20378](https://github.com/apache/hudi/pull/20378)) must ship together with
+checkpoint-generation isolation and an explicit legacy-identifier migration
+contract if pursued after this release. Atomic refresh and automatic downstream
+recovery are not provided by the current implementation.
+
 ## Incremental Hudi table chaining
 
 `chaining_acceptance.py` adds a second partitioned Hudi streaming table that
