@@ -387,7 +387,7 @@ public class HoodieWriteMergeHandle<T, I, K, O> extends HoodieAbstractMergeHandl
             readerContext.getRecordContext(), props, orderingFields, deleteContext);
         BufferedRecord<T> mergeResult = recordMerger.merge(oldBufferedRecord, newBufferedRecord, readerContext.getRecordContext(), props);
         HoodieSchema combineRecordSchema = readerContext.getRecordContext().getSchemaFromBufferRecord(mergeResult);
-        HoodieRecord combinedRecord = readerContext.getRecordContext().constructHoodieRecord(mergeResult);
+        HoodieRecord combinedRecord = readerContext.getRecordContext().constructFinalHoodieRecord(mergeResult);
         if (combinedRecord.shouldIgnore(combineRecordSchema, props)) {
           // If it is an IGNORE_RECORD, just copy the old record, and do not update the new record.
           copyOldRecord = true;
