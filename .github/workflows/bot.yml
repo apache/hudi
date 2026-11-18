@@ -813,6 +813,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -874,6 +875,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -941,6 +943,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1005,6 +1008,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1062,6 +1066,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1119,6 +1124,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1183,6 +1189,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1283,6 +1290,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1347,6 +1355,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1486,6 +1495,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1560,6 +1570,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
@@ -1659,6 +1670,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       # Keeps Java CI within the ASF cap of 20 jobs at once (2 of its 3 instances run at once); see java-ci-result.
       max-parallel: 2
@@ -1754,6 +1766,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       # Keeps Java CI within the ASF cap of 20 jobs at once (its 3 instances run one after another); see java-ci-result.
       max-parallel: 1
@@ -1869,6 +1882,7 @@ jobs:
     if: *route
     needs: changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 75
     strategy:
       matrix:
         include:
