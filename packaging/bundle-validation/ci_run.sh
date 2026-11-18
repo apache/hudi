@@ -114,6 +114,9 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.9' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   elif [[ ${FLINK_PROFILE} == 'flink2.2' ]]; then
     IMAGE_TAG=flink221hive313spark359
     FLINK_VERSION=2.2.1
+  elif [[ ${FLINK_PROFILE} == 'flink2.3' ]]; then
+    IMAGE_TAG=flink230hive313spark359
+    FLINK_VERSION=2.3.0
   else
     echo "Unsupported Flink profile ${FLINK_PROFILE}"
     exit 1
@@ -258,6 +261,8 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink2.1-bundle
   elif [[ ${FLINK_PROFILE} == 'flink2.2' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink2.2-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink2.3' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink2.3-bundle
   fi
 
   echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."
