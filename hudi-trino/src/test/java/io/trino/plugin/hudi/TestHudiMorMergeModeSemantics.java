@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.hudi;
 
+import io.trino.plugin.hudi.testing.ColumnTypesHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.CommitTimeOrderingHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer;
@@ -46,7 +47,11 @@ public class TestHudiMorMergeModeSemantics
         return HudiQueryRunner.builder()
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new EventTimeDeletesHudiTablesInitializer(),
-                        new CommitTimeOrderingHudiTablesInitializer()))
+                        new CommitTimeOrderingHudiTablesInitializer(),
+                        EventTimeDeletesHudiTablesInitializer.spillingEveryLogRecord(),
+                        CommitTimeOrderingHudiTablesInitializer.spillingEveryLogRecord(),
+                        new ColumnTypesHudiTablesInitializer(),
+                        ColumnTypesHudiTablesInitializer.spillingEveryLogRecord()))
                 .build();
     }
 
@@ -114,6 +119,39 @@ public class TestHudiMorMergeModeSemantics
         assertQuery(
                 "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
+    }
+
+    @Test
+    public void testSpilledMergeMatchesInMemoryMerge()
+    {
+        // The spilling tables hold the same commits with a one-byte merge budget, so every log record and delete
+        // goes through HudiTrinoReaderContext.getRecordSerializer before it is merged
+        assertQuery(
+                "SELECT key, name, value FROM " + EventTimeDeletesHudiTablesInitializer.SPILLING_RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k4', 'k4_base', 40),"
+                        + " ('k5', 'k5_base', 50), ('k6', 'k6_base', 60)");
+        assertQuery(
+                "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.SPILLING_RT_TABLE_NAME + " ORDER BY key",
+                "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
+        assertThat(query("SELECT key, name, value, ts, _hoodie_is_deleted FROM " + EventTimeDeletesHudiTablesInitializer.SPILLING_RT_TABLE_NAME))
+                .matches("SELECT key, name, value, ts, _hoodie_is_deleted FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME);
+        assertThat(query("SELECT key, name, value, ts FROM " + CommitTimeOrderingHudiTablesInitializer.SPILLING_RT_TABLE_NAME))
+                .matches("SELECT key, name, value, ts FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME);
+    }
+
+    @Test
+    public void testSpilledMergeKeepsEveryColumnType()
+    {
+        String columns = "key, ts, c_tinyint, c_smallint, c_decimal, c_date, c_timestamp, c_double, c_binary, c_array, c_map, c_struct";
+        // k1 is updated and k2 is nulled in the log file; k3 comes from the base file alone
+        assertThat(query("SELECT key, ts, c_tinyint, c_smallint, c_decimal, c_date, c_double, c_array, c_struct.name FROM "
+                + ColumnTypesHudiTablesInitializer.SPILLING_RT_TABLE_NAME))
+                .matches("VALUES"
+                        + " (VARCHAR 'k1', BIGINT '200', TINYINT '7', SMALLINT '1007', CAST(7.25 AS decimal(10, 2)), DATE '2022-01-15', DOUBLE '7.5', ARRAY[BIGINT '7', BIGINT '8'], VARCHAR 'struct-7'),"
+                        + " (VARCHAR 'k2', BIGINT '200', NULL, NULL, NULL, NULL, NULL, NULL, NULL),"
+                        + " (VARCHAR 'k3', BIGINT '100', TINYINT '3', SMALLINT '1003', CAST(3.25 AS decimal(10, 2)), DATE '2022-01-11', DOUBLE '3.5', ARRAY[BIGINT '3', BIGINT '4'], VARCHAR 'struct-3')");
+        assertThat(query("SELECT " + columns + " FROM " + ColumnTypesHudiTablesInitializer.SPILLING_RT_TABLE_NAME))
+                .matches("SELECT " + columns + " FROM " + ColumnTypesHudiTablesInitializer.RT_TABLE_NAME);
     }
 
     @Test

@@ -33,6 +33,7 @@ import java.util.Optional;
 
 import static io.trino.metastore.HiveType.HIVE_LONG;
 import static io.trino.metastore.HiveType.HIVE_STRING;
+import static org.apache.hudi.common.config.HoodieMemoryConfig.MAX_MEMORY_FOR_MERGE;
 
 /**
  * Creates a non-partitioned Merge-On-Read table in {@link RecordMergeMode#COMMIT_TIME_ORDERING} that
@@ -51,10 +52,26 @@ public class CommitTimeOrderingHudiTablesInitializer
 {
     public static final String TABLE_NAME = "commit_time_mor";
     public static final String RT_TABLE_NAME = TABLE_NAME + "_rt";
+    public static final String SPILLING_TABLE_NAME = TABLE_NAME + "_spilling";
+    public static final String SPILLING_RT_TABLE_NAME = SPILLING_TABLE_NAME + "_rt";
 
     public CommitTimeOrderingHudiTablesInitializer()
     {
         super(TABLE_NAME);
+    }
+
+    private CommitTimeOrderingHudiTablesInitializer(String tableName, Map<String, String> extraTableProperties)
+    {
+        super(tableName, extraTableProperties);
+    }
+
+    /**
+     * The same commits under {@link #SPILLING_TABLE_NAME}, with a one-byte merge memory budget. The merge buffer's
+     * in-memory share of it rounds down to zero bytes, so every log record and delete is spilled to disk.
+     */
+    public static CommitTimeOrderingHudiTablesInitializer spillingEveryLogRecord()
+    {
+        return new CommitTimeOrderingHudiTablesInitializer(SPILLING_TABLE_NAME, Map.of(MAX_MEMORY_FOR_MERGE.key(), "1"));
     }
 
     @Override
