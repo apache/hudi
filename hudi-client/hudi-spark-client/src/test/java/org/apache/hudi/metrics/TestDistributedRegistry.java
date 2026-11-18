@@ -19,7 +19,12 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
+import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
+import org.apache.hudi.common.metrics.LocalRegistry;
 import org.apache.hudi.common.metrics.Registry;
+import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -426,6 +431,59 @@ public class TestDistributedRegistry {
     } finally {
       Registry.REGISTRY_MAP.remove(Registry.makeKey("", registryName));
     }
+  }
+
+  @Test
+  public void testEngineContextRejectsRegistryOfAnotherClass() {
+    // Given: a LocalRegistry under the same table and registry name, as a writer with executor metrics off creates it
+    String tableName = "testEngineContextRejectsRegistryOfAnotherClass";
+    String registryName = REGISTRY_NAME + "_testAnotherClass";
+    Registry.getRegistryOfClass(tableName, registryName, LocalRegistry.class.getName());
+    try {
+      // Then: the engine context fails with the class mismatch instead of returning the LocalRegistry
+      HoodieException exception = Assertions.assertThrows(HoodieException.class,
+          () -> engineContext.getMetricRegistry(tableName, registryName));
+      Assertions.assertEquals("Registry " + Registry.makeKey(tableName, registryName) + " already exists with class "
+          + LocalRegistry.class.getName() + ", but class " + DistributedRegistry.class.getName() + " was requested", exception.getMessage());
+    } finally {
+      Registry.REGISTRY_MAP.remove(Registry.makeKey(tableName, registryName));
+    }
+  }
+
+  @Test
+  public void testWrapperFileSystemRegistriesReuseTheTableRegistryOfAnyClass() {
+    String tableName = "testWrapperFileSystemRegistries";
+    String dataKey = Registry.makeKey(tableName, HoodieWrapperFileSystem.REGISTRY_NAME);
+    String metaKey = Registry.makeKey(tableName, HoodieWrapperFileSystem.REGISTRY_META_NAME);
+    try {
+      // Given: a writer of the table with executor metrics on creates its registries as DistributedRegistry
+      DistributedRegistryUtil.createWrapperFileSystemRegistries(engineContext, metricsOnConfig(tableName, true));
+      Registry dataRegistry = Registry.REGISTRY_MAP.get(dataKey);
+      Registry metaRegistry = Registry.REGISTRY_MAP.get(metaKey);
+      assertThat(dataRegistry, instanceOf(DistributedRegistry.class));
+      assertThat(metaRegistry, instanceOf(DistributedRegistry.class));
+
+      // Then: a writer of the same table with executor metrics off reuses them instead of failing on the class
+      DistributedRegistryUtil.createWrapperFileSystemRegistries(engineContext, metricsOnConfig(tableName, false));
+      Assertions.assertSame(dataRegistry, Registry.REGISTRY_MAP.get(dataKey));
+      Assertions.assertSame(metaRegistry, Registry.REGISTRY_MAP.get(metaKey));
+    } finally {
+      HoodieWrapperFileSystem.setMetricsRegistry(null, null);
+      Registry.REGISTRY_MAP.remove(dataKey);
+      Registry.REGISTRY_MAP.remove(metaKey);
+    }
+  }
+
+  private static HoodieWriteConfig metricsOnConfig(String tableName, boolean executorMetrics) {
+    return HoodieWriteConfig.newBuilder()
+        .withPath("/" + tableName)
+        .forTable(tableName)
+        .withMetricsConfig(HoodieMetricsConfig.newBuilder()
+            .on(true)
+            .withReporterType(MetricsReporterType.INMEMORY.name())
+            .withExecutorMetrics(executorMetrics)
+            .build())
+        .build();
   }
 
   private static void makeStale(DistributedRegistry registry) {

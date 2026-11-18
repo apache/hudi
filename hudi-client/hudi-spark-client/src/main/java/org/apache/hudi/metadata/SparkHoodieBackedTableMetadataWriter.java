@@ -23,11 +23,9 @@ import org.apache.hudi.client.HoodieWriteResult;
 import org.apache.hudi.client.SparkRDDMetadataWriteClient;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
-import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.EngineType;
 import org.apache.hudi.common.engine.HoodieEngineContext;
-import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
 import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieRecord;
@@ -41,8 +39,6 @@ import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.index.HoodieSparkIndexClient;
 import org.apache.hudi.metadata.index.SparkIndexerSupport;
 import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
-import org.apache.hudi.metrics.DistributedRegistry;
-import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.table.BulkInsertPartitioner;
 
@@ -117,14 +113,6 @@ public class SparkHoodieBackedTableMetadataWriter extends HoodieBackedTableMetad
   @Override
   protected void initRegistry() {
     if (metadataWriteConfig.isMetricsOn()) {
-      Registry registry;
-      if (metadataWriteConfig.isExecutorMetricsEnabled() && metadataWriteConfig.getMetricsReporterType() != MetricsReporterType.INMEMORY) {
-        DistributedRegistry distRegistry = (DistributedRegistry) Registry.getRegistry("HoodieMetadata", DistributedRegistry.class.getName());
-        HoodieSparkEngineContext sparkEngineContext = (HoodieSparkEngineContext) engineContext;
-        registry = distRegistry.register(sparkEngineContext.getJavaSparkContext());
-      } else {
-        registry = Registry.getRegistry("HoodieMetadata");
-      }
       this.metrics = Option.of(new HoodieMetadataMetrics(metadataWriteConfig.getMetricsConfig(), dataMetaClient.getStorage(), dataWriteConfig.getMetadataConfig().isDetailedMetricsEnabled()));
     } else {
       this.metrics = Option.empty();

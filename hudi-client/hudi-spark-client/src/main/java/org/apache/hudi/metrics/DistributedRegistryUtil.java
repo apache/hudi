@@ -19,6 +19,7 @@
 package org.apache.hudi.metrics;
 
 import org.apache.hudi.common.engine.HoodieEngineContext;
+import org.apache.hudi.common.metrics.LocalRegistry;
 import org.apache.hudi.common.metrics.Registry;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HoodieWrapperFileSystem;
@@ -45,12 +46,20 @@ public class DistributedRegistryUtil {
         registry = context.getMetricRegistry(config.getTableName(), HoodieWrapperFileSystem.REGISTRY_NAME);
         registryMeta = context.getMetricRegistry(config.getTableName(), HoodieWrapperFileSystem.REGISTRY_META_NAME);
       } else {
-        registry = Registry.getRegistryOfClass(config.getTableName(), HoodieWrapperFileSystem.REGISTRY_NAME,
-            Registry.getRegistry(HoodieWrapperFileSystem.REGISTRY_NAME).getClass().getName());
-        registryMeta = Registry.getRegistryOfClass(config.getTableName(), HoodieWrapperFileSystem.REGISTRY_META_NAME,
-            Registry.getRegistry(HoodieWrapperFileSystem.REGISTRY_META_NAME).getClass().getName());
+        registry = getRegistry(config.getTableName(), HoodieWrapperFileSystem.REGISTRY_NAME);
+        registryMeta = getRegistry(config.getTableName(), HoodieWrapperFileSystem.REGISTRY_META_NAME);
       }
       HoodieWrapperFileSystem.setMetricsRegistry(registry, registryMeta);
     }
+  }
+
+  /**
+   * Returns the registry of the table, of any class, or creates a {@link LocalRegistry}. A writer of the same table
+   * with executor metrics enabled may already have created it in this JVM as a {@link DistributedRegistry}, which
+   * works on the driver as well.
+   */
+  private static Registry getRegistry(String tableName, String registryName) {
+    Registry registry = Registry.REGISTRY_MAP.get(Registry.makeKey(tableName, registryName));
+    return registry != null ? registry : Registry.getRegistryOfClass(tableName, registryName, LocalRegistry.class.getName());
   }
 }
