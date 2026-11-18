@@ -129,6 +129,9 @@ public class ITTestBucketStreamWrite {
     String tablePath = tempFile.getAbsolutePath();
     StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment().setParallelism(4);
     TableEnvironment tableEnv = StreamTableEnvironment.create(env);
+    // Flink 2.3 rejects an INSERT whose upsert key differs from the primary key of the sink table
+    // unless it has an ON CONFLICT clause (FLINK-38927), restore the behavior of earlier versions.
+    tableEnv.getConfig().getConfiguration().setString("table.exec.sink.require-on-conflict", "false");
     Map<String, String> options = new HashMap<>();
     options.put(FlinkOptions.PATH.key(), tablePath);
     options.put(FlinkOptions.TABLE_TYPE.key(), FlinkOptions.TABLE_TYPE_MERGE_ON_READ);
