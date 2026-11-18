@@ -56,8 +56,9 @@ import static java.util.Objects.requireNonNull;
  * <tr><td>DATE</td><td>date</td><td>kept</td></tr>
  * <tr><td>TIME millis, micros</td><td>time(3), time(6)</td><td>kept; integer or bigint through the metastore</td></tr>
  * <tr><td>TIMESTAMP millis, micros, UTC-adjusted</td><td>timestamp(3), timestamp(6) with time zone</td>
- * <td>kept; timestamp(9) through the metastore</td></tr>
- * <tr><td>TIMESTAMP millis, micros, local</td><td>timestamp(3), timestamp(6)</td><td>kept; timestamp(9) through the metastore</td></tr>
+ * <td>kept; bigint through the metastore, timestamp(9) with hoodie.datasource.hive_sync.support_timestamp</td></tr>
+ * <tr><td>TIMESTAMP millis, micros, local</td><td>timestamp(3), timestamp(6)</td>
+ * <td>kept; bigint through the metastore, timestamp(9) with hoodie.datasource.hive_sync.support_timestamp</td></tr>
  * <tr><td>UUID</td><td>uuid</td><td>kept; varbinary through the metastore</td></tr>
  * <tr><td>ARRAY, MAP, RECORD</td><td>array, map with varchar keys, row</td><td>kept</td></tr>
  * <tr><td>ENUM</td><td>varchar</td><td>lost: Trino has no enum type</td></tr>
@@ -65,6 +66,8 @@ import static java.util.Objects.requireNonNull;
  * <tr><td>VECTOR</td><td>array of real, double or tinyint</td><td>lost: the dimension; varbinary through the metastore</td></tr>
  * <tr><td>BLOB, VARIANT</td><td>row of their fields</td><td>lost: Trino sees a plain row</td></tr>
  * </table>
+ * hoodie.datasource.hive_sync.support_timestamp is off by default and on for Spark SQL writes.
+ * <p>
  * A nullable type maps as its non-null type; Trino carries nullability on the column. Other unions and NULL have no
  * Trino type and are rejected.
  */
@@ -79,8 +82,13 @@ public final class TrinoTypeMapper
 
     public Type toTypeSystem(HoodieSchema schema)
     {
-        HoodieSchema type = schema.isNullable() ? schema.getNonNullType() : schema;
-        return switch (type.getType()) {
+        requireNonNull(schema, "schema is null");
+        // Covers ["null"], which getNonNullType() cannot reduce, and every union wider than ["null", T]
+        if (schema.isComplexUnion()) {
+            throw unsupported(schema, "Trino has no union type");
+        }
+        HoodieSchema nonNullSchema = schema.getNonNullType();
+        return switch (nonNullSchema.getType()) {
             case BOOLEAN -> BOOLEAN;
             case INT -> INTEGER;
             case LONG -> BIGINT;
@@ -91,31 +99,32 @@ public final class TrinoTypeMapper
             case UUID -> UUID;
             case DATE -> DATE;
             case DECIMAL -> {
-                HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) type;
+                HoodieSchema.Decimal decimal = (HoodieSchema.Decimal) nonNullSchema;
                 if (decimal.getPrecision() > MAX_PRECISION) {
-                    throw unsupported(type, "Trino decimals stop at precision " + MAX_PRECISION);
+                    throw unsupported(nonNullSchema, "Trino decimals stop at precision " + MAX_PRECISION);
                 }
                 yield createDecimalType(decimal.getPrecision(), decimal.getScale());
             }
-            case TIME -> createTimeType(trinoPrecision(((HoodieSchema.Time) type).getPrecision()));
+            case TIME -> createTimeType(trinoPrecision(((HoodieSchema.Time) nonNullSchema).getPrecision()));
             case TIMESTAMP -> {
-                HoodieSchema.Timestamp timestamp = (HoodieSchema.Timestamp) type;
+                HoodieSchema.Timestamp timestamp = (HoodieSchema.Timestamp) nonNullSchema;
                 int precision = trinoPrecision(timestamp.getPrecision());
                 // A UTC-adjusted timestamp is an instant; a local one is a wall-clock time
                 yield timestamp.isUtcAdjusted() ? createTimestampWithTimeZoneType(precision) : createTimestampType(precision);
             }
-            case ARRAY -> new ArrayType(toTypeSystem(type.getElementType()));
-            case MAP -> new MapType(VARCHAR, toTypeSystem(type.getValueType()), typeOperators);
-            case RECORD, BLOB, VARIANT -> RowType.from(type.getFields().stream()
+            case ARRAY -> new ArrayType(toTypeSystem(nonNullSchema.getElementType()));
+            case MAP -> new MapType(VARCHAR, toTypeSystem(nonNullSchema.getValueType()), typeOperators);
+            case RECORD, BLOB, VARIANT -> RowType.from(nonNullSchema.getFields().stream()
                     .map(field -> RowType.field(field.name(), toTypeSystem(field.schema())))
                     .toList());
-            case VECTOR -> new ArrayType(switch (((HoodieSchema.Vector) type).getVectorElementType()) {
+            case VECTOR -> new ArrayType(switch (((HoodieSchema.Vector) nonNullSchema).getVectorElementType()) {
                 case FLOAT -> REAL;
                 case DOUBLE -> DOUBLE;
                 case INT8 -> TINYINT;
             });
-            case UNION -> throw unsupported(type, "Trino has no union type");
-            case NULL -> throw unsupported(type, "Trino has no null type");
+            // Unreachable: complex unions are rejected above and getNonNullType() unwraps ["null", T]
+            case UNION -> throw unsupported(nonNullSchema, "Trino has no union type");
+            case NULL -> throw unsupported(nonNullSchema, "Trino has no null type");
         };
     }
 

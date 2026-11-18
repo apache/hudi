@@ -95,17 +95,17 @@ final class TestTrinoTypeMapper
                 Arguments.of(struct, RowType.from(List.of(field("name", VARCHAR), field("at", TIMESTAMP_MICROS)))),
                 Arguments.of(HoodieSchema.createVector(4), new ArrayType(REAL)),
                 Arguments.of(HoodieSchema.createVector(4, HoodieSchema.Vector.VectorElementType.DOUBLE), new ArrayType(DOUBLE)),
-                Arguments.of(HoodieSchema.createVector(4, HoodieSchema.Vector.VectorElementType.INT8), new ArrayType(TINYINT)));
-    }
-
-    @Test
-    void testBlobAndVariantMapToRowsOfTheirFields()
-    {
-        for (HoodieSchema schema : List.of(HoodieSchema.createBlob(), HoodieSchema.createVariant())) {
-            RowType row = (RowType) MAPPER.toTypeSystem(schema);
-            assertThat(row.getFields()).extracting(rowField -> rowField.getName().orElseThrow())
-                    .containsExactlyElementsOf(schema.getFields().stream().map(HoodieSchemaField::name).toList());
-        }
+                Arguments.of(HoodieSchema.createVector(4, HoodieSchema.Vector.VectorElementType.INT8), new ArrayType(TINYINT)),
+                // BLOB's reference is a nested record, so this also covers a row inside a row
+                Arguments.of(HoodieSchema.createBlob(), RowType.from(List.of(
+                        field("type", VARCHAR),
+                        field("data", VARBINARY),
+                        field("reference", RowType.from(List.of(
+                                field("external_path", VARCHAR),
+                                field("offset", BIGINT),
+                                field("length", BIGINT),
+                                field("managed", BOOLEAN))))))),
+                Arguments.of(HoodieSchema.createVariant(), RowType.from(List.of(field("metadata", VARBINARY), field("value", VARBINARY)))));
     }
 
     @Test
@@ -120,5 +120,8 @@ final class TestTrinoTypeMapper
         assertThatThrownBy(() -> MAPPER.toTypeSystem(HoodieSchema.create(HoodieSchemaType.NULL)))
                 .isInstanceOf(TrinoException.class)
                 .hasMessageContaining("Trino has no null type");
+        assertThatThrownBy(() -> MAPPER.toTypeSystem(HoodieSchema.createUnion(HoodieSchema.create(HoodieSchemaType.NULL))))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("Trino has no union type");
     }
 }
