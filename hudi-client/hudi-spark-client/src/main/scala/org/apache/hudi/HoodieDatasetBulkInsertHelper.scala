@@ -160,8 +160,29 @@ object HoodieDatasetBulkInsertHelper
                  table: HoodieTable[_, _, _, _],
                  writeConfig: HoodieWriteConfig,
                  arePartitionRecordsSorted: Boolean,
-                 shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] = {
-    val schema = HoodieSchemaConversionUtils.alignFieldsNullability(dataset.schema, HoodieSchema.parse(writeConfig.getSchema))
+                 shouldPreserveHoodieMetadata: Boolean): HoodieData[WriteStatus] =
+    bulkInsert(dataset, instantTime, table, writeConfig, arePartitionRecordsSorted, shouldPreserveHoodieMetadata,
+      writerSchema(dataset.schema, writeConfig))
+
+  /**
+   * The schema the bulk-insert writers use for a dataset: its schema, with field nullability aligned to the table
+   * schema in `writeConfig`.
+   */
+  def writerSchema(datasetSchema: StructType, writeConfig: HoodieWriteConfig): StructType =
+    HoodieSchemaConversionUtils.alignFieldsNullability(datasetSchema, HoodieSchema.parse(writeConfig.getSchema))
+
+  /**
+   * Same as above, with the writer schema (see [[writerSchema]]) supplied by the caller. The write closure captures
+   * it, so a caller that unions many bulk inserts into one stage (clustering) passes one shared instance: Spark ships
+   * the whole stage lineage to every task, and a schema built per call is deserialized once per call by every task.
+   */
+  def bulkInsert(dataset: Dataset[Row],
+                 instantTime: String,
+                 table: HoodieTable[_, _, _, _],
+                 writeConfig: HoodieWriteConfig,
+                 arePartitionRecordsSorted: Boolean,
+                 shouldPreserveHoodieMetadata: Boolean,
+                 schema: StructType): HoodieData[WriteStatus] = {
     HoodieJavaRDD.of(
       injectSQLConf(dataset.queryExecution.toRdd.mapPartitions(iter => {
         val taskContextSupplier: TaskContextSupplier = table.getTaskContextSupplier
