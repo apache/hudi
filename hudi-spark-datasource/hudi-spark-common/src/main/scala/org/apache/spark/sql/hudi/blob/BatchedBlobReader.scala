@@ -24,13 +24,17 @@ import org.apache.hudi.common.schema.{HoodieSchema, HoodieSchemaType}
 import org.apache.hudi.common.util.HoodieStorageUtils
 import org.apache.hudi.io.SeekableDataInputStream
 import org.apache.hudi.storage.{HoodieStorage, StorageConfiguration, StoragePath}
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Dataset, Row}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{GenericRowWithSchema, SpecificInternalRow}
 import org.apache.spark.sql.types.{BinaryType, BlobType, DataType, StructField, StructType}
+import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 
 import java.io.InputStream
@@ -674,6 +678,20 @@ object BatchedBlobReader {
   val DATA_COL = "__temp__data"
 
   /**
+   * Broadcasts the Hadoop configuration behind `storageConf` wrapped in Spark's
+   * [[SerializableConfiguration]], which survives any `spark.serializer`. A broadcast
+   * [[HadoopStorageConfiguration]] arrives on executors with a null configuration under Kryo
+   * unless Hudi's Kryo registrator is configured, because its configuration is transient.
+   */
+  def broadcastStorageConf(sc: SparkContext,
+                           storageConf: StorageConfiguration[_]): Broadcast[SerializableConfiguration] =
+    sc.broadcast(new SerializableConfiguration(storageConf.unwrapAs(classOf[Configuration])))
+
+  /** Rebuilds the storage configuration on an executor from [[broadcastStorageConf]]'s value. */
+  def storageConfFrom(broadcastConf: Broadcast[SerializableConfiguration]): StorageConfiguration[_] =
+    new HadoopStorageConfiguration(broadcastConf.value.value)
+
+  /**
    * Read byte ranges from a DataFrame with a Blob column.
    *
    * The struct column must contain the HoodieSchema.Blob structure:
@@ -725,14 +743,14 @@ object BatchedBlobReader {
     // Create output schema (input + data column)
     val outputSchema = df.schema.add(StructField(DATA_COL, BinaryType, nullable = true))
 
-    // Broadcast storage configuration
-    val broadcastConf = spark.sparkContext.broadcast(storageConf)
+    val broadcastConf = broadcastStorageConf(spark.sparkContext, storageConf)
 
     // Apply mapPartitions
     val result = df.mapPartitions { partition =>
       // Create reader for this partition
+      val partitionConf = storageConfFrom(broadcastConf)
       val reader = new BatchedBlobReader(
-        HoodieStorageUtils.getStorage(_, broadcastConf.value), maxGapBytes, lookaheadSize)
+        HoodieStorageUtils.getStorage(_, partitionConf), maxGapBytes, lookaheadSize)
 
       // Import implicit instances for Row
       import RowAccessor.rowAccessor
@@ -770,7 +788,7 @@ object BatchedBlobReader {
   def processRDD(
       rdd: RDD[InternalRow],
       schema: StructType,
-      broadcastConf: Broadcast[StorageConfiguration[_]],
+      broadcastConf: Broadcast[SerializableConfiguration],
       maxGapBytes: Int = DEFAULT_MAX_GAP_BYTES,
       lookaheadSize: Int = DEFAULT_LOOKAHEAD_SIZE,
       columnName: String): RDD[InternalRow] = {
@@ -789,8 +807,9 @@ object BatchedBlobReader {
 
     // Process partitions using InternalRow type classes
     rdd.mapPartitions { partition =>
+      val partitionConf = storageConfFrom(broadcastConf)
       val reader = new BatchedBlobReader(
-        HoodieStorageUtils.getStorage(_, broadcastConf.value), maxGapBytes, lookaheadSize)
+        HoodieStorageUtils.getStorage(_, partitionConf), maxGapBytes, lookaheadSize)
 
       // Import implicit instances for InternalRow
       import RowAccessor.internalRowAccessor
