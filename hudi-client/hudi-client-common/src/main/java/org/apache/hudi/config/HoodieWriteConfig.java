@@ -781,6 +781,15 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("When enabled, records in older schema are rewritten into newer schema during upsert,delete and background"
           + " compaction,clustering operations.");
 
+  public static final ConfigProperty<Boolean> HALT_EXECUTOR_ON_CONNECTION_POOL_SHUTDOWN = ConfigProperty
+      .key("hoodie.write.halt.executor.on.connection.pool.shutdown")
+      .defaultValue(false)
+      .markAdvanced()
+      .withDocumentation("When an upsert write task fails because the storage client's HTTP connection pool has been "
+          + "shut down, halt the executor JVM instead of only failing the task. The pool belongs to the JVM-wide cached "
+          + "file system, so every later task on that executor fails the same way while the executor keeps heartbeating; "
+          + "halting lets Spark replace it. Other tasks running on that executor are lost and retried.");
+
   public static final ConfigProperty<Boolean> ALLOW_EMPTY_COMMIT = ConfigProperty
       .key("hoodie.allow.empty.commit")
       .defaultValue(true)
@@ -3039,6 +3048,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public boolean allowEmptyCommit() {
     return getBooleanOrDefault(ALLOW_EMPTY_COMMIT);
+  }
+
+  public boolean shouldHaltExecutorOnConnectionPoolShutdown() {
+    return getBooleanOrDefault(HALT_EXECUTOR_ON_CONNECTION_POOL_SHUTDOWN);
   }
 
   public boolean allowOperationMetadataField() {
