@@ -359,6 +359,9 @@ jobs:
           SPARK_PROFILE: ${{ matrix.sparkProfile }}
           FLINK_PROFILE: ${{ matrix.flinkProfile }}
         run: |
+          # Remove the utilities report first: if this step fails before the generator runs, the
+          # always() upload below must not publish it under this flag.
+          rm -f jacoco-report.xml
           module_dirs=$(mvn -q -B -ntp -D"$SCALA_PROFILE" -D"$SPARK_PROFILE" -D"$FLINK_PROFILE" -Phudi-platform-service -am -pl hudi-hadoop-mr,hudi-client/hudi-java-client org.codehaus.mojo:exec-maven-plugin:1.6.0:exec -Dexec.executable=pwd)
           COVERAGE_MODULE_DIRS="$module_dirs" ./scripts/jacoco/generate_merged_coverage_report.sh $GITHUB_WORKSPACE $GITHUB_WORKSPACE/hudi-hadoop-mr $GITHUB_WORKSPACE/hudi-client/hudi-java-client
       - name: Upload hudi-hadoop-mr and hudi-java-client coverage to Codecov
