@@ -101,6 +101,6 @@ public class IndexerFactory {
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient dataTableMetaClient) {
     return dataTableWriteConfig.getMetadataConfig().shouldDeferRliInitForFreshTable()
-        && dataTableMetaClient.getCommitsTimeline().filterCompletedInstants().empty();
+        && !dataTableMetaClient.isTimelineNonEmpty();
   }
 }
