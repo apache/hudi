@@ -696,36 +696,38 @@ class TestStreamingSource extends StreamTest with SparkAdapterSupport {
 
   Seq("READ_UPTO_LATEST_COMMIT", "READ_LATEST").foreach { recoveryStrategy =>
     test(s"restart failed batch with $recoveryStrategy then return to FAIL") {
-      withTempDir { dir =>
-        val tablePath = s"${dir.getCanonicalPath}/restart"
-        addData(tablePath, Seq(("1", "old", "10", "001")))
-        val df = spark.readStream.format("hudi").load(tablePath).select("id")
-        val recoveryRows = if (recoveryStrategy == "READ_LATEST") Seq(Row("1")) else Seq(Row("1"), Row("2"))
-        testStream(df)(
-          StartStream(),
-          AssertOnQuery { q => q.processAllAvailable(); true },
-          CheckAnswerRows(Seq(Row("1")), lastOnly = false, isSorted = false),
-          StopStream,
-          AssertOnQuery { _ =>
-            Seq(("2", "replacement", "20", "002")).toDF(columns: _*).write.format("hudi")
-              .options(commonOptions).option(TBL_NAME.key, "restart")
-              .option("hoodie.datasource.write.operation", "insert_overwrite_table")
-              .mode(SaveMode.Append).save(tablePath)
-            true
-          },
-          StartStream(),
-          // StreamTest checks exact classes; the safety exception is intentionally private.
-          ExpectFailure[Throwable]()(scala.reflect.ClassTag(
-            Class.forName("org.apache.spark.sql.hudi.streaming.HoodieStreamingSourceSafety$RebuildRequired"))),
-          StartStream(additionalConfs = Map(DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> recoveryStrategy)),
-          AssertOnQuery { q => q.processAllAvailable(); true },
-          CheckAnswerRows(recoveryRows, lastOnly = false, isSorted = false),
-          StopStream,
-          addDataToQuery(tablePath, Seq(("3", "next", "30", "003"))),
-          StartStream(additionalConfs = Map(DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> "FAIL")),
-          AssertOnQuery { q => q.processAllAvailable(); true },
-          CheckAnswerRows(recoveryRows :+ Row("3"), lastOnly = false, isSorted = false)
-        )
+      withSQLConf(DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> "FAIL") {
+        withTempDir { dir =>
+          val tablePath = s"${dir.getCanonicalPath}/restart"
+          addData(tablePath, Seq(("1", "old", "10", "001")))
+          val df = spark.readStream.format("hudi").load(tablePath).select("id")
+          val recoveryRows = if (recoveryStrategy == "READ_LATEST") Seq(Row("1")) else Seq(Row("1"), Row("2"))
+          testStream(df)(
+            StartStream(additionalConfs = Map(DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> "FAIL")),
+            AssertOnQuery { q => q.processAllAvailable(); true },
+            CheckAnswerRows(Seq(Row("1")), lastOnly = false, isSorted = false),
+            StopStream,
+            AssertOnQuery { _ =>
+              Seq(("2", "replacement", "20", "002")).toDF(columns: _*).write.format("hudi")
+                .options(commonOptions).option(TBL_NAME.key, "restart")
+                .option("hoodie.datasource.write.operation", "insert_overwrite_table")
+                .mode(SaveMode.Append).save(tablePath)
+              true
+            },
+            StartStream(additionalConfs = Map(DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> "FAIL")),
+            // StreamTest checks exact classes; the safety exception is intentionally private.
+            ExpectFailure[Throwable]()(scala.reflect.ClassTag(
+              Class.forName("org.apache.spark.sql.hudi.streaming.HoodieStreamingSourceSafety$RebuildRequired"))),
+            StartStream(additionalConfs = Map(DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> recoveryStrategy)),
+            AssertOnQuery { q => q.processAllAvailable(); true },
+            CheckAnswerRows(recoveryRows, lastOnly = false, isSorted = false),
+            StopStream,
+            addDataToQuery(tablePath, Seq(("3", "next", "30", "003"))),
+            StartStream(additionalConfs = Map(DataSourceReadOptions.STREAMING_READ_RECOVERY_STRATEGY.key() -> "FAIL")),
+            AssertOnQuery { q => q.processAllAvailable(); true },
+            CheckAnswerRows(recoveryRows :+ Row("3"), lastOnly = false, isSorted = false)
+          )
+        }
       }
     }
   }
