@@ -469,7 +469,16 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
   void completeCompactionWithLiveHeartbeatSucceeds() throws Exception {
     initMetaClient();
     HoodieTable<String, String, String, String> table = mockTableForCompactionCommit();
-    TestTableServiceClient client = new TestTableServiceClient(buildLazyConfigWithShortHeartbeat(), Collections.singletonList(table).iterator(),
+    // a wide heartbeat window so a late scheduler tick cannot expire the heartbeat mid-test
+    HoodieWriteConfig liveHeartbeatConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.LAZY)
+            .build())
+        .withHeartbeatIntervalInMs(60 * 1000)
+        .withHeartbeatTolerableMisses(2)
+        .build();
+    TestTableServiceClient client = new TestTableServiceClient(liveHeartbeatConfig, Collections.singletonList(table).iterator(),
         Option.empty(), Collections.emptyMap(), Collections.emptyIterator());
     String compactionTime = InProcessTimeGenerator.createNewInstantTime();
 
