@@ -24,8 +24,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.hash.HashID;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 
 import javax.annotation.concurrent.NotThreadSafe;
@@ -38,10 +37,9 @@ import static org.apache.hudi.common.fs.FSUtils.s3aToS3;
  * It implicitly derives the partition key from the hudi table name and hudi table base path
  * available in the lock configuration.
  */
+@Slf4j
 @NotThreadSafe
 public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBasedLockProviderBase {
-  protected static final Logger LOG = LoggerFactory.getLogger(DynamoDBBasedImplicitPartitionKeyLockProvider.class);
-
   private final String normalizedHudiTableBasePath;
 
   public DynamoDBBasedImplicitPartitionKeyLockProvider(final LockConfiguration lockConfiguration, final StorageConfiguration<?> conf) {
@@ -75,14 +73,14 @@ public class DynamoDBBasedImplicitPartitionKeyLockProvider extends DynamoDBBased
   public static String derivePartitionKey(String hudiTableBasePath) {
     String normalized = normalizeBasePathForLocking(hudiTableBasePath);
     String partitionKey = HashID.generateXXHashAsString(normalized, HashID.Size.BITS_64);
-    LOG.info("The DynamoDB partition key of the lock provider for the base path {} (normalized: {}) is {}",
+    log.info("The DynamoDB partition key of the lock provider for the base path {} (normalized: {}) is {}",
         hudiTableBasePath, normalized, partitionKey);
     // Releases before this change hashed s3aToS3(basePath) directly. When the canonical form
     // differs, this writer has moved to a new lock row and cannot exclude a writer still running
     // the old code, so say so loudly rather than leaving it to be inferred from the INFO line.
     String legacyForm = s3aToS3(hudiTableBasePath);
     if (!legacyForm.equals(normalized)) {
-      LOG.warn("DynamoDB partition key for base path {} moved from {} to {}. Every writer of this "
+      log.warn("DynamoDB partition key for base path {} moved from {} to {}. Every writer of this "
               + "table must be upgraded together; a writer still on the previous release locks on "
               + "the old partition key and will NOT be excluded by this one.",
           hudiTableBasePath,
