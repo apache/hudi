@@ -53,7 +53,8 @@ import static org.mockito.Mockito.when;
 class TestReadOptimizationFailures {
 
   @ParameterizedTest
-  @CsvSource({"image,false,0", "image,false,1", "image,false,2", "image,true,0", "image,true,1", "image,true,2"})
+  @CsvSource({"image,false,0", "image,false,1", "image,false,2", "image,true,0", "image,true,1", "image,true,2",
+      "video,false,0", "video,false,1", "video,false,2", "video,true,0", "video,true,1", "video,true,2"})
   void speculativeReadsPropagateCauseAndSuppressedJvmFailures(String kind, boolean partial, int form) throws Exception {
     LinkageError fatal = new LinkageError("source runtime unavailable");
     FailingBlob source = new FailingBlob(wrapped(fatal, form), partial);
@@ -65,7 +66,7 @@ class TestReadOptimizationFailures {
   }
 
   @ParameterizedTest
-  @CsvSource({"image,false", "image,true"})
+  @CsvSource({"image,false", "image,true", "video,false", "video,true"})
   void ordinarySpeculativeIoFailureStillFallsBack(String kind, boolean partial) throws Exception {
     FailingBlob source = new FailingBlob(new IOException("speculative read unavailable"), partial);
     try (ReadView view = view(kind, source)) {
@@ -75,7 +76,7 @@ class TestReadOptimizationFailures {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"image"})
+  @ValueSource(strings = {"image", "video"})
   void virtualMachineFailureIsNotFallback(String kind) throws Exception {
     InternalError fatal = new InternalError("source runtime unavailable");
     try (ReadView view = view(kind, new FailingBlob(new IOException("source read failed", fatal), false))) {
@@ -84,7 +85,7 @@ class TestReadOptimizationFailures {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"image"})
+  @ValueSource(strings = {"image", "video"})
   void causeCycleDoesNotHideSuppressedJvmFailure(String kind) throws Exception {
     LinkageError fatal = new LinkageError("source runtime unavailable");
     IOException first = new IOException("first wrapper");
@@ -98,7 +99,7 @@ class TestReadOptimizationFailures {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"image"})
+  @ValueSource(strings = {"image", "video"})
   void wrappedInputNestingKeepsItsExistingFallback(String kind) throws Exception {
     IOException failure = new IOException("input nesting", new StackOverflowError("input nesting"));
     try (ReadView view = view(kind, new FailingBlob(failure, false))) {

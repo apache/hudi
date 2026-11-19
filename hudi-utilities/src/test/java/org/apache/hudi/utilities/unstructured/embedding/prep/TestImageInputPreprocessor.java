@@ -76,6 +76,7 @@ public class TestImageInputPreprocessor {
     Chunk chunk = chunks.get(0);
     assertEquals(EmbeddingTableSchema.MODALITY_IMAGE, chunk.getModality());
     assertNull(chunk.getText());
+    assertNull(chunk.getFrameIndex(), "only a video frame has a frame index");
     Map<String, String> expectedAux = new HashMap<>();
     expectedAux.put(ImageInputPreprocessor.AUX_WIDTH, "97");
     expectedAux.put(ImageInputPreprocessor.AUX_HEIGHT, "41");

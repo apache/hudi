@@ -82,6 +82,7 @@ class TestPdfFilePreprocessor {
     for (Chunk chunk : chunks) {
       assertEquals("text", chunk.getModality());
       assertNull(chunk.getPayload(), "a text chunk carries no payload");
+      assertNull(chunk.getFrameIndex(), "a text chunk has no frame index");
       assertEquals(BPE.countTokens(chunk.getText()), (int) chunk.getTokenCount());
       assertTrue(Integer.parseInt(chunk.getAux().get(PdfFilePreprocessor.AUX_PAGE_START)) >= 1);
       assertTrue(chunk.getAux().containsKey(PdfFilePreprocessor.AUX_PAGE_END));

@@ -68,11 +68,14 @@ import scala.collection.JavaConverters;
  * <ul>
  *   <li>it numbers a file's chunks per MODALITY (the record key includes the source version, modality and chunk):
  *       each modality's chunks are numbered through the default {@link SequentialChunkIdScheme} by their ordinal in that
- *       modality (dense, 0-based, in emit order). It trusts each preprocessor's chunks to keep the {@link Chunk} contract
- *       (modality and payload), which the shipped preprocessors' tests hold them to;</li>
+ *       modality (dense, 0-based, in emit order), and a video frame sits at its frame index. It trusts each preprocessor's
+ *       chunks to keep the {@link Chunk} contract (modality, payload and frame index), which the shipped preprocessors' tests
+ *       hold them to;</li>
  *   <li>it stores a chunk's payload in {@code prepared_image}: a source payload as the source row's own blob value, unchanged (inline
  *       bytes, or the reference to the object), a derived one inline up to the source's inline threshold; a derived one above
  *       the threshold or not of its declared size fails that chunk;</li>
+ *   <li>no silent loss on a key collision: every id it assigns is above the last id of the same (file, modality), else
+ *       the file fails (a repeated key within a file is refused here, never dropped by the writer);</li>
  *   <li>a chunk whose payload cannot be stored fails that chunk only: chunk 0 fails its file-modality, whose later chunks are
  *       then skipped, with one side output naming no chunk; a later chunk is one side output naming its chunk_id, and the file
  *       goes on. A chunk that fails alone is not counted as a failed file;</li>
@@ -150,6 +153,8 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private long fileChunkFailures;
   /** Per modality, the chunks the current file emitted: the ordinal of its next chunk of that modality. */
   private final Map<String, Long> nextOrdinals = new HashMap<>();
+  /** Per modality, the last chunk_id the current file emitted: the next id of that modality must be above it. */
+  private final Map<String, Long> lastIds = new HashMap<>();
   private Row pending;
   /** Volatile: close() may run from a task-completion listener on another thread than the consumer's. */
   private volatile boolean closed;
@@ -362,13 +367,22 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
 
   /**
    * The chunk_id of {@code chunk}: numbered per (file version, modality), so the record key of every row the file emits is new.
-   * A row sits at the scheme's id of its ordinal in its modality, which the scheme keeps strictly increasing.
+   * A video frame row sits at its frame index, any other row at the scheme's id of its ordinal in its modality. Whatever the
+   * path, the id must be above the file's last id of that modality: a duplicate key fails the file, never reaches the writer's
+   * insert, which would drop it silently.
    */
   private long chunkIdOf(Chunk chunk) {
     String modality = chunk.getModality();
     long ordinal = nextOrdinals.getOrDefault(modality, 0L);
-    long id = chunkIds.chunkId(ordinal);
+    long id = chunk.getFrameIndex() != null ? chunk.getFrameIndex() : chunkIds.chunkId(ordinal);
+    Long last = lastIds.get(modality);
+    if (last != null && id <= last) {
+      throw new PreprocessingException("Duplicate record key: preprocessor " + currentPreprocessor.name() + " emitted "
+          + modality + " row " + ordinal + " at chunk_id " + id + " after chunk_id " + last + " of the same (source_path_sha, "
+          + "modality); chunk ids strictly increase per modality, so no row is dropped as a duplicate");
+    }
     nextOrdinals.put(modality, ordinal + 1);
+    lastIds.put(modality, id);
     return id;
   }
 
@@ -416,7 +430,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   /**
    * The quarantined error: a {@link PreprocessingException}'s message as thrown, without a class prefix. For the PDF
    * chunker's failures and the quarantine marker that message is the contract's {@code "CODE: detail"};
-   * the iterator's own refusals (a payload it cannot store) and other preprocessors' messages are kept as
+   * the iterator's own refusals (a duplicate chunk id, a payload it cannot store) and other preprocessors' messages are kept as
    * they are, uncoded. Any other failure is kept as its class and message plus its root cause, so the quarantine entry alone
    * tells an operator what went wrong.
    */
@@ -750,6 +764,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     fileChunks = 0;
     fileChunkFailures = 0;
     nextOrdinals.clear();
+    lastIds.clear();
     skippedModalities.clear();
     currentFileName = null;
     currentBlob = null;

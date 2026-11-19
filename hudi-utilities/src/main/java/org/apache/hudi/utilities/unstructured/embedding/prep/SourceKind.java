@@ -25,7 +25,9 @@ public enum SourceKind {
   /** A document whose rows are text chunks (a PDF). */
   DOCUMENT(EmbeddingTableSchema.MODALITY_TEXT),
   /** An image file: one image row. */
-  IMAGE(EmbeddingTableSchema.MODALITY_IMAGE);
+  IMAGE(EmbeddingTableSchema.MODALITY_IMAGE),
+  /** A video: one image row per kept frame. */
+  VIDEO(EmbeddingTableSchema.MODALITY_IMAGE);
 
   private final String markerModality;
 
@@ -35,7 +37,7 @@ public enum SourceKind {
 
   /**
    * The modality of the quarantine entry of a failed or empty file of this kind: its main target modality, so no row ever
-   * carries a source type ({@code text} for a document, {@code image} for an image).
+   * carries a source type ({@code text} for a document, {@code image} for an image or a video).
    */
   public String markerModality() {
     return markerModality;

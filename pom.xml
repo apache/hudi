@@ -110,6 +110,11 @@
     <kafka.version>3.4.1</kafka.version>
     <pulsar.version>3.0.2</pulsar.version>
     <tika.version>3.3.2</tika.version>
+    <jcodec.version>0.2.5</jcodec.version>
+    <!-- Video frame decoding: FFmpeg 7.1 through JavaCV. Stay on 1.5.11: its linux-arm64 FFmpeg natives are self-contained,
+         1.5.12's link libva. -->
+    <javacv.version>1.5.11</javacv.version>
+    <javacv.ffmpeg.version>7.1-${javacv.version}</javacv.ffmpeg.version>
     <jtokkit.version>1.1.0</jtokkit.version>
     <pdfbox.version>3.0.8</pdfbox.version>
     <kafka.connect.api.version>2.5.0</kafka.connect.api.version>
@@ -485,6 +490,9 @@
                          transitively; KCL 2.x moved to software.amazon.kinesis and stays allowed -->
                     <exclude>com.amazonaws:amazon-kinesis-client</exclude>
                     <exclude>com.amazonaws:amazon-kinesis-deaggregator</exclude>
+                    <!-- NOTE: FFmpeg and its Java bindings (LGPL) are not shipped: provided or test scope only -->
+                    <exclude>org.bytedeco:*:*:*:compile</exclude>
+                    <exclude>org.bytedeco:*:*:*:runtime</exclude>
                   </excludes>
                   <includes>
                     <include>org.slf4j:slf4j-simple:*:*:test</include>

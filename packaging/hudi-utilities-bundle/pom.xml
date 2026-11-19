@@ -103,6 +103,11 @@
                   <include>org.apache.pdfbox:pdfbox-io</include>
                   <include>org.apache.pdfbox:fontbox</include>
                   <include>com.knuddels:jtokkit</include>
+                  <!-- FFmpeg (org.bytedeco javacv / javacpp / ffmpeg, LGPL) is NOT bundled: a job that prepares video with
+                       FFmpeg adds those jars to the job classpath at launch. The root enforcer bans org.bytedeco at compile and
+                       runtime scope; scripts/ci/check_no_ffmpeg_in_bundles.sh checks a built bundle jar (run by hand, not in CI). -->
+                  <include>org.jcodec:jcodec</include>
+                  <include>org.jcodec:jcodec-javase</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
