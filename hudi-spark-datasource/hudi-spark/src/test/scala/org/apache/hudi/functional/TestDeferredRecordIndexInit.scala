@@ -323,8 +323,8 @@ class TestDeferredRecordIndexInit extends RecordLevelIndexTestBase with SparkDat
     assertEquals(expected, metaClient.getTableConfig.getTableVersion, "Table was written at an unexpected version")
   }
 
-  private def assertTableKeys(expectedKeys: Seq[String]): Unit =
-    assertEquals(expectedKeys.sorted, spark.read.format("hudi").load(basePath).select("_row_key").collect()
+  private def assertTableKeys(expectedKeys: Iterable[String]): Unit =
+    assertEquals(expectedKeys.toSeq.sorted, spark.read.format("hudi").load(basePath).select("_row_key").collect()
       .map(_.getString(0)).toSeq.sorted)
 }
 
