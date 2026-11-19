@@ -203,6 +203,16 @@
       <classifier>linux-x86_64</classifier>
       <scope>test</scope>
     </dependency>
+    <!-- whisper-jni 1.7.1 (Apache-2.0) with whisper.cpp 1.7.1 + ggml (MIT): the speech-to-text engine of the audio pass
+         (embedding/audio/whisper/WhisperSegmentTranscriber). One jar: the Java binding and its native libraries for linux-arm64
+         (debian-arm64/) and linux-x86_64 (debian-amd64/), glibc 2.31+; no classifier jars. The jar also carries debian-armv7l/,
+         macos-amd64/, macos-arm64/ and win-amd64/, which the utilities bundles filter out. Only linux-arm64 has been loaded and
+         measured; linux-x86_64 is unproven. Models (ggml, MIT) are not shipped. -->
+    <dependency>
+      <groupId>io.github.givimad</groupId>
+      <artifactId>whisper-jni</artifactId>
+      <version>${whisper.jni.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.tika</groupId>
       <artifactId>tika-parsers-standard-package</artifactId>
