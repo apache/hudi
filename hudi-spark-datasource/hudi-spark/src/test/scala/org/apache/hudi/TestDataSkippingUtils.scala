@@ -571,6 +571,14 @@ object TestDataSkippingUtils {
     C_maxValue = new Timestamp(1706788800000L), // 2024-02-01 12:00Z
     C_nullCount = 0)
 
+  // A file whose CAST(C AS DATE) spans the given days since the epoch in UTC (for ex, -1 is 1969-12-31),
+  // at noon so that the date does not depend on the time of day
+  private def fileOfDays(fileName: String, minDay: Int, maxDay: Int): IndexRow =
+    IndexRow(fileName, valueCount = 2,
+      C_minValue = new Timestamp((minDay * 24L + 12) * 3600000L),
+      C_maxValue = new Timestamp((maxDay * 24L + 12) * 3600000L),
+      C_nullCount = 0)
+
   def dottedColumnStatsPredicates(): java.util.stream.Stream[Arguments] = {
     val cases = Seq(
       ("A >= 0 AND `profile.name` = 'alice'", Set("missing", "matching"), false),
@@ -1525,7 +1533,22 @@ object TestDataSkippingUtils {
             C_maxValue = new Timestamp(1709380800000L), // 2024-03-02 12:00Z
             C_nullCount = 0)
         ),
-        Seq("file_1"))
+        Seq("file_1")),
+      // left(B, length(B) - 1) maps 'ab' to 'a', but the larger 'b' to ''. Re-applying it over min/max
+      // stats would wrongly prune file_1 even though its 'ab' row matches; must fall back to always-true,
+      // keeping the file. Only OptimizeIn runs here, so left is not rewritten into substring (#19479)
+      arguments(
+        "left(B, length(B) - 1) = 'a'",
+        Seq(IndexRow("file_1", valueCount = 2, B_minValue = "ab", B_maxValue = "b", B_nullCount = 0)),
+        Seq("file_1")),
+      // With a constant length, it still translates and prunes
+      arguments(
+        "left(B, 1) = 'c'",
+        Seq(
+          IndexRow("file_1", valueCount = 2, B_minValue = "ab", B_maxValue = "b", B_nullCount = 0),
+          IndexRow("file_2", valueCount = 2, B_minValue = "ca", B_maxValue = "cb", B_nullCount = 0)
+        ),
+        Seq("file_2"))
     )
   }
 
@@ -1626,7 +1649,35 @@ object TestDataSkippingUtils {
         Seq(
           IndexRow("file_1", valueCount = 2, A_minValue = 1, A_maxValue = Long.MaxValue, A_nullCount = 0)
         ),
-        Seq("file_1"))
+        Seq("file_1")),
+      // date_add, date_sub and datediff add or subtract a date's int number of days without an overflow
+      // check, even in ANSI mode. date_add(d, 2147483647) maps 1969-12-31 (day -1) to day 2147483646, but
+      // 1970-01-02 (day 1) wraps around to day -2147483648, before 2024-01-01: re-applying it over min/max
+      // stats would wrongly prune file_2, whose 1970-01-02 row matches. At the limit (file_1, up to
+      // 1970-01-01) no day wraps around and the file prunes; one past it (file_2) may, and is kept
+      arguments(
+        "date_add(CAST(C AS DATE), 2147483647) < DATE'2024-01-01'",
+        Seq(fileOfDays("file_1", -1, 0), fileOfDays("file_2", -1, 1)),
+        Seq("file_2")),
+      // A negative number of days wraps around the other way: 1969-12-30 (day -2) maps to day 2147483647
+      arguments(
+        "date_add(CAST(C AS DATE), -2147483647) > DATE'2024-01-01'",
+        Seq(fileOfDays("file_1", -1, 0), fileOfDays("file_2", -2, 0)),
+        Seq("file_2")),
+      arguments(
+        "date_sub(CAST(C AS DATE), 2147483647) > DATE'2024-01-01'",
+        Seq(fileOfDays("file_1", -1, 0), fileOfDays("file_2", -2, 0)),
+        Seq("file_2")),
+      arguments(
+        "date_sub(CAST(C AS DATE), -2147483647) < DATE'2024-01-01'",
+        Seq(fileOfDays("file_1", -1, 0), fileOfDays("file_2", -1, 1)),
+        Seq("file_2")),
+      // datediff(d, start) is d - start: from a start date of day -2147483647, 1970-01-02 (day 1) wraps
+      // around to -2147483648 days
+      arguments(
+        "datediff(CAST(C AS DATE), date_sub(DATE'1970-01-01', 2147483647)) < 0",
+        Seq(fileOfDays("file_1", -1, 0), fileOfDays("file_2", -1, 1)),
+        Seq("file_2"))
     )
   }
 }

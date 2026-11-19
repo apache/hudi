@@ -19,7 +19,7 @@ package org.apache.spark.sql.hudi.dataskipping.rules
 
 import org.apache.spark.sql.catalyst.expressions.{Add, And, DateAdd, DateDiff, DateSub, Divide, Expression, GreaterThanOrEqual, LessThanOrEqual, Literal, Multiply, ShiftLeft, ShiftRight}
 import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step, TermRange}
-import org.apache.spark.sql.types.{ByteType, DataType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType}
+import org.apache.spark.sql.types.{ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType}
 
 import scala.util.Try
 
@@ -47,21 +47,27 @@ import scala.util.Try
  *       1 | 2 = 3 > 2 | 2 = 2), #20449
  *
  * NOTE: Integral `Add`, `Multiply` and `ShiftLeft` wrap around on overflow, so the max can map below
- *       the min (for ex, Long.MaxValue * 2 = -2). `Add` and `Multiply` throw instead in ANSI mode, while
- *       `ShiftLeft` wraps around in either mode. Their steps carry a file guard that the file's range
- *       does not overflow (see [[IntegralLimits]]). Float / double results round monotonically and
- *       saturate to infinity instead. Decimal results round HALF_UP, which is monotonic, and overflow
- *       into NULL (or throw in ANSI mode): their steps are `partial`, so an overflowing bound is NULL
- *       and the file is kept. If neither the min nor the max overflows, no value in between does (#20460)
+ *       the min (for ex, Long.MaxValue * 2 = -2). So do `DateAdd`, `DateSub` and `DateDiff`, which add or
+ *       subtract a date's int number of days (for ex, date_add(1970-01-02, 2147483647) is before
+ *       date_add(1969-12-31, 2147483647)). `Add` and `Multiply` throw instead in ANSI mode, while
+ *       `ShiftLeft` and the date functions wrap around in either mode. Their steps carry a file guard
+ *       that the file's range does not overflow (see [[IntegralLimits]]). Float / double results round
+ *       monotonically and saturate to infinity instead. Decimal results round HALF_UP, which is
+ *       monotonic, and overflow into NULL (or throw in ANSI mode): their steps are `partial`, so an
+ *       overflowing bound is NULL and the file is kept. If neither the min nor the max overflows, no
+ *       value in between does (#20460)
  */
 object ConstantOperandRule extends RangeRule {
 
   override def steps(term: Expression): Seq[Step] = term match {
-    case DateAdd(start, days) if days.foldable => Seq(Step(term, start, Increasing, fileGuard = None, partial = false))
-    case DateSub(start, days) if days.foldable => Seq(Step(term, start, Increasing, fileGuard = None, partial = false))
+    case DateAdd(start, days) =>
+      integralConstant(days).filter(Days.holds).map(c => guardedStep(term, start, Days.addFits(c))).toSeq
+    case DateSub(start, days) =>
+      integralConstant(days).filter(Days.holds).map(c => guardedStep(term, start, Days.subtractFits(c))).toSeq
     // NOTE: DateDiff(end, start) is end - start, so it reverses the ordering of its start date,
-    //       which hence must not be matched
-    case DateDiff(end, start) if start.foldable => Seq(Step(term, end, Increasing, fileGuard = None, partial = false))
+    //       which hence must not be matched. A constant date evaluates to its number of days
+    case DateDiff(end, start) =>
+      integralConstant(start).filter(Days.holds).map(c => guardedStep(term, end, Days.subtractFits(c))).toSeq
 
     case Add(left, right, _) if hasFloatingPointResult(term) =>
       Seq(
@@ -160,11 +166,12 @@ object ConstantOperandRule extends RangeRule {
   }
 
   /**
-   * The limits of an integral result type. Past them, integral arithmetic wraps around, except that
-   * `Add` and `Multiply` throw instead in ANSI mode. Each guard holds when no value of the file's range
-   * goes past them: the step is increasing, so checking the min and the max covers every value in
-   * between. A file that may overflow gets a NULL bound and is kept, and a file that holds the guard
-   * never evaluates an overflowing bound, so ANSI `Add` and `Multiply` do not throw.
+   * The limits of an integral result type, or of a date's int number of days ([[Days]]). Past them,
+   * integral arithmetic wraps around, except that `Add` and `Multiply` throw instead in ANSI mode.
+   * Each guard holds when no value of the file's range goes past them: the step is increasing, so
+   * checking the min and the max covers every value in between. A file that may overflow gets a NULL
+   * bound and is kept, and a file that holds the guard never evaluates an overflowing bound, so ANSI
+   * `Add` and `Multiply` do not throw.
    */
   private case class IntegralLimits(dataType: DataType, min: Long, max: Long, bits: Int) {
 
@@ -177,6 +184,9 @@ object ConstantOperandRule extends RangeRule {
     /** `x + c` does not overflow: x <= max - c for c >= 0, x >= min - c for c < 0. */
     def addFits(c: Long)(r: TermRange): Expression =
       if (c >= 0) LessThanOrEqual(r.hi, literal(max - c)) else GreaterThanOrEqual(r.lo, literal(min - c))
+
+    /** `x - c` does not overflow: it is x + (-c), and -c is exact as a Long (for ex, -Int.MinValue). */
+    def subtractFits(c: Long)(r: TermRange): Expression = addFits(-c)(r)
 
     /**
      * `x * c` does not overflow, for c > 0: min / c <= x <= max / c. Long division truncates towards
@@ -204,8 +214,16 @@ object ConstantOperandRule extends RangeRule {
       case ShortType => Literal(v.toShort, ShortType)
       case IntegerType => Literal(v.toInt, IntegerType)
       case LongType => Literal(v, LongType)
+      case DateType => Literal(v.toInt, DateType)
     }
   }
+
+  /**
+   * A date is its int number of days since the epoch. `DateAdd` and `DateSub` add or subtract the days
+   * as an int, and `DateDiff` subtracts the start date's, with no overflow check even in ANSI mode. The
+   * guard reads the range of the date operand, so its limits are dates.
+   */
+  private val Days = IntegralLimits(DateType, Int.MinValue, Int.MaxValue, 32)
 
   private object IntegralLimits {
     // NOTE: Expression indexes skip the resolution check, and some unresolved terms throw on `dataType`

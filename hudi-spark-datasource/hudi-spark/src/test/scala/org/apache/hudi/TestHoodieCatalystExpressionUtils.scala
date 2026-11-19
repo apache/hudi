@@ -17,7 +17,7 @@
 
 package org.apache.hudi
 
-import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, Exp, Expression, FromUnixTime, FromUTCTimestamp, GetTimestamp, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, ShiftRight, Sqrt, ToUnixTimestamp, ToUTCTimestamp, TruncDate, UnaryMinus, UnixTimestamp, Upper}
+import org.apache.spark.sql.catalyst.expressions.{Add, AttributeReference, BitwiseOr, Cast, DateAdd, DateDiff, DateFormatClass, DateSub, DayOfMonth, Divide, Exp, Expression, FromUnixTime, FromUTCTimestamp, GetTimestamp, Length, Literal, Log, Lower, Multiply, ParseToDate, ParseToTimestamp, Rand, ShiftLeft, ShiftRight, Sqrt, Subtract, ToUnixTimestamp, ToUTCTimestamp, TruncDate, UnaryMinus, UnixTimestamp, Upper}
 import org.apache.spark.sql.hudi.dataskipping.{ColumnStatsSource, TermRange}
 import org.apache.spark.sql.types.{BinaryType, BooleanType, ByteType, DataType, DateType, Decimal, DecimalType, DoubleType, FloatType, IntegerType, LongType, ShortType, StringType, TimestampType}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
@@ -113,6 +113,14 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(false), guarded(Add(fltAttr, Literal(1.0f)), fltAttr))
     assertEquals(Some(false), guarded(Multiply(Literal(2.0f), fltAttr), fltAttr))
     assertEquals(Some(false), guarded(Add(Cast(longAttr, DoubleType), Literal(1.0d)), longAttr))
+    // A date adds or subtracts its int number of days, which wraps around in either mode, so the range
+    // is guarded too, with int limits for a smallint number of days as well.
+    assertEquals(Some(true), guarded(DateAdd(dateAttr, Literal(1)), dateAttr))
+    assertEquals(Some(true), guarded(DateAdd(dateAttr, Literal(1.toShort)), dateAttr))
+    assertEquals(Some(true), guarded(DateSub(dateAttr, Literal(Int.MinValue)), dateAttr))
+    assertEquals(Some(true), guarded(DateDiff(dateAttr, Literal(java.sql.Date.valueOf("2022-03-07"))), dateAttr))
+    // An unresolved number of days outside an int has no limits within it.
+    assertEquals(None, guarded(DateAdd(dateAttr, Literal(Long.MaxValue)), dateAttr))
   }
 
   @Test
@@ -189,6 +197,19 @@ class TestHoodieCatalystExpressionUtils extends SparkAdapterSupport {
     assertEquals(Some(dateAttr), matched(DateAdd(dateAttr, Add(Literal(1), Literal(2)))))
     assertEquals(Some(dateAttr), matched(DateSub(dateAttr, Add(Literal(1), Literal(2)))))
     assertEquals(Some(longAttr), matched(ShiftRight(longAttr, Add(Literal(1), Literal(2)))))
+  }
+
+  @Test
+  def testLeftRequiresConstantLength(): Unit = {
+    def left(str: Expression, len: Expression): Expression = new org.apache.spark.sql.catalyst.expressions.Left(str, len)
+    // left(s, length(s) - 1) maps 'ab' to 'a', but the larger 'b' to '', so a length referencing the
+    // column must not match.
+    assertEquals(None, matched(left(strAttr, Subtract(Length(strAttr), Literal(1)))))
+    // Data skipping re-evaluates the length against the min/max bounds, so it must be a constant.
+    assertEquals(None, matched(left(strAttr, Cast(Rand(Literal(0L)), IntegerType))))
+    // A foldable length is accepted, as the optimizer would fold it into a literal.
+    assertEquals(Some(strAttr), matched(left(strAttr, Literal(2))))
+    assertEquals(Some(strAttr), matched(left(strAttr, Add(Literal(1), Literal(1)))))
   }
 
   @Test

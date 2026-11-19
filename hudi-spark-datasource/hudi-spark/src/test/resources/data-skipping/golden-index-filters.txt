@@ -578,13 +578,13 @@ cs	cast(f(a) as bigint) IN (0:bigint, null:bigint)	true:boolean
 cs	NOT cast(f(a) as bigint) IN (0:bigint)	true:boolean
 cs	startswith(cast(f(a) as bigint), 'ab')	true:boolean
 cs	NOT startswith(cast(f(a) as bigint), 'ab')	true:boolean
-cs	(date_add(d, 1:int) = 0:date)	((date_add(d_minValue, 1:int) <= 0:date) AND (date_add(d_maxValue, 1:int) >= 0:date))
-cs	(0:date < date_add(d, 1:int))	(date_add(d_maxValue, 1:int) > 0:date)
-cs	(date_add(d, 1:int) >= 0:date)	(date_add(d_maxValue, 1:int) >= 0:date)
-cs	NOT (date_add(d, 1:int) = 0:date)	NOT ((date_add(d_minValue, 1:int) = 0:date) AND (date_add(d_maxValue, 1:int) = 0:date))
-cs	(date_add(d, 1:int) = cast(0:date as date))	((date_add(d_minValue, 1:int) <= cast(0:date as date)) AND (date_add(d_maxValue, 1:int) >= cast(0:date as date)))
-cs	date_add(d, 1:int) IN (0:date, null:date)	(((date_add(d_minValue, 1:int) <= 0:date) AND (date_add(d_maxValue, 1:int) >= 0:date)) OR ((date_add(d_minValue, 1:int) <= null:date) AND (date_add(d_maxValue, 1:int) >= null:date)))
-cs	NOT date_add(d, 1:int) IN (0:date)	NOT ((date_add(d_minValue, 1:int) = 0:date) AND (date_add(d_maxValue, 1:int) = 0:date))
+cs	(date_add(d, 1:int) = 0:date)	coalesce(((if((d_maxValue <= 2147483646:date), date_add(d_minValue, 1:int), null:date) <= 0:date) AND (if((d_maxValue <= 2147483646:date), date_add(d_maxValue, 1:int), null:date) >= 0:date)), true:boolean)
+cs	(0:date < date_add(d, 1:int))	coalesce((if((d_maxValue <= 2147483646:date), date_add(d_maxValue, 1:int), null:date) > 0:date), true:boolean)
+cs	(date_add(d, 1:int) >= 0:date)	coalesce((if((d_maxValue <= 2147483646:date), date_add(d_maxValue, 1:int), null:date) >= 0:date), true:boolean)
+cs	NOT (date_add(d, 1:int) = 0:date)	coalesce(NOT ((if((d_maxValue <= 2147483646:date), date_add(d_minValue, 1:int), null:date) = 0:date) AND (if((d_maxValue <= 2147483646:date), date_add(d_maxValue, 1:int), null:date) = 0:date)), true:boolean)
+cs	(date_add(d, 1:int) = cast(0:date as date))	coalesce(((if((d_maxValue <= 2147483646:date), date_add(d_minValue, 1:int), null:date) <= cast(0:date as date)) AND (if((d_maxValue <= 2147483646:date), date_add(d_maxValue, 1:int), null:date) >= cast(0:date as date))), true:boolean)
+cs	date_add(d, 1:int) IN (0:date, null:date)	coalesce((((if((d_maxValue <= 2147483646:date), date_add(d_minValue, 1:int), null:date) <= 0:date) AND (if((d_maxValue <= 2147483646:date), date_add(d_maxValue, 1:int), null:date) >= 0:date)) OR ((if((d_maxValue <= 2147483646:date), date_add(d_minValue, 1:int), null:date) <= null:date) AND (if((d_maxValue <= 2147483646:date), date_add(d_maxValue, 1:int), null:date) >= null:date))), true:boolean)
+cs	NOT date_add(d, 1:int) IN (0:date)	coalesce(NOT ((if((d_maxValue <= 2147483646:date), date_add(d_minValue, 1:int), null:date) = 0:date) AND (if((d_maxValue <= 2147483646:date), date_add(d_maxValue, 1:int), null:date) = 0:date)), true:boolean)
 cs	startswith(date_add(d, 1:int), 'ab')	true:boolean
 cs	NOT startswith(date_add(d, 1:int), 'ab')	true:boolean
 cs	(date_add(d, dayofmonth(d)) = 0:date)	true:boolean
@@ -605,13 +605,13 @@ cs	date_add(d, a) IN (0:date, null:date)	true:boolean
 cs	NOT date_add(d, a) IN (0:date)	true:boolean
 cs	startswith(date_add(d, a), 'ab')	true:boolean
 cs	NOT startswith(date_add(d, a), 'ab')	true:boolean
-cs	(date_sub(d, 3:int) = 0:date)	((date_sub(d_minValue, 3:int) <= 0:date) AND (date_sub(d_maxValue, 3:int) >= 0:date))
-cs	(0:date < date_sub(d, 3:int))	(date_sub(d_maxValue, 3:int) > 0:date)
-cs	(date_sub(d, 3:int) >= 0:date)	(date_sub(d_maxValue, 3:int) >= 0:date)
-cs	NOT (date_sub(d, 3:int) = 0:date)	NOT ((date_sub(d_minValue, 3:int) = 0:date) AND (date_sub(d_maxValue, 3:int) = 0:date))
-cs	(date_sub(d, 3:int) = cast(0:date as date))	((date_sub(d_minValue, 3:int) <= cast(0:date as date)) AND (date_sub(d_maxValue, 3:int) >= cast(0:date as date)))
-cs	date_sub(d, 3:int) IN (0:date, null:date)	(((date_sub(d_minValue, 3:int) <= 0:date) AND (date_sub(d_maxValue, 3:int) >= 0:date)) OR ((date_sub(d_minValue, 3:int) <= null:date) AND (date_sub(d_maxValue, 3:int) >= null:date)))
-cs	NOT date_sub(d, 3:int) IN (0:date)	NOT ((date_sub(d_minValue, 3:int) = 0:date) AND (date_sub(d_maxValue, 3:int) = 0:date))
+cs	(date_sub(d, 3:int) = 0:date)	coalesce(((if((d_minValue >= -2147483645:date), date_sub(d_minValue, 3:int), null:date) <= 0:date) AND (if((d_minValue >= -2147483645:date), date_sub(d_maxValue, 3:int), null:date) >= 0:date)), true:boolean)
+cs	(0:date < date_sub(d, 3:int))	coalesce((if((d_minValue >= -2147483645:date), date_sub(d_maxValue, 3:int), null:date) > 0:date), true:boolean)
+cs	(date_sub(d, 3:int) >= 0:date)	coalesce((if((d_minValue >= -2147483645:date), date_sub(d_maxValue, 3:int), null:date) >= 0:date), true:boolean)
+cs	NOT (date_sub(d, 3:int) = 0:date)	coalesce(NOT ((if((d_minValue >= -2147483645:date), date_sub(d_minValue, 3:int), null:date) = 0:date) AND (if((d_minValue >= -2147483645:date), date_sub(d_maxValue, 3:int), null:date) = 0:date)), true:boolean)
+cs	(date_sub(d, 3:int) = cast(0:date as date))	coalesce(((if((d_minValue >= -2147483645:date), date_sub(d_minValue, 3:int), null:date) <= cast(0:date as date)) AND (if((d_minValue >= -2147483645:date), date_sub(d_maxValue, 3:int), null:date) >= cast(0:date as date))), true:boolean)
+cs	date_sub(d, 3:int) IN (0:date, null:date)	coalesce((((if((d_minValue >= -2147483645:date), date_sub(d_minValue, 3:int), null:date) <= 0:date) AND (if((d_minValue >= -2147483645:date), date_sub(d_maxValue, 3:int), null:date) >= 0:date)) OR ((if((d_minValue >= -2147483645:date), date_sub(d_minValue, 3:int), null:date) <= null:date) AND (if((d_minValue >= -2147483645:date), date_sub(d_maxValue, 3:int), null:date) >= null:date))), true:boolean)
+cs	NOT date_sub(d, 3:int) IN (0:date)	coalesce(NOT ((if((d_minValue >= -2147483645:date), date_sub(d_minValue, 3:int), null:date) = 0:date) AND (if((d_minValue >= -2147483645:date), date_sub(d_maxValue, 3:int), null:date) = 0:date)), true:boolean)
 cs	startswith(date_sub(d, 3:int), 'ab')	true:boolean
 cs	NOT startswith(date_sub(d, 3:int), 'ab')	true:boolean
 cs	(date_sub(d, dayofmonth(d)) = 0:date)	true:boolean
@@ -623,13 +623,13 @@ cs	date_sub(d, dayofmonth(d)) IN (0:date, null:date)	true:boolean
 cs	NOT date_sub(d, dayofmonth(d)) IN (0:date)	true:boolean
 cs	startswith(date_sub(d, dayofmonth(d)), 'ab')	true:boolean
 cs	NOT startswith(date_sub(d, dayofmonth(d)), 'ab')	true:boolean
-cs	(datediff(d, 19723:date) = 0:int)	((datediff(d_minValue, 19723:date) <= 0:int) AND (datediff(d_maxValue, 19723:date) >= 0:int))
-cs	(0:int < datediff(d, 19723:date))	(datediff(d_maxValue, 19723:date) > 0:int)
-cs	(datediff(d, 19723:date) >= 0:int)	(datediff(d_maxValue, 19723:date) >= 0:int)
-cs	NOT (datediff(d, 19723:date) = 0:int)	NOT ((datediff(d_minValue, 19723:date) = 0:int) AND (datediff(d_maxValue, 19723:date) = 0:int))
-cs	(datediff(d, 19723:date) = cast(0:int as int))	((datediff(d_minValue, 19723:date) <= cast(0:int as int)) AND (datediff(d_maxValue, 19723:date) >= cast(0:int as int)))
-cs	datediff(d, 19723:date) IN (0:int, null:int)	(((datediff(d_minValue, 19723:date) <= 0:int) AND (datediff(d_maxValue, 19723:date) >= 0:int)) OR ((datediff(d_minValue, 19723:date) <= null:int) AND (datediff(d_maxValue, 19723:date) >= null:int)))
-cs	NOT datediff(d, 19723:date) IN (0:int)	NOT ((datediff(d_minValue, 19723:date) = 0:int) AND (datediff(d_maxValue, 19723:date) = 0:int))
+cs	(datediff(d, 19723:date) = 0:int)	coalesce(((if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) <= 0:int) AND (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) >= 0:int)), true:boolean)
+cs	(0:int < datediff(d, 19723:date))	coalesce((if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) > 0:int), true:boolean)
+cs	(datediff(d, 19723:date) >= 0:int)	coalesce((if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) >= 0:int), true:boolean)
+cs	NOT (datediff(d, 19723:date) = 0:int)	coalesce(NOT ((if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) = 0:int) AND (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) = 0:int)), true:boolean)
+cs	(datediff(d, 19723:date) = cast(0:int as int))	coalesce(((if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) <= cast(0:int as int)) AND (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) >= cast(0:int as int))), true:boolean)
+cs	datediff(d, 19723:date) IN (0:int, null:int)	coalesce((((if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) <= 0:int) AND (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) >= 0:int)) OR ((if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) <= null:int) AND (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) >= null:int))), true:boolean)
+cs	NOT datediff(d, 19723:date) IN (0:int)	coalesce(NOT ((if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) = 0:int) AND (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) = 0:int)), true:boolean)
 cs	startswith(datediff(d, 19723:date), 'ab')	true:boolean
 cs	NOT startswith(datediff(d, 19723:date), 'ab')	true:boolean
 cs	(datediff(19723:date, d) = 0:int)	true:boolean
@@ -650,13 +650,13 @@ cs	datediff(d, d) IN (0:int, null:int)	true:boolean
 cs	NOT datediff(d, d) IN (0:int)	true:boolean
 cs	startswith(datediff(d, d), 'ab')	true:boolean
 cs	NOT startswith(datediff(d, d), 'ab')	true:boolean
-cs	(date_add(cast(ts as date), 1:int) = 0:date)	((date_add(cast(ts_minValue as date), 1:int) <= 0:date) AND (date_add(cast(ts_maxValue as date), 1:int) >= 0:date))
-cs	(0:date < date_add(cast(ts as date), 1:int))	(date_add(cast(ts_maxValue as date), 1:int) > 0:date)
-cs	(date_add(cast(ts as date), 1:int) >= 0:date)	(date_add(cast(ts_maxValue as date), 1:int) >= 0:date)
-cs	NOT (date_add(cast(ts as date), 1:int) = 0:date)	NOT ((date_add(cast(ts_minValue as date), 1:int) = 0:date) AND (date_add(cast(ts_maxValue as date), 1:int) = 0:date))
-cs	(date_add(cast(ts as date), 1:int) = cast(0:date as date))	((date_add(cast(ts_minValue as date), 1:int) <= cast(0:date as date)) AND (date_add(cast(ts_maxValue as date), 1:int) >= cast(0:date as date)))
-cs	date_add(cast(ts as date), 1:int) IN (0:date, null:date)	(((date_add(cast(ts_minValue as date), 1:int) <= 0:date) AND (date_add(cast(ts_maxValue as date), 1:int) >= 0:date)) OR ((date_add(cast(ts_minValue as date), 1:int) <= null:date) AND (date_add(cast(ts_maxValue as date), 1:int) >= null:date)))
-cs	NOT date_add(cast(ts as date), 1:int) IN (0:date)	NOT ((date_add(cast(ts_minValue as date), 1:int) = 0:date) AND (date_add(cast(ts_maxValue as date), 1:int) = 0:date))
+cs	(date_add(cast(ts as date), 1:int) = 0:date)	coalesce(((if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_minValue as date), 1:int), null:date) <= 0:date) AND (if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_maxValue as date), 1:int), null:date) >= 0:date)), true:boolean)
+cs	(0:date < date_add(cast(ts as date), 1:int))	coalesce((if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_maxValue as date), 1:int), null:date) > 0:date), true:boolean)
+cs	(date_add(cast(ts as date), 1:int) >= 0:date)	coalesce((if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_maxValue as date), 1:int), null:date) >= 0:date), true:boolean)
+cs	NOT (date_add(cast(ts as date), 1:int) = 0:date)	coalesce(NOT ((if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_minValue as date), 1:int), null:date) = 0:date) AND (if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_maxValue as date), 1:int), null:date) = 0:date)), true:boolean)
+cs	(date_add(cast(ts as date), 1:int) = cast(0:date as date))	coalesce(((if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_minValue as date), 1:int), null:date) <= cast(0:date as date)) AND (if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_maxValue as date), 1:int), null:date) >= cast(0:date as date))), true:boolean)
+cs	date_add(cast(ts as date), 1:int) IN (0:date, null:date)	coalesce((((if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_minValue as date), 1:int), null:date) <= 0:date) AND (if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_maxValue as date), 1:int), null:date) >= 0:date)) OR ((if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_minValue as date), 1:int), null:date) <= null:date) AND (if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_maxValue as date), 1:int), null:date) >= null:date))), true:boolean)
+cs	NOT date_add(cast(ts as date), 1:int) IN (0:date)	coalesce(NOT ((if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_minValue as date), 1:int), null:date) = 0:date) AND (if((tryeval(cast(ts_maxValue as date)) <= 2147483646:date), date_add(cast(ts_maxValue as date), 1:int), null:date) = 0:date)), true:boolean)
 cs	startswith(date_add(cast(ts as date), 1:int), 'ab')	true:boolean
 cs	NOT startswith(date_add(cast(ts as date), 1:int), 'ab')	true:boolean
 cs	(date_format(ts, 'yyyy-MM-dd') = '')	coalesce(((if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_minValue, 'yyyy-MM-dd'), null:string) <= '') AND (if(((ts_minValue >= -62135510400000000:timestamp) AND (ts_maxValue < 253402214400000000:timestamp)), date_format(ts_maxValue, 'yyyy-MM-dd'), null:string) >= '')), true:boolean)
@@ -821,13 +821,13 @@ cs	(cast(a as bigint) + 1:bigint) IN (0:bigint, null:bigint)	coalesce((((if((try
 cs	NOT (cast(a as bigint) + 1:bigint) IN (0:bigint)	coalesce(NOT ((if((tryeval(cast(a_maxValue as bigint)) <= 9223372036854775806:bigint), (cast(a_minValue as bigint) + 1:bigint), null:bigint) = 0:bigint) AND (if((tryeval(cast(a_maxValue as bigint)) <= 9223372036854775806:bigint), (cast(a_maxValue as bigint) + 1:bigint), null:bigint) = 0:bigint)), true:boolean)
 cs	startswith((cast(a as bigint) + 1:bigint), 'ab')	true:boolean
 cs	NOT startswith((cast(a as bigint) + 1:bigint), 'ab')	true:boolean
-cs	((datediff(d, 19723:date) + 1:int) = 0:int)	coalesce(((if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_minValue, 19723:date) + 1:int), null:int) <= 0:int) AND (if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_maxValue, 19723:date) + 1:int), null:int) >= 0:int)), true:boolean)
-cs	(0:int < (datediff(d, 19723:date) + 1:int))	coalesce((if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_maxValue, 19723:date) + 1:int), null:int) > 0:int), true:boolean)
-cs	((datediff(d, 19723:date) + 1:int) >= 0:int)	coalesce((if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_maxValue, 19723:date) + 1:int), null:int) >= 0:int), true:boolean)
-cs	NOT ((datediff(d, 19723:date) + 1:int) = 0:int)	coalesce(NOT ((if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_minValue, 19723:date) + 1:int), null:int) = 0:int) AND (if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_maxValue, 19723:date) + 1:int), null:int) = 0:int)), true:boolean)
-cs	((datediff(d, 19723:date) + 1:int) = cast(0:int as int))	coalesce(((if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_minValue, 19723:date) + 1:int), null:int) <= cast(0:int as int)) AND (if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_maxValue, 19723:date) + 1:int), null:int) >= cast(0:int as int))), true:boolean)
-cs	(datediff(d, 19723:date) + 1:int) IN (0:int, null:int)	coalesce((((if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_minValue, 19723:date) + 1:int), null:int) <= 0:int) AND (if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_maxValue, 19723:date) + 1:int), null:int) >= 0:int)) OR ((if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_minValue, 19723:date) + 1:int), null:int) <= null:int) AND (if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_maxValue, 19723:date) + 1:int), null:int) >= null:int))), true:boolean)
-cs	NOT (datediff(d, 19723:date) + 1:int) IN (0:int)	coalesce(NOT ((if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_minValue, 19723:date) + 1:int), null:int) = 0:int) AND (if((tryeval(datediff(d_maxValue, 19723:date)) <= 2147483646:int), (datediff(d_maxValue, 19723:date) + 1:int), null:int) = 0:int)), true:boolean)
+cs	((datediff(d, 19723:date) + 1:int) = 0:int)	coalesce(((if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) + 1:int), null:int) <= 0:int) AND (if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) + 1:int), null:int) >= 0:int)), true:boolean)
+cs	(0:int < (datediff(d, 19723:date) + 1:int))	coalesce((if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) + 1:int), null:int) > 0:int), true:boolean)
+cs	((datediff(d, 19723:date) + 1:int) >= 0:int)	coalesce((if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) + 1:int), null:int) >= 0:int), true:boolean)
+cs	NOT ((datediff(d, 19723:date) + 1:int) = 0:int)	coalesce(NOT ((if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) + 1:int), null:int) = 0:int) AND (if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) + 1:int), null:int) = 0:int)), true:boolean)
+cs	((datediff(d, 19723:date) + 1:int) = cast(0:int as int))	coalesce(((if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) + 1:int), null:int) <= cast(0:int as int)) AND (if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) + 1:int), null:int) >= cast(0:int as int))), true:boolean)
+cs	(datediff(d, 19723:date) + 1:int) IN (0:int, null:int)	coalesce((((if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) + 1:int), null:int) <= 0:int) AND (if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) + 1:int), null:int) >= 0:int)) OR ((if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) + 1:int), null:int) <= null:int) AND (if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) + 1:int), null:int) >= null:int))), true:boolean)
+cs	NOT (datediff(d, 19723:date) + 1:int) IN (0:int)	coalesce(NOT ((if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_minValue, 19723:date), null:int) + 1:int), null:int) = 0:int) AND (if((tryeval(if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int)) <= 2147483646:int), (if((d_minValue >= -2147463925:date), datediff(d_maxValue, 19723:date), null:int) + 1:int), null:int) = 0:int)), true:boolean)
 cs	startswith((datediff(d, 19723:date) + 1:int), 'ab')	true:boolean
 cs	NOT startswith((datediff(d, 19723:date) + 1:int), 'ab')	true:boolean
 cs	(concat(s, s) = '')	true:boolean
@@ -1076,3 +1076,48 @@ cs	(dec / 2:decimal(10,2)) IN (0E-13:decimal(23,13), null:decimal(23,13))	coales
 cs	NOT (dec / 2:decimal(10,2)) IN (0E-13:decimal(23,13))	coalesce(NOT ((tryeval((dec_minValue / 2:decimal(10,2))) = 0E-13:decimal(23,13)) AND (tryeval((dec_maxValue / 2:decimal(10,2))) = 0E-13:decimal(23,13))), true:boolean)
 cs	startswith((dec / 2:decimal(10,2)), 'ab')	true:boolean
 cs	NOT startswith((dec / 2:decimal(10,2)), 'ab')	true:boolean
+cs	(date_add(d, 2147483647:int) = 0:date)	coalesce(((if((d_maxValue <= 0:date), date_add(d_minValue, 2147483647:int), null:date) <= 0:date) AND (if((d_maxValue <= 0:date), date_add(d_maxValue, 2147483647:int), null:date) >= 0:date)), true:boolean)
+cs	(0:date < date_add(d, 2147483647:int))	coalesce((if((d_maxValue <= 0:date), date_add(d_maxValue, 2147483647:int), null:date) > 0:date), true:boolean)
+cs	(date_add(d, 2147483647:int) >= 0:date)	coalesce((if((d_maxValue <= 0:date), date_add(d_maxValue, 2147483647:int), null:date) >= 0:date), true:boolean)
+cs	NOT (date_add(d, 2147483647:int) = 0:date)	coalesce(NOT ((if((d_maxValue <= 0:date), date_add(d_minValue, 2147483647:int), null:date) = 0:date) AND (if((d_maxValue <= 0:date), date_add(d_maxValue, 2147483647:int), null:date) = 0:date)), true:boolean)
+cs	(date_add(d, 2147483647:int) = cast(0:date as date))	coalesce(((if((d_maxValue <= 0:date), date_add(d_minValue, 2147483647:int), null:date) <= cast(0:date as date)) AND (if((d_maxValue <= 0:date), date_add(d_maxValue, 2147483647:int), null:date) >= cast(0:date as date))), true:boolean)
+cs	date_add(d, 2147483647:int) IN (0:date, null:date)	coalesce((((if((d_maxValue <= 0:date), date_add(d_minValue, 2147483647:int), null:date) <= 0:date) AND (if((d_maxValue <= 0:date), date_add(d_maxValue, 2147483647:int), null:date) >= 0:date)) OR ((if((d_maxValue <= 0:date), date_add(d_minValue, 2147483647:int), null:date) <= null:date) AND (if((d_maxValue <= 0:date), date_add(d_maxValue, 2147483647:int), null:date) >= null:date))), true:boolean)
+cs	NOT date_add(d, 2147483647:int) IN (0:date)	coalesce(NOT ((if((d_maxValue <= 0:date), date_add(d_minValue, 2147483647:int), null:date) = 0:date) AND (if((d_maxValue <= 0:date), date_add(d_maxValue, 2147483647:int), null:date) = 0:date)), true:boolean)
+cs	startswith(date_add(d, 2147483647:int), 'ab')	true:boolean
+cs	NOT startswith(date_add(d, 2147483647:int), 'ab')	true:boolean
+cs	(date_add(d, -2147483648:int) = 0:date)	coalesce(((if((d_minValue >= 0:date), date_add(d_minValue, -2147483648:int), null:date) <= 0:date) AND (if((d_minValue >= 0:date), date_add(d_maxValue, -2147483648:int), null:date) >= 0:date)), true:boolean)
+cs	(0:date < date_add(d, -2147483648:int))	coalesce((if((d_minValue >= 0:date), date_add(d_maxValue, -2147483648:int), null:date) > 0:date), true:boolean)
+cs	(date_add(d, -2147483648:int) >= 0:date)	coalesce((if((d_minValue >= 0:date), date_add(d_maxValue, -2147483648:int), null:date) >= 0:date), true:boolean)
+cs	NOT (date_add(d, -2147483648:int) = 0:date)	coalesce(NOT ((if((d_minValue >= 0:date), date_add(d_minValue, -2147483648:int), null:date) = 0:date) AND (if((d_minValue >= 0:date), date_add(d_maxValue, -2147483648:int), null:date) = 0:date)), true:boolean)
+cs	(date_add(d, -2147483648:int) = cast(0:date as date))	coalesce(((if((d_minValue >= 0:date), date_add(d_minValue, -2147483648:int), null:date) <= cast(0:date as date)) AND (if((d_minValue >= 0:date), date_add(d_maxValue, -2147483648:int), null:date) >= cast(0:date as date))), true:boolean)
+cs	date_add(d, -2147483648:int) IN (0:date, null:date)	coalesce((((if((d_minValue >= 0:date), date_add(d_minValue, -2147483648:int), null:date) <= 0:date) AND (if((d_minValue >= 0:date), date_add(d_maxValue, -2147483648:int), null:date) >= 0:date)) OR ((if((d_minValue >= 0:date), date_add(d_minValue, -2147483648:int), null:date) <= null:date) AND (if((d_minValue >= 0:date), date_add(d_maxValue, -2147483648:int), null:date) >= null:date))), true:boolean)
+cs	NOT date_add(d, -2147483648:int) IN (0:date)	coalesce(NOT ((if((d_minValue >= 0:date), date_add(d_minValue, -2147483648:int), null:date) = 0:date) AND (if((d_minValue >= 0:date), date_add(d_maxValue, -2147483648:int), null:date) = 0:date)), true:boolean)
+cs	startswith(date_add(d, -2147483648:int), 'ab')	true:boolean
+cs	NOT startswith(date_add(d, -2147483648:int), 'ab')	true:boolean
+cs	(date_sub(d, -2147483648:int) = 0:date)	coalesce(((if((d_maxValue <= -1:date), date_sub(d_minValue, -2147483648:int), null:date) <= 0:date) AND (if((d_maxValue <= -1:date), date_sub(d_maxValue, -2147483648:int), null:date) >= 0:date)), true:boolean)
+cs	(0:date < date_sub(d, -2147483648:int))	coalesce((if((d_maxValue <= -1:date), date_sub(d_maxValue, -2147483648:int), null:date) > 0:date), true:boolean)
+cs	(date_sub(d, -2147483648:int) >= 0:date)	coalesce((if((d_maxValue <= -1:date), date_sub(d_maxValue, -2147483648:int), null:date) >= 0:date), true:boolean)
+cs	NOT (date_sub(d, -2147483648:int) = 0:date)	coalesce(NOT ((if((d_maxValue <= -1:date), date_sub(d_minValue, -2147483648:int), null:date) = 0:date) AND (if((d_maxValue <= -1:date), date_sub(d_maxValue, -2147483648:int), null:date) = 0:date)), true:boolean)
+cs	(date_sub(d, -2147483648:int) = cast(0:date as date))	coalesce(((if((d_maxValue <= -1:date), date_sub(d_minValue, -2147483648:int), null:date) <= cast(0:date as date)) AND (if((d_maxValue <= -1:date), date_sub(d_maxValue, -2147483648:int), null:date) >= cast(0:date as date))), true:boolean)
+cs	date_sub(d, -2147483648:int) IN (0:date, null:date)	coalesce((((if((d_maxValue <= -1:date), date_sub(d_minValue, -2147483648:int), null:date) <= 0:date) AND (if((d_maxValue <= -1:date), date_sub(d_maxValue, -2147483648:int), null:date) >= 0:date)) OR ((if((d_maxValue <= -1:date), date_sub(d_minValue, -2147483648:int), null:date) <= null:date) AND (if((d_maxValue <= -1:date), date_sub(d_maxValue, -2147483648:int), null:date) >= null:date))), true:boolean)
+cs	NOT date_sub(d, -2147483648:int) IN (0:date)	coalesce(NOT ((if((d_maxValue <= -1:date), date_sub(d_minValue, -2147483648:int), null:date) = 0:date) AND (if((d_maxValue <= -1:date), date_sub(d_maxValue, -2147483648:int), null:date) = 0:date)), true:boolean)
+cs	startswith(date_sub(d, -2147483648:int), 'ab')	true:boolean
+cs	NOT startswith(date_sub(d, -2147483648:int), 'ab')	true:boolean
+cs	(shiftright(a, a) = 0:int)	true:boolean
+cs	(0:int < shiftright(a, a))	true:boolean
+cs	(shiftright(a, a) >= 0:int)	true:boolean
+cs	NOT (shiftright(a, a) = 0:int)	true:boolean
+cs	(shiftright(a, a) = cast(0:int as int))	true:boolean
+cs	shiftright(a, a) IN (0:int, null:int)	true:boolean
+cs	NOT shiftright(a, a) IN (0:int)	true:boolean
+cs	startswith(shiftright(a, a), 'ab')	true:boolean
+cs	NOT startswith(shiftright(a, a), 'ab')	true:boolean
+cs	(left(s, (length(s) - 1:int)) = '')	true:boolean
+cs	('' < left(s, (length(s) - 1:int)))	true:boolean
+cs	(left(s, (length(s) - 1:int)) >= '')	true:boolean
+cs	NOT (left(s, (length(s) - 1:int)) = '')	true:boolean
+cs	(left(s, (length(s) - 1:int)) = cast('' as string))	true:boolean
+cs	left(s, (length(s) - 1:int)) IN ('', null:string)	true:boolean
+cs	NOT left(s, (length(s) - 1:int)) IN ('')	true:boolean
+cs	startswith(left(s, (length(s) - 1:int)), 'ab')	true:boolean
+cs	NOT startswith(left(s, (length(s) - 1:int)), 'ab')	true:boolean
