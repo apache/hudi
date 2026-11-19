@@ -37,11 +37,11 @@ public final class RowBalancer {
 
   /**
    * @return the strategy {@code hoodie.unstructured.embedding.prep.balance.strategy.class} names, default
-   *     {@link HashBalancingStrategy}
+   *     {@link SizeTypeAwareBalancingStrategy}
    */
   public static RowBalancingStrategy strategyFrom(TypedProperties props) {
     return ReflectionUtils.loadClass(ConfigUtils.getStringWithAltKeys(props, EmbeddingTableConfig.BALANCE_STRATEGY_CLASS,
-        HashBalancingStrategy.class.getName()));
+        SizeTypeAwareBalancingStrategy.class.getName()));
   }
 
   /**

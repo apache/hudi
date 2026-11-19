@@ -134,7 +134,7 @@ public class TestVideoFrameRows {
     byte[] bytes = script.getBytes(StandardCharsets.UTF_8);
     Row blob = new GenericRowWithSchema(new Object[] {INLINE, bytes, null}, BLOB);
     Row source = new GenericRowWithSchema(new Object[] {"sha-video", "mp4", (long) bytes.length, 1L, blob, "s3://bucket/sha-video.mp4", "sha-video.mp4"}, SOURCE_ROW);
-    return new PreprocessingIterator(Collections.singletonList(source).iterator(), EmbeddingTableConfig.from(props),
+    return new PreprocessingIterator(Collections.singletonList(source).iterator(), EmbeddingTableConfig.from(props), "001",
         new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())), new PreprocessorRegistry(props),
         new WordCountTokenizer(), counters(), null);
   }

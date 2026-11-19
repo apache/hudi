@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.unstructured.embedding.prep;
 
 import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingPayloadWriteException;
 import org.apache.hudi.utilities.unstructured.embedding.source.PrepPlatformException;
 import org.apache.hudi.utilities.unstructured.embedding.source.PreprocessorConfigurationException;
 import org.apache.hudi.utilities.unstructured.embedding.source.SourceFailures;
@@ -41,6 +42,7 @@ import java.util.function.Function;
  *   <li>a {@link SourceReadException}: a storage failure of a source a later run can still read (transient, after its in-commit
  *       retries, or a 403/KMS denial);</li>
  *   <li>a {@link PreprocessorConfigurationException} or a {@link PrepPlatformException}: the job's configuration or its platform;</li>
+ *   <li>an {@link EmbeddingPayloadWriteException}: a prepared payload's file could not be written under the embedding table;</li>
  *   <li>a {@link TokenizerException} of kind {@link TokenizerException.Kind#RETRYABLE}: the tokenizer's runtime failed after its
  *       own bounded retries, the text itself was never judged;</li>
  *   <li>a JVM failure a decoder wrapped or suppressed (a {@link VirtualMachineError}, e.g. an OutOfMemoryError, or a
@@ -137,6 +139,7 @@ public final class PrepFailures {
     return cause instanceof SourceReadException
         || cause instanceof PreprocessorConfigurationException
         || cause instanceof PrepPlatformException
+        || cause instanceof EmbeddingPayloadWriteException
         || (cause instanceof TokenizerException && ((TokenizerException) cause).kind() == TokenizerException.Kind.RETRYABLE);
   }
 }

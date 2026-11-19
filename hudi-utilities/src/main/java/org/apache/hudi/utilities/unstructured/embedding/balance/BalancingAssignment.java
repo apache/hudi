@@ -37,8 +37,10 @@ import java.util.List;
 public class BalancingAssignment {
 
   public static final String SOURCE_PATH_SHA = BlobColumns.SOURCE_PATH_SHA;
+  public static final String SOURCE_MODIFICATION_TIME = BlobColumns.SOURCE_MODIFICATION_TIME;
+  public static final String SOURCE_FILE_SIZE = BlobColumns.SOURCE_FILE_SIZE;
   public static final List<String> KEY_COLUMNS = Collections.unmodifiableList(Arrays.asList(SOURCE_PATH_SHA,
-      BlobColumns.SOURCE_MODIFICATION_TIME, BlobColumns.SOURCE_FILE_SIZE));
+      SOURCE_MODIFICATION_TIME, SOURCE_FILE_SIZE));
   public static final String PARTITION = "_balance_partition";
   public static final StructType SCHEMA = DataTypes.createStructType(new StructField[] {
       DataTypes.createStructField(SOURCE_PATH_SHA, DataTypes.StringType, false),

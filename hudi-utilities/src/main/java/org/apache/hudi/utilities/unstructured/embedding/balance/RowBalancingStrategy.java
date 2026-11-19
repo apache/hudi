@@ -32,7 +32,7 @@ import java.io.Serializable;
  * <p>A strategy takes the incremental batch, blob bytes included, and returns its rows spread over the prep tasks. It either
  * shuffles the rows itself ({@link HashBalancingStrategy}: one hash shuffle by the source version key), or extends
  * {@link AssignmentBalancingStrategy} and supplies an explicit (source version, partition) plan computed from the batch's
- * metadata, which the base class applies exactly. Either way a row's task must depend
+ * metadata, which the base class applies exactly ({@link SizeTypeAwareBalancingStrategy}). Either way a row's task must depend
  * on the batch's versions alone, never on its partitioning or order, so a recomputed task reads the same rows.
  * Implementations need a public no-arg constructor.
  */

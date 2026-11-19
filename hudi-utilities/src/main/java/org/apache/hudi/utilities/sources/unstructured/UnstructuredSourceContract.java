@@ -23,8 +23,11 @@ import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.marker.MarkerType;
+import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.ComplexKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
@@ -33,6 +36,9 @@ import org.apache.hudi.utilities.sources.SourceContract;
 import org.apache.hudi.utilities.sources.UnstructuredDataSource;
 import org.apache.hudi.utilities.sources.blob.BlobPhysicalPins;
 import org.apache.hudi.utilities.sources.blob.BlobSourceSetup;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig;
+import org.apache.hudi.utilities.unstructured.embedding.prep.PreprocessorRegistry;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -40,6 +46,7 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -73,6 +80,16 @@ public class UnstructuredSourceContract implements SourceContract {
       Map<String, String> physical = BlobPhysicalPins.of(props);
       pins.requireTableProperties(physical, (source, base, table) -> BlobPhysicalPins.check(source, base, table, physical));
     }
+    if (mode == UnstructuredMode.EMBEDDING) {
+      String threshold = Long.toString(EmbeddingInputConfig.inlineMaxBytes(props));
+      TypedProperties job = TypedProperties.copy(props);
+      pins.requireTableProperties(Collections.singletonMap(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key(), threshold),
+          (source, base, table) -> {
+            if (!threshold.equals(table.getProperty(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key())) && storesInputs(mode, job)) {
+              EmbeddingInputConfig.checkTable(source, base, table, threshold);
+            }
+          });
+    }
     this.tablePins = pins.build();
   }
 
@@ -89,6 +106,13 @@ public class UnstructuredSourceContract implements SourceContract {
         UnstructuredSourceContract::fields, " (these fields, in this order)");
     require(merged, HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS, mode.injectorClass(), String::trim,
         " (a job's own injector goes under " + mode.injectorDelegateKey() + ", and runs first)");
+    if (mode == UnstructuredMode.EMBEDDING && ConfigUtils.getBooleanWithAltKeys(merged, HoodieWriteConfig.BLOB_MARKERS_ENABLE)
+        && storesInputs(mode, merged)) {
+      require(merged, HoodieWriteConfig.MARKERS_TYPE, MarkerType.TIMELINE_SERVER_BASED.name(),
+          value -> value.trim().toLowerCase(java.util.Locale.ROOT), "");
+      require(merged, HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE, "true",
+          value -> value.trim().toLowerCase(java.util.Locale.ROOT), "");
+    }
     if (mode == UnstructuredMode.BLOB) {
       setDefault(merged, HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "uncompressed");
       setDefault(merged, HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED, "false");
@@ -187,6 +211,28 @@ public class UnstructuredSourceContract implements SourceContract {
   }
 
   public static UnstructuredTableProperties embeddingTablePins(String sourceName, TypedProperties props) {
-    return UnstructuredTableVersion.tablePropertiesBuilder(sourceName, "embedding").build();
+    String inlineMaxBytes = Long.toString(EmbeddingInputConfig.inlineMaxBytes(props));
+    TypedProperties job = TypedProperties.copy(props);
+    UnstructuredTableProperties.Builder pins = UnstructuredTableVersion.tablePropertiesBuilder(sourceName, UnstructuredMode.EMBEDDING.configValue())
+        .requireTableProperties(Collections.singletonMap(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key(), inlineMaxBytes),
+            (name, basePath, table) -> {
+              if (!inlineMaxBytes.equals(table.getProperty(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key()))
+                  && storesInputs(UnstructuredMode.EMBEDDING, job)) {
+                EmbeddingInputConfig.checkTable(name, basePath, table, inlineMaxBytes);
+              }
+            });
+    return pins.build();
+  }
+
+  private static boolean storesInputs(UnstructuredMode mode, TypedProperties props) {
+    if (mode == UnstructuredMode.BLOB) {
+      return false;
+    }
+    PreprocessorRegistry registry = new PreprocessorRegistry(props);
+    try {
+      return registry.storesInputs(EmbeddingTableConfig.from(props));
+    } finally {
+      registry.close();
+    }
   }
 }

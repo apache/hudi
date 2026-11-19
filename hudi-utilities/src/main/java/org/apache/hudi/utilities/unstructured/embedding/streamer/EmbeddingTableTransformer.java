@@ -33,10 +33,12 @@ import org.apache.hudi.utilities.unstructured.embedding.balance.BalancedRows;
 import org.apache.hudi.utilities.unstructured.embedding.compute.ComputeCounters;
 import org.apache.hudi.utilities.unstructured.embedding.compute.ComputeRound;
 import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingClientFactory;
+import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PreprocessorRegistry;
 import org.apache.hudi.utilities.unstructured.embedding.prep.VideoFrameHeapCheck;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 import org.apache.hudi.utilities.unstructured.embedding.text.TokenizerFactory;
+import org.apache.hudi.utilities.unstructured.storage.OutOfLineWriter;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -192,6 +194,12 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     PrepRound.checkNoSpeculation(spark.sparkContext().getConf());
     PreprocessorRegistry registry = new PreprocessorRegistry(config.getProps());
     try {
+      if (registry.storesInputs(config)) {
+        // the input store's inline threshold against the per-task heap ceiling, before any Spark work
+        EmbeddingInputConfig.checkOnDriver(config.getProps(), spark.sparkContext().getConf());
+        OutOfLineWriter.checkTimelineServerMarkers(HadoopFSUtils.getStorageConf(spark.sparkContext().hadoopConfiguration()),
+            config.targetTablePath(), config.getProps());
+      }
       if (VideoFrameHeapCheck.prepsVideo(config, registry)) {
         // the executor heap must hold the frame decodes of a video: refused before any Spark work
         VideoFrameHeapCheck.check(config, spark.sparkContext().getConf());
@@ -225,6 +233,8 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     try {
       PrepRound.checkPrepFileExtensions(config, registry);
       registry.validateConfig(props, TokenizerFactory.create(props));
+      EmbeddingInputConfig.inlineMaxBytes(props);
+      EmbeddingInputConfig.inlineMaxHeapFraction(props);
 
     } finally {
       registry.close();
@@ -369,7 +379,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
       int parallelism = config.computeParallelism(jsc.defaultParallelism());
       ComputeCounters counters = ComputeCounters.register(jsc.sc());
       Dataset<Row> embedded = ComputeRound.embed(spark, ComputeRound.hashPartitionByKey(toEmbed, parallelism), tableSchema, model, props,
-          new BlobBytesSource(storageConf, config.prepSourceRetry()), counters, level);
+          new BlobBytesSource(target, storageConf, config.prepSourceRetry()), counters, level);
       caches.outputs.add(embedded);
       LOG.info("Embedding round of {} at instant {}: model {} over {} task(s): {} row(s) embedded, {} failed for good", target,
           instant, model.getName(), parallelism, counters.getRowsEmbedded().value(), counters.getRowsPermanent().value());

@@ -178,6 +178,7 @@ public class FfmpegAbsentProbe implements Callable<String> {
     return new PreprocessingIterator(
         Arrays.asList(rows).iterator(),
         EmbeddingTableConfig.from(props),
+        "001",
         new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
         new PreprocessorRegistry(props),
         new WordCountTokenizer(),

@@ -24,6 +24,7 @@ import org.apache.hudi.utilities.sources.blob.BlobInlineCeiling;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.video.FfmpegKeyframeVideoFrameSource;
 import org.apache.hudi.utilities.unstructured.embedding.video.VideoFrameConfig;
+import org.apache.hudi.utilities.unstructured.storage.OutOfLineWritePool;
 
 import org.apache.spark.SparkConf;
 import org.slf4j.Logger;
@@ -86,7 +87,7 @@ public final class VideoFrameHeapCheck {
    * Per-slot bytes of the buffers that came after the {@link #SLOT_OVERHEAD_BYTES} measurement: the FFmpeg frame source's block
    * reads and a task's background out-of-line frame writes (pending, plus one payload waiting for room): 10 MiB.
    */
-  static final long STREAMING_BUFFER_BYTES = FfmpegKeyframeVideoFrameSource.BUFFERED_READ_BYTES + 8L * 1024 * 1024;
+  static final long STREAMING_BUFFER_BYTES = FfmpegKeyframeVideoFrameSource.BUFFERED_READ_BYTES + 2L * OutOfLineWritePool.MAX_PENDING_BYTES;
   private static final Logger LOG = LoggerFactory.getLogger(VideoFrameHeapCheck.class);
   /** The read-ahead buffers a prep task holds at once: the file it prepares and the next one. */
   static final long PREFETCH_BUFFERS_PER_TASK = 2L;

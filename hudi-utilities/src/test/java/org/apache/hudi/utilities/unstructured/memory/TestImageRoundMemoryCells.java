@@ -327,7 +327,7 @@ public class TestImageRoundMemoryCells extends EmbeddingRoundTestBase {
         ConcurrencyCountingMultimodalClient.class.getName());
     props.setProperty(EmbeddingTableConfig.COMPUTE_PARALLELISM.key(), String.valueOf(COMPUTE_PARALLELISM));
     props.setProperty(HoodieWriteConfig.TAGGED_RECORD_STORAGE_LEVEL_VALUE.key(), "DISK_ONLY");
-    props.remove(EmbeddingTableConfig.BALANCE_NUM_PARTITIONS.key());
+    props.remove(EmbeddingTableConfig.BALANCE_MIN_PARTITIONS.key());
     return props;
   }
 

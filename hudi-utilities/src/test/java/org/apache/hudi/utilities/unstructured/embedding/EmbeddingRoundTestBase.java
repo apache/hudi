@@ -185,7 +185,7 @@ public abstract class EmbeddingRoundTestBase extends SparkClientFunctionalTestHa
     extra.setProperty(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + TEXT_EXTENSION
         + EmbeddingTableConfig.PREPROCESSOR_CLASS_SUFFIX, TextPipePreprocessor.class.getName());
     extra.setProperty(EmbeddingTableConfig.TOKENIZER_TYPE.key(), TokenizerFactory.WORD_COUNT);
-    extra.setProperty(EmbeddingTableConfig.BALANCE_NUM_PARTITIONS.key(), "2");
+    extra.setProperty(EmbeddingTableConfig.BALANCE_MIN_PARTITIONS.key(), "2");
     if (EmbeddingTableConfig.MODE_PREP_AND_COMPUTE.equals(mode)) {
       extra.setProperty(EmbeddingTableConfig.MODEL_PREFIX + EmbeddingStreamers.MODEL + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX,
           ScriptedEmbeddingClient.class.getName());

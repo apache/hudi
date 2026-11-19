@@ -343,7 +343,7 @@ public class TestEmbeddingRoundMemoryCells extends EmbeddingRoundTestBase {
           PartitionCountingEmbeddingClient.class.getName());
     }
     props.setProperty(HoodieWriteConfig.TAGGED_RECORD_STORAGE_LEVEL_VALUE.key(), "DISK_ONLY");
-    props.remove(EmbeddingTableConfig.BALANCE_NUM_PARTITIONS.key());
+    props.remove(EmbeddingTableConfig.BALANCE_MIN_PARTITIONS.key());
     // the cells hold PDFs and text files only: without video in the allow-list the video frame heap check does not apply
     props.setProperty(EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), "pdf," + TEXT_EXTENSION);
     props.putAll(extra);

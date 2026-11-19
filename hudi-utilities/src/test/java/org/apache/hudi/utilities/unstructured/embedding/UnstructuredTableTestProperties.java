@@ -43,6 +43,9 @@ public final class UnstructuredTableTestProperties {
         .requireTableProperty(UnstructuredTableVersion.KEY_ENCODING_VERSION, "1");
     settings.requireTableProperty(org.apache.hudi.common.config.ConfigProperty
         .key("hoodie.table.embedding.column.info.layout.version").noDefaultValue(), "1");
+    settings.requireTableProperty(org.apache.hudi.common.config.ConfigProperty
+        .key("hoodie.table.embedding.input.inline.max.bytes").noDefaultValue(),
+        Long.toString(org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig.inlineMaxBytes(jobProps)));
     return settings.build().tableProperties();
   }
 }

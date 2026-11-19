@@ -63,7 +63,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * adaptive execution on, so a row's partition is {@code pmod(murmur3(version), P)} whatever the input's partitioning or order, a
  * row with a null version column is kept, and partition counts are balanced in expectation.
  */
-public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness {
+class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness {
 
   private static final StructType ROWS = DataTypes.createStructType(new StructField[] {
       DataTypes.createStructField(BlobColumns.SOURCE_PATH_SHA, DataTypes.StringType, false),
@@ -79,7 +79,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
 
   /** Adaptive execution on, coalescing to a 64 MiB advisory size: it would merge every small shuffle into one partition. */
   @BeforeEach
-  public void adaptiveExecutionOn() {
+  void adaptiveExecutionOn() {
     String[] values = {"true", "true", String.valueOf(64L * 1024 * 1024)};
     for (int i = 0; i < ADAPTIVE_KEYS.length; i++) {
       previous.put(ADAPTIVE_KEYS[i], spark().conf().get(ADAPTIVE_KEYS[i], null));
@@ -88,7 +88,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
   }
 
   @AfterEach
-  public void restoreConf() {
+  void restoreConf() {
     previous.forEach((key, value) -> {
       if (value == null) {
         spark().conf().unset(key);
@@ -144,7 +144,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
   }
 
   @Test
-  public void givesExactlyPPartitionsWithAdaptiveExecutionOn() {
+  void givesExactlyPPartitionsWithAdaptiveExecutionOn() {
     Dataset<Row> batch = spark().createDataFrame(jsc().parallelize(files(40), 3), ROWS);
     try (BalancedRows balanced = new HashBalancingStrategy().balance(batch, props(7))) {
       assertEquals(7, balanced.getRows().getNumPartitions());
@@ -156,7 +156,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
   }
 
   @Test
-  public void defaultsToTheDefaultParallelism() {
+  void defaultsToTheDefaultParallelism() {
     Dataset<Row> batch = spark().createDataFrame(jsc().parallelize(files(5), 2), ROWS);
     try (BalancedRows balanced = new HashBalancingStrategy().balance(batch, new TypedProperties())) {
       assertEquals(jsc().defaultParallelism(), balanced.getRows().getNumPartitions());
@@ -169,7 +169,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
    * in the same partition.
    */
   @Test
-  public void theSameRowLandsInTheSamePartitionAcrossReshuffledInput() {
+  void theSameRowLandsInTheSamePartitionAcrossReshuffledInput() {
     List<Row> rows = files(60);
     List<Row> reversed = new ArrayList<>(rows);
     Collections.reverse(reversed);
@@ -203,7 +203,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
 
   /** The hash skips a null key column, so a row whose modification time or size is null is kept, whole. */
   @Test
-  public void rowWithANullKeyColumnIsKept() {
+  void rowWithANullKeyColumnIsKept() {
     Dataset<Row> batch = spark().createDataFrame(Arrays.asList(file("sha-a", 1000L, 5L, 1), file("sha-b", null, 5L, 2),
         file("sha-c", 1000L, null, 3), file("sha-d", null, null, 4)), ROWS);
     try (BalancedRows balanced = new HashBalancingStrategy().balance(batch, props(3))) {
@@ -236,7 +236,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
    * rows to the shuffle once.
    */
   @Test
-  public void thePhysicalPlanHasOneShuffleAndNoJoin() throws Exception {
+  void thePhysicalPlanHasOneShuffleAndNoJoin() throws Exception {
     int files = 200;
     int blobBytes = 4096;
     Random random = new Random(11);
@@ -276,7 +276,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
 
   /** At N/P = 1000 rows per partition the partition counts stay within 10% of the mean. */
   @Test
-  public void partitionCountsAreBalancedInExpectation() {
+  void partitionCountsAreBalancedInExpectation() {
     int partitions = 8;
     int rows = 8000;
     Dataset<Row> batch = spark().createDataFrame(jsc().parallelize(files(rows), 4), ROWS);
@@ -290,7 +290,7 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
   }
 
   @Test
-  public void anEmptyBatchGivesNoRowsAndNoFailure() {
+  void anEmptyBatchGivesNoRowsAndNoFailure() {
     Dataset<Row> batch = spark().createDataFrame(Collections.emptyList(), ROWS);
     BalancedRows balanced = new HashBalancingStrategy().balance(batch, props(3));
     assertEquals(0L, balanced.getRows().count());
@@ -301,10 +301,13 @@ public class TestHashBalancingStrategy extends SparkClientFunctionalTestHarness 
   }
 
   @Test
-  public void theSpreadNeedsAPartitionAndAKey() {
+  void theSpreadNeedsAPartitionAndAKey() {
     Dataset<Row> batch = spark().createDataFrame(Collections.emptyList(), ROWS);
-    assertThrows(IllegalArgumentException.class, () -> HashSpread.of(batch, 0, versionKey()));
+    Column[] key = versionKey();
+    assertThrows(IllegalArgumentException.class, () -> HashSpread.of(batch, 0, key));
     assertThrows(IllegalArgumentException.class, () -> HashSpread.of(batch, 3));
-    assertThrows(IllegalArgumentException.class, () -> new HashBalancingStrategy().balance(batch, props(0)));
+    HashBalancingStrategy strategy = new HashBalancingStrategy();
+    TypedProperties noPartitions = props(0);
+    assertThrows(IllegalArgumentException.class, () -> strategy.balance(batch, noPartitions));
   }
 }

@@ -33,6 +33,7 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.balance.BalancedRows;
 import org.apache.hudi.utilities.unstructured.embedding.balance.RowBalancer;
+import org.apache.hudi.utilities.unstructured.embedding.input.PayloadDestination;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PrepCounters;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PrepSideOutput;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PreprocessingIterator;
@@ -99,14 +100,19 @@ final class PrepRound {
   private PrepRound() {
   }
 
-  /** What prep leaves for the rest of the round: its persisted output (data and error rows) and the balancer's assignment. */
+  /**
+   * What prep leaves for the rest of the round: its persisted output (data and error rows), the balancer's assignment and the
+   * prep counters.
+   */
   static final class Prepared {
     final Dataset<Row> output;
     final BalancedRows balance;
+    final PrepCounters counters;
 
-    Prepared(Dataset<Row> output, BalancedRows balance) {
+    Prepared(Dataset<Row> output, BalancedRows balance, PrepCounters counters) {
       this.output = output;
       this.balance = balance;
+      this.counters = counters;
     }
   }
 
@@ -141,6 +147,16 @@ final class PrepRound {
     }
   }
 
+  /** Whether a preprocessor of the job stores model inputs ({@link PreprocessorRegistry#storesInputs}). */
+  private static boolean storesInputs(EmbeddingTableConfig config) {
+    PreprocessorRegistry registry = new PreprocessorRegistry(config.getProps());
+    try {
+      return registry.storesInputs(config);
+    } finally {
+      registry.close();
+    }
+  }
+
   /**
    * Prepares {@code blobRows} at {@code instant}. The returned output has {@code outputSchema} (the table schema plus
    * {@value #CORRUPT_RECORD}), is persisted at {@code level} and has been counted. A batch without rows returns an empty,
@@ -163,14 +179,18 @@ final class PrepRound {
       long rows = batch.count();
       if (rows == 0L) {
         batch.unpersist(false);
-        return new Prepared(spark.createDataFrame(Collections.emptyList(), outputSchema), null);
+        return new Prepared(spark.createDataFrame(Collections.emptyList(), outputSchema), null,
+            PrepCounters.register(spark.sparkContext()));
       }
       PrepCounters counters = PrepCounters.register(spark.sparkContext());
       // the strategy spreads the batch's rows; an assignment strategy plans on the batch without blob, and only its join reads the bytes
       balanced = RowBalancer.balance(batch, RowBalancer.strategyFrom(props), props);
-      // preprocessing over the balanced rows, read from the cached batch
-      JavaRDD<Row> prepared = balanced.getRows().mapPartitions(preprocessFunction(config, instant, storageConf, counters,
-          layoutOf(outputSchema, EmbeddingTableSchema.build(config)), outputSchema));
+      // preprocessing over the balanced rows, read from the cached batch; a payload above the input store's inline threshold is
+      // written under the embedding table as it is prepared, with the round's markers, so a rollback of the instant removes it.
+      // A job none of whose preprocessors stores inputs has no destination, so it needs no out-of-line markers
+      PayloadDestination destination = storesInputs(config) ? new PayloadDestination(storageConf, target, props) : null;
+      JavaRDD<Row> prepared = balanced.getRows().mapPartitions(preprocessFunction(config, instant, storageConf, destination,
+          counters, layoutOf(outputSchema, EmbeddingTableSchema.build(config)), outputSchema));
       output = spark.createDataFrame(prepared, outputSchema).persist(level);
       // the action that runs preprocessing, inside the round, where a failure rolls the instant back
       long outputRows = output.count();
@@ -182,7 +202,7 @@ final class PrepRound {
       if (!errorTableEnabled(props)) {
         failOnFailedRows(output, config);
       }
-      return new Prepared(output, balanced);
+      return new Prepared(output, balanced, counters);
     } catch (Exception e) {
       // a failed Spark job surfaces as a checked SparkException: wrapped, so the streamer's rollback of the instant runs
       batch.unpersist(false);
@@ -216,11 +236,11 @@ final class PrepRound {
   }
 
   private static FlatMapFunction<Iterator<Row>, Row> preprocessFunction(
-      EmbeddingTableConfig config, String instant, StorageConfiguration<?> storageConf,
+      EmbeddingTableConfig config, String instant, StorageConfiguration<?> storageConf, PayloadDestination destination,
       PrepCounters counters, int[] layout, StructType outputSchema) {
     return blobRows -> outputRows(blobRows, config,
         new BlobBytesSource(storageConf, config.prepSourceRetry()), new PreprocessorRegistry(config.getProps()),
-        TokenizerFactory.create(config.getProps()), counters, instant, outputSchema, layout);
+        TokenizerFactory.create(config.getProps()), counters, instant, outputSchema, layout, destination);
   }
 
   /**
@@ -230,10 +250,10 @@ final class PrepRound {
   @VisibleForTesting
   static Iterator<Row> outputRows(Iterator<Row> blobRows, EmbeddingTableConfig config, BlobBytesSource bytesSource,
                                   PreprocessorRegistry registry, Tokenizer tokenizer, PrepCounters counters,
-                                  String instant, StructType outputSchema, int[] layout) {
+                                  String instant, StructType outputSchema, int[] layout, PayloadDestination destination) {
     Deque<PrepSideOutput> sideOutputs = new ArrayDeque<>();
-    PreprocessingIterator rows = new PreprocessingIterator(blobRows, config, bytesSource, registry, tokenizer, counters,
-        sideOutputs::add);
+    PreprocessingIterator rows = new PreprocessingIterator(blobRows, config, instant, bytesSource, registry, tokenizer, counters,
+        sideOutputs::add, destination);
     return new Iterator<Row>() {
       private boolean ready() {
         return !sideOutputs.isEmpty() || rows.advanceToRowOrSideOutput() || !sideOutputs.isEmpty();

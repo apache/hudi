@@ -30,12 +30,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Resolves configured file preprocessors by extension. The shipped defaults: PDF for {@code pdf}, {@link ImageInputPreprocessor}
@@ -102,6 +104,19 @@ public class PreprocessorRegistry {
     return Collections.unmodifiableSet(classByExtension.keySet());
   }
 
+  /** The job's resolved video preprocessor class name, without instantiating it. */
+  public String videoClassName() {
+    return videoClass;
+  }
+
+  /**
+   * The class name of the preprocessor of every extension this registry resolves (lower-case extension to class name, sorted by
+   * extension), a copy; no preprocessor is instantiated. The prep balancer groups rows by it.
+   */
+  public Map<String, String> classNamesByExtension() {
+    return new TreeMap<>(classByExtension);
+  }
+
   /**
    * Closes every preprocessor this registry resolved that is {@link AutoCloseable} (one holding per-task resources), once, quietly: a failing close is logged and never hides the outcome it
    * follows. The prep framework calls it when its task's iterator closes.
@@ -134,6 +149,17 @@ public class PreprocessorRegistry {
     for (String extension : classByExtension.keySet()) {
       forExtension(extension).get().validateConfig(props, tokenizer);
     }
+  }
+
+  /**
+   * Whether an extension the job preps stores model inputs ({@link FilePreprocessor#storesInputs}): the prep allow-list, or
+   * every mapped extension without that list. Then a round may carry inputs and checks the input store's configuration at start.
+   */
+  public boolean storesInputs(EmbeddingTableConfig config) {
+    Option<List<String>> allowed = config.prepFileExtensions();
+    Collection<String> extensions = allowed.isPresent() ? allowed.get() : classByExtension.keySet();
+    return extensions.stream().map(this::forExtension)
+        .anyMatch(preprocessor -> preprocessor.isPresent() && preprocessor.get().storesInputs());
   }
 
 }

@@ -213,7 +213,7 @@ class TestPreprocessingIteratorLifecycle {
       };
       TypedProperties props = new TypedProperties();
       props.setProperty(EmbeddingTableConfig.MODE.key(), EmbeddingTableConfig.MODE_PREP_ONLY);
-      iterator = new PreprocessingIterator(rows, EmbeddingTableConfig.from(props),
+      iterator = new PreprocessingIterator(rows, EmbeddingTableConfig.from(props), "001",
           mock(BlobBytesSource.class), registry, new WordCountTokenizer(), PrepCounters.local(), null);
     }
 
