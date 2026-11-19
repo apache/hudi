@@ -24,6 +24,7 @@ import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.util.HoodieRecordUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.v2.RowDataInlineLogWriteHandle;
 import org.apache.hudi.io.v2.RowDataNativeLogWriteHandle;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -59,6 +60,11 @@ public class FlinkWriteHandleFactory {
       return ClusterWriteHandleFactory.getInstance();
     }
     if (tableConfig.getTableType().equals(HoodieTableType.MERGE_ON_READ)) {
+      if (writeConfig.shouldWriteUpdatesAsDeletesAndInserts()) {
+        // The Flink writer appends updates and inserts to logs as data blocks
+        throw new HoodieNotSupportedException("Flink upserts and inserts on merge-on-read tables are not supported when "
+            + HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is enabled");
+      }
       return HoodieTableMetadata.isMetadataTable(writeConfig.getBasePath())
           ? DeltaCommitWriteHandleFactory.getInstance() : DeltaCommitRowDataHandleFactory.getInstance();
     } else if (tableConfig.isCDCEnabled()) {

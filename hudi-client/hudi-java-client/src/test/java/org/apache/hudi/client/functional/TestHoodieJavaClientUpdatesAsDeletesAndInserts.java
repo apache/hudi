@@ -316,6 +316,32 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
         "log compaction must be rejected in this write mode but got: " + exception);
   }
 
+  /**
+   * Prepped upserts arrive already tagged and skip the write helper, so they would append the
+   * updates to the log as data blocks.
+   */
+  @Test
+  void testPreppedUpsertRejectedInDeleteInsertMode() throws Exception {
+    HoodieWriteConfig config = buildConfig(true);
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, insertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    String updateTime = WriteClientTestUtils.createNewInstantTime();
+    Exception exception = assertThrows(Exception.class, () ->
+        updateBatch(config, client, updateTime, insertTime, Option.of(Arrays.asList(insertTime)),
+            "000", 50, (writeClient, records, instantTime) -> {
+              // The merge-on-read prepped executor expects the caller to move the instant to inflight
+              writeClient.transitionInflight(instantTime);
+              return writeClient.upsertPreppedRecords(records, instantTime);
+            }, true, false, 50, 100, 2,
+            config.populateMetaFields(), INSTANT_GENERATOR));
+    assertTrue(
+        exceptionChainContains(exception, HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()),
+        "prepped upserts must be rejected in this write mode but got: " + exception);
+  }
+
   @Test
   public void testEventTimeOrderingRejectedInDeleteInsertMode() throws Exception {
     String eventTimeBasePath = basePath + "_event_time";
