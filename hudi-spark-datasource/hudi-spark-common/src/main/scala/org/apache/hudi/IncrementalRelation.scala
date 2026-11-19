@@ -34,7 +34,7 @@ import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.{HoodieTableMetaClient, TableSchemaResolver}
 import org.apache.hudi.common.util.{HoodieTimer, InternalSchemaCache}
 import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.exception.{HoodieException, HoodieIncrementalPathNotFoundException}
+import org.apache.hudi.exception.{ExceptionUtil, HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.internal.schema.InternalSchema
 import org.apache.hudi.internal.schema.utils.SerDeHelper
@@ -52,6 +52,8 @@ import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SQLContext}
 import org.slf4j.LoggerFactory
+
+import java.io.FileNotFoundException
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -160,33 +162,18 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val regularFileIdToFullPath = mutable.HashMap[String, String]()
       var metaBootstrapFileIdToFullPath = mutable.HashMap[String, String]()
 
-      // create Replaced file group
-      val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
-      val replacedFile = replacedTimeline.getInstants.asScala.flatMap { instant =>
-        val replaceMetadata = HoodieReplaceCommitMetadata.
-          fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
-        replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
-          entry.getValue.asScala.map { e =>
-            val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
-            (e, fullPath)
-          }
-        }
-      }.toMap
-
-      for (commit <- commitsToReturn) {
-        val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
-          .get, classOf[HoodieCommitMetadata])
-
-        if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
-          metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
-            replacedFile.contains(k) && v.startsWith(replacedFile(k))
-          }
-        } else {
-          regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
-            replacedFile.contains(k) && v.startsWith(replacedFile(k))
-          }
-        }
+      // Readers hold no lease on the timeline, so the writer can archive a commit to return after the timeline was
+      // listed; reading its metadata then fails with FileNotFoundException. Treated like an archived start or end
+      // commit below.
+      val includedCommitArchivalFailure: Option[Exception] = try {
+        collectWrittenFiles(regularFileIdToFullPath, metaBootstrapFileIdToFullPath)
+        None
+      } catch {
+        case e: Exception if ExceptionUtil.hasCause(e, classOf[FileNotFoundException]) =>
+          log.warn(s"A commit to return of $basePath was archived after the incremental query listed the timeline", e)
+          Some(e)
       }
+      val includedCommitArchived = includedCommitArchivalFailure.isDefined
 
       if (metaBootstrapFileIdToFullPath.nonEmpty) {
         // filer out meta bootstrap files that have had more commits since metadata bootstrap
@@ -227,7 +214,8 @@ class IncrementalRelation(val sqlContext: SQLContext,
       // Fallback to full table scan if any of the following conditions matches:
       //   1. the start commit is archived
       //   2. the end commit is archived
-      //   3. there are files in metadata be deleted
+      //   3. a commit to return was archived after the timeline was listed
+      //   4. there are files in metadata be deleted
       val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key,
         DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.defaultValue).toBoolean
 
@@ -238,12 +226,15 @@ class IncrementalRelation(val sqlContext: SQLContext,
       val endInstantTime = optParams.getOrElse(DataSourceReadOptions.END_INSTANTTIME.key(), lastInstant.getTimestamp)
       val endInstantArchived = commitTimeline.isBeforeTimelineStarts(endInstantTime)
 
-      val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived)) {
+      val scanDf = if (fallbackToFullTableScan && (startInstantArchived || endInstantArchived || includedCommitArchived)) {
         if (hollowCommitHandling == USE_TRANSITION_TIME) {
           throw new HoodieException("Cannot use stateTransitionTime while enables full table scan")
         }
-        log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived")
+        log.info(s"Falling back to full table scan as startInstantArchived: $startInstantArchived, endInstantArchived: $endInstantArchived, "
+          + s"includedCommitArchived: $includedCommitArchived")
         fullTableScanDataFrame(startInstantTime, endInstantTime)
+      } else if (includedCommitArchived) {
+        throw new HoodieIncrementalPathNotFoundException(includedCommitArchivalFailure.get)
       } else {
         if (filteredRegularFullPaths.isEmpty && filteredMetaBootstrapFullPaths.isEmpty) {
           sqlContext.createDataFrame(sqlContext.sparkContext.emptyRDD[Row], usedSchema)
@@ -319,6 +310,42 @@ class IncrementalRelation(val sqlContext: SQLContext,
       }
 
       filters.foldLeft(scanDf)((e, f) => e.filter(f)).rdd
+    }
+  }
+
+  /**
+   * Adds the paths of the files written by the commits to return to `regularFileIdToFullPath`, or to
+   * `metaBootstrapFileIdToFullPath` for the metadata bootstrap commit, leaving out file groups that the replace
+   * commits among them replaced.
+   */
+  private def collectWrittenFiles(regularFileIdToFullPath: mutable.HashMap[String, String],
+                                  metaBootstrapFileIdToFullPath: mutable.HashMap[String, String]): Unit = {
+    // create Replaced file group
+    val replacedTimeline = commitsTimelineToReturn.getCompletedReplaceTimeline
+    val replacedFile = replacedTimeline.getInstants.asScala.flatMap { instant =>
+      val replaceMetadata = HoodieReplaceCommitMetadata.
+        fromBytes(metaClient.getActiveTimeline.getInstantDetails(instant).get, classOf[HoodieReplaceCommitMetadata])
+      replaceMetadata.getPartitionToReplaceFileIds.entrySet().asScala.flatMap { entry =>
+        entry.getValue.asScala.map { e =>
+          val fullPath = FSUtils.constructAbsolutePath(basePath, entry.getKey).toString
+          (e, fullPath)
+        }
+      }
+    }.toMap
+
+    for (commit <- commitsToReturn) {
+      val metadata: HoodieCommitMetadata = HoodieCommitMetadata.fromBytes(commitTimeline.getInstantDetails(commit)
+        .get, classOf[HoodieCommitMetadata])
+
+      if (HoodieTimeline.METADATA_BOOTSTRAP_INSTANT_TS == commit.getTimestamp) {
+        metaBootstrapFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
+          replacedFile.contains(k) && v.startsWith(replacedFile(k))
+        }
+      } else {
+        regularFileIdToFullPath ++= metadata.getFileIdAndFullPaths(basePath).asScala.filterNot { case (k, v) =>
+          replacedFile.contains(k) && v.startsWith(replacedFile(k))
+        }
+      }
     }
   }
 
