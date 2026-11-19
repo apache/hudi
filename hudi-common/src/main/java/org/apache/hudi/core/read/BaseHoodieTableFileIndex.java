@@ -48,6 +48,7 @@ import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap;
 import org.apache.hudi.common.util.collection.ExternalSpillableMap.DiskMapType;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -61,6 +62,7 @@ import lombok.Getter;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -400,6 +402,26 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .collect(Collectors.toList());
   }
 
+  /**
+   * Returns the partitions written by the instants of an incremental query's timeline. If the writer archived one of
+   * those instants after the timeline was listed, its metadata file is gone and the written partitions are unknown,
+   * so all partitions under {@code relativePartitionPaths} are returned instead. The incremental relation then handles
+   * the archived instant: V1 relations fall back to a full table scan or fail, as they do when the begin instant is
+   * archived, and V2 relations read the instant from the archived timeline.
+   */
+  private List<String> getWrittenPartitionsOrAll(HoodieTimeline timelineToQuery, List<String> relativePartitionPaths) throws IOException {
+    try {
+      return TimelineUtils.getWrittenPartitions(timelineToQuery);
+    } catch (HoodieIOException e) {
+      if (!ExceptionUtil.isCausedBy(e, FileNotFoundException.class)) {
+        throw e;
+      }
+      log.warn("An instant of {} was archived after the incremental query listed the timeline; listing all partitions",
+          basePath, e);
+      return tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
+    }
+  }
+
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
     List<String> matchedPartitionPaths;
     try {
@@ -409,7 +431,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
             && !START_COMMIT_EARLIEST.equalsIgnoreCase(incrementalQueryStartTime.get())
             && !isBeforeTimelineStarts()) {
           HoodieTimeline timelineToQuery = findInstantsInRange();
-          matchedPartitionPaths = TimelineUtils.getWrittenPartitions(timelineToQuery);
+          matchedPartitionPaths = getWrittenPartitionsOrAll(timelineToQuery, relativePartitionPaths);
         } else {
           HoodieTimer timer = HoodieTimer.start();
           try {

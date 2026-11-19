@@ -19,14 +19,14 @@ package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
 import org.apache.hudi.HoodieSparkConfUtils.getHollowCommitHandling
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.{FileSlice, HoodieCommitMetadata, HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata, handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling.USE_TRANSITION_TIME
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{ExceptionUtil, HoodieException, HoodieIncrementalPathNotFoundException}
 import org.apache.hudi.hadoop.utils.HoodieInputFormatUtils.listAffectedFilesForCommits
 import org.apache.hudi.metadata.HoodieTableMetadataUtil.getWritePartitionPaths
 import org.apache.hudi.storage.StoragePathInfo
@@ -38,6 +38,8 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
+
+import java.io.FileNotFoundException
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable
@@ -202,12 +204,14 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
   // Fallback to full table scan if any of the following conditions matches:
   //   1. the start commit is archived
   //   2. the end commit is archived
-  //   3. there are files in metadata be deleted
+  //   3. an included commit was archived after the timeline was listed
+  //   4. there are files in metadata be deleted
+  // Condition 3 is checked before 4, which reads the metadata of every included commit.
   protected lazy val fullTableScan: Boolean = {
     val fallbackToFullTableScan = optParams.getOrElse(DataSourceReadOptions.INCREMENTAL_FALLBACK_TO_FULL_TABLE_SCAN.key, "false").toBoolean
     if (!fallbackToFullTableScan) {
       false
-    } else if (startInstantArchived || endInstantArchived) {
+    } else if (startInstantArchived || endInstantArchived || includedCommitArchived) {
       true
     } else {
       val missingFileFound = HoodieBaseRelation.checkIfAnyFilesMissing(
@@ -233,7 +237,32 @@ trait HoodieIncrementalRelationV1Trait extends HoodieBaseRelation {
     }
   }
 
-  protected lazy val commitsMetadata = includedCommits.map(getCommitMetadata(_, super.timeline)).asJava
+  /**
+   * Metadata of the included commits, or the failure to read it because the writer archived one of them after the
+   * timeline was listed. Readers hold no lease on the timeline, so the archiver can move a listed instant out of the
+   * active timeline before its metadata is read.
+   */
+  private lazy val commitsMetadataOrArchivalFailure: Either[Exception, java.util.List[HoodieCommitMetadata]] = {
+    try {
+      Right(includedCommits.map(getCommitMetadata(_, super.timeline)).asJava)
+    } catch {
+      case e: Exception if ExceptionUtil.isCausedBy(e, classOf[FileNotFoundException]) =>
+        logWarning(s"An included instant of ${metaClient.getBasePath} was archived after the incremental query listed the timeline", e)
+        Left(e)
+    }
+  }
+
+  /**
+   * Whether an included commit was archived after the timeline was listed, so that its metadata can no longer be read
+   * from the active timeline. Treated like an archived start or end commit.
+   */
+  protected lazy val includedCommitArchived: Boolean = commitsMetadataOrArchivalFailure.isLeft
+
+  /**
+   * @throws HoodieIncrementalPathNotFoundException if an included commit was archived after the timeline was listed
+   */
+  protected lazy val commitsMetadata: java.util.List[HoodieCommitMetadata] =
+    commitsMetadataOrArchivalFailure.fold(e => throw new HoodieIncrementalPathNotFoundException(e), identity)
 
   protected lazy val affectedFilesInCommits: java.util.List[StoragePathInfo] = {
     listAffectedFilesForCommits(conf, metaClient.getBasePath, commitsMetadata)

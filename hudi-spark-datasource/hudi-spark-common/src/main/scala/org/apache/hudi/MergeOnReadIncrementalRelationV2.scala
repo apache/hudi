@@ -23,7 +23,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieArchivedTimeline, HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{concatTimeline, getCommitMetadata}
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
 import org.apache.hudi.common.util.{Option => HOption, StringUtils}
@@ -245,9 +245,15 @@ trait HoodieIncrementalRelationV2Trait extends HoodieBaseRelation {
       if (queryContext.getArchivedInstants.contains(i)) {
         getCommitMetadata(i, queryContext.getArchivedTimeline)
       } else {
-        getCommitMetadata(i, queryContext.getActiveTimeline)
+        // Tolerates the writer archiving the instant after the query context listed the timeline
+        getCommitMetadata(metaClient, i, queryContext.getActiveTimeline, () => archivedTimelineForIncludedCommits)
       }
     }).asJava
+
+  // Loaded only if the writer archives an included instant after the query context listed the timeline, and then
+  // once for all of them
+  private lazy val archivedTimelineForIncludedCommits: HoodieArchivedTimeline =
+    metaClient.getArchivedTimeline(includedCommits.map(_.requestedTime).min, false)
 
   protected lazy val affectedFilesInCommits: java.util.List[StoragePathInfo] = {
     listAffectedFilesForCommits(conf, metaClient.getBasePath, commitsMetadata)
