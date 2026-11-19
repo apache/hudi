@@ -39,6 +39,8 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.util.Utf8;
+import org.apache.hudi.common.avro.AvroOrderingValueConverter;
+import org.apache.hudi.common.avro.AvroRecordContext;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
@@ -138,7 +140,7 @@ final class TestHoodieSchemaAvroSerializer
                 new TypeCase("long", HoodieSchema.create(HoodieSchemaType.LONG), output -> BIGINT.writeLong(output, 1L << 40), 1L << 40),
                 new TypeCase("float", HoodieSchema.create(HoodieSchemaType.FLOAT), output -> REAL.writeLong(output, floatToRawIntBits(1.5f)), 1.5f),
                 new TypeCase("double", HoodieSchema.create(HoodieSchemaType.DOUBLE), output -> DOUBLE.writeDouble(output, 2.25), 2.25),
-                new TypeCase("string", HoodieSchema.create(HoodieSchemaType.STRING), output -> VARCHAR.writeSlice(output, utf8Slice("h\u00e9llo")), "h\u00e9llo"),
+                new TypeCase("string", HoodieSchema.create(HoodieSchemaType.STRING), output -> VARCHAR.writeSlice(output, utf8Slice("h\u00e9llo")), new Utf8("h\u00e9llo")),
                 new TypeCase("enum", enumSchema, output -> VARCHAR.writeSlice(output, utf8Slice("GREEN")),
                         new GenericData.EnumSymbol(enumSchema.toAvroSchema(), "GREEN")),
                 new TypeCase("bytes", HoodieSchema.create(HoodieSchemaType.BYTES), output -> VARBINARY.writeSlice(output, wrappedBuffer(new byte[] {1, 2, 3})),
@@ -146,7 +148,7 @@ final class TestHoodieSchemaAvroSerializer
                 new TypeCase("fixed", fixedSchema, output -> VARBINARY.writeSlice(output, wrappedBuffer(new byte[] {1, 2, 3, 4})),
                         new GenericData.Fixed(fixedSchema.toAvroSchema(), new byte[] {1, 2, 3, 4})),
                 new TypeCase("uuid over string", HoodieSchema.createUUID(), output -> UuidType.UUID.writeSlice(output, javaUuidToTrinoUuid(SAMPLE_UUID)),
-                        SAMPLE_UUID.toString()),
+                        new Utf8(SAMPLE_UUID.toString())),
                 new TypeCase("uuid over fixed(16)", fixedUuidSchema, output -> UuidType.UUID.writeSlice(output, javaUuidToTrinoUuid(SAMPLE_UUID)),
                         new GenericData.Fixed(fixedUuidSchema.toAvroSchema(), uuidBytes(SAMPLE_UUID))),
                 new TypeCase("decimal over bytes", bytesDecimalSchema, output -> TYPE_MAPPER.toTypeSystem(bytesDecimalSchema).writeLong(output, -12345),
@@ -372,6 +374,28 @@ final class TestHoodieSchemaAvroSerializer
             assertThat(types.get(8).getObjectValue(page.getBlock(8), position)).isEqualTo(Map.of("k", "v"));
             assertThat(INTEGER.getInt(page.getBlock(9), position)).isEqualTo(42);
         }
+    }
+
+    /**
+     * hudi-common compares the ordering value of a serialized base row with those of Avro log rows and delete records,
+     * which are Utf8 (AvroOrderingValueConverter turns a delete record's String into Utf8), so a string ordering field
+     * must serialize as Utf8: String and Utf8 do not compare.
+     */
+    @Test
+    void testStringOrderingValueComparesWithDeleteRecordOrderingValue()
+    {
+        HoodieSchema schema = HoodieSchema.createRecord("rec", null, null, List.of(
+                HoodieSchemaField.of("ts", HoodieSchema.create(HoodieSchemaType.STRING))));
+        PageBuilder pageBuilder = new PageBuilder(List.of(VARCHAR));
+        pageBuilder.declarePosition();
+        VARCHAR.writeSlice(pageBuilder.getBlockBuilder(0), utf8Slice("b"));
+        IndexedRecord baseRow = new HoodieSchemaAvroSerializer(List.of(dataColumn("ts", VARCHAR)), prefilledValues(), schema.toAvroSchema())
+                .serialize(pageBuilder.build(), 0);
+
+        Comparable baseOrderingValue = (Comparable) AvroRecordContext.getOrderingValueFromIndexedRecord(baseRow, "ts", false);
+        Comparable deleteOrderingValue = AvroOrderingValueConverter.create(schema, List.of("ts"), false).convert("a");
+        assertThat(baseOrderingValue.compareTo(deleteOrderingValue)).isPositive();
+        assertThat(deleteOrderingValue.compareTo(baseOrderingValue)).isNegative();
     }
 
     @Test

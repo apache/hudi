@@ -97,7 +97,7 @@ import static org.apache.hudi.common.schema.HoodieSchema.VectorLogicalType.VECTO
  * schema and the column's Trino type, and the switch over the type has no default branch so a new type does not
  * compile until it is mapped. Nullable unions are unwrapped exactly as {@link TrinoTypeMapper} unwraps them.
  * <ul>
- * <li>{@link #serialize} writes Avro-native values (Integer, Utf8-compatible strings, ByteBuffer, GenericFixed,
+ * <li>{@link #serialize} writes Avro-native values (Integer, Utf8, ByteBuffer, GenericFixed,
  * GenericEnumSymbol, GenericData.Array, Map, GenericData.Record), so a record survives the Avro binary round trip
  * payload-based merging puts it through ({@code BaseAvroPayload}) and the ordering-value conversions in
  * {@code HoodieAvroUtils}.</li>
@@ -239,7 +239,9 @@ public class HoodieSchemaAvroSerializer
             case LONG -> (block, position) -> type.getLong(block, position);
             case FLOAT -> (block, position) -> REAL.getFloat(block, position);
             case DOUBLE -> (block, position) -> type.getDouble(block, position);
-            case STRING -> (block, position) -> type.getSlice(block, position).toStringUtf8();
+            // Utf8, as an Avro log block decodes it: hudi-common compares ordering values of base and log rows, and of
+            // delete records (AvroOrderingValueConverter turns String into Utf8), and String and Utf8 do not compare
+            case STRING -> (block, position) -> new Utf8(type.getSlice(block, position).getBytes());
             case ENUM -> {
                 Schema enumSchema = schema.toAvroSchema();
                 yield (block, position) -> new GenericData.EnumSymbol(enumSchema, type.getSlice(block, position).toStringUtf8());
@@ -271,7 +273,7 @@ public class HoodieSchemaAvroSerializer
         if (uuidSchema.getType() == Schema.Type.FIXED) {
             return (block, position) -> new GenericData.Fixed(uuidSchema, type.getSlice(block, position).getBytes());
         }
-        return (block, position) -> trinoUuidToJavaUuid(type.getSlice(block, position)).toString();
+        return (block, position) -> new Utf8(trinoUuidToJavaUuid(type.getSlice(block, position)).toString());
     }
 
     private static ValueToAvro decimalToAvro(String fieldName, HoodieSchema.Decimal schema, DecimalType type)
