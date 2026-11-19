@@ -30,6 +30,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.storage.HoodieStorage;
 
+import lombok.extern.slf4j.Slf4j;
+
 import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
 
 /**
@@ -38,6 +40,7 @@ import static org.apache.hudi.common.util.StringUtils.EMPTY_STRING;
  * detection is enabled.  Anything done between a start and end transaction is guaranteed to be
  * atomic.
  */
+@Slf4j
 public class DirectMarkerTransactionManager extends TransactionManager {
   private final String filePath;
 
@@ -48,20 +51,20 @@ public class DirectMarkerTransactionManager extends TransactionManager {
 
   public void beginTransaction(String newTxnOwnerInstantTime, InstantGenerator instantGenerator) {
     if (isLockRequired) {
-      LOG.info("Transaction starting for {} and {}", newTxnOwnerInstantTime, filePath);
+      log.info("Transaction starting for {} and {}", newTxnOwnerInstantTime, filePath);
       lockManager.lock();
 
       reset(changeActionInstant, Option.of(getInstant(newTxnOwnerInstantTime, instantGenerator)), Option.empty());
-      LOG.info("Transaction started for {} and {}", newTxnOwnerInstantTime, filePath);
+      log.info("Transaction started for {} and {}", newTxnOwnerInstantTime, filePath);
     }
   }
 
   public void endTransaction(String currentTxnOwnerInstantTime, InstantGenerator instantGenerator) {
     if (isLockRequired) {
-      LOG.info("Transaction ending with transaction owner {} for {}", currentTxnOwnerInstantTime, filePath);
+      log.info("Transaction ending with transaction owner {} for {}", currentTxnOwnerInstantTime, filePath);
       if (reset(Option.of(getInstant(currentTxnOwnerInstantTime, instantGenerator)), Option.empty(), Option.empty())) {
         lockManager.unlock();
-        LOG.info("Transaction ended with transaction owner {} for {}", currentTxnOwnerInstantTime, filePath);
+        log.info("Transaction ended with transaction owner {} for {}", currentTxnOwnerInstantTime, filePath);
       }
     }
   }

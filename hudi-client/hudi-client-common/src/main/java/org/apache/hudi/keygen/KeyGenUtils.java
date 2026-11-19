@@ -56,9 +56,8 @@ import org.apache.hudi.keygen.parser.BaseHoodieDateTimeParser;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.generic.GenericRecord;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -77,6 +76,7 @@ import static org.apache.hudi.keygen.KeyGenerator.EMPTY_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenerator.NULL_RECORDKEY_PLACEHOLDER;
 import static org.apache.hudi.keygen.KeyGenerator.constructRecordKey;
 
+@Slf4j
 public class KeyGenUtils {
 
   /**
@@ -84,7 +84,6 @@ public class KeyGenUtils {
    * that a table whose latest commits wrote no data files does not turn the upgrade into a full timeline scan.
    */
   private static final int MAX_INSTANTS_SCANNED_FOR_ENCODING = 20;
-  private static final Logger LOG = LoggerFactory.getLogger(KeyGenUtils.class);
 
   protected static final String HUDI_DEFAULT_PARTITION_PATH = PartitionPathEncodeUtils.DEFAULT_PARTITION_PATH;
   public static final String DEFAULT_PARTITION_PATH_SEPARATOR = "/";
@@ -586,7 +585,7 @@ public class KeyGenUtils {
         props.setProperty(HoodieTableConfig.COMPLEX_KEYGEN_ENCODING.key(), encoding.name());
         HoodieTableConfig.update(metaClient.getStorage(), metaClient.getMetaPath(), props);
         metaClient.reloadTableConfig();
-        LOG.info("Recorded complex keygen record key encoding {} on table {}", encoding, metaClient.getBasePath());
+        log.info("Recorded complex keygen record key encoding {} on table {}", encoding, metaClient.getBasePath());
       } finally {
         transactionManager.endStateChange(Option.empty());
       }
@@ -631,7 +630,7 @@ public class KeyGenUtils {
     }
     ComplexKeyGenEncoding configured =
         ComplexKeyGenEncoding.fromUseNewEncoding(config.getBooleanOrDefault(COMPLEX_KEYGEN_NEW_ENCODING));
-    LOG.warn("Could not determine the record key encoding of table {} from its data; recording the configured {} "
+    log.warn("Could not determine the record key encoding of table {} from its data; recording the configured {} "
             + "because {} is disabled. If the existing keys are not {}, fix {} and rerun, or the records written "
             + "from now on will not match the existing ones.",
         metaClient.getBasePath(), configured, ENABLE_COMPLEX_KEYGEN_VALIDATION.key(), configured,
@@ -671,13 +670,13 @@ public class KeyGenUtils {
         if (recordKey.isPresent()) {
           ComplexKeyGenEncoding encoding =
               ComplexKeyGenEncoding.fromUseNewEncoding(!recordKey.get().startsWith(expectedPrefix));
-          LOG.info("Deduced complex keygen record key encoding {} of table {} from {}",
+          log.info("Deduced complex keygen record key encoding {} of table {} from {}",
               encoding, metaClient.getBasePath(), path);
           return Option.of(encoding);
         }
       }
     }
-    LOG.warn("The most recent {} commit(s) of table {} yielded no data file with a readable record key, so the "
+    log.warn("The most recent {} commit(s) of table {} yielded no data file with a readable record key, so the "
             + "complex keygen record key encoding cannot be deduced from the data.",
         instantsToScan.size(), metaClient.getBasePath());
     return Option.empty();
@@ -752,7 +751,7 @@ public class KeyGenUtils {
         return keys.hasNext() ? Option.of(keys.next().getRecordKey()) : Option.empty();
       }
     } catch (Exception e) {
-      LOG.warn("Could not read a record key from {} to deduce the complex keygen record key encoding", path, e);
+      log.warn("Could not read a record key from {} to deduce the complex keygen record key encoding", path, e);
       return Option.empty();
     }
   }

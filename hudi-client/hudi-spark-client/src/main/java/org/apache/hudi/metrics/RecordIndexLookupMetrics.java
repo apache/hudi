@@ -25,8 +25,7 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.storage.StoragePath;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -42,9 +41,8 @@ import java.util.Set;
  * no output row at all. So the driver resolves an accumulator-backed {@link DistributedRegistry}, the
  * lookup closure captures it, tasks add into their own copy, and Spark merges those copies home.
  */
+@Slf4j
 public class RecordIndexLookupMetrics {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RecordIndexLookupMetrics.class);
 
   /** The registry name, as reported. Keying is done by {@link #registryKey}. */
   public static final String REGISTRY_NAME = "HoodieRecordIndexLookup";
@@ -135,7 +133,7 @@ public class RecordIndexLookupMetrics {
       publish(context, config, hoodieMetrics);
     } catch (Exception e) {
       // This runs after the commit has landed. Reporting is not worth failing a completed write over.
-      LOG.warn("Failed to publish record index lookup metrics; the commit is unaffected.", e);
+      log.warn("Failed to publish record index lookup metrics; the commit is unaffected.", e);
     }
   }
 
@@ -143,7 +141,7 @@ public class RecordIndexLookupMetrics {
                               HoodieMetrics hoodieMetrics) {
     if (!config.isRecordIndexLookupMetricsEnabled()) {
       // Callers gate before reaching here, so this is a wiring mistake rather than normal flow.
-      LOG.warn("Record index lookup metrics drain reached with the feature disabled; nothing published.");
+      log.warn("Record index lookup metrics drain reached with the feature disabled; nothing published.");
       return;
     }
     if (!(context instanceof HoodieSparkEngineContext)) {

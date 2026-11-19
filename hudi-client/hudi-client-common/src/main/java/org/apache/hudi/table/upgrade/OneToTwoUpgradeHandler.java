@@ -29,8 +29,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.Hashtable;
@@ -41,9 +40,9 @@ import java.util.stream.Collectors;
 /**
  * Upgrade handle to assist in upgrading hoodie table from version 1 to 2.
  */
+@Slf4j
 public class OneToTwoUpgradeHandler implements UpgradeHandler {
 
-  private static final Logger LOG = LoggerFactory.getLogger(OneToTwoUpgradeHandler.class);
   private static final String NESTED_FIELD_SEPARATOR = ".";
 
   @Override
@@ -93,12 +92,12 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
     }
     Option<HoodieSchema> schema = resolveSchema(config, metaClient);
     if (!schema.isPresent()) {
-      LOG.warn("Skipping the ordering fields {} while upgrading {} to table version two: no schema is available to "
+      log.warn("Skipping the ordering fields {} while upgrading {} to table version two: no schema is available to "
           + "resolve them against", orderingFields, config.getBasePath());
       return Option.empty();
     }
     if (!topLevelFields.stream().allMatch(field -> schema.get().getField(field).isPresent())) {
-      LOG.warn("Skipping the ordering fields {} while upgrading {} to table version two: the schema does not have "
+      log.warn("Skipping the ordering fields {} while upgrading {} to table version two: the schema does not have "
           + "all of them as top level fields", orderingFields, config.getBasePath());
       return Option.empty();
     }
@@ -122,8 +121,8 @@ public class OneToTwoUpgradeHandler implements UpgradeHandler {
     } catch (Exception e) {
       // the upgrade gates every write, so a schema that cannot be read or parsed leaves the fields
       // unrecorded rather than blocking the table
-      LOG.warn("Failed to resolve the schema of " + config.getBasePath()
-          + " while upgrading to table version two, leaving the ordering fields unrecorded", e);
+      log.warn("Failed to resolve the schema of {} while upgrading to table version two, leaving the ordering fields unrecorded",
+          config.getBasePath(), e);
       return Option.empty();
     }
   }

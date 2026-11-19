@@ -40,6 +40,7 @@ import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
 import org.apache.avro.generic.GenericData;
@@ -48,8 +49,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -64,10 +63,8 @@ import static org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorage
 /**
  * Tests concurrent Java client writers.
  */
+@Slf4j
 public class TestMultipleHoodieJavaWriteClient {
-  private static final Logger LOGGER =
-      LoggerFactory.getLogger(TestMultipleHoodieJavaWriteClient.class.getName());
-
   @TempDir
   protected java.nio.file.Path tablePath;
 
@@ -197,9 +194,9 @@ public class TestMultipleHoodieJavaWriteClient {
         .parallel()
         .forEach(
             record -> {
-              LOGGER.info("Inserting record = {}", record);
+              log.info("Inserting record = {}", record);
               HoodieJavaWriteClient writer;
-              LOGGER.info("Entering while loop");
+              log.info("Entering while loop");
               try {
                 writer = writerQueue.take();
               } catch (InterruptedException e) {
@@ -210,13 +207,13 @@ public class TestMultipleHoodieJavaWriteClient {
 
               try {
                 writer.commit(startCommitTime, s);
-                LOGGER.info("Completed commit");
+                log.info("Completed commit");
               } catch (HoodieWriteConflictException e) {
                 // Under OPTIMISTIC_CONCURRENCY_CONTROL, two writers updating overlapping file
                 // groups conflict and one of them is aborted by design. This test validates that
                 // concurrent writers do not deadlock, so an aborted commit is an expected outcome
                 // and must not fail the test.
-                LOGGER.info("Commit {} was aborted by an expected OCC conflict", startCommitTime);
+                log.info("Commit {} was aborted by an expected OCC conflict", startCommitTime);
               } finally {
                 // Always return the writer to the pool, even when its commit was aborted, so the
                 // remaining records are not starved of writers.

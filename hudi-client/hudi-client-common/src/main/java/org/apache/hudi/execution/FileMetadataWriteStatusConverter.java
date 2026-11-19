@@ -30,8 +30,7 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Map;
@@ -39,9 +38,9 @@ import java.util.Map;
 /**
  * This class is mainly used by the SparkExternalFileClusteringExecutionStrategy to generate WriteStatus classes.
  */
+@Slf4j
 public class FileMetadataWriteStatusConverter<T extends HoodieRecordPayload, I, K, O> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(FileMetadataWriteStatusConverter.class);
   private final HoodieTable<T, I, K, O> hoodieTable;
   private final HoodieWriteConfig writeConfig;
   private final HoodieStorage storage;
@@ -61,7 +60,7 @@ public class FileMetadataWriteStatusConverter<T extends HoodieRecordPayload, I, 
    */
   public WriteStatus convert(String parquetFile, String partitionPath,
                              Map<String, Object> executionConfigs) throws IOException {
-    LOG.info("Creating write status for parquet file {}", parquetFile);
+    log.info("Creating write status for parquet file {}", parquetFile);
     WriteStatus writeStatus = (WriteStatus) ReflectionUtils.loadClass(this.writeConfig.getWriteStatusClassName(),
         this.hoodieTable.shouldTrackSuccessRecords(), this.writeConfig.getWriteStatusFailureFraction(), this.hoodieTable.isMetadataTable());
     StoragePath parquetFilePath = new StoragePath(parquetFile);

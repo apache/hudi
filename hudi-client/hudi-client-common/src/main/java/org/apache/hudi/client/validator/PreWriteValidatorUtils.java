@@ -30,8 +30,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieValidationException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.List;
@@ -42,9 +41,8 @@ import java.util.stream.Stream;
 /**
  * Utility class for running pre-write validators.
  */
+@Slf4j
 public class PreWriteValidatorUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(PreWriteValidatorUtils.class);
-
   /**
    * Run all configured pre-write validators.
    * Validators are run asynchronously in parallel, and if any validator fails,
@@ -69,7 +67,7 @@ public class PreWriteValidatorUtils {
     String validatorClassNames = config.getPreWriteValidators();
 
     if (StringUtils.isNullOrEmpty(validatorClassNames)) {
-      LOG.debug("No pre-write validators configured.");
+      log.debug("No pre-write validators configured.");
       return;
     }
 
@@ -79,7 +77,7 @@ public class PreWriteValidatorUtils {
         .filter(className -> !className.isEmpty())
         .map(className -> (PreWriteValidator) ReflectionUtils.loadClass(className));
 
-    LOG.info("Running pre-write validators for instant {}", instantTime);
+    log.info("Running pre-write validators for instant {}", instantTime);
 
     // Collect all futures first to ensure parallel execution
     List<CompletableFuture<Boolean>> futures = validators
@@ -92,12 +90,12 @@ public class PreWriteValidatorUtils {
         .reduce(true, Boolean::logicalAnd);
 
     long duration = timer.endTimer();
-    LOG.info("Pre-write validation completed in {} ms", duration);
+    log.info("Pre-write validation completed in {} ms", duration);
 
     if (allSuccess) {
-      LOG.info("All pre-write validations succeeded");
+      log.info("All pre-write validations succeeded");
     } else {
-      LOG.error("At least one pre-write validation failed");
+      log.error("At least one pre-write validation failed");
       throw new HoodieValidationException("At least one pre-write validation failed");
     }
   }
@@ -116,19 +114,19 @@ public class PreWriteValidatorUtils {
                                                                    Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
     return CompletableFuture.supplyAsync(() -> {
       String validatorName = validator.getName();
-      LOG.info("Running pre-write validator: {}", validatorName);
+      log.info("Running pre-write validator: {}", validatorName);
 
       try {
         HoodieTimer timer = HoodieTimer.start();
         validator.validate(instantTime, writeOperationType, metaClient, writeConfig, engineContext, recordsOpt);
         long duration = timer.endTimer();
-        LOG.info("Pre-write validator {} completed successfully in {} ms", validatorName, duration);
+        log.info("Pre-write validator {} completed successfully in {} ms", validatorName, duration);
         return true;
       } catch (HoodieValidationException e) {
-        LOG.error("Pre-write validation failed for validator {}: {}", validatorName, e.getMessage(), e);
+        log.error("Pre-write validation failed for validator {}: {}", validatorName, e.getMessage(), e);
         return false;
       } catch (Exception e) {
-        LOG.error("Unexpected error running pre-write validator {}: {}", validatorName, e.getMessage(), e);
+        log.error("Unexpected error running pre-write validator {}: {}", validatorName, e.getMessage(), e);
         return false;
       }
     });
