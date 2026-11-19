@@ -23,7 +23,25 @@ from pathlib import Path
 import sys
 import tempfile
 
-SOURCE = 'from pyspark import pipelines as dp\nfrom pyspark.sql import SparkSession\nspark = SparkSession.active()\n\n@dp.materialized_view(name="json_mv", format="hudi", partition_cols=["value"], table_properties={"type": "cow", "primaryKey": "id"})\ndef json_mv():\n    return spark.read.schema("id INT, value STRING").json(spark.conf.get("hudi.test.input"))\n\n@dp.materialized_view(name="hudi_mv", format="hudi", table_properties={"type": "cow", "primaryKey": "id"})\ndef hudi_mv():\n    return spark.read.format("hudi").load(spark.conf.get("hudi.test.source")).select("id", "value")\n'
+SOURCE = """from pyspark import pipelines as dp
+from pyspark.sql import SparkSession, functions as F
+spark = SparkSession.active()
+
+@dp.materialized_view(name="json_mv", format="hudi", partition_cols=["value"],
+                      table_properties={"type": "cow", "primaryKey": "id"})
+def json_mv():
+    return spark.read.schema("id INT, value STRING").json(spark.conf.get("hudi.test.input"))
+
+@dp.materialized_view(name="hudi_mv", format="hudi", table_properties={"type": "cow", "primaryKey": "id"})
+def hudi_mv():
+    return spark.read.format("hudi").load(spark.conf.get("hudi.test.source")).select("id", "value")
+
+@dp.materialized_view(name="aggregate_mv", format="hudi", table_properties={"type": "cow"})
+def aggregate_mv():
+    return (spark.read.schema("id INT, value STRING").json(spark.conf.get("hudi.test.input"))
+            .groupBy("value").agg(F.sum("id").alias("total"), F.count("*").alias("rows")))
+"""
+
 
 def require(condition, message):
     if not condition:
@@ -54,6 +72,11 @@ def client(mode, remote, root):
                           .select("id", "value").orderBy("id").collect()]
                 require(actual == expected, (name, actual, expected))
                 print(f"PASS {mode} {name}: {actual}")
+            expected_aggregate = json.loads((root / "expected-aggregate.json").read_text())
+            actual = [list(row) for row in spark.table("sdp_test.aggregate_mv")
+                      .select("value", "total", "rows").orderBy("value").collect()]
+            require(actual == expected_aggregate, ("aggregate_mv", actual, expected_aggregate))
+            print(f"PASS {mode} aggregate_mv: {actual}")
     finally:
         spark.stop()
 
@@ -75,15 +98,20 @@ def scenario(h):
     (h.logs / "mv.py").write_text(SOURCE)
     (h.logs / path.name).write_text(path.read_text())
     # Remove and change rows as well as adding them: stale append output must fail.
-    for i, expected in enumerate(([[1, "one"], [2, "two"]],
-                                   [[2, "updated"], [3, "three"]], [[4, "four"]], []), 1):
+    stages = (
+        ([[1, "one"], [2, "one"], [3, "two"]], [["one", 3, 2], ["two", 3, 1]]),
+        ([[2, "one"], [3, "three"], [4, "one"]], [["one", 6, 2], ["three", 3, 1]]),
+        ([[4, "four"]], [["four", 4, 1]]),
+        ([], []))
+    for i, (expected, aggregate) in enumerate(stages, 1):
+        (h.root / "expected-aggregate.json").write_text(json.dumps(aggregate))
         (h.root / "expected.json").write_text(json.dumps(expected))
         (source / "rows.json").write_text("".join(json.dumps(dict(zip(("id", "value"), row))) + "\n"
                                                    for row in expected))
         h.client(Path(__file__).resolve(), f"prepare-{i}")
         h.run_pipeline(path, f"refresh-{i}")
         h.client(Path(__file__).resolve(), f"verify-{i}")
-    print("PASS: four exact MV refreshes over JSON and Hudi sources")
+    print("PASS: four exact keyed and keyless aggregate MV refreshes")
 
 
 def main():

@@ -40,8 +40,10 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.filter.UnboundRecordFilter;
 import org.apache.parquet.filter2.predicate.FilterPredicate;
 import org.apache.parquet.hadoop.BadConfigurationException;
+import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.hadoop.util.ConfigurationUtil;
 import org.apache.parquet.hadoop.util.SerializationUtil;
+import org.apache.parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.util.LinkedHashMap;
@@ -49,6 +51,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.parquet.filter2.predicate.FilterApi.and;
+import static org.apache.parquet.format.converter.ParquetMetadataConverter.range;
+import static org.apache.parquet.hadoop.ParquetFileReader.readFooter;
 import static org.apache.parquet.hadoop.ParquetInputFormat.FILTER_PREDICATE;
 import static org.apache.parquet.hadoop.ParquetInputFormat.UNBOUND_RECORD_FILTER;
 
@@ -105,14 +109,19 @@ public abstract class RecordIterators {
       long splitStart,
       long splitLength,
       List<Predicate> predicates) throws IOException {
-    FilterPredicate filterPredicate = getFilterPredicate(conf);
-    for (Predicate predicate : predicates) {
-      FilterPredicate filter = predicate.filter();
-      if (filter != null) {
-        filterPredicate = filterPredicate == null ? filter : and(filterPredicate, filter);
-      }
+    // Read the footer once for both predicate validation and the split reader.
+    ParquetMetadata footer = readFooter(conf, new org.apache.hadoop.fs.Path(path.toUri()), range(splitStart, splitStart + splitLength));
+    MessageType fileSchema = footer.getFileMetaData().getSchema();
+    FilterPredicate configuredFilter = getFilterPredicate(conf);
+    Configuration readConf = conf;
+    if (configuredFilter != null && !ParquetPredicateColumnValidator.hasAllColumns(configuredFilter, fileSchema)) {
+      // ParquetFileReader reloads the configured predicate, so remove it from a per-file copy as well.
+      readConf = new Configuration(conf);
+      readConf.unset(FILTER_PREDICATE);
+      configuredFilter = null;
     }
-    UnboundRecordFilter recordFilter = getUnboundRecordFilterInstance(conf);
+    FilterPredicate filterPredicate = createFilterPredicate(fileSchema, predicates, configuredFilter);
+    UnboundRecordFilter recordFilter = getUnboundRecordFilterInstance(readConf);
 
     InternalSchema mergeSchema = internalSchemaManager.getMergeSchema(getFileName(path));
     if (mergeSchema.isEmptySchema()) {
@@ -120,15 +129,14 @@ public abstract class RecordIterators {
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
               caseSensitive,
-              conf,
+              readConf,
               fieldNames,
               fieldTypes,
               partitionSpec,
               selectedFields,
               batchSize,
               path,
-              splitStart,
-              splitLength,
+              footer,
               filterPredicate,
               recordFilter));
     } else {
@@ -138,15 +146,14 @@ public abstract class RecordIterators {
           ParquetSplitReaderUtil.genPartColumnarRowReader(
               utcTimestamp,
               caseSensitive,
-              conf,
+              readConf,
               internalSchemaManager.getMergeFieldNames(mergeSchema, fieldNames), // the reconciled field names
               castMap.getFileFieldTypes(),                                     // the reconciled field types
               partitionSpec,
               selectedFields,
               batchSize,
               path,
-              splitStart,
-              splitLength,
+              footer,
               filterPredicate,
               recordFilter));
       if (castProjection.isPresent()) {
@@ -155,6 +162,21 @@ public abstract class RecordIterators {
         return itr;
       }
     }
+  }
+
+  static FilterPredicate createFilterPredicate(MessageType fileSchema, List<Predicate> predicates, FilterPredicate configuredFilter) {
+    FilterPredicate filterPredicate = configuredFilter;
+    for (Predicate predicate : predicates) {
+      // Missing columns are null to Parquet, which can incorrectly prune native delete records.
+      // Skip the whole predicate if any reference is absent; pruning only one branch of OR/NOT is unsafe.
+      if (predicate.references().stream().allMatch(column -> fileSchema.containsPath(column.split("\\.")))) {
+        FilterPredicate filter = predicate.filter();
+        if (filter != null) {
+          filterPredicate = filterPredicate == null ? filter : and(filterPredicate, filter);
+        }
+      }
+    }
+    return filterPredicate;
   }
 
   private static String getFileName(Path path) {

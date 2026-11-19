@@ -525,6 +525,54 @@
   </dependencies>
 
   <profiles>
+    <!-- SDP is a Spark 4.1 API. Keep its server dependency and tests out of other profiles. -->
+    <profile>
+      <id>spark4.1</id>
+      <activation>
+        <property><name>spark4.1</name></property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.spark</groupId>
+          <artifactId>spark-connect_${scala.binary.version}</artifactId>
+          <version>${spark41.version}</version>
+          <scope>test</scope>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>build-helper-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>add-sdp-test-source</id>
+                <phase>generate-test-sources</phase>
+                <goals><goal>add-test-source</goal></goals>
+                <configuration>
+                  <sources><source>src/test/scala-spark4.1</source></sources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.scalastyle</groupId>
+            <artifactId>scalastyle-maven-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>check-sdp-test-style</id>
+                <phase>test-compile</phase>
+                <goals><goal>check</goal></goals>
+                <configuration>
+                  <testSourceDirectory>${project.basedir}/src/test/scala-spark4.1</testSourceDirectory>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
     <!-- Vortex requires Java 17 (vortex-jni/vortex-spark ship Java 17 bytecode). The Vortex
          round-trip test compiles/runs only under JDK 17; Java 11 builds skip it. -->
     <profile>

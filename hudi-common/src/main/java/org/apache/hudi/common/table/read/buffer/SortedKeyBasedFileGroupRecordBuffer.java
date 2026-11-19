@@ -75,7 +75,7 @@ class SortedKeyBasedFileGroupRecordBuffer<T> extends KeyBasedFileGroupRecordBuff
       }
       // Handle the case where the next record is only present in the log records
       BufferedRecord<T> nextLogRecord = records.remove(nextLogRecordKey);
-      nextRecord = updateProcessor.processUpdate(recordKey, null, nextLogRecord, nextLogRecord.isDelete());
+      nextRecord = updateProcessor.processUpdate(nextLogRecordKey, null, nextLogRecord, nextLogRecord.isDelete());
       if (nextRecord != null) {
         // If the next log record does not result in a deletion, or we are emitting deletes, we can return it
         // and queue the base record, which is already read from the iterator, for the next iteration

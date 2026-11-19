@@ -18,13 +18,23 @@
 # under the License.
 #
 /bin/bash --version
-shopt -s globstar
+# nullglob drops a directory with no exec files instead of passing its pattern to merge.
+shopt -s globstar nullglob
 echo "Jacoco CLI jar: $1"
-echo "Hudi source directory: $2"
+echo "Hudi source directories: ${*:2}"
+exec_files=()
+for dir in "${@:2}"; do
+  exec_files+=($dir/**/jacoco-agent/**/*.exec)
+done
+# Without this check, merge with no input files succeeds and writes an empty exec file.
+if [[ ${#exec_files[@]} -eq 0 ]]; then
+  echo "No JaCoCo exec files found under: ${*:2}" >&2
+  exit 1
+fi
 retry_count=0
 while [[ $retry_count -lt 3 ]]; do
-  ls -l $2/**/jacoco-agent/**/*.exec
-  java -jar $1 merge $2/**/jacoco-agent/**/*.exec --destfile merged-jacoco.exec
+  ls -l "${exec_files[@]}"
+  java -jar $1 merge "${exec_files[@]}" --destfile merged-jacoco.exec
   exit_status=$?
 
   if [[ $exit_status -eq 0 ]]; then
@@ -35,3 +45,5 @@ while [[ $retry_count -lt 3 ]]; do
   retry_count=$((retry_count + 1))
   sleep 10
 done
+echo "Jacoco merge failed after $retry_count attempts" >&2
+exit 1

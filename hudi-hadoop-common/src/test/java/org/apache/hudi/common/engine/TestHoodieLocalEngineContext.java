@@ -19,6 +19,7 @@
 package org.apache.hudi.common.engine;
 
 import org.apache.hudi.common.data.HoodieData;
+import org.apache.hudi.common.data.HoodieListData;
 import org.apache.hudi.common.data.HoodieListPairData;
 import org.apache.hudi.common.data.HoodiePairData;
 import org.apache.hudi.common.function.SerializableFunction;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -169,5 +171,23 @@ public class TestHoodieLocalEngineContext {
     assertEquals(2, resultList.size());
     assertTrue(resultList.contains(42));
     assertTrue(resultList.contains(17));
+  }
+
+  @Test
+  void testUnion() {
+    assertTrue(context.union(Collections.<HoodieData<Integer>>emptyList()).isEmpty());
+
+    HoodieData<Integer> single = context.union(Collections.singletonList(HoodieListData.lazy(Arrays.asList(1, 2))));
+    assertEquals(Arrays.asList(1, 2), single.collectAsList());
+
+    HoodieData<Integer> union = context.union(Arrays.asList(
+        context.parallelize(Arrays.asList(1, 2)),
+        context.emptyHoodieData(),
+        HoodieListData.lazy(Arrays.asList(3, 4)),
+        context.parallelize(Collections.singletonList(5))));
+    assertEquals(Arrays.asList(1, 2, 3, 4, 5), union.collectAsList());
+    // The result bears the eager semantic of emptyHoodieData(), even over lazy inputs
+    assertEquals(5, union.count());
+    assertEquals(Arrays.asList(1, 2, 3, 4, 5), union.collectAsList());
   }
 }

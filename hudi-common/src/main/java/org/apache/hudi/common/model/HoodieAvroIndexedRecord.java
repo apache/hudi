@@ -315,7 +315,7 @@ public class HoodieAvroIndexedRecord extends HoodieRecord<IndexedRecord> {
         KeyGeneratorOptions.KEYGENERATOR_CONSISTENT_LOGICAL_TIMESTAMP_ENABLED.defaultValue()));
     return OrderingValues.create(
         orderingFields,
-        field -> (Comparable<?>) HoodieAvroUtils.getNestedFieldVal((GenericRecord) data, field, true, consistentLogicalTimestampEnabled));
+        field -> (Comparable<?>) AvroRecordContext.getOrderingValueFromIndexedRecord(data, field, consistentLogicalTimestampEnabled));
   }
 
   private void decodeRecord(Schema recordSchema) {

@@ -113,9 +113,11 @@ public class SchemaEvolvingRowDataProjection implements RowProjection {
     return obj -> {
       final Map<Object, Object> result = new HashMap<>();
       MapData map = (MapData) obj;
+      final ArrayData keys = map.keyArray();
+      final ArrayData values = map.valueArray();
       for (int i = 0; i < map.size(); i++) {
-        Object keyObj = keyElementGetter.getElementOrNull(map.keyArray(), i);
-        Object fromObj = valueElementGetter.getElementOrNull(map.valueArray(), i);
+        Object keyObj = keyElementGetter.getElementOrNull(keys, i);
+        Object fromObj = valueElementGetter.getElementOrNull(values, i);
         // need to handle nulls to prevent NullPointerException in #getConversion()
         Object toObj = fromObj == null ? null : valueConverter.convert(fromObj);
         result.put(keyObj, toObj);
