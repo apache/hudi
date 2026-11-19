@@ -39,7 +39,9 @@ import java.util.List;
 
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestChainedTransformer {
   @Test
@@ -100,4 +102,40 @@ public class TestChainedTransformer {
       return schema.add(props.getString("column"), DataTypes.StringType);
     }
   }
+
+  @Test
+  public void closeRetiresEveryChildAndPreservesCleanupFailures() {
+    IllegalStateException first = new IllegalStateException("first cleanup");
+    IllegalStateException second = new IllegalStateException("second cleanup");
+    ClosingTransformer one = new ClosingTransformer(first);
+    ClosingTransformer two = new ClosingTransformer(second);
+    ChainedTransformer chain = new ChainedTransformer(Arrays.asList(one, two));
+    IllegalStateException failure = assertThrows(IllegalStateException.class, () -> ((AutoCloseable) chain).close());
+    assertSame(first, failure);
+    assertTrue(one.closed);
+    assertTrue(two.closed);
+    assertEquals(1, failure.getSuppressed().length);
+    assertSame(second, failure.getSuppressed()[0]);
+  }
+
+  private static final class ClosingTransformer implements Transformer, AutoCloseable {
+    private final IllegalStateException failure;
+    private boolean closed;
+
+    private ClosingTransformer(IllegalStateException failure) {
+      this.failure = failure;
+    }
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rows, TypedProperties properties) {
+      return rows;
+    }
+
+    @Override
+    public void close() {
+      closed = true;
+      throw failure;
+    }
+  }
+
 }
