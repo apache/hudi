@@ -38,13 +38,23 @@ public final class UnstructuredTableVersion {
   public static final ConfigProperty<String> KEY_ENCODING_VERSION = ConfigProperty
       .key("hoodie.table.unstructured.key.encoding.version").noDefaultValue();
 
+  /** Parser layout of the embedding table's auxiliary model history. */
+  public static final ConfigProperty<String> EMBEDDING_COLUMN_INFO_LAYOUT_VERSION = ConfigProperty
+      .key("hoodie.table.embedding.column.info.layout.version").noDefaultValue();
+  /** The auxiliary model-history layout this build writes. */
+  public static final String CURRENT_EMBEDDING_COLUMN_INFO_LAYOUT_VERSION = "1";
+
   /** Common persisted format pins, shared by source creation and standalone embedding validation. */
   public static UnstructuredTableProperties.Builder tablePropertiesBuilder(String sourceName, String kind) {
-    return UnstructuredTableProperties.builder(sourceName)
+    UnstructuredTableProperties.Builder pins = UnstructuredTableProperties.builder(sourceName)
         .requireTableProperty(BLOB_LAYOUT_VERSION, "1")
         .requireTableProperty(KIND, kind)
         .requireTableProperty(SCHEMA_VERSION, "1")
         .requireTableProperty(KEY_ENCODING_VERSION, "1");
+    if ("embedding".equals(kind)) {
+      pins.requireTableProperty(EMBEDDING_COLUMN_INFO_LAYOUT_VERSION, CURRENT_EMBEDDING_COLUMN_INFO_LAYOUT_VERSION);
+    }
+    return pins;
   }
 
   private UnstructuredTableVersion() {
