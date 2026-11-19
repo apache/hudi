@@ -110,7 +110,8 @@ object BlobTestHelpers {
     val file = new File(tempDir.toString, name)
     val bytes = (0 until size).map(i => (i % 256).toByte).toArray
     Files.write(file.toPath, bytes)
-    file.getAbsolutePath
+    // Scheme-less paths, including leading slashes, resolve under the Hudi table base path.
+    file.toURI.toString
   }
 
   /**
