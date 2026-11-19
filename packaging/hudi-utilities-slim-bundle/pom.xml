@@ -93,6 +93,11 @@
                 <includes combine.children="append">
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.tika:tika-core</include>
+                  <!-- PDF chunker, as in hudi-utilities-bundle -->
+                  <include>org.apache.pdfbox:pdfbox</include>
+                  <include>org.apache.pdfbox:pdfbox-io</include>
+                  <include>org.apache.pdfbox:fontbox</include>
+                  <include>com.knuddels:jtokkit</include>
 
                   <include>org.antlr:stringtemplate</include>
                   <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->
@@ -116,6 +121,18 @@
                 </includes>
               </artifactSet>
               <relocations combine.children="append">
+                <relocation>
+                  <pattern>org.apache.pdfbox.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.pdfbox.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.fontbox.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.fontbox.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.knuddels.jtokkit.</pattern>
+                  <shadedPattern>org.apache.hudi.com.knuddels.jtokkit.</shadedPattern>
+                </relocation>
                 <!-- NOTE: We have to relocate all classes w/in org.apache.spark.sql.avro to avoid
                            potential classpath collisions in case users would like to also use "spark-avro" w/in
                            their runtime, since Hudi carries some of the same classes as "spark-avro" -->

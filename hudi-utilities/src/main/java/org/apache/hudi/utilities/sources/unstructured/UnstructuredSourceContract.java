@@ -183,4 +183,8 @@ public class UnstructuredSourceContract implements SourceContract {
   public UnstructuredTableProperties requiredTableProperties() {
     return tablePins;
   }
+
+  public static UnstructuredTableProperties embeddingTablePins(String sourceName, TypedProperties props) {
+    return UnstructuredTableVersion.tablePropertiesBuilder(sourceName, "embedding").build();
+  }
 }
