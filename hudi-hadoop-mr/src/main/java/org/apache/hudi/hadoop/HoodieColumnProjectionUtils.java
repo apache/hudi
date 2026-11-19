@@ -25,9 +25,9 @@ import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.common.util.collection.Pair;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.ql.io.IOConstants;
-import org.apache.hadoop.hive.serde2.ColumnProjectionUtils;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector.Category;
 import org.apache.hadoop.hive.serde2.typeinfo.ListTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.MapTypeInfo;
@@ -36,8 +36,6 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoUtils;
 import org.apache.hadoop.hive.serde2.typeinfo.UnionTypeInfo;
 import org.apache.hadoop.util.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -57,9 +55,8 @@ import static org.apache.hadoop.hive.serde.serdeConstants.TIMESTAMP_TYPE_NAME;
  * Needed to copy as we see NoSuchMethod errors when directly using these APIs with/without Spark.
  * Some of these methods are not available across hive versions.
  */
+@Slf4j
 public class HoodieColumnProjectionUtils {
-  public static final Logger LOG = LoggerFactory.getLogger(ColumnProjectionUtils.class);
-
   public static final String READ_COLUMN_IDS_CONF_STR = "hive.io.file.readcolumn.ids";
   /**
    * the nested column path is the string from the root to the leaf

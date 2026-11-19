@@ -36,12 +36,11 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
 import java.util.HashMap;
@@ -68,10 +67,10 @@ import static org.apache.hudi.hadoop.fs.HadoopFSUtils.convertToStoragePath;
  * hadoopConf.setClass("mapreduce.input.pathFilter.class", org.apache.hudi.hadoop .HoodieROTablePathFilter.class,
  * org.apache.hadoop.fs.PathFilter.class)
  */
+@Slf4j
 public class HoodieROTablePathFilter implements Configurable, PathFilter, Serializable {
 
   private static final long serialVersionUID = 1L;
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieROTablePathFilter.class);
 
   /**
    * Its quite common, to have all files from a given partition path be passed into accept(), cache the check for hoodie
@@ -151,7 +150,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       this.engineContext = new HoodieLocalEngineContext(this.conf);
     }
 
-    LOG.debug("Checking acceptance for path {}", path);
+    log.debug("Checking acceptance for path {}", path);
     Path folder = null;
     try {
       if (storage == null) {
@@ -162,12 +161,12 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       folder = path.getParent(); // get the immediate parent.
       // Try to use the caches.
       if (nonHoodiePathCache.contains(folder.toString())) {
-        LOG.debug("Accepting non-hoodie path from cache: {}", path);
+        log.debug("Accepting non-hoodie path from cache: {}", path);
         return true;
       }
 
       if (hoodiePathCache.containsKey(folder.toString())) {
-        LOG.debug("{} Hoodie path checked against cache, accept => {}", path, hoodiePathCache.get(folder.toString()).contains(path));
+        log.debug("{} Hoodie path checked against cache, accept => {}", path, hoodiePathCache.get(folder.toString()).contains(path));
         return hoodiePathCache.get(folder.toString()).contains(path);
       }
 
@@ -175,7 +174,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       String filePath = path.toString();
       if (filePath.contains("/" + HoodieTableMetaClient.METAFOLDER_NAME + "/")
           || filePath.endsWith("/" + HoodieTableMetaClient.METAFOLDER_NAME)) {
-        LOG.debug("Skipping Hoodie Metadata file {}", filePath);
+        log.debug("Skipping Hoodie Metadata file {}", filePath);
         return false;
       }
 
@@ -193,7 +192,7 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
       if (baseDir != null) {
         // Check whether baseDir in nonHoodiePathCache
         if (nonHoodiePathCache.contains(baseDir.toString())) {
-          LOG.debug("Accepting non-hoodie path from cache: {}", path);
+          log.debug("Accepting non-hoodie path from cache: {}", path);
           return true;
         }
         HoodieTableFileSystemView fsView = null;
@@ -233,19 +232,19 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
           if (!hoodiePathCache.containsKey(folder.toString())) {
             hoodiePathCache.put(folder.toString(), new HashSet<>());
           }
-          LOG.info("Based on hoodie metadata from base path: {}, caching {} files under {}", baseDir, latestFiles.size(), folder);
+          log.info("Based on hoodie metadata from base path: {}, caching {} files under {}", baseDir, latestFiles.size(), folder);
           for (HoodieBaseFile lfile : latestFiles) {
             hoodiePathCache.get(folder.toString()).add(new Path(lfile.getPath()));
           }
 
           // accept the path, if its among the latest files.
-          if (LOG.isDebugEnabled()) {
-            LOG.debug("{} checked after cache population, accept => {}", path, hoodiePathCache.get(folder.toString()).contains(path));
+          if (log.isDebugEnabled()) {
+            log.debug("{} checked after cache population, accept => {}", path, hoodiePathCache.get(folder.toString()).contains(path));
           }
           return hoodiePathCache.get(folder.toString()).contains(path);
         } catch (TableNotFoundException e) {
           // Non-hoodie path, accept it.
-          LOG.debug("(1) Caching non-hoodie path under {} with basePath {}", folder, baseDir);
+          log.debug("(1) Caching non-hoodie path under {} with basePath {}", folder, baseDir);
           nonHoodiePathCache.add(folder.toString());
           nonHoodiePathCache.add(baseDir.toString());
           return true;
@@ -256,13 +255,13 @@ public class HoodieROTablePathFilter implements Configurable, PathFilter, Serial
         }
       } else {
         // files is at < 3 level depth in FS tree, can't be hoodie dataset
-        LOG.debug("(2) Caching non-hoodie path under{}", folder);
+        log.debug("(2) Caching non-hoodie path under{}", folder);
         nonHoodiePathCache.add(folder.toString());
         return true;
       }
     } catch (Exception e) {
       String msg = "Error checking path :" + path + ", under folder: " + folder;
-      LOG.error(msg, e);
+      log.error(msg, e);
       throw new HoodieException(msg, e);
     }
   }

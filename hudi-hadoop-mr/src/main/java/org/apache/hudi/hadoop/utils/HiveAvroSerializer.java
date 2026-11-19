@@ -27,6 +27,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieAvroSchemaException;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericEnumSymbol;
@@ -55,8 +56,6 @@ import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfoFactory;
 import org.apache.hadoop.hive.serde2.typeinfo.UnionTypeInfo;
 import org.apache.hadoop.io.ArrayWritable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -71,14 +70,13 @@ import static org.apache.hudi.common.schema.HoodieSchemaUtils.isMetadataField;
 /**
  * Helper class to serialize hive writable type to avro record.
  */
+@Slf4j
 public class HiveAvroSerializer {
 
   private final List<String> columnNames;
   private final List<TypeInfo> columnTypes;
   private final ArrayWritableObjectInspector objectInspector;
   private final HoodieSchema recordSchema;
-
-  private static final Logger LOG = LoggerFactory.getLogger(HiveAvroSerializer.class);
 
   public HiveAvroSerializer(HoodieSchema schema) {
     if (schema.getNonNullType().getType() != HoodieSchemaType.RECORD) {
@@ -257,9 +255,9 @@ public class HiveAvroSerializer {
         setUpRecordFieldFromWritable(columnTypes.get(i), structFieldsDataAsList.get(i),
             allStructFieldRefs.get(i).getFieldObjectInspector(), record, field);
       } catch (Exception e) {
-        LOG.error(String.format("current columnNames: %s", columnNames.stream().collect(Collectors.joining(","))));
-        LOG.error(String.format("current type: %s", columnTypes.stream().map(f -> f.getTypeName()).collect(Collectors.joining(","))));
-        LOG.error(String.format("current value: %s", HoodieRealtimeRecordReaderUtils.arrayWritableToString((ArrayWritable) o)));
+        log.error(String.format("current columnNames: %s", columnNames.stream().collect(Collectors.joining(","))));
+        log.error(String.format("current type: %s", columnTypes.stream().map(f -> f.getTypeName()).collect(Collectors.joining(","))));
+        log.error(String.format("current value: %s", HoodieRealtimeRecordReaderUtils.arrayWritableToString((ArrayWritable) o)));
         throw e;
       }
     }

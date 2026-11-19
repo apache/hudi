@@ -21,9 +21,8 @@ package org.apache.hudi.hadoop;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.mapred.RecordReader;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.NoSuchElementException;
@@ -34,9 +33,8 @@ import java.util.NoSuchElementException;
  * @param <K> Key Type
  * @param <V> Value Type
  */
+@Slf4j
 public class RecordReaderValueIterator<K, V> implements ClosableIterator<V> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(RecordReaderValueIterator.class);
 
   private final RecordReader<K, V> reader;
   private V nextVal = null;
@@ -62,7 +60,7 @@ public class RecordReaderValueIterator<K, V> implements ClosableIterator<V> {
         }
         this.nextVal = val;
       } catch (IOException e) {
-        LOG.error("Got error reading next record from record reader");
+        log.error("Got error reading next record from record reader");
         throw new HoodieException(e);
       }
     }
