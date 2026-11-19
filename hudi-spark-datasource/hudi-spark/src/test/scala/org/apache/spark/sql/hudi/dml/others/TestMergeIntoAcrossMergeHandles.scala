@@ -19,9 +19,6 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
-import org.apache.hudi.config.HoodieWriteConfig
-import org.apache.hudi.io.HoodieWriteMergeHandle
-
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
@@ -29,20 +26,15 @@ import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructFiel
 import scala.collection.JavaConverters._
 
 /**
- * MERGE INTO updates of existing keys on a COW table merged through [[HoodieWriteMergeHandle]].
+ * MERGE INTO updates of existing keys on a COW table, run through every merge handle in
+ * [[HoodieSparkSqlTestBase.mergeHandleClasses]].
  *
- * The handle merges the old and incoming records and must write the merge result as-is. The
- * merged row is in the table schema (nullable columns), while [[ExpressionPayload]] decodes its
- * bytes with the MERGE source schema and re-applies the NOT MATCHED clause, so the merge result
- * must not be wrapped in an ExpressionPayload again.
- *
- * The default FileGroupReaderBasedMergeHandle does not take this path, so every test pins
- * [[HoodieWriteMergeHandle]].
+ * A merge handle must write the merge result as-is. The merged row is in the table schema
+ * (nullable columns), while [[ExpressionPayload]] decodes its bytes with the MERGE source schema
+ * and re-applies the NOT MATCHED clause, so the merge result must not be wrapped in an
+ * ExpressionPayload again, which HoodieWriteMergeHandle used to do.
  */
-class TestMergeIntoWithWriteMergeHandle extends HoodieSparkSqlTestBase {
-
-  private val mergeHandleConf =
-    HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key -> classOf[HoodieWriteMergeHandle[_, _, _, _]].getName
+class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
 
   private def createTableWithRows(tableName: String, location: String): Unit = {
     spark.sql(
@@ -85,26 +77,24 @@ class TestMergeIntoWithWriteMergeHandle extends HoodieSparkSqlTestBase {
     spark.createDataFrame(rows.asJava, sourceSchema).createOrReplaceTempView(viewName)
   }
 
-  test("Test MergeInto update with a non-nullable source through HoodieWriteMergeHandle") {
+  testWithMergeHandles("Test MergeInto update with a non-nullable source") {
     withTempDir { tmp =>
       val tableName = generateTableName
       createTableWithRows(tableName, s"${tmp.getCanonicalPath}/$tableName")
 
-      withSQLConf(mergeHandleConf) {
-        // A subquery of constants: every source column is NOT NULL, the table's are nullable.
-        spark.sql(
-          s"""
-             |merge into $tableName t
-             |using (
-             |  select 'a1' as name, 'scottsdale' as city, 9 as rating, 2000L as ts, 'US' as country
-             |  union all
-             |  select 'a4', 'sf', 5, 2001L, 'US'
-             |) s
-             |on t.country = s.country and t.name = s.name
-             |when matched then update set *
-             |when not matched then insert *
-           """.stripMargin)
-      }
+      // A subquery of constants: every source column is NOT NULL, the table's are nullable.
+      spark.sql(
+        s"""
+           |merge into $tableName t
+           |using (
+           |  select 'a1' as name, 'scottsdale' as city, 9 as rating, 2000L as ts, 'US' as country
+           |  union all
+           |  select 'a4', 'sf', 5, 2001L, 'US'
+           |) s
+           |on t.country = s.country and t.name = s.name
+           |when matched then update set *
+           |when not matched then insert *
+         """.stripMargin)
 
       checkRows(tableName)(
         Seq("a1", "scottsdale", 9, 2000L, "US"),
@@ -114,7 +104,7 @@ class TestMergeIntoWithWriteMergeHandle extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test MergeInto update with a nullable source through HoodieWriteMergeHandle") {
+  testWithMergeHandles("Test MergeInto update with a nullable source") {
     withTempDir { tmp =>
       val tableName = generateTableName
       createTableWithRows(tableName, s"${tmp.getCanonicalPath}/$tableName")
@@ -125,16 +115,14 @@ class TestMergeIntoWithWriteMergeHandle extends HoodieSparkSqlTestBase {
         Row("a1", "scottsdale", 9, 2000L, "US"),
         Row("a4", "sf", 5, 2001L, "US"))
 
-      withSQLConf(mergeHandleConf) {
-        spark.sql(
-          s"""
-             |merge into $tableName t
-             |using $sourceView s
-             |on t.country = s.country and t.name = s.name
-             |when matched then update set *
-             |when not matched then insert *
-           """.stripMargin)
-      }
+      spark.sql(
+        s"""
+           |merge into $tableName t
+           |using $sourceView s
+           |on t.country = s.country and t.name = s.name
+           |when matched then update set *
+           |when not matched then insert *
+         """.stripMargin)
 
       checkRows(tableName)(
         Seq("a1", "scottsdale", 9, 2000L, "US"),
@@ -144,7 +132,7 @@ class TestMergeIntoWithWriteMergeHandle extends HoodieSparkSqlTestBase {
     }
   }
 
-  test("Test MergeInto update is not filtered by the NOT MATCHED condition through HoodieWriteMergeHandle") {
+  testWithMergeHandles("Test MergeInto update is not filtered by the NOT MATCHED condition") {
     withTempDir { tmp =>
       val tableName = generateTableName
       createTableWithRows(tableName, s"${tmp.getCanonicalPath}/$tableName")
@@ -155,17 +143,15 @@ class TestMergeIntoWithWriteMergeHandle extends HoodieSparkSqlTestBase {
         Row("a1", "scottsdale", 9, 2000L, "US"),
         Row("a4", "sf", 50, 2001L, "US"))
 
-      withSQLConf(mergeHandleConf) {
-        // The NOT MATCHED condition is false for the matched key's source row, so it must not affect its update.
-        spark.sql(
-          s"""
-             |merge into $tableName t
-             |using $sourceView s
-             |on t.country = s.country and t.name = s.name
-             |when matched then update set *
-             |when not matched and s.rating > 10 then insert *
-           """.stripMargin)
-      }
+      // The NOT MATCHED condition is false for the matched key's source row, so it must not affect its update.
+      spark.sql(
+        s"""
+           |merge into $tableName t
+           |using $sourceView s
+           |on t.country = s.country and t.name = s.name
+           |when matched then update set *
+           |when not matched and s.rating > 10 then insert *
+         """.stripMargin)
 
       checkRows(tableName)(
         Seq("a1", "scottsdale", 9, 2000L, "US"),

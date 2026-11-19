@@ -32,6 +32,7 @@ import org.apache.hudi.common.util.OrderingValues
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.index.HoodieInMemoryHashIndex
+import org.apache.hudi.io.{FileGroupReaderBasedMergeHandle, HoodieWriteMergeHandle}
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.HoodieClientTestUtils.{createMetaClient, getSparkConfForTest}
 
@@ -100,6 +101,29 @@ class HoodieSparkSqlTestBase extends FunSuite with BeforeAndAfterAll {
     val tempDir = Utils.createTempDir()
     try f(tempDir) finally {
       Utils.deleteRecursively(tempDir)
+    }
+  }
+
+  /**
+   * Merge handles a write can merge base file records through: the default file group reader based handle,
+   * and [[HoodieWriteMergeHandle]], which merges with the incoming record's payload.
+   */
+  protected val mergeHandleClasses: Seq[String] = Seq(
+    classOf[FileGroupReaderBasedMergeHandle[_, _, _, _]].getName,
+    classOf[HoodieWriteMergeHandle[_, _, _, _]].getName)
+
+  /**
+   * Registers the test once per class in [[mergeHandleClasses]], with `hoodie.write.merge.handle.class` set to
+   * that class and its simple name appended to the test name.
+   */
+  protected def testWithMergeHandles(testName: String, testTags: Tag*)(testFun: => Any)
+                                    (implicit pos: source.Position): Unit = {
+    mergeHandleClasses.foreach { mergeHandleClass =>
+      test(s"$testName (${mergeHandleClass.substring(mergeHandleClass.lastIndexOf('.') + 1)})", testTags: _*) {
+        withSQLConf(HoodieWriteConfig.MERGE_HANDLE_CLASS_NAME.key -> mergeHandleClass) {
+          testFun
+        }
+      }
     }
   }
 
