@@ -98,6 +98,45 @@ Spark SQL can be used within ForeachBatch sink to do INSERT, UPDATE, DELETE and 
 Target table must exist before write.
 :::
 
+### Limit commits per micro-batch
+
+Starting with Hudi 1.3.0, set `hoodie.datasource.read.streaming.max.commits.per.trigger`
+to a positive integer to limit the completed write commits admitted in each
+incremental micro-batch. The option is unset by default, which leaves reads
+unbounded. Invalid values fail when loading the streaming source.
+
+```python
+source = (spark.readStream.format("hudi")
+    .option("hoodie.datasource.read.streaming.max.commits.per.trigger", "5")
+    .load(basePath))
+
+query = (source.writeStream
+    .format("console")
+    .option("checkpointLocation", checkpointPath)
+    .trigger(availableNow=True)
+    .start())
+```
+
+The limit applies to Copy-on-Write and Merge-on-Read tables with both streaming
+offset versions. It counts completed writes from active and archived timelines.
+Clean and rollback actions do not consume the limit. With
+`hoodie.datasource.read.incr.skip_compact=true`, MOR compactions are excluded before
+counting. Clustering remains included, matching Spark incremental read support.
+
+Processing-time triggers consume the backlog in capped batches.
+`Trigger.AvailableNow` captures the end offset when the query starts and drains
+that backlog in capped batches; writes arriving afterward wait for the next run.
+Restarting with the same checkpoint resumes from the last processed offset.
+`Trigger.Once` requests all available data and ignores the cap, following Spark's
+contract. Use AvailableNow for capped triggered reads.
+
+A commit can contain arbitrarily many rows or bytes, so this is not a memory,
+row-count, or file-size bound. When offsets use completion time, commits sharing
+the same completion timestamp cannot be split and may exceed the configured
+count. Snapshot fallback and recovery reads are not divided into capped reads.
+Retain timeline history and data files long enough for consumers to catch up;
+this option does not restore cleaned files.
+
 ## Flink Streaming Read
 
 Flink can continuously consume new commits from a Hudi table as a streaming source. Enable this by setting `read.streaming.enabled=true` and optionally a `read.start-commit`.
@@ -141,3 +180,4 @@ Savepoints taken with the legacy source are not compatible with Source V2. Start
 :::
 
 For a full list of Flink streaming read options (rate limiting, commits limit, CDC mode, etc.), see [Using Flink](ingestion_flink.md).
+
