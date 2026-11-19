@@ -23,8 +23,11 @@
 # Usage: ./scripts/jacoco/generate_merged_coverage_report.sh [workspace_dir [exec_dir ...]]
 #   workspace_dir: root of the source tree (defaults to current directory)
 #   exec_dir: only the exec files under these directories go into the report (defaults to
-#     workspace_dir). Classes and sources always come from the whole workspace. A job that uploads
-#     one report per Codecov flag calls this once per flag, uploading each report before the next.
+#     workspace_dir). A job that uploads one report per Codecov flag calls this once per flag,
+#     uploading each report before the next.
+# Environment:
+#   COVERAGE_MODULE_DIRS: optional newline-separated module directories. When set, only these
+#     modules' classes and sources go into the report; otherwise every module in the workspace does.
 
 set -euo pipefail
 
@@ -51,9 +54,26 @@ fi
 "$SCRIPT_DIR/merge_jacoco_exec_files.sh" jacoco-lib/lib/jacococli.jar "${EXEC_DIRS[@]}"
 mv merged-jacoco.exec jacoco.exec
 
+# Recreated on every call, so a report never picks up classes or sources copied for an earlier one.
+rm -rf aggregate-classes aggregate-sources
 mkdir -p aggregate-classes aggregate-sources
-find "$WORKSPACE_DIR" -path '*/target/classes' -type d | while read d; do cp -r "$d"/. aggregate-classes/ 2>/dev/null; done
-find "$WORKSPACE_DIR" -path '*/src/main/java' -type d | while read d; do cp -r "$d"/. aggregate-sources/ 2>/dev/null; done
-find "$WORKSPACE_DIR" -path '*/src/main/scala' -type d | while read d; do cp -r "$d"/. aggregate-sources/ 2>/dev/null; done
+if [ -n "${COVERAGE_MODULE_DIRS:-}" ]; then
+  while read -r d; do
+    # Skips pom-only modules, which have no classes, and any line that is not a module directory.
+    if [ ! -d "$d/target/classes" ]; then
+      continue
+    fi
+    cp -r "$d/target/classes"/. aggregate-classes/
+    for src in "$d/src/main/java" "$d/src/main/scala"; do
+      if [ -d "$src" ]; then
+        cp -r "$src"/. aggregate-sources/
+      fi
+    done
+  done <<< "$COVERAGE_MODULE_DIRS"
+else
+  find "$WORKSPACE_DIR" -path '*/target/classes' -type d | while read d; do cp -r "$d"/. aggregate-classes/ 2>/dev/null; done
+  find "$WORKSPACE_DIR" -path '*/src/main/java' -type d | while read d; do cp -r "$d"/. aggregate-sources/ 2>/dev/null; done
+  find "$WORKSPACE_DIR" -path '*/src/main/scala' -type d | while read d; do cp -r "$d"/. aggregate-sources/ 2>/dev/null; done
+fi
 
 "$SCRIPT_DIR/generate_jacoco_coverage_report.sh" jacoco-lib/lib/jacococli.jar "$WORKSPACE_DIR"

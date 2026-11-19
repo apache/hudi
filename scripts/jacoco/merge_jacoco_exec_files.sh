@@ -26,6 +26,11 @@ exec_files=()
 for dir in "${@:2}"; do
   exec_files+=($dir/**/jacoco-agent/**/*.exec)
 done
+# Without this check, merge with no input files succeeds and writes an empty exec file.
+if [[ ${#exec_files[@]} -eq 0 ]]; then
+  echo "No JaCoCo exec files found under: ${*:2}" >&2
+  exit 1
+fi
 retry_count=0
 while [[ $retry_count -lt 3 ]]; do
   ls -l "${exec_files[@]}"
@@ -40,3 +45,5 @@ while [[ $retry_count -lt 3 ]]; do
   retry_count=$((retry_count + 1))
   sleep 10
 done
+echo "Jacoco merge failed after $retry_count attempts" >&2
+exit 1
