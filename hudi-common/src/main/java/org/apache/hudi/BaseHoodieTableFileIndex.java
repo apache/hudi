@@ -36,6 +36,7 @@ import org.apache.hudi.common.util.HoodieTimer;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.expression.Expression;
@@ -49,6 +50,7 @@ import org.apache.hudi.storage.StoragePathInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -308,6 +310,25 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         .collect(Collectors.toList());
   }
 
+  /**
+   * Returns the partitions written by the instants of an incremental query's timeline. If the writer archived one of
+   * those instants after the timeline was listed, its metadata file is gone and the written partitions are unknown,
+   * so all partitions under {@code relativePartitionPaths} are returned instead. The incremental relation then either
+   * falls back to a full table scan or fails, as it does when the begin instant is archived.
+   */
+  private List<String> getWrittenPartitionsOrAll(HoodieTimeline timelineToQuery, List<String> relativePartitionPaths) throws IOException {
+    try {
+      return TimelineUtils.getWrittenPartitions(timelineToQuery);
+    } catch (HoodieIOException e) {
+      if (!ExceptionUtil.hasCause(e, FileNotFoundException.class)) {
+        throw e;
+      }
+      LOG.warn("An instant of {} was archived after the incremental query listed the timeline; listing all partitions",
+          basePath, e);
+      return tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
+    }
+  }
+
   protected List<PartitionPath> listPartitionPaths(List<String> relativePartitionPaths) {
     List<String> matchedPartitionPaths;
     try {
@@ -315,7 +336,7 @@ public abstract class BaseHoodieTableFileIndex implements AutoCloseable {
         if (queryType == HoodieTableQueryType.INCREMENTAL && beginInstantTime.isPresent()) {
           HoodieTimeline timelineAfterBeginInstant = TimelineUtils.getCommitsTimelineAfter(metaClient, beginInstantTime.get(), Option.empty());
           HoodieTimeline timelineToQuery = endInstantTime.map(timelineAfterBeginInstant::findInstantsBeforeOrEquals).orElse(timelineAfterBeginInstant);
-          matchedPartitionPaths = TimelineUtils.getWrittenPartitions(timelineToQuery);
+          matchedPartitionPaths = getWrittenPartitionsOrAll(timelineToQuery, relativePartitionPaths);
         } else {
           matchedPartitionPaths = tableMetadata.getPartitionPathWithPathPrefixes(relativePartitionPaths);
         }

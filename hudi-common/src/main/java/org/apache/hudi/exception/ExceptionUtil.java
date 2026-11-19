@@ -39,4 +39,15 @@ public final class ExceptionUtil {
     return cause;
   }
 
+  /**
+   * Returns true if {@code t} or any exception in its cause chain is an instance of {@code type}.
+   */
+  public static boolean hasCause(@Nonnull Throwable t, @Nonnull Class<? extends Throwable> type) {
+    for (Throwable cause = t; cause != null; cause = cause.getCause()) {
+      if (type.isInstance(cause)) {
+        return true;
+      }
+    }
+    return false;
+  }
 }
