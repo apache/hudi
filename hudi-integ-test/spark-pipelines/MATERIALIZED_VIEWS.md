@@ -27,16 +27,26 @@ python hudi-integ-test/spark-pipelines/materialized_views.py \
   --bundle /path/to/candidate-hudi-spark4.1-bundle.jar
 ```
 
-Two Hudi materialized views read a JSON source and a Hudi source respectively.
-Four real CLI runs replace the source contents with `(1, one), (2, two)`,
-then `(2, updated), (3, three)`, then `(4, four)`, then zero rows.
-The JSON-backed target is partitioned by `value`. After every refresh, each
-view must exactly match its defining query's expected rows. Removing old rows
-ensures that accidental append behavior fails. Repeated catalog reconciliation
-exercises metadata-column deletes and unchanged properties.
+Three Hudi materialized views cover keyed JSON and Hudi sources and a keyless
+JSON aggregate. The aggregate declares only `type=cow`, with no primary key,
+and groups by `value`, computing `sum(id)` and `count(*)`.
 
-Keyless aggregate materialized views remain deferred under #20405.
-Land this scenario after the #20453 harness dependency. Checks remain active under
+Four real CLI runs use the following exact inputs and aggregate expectations:
+
+| Run | Input `(id, value)` | Aggregate `(value, total, rows)` |
+| --- | --- | --- |
+| 1 | `(1, one), (2, one), (3, two)` | `(one, 3, 2), (two, 3, 1)` |
+| 2 | `(2, one), (4, one), (3, three)` | `(one, 6, 2), (three, 3, 1)` |
+| 3 | `(4, four)` | `(four, 4, 1)` |
+| 4 | empty | empty |
+
+After every refresh, all three views must match exact expected business rows.
+The repeated `one` group changes its aggregate, old groups disappear, and the
+last refresh removes every group. This detects stale rows and duplicate aggregate
+rows even when Hudi generates record keys. The keyed JSON target remains
+partitioned by `value`; the aggregate is unpartitioned.
+
+Checks remain active under
 `python -O`, and SIGTERM unwinds the harness for server and temporary-directory cleanup.
 
 This is Phase 2 coverage on today's purge-style truncate. See the
