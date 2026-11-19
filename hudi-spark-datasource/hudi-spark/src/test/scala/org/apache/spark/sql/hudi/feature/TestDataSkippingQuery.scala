@@ -39,6 +39,19 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
     initQueryIndexConf()
   }
 
+  /**
+   * Runs `check` with data skipping off, as the caller's session conf has it, then again with data
+   * skipping on in the session conf and the table properties.
+   */
+  private def checkWithAndWithoutDataSkipping(tableName: String)(check: => Unit): Unit = {
+    check
+    withSQLConf("hoodie.enable.data.skipping" -> "true") {
+      spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
+      spark.catalog.refreshTable(tableName)
+      check
+    }
+  }
+
   test("Test the data skipping query involves conditions " +
     "that cover both columns supported by column stats and those that are not supported.") {
     Seq("cow", "mor").foreach { tableType =>
@@ -362,6 +375,9 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
   }
 
   test("Data skipping keeps files for terms that are not order-preserving in the column") {
+    // With partition stats on, PartitionStatsIndexSupport.filterNonSqlExpressions drops the date_add,
+    // date_sub and shiftright(a, a) filters before translation (it matches DateAdd, DateSub and the cast
+    // of the shift amount to int), so only the two | filters and datediff exercise partition stats
     Seq(false, true).foreach { partitionStats =>
       withTempDir { tmp =>
         val tableName = generateTableName
@@ -396,16 +412,12 @@ class TestDataSkippingQuery extends HoodieSparkSqlTestBase {
             "date_add(d, dayofmonth(d)) = date'2024-03-02'" -> 1,
             "date_sub(d, -dayofmonth(d)) = date'2024-03-02'" -> 1,
             "datediff(d, trunc(d, 'MM')) = 30" -> 1)
-          def checkQueries(): Unit = queries.foreach { case (filter, id) =>
-            withClue(s"$filter: ") {
-              checkAnswer(s"select id from $tableName where $filter")(Seq(id))
+          checkWithAndWithoutDataSkipping(tableName) {
+            queries.foreach { case (filter, id) =>
+              withClue(s"$filter: ") {
+                checkAnswer(s"select id from $tableName where $filter")(Seq(id))
+              }
             }
-          }
-          checkQueries()
-          withSQLConf("hoodie.enable.data.skipping" -> "true") {
-            spark.sql(s"alter table $tableName set tblproperties ('hoodie.enable.data.skipping' = 'true')")
-            spark.catalog.refreshTable(tableName)
-            checkQueries()
           }
         }
       }
