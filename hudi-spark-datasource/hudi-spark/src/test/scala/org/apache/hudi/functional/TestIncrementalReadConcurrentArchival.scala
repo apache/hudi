@@ -20,7 +20,7 @@ package org.apache.hudi.functional
 import org.apache.hudi.{DataSourceOptionsHelper, DataSourceReadOptions, DataSourceWriteOptions, DefaultSource}
 import org.apache.hudi.common.model.{HoodieRecord, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.HoodieInstant
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.config.HoodieWriteConfig
 import org.apache.hudi.exception.{ExceptionUtil, HoodieIncrementalPathNotFoundException, HoodieIOException}
@@ -138,12 +138,34 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
       ioException.get.getMessage)
   }
 
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testReadsReplaceCommitArchivedAfterListingFromArchivedTimeline(tableType: HoodieTableType): Unit = {
+    // Batch 3 overwrites the table, replacing the file groups of batches 1 and 2.
+    val overwriteBatch = 2
+    val batches = writeBatches(tableType, legacyTableVersion = false, 6, overwriteTableBatch = Some(overwriteBatch))
+    val replaceInstant = batches(overwriteBatch).instant
+    assertEquals(HoodieTimeline.REPLACE_COMMIT_ACTION, replaceInstant.getAction)
+    val listedMetaClient = loadMetaClient()
+    val relation = createRelation(listedMetaClient, startCommit(batches.head, legacyTableVersion = false), fallbackToFullTableScan = false)
+
+    // The archiver keeps a replace commit until the file groups it replaced are cleaned.
+    archiveIncludedInstants(listedMetaClient, batches, legacyTableVersion = false, cleanFirst = true)
+    assertTrue(loadMetaClient().getArchivedTimeline.containsInstant(replaceInstant.requestedTime),
+      s"Expected archival to move the replace commit $replaceInstant to the archived timeline")
+
+    // Batch 2 is in the queried range but its file group was replaced, which the relation can only know from the
+    // replace commit's metadata, now read back from the archived timeline.
+    assertEquals(expectedRows(batches.drop(overwriteBatch)), readRows(relation))
+  }
+
   /**
    * Archives instants the way a concurrent writer does, and checks that some of the instants the relation included
    * when it listed the timeline left the active timeline.
    */
-  private def archiveIncludedInstants(listedMetaClient: HoodieTableMetaClient, batches: Seq[Batch], legacyTableVersion: Boolean): Unit = {
-    archive(legacyTableVersion, keepMinCommits = 2, keepMaxCommits = 3)
+  private def archiveIncludedInstants(listedMetaClient: HoodieTableMetaClient, batches: Seq[Batch], legacyTableVersion: Boolean,
+                                      cleanFirst: Boolean = false): Unit = {
+    archive(legacyTableVersion, keepMinCommits = 2, keepMaxCommits = 3, cleanFirst)
 
     val archivedTimestamps = loadMetaClient().getArchivedTimeline.getInstants.asScala.map(_.requestedTime).toSet
     val activeTimestamps = loadMetaClient().getCommitsTimeline.filterCompletedInstants.getInstants.asScala
@@ -157,10 +179,17 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
   private case class Batch(instant: HoodieInstant, keys: Set[String])
 
   /**
-   * Writes `numBatches` insert batches and returns, per batch, its completed instant and record keys.
+   * Writes `numBatches` insert batches and returns, per batch, its completed instant and record keys. The batch at
+   * index `overwriteTableBatch`, if any, is an insert_overwrite_table instead.
    */
-  private def writeBatches(tableType: HoodieTableType, legacyTableVersion: Boolean, numBatches: Int): Seq[Batch] = {
+  private def writeBatches(tableType: HoodieTableType, legacyTableVersion: Boolean, numBatches: Int,
+                           overwriteTableBatch: Option[Int] = None): Seq[Batch] = {
     (1 to numBatches).map { batch =>
+      val operation = if (overwriteTableBatch.contains(batch - 1)) {
+        DataSourceWriteOptions.INSERT_OVERWRITE_TABLE_OPERATION_OPT_VAL
+      } else {
+        DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL
+      }
       val records = dataGen.generateInserts("%05d".format(batch), recordsPerBatch).asScala
       val inputDF = spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records.asJava).asScala.toSeq, 2))
       inputDF.write.format("org.apache.hudi")
@@ -170,7 +199,7 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
         .option(DataSourceWriteOptions.RECORDKEY_FIELD.key, "_row_key")
         .option(DataSourceWriteOptions.PARTITIONPATH_FIELD.key, "partition")
         .option(DataSourceWriteOptions.PRECOMBINE_FIELD.key, "timestamp")
-        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .option(DataSourceWriteOptions.OPERATION.key, operation)
         .option(HoodieWriteConfig.TBL_NAME.key, testTableName)
         .option("hoodie.metadata.enable", "false")
         .option("hoodie.archive.automatic", "false")
@@ -199,7 +228,7 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
     if (legacyTableVersion) batch.instant.requestedTime else batch.instant.getCompletionTime
   }
 
-  private def archive(legacyTableVersion: Boolean, keepMinCommits: Int, keepMaxCommits: Int): Unit = {
+  private def archive(legacyTableVersion: Boolean, keepMinCommits: Int, keepMaxCommits: Int, cleanFirst: Boolean): Unit = {
     val props = new Properties()
     tableVersionOptions(legacyTableVersion).foreach { case (key, value) => props.setProperty(key, value) }
     props.setProperty("hoodie.metadata.enable", "false")
@@ -211,6 +240,9 @@ class TestIncrementalReadConcurrentArchival extends HoodieSparkClientTestBase {
     val config = HoodieWriteConfig.newBuilder().withPath(basePath).forTable(testTableName).withProps(props).build()
     val client = getHoodieWriteClient(config)
     try {
+      if (cleanFirst) {
+        client.clean()
+      }
       client.archive()
     } finally {
       client.close()

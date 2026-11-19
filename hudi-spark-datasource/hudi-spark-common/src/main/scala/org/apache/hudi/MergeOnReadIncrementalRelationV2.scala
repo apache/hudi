@@ -18,7 +18,7 @@
 package org.apache.hudi
 
 import org.apache.hudi.HoodieConversionUtils.toScalaOption
-import org.apache.hudi.common.model.{FileSlice, HoodieRecord, HoodieTableType}
+import org.apache.hudi.common.model.{FileSlice, HoodieFileGroupId, HoodieRecord, HoodieReplaceCommitMetadata, HoodieTableType}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.log.InstantRange.RangeType
@@ -108,9 +108,9 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
 
         val modifiedPartitions = getWritePartitionPaths(commitsMetadata)
 
-        modifiedPartitions.asScala.flatMap { relativePartitionPath =>
+        dropFileGroupsReplacedByIncludedCommits(modifiedPartitions.asScala.flatMap { relativePartitionPath =>
           fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
-        }.toSeq
+        }.toSeq)
       }
 
       buildSplits(filterFileSlices(fileSlices, globPattern))
@@ -130,11 +130,11 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
 
         // Evaluate the partition predicates against the modified partitions only, rather than listing
         // every partition of the table.
-        fileIndex.filterPartitionPaths(modifiedPartitions.asScala.toSeq,
+        dropFileGroupsReplacedByIncludedCommits(fileIndex.filterPartitionPaths(modifiedPartitions.asScala.toSeq,
           HoodieFileIndex.convertFilterForTimestampKeyGenerator(metaClient, partitionFilters))
           .flatMap { relativePartitionPath =>
             fsView.getLatestMergedFileSlicesBeforeOrOn(relativePartitionPath, latestCommit).iterator().asScala
-          }
+          })
       }
       filterFileSlices(fileSlices, globPattern)
     }
@@ -170,6 +170,27 @@ case class MergeOnReadIncrementalRelationV2(override val sqlContext: SQLContext,
   }
 
   override def shouldIncludeLogFiles(): Boolean = fullTableScan
+
+  /**
+   * Drops the file groups that the included replace commits replaced. The file system view reads replace commit
+   * metadata from the active timeline only and skips a replace commit whose file the writer archived after the query
+   * context listed the timeline, so it would still return the file groups that commit replaced, which the cleaner
+   * may already have deleted. The included commits' metadata, read from the archived timeline where needed, still
+   * names them.
+   */
+  private def dropFileGroupsReplacedByIncludedCommits(fileSlices: Seq[FileSlice]): Seq[FileSlice] = {
+    if (fileGroupsReplacedByIncludedCommits.isEmpty) {
+      fileSlices
+    } else {
+      fileSlices.filterNot(fileSlice => fileGroupsReplacedByIncludedCommits.contains(fileSlice.getFileGroupId))
+    }
+  }
+
+  private lazy val fileGroupsReplacedByIncludedCommits: Set[HoodieFileGroupId] =
+    commitsMetadata.asScala.collect { case replaceMetadata: HoodieReplaceCommitMetadata => replaceMetadata }
+      .flatMap(_.getPartitionToReplaceFileIds.asScala.flatMap { case (partitionPath, fileIds) =>
+        fileIds.asScala.map(fileId => new HoodieFileGroupId(partitionPath, fileId))
+      }).toSet
 
   private def filterFileSlices(fileSlices: Seq[FileSlice], pathGlobPattern: String): Seq[FileSlice] = {
     val filteredFileSlices = if (!StringUtils.isNullOrEmpty(pathGlobPattern)) {
