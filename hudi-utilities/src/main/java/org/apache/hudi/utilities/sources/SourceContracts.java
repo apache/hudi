@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.sources.unstructured.UnstructuredSourceContract;
 
 import java.util.Collections;
 import java.util.Map;
@@ -31,7 +32,7 @@ public final class SourceContracts {
   /** The contract of a source that registers none: the job's properties are used as given. */
   public static final SourceContract NONE = props -> props;
 
-  private static final Map<Class<?>, Function<TypedProperties, SourceContract>> FACTORIES = Collections.emptyMap();
+  private static final Map<Class<?>, Function<TypedProperties, SourceContract>> FACTORIES = Collections.singletonMap(UnstructuredDataSource.class, UnstructuredSourceContract::new);
 
   private SourceContracts() {
   }
