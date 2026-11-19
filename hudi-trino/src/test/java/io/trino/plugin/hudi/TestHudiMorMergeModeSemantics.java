@@ -20,18 +20,24 @@ import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.SchemaColumnTypesHudiTablesInitializer;
 import io.trino.plugin.hudi.util.TrinoTypeMapper;
+import io.trino.spi.QueryId;
+import io.trino.spi.metrics.Count;
 import io.trino.spi.type.TypeOperators;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.QueryRunner;
 import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.intellij.lang.annotations.Language;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static io.trino.plugin.hudi.testing.SchemaColumnTypesHudiTablesInitializer.TABLE_SCHEMA;
@@ -53,8 +59,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>COMMIT_TIME_ORDERING: the latest write wins even with a LOWER ordering value -- the exact
  *       mirror of the event-time obsolete-update case, discriminating the two merger dispatches.</li>
  * </ul>
- * The table written by {@link SchemaColumnTypesHudiTablesInitializer} holds one column per HoodieSchema type and is read
- * with {@code schema_column_types_enabled} on, so its merge runs through the HoodieSchema-driven serializer.
+ * The merge-semantics tests run with {@code schema_column_types_enabled} off and on: on, the merge runs on Trino rows
+ * ({@code HudiTrinoRowReaderContext}). The table written by {@link SchemaColumnTypesHudiTablesInitializer} holds one
+ * column per HoodieSchema type and is read with the property on, so every type goes through the Trino-row merge.
  */
 public class TestHudiMorMergeModeSemantics
         extends AbstractTestQueryFramework
@@ -71,68 +78,109 @@ public class TestHudiMorMergeModeSemantics
                 .build();
     }
 
-    @Test
-    public void testReadOptimizedShowsAllBaseRows()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testReadOptimizedShowsAllBaseRows(boolean schemaColumnTypes)
     {
         // Deletes and updates live in log files only; the read-optimized tables reflect the base commit
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + EventTimeDeletesHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', 20), ('k3', 'k3_base', 30),"
                         + " ('k4', 'k4_base', 40), ('k5', 'k5_base', 50), ('k6', 'k6_base', 60)");
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', 20), ('k3', 'k3_base', 30)");
     }
 
-    @Test
-    public void testEventTimeMergeWithDeletes()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testEventTimeMergeWithDeletes(boolean schemaColumnTypes)
     {
         // k1: higher-ts update wins; k2: hard-deleted; k3: soft-deleted (higher ts);
         // k4: OBSOLETE soft delete (lower ts) -> base row survives;
         // k5: untouched; k6: OBSOLETE update (lower ts) -> base row survives
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k4', 'k4_base', 40),"
                         + " ('k5', 'k5_base', 50), ('k6', 'k6_base', 60)");
     }
 
-    @Test
-    public void testHardDeleteRemovesRowOnSnapshotRead()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testHardDeleteRemovesRowOnSnapshotRead(boolean schemaColumnTypes)
     {
         // The hard delete is a native delete log file, resolved through the connector's
         // getFileRecordIterator with the synthetic delete-log schema (record key + ordering field)
-        assertThat(computeScalar("SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k2'"))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k2'"))
                 .isEqualTo(0L);
-        assertThat(computeScalar("SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k2'"))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k2'"))
                 .isEqualTo(1L);
     }
 
-    @Test
-    public void testSoftDeleteRemovesRowOnSnapshotRead()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSoftDeleteRemovesRowOnSnapshotRead(boolean schemaColumnTypes)
     {
         // _hoodie_is_deleted=true log record with a winning (higher) ordering value
-        assertThat(computeScalar("SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k3'"))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k3'"))
                 .isEqualTo(0L);
-        assertThat(computeScalar("SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k3'"))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.TABLE_NAME + " WHERE key = 'k3'"))
                 .isEqualTo(1L);
     }
 
-    @Test
-    public void testObsoleteSoftDeleteLosesUnderEventTimeOrdering()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testObsoleteSoftDeleteLosesUnderEventTimeOrdering(boolean schemaColumnTypes)
     {
         // The k4 soft delete carries ts=50 < base ts=100: event-time merging must keep the base row
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k4'",
                 "VALUES ('k4', 'k4_base', CAST(40 AS BIGINT))");
     }
 
-    @Test
-    public void testCommitTimeOrderingKeepsLatestWrite()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testOrderingMergesReadTrinoRowsWithSchemaColumnTypes(boolean schemaColumnTypes)
+    {
+        // The suites pass on either record context, so which one a merged split took is checked directly
+        for (String table : List.of(EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME, CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME)) {
+            long trinoRowSplits = trinoRowMergeSplits(getQueryRunner(), session(schemaColumnTypes), "SELECT key, name, value FROM " + table);
+            if (schemaColumnTypes) {
+                assertThat(trinoRowSplits).as(table).isPositive();
+            }
+            else {
+                assertThat(trinoRowSplits).as(table).isZero();
+            }
+        }
+    }
+
+    /**
+     * The splits of {@code sql} merged as {@link io.trino.plugin.hudi.reader.TrinoRow}s, from the connector metric
+     * {@link HudiPageSource#TRINO_ROW_MERGE_SPLITS}.
+     */
+    static long trinoRowMergeSplits(QueryRunner queryRunner, Session session, @Language("SQL") String sql)
+    {
+        QueryId queryId = queryRunner.executeWithPlan(session, sql).queryId();
+        return queryRunner.getCoordinator().getQueryManager().getFullQueryInfo(queryId).getQueryStats().getOperatorSummaries().stream()
+                .map(operator -> operator.getConnectorMetrics().getMetrics().get(HudiPageSource.TRINO_ROW_MERGE_SPLITS))
+                .filter(Objects::nonNull)
+                .mapToLong(metric -> ((Count<?>) metric).getTotal())
+                .sum();
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testCommitTimeOrderingKeepsLatestWrite(boolean schemaColumnTypes)
     {
         // k1's update carries ts=50 < base ts=100. Under COMMIT_TIME_ORDERING the LATEST WRITE wins
         // regardless of the ordering value -- the mirror of the event-time k6 case, where the same
         // shape keeps the BASE row. Together they discriminate the two merger dispatches.
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(11 AS BIGINT)), ('k3', 'k3_base', 30)");
     }
@@ -161,25 +209,29 @@ public class TestHudiMorMergeModeSemantics
                 .isEqualTo("\tx\t  ");
     }
 
-    @Test
-    public void testCountAfterDeletes()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testCountAfterDeletes(boolean schemaColumnTypes)
     {
-        assertThat(computeScalar("SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(4L);
-        assertThat(computeScalar("SELECT count(*) FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(2L);
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(4L);
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT count(*) FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME)).isEqualTo(2L);
     }
 
-    @Test
-    public void testNarrowProjectionMergesCorrectly()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testNarrowProjectionMergesCorrectly(boolean schemaColumnTypes)
     {
         // Neither the ordering field nor _hoodie_is_deleted is projected; the connector must still read
         // them on both the base and log sides for the merge to resolve updates and deletes correctly
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(11 AS BIGINT)), ('k4', 40), ('k5', 50), ('k6', 60)");
     }
 
-    @Test
-    public void testPredicateIsNotPushedIntoTheBaseReadOfAMergedSplit()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testPredicateIsNotPushedIntoTheBaseReadOfAMergedSplit(boolean schemaColumnTypes)
     {
         // HudiPageSourceProvider enables parquet predicate pushdown for base-file-only splits ONLY; the merge
         // path builds its base page source with it off. That invariant is load-bearing and nothing else pins it:
@@ -191,10 +243,12 @@ public class TestHudiMorMergeModeSemantics
         // merge is silently skipped. Note the naive shape does NOT discriminate: for a row whose log record wins
         // and carries the full record, dropping the base row still yields the right answer.
         assertQueryReturnsEmptyResult(
+                session(schemaColumnTypes),
                 "SELECT key, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE value > 65");
         // Anchor: the same predicate one step lower does return the rows it should, so the query above is empty
         // because of the merge, not because nothing ever matches.
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE value > 45 ORDER BY key",
                 "VALUES ('k5', CAST(50 AS BIGINT)), ('k6', 60)");
     }
@@ -226,8 +280,8 @@ public class TestHudiMorMergeModeSemantics
     @Test
     public void testSchemaColumnTypesSnapshotReadMergesEveryType()
     {
-        // k1 is rewritten with seed 8 and k2 nulled in the log file; k3 comes from the base file alone, through
-        // serialize() and back
+        // k1 is rewritten with seed 8 and k2 nulled in the log file; k3 comes from the base file alone, copied
+        // position by position
         assertThat(query(schemaColumnTypesSession(), "SELECT " + schemaColumnList() + " FROM " + SchemaColumnTypesHudiTablesInitializer.RT_TABLE_NAME))
                 .matches("VALUES " + join(", ",
                         populatedRow("k1", 200, 8),
@@ -292,8 +346,13 @@ public class TestHudiMorMergeModeSemantics
 
     private Session schemaColumnTypesSession()
     {
+        return session(true);
+    }
+
+    private Session session(boolean schemaColumnTypes)
+    {
         return SessionBuilder.from(getSession())
-                .withSchemaColumnTypesEnabled(true)
+                .withSchemaColumnTypesEnabled(schemaColumnTypes)
                 .build();
     }
 

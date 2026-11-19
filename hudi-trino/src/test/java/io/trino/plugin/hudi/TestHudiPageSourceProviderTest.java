@@ -16,6 +16,7 @@ package io.trino.plugin.hudi;
 import io.trino.metastore.HiveType;
 import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.HiveColumnProjectionInfo;
+import io.trino.plugin.hudi.testing.KeyBasedTestRecordMerger;
 import io.trino.spi.connector.DynamicFilter;
 import io.trino.spi.predicate.Domain;
 import io.trino.spi.predicate.Range;
@@ -44,12 +45,19 @@ import java.util.Optional;
 import static io.trino.plugin.hive.HiveColumnHandle.createBaseColumn;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.remapColumnIndicesToPhysical;
 import static io.trino.plugin.hudi.HudiPageSourceProvider.remapPredicateColumnIndicesToPhysical;
+import static io.trino.plugin.hudi.HudiPageSourceProvider.usesTrinoRows;
 import static io.trino.plugin.hudi.TestingBaseFilePageSource.dynamicFilterOn;
 import static io.trino.plugin.hudi.TestingBaseFilePageSource.writeBaseFile;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.VarcharType.VARCHAR;
 import static java.lang.Integer.parseInt;
+import static org.apache.hudi.common.config.RecordMergeMode.COMMIT_TIME_ORDERING;
+import static org.apache.hudi.common.config.RecordMergeMode.CUSTOM;
+import static org.apache.hudi.common.config.RecordMergeMode.EVENT_TIME_ORDERING;
+import static org.apache.hudi.common.model.HoodieRecordMerger.COMMIT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.EVENT_TIME_BASED_MERGE_STRATEGY_UUID;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 import static org.apache.hudi.common.model.HoodieRecord.HOODIE_META_COLUMNS;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -542,6 +550,24 @@ class TestHudiPageSourceProviderTest
         assertThat(positional.getMaterializedRows())
                 .as("hudi.parquet.use-column-names=false must read what use-column-names=true reads")
                 .isEqualTo(byName.getMaterializedRows());
+    }
+
+    @Test
+    public void testMergeReadsUseTrinoRowsForOrderingAndPayloadMerges()
+    {
+        String customStrategyId = KeyBasedTestRecordMerger.MERGE_STRATEGY_ID;
+        // Schema column types on: the merge modes whose mergers read records only through the record context
+        assertThat(usesTrinoRows(true, COMMIT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)).isTrue();
+        assertThat(usesTrinoRows(true, EVENT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID)).isTrue();
+        assertThat(usesTrinoRows(true, CUSTOM, PAYLOAD_BASED_MERGE_STRATEGY_UUID)).isTrue();
+        // A user HoodieRecordMerger may cast records to Avro, so it keeps the Avro records
+        assertThat(usesTrinoRows(true, CUSTOM, customStrategyId)).isFalse();
+        assertThat(usesTrinoRows(true, CUSTOM, null)).isFalse();
+        // Schema column types off: always the Avro records
+        assertThat(usesTrinoRows(false, COMMIT_TIME_ORDERING, COMMIT_TIME_BASED_MERGE_STRATEGY_UUID)).isFalse();
+        assertThat(usesTrinoRows(false, EVENT_TIME_ORDERING, EVENT_TIME_BASED_MERGE_STRATEGY_UUID)).isFalse();
+        assertThat(usesTrinoRows(false, CUSTOM, PAYLOAD_BASED_MERGE_STRATEGY_UUID)).isFalse();
+        assertThat(usesTrinoRows(false, CUSTOM, customStrategyId)).isFalse();
     }
 
     private static MaterializedResult read(

@@ -232,7 +232,7 @@ public class HoodieSchemaAvroSerializer
      * Reads a non-null Trino value as the Avro-native value of a field.
      */
     @FunctionalInterface
-    private interface ValueToAvro
+    public interface ValueToAvro
     {
         Object convert(Block block, int position);
     }
@@ -241,14 +241,18 @@ public class HoodieSchemaAvroSerializer
      * Appends a non-null Avro value of a field to a Trino block.
      */
     @FunctionalInterface
-    private interface AvroToBlock
+    public interface AvroToBlock
     {
         void append(Object value, BlockBuilder output);
     }
 
     // Trino block -> Avro value
 
-    private static ValueToAvro toAvro(String fieldName, HoodieSchema fieldSchema, Type type)
+    /**
+     * Compiles the reader of a field's Avro-native value from a block of its Trino type. {@code fieldName} only names
+     * the field in error messages.
+     */
+    public static ValueToAvro toAvro(String fieldName, HoodieSchema fieldSchema, Type type)
     {
         HoodieSchema schema = nonNullSchema(fieldName, fieldSchema);
         return switch (schema.getType()) {
@@ -470,7 +474,11 @@ public class HoodieSchemaAvroSerializer
 
     // Avro value -> Trino block
 
-    private static AvroToBlock toBlock(String fieldName, HoodieSchema fieldSchema, Type type)
+    /**
+     * Compiles the writer of a field's value to a block builder of its Trino type. The writer accepts every shape
+     * {@link #buildRecordInPage} accepts. {@code fieldName} only names the field in error messages.
+     */
+    public static AvroToBlock toBlock(String fieldName, HoodieSchema fieldSchema, Type type)
     {
         HoodieSchema schema = nonNullSchema(fieldName, fieldSchema);
         return switch (schema.getType()) {
@@ -773,7 +781,7 @@ public class HoodieSchemaAvroSerializer
      * Unwraps a nullable union the way {@link TrinoTypeMapper#toTypeSystem} does; Trino carries nullability on the
      * value, not in the type.
      */
-    private static HoodieSchema nonNullSchema(String fieldName, HoodieSchema schema)
+    public static HoodieSchema nonNullSchema(String fieldName, HoodieSchema schema)
     {
         if (schema.isComplexUnion()) {
             throw unsupported(fieldName, schema, "Trino has no union type");
@@ -781,7 +789,10 @@ public class HoodieSchemaAvroSerializer
         return schema.getNonNullType();
     }
 
-    private static int rowFieldIndex(RowType type, String name)
+    /**
+     * The index of the row field named {@code name}, case-insensitively, or -1.
+     */
+    public static int rowFieldIndex(RowType type, String name)
     {
         List<RowType.Field> fields = type.getFields();
         for (int field = 0; field < fields.size(); field++) {

@@ -179,6 +179,14 @@ public class SchemaColumnTypesHudiTablesInitializer
 
     private static HoodieRecord<HoodieAvroPayload> populated(String key, long ts, int seed)
     {
+        return avroRecord(populatedRecord(key, ts, seed), key);
+    }
+
+    /**
+     * A {@link #TABLE_SCHEMA} record with a value in every column, derived from {@code seed}, as the Avro write path takes it.
+     */
+    public static GenericRecord populatedRecord(String key, long ts, int seed)
+    {
         GenericRecord record = new GenericData.Record(AVRO_SCHEMA);
         record.put(RECORD_KEY_FIELD, key);
         record.put(ORDERING_FIELD, ts);
@@ -231,7 +239,7 @@ public class SchemaColumnTypesHudiTablesInitializer
         variant.put(HoodieSchema.Variant.VARIANT_METADATA_FIELD, ByteBuffer.wrap(new byte[] {0x01, 0x00, 0x00}));
         variant.put(HoodieSchema.Variant.VARIANT_VALUE_FIELD, ByteBuffer.wrap(new byte[] {0x0C, (byte) seed}));
         record.put("c_variant", variant);
-        return avroRecord(record, key);
+        return record;
     }
 
     /**

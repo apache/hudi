@@ -39,6 +39,8 @@ import io.trino.plugin.hive.TransformConnectorPageSource;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.file.HudiBaseFile;
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
+import io.trino.plugin.hudi.reader.HudiTrinoRowReaderContext;
+import io.trino.plugin.hudi.reader.TrinoRow;
 import io.trino.plugin.hudi.util.ParquetReadConversions;
 import io.trino.plugin.hudi.util.ParquetReadConversions.ReadConversion;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
@@ -61,6 +63,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.engine.HoodieReaderContext;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
@@ -127,6 +130,7 @@ import static java.lang.String.format;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_DEPRECATED_WRITE_CONFIG_KEY;
 import static org.apache.hudi.common.config.HoodieReaderConfig.RECORD_MERGE_IMPL_CLASSES_WRITE_CONFIG_KEY;
+import static org.apache.hudi.common.model.HoodieRecordMerger.PAYLOAD_BASED_MERGE_STRATEGY_UUID;
 
 public class HudiPageSourceProvider
         implements ConnectorPageSourceProvider
@@ -285,6 +289,22 @@ public class HudiPageSourceProvider
                         timeZone,
                         DynamicFilter.EMPTY,
                         false);
+        Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), readColumnHandles.stream().map(HiveColumnHandle::getName).toList());
+        FileSlice fileSlice = convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath());
+        // The merge mode is resolved only with schema column types on, so the path with them off is unchanged
+        if (schemaTypeMapper.isPresent() && usesTrinoRows(metaClient.getTableConfig())) {
+            HudiTrinoRowReaderContext readerContext = new HudiTrinoRowReaderContext(
+                    metaClient.getStorageConf(),
+                    metaClient.getTableConfig(),
+                    dataPageSource,
+                    readColumnHandles,
+                    logPageSourceFactory,
+                    readerProps,
+                    typeMapper);
+            HoodieFileGroupReader<TrinoRow> fileGroupReader = buildFileGroupReader(
+                    readerContext, metaClient, fileSlice, dataSchema, requestedSchema, hudiTableHandle.getLatestCommitTime(), readerProps, start, length);
+            return HudiPageSource.forTrinoRows(dataPageSource, fileGroupReader, hiveColumnHandles, prefilledColumnValues);
+        }
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
                 metaClient.getStorageConf(),
                 metaClient.getTableConfig(),
@@ -294,30 +314,68 @@ public class HudiPageSourceProvider
                 logPageSourceFactory,
                 readerProps,
                 schemaTypeMapper);
-
-        Schema requestedSchema = constructSchema(dataSchema.toAvroSchema(), readColumnHandles.stream().map(HiveColumnHandle::getName).toList());
-        FileSlice fileSlice = convertToFileSlice(hudiSplit, hudiTableHandle.getBasePath());
-        HoodieFileGroupReader<IndexedRecord> fileGroupReader =
-                HoodieFileGroupReader.<IndexedRecord>builder()
-                        .withReaderContext(readerContext)
-                        .withHoodieTableMetaClient(metaClient)
-                        .withBaseFileOption(fileSlice.getBaseFile())
-                        .withLogFiles(fileSlice.getLogFiles())
-                        .withPartitionPath(fileSlice.getPartitionPath())
-                        .withDataSchema(dataSchema)
-                        .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedSchema))
-                        .withLatestCommitTime(hudiTableHandle.getLatestCommitTime())
-                        .withProps(readerProps)
-                        .withShouldUseRecordPosition(false)
-                        .withStart(start)
-                        .withLength(length)
-                        .build();
-        return new HudiPageSource(
+        HoodieFileGroupReader<IndexedRecord> fileGroupReader = buildFileGroupReader(
+                readerContext, metaClient, fileSlice, dataSchema, requestedSchema, hudiTableHandle.getLatestCommitTime(), readerProps, start, length);
+        return HudiPageSource.forAvroRecords(
                 dataPageSource,
                 fileGroupReader,
                 hiveColumnHandles,
                 prefilledColumnValues,
                 schemaTypeMapper.isPresent());
+    }
+
+    /**
+     * Whether the merge read merges {@link TrinoRow}s ({@link HudiTrinoRowReaderContext}) rather than Avro records
+     * ({@link HudiTrinoReaderContext}): with schema column types on, for the merge modes whose mergers read records only
+     * through the record context. Commit-time and event-time ordering compare ordering values; the payload strategy's
+     * HoodieAvroRecordMerger converts the two records it merges to Avro. Any other CUSTOM strategy resolves a user
+     * HoodieRecordMerger, which may cast a record to Avro.
+     *
+     * @param mergeMode the merge mode the file-group reader resolves ({@link HudiUtil#resolveMergeModeAndStrategyId})
+     */
+    private static boolean usesTrinoRows(HoodieTableConfig tableConfig)
+    {
+        Pair<RecordMergeMode, String> mergeModeAndStrategyId = resolveMergeModeAndStrategyId(tableConfig);
+        return usesTrinoRows(true, mergeModeAndStrategyId.getLeft(), mergeModeAndStrategyId.getRight());
+    }
+
+    @VisibleForTesting
+    static boolean usesTrinoRows(boolean schemaColumnTypes, RecordMergeMode mergeMode, String mergeStrategyId)
+    {
+        if (!schemaColumnTypes) {
+            return false;
+        }
+        return switch (mergeMode) {
+            case COMMIT_TIME_ORDERING, EVENT_TIME_ORDERING -> true;
+            case CUSTOM -> PAYLOAD_BASED_MERGE_STRATEGY_UUID.equals(mergeStrategyId);
+        };
+    }
+
+    private static <T> HoodieFileGroupReader<T> buildFileGroupReader(
+            HoodieReaderContext<T> readerContext,
+            HoodieTableMetaClient metaClient,
+            FileSlice fileSlice,
+            HoodieSchema dataSchema,
+            Schema requestedSchema,
+            String latestCommitTime,
+            TypedProperties readerProps,
+            long start,
+            long length)
+    {
+        return HoodieFileGroupReader.<T>builder()
+                .withReaderContext(readerContext)
+                .withHoodieTableMetaClient(metaClient)
+                .withBaseFileOption(fileSlice.getBaseFile())
+                .withLogFiles(fileSlice.getLogFiles())
+                .withPartitionPath(fileSlice.getPartitionPath())
+                .withDataSchema(dataSchema)
+                .withRequestedSchema(HoodieSchema.fromAvroSchema(requestedSchema))
+                .withLatestCommitTime(latestCommitTime)
+                .withProps(readerProps)
+                .withShouldUseRecordPosition(false)
+                .withStart(start)
+                .withLength(length)
+                .build();
     }
 
     private ConnectorPageSource createBaseFilePageSource(
