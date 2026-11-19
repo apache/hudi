@@ -964,7 +964,8 @@ public class HoodieWriteConfig extends HoodieConfig {
           + "partitioner, instead of appending an update record to the current file group's log. Log files then "
           + "carry only positional deletes and every live record stays in a base file, so table formats based on "
           + "deletion vectors can represent the table exactly. Requires write table version 8 or higher, "
-          + WRITE_RECORD_POSITIONS.key() + ", an index that produces record positions, and commit-time ordering "
+          + WRITE_RECORD_POSITIONS.key() + ", the BLOOM or SIMPLE index (the global variants do not produce "
+          + "record positions on merge-on-read tables), and commit-time ordering "
           + "merge semantics.");
 
   public static final ConfigProperty<String> WRITE_PARTIAL_UPDATE_SCHEMA = ConfigProperty

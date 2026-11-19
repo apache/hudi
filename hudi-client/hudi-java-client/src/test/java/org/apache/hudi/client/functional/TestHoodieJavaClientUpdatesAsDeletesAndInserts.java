@@ -44,6 +44,7 @@ import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
@@ -340,10 +341,17 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
     }
   }
 
-  @Test
-  public void testIndexWithoutPositionsRejectedInDeleteInsertMode() throws Exception {
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA,
-        HoodieIndex.IndexType.INMEMORY)
+  /**
+   * Global indexes tag merge-on-read records through a lookup that drops the base file position.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class, names = {"INMEMORY", "GLOBAL_SIMPLE"})
+  void testIndexWithoutPositionsRejectedInDeleteInsertMode(HoodieIndex.IndexType indexType) throws Exception {
+    Properties keyGenProps = new Properties();
+    keyGenProps.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    keyGenProps.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, indexType)
+        .withProperties(keyGenProps)
         .withWriteUpdatesAsDeletesAndInserts(true)
         .build();
     assertUpsertRejected(config, "produces record positions");
