@@ -676,7 +676,7 @@ public final class HoodieMetadataConfig extends HoodieConfig {
           + "metadata table. This is used to calculate how many bits should be assigned for the bloom filter "
           + "and the number of hash functions. This is usually set very low (default: 0.000000001), "
           + "we like to tradeoff disk space for lower false positives. If the number of entries "
-          + "added to bloom filter exceeds the configured value (hoodie.metadata.bloom.filter.num.entries), "
+          + "added to bloom filter exceeds the configured value (" + BLOOM_FILTER_NUM_ENTRIES.key() + "), "
           + "then this fpp may not be honored.");
 
   public static final ConfigProperty<String> BLOOM_FILTER_DYNAMIC_MAX_ENTRIES = ConfigProperty
