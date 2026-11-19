@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The streaming PNG writer the large-image tests generate their fixtures with. */
-public class TestStreamingPngWriter {
+class TestStreamingPngWriter {
 
   private static final byte[] SIGNATURE = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
 
@@ -48,7 +48,7 @@ public class TestStreamingPngWriter {
    */
   @ParameterizedTest
   @CsvSource({"37,23,64", "300,200,4096", "64,255,1000", "64,510,65536"})
-  public void storedPngIsWellFormedDecodesToTheGeneratedPixelsAndHasThePredictedSize(int width, int height, int idatChunkBytes)
+  void storedPngIsWellFormedDecodesToTheGeneratedPixelsAndHasThePredictedSize(int width, int height, int idatChunkBytes)
       throws IOException, DataFormatException {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     long written = StreamingPngWriter.writeGradient(out, width, height, false, idatChunkBytes);
@@ -60,7 +60,7 @@ public class TestStreamingPngWriter {
   }
 
   @Test
-  public void compressedPngIsWellFormedDecodesToTheGeneratedPixelsAndIsSmallerThanTheRaster()
+  void compressedPngIsWellFormedDecodesToTheGeneratedPixelsAndIsSmallerThanTheRaster()
       throws IOException, DataFormatException {
     int width = 300;
     int height = 200;
@@ -73,7 +73,7 @@ public class TestStreamingPngWriter {
   }
 
   @Test
-  public void invalidDimensionsAreRefused() {
+  void invalidDimensionsAreRefused() {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     assertThrows(IllegalArgumentException.class, () -> StreamingPngWriter.writeGradient(out, 0, 10, false, 64));
     assertThrows(IllegalArgumentException.class, () -> StreamingPngWriter.writeGradient(out, 10, 0, false, 64));

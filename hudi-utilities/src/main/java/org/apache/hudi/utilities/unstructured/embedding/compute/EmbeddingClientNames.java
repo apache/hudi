@@ -22,6 +22,7 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -35,7 +36,7 @@ public final class EmbeddingClientNames {
   private static final String PKG = "org.apache.hudi.utilities.unstructured.embedding.compute.";
 
   /** The provider ids with a built-in client, as {@code hoodie.unstructured.embedding.model.<alias>.provider} names them. */
-  public static final List<String> PROVIDERS = Collections.singletonList(DummyEmbeddingClient.PROVIDER);
+  public static final List<String> PROVIDERS = Collections.unmodifiableList(Arrays.asList(DummyEmbeddingClient.PROVIDER, DummyMultimodalEmbeddingClient.PROVIDER));
 
   private EmbeddingClientNames() {
   }
@@ -66,6 +67,9 @@ public final class EmbeddingClientNames {
     }
     if (DummyEmbeddingClient.PROVIDER.equals(spec.getProvider())) {
       return DummyEmbeddingClient.class.getName();
+    }
+    if (DummyMultimodalEmbeddingClient.PROVIDER.equals(spec.getProvider())) {
+      return DummyMultimodalEmbeddingClient.class.getName();
     }
     throw new UnsupportedOperationException("provider " + spec.getProvider() + " of model " + spec.getName()
         + " has no built-in embedding client; providers: " + String.join(", ", PROVIDERS) + ", or set " + EmbeddingTableConfig.MODEL_PREFIX + spec.getName()

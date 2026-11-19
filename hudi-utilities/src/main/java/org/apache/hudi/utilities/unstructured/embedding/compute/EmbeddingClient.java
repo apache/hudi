@@ -49,6 +49,18 @@ import java.util.TreeSet;
  * <p>Modalities: {@link #supportedModalities} names the modalities the client has a request format for. Compute hands the
  * client only rows of the modalities the model declares ({@code hoodie.unstructured.embedding.model.<alias>.modalities}), and
  * the job refuses at start a declaration outside {@link #supportedModalities}.
+ *
+ * <p>Outcome contract for image inputs (modality {@code image}), on top of the above: each such {@link EmbeddingInput} carries
+ * its stored input ({@link EmbeddingInput#storedImage()}) and the resized model input ({@link EmbeddingInput#image()}), made
+ * lazily when the client asks for it, so a client holds at most the prepared images of the request it is building, never the
+ * whole call's. When {@link PreparedImageSupplier#get()} throws, the client answers that input with {@link ImageFailures#result} and goes on with
+ * the others. A refusal before decode
+ * ({@link org.apache.hudi.utilities.unstructured.embedding.image.ImageRefusedException}), an unreadable header
+ * ({@link org.apache.hudi.utilities.unstructured.embedding.image.ImageHeaderException}), corrupt pixel data
+ * ({@link javax.imageio.IIOException}) or a body cut short is PERMANENT; a storage failure under the read
+ * ({@link org.apache.hudi.utilities.unstructured.embedding.source.BlobReadException} in the cause chain) is RETRYABLE; a malformed
+ * stored-input reference, or a JVM failure anywhere in the cause chain (an OutOfMemoryError the PNG reader wrapped in an
+ * IIOException, a LinkageError; not a StackOverflowError), fails the run ({@link EmbeddingComputePlatformException}).
  */
 public interface EmbeddingClient extends AutoCloseable {
 

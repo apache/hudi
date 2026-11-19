@@ -111,8 +111,8 @@ public final class ImageProviderLeakSpies implements AutoCloseable {
   }
 
   /**
-   * A JDK-named spy JPEG writer ordered ahead of the JDK's own JPEG writer, so a JPEG writer walk that takes the first JDK
-   * writer chooses it. With {@code laterProviderFails}, a foreign JPEG writer provider whose writer creation throws is ordered after the
+   * A JDK-named spy JPEG writer ordered ahead of the JDK's own JPEG writer, so the JPEG writer walk of the video frame encoder
+   * chooses it. With {@code laterProviderFails}, a foreign JPEG writer provider whose writer creation throws is ordered after the
    * spy; with {@code disposeFails}, the spy writer's dispose throws {@link JdkNamedSpyWriterSpi#DISPOSE_FAILURE}. While installed,
    * every JPEG write of the JVM that picks the first JDK writer gets the spy, which writes nothing.
    */
@@ -289,6 +289,7 @@ public final class ImageProviderLeakSpies implements AutoCloseable {
 
     @Override
     public void write(IIOMetadata streamMetadata, IIOImage image, ImageWriteParam param) {
+      // writes nothing: this writer only records whether it was disposed
     }
   }
 }

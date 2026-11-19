@@ -24,6 +24,14 @@ package org.apache.hudi.utilities.unstructured.embedding.compute;
  * resized model input ({@link EmbeddingInput#image()}), made lazily when the client asks for it, so at most one prepared image per
  * call in flight is held, never a batch of them.
  *
+ * <p>Outcome contract for image inputs, on top of {@link EmbeddingClient}'s: when {@link PreparedImageSupplier#get()} throws, the
+ * client answers that input with {@link ImageFailures#result} and goes on with the others. A refusal before decode
+ * ({@link org.apache.hudi.utilities.unstructured.embedding.image.ImageRefusedException}), an unreadable header
+ * ({@link org.apache.hudi.utilities.unstructured.embedding.image.ImageHeaderException}), corrupt pixel data
+ * ({@link javax.imageio.IIOException}) or a body cut short is PERMANENT; a storage failure under the read
+ * ({@link org.apache.hudi.utilities.unstructured.embedding.source.BlobReadException} in the cause chain) is RETRYABLE; a malformed
+ * stored-input reference fails the run ({@link EmbeddingComputePlatformException}).
+ *
  * <p>A client that does not implement this interface embeds text only: compute never hands it an image row, and gives every such
  * row a permanent failure naming the provider instead.
  */

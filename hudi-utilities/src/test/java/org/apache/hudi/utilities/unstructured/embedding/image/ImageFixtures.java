@@ -25,10 +25,13 @@ import java.awt.image.BufferedImage;
 import java.awt.image.IndexColorModel;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.zip.CRC32;
+import java.util.zip.DeflaterOutputStream;
 
 /**
  * Small images built in memory for the image tests: real encodings written by the JDK's own ImageIO writers, a hand-built
@@ -166,6 +169,84 @@ public final class ImageFixtures {
     return bytes.toByteArray();
   }
 
+  /**
+   * A valid non-interlaced PNG of {@code width} x {@code height} whose every sample is 0, written row by row in small pieces so a
+   * very wide row is never held whole: compressed, a row of zeros costs about a thousandth of its size. A palette image
+   * (colorType 3) gets a two-entry PLTE.
+   *
+   * @param colorType the IHDR color type (0 gray, 2 RGB, 3 palette, 4 gray + alpha, 6 RGBA)
+   */
+  public static byte[] zeroPng(int width, int height, int bitDepth, int colorType) {
+    int samples = colorType == 2 ? 3 : colorType == 4 ? 2 : colorType == 6 ? 4 : 1;
+    long rowBytes = ((long) width * samples * bitDepth + 7) / 8;
+    try {
+      ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+      DataOutputStream out = new DataOutputStream(bytes);
+      out.write(new byte[] {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'});
+      ByteArrayOutputStream ihdr = new ByteArrayOutputStream();
+      DataOutputStream header = new DataOutputStream(ihdr);
+      header.writeInt(width);
+      header.writeInt(height);
+      header.writeByte(bitDepth);
+      header.writeByte(colorType);
+      header.writeByte(0);
+      header.writeByte(0);
+      header.writeByte(0);
+      pngChunk(out, "IHDR", ihdr.toByteArray());
+      if (colorType == 3) {
+        pngChunk(out, "PLTE", new byte[] {0, 0, 0, (byte) 255, (byte) 255, (byte) 255});
+      }
+      ByteArrayOutputStream zlib = new ByteArrayOutputStream();
+      try (DeflaterOutputStream deflater = new DeflaterOutputStream(zlib)) {
+        byte[] piece = new byte[65536];
+        for (int y = 0; y < height; y++) {
+          // filter type 0 (None), then the row's zero samples
+          deflater.write(0);
+          for (long left = rowBytes; left > 0; left -= piece.length) {
+            deflater.write(piece, 0, (int) Math.min(piece.length, left));
+          }
+        }
+      }
+      pngChunk(out, "IDAT", zlib.toByteArray());
+      pngChunk(out, "IEND", new byte[0]);
+      return bytes.toByteArray();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  private static void pngChunk(DataOutputStream out, String type, byte[] data) throws IOException {
+    byte[] name = type.getBytes(StandardCharsets.US_ASCII);
+    CRC32 crc = new CRC32();
+    crc.update(name);
+    crc.update(data);
+    out.writeInt(data.length);
+    out.write(name);
+    out.write(data);
+    out.writeInt((int) crc.getValue());
+  }
+
+  /**
+   * An uncompressed (BI_RGB) BMP of {@code width} x {@code height} at {@code bitsPerPixel} (1, 4, 8, 16, 24 or 32) with a
+   * BITMAPINFOHEADER, every pixel 0; an indexed image gets a palette of 2^bitsPerPixel black entries.
+   */
+  public static byte[] uncompressedBmp(int width, int height, int bitsPerPixel) {
+    int rowBytes = (int) (((long) width * bitsPerPixel + 31) / 32 * 4);
+    int palette = bitsPerPixel <= 8 ? 4 << bitsPerPixel : 0;
+    int offset = 14 + 40 + palette;
+    byte[] bmp = new byte[offset + rowBytes * height];
+    put(bmp, 0, "BM");
+    putLe32(bmp, 2, bmp.length);
+    putLe32(bmp, 10, offset);
+    putLe32(bmp, 14, 40);
+    putLe32(bmp, 18, width);
+    putLe32(bmp, 22, height);
+    bmp[26] = 1;
+    bmp[28] = (byte) bitsPerPixel;
+    putLe32(bmp, 34, rowBytes * height);
+    return bmp;
+  }
+
   /** A PNG cut inside its IHDR chunk: the signature is valid, the header is not. */
   public static byte[] truncatedPng() {
     return Arrays.copyOf(image("png", 40, 30), 14);
@@ -240,6 +321,11 @@ public final class ImageFixtures {
   /** Bytes no image reader recognises. */
   public static byte[] garbage() {
     return "this is not an image, only text pretending to be one".getBytes(StandardCharsets.UTF_8);
+  }
+
+  /** A source over in-memory bytes (tests only: production compute opens a seekable blob stream). */
+  public static ImageSource source(byte[] bytes) {
+    return () -> new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes));
   }
 
   public static BufferedImage decode(byte[] encoded) {
