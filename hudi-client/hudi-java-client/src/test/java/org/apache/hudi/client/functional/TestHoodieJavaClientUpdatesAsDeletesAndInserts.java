@@ -24,7 +24,9 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -43,8 +45,11 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.testutils.GenericRecordValidationTestUtils;
 import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
@@ -56,6 +61,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -155,12 +161,20 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
       assertTrue(block instanceof HoodieDeleteBlock,
           "expected only delete blocks but got: " + block.getClass().getSimpleName() + " in " + logFile.getFileName());
       HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) block;
-      deleteRecordCount.addAndGet(deleteBlock.getRecordsToDelete().length);
+      DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
+      deleteRecordCount.addAndGet(deleteRecords.length);
       List<Long> positions = deleteBlock.getRecordPositionList();
-      assertEquals(deleteBlock.getRecordsToDelete().length, positions.size(),
+      assertEquals(deleteRecords.length, positions.size(),
           "every delete record must carry a position");
-      positions.forEach(position ->
-          assertTrue(position >= 0, "delete record positions must be valid"));
+      // The i-th position belongs to the i-th delete record: inline delete blocks store both sorted by
+      // position, and native delete log files store positions in delete-row order.
+      List<String> baseFileKeys = readRecordKeys(config, slice.getBaseFile().get());
+      for (int i = 0; i < positions.size(); i++) {
+        long position = positions.get(i);
+        assertTrue(position >= 0 && position < baseFileKeys.size(), "delete record position out of range: " + position);
+        assertEquals(deleteRecords[i].getRecordKey(), baseFileKeys.get((int) position),
+            "the base file row at a delete position must hold the deleted record key");
+      }
       assertEquals(slice.getBaseFile().get().getCommitTime(),
           deleteBlock.getBaseFileInstantTimeOfPositions(),
           "positions must reference the file slice's base file");
@@ -463,5 +477,19 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
           .map(FileSlice::getFileId)
           .collect(Collectors.toSet());
     }
+  }
+
+  /**
+   * Returns the record keys of a base file in row order, so that a key's index is its row position.
+   */
+  private List<String> readRecordKeys(HoodieWriteConfig config, HoodieBaseFile baseFile) throws IOException {
+    List<String> keys = new ArrayList<>();
+    try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(storage)
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(config, new StoragePath(baseFile.getPath()));
+         ClosableIterator<String> keyIterator = reader.getRecordKeyIterator()) {
+      keyIterator.forEachRemaining(keys::add);
+    }
+    return keys;
   }
 }

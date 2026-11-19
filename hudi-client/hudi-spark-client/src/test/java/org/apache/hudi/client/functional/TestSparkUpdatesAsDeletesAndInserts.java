@@ -21,7 +21,9 @@ package org.apache.hudi.client.functional;
 import org.apache.hudi.client.SparkRDDWriteClient;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieBaseFile;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
@@ -34,8 +36,12 @@ import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileReader;
+import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
 import org.apache.spark.api.java.JavaRDD;
@@ -44,6 +50,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
@@ -113,6 +120,7 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
         for (FileSlice slice : slicesWithLogs) {
           assertTrue(slice.getBaseFile().isPresent(),
               "a file group with delete logs must have a base file");
+          List<String> baseFileKeys = readRecordKeys(config, slice.getBaseFile().get());
           for (HoodieLogFile logFile : slice.getLogFiles().collect(Collectors.toList())) {
             assertEquals(tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN),
                 FSUtils.isNativeDeleteLogFile(logFile.getFileName()), "unexpected log file layout: " + logFile.getFileName());
@@ -123,11 +131,16 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
                 assertTrue(block instanceof HoodieDeleteBlock,
                     "expected only delete blocks but got: " + block.getClass().getSimpleName() + " in " + logFile.getFileName());
                 HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) block;
+                DeleteRecord[] deletes = deleteBlock.getRecordsToDelete();
                 List<Long> positions = deleteBlock.getRecordPositionList();
-                assertEquals(deleteBlock.getRecordsToDelete().length, positions.size(),
+                assertEquals(deletes.length, positions.size(),
                     "every delete record must carry a position");
-                assertTrue(positions.stream().allMatch(position -> position >= 0),
-                    "delete record positions must be valid");
+                for (int i = 0; i < positions.size(); i++) {
+                  long position = positions.get(i);
+                  assertTrue(position >= 0 && position < baseFileKeys.size(), "delete record position out of range: " + position);
+                  assertEquals(deletes[i].getRecordKey(), baseFileKeys.get((int) position),
+                      "the base file row at a delete position must hold the deleted record key");
+                }
                 assertEquals(slice.getBaseFile().get().getCommitTime(), deleteBlock.getBaseFileInstantTimeOfPositions(),
                     "positions must reference the file slice's base file");
                 deleteRecords += positions.size();
@@ -142,5 +155,19 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
       // Both rounds tombstone 100 records each in file groups that remain the latest slices.
       assertEquals(200, deleteRecords, "each update must produce exactly one positional delete");
     }
+  }
+
+  /**
+   * Returns the record keys of a base file in row order, so that a key's index is its row position.
+   */
+  private List<String> readRecordKeys(HoodieWriteConfig config, HoodieBaseFile baseFile) throws IOException {
+    List<String> keys = new ArrayList<>();
+    try (HoodieFileReader reader = HoodieIOFactory.getIOFactory(hoodieStorage())
+        .getReaderFactory(HoodieRecord.HoodieRecordType.AVRO)
+        .getFileReader(config, new StoragePath(baseFile.getPath()));
+         ClosableIterator<String> keyIterator = reader.getRecordKeyIterator()) {
+      keyIterator.forEachRemaining(keys::add);
+    }
+    return keys;
   }
 }
