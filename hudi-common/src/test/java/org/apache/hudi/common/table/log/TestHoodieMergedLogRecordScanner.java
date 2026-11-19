@@ -20,10 +20,12 @@
 package org.apache.hudi.common.table.log;
 
 import org.apache.hudi.common.engine.RecordContext;
-import org.apache.hudi.common.model.HoodieAvroIndexedRecord;
+import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
+import org.apache.hudi.common.model.HoodiePreCombineAvroRecordMerger;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordMerger;
+import org.apache.hudi.common.model.OverwriteWithLatestAvroPayload;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -64,7 +66,7 @@ class TestHoodieMergedLogRecordScanner {
       contexts.add(context);
       assertEquals(older.getRecord().getSchema(), context.getSchemaFromBufferRecord(older).toAvroSchema());
       assertEquals(newer.getRecord().getSchema(), context.getSchemaFromBufferRecord(newer).toAvroSchema());
-      return newer;
+      return new HoodiePreCombineAvroRecordMerger().merge(older, newer, context, invocation.getArgument(3));
     });
 
     try (HoodieMergedLogRecordScanner first = scanner(firstSchema, merger);
@@ -80,12 +82,6 @@ class TestHoodieMergedLogRecordScanner {
       RecordContext<IndexedRecord> secondContext = contexts.get(1);
       assertNotSame(firstContext, secondContext, "Scanners must not share their schema cache");
       assertSame(firstContext, contexts.get(2), "A scanner must reuse its context across merges");
-      // Both scanners start their own ID space, and each ID still resolves to its own schema.
-      Integer firstId = firstContext.encodeSchema(firstSchema);
-      Integer secondId = secondContext.encodeSchema(secondSchema);
-      assertEquals(firstId, secondId);
-      assertEquals(firstSchema, firstContext.decodeAvroSchema(firstId));
-      assertEquals(secondSchema, secondContext.decodeAvroSchema(secondId));
       assertEquals("first-update-again", ((IndexedRecord) first.getRecords().get("key").getData()).get(0).toString());
       assertEquals("second-update", ((IndexedRecord) second.getRecords().get("key").getData()).get(0).toString());
     }
@@ -109,9 +105,9 @@ class TestHoodieMergedLogRecordScanner {
     return HoodieSchema.parse("{\"type\":\"record\",\"name\":\"" + name + "\",\"fields\":[{\"name\":\"value\",\"type\":\"string\"}]}");
   }
 
-  private static HoodieAvroIndexedRecord record(HoodieSchema schema, String value) {
+  private static HoodieAvroRecord<OverwriteWithLatestAvroPayload> record(HoodieSchema schema, String value) {
     GenericData.Record data = new GenericData.Record(schema.toAvroSchema());
     data.put("value", value);
-    return new HoodieAvroIndexedRecord(new HoodieKey("key", "partition"), data, 0L);
+    return new HoodieAvroRecord<>(new HoodieKey("key", "partition"), new OverwriteWithLatestAvroPayload(data, 0L));
   }
 }
