@@ -1934,14 +1934,25 @@ class TestExpressionIndex extends HoodieSparkSqlTestBase with SparkAdapterSuppor
         spark.sql(s"INSERT INTO $tableName VALUES ('2023-09-23 09:42:17','u1','rider-F',34.15,'sao_paulo')")
         spark.sql(s"INSERT INTO $tableName VALUES ('2023-09-24 09:00:00','u2','rider-Z',12.50,'sao_paulo')")
         spark.sql(s"CREATE INDEX ts_year ON $tableName USING column_stats(ts) options(expr='date_format', format='yyyy')")
-        spark.sql(s"CREATE INDEX ts_two_days ON $tableName USING bloom_filters(ts) options(expr='date_add', days='2')")
 
         withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
           "spark.sql.adaptive.enabled" -> "false") {
           // Spark casts the indexed string to INT here, which no rule ranges: the index cannot prune this filter
           assertScan(tableName, "date_format(ts, 'yyyy') = 2023 AND fare = 12.5", Seq("rider-Z"), expectedFiles = 1)
-          // A bloom filter holds a DATE as the writer's string, not as the epoch days of the literal: it cannot answer this
-          assertScan(tableName, "date_add(ts, 2) IN (DATE'2023-09-25', DATE'2023-09-27')", Seq("rider-F"), expectedFiles = 2)
+        }
+
+        // A bloom filter holds a DATE as the writer's string, a java.sql.Date or, with the java8 API, a LocalDate,
+        // not as the epoch days of the literal (#20567)
+        Seq("false", "true").foreach { java8Api =>
+          withSQLConf("spark.sql.datetime.java8API.enabled" -> java8Api) {
+            spark.sql(s"CREATE INDEX ts_two_days ON $tableName USING bloom_filters(ts) options(expr='date_add', days='2')")
+          }
+          withSQLConf(DataSourceReadOptions.ENABLE_DATA_SKIPPING.key -> "true", HoodieMetadataConfig.ENABLE.key -> "true",
+            "spark.sql.adaptive.enabled" -> "false") {
+            assertScan(tableName, "date_add(ts, 2) = DATE'2023-09-25'", Seq("rider-F"), expectedFiles = 1)
+            assertScan(tableName, "date_add(ts, 2) IN (DATE'2023-09-25', DATE'2023-09-27')", Seq("rider-F"), expectedFiles = 1)
+          }
+          spark.sql(s"DROP INDEX ts_two_days ON $tableName")
         }
       }
     }
