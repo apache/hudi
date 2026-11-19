@@ -69,8 +69,7 @@ class TestHudiAvroSerializer
                 Arguments.of(" ab  ", " ab"),
                 Arguments.of("     ", ""),
                 Arguments.of("\tab\t ", "\tab\t"),
-                Arguments.of(" a😀  ", " a😀"),
-                Arguments.of(" a😀😀😀x", " a😀😀😀"),
+                Arguments.of(" a\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00x", " a\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00"),
                 Arguments.of(" abcdef", " abcd"));
     }
 
@@ -92,10 +91,10 @@ class TestHudiAvroSerializer
                 Arguments.of(boundedType, " ab  ", " ab  "),
                 Arguments.of(boundedType, "\tab\t ", "\tab\t "),
                 Arguments.of(boundedType, " abcdef", " abcd"),
-                Arguments.of(boundedType, " a😀😀😀x", " a😀😀😀"),
+                Arguments.of(boundedType, " a\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00x", " a\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00"),
                 Arguments.of(boundedType, "", ""),
                 Arguments.of(VARCHAR, " abcdef ", " abcdef "),
-                Arguments.of(VARCHAR, " a😀😀😀x ", " a😀😀😀x "));
+                Arguments.of(VARCHAR, " a\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00x ", " a\uD83D\uDE00\uD83D\uDE00\uD83D\uDE00x "));
     }
 
     /**
