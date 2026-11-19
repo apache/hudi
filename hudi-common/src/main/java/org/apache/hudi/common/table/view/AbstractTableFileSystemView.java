@@ -518,9 +518,9 @@ public abstract class AbstractTableFileSystemView implements SyncableFileSystemV
         return pathName.contains(baseFileExtension);
       }
     };
-    // A table shared with another table format (e.g. Iceberg under a pluggable table format) can
-    // hold data files that Hudi did not write; they carry no file id or commit time and belong to
-    // no file group, so they are not part of the view.
+    // A table shared with an external table format through a pluggable table format can hold data
+    // files that Hudi did not write; they carry no file id or commit time and belong to no file
+    // group, so they are not part of the view.
     return pathInfoList.stream()
         .filter(roFilePredicate)
         .filter(pathInfo -> FileNameParser.parseBaseFile(pathInfo.getPath().getName()).isPresent())
