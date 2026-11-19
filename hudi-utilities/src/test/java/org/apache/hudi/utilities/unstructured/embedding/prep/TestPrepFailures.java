@@ -27,6 +27,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.stream.Stream;
 
@@ -103,6 +104,22 @@ public class TestPrepFailures {
     // control: a decoder's own failure with no JVM failure under it is the file's bad input
     assertDoesNotThrow(() -> PrepFailures.rethrowRoundFailure(new PreprocessingException("corrupt", new IOException("bad data"))));
     assertDoesNotThrow(() -> PrepFailures.rethrowRoundFailure(new PreprocessingException("too deep", new StackOverflowError())));
+  }
+
+  /**
+   * A source read failure with a JVM failure under it is thrown unchecked, as a platform failure carrying it, before a decoder
+   * could take the read's IOException for an end of data; a plain read failure stays a source read failure, a missing source the
+   * file's own.
+   */
+  @Test
+  void sourceReadFailureWithAJvmFailureUnderItIsThrownUnchecked() {
+    IOException underHeap = new IOException("read failed", new OutOfMemoryError("Java heap space"));
+    PrepPlatformException round = assertThrows(PrepPlatformException.class, () -> PreprocessingIterator.classified(underHeap));
+    assertSame(underHeap, round.getCause());
+    IOException plain = new IOException("connection reset");
+    assertSame(plain, assertThrows(SourceReadException.class, () -> PreprocessingIterator.classified(plain)).getCause());
+    FileNotFoundException missing = new FileNotFoundException("gone");
+    assertSame(missing, PreprocessingIterator.classified(missing));
   }
 
   @Test

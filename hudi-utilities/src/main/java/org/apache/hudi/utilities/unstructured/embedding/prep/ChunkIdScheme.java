@@ -24,8 +24,7 @@ import java.io.Serializable;
  * Turns the dense ordinal of a chunk among its file's chunks of the SAME modality (0, 1, 2, … in extraction order) into its
  * {@code chunk_id}; each modality is numbered on its own. An implementation must be STRICTLY increasing in the
  * ordinal, so for two chunks of one file and one modality {@code a.chunk_id < b.chunk_id} holds exactly when {@code a} was
- * extracted before {@code b}; ids of different modalities are not ordered against each other. The framework fails a file whose
- * ids are not increasing. Marker rows keep their
+ * extracted before {@code b}; ids of different modalities are not ordered against each other. Marker rows keep their
  * fixed id. Data prep numbers chunks with {@link SequentialChunkIdScheme}.
  */
 public interface ChunkIdScheme extends Serializable {
