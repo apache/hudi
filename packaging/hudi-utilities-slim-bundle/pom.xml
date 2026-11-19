@@ -105,6 +105,10 @@
                        decodes H.264 in MP4 without FFmpeg. Its license notice is in the top-level LICENSE. -->
                   <include>org.jcodec:jcodec</include>
                   <include>org.jcodec:jcodec-javase</include>
+                  <!-- Speech-to-text (embedding/audio/whisper): whisper-jni 1.7.1 with its linux-arm64 and linux-x86_64 natives (the filter
+                       below keeps only those). NOT relocated: JNI binds the native symbols to the
+                       io.github.givimad.whisperjni class names. -->
+                  <include>io.github.givimad:whisper-jni</include>
 
                   <include>org.antlr:stringtemplate</include>
                   <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->
@@ -202,6 +206,17 @@
                     <exclude>META-INF/services/javax.*</exclude>
                     <exclude>**/*.proto</exclude>
                   </excludes>
+                </filter>
+                <filter>
+                  <!-- whisper-jni: ship only its classes and the Linux natives it loads (debian-arm64/, debian-amd64/); any
+                       other platform folder, today or in a later version, is left out -->
+                  <artifact>io.github.givimad:whisper-jni</artifact>
+                  <includes>
+                    <include>io/**</include>
+                    <include>META-INF/**</include>
+                    <include>debian-arm64/**</include>
+                    <include>debian-amd64/**</include>
+                  </includes>
                 </filter>
               </filters>
             </configuration>

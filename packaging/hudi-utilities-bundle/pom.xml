@@ -106,6 +106,10 @@
                   <!-- FFmpeg (org.bytedeco javacv / javacpp / ffmpeg, LGPL) is NOT bundled: a job that prepares video with
                        FFmpeg adds those jars to the job classpath at launch. The root enforcer bans org.bytedeco at compile and
                        runtime scope; scripts/ci/check_no_ffmpeg_in_bundles.sh checks a built bundle jar (run by hand, not in CI). -->
+                  <!-- Speech-to-text (embedding/audio/whisper): whisper-jni 1.7.1 with its linux-arm64 and linux-x86_64 natives (the filter
+                       below keeps only those). NOT relocated: JNI binds the native symbols to the
+                       io.github.givimad.whisperjni class names. -->
+                  <include>io.github.givimad:whisper-jni</include>
                   <include>org.jcodec:jcodec</include>
                   <include>org.jcodec:jcodec-javase</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
@@ -280,6 +284,17 @@
                   <excludes>
                     <exclude>public/**</exclude>
                   </excludes>
+                </filter>
+                <filter>
+                  <!-- whisper-jni: ship only its classes and the Linux natives it loads (debian-arm64/, debian-amd64/); any
+                       other platform folder, today or in a later version, is left out -->
+                  <artifact>io.github.givimad:whisper-jni</artifact>
+                  <includes>
+                    <include>io/**</include>
+                    <include>META-INF/**</include>
+                    <include>debian-arm64/**</include>
+                    <include>debian-amd64/**</include>
+                  </includes>
                 </filter>
               </filters>
             </configuration>
