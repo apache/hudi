@@ -284,8 +284,14 @@ public class TestParquetUtils extends HoodieCommonTestHarness {
     List<GenericRecord> full = parquetUtils.readAvroRecords(storage, storagePath);
     assertEquals(2, full.size());
     assertEquals(2, full.get(0).getSchema().getFields().size());
-    assertEquals("p1", full.get(0).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD).toString());
+    assertEquals("p1", String.valueOf(full.get(0).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)));
     assertEquals(keyOnlySchema.toAvroSchema().toString(), conf.get(AVRO_READ_SCHEMA_KEY));
+
+    // A read with a schema ignores the stale projection too, so stored fields are read rather than defaulted.
+    List<GenericRecord> evolvedAfterStale = parquetUtils.readAvroRecords(storage, storagePath, evolvedSchema);
+    assertEquals(2, evolvedAfterStale.size());
+    assertEquals(3, evolvedAfterStale.get(0).getSchema().getFields().size());
+    assertEquals("p1", String.valueOf(evolvedAfterStale.get(0).get(HoodieRecord.PARTITION_PATH_METADATA_FIELD)));
   }
 
   @Test
