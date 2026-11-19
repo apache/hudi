@@ -23,6 +23,7 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingRoundTestBase;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers.Round;
@@ -247,4 +248,32 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
     assertTrue(EmbeddingStreamers.commits(table(), storage()).isEmpty());
   }
 
+  /**
+   * A job that preps video (no allow-list: every mapped extension, the video ones included) whose executor heap cannot hold the
+   * frame decodes is refused by the start checks before any prep work, and writes nothing; the same job with an allow-list
+   * without video is not checked.
+   */
+  @Test
+  public void videoJobWhoseHeapCannotHoldItsFramesIsRefusedBeforeAnyRound() throws Exception {
+    announce(text("a", "alpha"));
+    TypedProperties props = prepOnly();
+    // this JVM is the executor in local mode: a fixed term of its whole heap leaves no room for any frame
+    props.setProperty(EmbeddingTableConfig.PREP_VIDEO_HEAP_FIXED_BYTES.key(), String.valueOf(Runtime.getRuntime().maxMemory()));
+
+    Exception failure = assertThrows(Exception.class, () -> round(props));
+    HoodieValidationException refused = EmbeddingStreamers.causeOf(failure, HoodieValidationException.class)
+        .orElseThrow(() -> new AssertionError(EmbeddingStreamers.causes(failure)));
+
+    assertTrue(refused.getMessage().contains(EmbeddingTableConfig.PREP_VIDEO_MAX_PIXELS.key())
+        && refused.getMessage().contains(EmbeddingTableConfig.PREP_VIDEO_HEAP_FIXED_BYTES.key()), refused.getMessage());
+    // without an allow-list the refusal also names it: a job without videos lists its extensions there
+    assertTrue(refused.getMessage().contains("list its extensions in " + EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key()),
+        refused.getMessage());
+    assertEquals(0, TextPipePreprocessor.OPENED.get(), "no prep work ran");
+    assertTrue(EmbeddingStreamers.commits(table(), storage()).isEmpty());
+
+    props.setProperty(EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), TEXT_EXTENSION);
+    Round round = round(props);
+    assertTrue(round.getCommit().isPresent(), round.toString());
+  }
 }

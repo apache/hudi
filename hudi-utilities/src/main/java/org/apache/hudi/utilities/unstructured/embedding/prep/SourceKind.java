@@ -26,7 +26,7 @@ public enum SourceKind {
   DOCUMENT(EmbeddingTableSchema.MODALITY_TEXT),
   /** An image file: one image row. */
   IMAGE(EmbeddingTableSchema.MODALITY_IMAGE),
-  /** A video: one image row per kept frame. */
+  /** A video: one image row per kept frame and, with audio on, text rows of its speech. */
   VIDEO(EmbeddingTableSchema.MODALITY_IMAGE);
 
   private final String markerModality;

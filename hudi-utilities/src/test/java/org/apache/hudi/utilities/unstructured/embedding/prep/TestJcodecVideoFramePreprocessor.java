@@ -22,6 +22,8 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.audio.AudioConfigKeys;
+import org.apache.hudi.utilities.unstructured.embedding.audio.StubAudioSegmentSource;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImageContentTypes;
 import org.apache.hudi.utilities.unstructured.embedding.source.FileMeta;
 import org.apache.hudi.utilities.unstructured.embedding.text.TokenizerFactory;
@@ -46,6 +48,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -84,6 +87,24 @@ public class TestJcodecVideoFramePreprocessor {
     for (String extension : PreprocessorRegistry.VIDEO_EXTENSIONS) {
       assertEquals(VideoFramePreprocessor.class, registry.forExtension(extension).get().getClass(), extension);
     }
+  }
+
+  @Test
+  public void testAudioIsRefusedOnTheDriverNamingTheKey() {
+    TypedProperties props = jcodecProps();
+    props.setProperty(AudioConfigKeys.ENABLED.key(), "true");
+    props.setProperty(AudioConfigKeys.SEGMENT_SOURCE_CLASS.key(), StubAudioSegmentSource.class.getName());
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> new PreprocessorRegistry(props).validateConfig(props, TokenizerFactory.create(props)));
+    String message = refused.getMessage();
+    assertTrue(message.contains(AudioConfigKeys.ENABLED.key()), message);
+    assertTrue(message.contains(JcodecVideoFramePreprocessor.NAME), message);
+    assertTrue(message.contains(VideoFramePreprocessor.class.getName()), message);
+    assertTrue(message.contains("frames only"), message);
+    assertFalse(message.contains("FFmpeg"), message);
+    // audio off (explicitly) is accepted
+    props.setProperty(AudioConfigKeys.ENABLED.key(), "false");
+    new PreprocessorRegistry(props).validateConfig(props, TokenizerFactory.create(props));
   }
 
   /** A JCodec frame row: the FFmpeg row's shape (modality image, the frame index, every aux key) under JCodec's own names. */

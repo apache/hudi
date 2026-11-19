@@ -39,6 +39,9 @@ and from a public-domain LibriVox recording.
 | `h264-aac-bframes-trimmed-ss3.mp4` | base clip | cut at 3 s (both tracks), stream copy |
 | `h264-aac-bframes-video-delayed-1500ms.mp4` | base clip | video track delayed 1.5 s by an empty edit, stream copy |
 | `h264-aac-speech-12s.mp4` | base clip video + speech | the speech excerpt (44.1 kHz stereo) encoded as AAC 64 kb/s, video stream copy |
+| `aac-speech-audio-only.mp4` | `h264-aac-speech-12s.mp4` | the speech track alone, stream copy |
+| `h264-aac-speech-video-delayed-1500ms.mp4` | `h264-aac-speech-12s.mp4` | video track delayed 1.5 s by an empty edit, stream copy |
+| `h264-noise-aac-speech.mp4` | `h264-aac-speech-12s.mp4` | every video packet overwritten by the `noise` bitstream filter, audio intact |
 
 With the linux-arm64 ffmpeg program of org.bytedeco:ffmpeg:7.1-1.5.11 the script rewrites the committed bytes of every
 derived clip; the AAC encoding of the speech track may differ on another platform.
