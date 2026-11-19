@@ -359,6 +359,17 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
     assertUpsertRejected(config, HoodieWriteConfig.WRITE_RECORD_POSITIONS.key());
   }
 
+  /**
+   * A version 6 writer does not write record positions, whether the table is at version 6 or at a
+   * higher version it may still write to.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
+  void testWriteTableVersionSixRejectedInDeleteInsertMode(HoodieTableVersion tableVersion) throws Exception {
+    initTable(tableVersion);
+    assertUpsertRejected(buildConfig(true, HoodieTableVersion.SIX, 10), "write table version 8 or higher");
+  }
+
   private void assertUpsertRejected(HoodieWriteConfig config, String expectedMessage) {
     try (HoodieJavaWriteClient client =
         new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), config)) {

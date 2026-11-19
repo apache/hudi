@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
 import org.apache.hudi.common.table.read.BufferedRecordMergerFactory;
@@ -108,6 +109,14 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         || table.getMetaClient().getTableType() != HoodieTableType.MERGE_ON_READ
         || !table.getConfig().shouldWriteUpdatesAsDeletesAndInserts()) {
       return false;
+    }
+    HoodieTableVersion writeVersion = table.getConfig().getWriteVersion();
+    if (writeVersion.lesserThan(HoodieTableVersion.EIGHT)) {
+      // Log files carry record positions only from write table version 8 on
+      throw new HoodieNotSupportedException(
+          HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
+              + " requires write table version 8 or higher to write record positions but the write table version is "
+              + writeVersion.versionCode());
     }
     RecordMergeMode mergeMode = table.getMetaClient().getTableConfig().getRecordMergeMode();
     if (mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) {
