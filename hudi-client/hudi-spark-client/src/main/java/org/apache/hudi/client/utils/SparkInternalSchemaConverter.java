@@ -343,37 +343,56 @@ public class SparkInternalSchemaConverter {
   }
 
   /**
-   * Convert Int/long type to other Type.
-   * Now only support int/long -> long/float/double/string/Decimal
+   * Convert byte/short/int/long type to other Type.
+   * Now only support byte/short -> int and byte/short/int/long -> long/float/double/string/Decimal.
+   * byte/short columns come from parquet files holding INT32 annotated INT(8) / INT(16), which
+   * Spark reads as ByteType / ShortType while the table schema, which has no 8- or 16-bit integer
+   * type, records the column as int (#20503).
    * TODO: support more types
    */
-  private static boolean convertIntLongType(WritableColumnVector oldV, WritableColumnVector newV, DataType newType, int len) {
-    boolean isInt = oldV.dataType() instanceof IntegerType;
-    if (newType instanceof LongType || newType instanceof FloatType
+  private static boolean convertIntegralType(WritableColumnVector oldV, WritableColumnVector newV, DataType newType, int len) {
+    DataType oldType = oldV.dataType();
+    boolean isNarrowerThanInt = oldType instanceof ByteType || oldType instanceof ShortType;
+    if ((newType instanceof IntegerType && isNarrowerThanInt) || newType instanceof LongType || newType instanceof FloatType
         || newType instanceof DoubleType || newType instanceof StringType || newType instanceof DecimalType) {
       for (int i = 0; i < len; i++) {
         if (oldV.isNullAt(i)) {
           newV.putNull(i);
           continue;
         }
-        // int/long -> long/float/double/string/decimal
-        if (newType instanceof LongType) {
-          newV.putLong(i, isInt ? oldV.getInt(i) : oldV.getLong(i));
+        long value = getIntegralValue(oldV, oldType, i);
+        // byte/short -> int, byte/short/int/long -> long/float/double/string/decimal
+        if (newType instanceof IntegerType) {
+          newV.putInt(i, (int) value);
+        } else if (newType instanceof LongType) {
+          newV.putLong(i, value);
         } else if (newType instanceof FloatType) {
-          newV.putFloat(i, isInt ? oldV.getInt(i) : oldV.getLong(i));
+          newV.putFloat(i, value);
         } else if (newType instanceof DoubleType) {
-          newV.putDouble(i, isInt ? oldV.getInt(i) : oldV.getLong(i));
+          newV.putDouble(i, value);
         } else if (newType instanceof StringType) {
-          newV.putByteArray(i, getUTF8Bytes((isInt ? oldV.getInt(i) : oldV.getLong(i)) + ""));
+          newV.putByteArray(i, getUTF8Bytes(value + ""));
         } else if (newType instanceof DecimalType) {
           DecimalType decimalType = (DecimalType) newType;
-          Decimal oldDecimal = Decimal.apply(isInt ? oldV.getInt(i) : oldV.getLong(i));
+          Decimal oldDecimal = Decimal.apply(value);
           putDecimalOrNull(newV, i, oldDecimal, decimalType);
         }
       }
       return true;
     }
     return false;
+  }
+
+  private static long getIntegralValue(WritableColumnVector vector, DataType type, int rowId) {
+    if (type instanceof ByteType) {
+      return vector.getByte(rowId);
+    } else if (type instanceof ShortType) {
+      return vector.getShort(rowId);
+    } else if (type instanceof IntegerType) {
+      return vector.getInt(rowId);
+    } else {
+      return vector.getLong(rowId);
+    }
   }
 
   /**
@@ -516,13 +535,13 @@ public class SparkInternalSchemaConverter {
       if (oldType instanceof BooleanType) {
         return false;
       } else if (oldType instanceof ByteType) {
-        return false;
+        return convertIntegralType(oldV, newV, newType, len);
       } else if (oldType instanceof ShortType) {
-        return false;
+        return convertIntegralType(oldV, newV, newType, len);
       } else if (oldType instanceof IntegerType) {
-        return convertIntLongType(oldV, newV, newType, len);
+        return convertIntegralType(oldV, newV, newType, len);
       } else if (oldType instanceof LongType) {
-        return convertIntLongType(oldV, newV, newType, len);
+        return convertIntegralType(oldV, newV, newType, len);
       } else if (oldType instanceof FloatType) {
         return convertFloatType(oldV, newV, newType, len);
       } else if (oldType instanceof DoubleType) {
