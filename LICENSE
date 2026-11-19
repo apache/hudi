@@ -1808,6 +1808,9 @@ SOFTWARE.
 
 The test resources of hudi-utilities include public-domain material:
 
+- An excerpt (60 s to 72 s) of the LibriVox recording of "The Selfish Giant" by Oscar Wilde, read by Joy Chan
+  (https://archive.org/download/hpot_librivox/hpot_03_selfish_giant.mp3), in the audio tracks of the speech clips under
+  hudi-utilities/src/test/resources/video/. LibriVox recordings are in the public domain.
 - Passages of "The Selfish Giant" from Project Gutenberg eBook #902, "The Happy Prince, and Other Tales"
   (https://www.gutenberg.org/ebooks/902), and a transcript of the LibriVox recording of it
   read by Joy Chan (https://archive.org/download/hpot_librivox/hpot_03_selfish_giant.mp3, public domain), under

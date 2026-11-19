@@ -57,16 +57,17 @@ public final class AudioConfigKeys {
   public static final boolean DEFAULT_ENABLED = false;
 
   /**
-   * {@link AudioSegmentSource} implementation (public no-arg constructor); no default, it must be set when audio is on. Not a
-   * style key.
+   * {@link AudioSegmentSource} implementation (public no-arg constructor); unset, the default
+   * {@link AudioConfig#DEFAULT_SEGMENT_SOURCE_CLASS} (FFmpeg). Not a style key.
    */
   public static final ConfigProperty<String> SEGMENT_SOURCE_CLASS = ConfigProperty
       .key(RUNTIME_PREFIX + "segment.source.class")
-      .noDefaultValue()
+      .defaultValue("org.apache.hudi.utilities.unstructured.embedding.audio.ffmpeg.FfmpegAudioSegmentSource")
       .markAdvanced()
       .sinceVersion(SINCE_VERSION)
-      .withDocumentation("AudioSegmentSource implementation (public no-arg constructor); no default, it must be set when "
-          + "audio is on. Not a style key.");
+      .withDocumentation("AudioSegmentSource implementation (public no-arg constructor); unset, the default "
+          + "org.apache.hudi.utilities.unstructured.embedding.audio.ffmpeg.FfmpegAudioSegmentSource (FFmpeg). Not a "
+          + "style key.");
 
   /**
    * {@link SegmentTranscriber} implementation (public no-arg constructor); unset, the default

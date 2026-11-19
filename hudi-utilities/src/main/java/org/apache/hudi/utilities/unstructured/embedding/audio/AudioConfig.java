@@ -40,9 +40,9 @@ import java.util.TreeMap;
  * configuration alone, without editing data prep or the default implementations):
  * <ul>
  *   <li>it is named by ONE class key ({@link AudioConfigKeys#SEGMENT_SOURCE_CLASS}, {@link AudioConfigKeys#TRANSCRIBER_CLASS},
- *       {@link AudioConfigKeys#CHUNKER_CLASS}) and has a public no-arg constructor; the segment source key has no default
- *       and must be set, and the other two, unset, resolve to the real implementation ({@link #DEFAULT_TRANSCRIBER_CLASS}:
- *       whisper, {@link #DEFAULT_CHUNKER_CLASS}: {@link TranscriptPacker}), so enabling audio never embeds stub text: the whisper
+ *       {@link AudioConfigKeys#CHUNKER_CLASS}) and has a public no-arg constructor; unset, the key resolves to the real
+ *       implementation ({@link #DEFAULT_SEGMENT_SOURCE_CLASS}: FFmpeg, {@link #DEFAULT_TRANSCRIBER_CLASS}: whisper,
+ *       {@link #DEFAULT_CHUNKER_CLASS}: {@link TranscriptPacker}), so enabling audio never embeds stub text: the whisper
  *       transcriber needs its model ({@code ...transcriber.whisper.model.dir} for the default named model), and
  *       {@link #validate()} refuses a job without it at start, naming the key. The stubs are test doubles only;</li>
  *   <li>a segment source's or transcriber's own settings (a model file, a language) live under {@link #SEGMENT_SOURCE_PREFIX}
@@ -77,6 +77,12 @@ public final class AudioConfig implements Serializable {
   /** Prefix of the chunker implementation's own (non-style) keys; never {@code .class}. */
   public static final String CHUNKER_PREFIX = AudioConfigKeys.RUNTIME_PREFIX + "chunker.";
 
+  /**
+   * The segment source when {@link AudioConfigKeys#SEGMENT_SOURCE_CLASS} is unset: the FFmpeg source, by name, so nothing loads
+   * FFmpeg (not shipped by Hudi; the job adds its jars) unless a video's speech is prepared.
+   */
+  public static final String DEFAULT_SEGMENT_SOURCE_CLASS =
+      "org.apache.hudi.utilities.unstructured.embedding.audio.ffmpeg.FfmpegAudioSegmentSource";
   /** The transcriber when {@link AudioConfigKeys#TRANSCRIBER_CLASS} is unset: whisper, by name. */
   public static final String DEFAULT_TRANSCRIBER_CLASS =
       "org.apache.hudi.utilities.unstructured.embedding.audio.whisper.WhisperSegmentTranscriber";
@@ -139,7 +145,7 @@ public final class AudioConfig implements Serializable {
 
   /** A new instance of the configured {@link AudioConfigKeys#SEGMENT_SOURCE_CLASS}. */
   public AudioSegmentSource newSegmentSource() {
-    return load(AudioConfigKeys.SEGMENT_SOURCE_CLASS.key(), null, AudioSegmentSource.class);
+    return load(AudioConfigKeys.SEGMENT_SOURCE_CLASS.key(), DEFAULT_SEGMENT_SOURCE_CLASS, AudioSegmentSource.class);
   }
 
   /** A new instance of the configured {@link AudioConfigKeys#TRANSCRIBER_CLASS}. */
@@ -265,9 +271,6 @@ public final class AudioConfig implements Serializable {
   private <T> T load(String key, String defaultClass, Class<T> type) {
     String configured = ConfigUtils.getStringWithAltKeys(props, ConfigProperty.key(key).noDefaultValue(), "").trim();
     String className = configured.isEmpty() ? defaultClass : configured;
-    if (className == null) {
-      throw new IllegalArgumentException("Config " + key + " must be set");
-    }
     Class<?> implementation;
     try {
       implementation = ReflectionUtils.getClass(className);

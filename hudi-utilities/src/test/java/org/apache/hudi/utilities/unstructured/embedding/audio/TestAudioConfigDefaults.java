@@ -18,14 +18,11 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.audio;
 
-import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.unstructured.embedding.audio.whisper.WhisperSegmentTranscriber;
 
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The default implementations AudioConfig names by string stay the classes they name. */
 class TestAudioConfigDefaults {
@@ -34,14 +31,5 @@ class TestAudioConfigDefaults {
   void defaultTranscriberIsWhisper() {
     String defaultTranscriber = AudioConfig.DEFAULT_TRANSCRIBER_CLASS;
     assertEquals(WhisperSegmentTranscriber.class.getName(), defaultTranscriber);
-  }
-
-  @Test
-  void segmentSourceHasNoDefault() {
-    assertFalse(AudioConfigKeys.SEGMENT_SOURCE_CLASS.hasDefaultValue(),
-        "no segment source ships here, so the key must not name one by default");
-    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-        () -> AudioConfig.from(new TypedProperties()).newSegmentSource());
-    assertEquals("Config " + AudioConfigKeys.SEGMENT_SOURCE_CLASS.key() + " must be set", e.getMessage());
   }
 }
