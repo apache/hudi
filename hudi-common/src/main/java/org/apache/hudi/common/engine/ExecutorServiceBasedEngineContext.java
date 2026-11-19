@@ -40,8 +40,7 @@ import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.keygen.KeyGenerator;
 import org.apache.hudi.storage.StorageConfiguration;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -69,9 +68,8 @@ import java.util.stream.Stream;
  * {@code ClassNotFoundException} that occurs when the common {@link ForkJoinPool} is used
  * because its workers do not inherit the submitting thread's context classloader.
  */
+@Slf4j
 public class ExecutorServiceBasedEngineContext extends HoodieEngineContext {
-
-  private static final Logger LOG = LoggerFactory.getLogger(ExecutorServiceBasedEngineContext.class);
 
   // Lazy-initialized, daemon, fixed thread pool whose workers carry the correct classloader.
   // JLS §12.4.2 guarantees thread-safe initialization via class-loading locks.
@@ -88,7 +86,7 @@ public class ExecutorServiceBasedEngineContext extends HoodieEngineContext {
       t.setDaemon(true);
       return t;
     });
-    LOG.info("Created ExecutorServiceBasedEngineContext pool with {} threads", parallelism);
+    log.info("Created ExecutorServiceBasedEngineContext pool with {} threads", parallelism);
     return executor;
   }
 
