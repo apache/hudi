@@ -1095,23 +1095,35 @@ public abstract class HoodieBackedTableMetadataWriter<I, O> implements HoodieTab
    * @param instantTime    Timestamp for the mdt commit
    */
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieCommitMetadata commitMetadata, String instantTime) {
-    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
+    if (isPartitionedRecordIndexInitialized()) {
       Set<String> partitionsTouchedByInflightCommit = new HashSet<>(commitMetadata.getPartitionToWriteStats().keySet());
       initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
     }
   }
 
   private void maybeInitializeNewFileGroupsForPartitionedRLI(HoodieData<WriteStatus> writeStatus, String instantTime) {
-    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
+    if (isPartitionedRecordIndexInitialized()) {
       Set<String> partitionsTouchedByInflightCommit = new HashSet<>(writeStatus.map(WriteStatus::getPartitionPath).collectAsList());
       initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
     }
   }
 
   private void maybeInitializeNewFileGroupsForPartitionedRLI(Set<String> partitionsTouchedByInflightCommit, String instantTime) {
-    if (dataWriteConfig.isRecordLevelIndexEnabled()) {
+    if (isPartitionedRecordIndexInitialized()) {
       initializeNewFileGroupsForPartitionedRLIHelper(partitionsTouchedByInflightCommit, instantTime);
     }
+  }
+
+  /**
+   * New partitions get record index file groups only once the partitioned record index exists or is being built by the
+   * async indexer. Until then, for instance while its initialization is deferred, there is nothing to add them to, and
+   * the build sizes every partition itself.
+   */
+  private boolean isPartitionedRecordIndexInitialized() {
+    HoodieTableConfig tableConfig = dataMetaClient.getTableConfig();
+    return dataWriteConfig.isRecordLevelIndexEnabled()
+        && (tableConfig.isMetadataPartitionAvailable(RECORD_INDEX)
+        || tableConfig.getMetadataPartitionsInflight().contains(RECORD_INDEX.getPartitionPath()));
   }
 
   private void initializeNewFileGroupsForPartitionedRLIHelper(Set<String> partitionsTouchedByInflightCommit, String instantTime) {
