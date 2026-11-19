@@ -720,4 +720,20 @@ class TestHoodieTableMetaClient extends HoodieCommonTestHarness {
       }
     }, "Should throw HoodieIOException for invalid JSON");
   }
+
+  /** Additional properties reach the new table's config; an explicit builder setting wins over an additional one. */
+  @Test
+  void tableBuilderCarriesAdditionalPropertiesBehindExplicitSettings() {
+    Properties additional = new Properties();
+    additional.setProperty("hoodie.test.additional.key", "carried");
+    additional.setProperty(HoodieTableConfig.NAME.key(), "from_additional");
+    Properties built = HoodieTableMetaClient.newTableBuilder()
+        .setAdditionalProperties(additional)
+        .setTableType(HoodieTableType.COPY_ON_WRITE)
+        .setTableName("explicit_name")
+        .build();
+    assertEquals("carried", built.getProperty("hoodie.test.additional.key"));
+    assertEquals("explicit_name", built.getProperty(HoodieTableConfig.NAME.key()));
+    assertEquals("from_additional", additional.getProperty(HoodieTableConfig.NAME.key()), "the caller's properties are not changed");
+  }
 }
