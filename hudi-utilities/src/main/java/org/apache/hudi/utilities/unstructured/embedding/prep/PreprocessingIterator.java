@@ -335,7 +335,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
 
   /**
    * An {@link Error} (a native library that does not link, an exhausted heap) ends the task: this iterator closes the open file and
-   * every preprocessor (their native engines) before it propagates, so nothing they
+   * every preprocessor (their native engines, a video's open segment and utterance iterators) before it propagates, so nothing they
    * hold waits for the task completion listener, which a caller outside Spark does not have.
    */
   private Error closedOn(Error e) {

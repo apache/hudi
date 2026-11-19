@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Resolves configured file preprocessors by extension. The shipped defaults: PDF for {@code pdf}, {@link ImageInputPreprocessor}
@@ -94,6 +95,11 @@ public class PreprocessorRegistry {
       return Option.empty();
     }
     return Option.of(instances.computeIfAbsent(className, ReflectionUtils::loadClass));
+  }
+
+  /** Every extension this registry maps to a preprocessor class, lower case. */
+  public Set<String> extensions() {
+    return Collections.unmodifiableSet(classByExtension.keySet());
   }
 
   /**

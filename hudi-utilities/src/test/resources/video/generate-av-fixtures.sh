@@ -53,5 +53,11 @@ ff -i "$BASE" -ss 60 -t 12 -i "$LIBRIVOX_MP3" -map 0:v -map 1:a -c:v copy -c:a a
   -map_metadata -1 -fflags +bitexact "${WORK}/h264-aac-speech-12s.mp4"
 SPEECH="${WORK}/h264-aac-speech-12s.mp4"
 
+# The speech track alone, stream copy.
+ff -i "$SPEECH" -map 0:a -c copy "${WORK}/aac-speech-audio-only.mp4"
+# The speech clip with its video track delayed 1.5 s by an empty edit, stream copy.
+ff -i "$SPEECH" -itsoffset 1.5 -i "$SPEECH" -map 1:v -map 0:a -c copy "${WORK}/h264-aac-speech-video-delayed-1500ms.mp4"
+# The speech clip with every video packet overwritten by noise (the noise bitstream filter), the audio intact.
+ff -i "$SPEECH" -map 0 -c copy -bsf:v noise=amount=1 "${WORK}/h264-noise-aac-speech.mp4"
 
 cp -- "${WORK}"/*.mp4 "$DIR"/

@@ -553,6 +553,48 @@ public class EmbeddingTableConfig implements Serializable {
   public static final long DEFAULT_PREP_VIDEO_MAX_PIXELS = 3840L * 2160;
 
   /**
+   * The per-executor heap a job that preps video leaves outside its task slots (Spark's own structures, per-JVM caches) in the
+   * frame-heap start check ({@code prep.VideoFrameHeapCheck}); default {@link #DEFAULT_PREP_VIDEO_HEAP_FIXED_BYTES} (64 MiB, an
+   * estimate). Not part of the preprocessing style.
+   */
+  public static final ConfigProperty<Long> PREP_VIDEO_HEAP_FIXED_BYTES = ConfigProperty
+      .key(PREP_PREFIX + "video.heap.fixed.bytes")
+      .defaultValue(67108864L)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The per-executor heap a job that preps video leaves outside its task slots (Spark's own structures, "
+          + "per-JVM caches) in the frame-heap start check (the video frame heap check); default 67108864 (64 MiB, an estimate). "
+          + "Not part of the preprocessing style.");
+
+  public static final long DEFAULT_PREP_VIDEO_HEAP_FIXED_BYTES = 64L * 1024 * 1024;
+
+  /**
+   * Data prep reads the next file of a task ahead, while the current one is prepared: up to this many of its leading bytes, held
+   * in memory until that file is prepared (a file no larger is read whole, and then prepared with no further storage request).
+   * A task holds at most two such buffers, the current file's and the next one's: a job that preps video reads ahead only when
+   * they fit the executor heap beside its frame decodes (2 x this per task slot), else it reads nothing ahead, with a WARN. An
+   * image is read ahead only when it is no larger than {@link #PREP_IMAGE_HEADER_MAX_BYTES}. 0 reads no file ahead. Default
+   * {@link #DEFAULT_PREP_PREFETCH_MAX_BYTES} (8 MiB). Changes no output rows: not style.
+   */
+  public static final ConfigProperty<Long> PREP_PREFETCH_MAX_BYTES = ConfigProperty
+      .key(PREP_PREFIX + "prefetch.max.bytes")
+      .defaultValue(8388608L)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Data prep reads the next file of a task ahead, while the current one is prepared: up to this many of its "
+          + "leading bytes, held in memory until that file is prepared (a file no larger is read whole, and then prepared with no "
+          + "further storage request). A task holds at most two such buffers, the current file's and the next one's: "
+          + "a job that preps video reads ahead only when they fit the executor heap beside its frame decodes (2 x this per task "
+          + "slot), else it reads nothing ahead, with a WARN. "
+          + "An image is read ahead only when it is no larger than hoodie.unstructured.embedding.prep.image.header.max.bytes. "
+          + "0 reads no file ahead. Default 8388608 (8 MiB). Changes no output rows: not style.");
+
+  public static final long DEFAULT_PREP_PREFETCH_MAX_BYTES = 8L * 1024 * 1024;
+
+  /** The largest {@link #PREP_PREFETCH_MAX_BYTES}: one Java array. */
+  public static final long MAX_PREP_PREFETCH_MAX_BYTES = Integer.MAX_VALUE - 8L;
+
+  /**
    * FFmpeg decoder threads per video ({@code thread_count}); default {@link #DEFAULT_VIDEO_FFMPEG_THREADS}, at most
    * {@link #MAX_VIDEO_FFMPEG_THREADS}. Set explicitly because FFmpeg's own default (0) starts one thread per core the executor
    * may use; parallelism comes from Spark tasks, one video per task at a time. Changes no output: not style.
@@ -1166,6 +1208,15 @@ public class EmbeddingTableConfig implements Serializable {
     return Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
   }
 
+  /** {@link #PREP_VIDEO_HEAP_FIXED_BYTES}, at least 0. */
+  public long videoHeapFixedBytes() {
+    long fixed = longValue(PREP_VIDEO_HEAP_FIXED_BYTES, DEFAULT_PREP_VIDEO_HEAP_FIXED_BYTES);
+    if (fixed < 0) {
+      throw new IllegalArgumentException("Config " + PREP_VIDEO_HEAP_FIXED_BYTES.key() + " must be >= 0 but is " + fixed);
+    }
+    return fixed;
+  }
+
   private int intValue(ConfigProperty<?> property, int defaultValue) {
     String raw = ConfigUtils.getStringWithAltKeys(props, property, String.valueOf(defaultValue));
     try {
@@ -1223,5 +1274,14 @@ public class EmbeddingTableConfig implements Serializable {
           + "written");
     }
     return active.get(0);
+  }
+
+  public long prepPrefetchMaxBytes() {
+    long bytes = longValue(PREP_PREFETCH_MAX_BYTES, DEFAULT_PREP_PREFETCH_MAX_BYTES);
+    if (bytes < 0 || bytes > MAX_PREP_PREFETCH_MAX_BYTES) {
+      throw new IllegalArgumentException("Config " + PREP_PREFETCH_MAX_BYTES.key() + " must be in [0, " + MAX_PREP_PREFETCH_MAX_BYTES
+          + "] but is " + bytes);
+    }
+    return bytes;
   }
 }
