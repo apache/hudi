@@ -158,6 +158,21 @@ Types use Spark SQL names such as `int`, `bigint`, and `array<string>`. Each cal
 creates an independent remote session, sets its catalog/schema, and stops that
 session in a finally block. Sessions are not shared across tool calls.
 
+### Query result format
+
+Spark Connect `query_lakehouse` results list Spark SQL types in `column_types`, in the
+same order as `columns`, even for empty results. Decimals use exact strings that preserve
+scale, so `column_types` distinguishes a `decimal(10,2)` value of `"1.10"` from a `string`
+with the same text. `TIMESTAMP` uses ISO-8601 in UTC (`+00:00`), and `TIMESTAMP_NTZ`
+preserves local date and time without an offset. Both backends encode maps with integer keys
+as JSON objects with decimal property names, e.g. `{"9007199254740993": "paid"}` for a `BIGINT` key.
+
+| SQL value | Spark Connect JSON | Trino gateway JSON |
+| --- | --- | --- |
+| Struct / `ROW` | Object keyed by field name, including inside arrays. Repeated names use an array in field order. | Array of field values |
+| Binary | Base64 string, e.g. `"AP8="` | Python bytes representation, e.g. `b'\x00\xff'` |
+| Map with keys other than strings or integers | Array of `[key, value]` pairs that preserve the key structure. | Some key types, including dates, fail JSON serialization. |
+
 **Bounds:** SQL LIMIT and DataFrame.limit before collect cap query result rows;
 the existing JSON size cap truncates tool responses. Wide rows can still consume
 substantial client memory, and SHOW TABLES can enumerate the whole namespace
@@ -182,7 +197,8 @@ the chart itself has no authentication or TLS. Gateway tools expose no DML;
 direct Superset/Zeppelin writes have their own
 [tutorials and limitations](../hudi-lakehouse/charts/hudi-spark-connect/README.md#spark-connect-client-tutorials).
 
-Opt-in live tests use an existing table and do not write data:
+The result encoding tests need only `GATEWAY_IT_SPARK_CONNECT_URI`. Set
+`GATEWAY_IT_SPARK_TABLE` to include checks against an existing table:
 
 ```bash
 GATEWAY_IT_SPARK_CONNECT_URI='sc://localhost:15002' \

@@ -32,6 +32,7 @@ class QueryTimeoutError(QueryError):
 class QueryResult:
     columns: list[str]
     rows: list[list[Any]]
+    column_types: list[str] | None = None
     row_count: int = field(init=False)
 
     def __post_init__(self) -> None:

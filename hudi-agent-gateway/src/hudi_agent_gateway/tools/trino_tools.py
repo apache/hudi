@@ -67,6 +67,8 @@ def shape_result(result: QueryResult, *, max_bytes: int, sql: str, row_cap: int)
         "row_count": result.row_count,
         "truncated": row_capped,
     }
+    if result.column_types is not None:
+        payload["column_types"] = result.column_types
     if row_capped:
         payload["notice"] = (
             f"Result hit the {row_cap}-row cap and may be incomplete. "
