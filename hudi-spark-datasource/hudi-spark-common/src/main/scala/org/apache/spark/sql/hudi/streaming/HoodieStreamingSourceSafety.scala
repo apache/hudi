@@ -20,9 +20,9 @@ package org.apache.spark.sql.hudi.streaming
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
 import org.apache.hudi.common.model.WriteOperationType
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.table.timeline.{HoodieInstant, HoodieTimeline, TimelineUtils}
 import org.apache.hudi.common.util.CleanerUtils
-import org.apache.hudi.exception.HoodieException
+import org.apache.hudi.exception.{HoodieException, HoodieTimeTravelException}
 
 import org.apache.spark.{Partition, TaskContext}
 import org.apache.spark.rdd.RDD
@@ -51,6 +51,17 @@ private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSuppor
         }
         sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession, rows, schema, isStreaming = true)
     }
+  }
+
+  // Spark supplies the last committed end through its discarded restart getBatch call.
+  // Preserve legacy service offsets until a write catches up, without masking removed writes.
+  def legacyOffset(metaClient: HoodieTableMetaClient, end: HoodieSourceOffset,
+                   completionTime: Boolean): Option[HoodieSourceOffset] = {
+    val timeline = metaClient.reloadActiveTimeline()
+    def matches(i: HoodieInstant): Boolean =
+      (if (completionTime) i.getCompletionTime else i.requestedTime()) == end.offsetCommitTime
+    val isWrite = timeline.getWriteTimeline.filterCompletedInstants().getInstants.asScala.exists(matches)
+    if (!isWrite && timeline.filterCompletedInstants().getInstants.asScala.exists(matches)) Some(end) else None
   }
 
   def strategy(parameters: Map[String, String]): String = {
@@ -99,6 +110,17 @@ private[streaming] object HoodieStreamingSourceSafety extends SparkAdapterSuppor
           if (bound.isEmpty || writes.exists(i => offset(i) > end && i.requestedTime() <= bound.get && !isTableService(i))) {
             throw new RebuildRequired("Cannot reconstruct the recovery snapshot at the checkpointed batch end. "
               + "Rebuild downstream tables and checkpoints together.", error)
+          }
+          try {
+            TimelineUtils.validateTimestampAsOf(metaClient, bound.get)
+          } catch {
+            case cause: IllegalArgumentException =>
+              throw new RebuildRequired("Cannot reconstruct the recovery snapshot: recorded batch end is outside cleaner retention. "
+                + "Use READ_LATEST to skip the gap or rebuild downstream tables and checkpoints together.", cause)
+            case cause: HoodieTimeTravelException =>
+              throw new RebuildRequired("Cannot reconstruct the recovery snapshot at the recorded batch end: "
+                + "a pending write or unavailable cleaner history prevents time travel. Wait for pending writes to complete, "
+                + "use READ_LATEST to skip the gap, or rebuild downstream tables and checkpoints together.", cause)
           }
           val options = parameters ++ Map(
             DataSourceReadOptions.QUERY_TYPE.key() -> DataSourceReadOptions.QUERY_TYPE_SNAPSHOT_OPT_VAL,

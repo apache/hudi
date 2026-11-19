@@ -55,3 +55,10 @@ on restart. For Hudi sinks, keep
 Setting it to `true`, or swallowing errors in a custom sink, can acknowledge a
 rejected batch and advance the checkpoint past unread data even under `FAIL`.
 Healthy batches retain their scan relations for column pruning and filter pushdown.
+
+Before a v6 to v8+ source-table upgrade, pin existing requested-time readers with
+`hoodie.datasource.read.streaming.table.version=6` on every restart of the existing
+checkpoint. The unversioned offset cannot safely switch to V2 completion-time
+semantics automatically. `USE_TRANSITION_TIME` readers already use completion times.
+See the operational guide's table-upgrade section for migration and legacy
+service-checkpoint limitations. Return to `FAIL` after explicit recovery.

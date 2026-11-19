@@ -112,10 +112,12 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
     }
   }
 
+  private var legacyEnd: Option[HoodieSourceOffset] = None
+
   private def getLatestOffset: Option[HoodieSourceOffset] = {
     metaClient.reloadActiveTimeline()
     val filteredTimeline = handleHollowCommitIfNeeded(
-      metaClient.getActiveTimeline.filterCompletedInstants(), metaClient, hollowCommitHandlingMode)
+      metaClient.getActiveTimeline.getWriteTimeline.filterCompletedInstants(), metaClient, hollowCommitHandlingMode)
     filteredTimeline match {
       case activeInstants if !activeInstants.empty() =>
         val timestamp = if (hollowCommitHandlingMode == USE_TRANSITION_TIME) {
@@ -134,10 +136,13 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
    * @return
    */
   override def getOffset: Option[Offset] = {
-    getLatestOffset
+    val latest = getLatestOffset
+    legacyEnd.filter(old => latest.forall(_.offsetCommitTime <= old.offsetCommitTime)).orElse(latest)
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
+    legacyEnd = HoodieStreamingSourceSafety.legacyOffset(metaClient, HoodieSourceOffset(end),
+      completionTime = hollowCommitHandlingMode == USE_TRANSITION_TIME)
     val batchStart = start.map(HoodieSourceOffset(_)).getOrElse(initialOffsets)
     if (isCDCQuery) buildBatch(start, end, batchStart) else {
       HoodieStreamingSourceSafety.deferRejection(sqlContext, schema) { buildBatch(start, end, batchStart) }

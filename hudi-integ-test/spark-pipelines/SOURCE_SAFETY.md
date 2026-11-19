@@ -93,6 +93,15 @@ for that batch (if reconstructible), then the post-reset snapshot when the next
 batch includes the replace commit. Append targets can therefore receive the
 whole table twice.
 
+Keep consumer lag within the cleaner retention window (`hoodie.clean.commits.retained`,
+formerly `hoodie.cleaner.commits.retained`) as well as the archival window.
+`READ_UPTO_LATEST_COMMIT` uses the failed batch end already recorded by Spark;
+it only works while that end remains readable. Once cleaning passes that end,
+use `READ_LATEST` (accepting data loss) or rebuild. Pending non-clustering writes
+at or before the snapshot bound must complete before snapshot replay can proceed.
+After a successful recovery, restart with `FAIL` again. Leaving snapshot recovery
+on with daily partition TTL can replay the entire table every day.
+
 Retain sufficient active history for the slowest consumer with
 `hoodie.keep.min.commits` / `hoodie.keep.max.commits`. An archived checkpoint
 requires recovery even if some data files remain. With
@@ -139,3 +148,20 @@ on restart. For Hudi sinks, keep
 Setting it to `true`, or swallowing errors in a custom sink, can acknowledge a
 rejected batch and advance the checkpoint past unread data even under `FAIL`.
 Healthy batches retain their scan relations for column pruning and filter pushdown.
+
+## Table upgrades and legacy checkpoints
+
+Before upgrading a source table from v6 to v8 or newer, pin existing requested-time
+(`BLOCK`/`FAIL` hollow-commit mode) readers with
+`.option("hoodie.datasource.read.streaming.table.version", "6")` and keep that
+option on every restart using the same checkpoint. Offsets have no version marker;
+automatically selecting V2 after the table upgrade interprets an old requested
+time as a completion time and fails validation. Do not change offset semantics
+in place. To adopt V2, coordinate a downstream/checkpoint rebuild. Readers already
+using `USE_TRANSITION_TIME` use completion times and do not need this conversion.
+
+New offsets come only from completed writes, so rolling back a checkpointed write
+via restore requires recovery. Existing service-time checkpoints remain supported:
+on restart, an active legacy clean/rollback offset is retained until a later write
+arrives. Such legacy positions cannot prove that earlier writes survived a restore;
+coordinate restore with downstream rebuilding even when a legacy position survives.

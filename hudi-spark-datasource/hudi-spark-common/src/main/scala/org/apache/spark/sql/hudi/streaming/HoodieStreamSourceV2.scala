@@ -94,9 +94,11 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
     }
   }
 
+  private var legacyEnd: Option[HoodieSourceOffset] = None
+
   private def getLatestOffset: Option[HoodieSourceOffset] = {
     metaClient.reloadActiveTimeline()
-    val latestCompletionTime = metaClient.getActiveTimeline.filterCompletedInstants.getLatestCompletionTime
+    val latestCompletionTime = metaClient.getActiveTimeline.getWriteTimeline.filterCompletedInstants.getLatestCompletionTime
     if (latestCompletionTime.isPresent) {
       Some(HoodieSourceOffset(latestCompletionTime.get))
     } else {
@@ -109,10 +111,13 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
     * @return
     */
   override def getOffset: Option[Offset] = {
-    getLatestOffset
+    val latest = getLatestOffset
+    legacyEnd.filter(old => latest.forall(_.offsetCommitTime <= old.offsetCommitTime)).orElse(latest)
   }
 
   override def getBatch(start: Option[Offset], end: Offset): DataFrame = {
+    legacyEnd = HoodieStreamingSourceSafety.legacyOffset(metaClient, HoodieSourceOffset(end),
+      completionTime = true)
     val batchStart = start.map(HoodieSourceOffset(_)).getOrElse(initialOffsets)
     if (isCDCQuery) buildBatch(start, end, batchStart) else {
       HoodieStreamingSourceSafety.deferRejection(sqlContext, schema) { buildBatch(start, end, batchStart) }
