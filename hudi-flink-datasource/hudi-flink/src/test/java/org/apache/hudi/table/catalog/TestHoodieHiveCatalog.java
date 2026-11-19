@@ -454,6 +454,33 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
             tablePath, partitionSpec, CatalogColumnStatistics.UNKNOWN, false));
   }
 
+  @Test
+  void testGetSparkTableRestoresVectorColumns() throws Exception {
+    Schema vectorSchema = Schema.newBuilder()
+        .column("id", DataTypes.INT().notNull())
+        .column("embedding", DataTypes.ARRAY(DataTypes.FLOAT()))
+        .column("scores", DataTypes.ARRAY(DataTypes.FLOAT()))
+        .column("features", DataTypes.ARRAY(DataTypes.DOUBLE()))
+        .primaryKey("id")
+        .build();
+    String vectorOption = FlinkOptions.VECTOR_COLUMNS.key();
+    Map<String, String> options = new HashMap<>();
+    options.put(CONNECTOR.key(), "hudi");
+    options.put(vectorOption, "features:2,embedding:3");
+    hoodieCatalog.createTable(tablePath, CatalogUtils.createCatalogTable(vectorSchema, Collections.emptyList(), options, ""), false);
+    assertEquals("features:2,embedding:3", hoodieCatalog.getTable(tablePath).getOptions().get(vectorOption));
+
+    // Model a Spark HMS entry over the same stored Hudi schema.
+    Table hiveTable = hoodieCatalog.getHiveTable(tablePath);
+    hiveTable.setParameters(new HashMap<>());
+    hiveTable.putToParameters(TableOptionProperties.SPARK_SOURCE_PROVIDER, "hudi");
+    hiveTable.putToParameters("primaryKey", "id");
+    hoodieCatalog.getClient().alter_table(tablePath.getDatabaseName(), tablePath.getObjectName(), hiveTable);
+
+    assertEquals("embedding:3,features:2", hoodieCatalog.getTable(tablePath).getOptions().get(vectorOption));
+    assertFalse(hoodieCatalog.getHiveTable(tablePath).getParameters().containsKey(vectorOption));
+  }
+
   @ParameterizedTest
   @EnumSource(value = HoodieTableType.class)
   public void testCreateAndGetHoodieTable(HoodieTableType tableType) throws Exception {
@@ -516,6 +543,7 @@ public class TestHoodieHiveCatalog extends BaseTestHoodieCatalog {
     assertEquals(tableType.toString(), table1.getOptions().get(FlinkOptions.TABLE_TYPE.key()));
     assertEquals("uuid", table1.getOptions().get(FlinkOptions.RECORD_KEY_FIELD.key()));
     assertNull(table1.getOptions().get(ORDERING_FIELDS.key()), "preCombine key is not declared");
+    assertFalse(table1.getOptions().containsKey(FlinkOptions.VECTOR_COLUMNS.key()));
     String tableSchema = table1.getUnresolvedSchema().getColumns().stream()
         .map(Schema.UnresolvedColumn::toString)
         .collect(Collectors.joining(","));
