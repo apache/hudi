@@ -483,12 +483,18 @@ public class HoodieSchemaAvroSerializer
     private static AvroToBlock decimalToBlock(String fieldName, HoodieSchema.Decimal schema, DecimalType type)
     {
         return (value, output) -> {
-            BigInteger unscaled = switch (value) {
-                case BigDecimal decimal -> rescale(fieldName, decimal, schema.getScale()).unscaledValue();
-                case ByteBuffer buffer -> new BigInteger(bytesOf(buffer));
-                case GenericFixed fixed -> new BigInteger(fixed.bytes());
+            BigDecimal decimal = switch (value) {
+                case BigDecimal javaDecimal -> javaDecimal;
+                case ByteBuffer buffer -> new BigDecimal(new BigInteger(bytesOf(buffer)), schema.getScale());
+                case GenericFixed fixed -> new BigDecimal(new BigInteger(fixed.bytes()), schema.getScale());
                 default -> throw unexpectedValue(fieldName, schema, value);
             };
+            // The record's scale may not be the column's, as in a record written in an older schema: rescale to the
+            // column's, so the unscaled value the block holds means the same number
+            BigInteger unscaled = rescale(fieldName, decimal, type.getScale()).unscaledValue();
+            if (unscaled.abs().compareTo(BigInteger.TEN.pow(type.getPrecision())) >= 0) {
+                throw new TrinoException(HUDI_BAD_DATA, "Decimal value %s of field %s does not fit %s".formatted(decimal, fieldName, type));
+            }
             if (type.isShort()) {
                 type.writeLong(output, unscaled.longValueExact());
             }

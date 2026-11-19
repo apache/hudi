@@ -27,6 +27,7 @@ import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.block.MapBlockBuilder;
 import io.trino.spi.block.RowBlockBuilder;
 import io.trino.spi.predicate.TupleDomain;
+import io.trino.spi.type.DecimalType;
 import io.trino.spi.type.Int128;
 import io.trino.spi.type.LongTimestampWithTimeZone;
 import io.trino.spi.type.Type;
@@ -72,6 +73,7 @@ import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.BooleanType.BOOLEAN;
 import static io.trino.spi.type.DateTimeEncoding.packDateTimeWithZone;
 import static io.trino.spi.type.DateType.DATE;
+import static io.trino.spi.type.DecimalType.createDecimalType;
 import static io.trino.spi.type.DoubleType.DOUBLE;
 import static io.trino.spi.type.IntegerType.INTEGER;
 import static io.trino.spi.type.RealType.REAL;
@@ -396,6 +398,44 @@ final class TestHoodieSchemaAvroSerializer
         Comparable deleteOrderingValue = AvroOrderingValueConverter.create(schema, List.of("ts"), false).convert("a");
         assertThat(baseOrderingValue.compareTo(deleteOrderingValue)).isPositive();
         assertThat(deleteOrderingValue.compareTo(baseOrderingValue)).isNegative();
+    }
+
+    /**
+     * A record written in an older schema, such as a payload's result, can hold a decimal at another scale than the
+     * column's; its value is rescaled to the column's, or rejected when that loses digits or overflows.
+     */
+    @Test
+    void testDecimalIsRescaledToTheColumnScale()
+    {
+        Schema recordSchema = HoodieSchema.createRecord("rec", null, null, List.of(
+                HoodieSchemaField.of("d", HoodieSchema.createDecimal(10, 2)),
+                HoodieSchemaField.of("f", HoodieSchema.createDecimal("f", null, null, 10, 4, 5)))).toAvroSchema();
+        GenericData.Record record = new GenericData.Record(recordSchema);
+        record.put("d", ByteBuffer.wrap(BigInteger.valueOf(125).toByteArray()));
+        Schema fixedSchema = recordSchema.getField("f").schema();
+        record.put("f", new Conversions.DecimalConversion().toFixed(new BigDecimal("-1.2300"), fixedSchema, fixedSchema.getLogicalType()));
+
+        DecimalType shortDecimal = createDecimalType(10, 3);
+        DecimalType longDecimal = createDecimalType(30, 3);
+        PageBuilder pageBuilder = new PageBuilder(List.of(shortDecimal, longDecimal));
+        new HoodieSchemaAvroSerializer(List.of(dataColumn("d", shortDecimal), dataColumn("f", longDecimal)), prefilledValues())
+                .buildRecordInPage(pageBuilder, record);
+        Page page = pageBuilder.build();
+        assertThat(shortDecimal.getObjectValue(page.getBlock(0), 0)).hasToString("1.250");
+        assertThat(longDecimal.getObjectValue(page.getBlock(1), 0)).hasToString("-1.230");
+
+        record.put("f", new Conversions.DecimalConversion().toFixed(new BigDecimal("1.2345"), fixedSchema, fixedSchema.getLogicalType()));
+        assertThatThrownBy(() -> new HoodieSchemaAvroSerializer(List.of(dataColumn("d", shortDecimal), dataColumn("f", longDecimal)), prefilledValues())
+                .buildRecordInPage(new PageBuilder(List.of(shortDecimal, longDecimal)), record))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("does not have scale 3");
+
+        DecimalType narrow = createDecimalType(3, 2);
+        record.put("d", ByteBuffer.wrap(BigInteger.valueOf(12345).toByteArray()));
+        assertThatThrownBy(() -> new HoodieSchemaAvroSerializer(List.of(dataColumn("d", narrow)), prefilledValues())
+                .buildRecordInPage(new PageBuilder(List.of(narrow)), record))
+                .isInstanceOf(TrinoException.class)
+                .hasMessageContaining("does not fit decimal(3,2)");
     }
 
     @Test
