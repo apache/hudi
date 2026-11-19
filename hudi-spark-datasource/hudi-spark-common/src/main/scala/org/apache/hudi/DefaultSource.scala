@@ -37,7 +37,7 @@ import org.apache.hudi.util.SparkConfigUtils
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession, SQLContext}
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.hudi.HoodieSqlCommonUtils.isUsingHiveCatalog
-import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSourceV1, HoodieStreamSourceV2}
+import org.apache.spark.sql.hudi.streaming.{HoodieEarliestOffsetRangeLimit, HoodieLatestOffsetRangeLimit, HoodieSourceAdmissionControl, HoodieSpecifiedOffsetRangeLimit, HoodieStreamSourceV1, HoodieStreamSourceV2}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
@@ -233,6 +233,7 @@ class DefaultSource extends RelationProvider
                             schema: Option[StructType],
                             providerName: String,
                             parameters: Map[String, String]): (String, StructType) = {
+    HoodieSourceAdmissionControl.readLimit(parameters)
     val path = parameters.get("path")
     if (path.isEmpty || path.get == null) {
       throw new HoodieException(s"'path'  must be specified.")
@@ -250,6 +251,7 @@ class DefaultSource extends RelationProvider
                             schema: Option[StructType],
                             providerName: String,
                             parameters: Map[String, String]): Source = {
+    HoodieSourceAdmissionControl.readLimit(parameters)
     val offsetRangeLimit = parameters.getOrElse(START_OFFSET.key(), START_OFFSET.defaultValue()) match {
       case offset if offset.equalsIgnoreCase("earliest") =>
         HoodieEarliestOffsetRangeLimit

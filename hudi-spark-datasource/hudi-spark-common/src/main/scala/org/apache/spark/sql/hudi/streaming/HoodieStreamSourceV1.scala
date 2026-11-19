@@ -25,7 +25,6 @@ import org.apache.hudi.cdc.HoodieCDCFileIndex
 import org.apache.hudi.common.config.HoodieReaderConfig
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.{HoodieTableMetaClient, HoodieTableVersion, TableSchemaResolver}
-import org.apache.hudi.common.table.checkpoint.{CheckpointUtils, StreamerCheckpointV1}
 import org.apache.hudi.common.table.timeline.TimelineUtils.{handleHollowCommitIfNeeded, HollowCommitHandling}
 import org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHandling._
 import org.apache.hudi.util.SparkConfigUtils
@@ -110,7 +109,7 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   override protected def completedWriteOffsets: Seq[String] = {
     metaClient.reloadActiveTimeline()
     val timeline = handleHollowCommitIfNeeded(
-      metaClient.getActiveTimeline.getWriteTimeline.filterCompletedInstants(), metaClient, hollowCommitHandlingMode)
+      HoodieSourceAdmissionControl.readTimeline(metaClient, parameters), metaClient, hollowCommitHandlingMode)
     timeline.getInstants.asScala.map(instant =>
       if (hollowCommitHandlingMode == USE_TRANSITION_TIME) instant.getCompletionTime else instant.requestedTime()).toSeq
   }
@@ -164,19 +163,14 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
   }
 
   private def buildBatch(start: Option[Offset], end: Offset, batchStart: HoodieSourceOffset): DataFrame = {
-    var startOffset = batchStart
-    var endOffset = HoodieSourceOffset(end)
+    val startOffset = batchStart
+    val endOffset = HoodieSourceOffset(end)
 
     val recovery = if (isCDCQuery) None else HoodieStreamingSourceSafety.recover(
       sqlContext, metaClient, schema, parameters, recoveryStrategy, startOffset.offsetCommitTime,
       endOffset.offsetCommitTime, completionTime = hollowCommitHandlingMode == USE_TRANSITION_TIME, resumed = start.isDefined)
     recovery.getOrElse {
-      // We update the offsets here since until this point the latest offsets have been
-      // calculated no matter if it is in the expected version.
-      // We translate them here, then the rest logic should be intact.
-      startOffset = HoodieSourceOffset(translateCheckpoint(startOffset.offsetCommitTime))
-      endOffset = HoodieSourceOffset(translateCheckpoint(endOffset.offsetCommitTime))
-
+      // Keep V1 boundaries in the reader time domain, including capped recovery batches.
       if (startOffset == endOffset) {
         sparkAdapter.internalCreateDataFrame(sqlContext.sparkSession,
           sqlContext.sparkContext.emptyRDD[InternalRow].setName("empty"), schema, isStreaming = true)
@@ -240,15 +234,6 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
       case HoodieSourceOffset(commitTime) =>
         commitTime
       case _=> throw new IllegalStateException("UnKnow offset type.")
-    }
-  }
-
-  private def translateCheckpoint(commitTime: String): String = {
-    if (writeTableVersion.greaterThanOrEquals(HoodieTableVersion.EIGHT)) {
-      CheckpointUtils.convertToCheckpointV2ForCommitTime(
-        new StreamerCheckpointV1(commitTime), metaClient, hollowCommitHandlingMode).getCheckpointKey
-    } else {
-      commitTime
     }
   }
 

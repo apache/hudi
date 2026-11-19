@@ -17,7 +17,10 @@
 
 package org.apache.spark.sql.hudi.streaming
 
-import org.apache.hudi.DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER
+import org.apache.hudi.DataSourceReadOptions.{INCREMENTAL_READ_SKIP_COMPACT, STREAMING_MAX_COMMITS_PER_TRIGGER}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
+import org.apache.hudi.common.table.timeline.HoodieTimeline
 
 import org.apache.spark.sql.connector.read.streaming.{Offset => ConnectorOffset, ReadLimit, SupportsTriggerAvailableNow}
 import org.apache.spark.sql.execution.streaming.Source
@@ -28,18 +31,7 @@ private[streaming] trait HoodieSourceAdmissionControl extends Source with Suppor
   protected def admissionInitialOffset: HoodieSourceOffset
   protected def completedWriteOffsets: Seq[String]
 
-  private lazy val configuredLimit: ReadLimit = admissionParameters.get(STREAMING_MAX_COMMITS_PER_TRIGGER.key) match {
-    case Some(value) =>
-      val count = try {
-        value.toInt
-      } catch {
-        case _: NumberFormatException => throw new IllegalArgumentException(
-          s"${STREAMING_MAX_COMMITS_PER_TRIGGER.key} must be a positive integer: $value")
-      }
-      require(count > 0, s"${STREAMING_MAX_COMMITS_PER_TRIGGER.key} must be positive: $value")
-      HoodieSourceCommitLimit(count)
-    case None => ReadLimit.allAvailable()
-  }
+  private lazy val configuredLimit = HoodieSourceAdmissionControl.readLimit(admissionParameters)
 
   // Some(None) means AvailableNow started on an empty timeline. Do not admit later arrivals.
   private var availableNowEnd: Option[Option[HoodieSourceOffset]] = None
@@ -73,3 +65,30 @@ private[streaming] trait HoodieSourceAdmissionControl extends Source with Suppor
 }
 
 private[streaming] case class HoodieSourceCommitLimit(commits: Int) extends ReadLimit
+
+object HoodieSourceAdmissionControl {
+  def readLimit(parameters: Map[String, String]): ReadLimit = parameters.get(STREAMING_MAX_COMMITS_PER_TRIGGER.key) match {
+    case Some(value) =>
+      val count = try {
+        value.toInt
+      } catch {
+        case _: NumberFormatException => throw new IllegalArgumentException(
+          s"${STREAMING_MAX_COMMITS_PER_TRIGGER.key} must be a positive integer: $value")
+      }
+      require(count > 0, s"${STREAMING_MAX_COMMITS_PER_TRIGGER.key} must be positive: $value")
+      HoodieSourceCommitLimit(count)
+    case None => ReadLimit.allAvailable()
+  }
+
+  private[streaming] def readTimeline(metaClient: HoodieTableMetaClient,
+                                     parameters: Map[String, String]): HoodieTimeline = {
+    // Include archived writes before selecting the boundary. Active-only selection would
+    // admit the entire archived gap in the first micro-batch after a stale checkpoint.
+    val timeline = metaClient.getArchivedTimeline("", false).getWriteTimeline.filterCompletedInstants()
+      .mergeTimeline(metaClient.getActiveTimeline.getWriteTimeline.filterCompletedInstants())
+    // Spark incremental reads do not support skipping clustering/insert-overwrite yet.
+    IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timeline,
+      parameters.getOrElse(INCREMENTAL_READ_SKIP_COMPACT.key,
+        INCREMENTAL_READ_SKIP_COMPACT.defaultValue.toString).toBoolean, false, false)
+  }
+}

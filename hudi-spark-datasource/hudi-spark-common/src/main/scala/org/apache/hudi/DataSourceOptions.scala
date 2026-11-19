@@ -113,6 +113,7 @@ object DataSourceReadOptions {
   val STREAMING_MAX_COMMITS_PER_TRIGGER: ConfigProperty[String] = ConfigProperty
     .key("hoodie.datasource.read.streaming.max.commits.per.trigger")
     .noDefaultValue()
+    .markAdvanced()
     .sinceVersion("1.3.0")
     .withDocumentation("Maximum completed write commits per streaming micro-batch. Must be a positive integer. "
       + "Unset means unbounded. AvailableNow pins its end offset and drains the backlog in capped batches; "

@@ -91,7 +91,7 @@ class HoodieStreamSourceV2(sqlContext: SQLContext,
 
   override protected def completedWriteOffsets: Seq[String] = {
     metaClient.reloadActiveTimeline()
-    metaClient.getActiveTimeline.getWriteTimeline.filterCompletedInstants().getInstants.asScala
+    HoodieSourceAdmissionControl.readTimeline(metaClient, parameters).getInstants.asScala
       .map(_.getCompletionTime).toSeq
   }
 

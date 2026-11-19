@@ -101,6 +101,81 @@ class TestStreamingSource extends StreamTest with SparkAdapterSupport {
     }
   }
 
+  for (mode <- Seq("BLOCK", "USE_TRANSITION_TIME")) {
+    test(s"cap one drains V1 MOR with out-of-order compaction completion in $mode") {
+      withTempDir { dir =>
+        val tablePath = s"${dir.getCanonicalPath}/source"
+        val metaClient = HoodieTableMetaClient.newTableBuilder()
+          .setTableType(MERGE_ON_READ).setTableName(getTableName(tablePath))
+          .setTableVersion(HoodieTableVersion.SIX).setRecordKeyFields("id").setOrderingFields("ts")
+          .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+        addData(tablePath, Seq(("1", "seed", "10", "000")), tableVersion = HoodieTableVersion.SIX)
+        val seed = metaClient.reloadActiveTimeline().getCommitsTimeline.lastInstant().get()
+        (1 to 4).foreach(i => addData(tablePath, Seq((i.toString, s"a$i", "10", "001")),
+          enableInlineCompaction = i == 1, tableVersion = HoodieTableVersion.SIX))
+        // V6 stores completion time in the instant file's mtime. Finish the compaction
+        // after the later delta commits, reproducing the review's requested/completion inversion.
+        val compaction = metaClient.reloadActiveTimeline().getCommitTimeline.filterCompletedInstants().lastInstant().get()
+        val instantPath = java.nio.file.Paths.get(metaClient.getTimelinePath.toString,
+          metaClient.getInstantFileNameGenerator.getFileName(compaction))
+        java.nio.file.Files.setLastModifiedTime(instantPath,
+          java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 10000))
+        val batches = scala.collection.mutable.ArrayBuffer.empty[Seq[String]]
+        val query = spark.readStream.format("hudi")
+          .option(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key, "1")
+          .option(DataSourceReadOptions.INCREMENTAL_READ_HANDLE_HOLLOW_COMMIT.key, mode)
+          .option(START_OFFSET.key, if (mode == "BLOCK") seed.requestedTime() else seed.getCompletionTime)
+          .option(DataSourceReadOptions.INCREMENTAL_READ_SKIP_COMPACT.key, "true")
+          .load(tablePath).writeStream.option("checkpointLocation", s"${dir.getCanonicalPath}/checkpoint")
+          .foreachBatch { (batch: DataFrame, _: Long) =>
+            batches += batch.select("id").collect().map(_.getString(0)).sorted.toSeq
+            ()
+          }.trigger(Trigger.ProcessingTime("100 milliseconds")).start()
+        try {
+          query.processAllAvailable()
+          assertEquals(Seq("1", "2", "3", "4"), batches.flatten.sorted.toSeq)
+          assertEquals(Seq(1, 1, 1, 1), batches.filter(_.nonEmpty).map(_.size).toSeq)
+        } finally {
+          query.stop()
+        }
+      }
+    }
+  }
+
+  test("CDC streaming drains one commit per trigger and validates options at load") {
+    withTempDir { dir =>
+      val tablePath = s"${dir.getCanonicalPath}/source"
+      HoodieTableMetaClient.newTableBuilder()
+        .setTableType(COPY_ON_WRITE).setTableName(getTableName(tablePath))
+        .setTableVersion(HoodieTableVersion.SIX).setRecordKeyFields("id").setOrderingFields("ts")
+        .setCDCEnabled(true).setCDCSupplementalLoggingMode("DATA_BEFORE_AFTER")
+        .initTable(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()), tablePath)
+      (1 to 3).foreach(i => addData(tablePath, Seq((i.toString, s"a$i", "10", "000")), tableVersion = HoodieTableVersion.SIX))
+      Seq("0", "-1", "garbage", "2147483648").foreach { value =>
+        intercept[IllegalArgumentException] {
+          spark.readStream.format("hudi")
+            .option(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key, value).load(tablePath)
+        }
+      }
+      val batches = scala.collection.mutable.ArrayBuffer.empty[Seq[String]]
+      val query = spark.readStream.format("hudi")
+        .option(DataSourceReadOptions.QUERY_TYPE.key, DataSourceReadOptions.QUERY_TYPE_INCREMENTAL_OPT_VAL)
+        .option(DataSourceReadOptions.INCREMENTAL_FORMAT.key, DataSourceReadOptions.INCREMENTAL_FORMAT_CDC_VAL)
+        .option(DataSourceReadOptions.STREAMING_MAX_COMMITS_PER_TRIGGER.key, "1")
+        .load(tablePath).writeStream.option("checkpointLocation", s"${dir.getCanonicalPath}/checkpoint")
+        .foreachBatch { (batch: DataFrame, _: Long) =>
+          batches += batch.selectExpr("get_json_object(after, '$.id')").collect().map(_.getString(0)).toSeq
+          ()
+        }.trigger(Trigger.AvailableNow()).start()
+      try {
+        assertTrue(query.awaitTermination(60000))
+        assertEquals(Seq(Seq("1"), Seq("2"), Seq("3")), batches.toSeq)
+      } finally {
+        query.stop()
+      }
+    }
+  }
+
   test("test cow stream source") {
     withTempDir { inputDir =>
       val tablePath = s"${inputDir.getCanonicalPath}/test_cow_stream"

@@ -15,38 +15,25 @@
   limitations under the License.
 -->
 
-# Streaming source commit throttling
+# Streaming source throttling acceptance
 
-Set `hoodie.datasource.read.streaming.max.commits.per.trigger` on the Hudi
-streaming reader to a positive integer. Without the option, reads remain unbounded.
-For example, an SDP Python flow can use:
+User-facing configuration, trigger and retention guidance is maintained in the
+website Streaming Reads page ([documentation PR #20751](https://github.com/apache/hudi/pull/20751)).
 
-```python
-spark.readStream.format("hudi").option(
-    "hoodie.datasource.read.streaming.max.commits.per.trigger", "5"
-).load(source_path)
-```
+Regression coverage in `TestStreamingSource` checks five commits drained as
+2/2/1 batches for COW and MOR with both offset versions. A sixth commit arriving
+during AvailableNow is excluded until restart, and a quiescent restart emits
+no batch. Cap-one coverage includes ProcessingTime, CDC, and V1 MOR with
+out-of-order compaction completion under BLOCK and USE_TRANSITION_TIME.
+Invalid options are rejected at `readStream.load()`.
 
-This limits completed write commits in each incremental micro-batch. It applies
-to both Hudi streaming offset versions and COW/MOR tables. Requested-time offsets
-retain hollow-commit handling; completion-time offsets are sorted by completion.
-Clean and rollback instants do not consume the limit. Commits with the same
-completion timestamp share one offset and cannot be split, so a boundary tie can
-admit more than the configured count.
+`TestHoodieSourceAdmissionControl` covers archived writes, skipped MOR compactions,
+service offsets, completion-time ties, unbounded/Once behavior, invalid limits,
+and an initially empty AvailableNow run.
 
-`Trigger.AvailableNow` pins its end offset when the query starts and drains that
-backlog in capped batches. Writes arriving afterward wait for the next run.
-Ordinary checkpoint restart resumes from the last processed offset.
-`Trigger.Once` requests all available data and ignores the cap, per Spark's contract.
-Use AvailableNow for bounded triggered updates.
-
-A commit can contain arbitrarily many rows or bytes. This option is not a memory,
-file-size or row-count bound. It counts the available active write timeline;
-archived-history fallback and snapshot recovery are not split into capped reads.
-Keep history and data-file retention long enough for consumers to catch up.
-Source recovery strategies remain separate from admission control.
-
-Regression coverage checks five commits drained as 2/2/1 batches for COW and MOR
-with both offset versions. A sixth commit arriving during the run is excluded until
-restart. It also checks a quiescent restart, service offsets, completion-time ties,
-unbounded/Once behavior, invalid limits and an initially empty AvailableNow run.
+Admission counts archived and active completed writes. Snapshot fallback and
+recovery reads are not split into capped reads. #20516 is an independent change:
+whichever PR lands second must test recovery at a capped intermediate end,
+including cleaned files and an unavailable snapshot. Recovery is not made safe
+merely by selecting a smaller offset. The combined recovery branch has not been
+tested here.
