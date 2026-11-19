@@ -19,35 +19,36 @@
 package org.apache.hudi.utilities.deltastreamer;
 
 import org.apache.hudi.common.config.HoodieMetadataConfig;
-import org.apache.hudi.common.model.FileSlice;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
+import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
-import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.metadata.HoodieTableMetadata;
-import org.apache.hudi.metadata.HoodieTableMetadataUtil;
-import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.hudi.functional.DeferredRecordIndexTestUtils.assertRecordIndexBuilt;
+import static org.apache.hudi.functional.DeferredRecordIndexTestUtils.assertRecordIndexMatchesTable;
+import static org.apache.hudi.functional.DeferredRecordIndexTestUtils.assertRecordIndexNotBuilt;
+import static org.apache.hudi.functional.DeferredRecordIndexTestUtils.assertRecordIndexSizedFrom;
+import static org.apache.hudi.functional.DeferredRecordIndexTestUtils.rowsPerPartition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Deferred record index initialization on the HoodieStreamer path: the first sync leaves the index unbuilt and the
- * second one builds it, with no duplicates across the switch from the fallback index.
+ * Deferred record index initialization on the HoodieStreamer path: the first sync leaves the index unbuilt, the second
+ * builds it, and the index agrees with the table after the second sync and the third.
  */
 @Tag("functional")
 public class TestDeferredRecordIndexOnStreamerPath extends HoodieDeltaStreamerTestBase {
@@ -61,41 +62,12 @@ public class TestDeferredRecordIndexOnStreamerPath extends HoodieDeltaStreamerTe
     cfg.configs.add(HoodieIndexConfig.INDEX_TYPE.key() + "="
         + (partitioned ? "RECORD_LEVEL_INDEX" : "GLOBAL_RECORD_LEVEL_INDEX"));
     cfg.configs.add(HoodieMetadataConfig.DEFER_RLI_INIT_FOR_FRESH_TABLE.key() + "=true");
-    // Pin the sizing inputs so the expected file group count follows from the record count alone: 9600 bytes over
-    // 48 bytes per entry is 200 entries per file group, and the floor is kept out of the way.
+    // A small file group size and a floor of one keep the sizing result away from the floor.
     cfg.configs.add(HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key() + "=9600");
     cfg.configs.add(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key() + "=1");
     cfg.configs.add(HoodieMetadataConfig.RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key() + "=1");
     cfg.configs.add(HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key() + "=1000");
     cfg.configs.add(HoodieMetadataConfig.RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key() + "=1000");
-  }
-
-  /**
-   * The file group count the record index is sized to for the given number of records, applying the growth factor and
-   * the entries that fit in one file group.
-   */
-  private static int expectedFileGroupCount(long records) {
-    long estimated = (long) Math.ceil(records * 2.0) / 200;
-    return (int) Math.max(1, Math.min(1000, estimated));
-  }
-
-  private static List<String> recordIndexFileGroupIds(String tableBasePath) {
-    HoodieTableMetaClient metadataMetaClient = HoodieTableMetaClient.builder()
-        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(tableBasePath))
-        .setConf(HoodieTestUtils.getDefaultStorageConf())
-        .build();
-    return HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, Option.empty(),
-            MetadataPartitionType.RECORD_INDEX.getPartitionPath())
-        .stream().map(FileSlice::getFileId).collect(Collectors.toList());
-  }
-
-  private static boolean isRecordIndexBuilt(String tableBasePath) {
-    return HoodieTableMetaClient.builder()
-        .setBasePath(tableBasePath)
-        .setConf(HoodieTestUtils.getDefaultStorageConf())
-        .build()
-        .getTableConfig().getMetadataPartitions()
-        .contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath());
   }
 
   static Stream<Arguments> testArgs() {
@@ -110,48 +82,79 @@ public class TestDeferredRecordIndexOnStreamerPath extends HoodieDeltaStreamerTe
   public void testRecordIndexDeferredUntilSecondSync(boolean partitioned, int tableVersion) throws Exception {
     String tableBasePath = basePath + "/test_rli_deferred_streamer_"
         + (partitioned ? "partitioned" : "global") + "_v" + tableVersion;
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
 
     HoodieDeltaStreamer.Config insertCfg =
         TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.INSERT);
     enableDeferredRecordIndex(insertCfg, partitioned, tableVersion);
     new HoodieDeltaStreamer(insertCfg, jsc).sync();
     assertEquals(tableVersion, HoodieTableMetaClient.builder().setBasePath(tableBasePath)
-        .setConf(HoodieTestUtils.getDefaultStorageConf()).build().getTableConfig().getTableVersion().versionCode());
-    assertFalse(isRecordIndexBuilt(tableBasePath), "Record index should not be built by the first sync");
-
-    // The index is sized from the data the first sync left behind, so capture it before the second sync adds to it.
+        .setConf(storageConf).build().getTableConfig().getTableVersion().versionCode());
+    assertRecordIndexNotBuilt(tableBasePath, storageConf);
     assertRecordCount(1000, tableBasePath, sqlContext);
     sqlContext.clearCache();
-    Map<String, Long> rowsPerPartition = sqlContext.read().format("hudi").load(tableBasePath)
-        .groupBy("_hoodie_partition_path").count()
-        .collectAsList().stream().collect(Collectors.toMap(row -> row.getString(0), row -> row.getLong(1)));
-    long rowsBeforeBuild = rowsPerPartition.values().stream().mapToLong(Long::longValue).sum();
+    Map<String, Long> rowsBeforeBuild = rowsPerPartition(sqlContext.sparkSession(), tableBasePath);
 
+    // Every later sync carries 1000 records from the test source: 500 inserts, 450 updates and 50 deletes, so the
+    // 1000 rows the first sync wrote become 1450 after the second and 1900 after the third. The second sync builds
+    // the index from what the first left, then writes its own records; the third is tagged through the index alone.
     HoodieDeltaStreamer.Config upsertCfg =
         TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
     enableDeferredRecordIndex(upsertCfg, partitioned, tableVersion);
     new HoodieDeltaStreamer(upsertCfg, jsc).sync();
-    assertTrue(isRecordIndexBuilt(tableBasePath), "Record index should be built by the second sync");
+    assertRecordIndexBuilt(tableBasePath, storageConf, partitioned);
+    assertRecordIndexSizedFrom(tableBasePath, storageConf, writeProps(upsertCfg), partitioned, rowsBeforeBuild);
+    assertSyncedTable(tableBasePath, storageConf, 1450);
 
-    // The second sync carries 1000 records from the test source: 500 inserts, 450 updates and 50 deletes, so the
-    // 1000 the first sync wrote become 1450, one row per key, and the deletes make this cover a key removed through
-    // the fallback index as well. The same 1450 comes out with the deferral turned off, so this pins what the two
-    // syncs write rather than anything the deferral does, and a row lost or duplicated across the switch from the
-    // fallback index to the record index fails here.
-    assertRecordCount(1450, tableBasePath, sqlContext);
-    assertDistinctRecordCount(1450, tableBasePath, sqlContext);
+    new HoodieDeltaStreamer(upsertCfg, jsc).sync();
+    assertSyncedTable(tableBasePath, storageConf, 1900);
+  }
 
-    List<String> fileGroupIds = recordIndexFileGroupIds(tableBasePath);
-    if (partitioned) {
-      Map<String, Integer> expected = rowsPerPartition.entrySet().stream()
-          .collect(Collectors.toMap(Map.Entry::getKey, entry -> expectedFileGroupCount(entry.getValue())));
-      Map<String, Integer> actual = fileGroupIds.stream()
-          .collect(Collectors.groupingBy(HoodieTableMetadataUtil::getDataTablePartitionNameFromFileGroupName,
-              Collectors.reducing(0, fileGroupId -> 1, Integer::sum)));
-      assertEquals(expected, actual, "Each partition's record index should be sized from that partition's records");
-    } else {
-      assertEquals(expectedFileGroupCount(rowsBeforeBuild), fileGroupIds.size(),
-          "The record index should be sized from the records the first sync left behind");
-    }
+  /**
+   * The same deferral in continuous mode, where one write client outlives the commit that defers the build, the commit
+   * that runs it and the commits tagged through it.
+   */
+  @ParameterizedTest
+  @MethodSource("testArgs")
+  public void testRecordIndexDeferredInContinuousMode(boolean partitioned, int tableVersion) throws Exception {
+    String tableBasePath = basePath + "/test_rli_deferred_continuous_streamer_"
+        + (partitioned ? "partitioned" : "global") + "_v" + tableVersion;
+    StorageConfiguration<?> storageConf = HoodieTestUtils.getDefaultStorageConf();
+    HoodieDeltaStreamer.Config cfg = TestHoodieDeltaStreamer.TestHelpers.makeConfig(tableBasePath, WriteOperationType.UPSERT);
+    cfg.continuousMode = true;
+    enableDeferredRecordIndex(cfg, partitioned, tableVersion);
+    TestHoodieDeltaStreamer.deltaStreamerTestRunner(new HoodieDeltaStreamer(cfg, jsc), cfg, ignored -> {
+      TestHoodieDeltaStreamer.TestHelpers.assertAtLeastNCommits(3, tableBasePath);
+      return true;
+    });
+
+    // The index must have been sized from the rows the first commit wrote, which a build in that commit could not do.
+    HoodieTimeline commits = HoodieTableMetaClient.builder().setBasePath(tableBasePath).setConf(storageConf).build()
+        .getCommitsTimeline().filterCompletedInstants();
+    Map<String, Long> rowsOfFirstCommit = commits.readCommitMetadata(commits.firstInstant().get())
+        .getPartitionToWriteStats().entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().stream().mapToLong(HoodieWriteStat::getNumWrites).sum()));
+    assertRecordIndexBuilt(tableBasePath, storageConf, partitioned);
+    assertRecordIndexSizedFrom(tableBasePath, storageConf, writeProps(cfg), partitioned, rowsOfFirstCommit);
+    sqlContext.clearCache();
+    long rows = sqlContext.read().format("hudi").load(tableBasePath).count();
+    assertDistinctRecordCount(rows, tableBasePath, sqlContext);
+    assertRecordIndexMatchesTable(sqlContext.sparkSession(), tableBasePath, storageConf);
+  }
+
+  private static Properties writeProps(HoodieDeltaStreamer.Config cfg) {
+    Properties props = new Properties();
+    cfg.configs.forEach(config -> {
+      String[] keyAndValue = config.split("=", 2);
+      props.setProperty(keyAndValue[0], keyAndValue[1]);
+    });
+    return props;
+  }
+
+  private void assertSyncedTable(String tableBasePath, StorageConfiguration<?> storageConf, long expectedRows) {
+    sqlContext.clearCache();
+    assertRecordCount(expectedRows, tableBasePath, sqlContext);
+    assertDistinctRecordCount(expectedRows, tableBasePath, sqlContext);
+    assertRecordIndexMatchesTable(sqlContext.sparkSession(), tableBasePath, storageConf);
   }
 }

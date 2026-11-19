@@ -35,7 +35,7 @@ import org.apache.hudi.common.util.{CollectionUtils, CommitUtils, MarkerUtils, O
 import org.apache.hudi.config.{HoodieCleanConfig, HoodieClusteringConfig, HoodieCompactionConfig, HoodieIndexConfig, HoodieLockConfig, HoodieWriteConfig}
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider
 import org.apache.hudi.exception.{HoodieException, TableNotFoundException}
-import org.apache.hudi.metadata.{HoodieTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.functional.DeferredRecordIndexTestUtils.{assertRecordIndexBuilt, assertRecordIndexMatchesTable, assertRecordIndexNotBuilt, assertRecordIndexSizedFrom, rowsPerPartition, toProperties}
 import org.apache.hudi.storage.{HoodieStorage, StoragePath}
 import org.apache.hudi.testutils.{DataSourceTestUtils, HoodieSparkClientTestBase, HoodieSparkDeleteRecordMerger}
 
@@ -43,7 +43,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.streaming.{OutputMode, StreamingQuery, StreamingQueryException, Trigger}
 import org.apache.spark.sql.types.StructType
-import org.junit.jupiter.api.{BeforeEach, Tag, Test}
+import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
@@ -230,10 +230,9 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
   }
 
   /**
-   * Deferred record index initialization through the streaming sink: the first micro-batch leaves the index unbuilt
-   * and the second one builds it, with no duplicates across the switch from the fallback index.
+   * Deferred record index initialization through the streaming sink: the first micro-batch leaves the index unbuilt,
+   * the second builds it, and the index agrees with the table after the second and the third.
    */
-  @Tag("functional")
   @ParameterizedTest
   @ValueSource(booleans = Array(false, true))
   def testRecordIndexDeferredUntilSecondMicroBatch(partitioned: Boolean): Unit = {
@@ -263,55 +262,43 @@ class TestStructuredStreaming extends HoodieSparkClientTestBase {
       maxFileGroupProp -> "1000")
     val toDf = (records: java.util.List[HoodieRecord[_]]) =>
       spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records).asScala.toList, 2))
-    val recordIndexBuilt = () => HoodieTableMetaClient.builder().setBasePath(destPath).setConf(storageConf).build()
-      .getTableConfig.getMetadataPartitions.contains(MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+    val keysOf = (records: java.util.List[HoodieRecord[_]]) => records.asScala.map(_.getRecordKey).toSeq
+    val assertTableKeys = (expectedKeys: Seq[String]) => assertEquals(expectedKeys.sorted,
+      spark.read.format("org.apache.hudi").load(destPath).select("_row_key").collect().map(_.getString(0)).toSeq.sorted)
 
-    val allRecords = new java.util.ArrayList[HoodieRecord[_]]()
-    val firstBatch = dataGen.generateInserts("001", 2000)
-    allRecords.addAll(firstBatch)
+    val firstBatch = dataGen.generateInserts("001", 2000).asInstanceOf[java.util.List[HoodieRecord[_]]]
     val streamingQuery = initWritingStreamingQuery(toDf(firstBatch).schema, sourcePath, destPath, hudiOptions)
     try {
       toDf(firstBatch).coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       val numCommits = waitTillAtleastNCommits(storage, destPath, 1, 120, 1)
-      assertFalse(recordIndexBuilt(), "Record index should not be built by the first micro-batch")
+      assertRecordIndexNotBuilt(destPath, storageConf)
+      val rowsBeforeBuild = rowsPerPartition(spark, destPath)
 
-      // The index is sized from what the first micro-batch left behind, so capture it before the second one adds to it.
-      val rowsPerPartition = spark.read.format("org.apache.hudi").load(destPath)
-        .groupBy("_hoodie_partition_path").count().collect()
-        .map(row => row.getString(0) -> row.getLong(1)).toMap
-      val rowsBeforeBuild = rowsPerPartition.values.sum
-
-      val updates = dataGen.generateUpdates("002", allRecords.subList(0, 300))
-      val newRecords = dataGen.generateInserts("002", 10)
-      val secondBatch = new java.util.ArrayList[HoodieRecord[_]](updates)
-      secondBatch.addAll(newRecords)
-      allRecords.addAll(newRecords)
-      toDf(secondBatch).coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      // The second micro-batch builds the index from what the first left, then writes updates, deletes and enough new
+      // rows that an index sized after it would get a different file group count.
+      val deletedRecords = firstBatch.subList(300, 350)
+      val newRecords = dataGen.generateInserts("002", 2000).asInstanceOf[java.util.List[HoodieRecord[_]]]
+      toDf(dataGen.generateUpdates("002", firstBatch.subList(0, 300)).asInstanceOf[java.util.List[HoodieRecord[_]]])
+        .union(toDf(dataGen.generateUpdates("002", deletedRecords).asInstanceOf[java.util.List[HoodieRecord[_]]])
+          .withColumn("_hoodie_is_deleted", lit(true)))
+        .union(toDf(newRecords))
+        .coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
       waitTillAtleastNCommits(storage, destPath, numCommits + 1, 120, 1)
-      assertTrue(recordIndexBuilt(), "Record index should be built by the second micro-batch")
+      assertRecordIndexBuilt(destPath, storageConf, partitioned)
+      assertRecordIndexSizedFrom(destPath, storageConf, toProperties(hudiOptions), partitioned, rowsBeforeBuild)
+      val deletedKeys = keysOf(deletedRecords).toSet
+      val keysAfterBuild = (keysOf(firstBatch) ++ keysOf(newRecords)).filterNot(deletedKeys)
+      assertTableKeys(keysAfterBuild)
+      assertRecordIndexMatchesTable(spark, destPath, storageConf)
 
-      val keys = spark.read.format("org.apache.hudi").load(destPath).select("_row_key").collect().map(_.getString(0))
-      assertEquals(allRecords.asScala.map(_.getRecordKey).sorted.toSeq, keys.sorted.toSeq)
-
-      // The record index is sized from the records the first micro-batch left behind, a partition at a time for the
-      // partitioned index and over the whole table for the global one.
-      val metadataMetaClient = HoodieTableMetaClient.builder()
-        .setBasePath(HoodieTableMetadata.getMetadataTableBasePath(destPath))
-        .setConf(storageConf)
-        .build()
-      val fileGroupIds = HoodieTableMetadataUtil.getPartitionLatestFileSlices(metadataMetaClient, HOption.empty(),
-        MetadataPartitionType.RECORD_INDEX.getPartitionPath).asScala.map(_.getFileId).toSeq
-      val expectedFileGroupCount = (records: Long) => {
-        val estimated = (math.ceil(records * 2.0).toLong / 200).toInt
-        if (estimated >= 1000) 1000 else if (estimated <= 1) 1 else estimated
-      }
-      if (partitioned) {
-        val actual = fileGroupIds.groupBy(HoodieTableMetadataUtil.getDataTablePartitionNameFromFileGroupName)
-          .mapValues(_.size).toMap
-        assertEquals(rowsPerPartition.mapValues(expectedFileGroupCount).toMap, actual)
-      } else {
-        assertEquals(expectedFileGroupCount(rowsBeforeBuild), fileGroupIds.size)
-      }
+      // The third micro-batch is tagged through the index alone: it updates rows the second inserted and brings back
+      // the keys the second deleted.
+      toDf(dataGen.generateUpdates("003", newRecords.subList(0, 300)).asInstanceOf[java.util.List[HoodieRecord[_]]])
+        .union(toDf(dataGen.generateUpdates("003", deletedRecords).asInstanceOf[java.util.List[HoodieRecord[_]]]))
+        .coalesce(1).write.mode(SaveMode.Append).json(sourcePath)
+      waitTillAtleastNCommits(storage, destPath, numCommits + 2, 120, 1)
+      assertTableKeys(keysAfterBuild ++ deletedKeys)
+      assertRecordIndexMatchesTable(spark, destPath, storageConf)
     } finally {
       streamingQuery.stop()
     }

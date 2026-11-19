@@ -94,12 +94,13 @@ public class IndexerFactory {
   }
 
   /**
-   * Returns whether the initialization of record index should be deferred, true if the table is a fresh table.
+   * Returns whether the initialization of record index should be deferred, true if the table has no completed commit.
+   * Completed rollbacks and cleans do not count, since a table whose only commit failed and was rolled back has no data.
    */
   private static boolean shouldDeferRecordIndexInit(
       HoodieWriteConfig dataTableWriteConfig,
       HoodieTableMetaClient dataTableMetaClient) {
     return dataTableWriteConfig.getMetadataConfig().shouldDeferRliInitForFreshTable()
-        && dataTableMetaClient.getActiveTimeline().filterCompletedInstants().countInstants() == 0;
+        && dataTableMetaClient.getCommitsTimeline().filterCompletedInstants().empty();
   }
 }
