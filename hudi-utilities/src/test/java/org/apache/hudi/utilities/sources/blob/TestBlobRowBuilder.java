@@ -23,17 +23,21 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
+import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.RawLocalFileSystem;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -196,6 +200,27 @@ public class TestBlobRowBuilder {
     org.junit.jupiter.api.Assertions.assertNull(blob.get(1));
     assertEquals(org.apache.spark.sql.RowFactory.create(meta.getPath(), null, null, false), blob.getStruct(2));
     assertEquals(0L, tableFiles());
+  }
+
+  /** Unmanaged references read the whole current object even when its size changes after the row was built. */
+  @ParameterizedTest
+  @ValueSource(ints = {32, 160})
+  public void unmanagedReferenceReadsTheWholeCurrentObject(int currentSize) throws Exception {
+    CloudObjectMetadata meta = writeSource("current.mp4", bytes(100, 1));
+    Row row = builder().buildRow(meta);
+    byte[] current = bytes(currentSize, 2);
+    Files.write(source.resolve("current.mp4"), current);
+    assertEquals(100L, column(row, BlobTableSchema.SOURCE_FILE_SIZE), "the row retains its observed size");
+    BlobBytesSource reader = new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration()));
+    Row blob = (Row) column(row, BlobTableSchema.BLOB);
+    Row reference = blob.getStruct(2);
+    StructType blobType = (StructType) BlobTableSchema.schema().apply(BlobTableSchema.BLOB).dataType();
+    StructType referenceType = (StructType) blobType.apply(HoodieSchema.Blob.EXTERNAL_REFERENCE).dataType();
+    Row namedReference = new GenericRowWithSchema(new Object[] {reference.get(0), reference.get(1), reference.get(2), reference.get(3)}, referenceType);
+    Row namedBlob = new GenericRowWithSchema(new Object[] {blob.get(0), blob.get(1), namedReference}, blobType);
+    try (InputStream in = reader.open(namedBlob)) {
+      assertArrayEquals(current, in.readAllBytes());
+    }
   }
 
   /** A source path without a scheme cannot be referenced: a reader would resolve it against the table. */
