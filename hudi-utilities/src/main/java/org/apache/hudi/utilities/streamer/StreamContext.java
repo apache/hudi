@@ -23,12 +23,20 @@ import org.apache.hudi.PublicAPIClass;
 import org.apache.hudi.PublicAPIMethod;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.SourceContract;
+import org.apache.hudi.utilities.sources.SourceContracts;
 
 /**
  * The context required to sync one batch of data to hoodie table using StreamSync.
  */
 @PublicAPIClass(maturity = ApiMaturityLevel.EVOLVING)
 public interface StreamContext {
+
+  /** The source contract that prepared this job, or the default for a directly constructed source. */
+  @PublicAPIMethod(maturity = ApiMaturityLevel.EVOLVING)
+  default SourceContract getSourceContract() {
+    return SourceContracts.NONE;
+  }
 
   /**
    * The schema provider used for reading data from source and also writing to hoodie table.

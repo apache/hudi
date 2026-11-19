@@ -114,6 +114,8 @@ import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.sources.SourceContract;
+import org.apache.hudi.utilities.sources.SourceContracts;
 import org.apache.hudi.utilities.streamer.validator.SparkStreamerValidatorUtils;
 import org.apache.hudi.utilities.transform.Transformer;
 
@@ -130,6 +132,7 @@ import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.storage.StorageLevel;
 
@@ -142,6 +145,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -212,6 +216,9 @@ public class StreamSync implements Serializable, Closeable {
    * Allows transforming source to target table before writing.
    */
   private transient Option<Transformer> transformer;
+
+  /** The contract of the job's source, which prepared {@link #props}; {@link SourceContracts#NONE} for a source without one. */
+  private transient SourceContract sourceContract = SourceContracts.NONE;
 
   private final String keyGenClassName;
 
@@ -322,7 +329,26 @@ public class StreamSync implements Serializable, Closeable {
                     TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
                     FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, StreamContext streamContext) throws IOException {
+    this(cfg, sparkSession, HoodieStreamer.StreamSyncService.prepareJob(cfg, props), hoodieSparkContext, fs, conf,
+        onInitializingHoodieWriteClient, streamContext);
+  }
+
+  private StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, Pair<SourceContract, TypedProperties> prepared,
+                     HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, StreamContext streamContext) throws IOException {
+    this(cfg, sparkSession, prepared.getRight(), hoodieSparkContext, fs, conf, onInitializingHoodieWriteClient, streamContext,
+        prepared.getLeft());
+  }
+
+  /**
+   * For callers that have already prepared {@code props} with {@code contract} ({@link HoodieStreamer.StreamSyncService} does it
+   * before it builds its schema provider and validates its table).
+   */
+  StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
+             FileSystem fs, Configuration conf, Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient,
+             StreamContext streamContext, SourceContract contract) throws IOException {
     this.cfg = cfg;
+    this.sourceContract = contract;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
     this.storage = HoodieStorageUtils.getStorage(
@@ -346,12 +372,43 @@ public class StreamSync implements Serializable, Closeable {
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     this.isErrorTableWriteUnificationEnabled = getBooleanWithAltKeys(props, ENABLE_ERROR_TABLE_WRITE_UNIFICATION);
-    initializeMetaClient();
-    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
+    HoodieTableMetaClient metaClient = initializeMetaClient();
+    // the contract's checks run before the source is built, so a job they refuse never builds its source; the chain's own syntax
+    // is checked when the transformer is created, after it
+    contract.checkTable(cfg.targetBasePath, metaClient.getTableConfig());
+    List<String> chain = contract.transformerChain(cfg.transformerClassNames);
+    if (contract != SourceContracts.NONE) {
+      // a source without a contract reads nothing more at start than without contracts
+      TypedProperties jobProps = TypedProperties.copy(props);
+      jobProps.setProperty(HoodieWriteConfig.BASE_PATH.key(), cfg.targetBasePath);
+      contract.checkJob(hoodieSparkContext.jsc(), sparkSession, chain == null ? Collections.emptyList() : chain, jobProps,
+          userTargetSchema(), tableSchemaWithoutMetaFields(metaClient));
+    }
+    // a source without a contract gets its caller's context unchanged
+    StreamContext sourceContext = contract == SourceContracts.NONE
+        ? streamContext
+        : new DefaultStreamContext(streamContext.getSchemaProvider(), streamContext.getSourceProfileSupplier(), contract);
+    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, sourceContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
     Supplier<Option<HoodieSchema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceHoodieSchema());
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), schemaSupplier, this.errorTableWriter.isPresent());
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(chain), schemaSupplier, this.errorTableWriter.isPresent());
+  }
+
+  /** The target schema of the job's schema provider, when it gives one. */
+  private Option<HoodieSchema> userTargetSchema() {
+    if (userProvidedSchemaProvider == null) {
+      return Option.empty();
+    }
+    HoodieSchema target = userProvidedSchemaProvider.getTargetHoodieSchema();
+    return target == null || target.getType() == HoodieSchemaType.NULL ? Option.empty() : Option.of(target);
+  }
+
+  /** The table's latest writer schema without its meta columns; empty for a table with no commit. */
+  private Option<StructType> tableSchemaWithoutMetaFields(HoodieTableMetaClient metaClient) {
+    return UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient)
+        .map(schema -> new StructType(Arrays.stream(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema).fields())
+            .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name())).toArray(StructField[]::new)));
   }
 
   /**
@@ -467,7 +524,8 @@ public class StreamSync implements Serializable, Closeable {
         DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS().key(),
         props.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
             HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue()));
-    return tableBuilder.setTableType(cfg.tableType)
+    return tableBuilder.setAdditionalProperties(sourceContract == null ? new Properties() : sourceContract.tableProperties())
+        .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
         .setPayloadClassName(payloadClass)
