@@ -30,4 +30,10 @@ public class CloudObjectMetadata implements Serializable {
 
   private final String path;
   private final long size;
+  /** Optional per-object ordering token; absent when the source does not provide one. */
+  private final String orderingToken;
+
+  public CloudObjectMetadata(String path, long size) {
+    this(path, size, null);
+  }
 }

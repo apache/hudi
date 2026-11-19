@@ -79,7 +79,6 @@ import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_MERGE_SCHEMA;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARALLELISM;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARTITIONS;
@@ -260,7 +259,17 @@ public class CloudObjectsSelectorCommon {
 
   public static String generateFilter(Type type,
                                       TypedProperties props) {
-    String fileFormat = CloudDataFetcher.getFileFormat(props);
+    return generateFilter(type, props, new ColumnarFileMaterializer(props));
+  }
+
+  /**
+   * Builds the filter restricting which cloud objects a batch selects. The size and relative-path
+   * restrictions are common to every payload; which object keys are eligible is not, and so comes
+   * from {@code materializer}.
+   */
+  public static String generateFilter(Type type,
+                                      TypedProperties props,
+                                      CloudObjectMaterializer materializer) {
     Option<String> selectRelativePathPrefix = getPropVal(props, SELECT_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathPrefix = getPropVal(props, IGNORE_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathSubStr = getPropVal(props, IGNORE_RELATIVE_PATH_SUBSTR);
@@ -302,9 +311,7 @@ public class CloudObjectsSelectorCommon {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
     }
 
-    // Fall back to the file format when the configured list has no usable extension.
-    List<String> extensions = usableExtensions(getPropVal(props, CLOUD_DATAFILE_EXTENSION).orElse(""));
-    filter.append(extensionClause(objectKey, extensions.isEmpty() ? usableExtensions(fileFormat) : extensions));
+    filter.append(materializer.objectKeyPredicate(objectKey, props));
 
     return filter.toString();
   }
@@ -680,7 +687,7 @@ public class CloudObjectsSelectorCommon {
     return !modifiedNestedSchema.equals(rowField.dataType()) || !field.aliases().isEmpty();
   }
 
-  private static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {
+  static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {
     String value = getStringWithAltKeys(props, configProperty, true);
     if (!StringUtils.isNullOrEmpty(value)) {
       return Option.of(value);
