@@ -50,10 +50,12 @@ propagation of upstream deletes. It does not cover full refresh, table chaining,
 fan-in or failure between commit and checkpoint (separate recovery coverage).
 
 For MOR, inline and asynchronous compaction are disabled. After the newer update,
-the test requires log files and verifies that read-optimized base-file output differs
-from the exact snapshot result. This proves the snapshot must merge logs. Subsequent
-late updates, deletes and reinsertion must also produce exact snapshots. Both table
-types verify that an unchanged restart adds no completed commit.
+the test requires log files and verifies that read-optimized base-file output matches
+the exact stage-1 rows while the snapshot matches the updated rows. This proves the
+snapshot must merge logs. Subsequent late updates, deletes and reinsertion must also
+produce exact snapshots. Both table
+types verify that an unchanged restart adds no completed commit, reporting the
+before/after commit filenames for each table if the check fails.
 The flows rely on the default streaming upsert operation, without a session override.
 The catalog regression uses `PARTITIONED BY (PART)` against schema field `part`
 to verify case-insensitive normalization. The SDP scenario uses exact spelling

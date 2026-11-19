@@ -61,7 +61,8 @@ def client(mode, remote, root):
                                  .option("hoodie.datasource.query.type", "read_optimized")
                                  .load(location.as_uri()).select("id", "ts", "part", "value")
                                  .orderBy("id").collect()]
-                    require(base_rows != expected, "Update must require log merging, not only base-file reads")
+                    expected_base = json.loads((root / "expected-base.json").read_text())
+                    require(base_rows == expected_base, (table, "MOR base rows", base_rows, expected_base))
                     print(f"PASS MOR log merge {table}: base rows {base_rows}, snapshot {actual}")
     finally:
         spark.stop()
@@ -98,6 +99,7 @@ def scenario(h, table_type):
         ([(1, 2, "a", "late-delete", True)], [[1, 3, "a", "updated"], [2, 1, "b", "keep"]]),
         ([(1, 4, "a", "deleted", True)], [[2, 1, "b", "keep"]]),
         ([(1, 5, "a", "reinserted", False)], [[1, 5, "a", "reinserted"], [2, 1, "b", "keep"]]))
+    (h.root / "expected-base.json").write_text(json.dumps(stages[0][1]))
     for i, (rows, expected) in enumerate(stages, 1):
         (source / f"{i}.json").write_text("".join(json.dumps(dict(zip(
             ("id", "ts", "part", "value", "_hoodie_is_deleted"), row))) + "\n" for row in rows))
@@ -112,7 +114,9 @@ def scenario(h, table_type):
     before_restart = completed_commits()
     require(all(before_restart.values()), "Expected completed commits before restart")
     h.run_pipeline(path, "restart")
-    require(completed_commits() == before_restart, "Unchanged restart wrote an extra commit")
+    after_restart = completed_commits()
+    require(after_restart == before_restart,
+            ("Unchanged restart wrote an extra commit", before_restart, after_restart))
     h.client(Path(__file__).resolve(), "verify-restart")
     invalid = (
         ("missing_key", properties.replace("'primaryKey'='id'", "'primaryKey'='missing_key'"), "part", SOURCE, "Can't find primaryKey"),
