@@ -23,13 +23,16 @@ import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.config.RecordMergeMode;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
 import org.apache.hudi.common.table.log.block.HoodieDeleteBlock;
 import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
@@ -37,6 +40,7 @@ import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
@@ -47,7 +51,10 @@ import org.apache.hudi.testutils.HoodieJavaClientTestHarness;
 import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -81,16 +88,46 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
   }
 
   private HoodieWriteConfig buildConfig(boolean updatesAsDeletesAndInserts) {
-    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(10).build())
-        .withWriteUpdatesAsDeletesAndInserts(updatesAsDeletesAndInserts)
+    return configBuilder(updatesAsDeletesAndInserts, 10).build();
+  }
+
+  private HoodieWriteConfig buildConfig(boolean updatesAsDeletesAndInserts, HoodieTableVersion tableVersion,
+                                        int maxDeltaCommitsBeforeCompaction) {
+    return configBuilder(updatesAsDeletesAndInserts, maxDeltaCommitsBeforeCompaction)
+        .withWriteTableVersion(tableVersion.versionCode())
+        .withAutoUpgradeVersion(false)
         .build();
   }
 
-  @Test
-  public void testUpdatesBecomePositionalDeletesAndInserts() throws Exception {
-    HoodieWriteConfig config = buildConfig(true);
+  private HoodieWriteConfig.Builder configBuilder(boolean updatesAsDeletesAndInserts, int maxDeltaCommitsBeforeCompaction) {
+    return getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE)
+        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
+            .withMaxNumDeltaCommitsBeforeCompaction(maxDeltaCommitsBeforeCompaction).build())
+        .withWriteUpdatesAsDeletesAndInserts(updatesAsDeletesAndInserts);
+  }
+
+  /**
+   * Re-creates the test table at the given table version; versions 8 and 9 write inline log files and
+   * version 10 writes native log files.
+   */
+  private void initTable(HoodieTableVersion tableVersion) throws IOException {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), String.valueOf(tableVersion.versionCode()));
+    metaClient = HoodieTestUtils.init(storageConf, basePath, getTableType(), properties);
+    assertEquals(tableVersion, metaClient.getTableConfig().getTableVersion());
+    testTable = HoodieTestTable.of(metaClient);
+  }
+
+  private void assertTableVersion(HoodieTableVersion tableVersion) {
+    assertEquals(tableVersion, HoodieTestUtils.createMetaClient(storageConf, basePath).getTableConfig().getTableVersion(),
+        "the writes must keep the table at its version");
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "NINE", "TEN"})
+  void testUpdatesBecomePositionalDeletesAndInserts(HoodieTableVersion tableVersion) throws Exception {
+    initTable(tableVersion);
+    HoodieWriteConfig config = buildConfig(true, tableVersion, 10);
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
     String insertTime = WriteClientTestUtils.createNewInstantTime();
@@ -104,42 +141,29 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
         "000", 50, HoodieJavaWriteClient::upsert, false, false, 50, 100, 2,
         config.populateMetaFields(), INSTANT_GENERATOR);
 
-    // Every log file written by the update must be a delete log carrying valid record positions
-    // that reference the file slice's base file instant; no update record lands in a log.
+    assertTableVersion(tableVersion);
+
+    // Every log block written by the update must be a delete block carrying valid record positions
+    // that reference the file slice's base file instant; no update record lands in a log. Version 10
+    // writes the deletes as native delete log files, earlier versions as blocks of inline log files.
     AtomicLong deleteRecordCount = new AtomicLong();
-    HoodieSchema schema = HoodieSchema.parse(config.getSchema());
-    try (SyncableFileSystemView fsView = getFileSystemView(metaClient.reloadActiveTimeline())) {
-      for (String partition : dataGen.getPartitionPaths()) {
-        for (FileSlice slice : fsView.getLatestFileSlices(partition).collect(Collectors.toList())) {
-          List<HoodieLogFile> logFiles = slice.getLogFiles().collect(Collectors.toList());
-          if (logFiles.isEmpty()) {
-            continue;
-          }
-          assertTrue(slice.getBaseFile().isPresent(), "a file group with delete logs must have a base file");
-          for (HoodieLogFile logFile : logFiles) {
-            assertTrue(logFile.getFileName().contains(".deletes."),
-                "log files must only contain deletes but got: " + logFile.getFileName());
-            try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient, logFile, schema)) {
-              while (reader.hasNext()) {
-                HoodieLogBlock block = reader.next();
-                assertTrue(block instanceof HoodieDeleteBlock,
-                    "expected only delete blocks but got: " + block.getClass().getSimpleName());
-                HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) block;
-                deleteRecordCount.addAndGet(deleteBlock.getRecordsToDelete().length);
-                List<Long> positions = deleteBlock.getRecordPositionList();
-                assertEquals(deleteBlock.getRecordsToDelete().length, positions.size(),
-                    "every delete record must carry a position");
-                positions.forEach(position ->
-                    assertTrue(position >= 0, "delete record positions must be valid"));
-                assertEquals(slice.getBaseFile().get().getCommitTime(),
-                    deleteBlock.getBaseFileInstantTimeOfPositions(),
-                    "positions must reference the file slice's base file");
-              }
-            }
-          }
-        }
-      }
-    }
+    forEachLatestLogBlock(config, (slice, logFile, block) -> {
+      assertTrue(slice.getBaseFile().isPresent(), "a file group with delete logs must have a base file");
+      assertEquals(tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN),
+          FSUtils.isNativeDeleteLogFile(logFile.getFileName()), "unexpected log file layout: " + logFile.getFileName());
+      assertTrue(block instanceof HoodieDeleteBlock,
+          "expected only delete blocks but got: " + block.getClass().getSimpleName() + " in " + logFile.getFileName());
+      HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) block;
+      deleteRecordCount.addAndGet(deleteBlock.getRecordsToDelete().length);
+      List<Long> positions = deleteBlock.getRecordPositionList();
+      assertEquals(deleteBlock.getRecordsToDelete().length, positions.size(),
+          "every delete record must carry a position");
+      positions.forEach(position ->
+          assertTrue(position >= 0, "delete record positions must be valid"));
+      assertEquals(slice.getBaseFile().get().getCommitTime(),
+          deleteBlock.getBaseFileInstantTimeOfPositions(),
+          "positions must reference the file slice's base file");
+    });
     assertEquals(50, deleteRecordCount.get(), "each update must produce exactly one positional delete");
 
     // The new versions must land in new file groups of the same partitions.
@@ -162,9 +186,11 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
     assertEquals(50, updatedRecords);
   }
 
-  @Test
-  public void testRepeatedUpdatesOfSameKeys() throws Exception {
-    HoodieWriteConfig config = buildConfig(true);
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "NINE", "TEN"})
+  void testRepeatedUpdatesOfSameKeys(HoodieTableVersion tableVersion) throws Exception {
+    initTable(tableVersion);
+    HoodieWriteConfig config = buildConfig(true, tableVersion, 10);
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
     String commitTime = WriteClientTestUtils.createNewInstantTime();
@@ -193,11 +219,14 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
           .count(), "every record must be served from the latest round");
       prevCommitTime = updateTime;
     }
+    assertTableVersion(tableVersion);
   }
 
-  @Test
-  public void testDefaultBehaviorKeepsUpdatesInLogFiles() throws Exception {
-    HoodieWriteConfig config = buildConfig(false);
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "NINE", "TEN"})
+  void testDefaultBehaviorKeepsUpdatesInLogFiles(HoodieTableVersion tableVersion) throws Exception {
+    initTable(tableVersion);
+    HoodieWriteConfig config = buildConfig(false, tableVersion, 10);
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
     String insertTime = WriteClientTestUtils.createNewInstantTime();
@@ -210,25 +239,27 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
         "000", 50, HoodieJavaWriteClient::upsert, false, false, 50, 100, 2,
         config.populateMetaFields(), INSTANT_GENERATOR);
 
-    // Updates stay in their file groups as data log files; no new file groups appear.
+    assertTableVersion(tableVersion);
+
+    // Updates stay in their file groups as data blocks of their logs; no new file groups appear.
     assertEquals(fileIdsAfterInsert, collectFileIds());
-    try (SyncableFileSystemView fsView = getFileSystemView(metaClient.reloadActiveTimeline())) {
-      long dataLogFiles = Arrays.stream(dataGen.getPartitionPaths())
-          .flatMap(fsView::getLatestFileSlices)
-          .flatMap(FileSlice::getLogFiles)
-          .filter(logFile -> !logFile.getFileName().contains(".deletes."))
-          .count();
-      assertTrue(dataLogFiles > 0, "updates must be appended to data log files by default");
-    }
+    AtomicLong updateRecordCount = new AtomicLong();
+    forEachLatestLogBlock(config, (slice, logFile, block) -> {
+      assertTrue(block instanceof HoodieDataBlock,
+          "expected only data blocks but got: " + block.getClass().getSimpleName() + " in " + logFile.getFileName());
+      try (ClosableIterator<HoodieRecord<Object>> records =
+               ((HoodieDataBlock) block).getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
+        records.forEachRemaining(record -> updateRecordCount.incrementAndGet());
+      }
+    });
+    assertEquals(50, updateRecordCount.get(), "every update must be appended to its file group's log by default");
   }
 
-  @Test
-  public void testCompactionAfterDecomposedUpdates() throws Exception {
-    HoodieWriteConfig config = getConfigBuilder(HoodieTestDataGenerator.TRIP_EXAMPLE_SCHEMA, HoodieIndex.IndexType.SIMPLE)
-        .withCompactionConfig(HoodieCompactionConfig.newBuilder()
-            .withMaxNumDeltaCommitsBeforeCompaction(2).build())
-        .withWriteUpdatesAsDeletesAndInserts(true)
-        .build();
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "NINE", "TEN"})
+  void testCompactionAfterDecomposedUpdates(HoodieTableVersion tableVersion) throws Exception {
+    initTable(tableVersion);
+    HoodieWriteConfig config = buildConfig(true, tableVersion, 2);
     HoodieJavaWriteClient client = getHoodieWriteClient(config);
 
     String insertTime = WriteClientTestUtils.createNewInstantTime();
@@ -261,6 +292,7 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
           .count();
       assertEquals(0, remainingLogFiles, "compaction must consume all delete log files");
     }
+    assertTableVersion(tableVersion);
   }
 
   @Test
@@ -348,6 +380,35 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
       throwable = throwable.getCause();
     }
     return false;
+  }
+
+  @FunctionalInterface
+  private interface LogBlockVisitor {
+    void visit(FileSlice slice, HoodieLogFile logFile, HoodieLogBlock block) throws Exception;
+  }
+
+  /**
+   * Visits every block of every log file in the latest file slices through the log reader, which reads
+   * inline log files and native log files alike.
+   */
+  private void forEachLatestLogBlock(HoodieWriteConfig config, LogBlockVisitor visitor) throws Exception {
+    HoodieSchema schema = HoodieSchema.parse(config.getSchema());
+    try (SyncableFileSystemView fsView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      for (String partition : dataGen.getPartitionPaths()) {
+        for (FileSlice slice : fsView.getLatestFileSlices(partition).collect(Collectors.toList())) {
+          for (HoodieLogFile logFile : slice.getLogFiles().collect(Collectors.toList())) {
+            int blocks = 0;
+            try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(metaClient, logFile, schema)) {
+              while (reader.hasNext()) {
+                visitor.visit(slice, logFile, reader.next());
+                blocks++;
+              }
+            }
+            assertTrue(blocks > 0, "log file must hold at least one block: " + logFile.getFileName());
+          }
+        }
+      }
+    }
   }
 
   private Set<String> collectFileIds() throws Exception {
