@@ -438,8 +438,8 @@ public class HudiAvroSerializer
     private static void writeSlice(BlockBuilder output, Type type, Object value)
     {
         if (type instanceof VarcharType varcharType) {
-            Slice slice = utf8Slice(value.toString());
-            type.writeSlice(output, varcharType.isUnbounded() ? slice : truncateToLength(slice, varcharType));
+            // Match Trino's Parquet VARCHAR reader: truncate a bounded VARCHAR to its length in code points
+            type.writeSlice(output, truncateToLength(utf8Slice(value.toString()), varcharType));
         }
         else if (type instanceof VarbinaryType) {
             if (value instanceof ByteBuffer) {
