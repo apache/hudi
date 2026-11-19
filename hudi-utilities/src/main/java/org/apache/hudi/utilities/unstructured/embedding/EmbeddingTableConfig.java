@@ -256,13 +256,27 @@ public class EmbeddingTableConfig implements Serializable {
   /** Prefix of the row-balancing keys; they do not shape the preprocessing style. */
   public static final String BALANCE_PREFIX = PREP_PREFIX + "balance.";
 
-  /** Exact task count of hash prep balancing; positive, default {@code spark.default.parallelism}. */
+  /**
+   * RowBalancingStrategy implementation; the default, {@code balance.HashBalancingStrategy}, spreads the files over exactly
+   * {@code num.partitions} tasks by a hash of their source version, with one shuffle: balanced in expectation, not exactly.
+   */
+  public static final ConfigProperty<String> BALANCE_STRATEGY_CLASS = ConfigProperty
+      .key(BALANCE_PREFIX + "strategy.class")
+      .defaultValue("org.apache.hudi.utilities.unstructured.embedding.balance.HashBalancingStrategy")
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("RowBalancingStrategy implementation. The default, HashBalancingStrategy, spreads the files over exactly "
+          + "hoodie.unstructured.embedding.prep.num.partitions tasks by a hash of their source version (path sha, modification "
+          + "time, size), with one shuffle and no plan: a file's task depends on its version alone, and task file counts are "
+          + "balanced in expectation, not exactly equal.");
+
+  /** Exact task count of {@code balance.HashBalancingStrategy}; positive, default {@code spark.default.parallelism}. */
   public static final ConfigProperty<String> BALANCE_NUM_PARTITIONS = ConfigProperty
       .key(PREP_PREFIX + "num.partitions")
       .noDefaultValue("<derived>")
       .markAdvanced()
       .sinceVersion(SINCE_1_3_0)
-      .withDocumentation("Exact task count of hash prep balancing, a positive integer (default spark.default.parallelism).");
+      .withDocumentation("Exact task count of HashBalancingStrategy, a positive integer (default spark.default.parallelism).");
 
   /**
    * Tries in all of opening one blob's stored bytes when the open fails transiently (a throttled, reset or timed-out
