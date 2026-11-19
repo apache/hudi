@@ -23,11 +23,13 @@ import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.common.HoodiePendingRollbackInfo;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.engine.HoodieLocalEngineContext;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieFailedWritesCleaningPolicy;
+import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -41,7 +43,9 @@ import org.apache.hudi.common.testutils.MockHoodieTimeline;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
+import org.apache.hudi.config.HoodieLockConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieCompactionAlreadyRunningException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.metrics.MetricsReporterType;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -79,6 +83,23 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
+
+  @Test
+  void compactionRejectsFreshHeartbeatBeforeExecution() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+        .withLockConfig(HoodieLockConfig.newBuilder().withLockProvider(InProcessLockProvider.class).build())
+        .build();
+    HoodieTable<String, String, String, String> table = mock(HoodieTable.class);
+    when(table.getMetaClient()).thenReturn(metaClient);
+    try (TestTableServiceClient client = createSimpleTestClient(config)) {
+      client.heartbeatClient.start("001");
+      assertThrows(HoodieCompactionAlreadyRunningException.class, () -> client.compact(table, "001", false));
+      verify(table, never()).compact(any(), eq("001"));
+    }
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
