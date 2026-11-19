@@ -75,8 +75,8 @@ public class ScheduleCompactionActionExecutor<T, I, K, O> extends BaseTableServi
     checkArgument(operationType == WriteOperationType.COMPACT || operationType == WriteOperationType.LOG_COMPACT,
         "Only COMPACT and LOG_COMPACT is supported");
     if (operationType == WriteOperationType.LOG_COMPACT && config.shouldWriteUpdatesAsDeletesAndInserts()) {
-      // Log compaction rewrites delete blocks, which breaks the delete-only, positionally
-      // consistent log layout the update-as-delete-insert mode maintains
+      // Log compaction rewrites the logged deletes (inline delete blocks or native delete log files),
+      // which breaks the delete-only, positionally consistent log layout this mode maintains
       throw new HoodieNotSupportedException("Log compaction is not supported when "
           + HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is enabled");
     }
