@@ -56,6 +56,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import static com.google.common.base.Preconditions.checkState;
@@ -139,9 +140,25 @@ public class HoodieSchemaAvroSerializer
      */
     public HoodieSchemaAvroSerializer(List<HiveColumnHandle> columnHandles, PrefilledColumnValues prefilledColumnValues, Schema recordSchema)
     {
+        this(columnHandles, Optional.of(requireNonNull(prefilledColumnValues, "prefilledColumnValues is null")), recordSchema);
+    }
+
+    /**
+     * Builds a serializer for {@link #serialize} alone, outside a split: a reader of a file that is not a table data
+     * file (the archived timeline) has no partition or hidden columns to prefill. {@link #buildRecordInPage} is not
+     * available on it.
+     */
+    public HoodieSchemaAvroSerializer(List<HiveColumnHandle> columnHandles, Schema recordSchema)
+    {
+        this(columnHandles, Optional.empty(), recordSchema);
+    }
+
+    private HoodieSchemaAvroSerializer(List<HiveColumnHandle> columnHandles, Optional<PrefilledColumnValues> prefilledColumnValues, Schema recordSchema)
+    {
         this.columnHandles = List.copyOf(requireNonNull(columnHandles, "columnHandles is null"));
         this.columnTypes = this.columnHandles.stream().map(HiveColumnHandle::getType).toList();
-        this.prefilledColumnValues = requireNonNull(prefilledColumnValues, "prefilledColumnValues is null");
+        // Absent only for a serialize-only serializer, which never reaches prefilled columns
+        this.prefilledColumnValues = prefilledColumnValues.orElse(null);
         this.schema = requireNonNull(recordSchema, "recordSchema is null");
         this.channelToFieldPosition = new int[this.columnHandles.size()];
         this.channelToAvro = new ValueToAvro[this.columnHandles.size()];
@@ -168,6 +185,7 @@ public class HoodieSchemaAvroSerializer
 
     public void buildRecordInPage(PageBuilder pageBuilder, IndexedRecord record)
     {
+        checkState(prefilledColumnValues != null, "buildRecordInPage() requires a serializer built with prefilled column values");
         pageBuilder.declarePosition();
         // The record may be wider than the projection: resolve fields by name off its own schema
         compileFor(record.getSchema());
