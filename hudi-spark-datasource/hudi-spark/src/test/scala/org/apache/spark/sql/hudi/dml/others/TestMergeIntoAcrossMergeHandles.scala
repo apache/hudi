@@ -19,24 +19,34 @@
 
 package org.apache.spark.sql.hudi.dml.others
 
+import org.apache.hudi.config.HoodieIndexConfig
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hudi.common.HoodieSparkSqlTestBase
 import org.apache.spark.sql.types.{IntegerType, LongType, StringType, StructField, StructType}
+import org.junit.jupiter.api.Assertions.assertTrue
+
+import java.nio.file.{Files, Paths}
 
 import scala.collection.JavaConverters._
 
 /**
- * MERGE INTO updates of existing keys on a COW table, run through every merge handle in
- * [[HoodieSparkSqlTestBase.mergeHandleClasses]].
+ * MERGE INTO updates of existing keys merged into base files, run through every merge handle in
+ * [[HoodieSparkSqlTestBase.mergeHandleClasses]], on COW and MOR tables.
  *
  * A merge handle must write the merge result as-is. The merged row is in the table schema
  * (nullable columns), while [[ExpressionPayload]] decodes its bytes with the MERGE source schema
  * and re-applies the NOT MATCHED clause, so the merge result must not be wrapped in an
  * ExpressionPayload again, which HoodieWriteMergeHandle used to do.
+ *
+ * The tables use the SIMPLE index, which cannot index log files, so MOR updates to a small file
+ * group are merged into its base file through the merge handle rather than appended to a log file.
  */
 class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
 
-  private def createTableWithRows(tableName: String, location: String): Unit = {
+  private val tableTypes = Seq("cow", "mor")
+
+  private def createTableWithRows(tableName: String, location: String, tableType: String): Unit = {
     spark.sql(
       s"""
          |create table $tableName (
@@ -48,7 +58,7 @@ class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
          |) using hudi
          | partitioned by (country)
          | tblproperties (
-         |   type = 'cow',
+         |   type = '$tableType',
          |   primaryKey = 'country,name',
          |   preCombineField = 'ts'
          | )
@@ -66,6 +76,25 @@ class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
   private def checkRows(tableName: String)(expected: Seq[Any]*): Unit =
     checkAnswer(s"select name, city, rating, ts, country from $tableName order by name")(expected: _*)
 
+  /** Asserts the writes merged into base files: on MOR an append to a log file would bypass the merge handle. */
+  private def assertNoLogFiles(location: String): Unit = {
+    val logFiles = Files.walk(Paths.get(location)).iterator().asScala
+      .map(_.toString)
+      .filter(path => !path.contains("/.hoodie/") && path.contains(".log."))
+      .toList
+    assertTrue(logFiles.isEmpty, s"Expected updates to be merged into base files, found log files: $logFiles")
+  }
+
+  /** Registers the test for each table type and merge handle, with the SIMPLE index. */
+  private def testOnTableTypesAndMergeHandles(testName: String)(testFun: String => Unit): Unit =
+    tableTypes.foreach { tableType =>
+      testWithMergeHandles(s"$testName ($tableType)") {
+        withSQLConf(HoodieIndexConfig.INDEX_TYPE.key -> "SIMPLE") {
+          testFun(tableType)
+        }
+      }
+    }
+
   /** Registers a view whose columns are all nullable, as a scan of a table gives. */
   private def createNullableSourceView(viewName: String, rows: Row*): Unit = {
     val sourceSchema = StructType(Seq(
@@ -77,10 +106,11 @@ class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
     spark.createDataFrame(rows.asJava, sourceSchema).createOrReplaceTempView(viewName)
   }
 
-  testWithMergeHandles("Test MergeInto update with a non-nullable source") {
+  testOnTableTypesAndMergeHandles("Test MergeInto update with a non-nullable source") { tableType =>
     withTempDir { tmp =>
       val tableName = generateTableName
-      createTableWithRows(tableName, s"${tmp.getCanonicalPath}/$tableName")
+      val location = s"${tmp.getCanonicalPath}/$tableName"
+      createTableWithRows(tableName, location, tableType)
 
       // A subquery of constants: every source column is NOT NULL, the table's are nullable.
       spark.sql(
@@ -101,13 +131,15 @@ class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
         Seq("a2", "nyc", 2, 1000L, "US"),
         Seq("a3", "toronto", 3, 1000L, "CA"),
         Seq("a4", "sf", 5, 2001L, "US"))
+      assertNoLogFiles(location)
     }
   }
 
-  testWithMergeHandles("Test MergeInto update with a nullable source") {
+  testOnTableTypesAndMergeHandles("Test MergeInto update with a nullable source") { tableType =>
     withTempDir { tmp =>
       val tableName = generateTableName
-      createTableWithRows(tableName, s"${tmp.getCanonicalPath}/$tableName")
+      val location = s"${tmp.getCanonicalPath}/$tableName"
+      createTableWithRows(tableName, location, tableType)
 
       // Source columns match the table's nullability, so this passed even before the fix.
       val sourceView = s"${tableName}_source"
@@ -129,13 +161,15 @@ class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
         Seq("a2", "nyc", 2, 1000L, "US"),
         Seq("a3", "toronto", 3, 1000L, "CA"),
         Seq("a4", "sf", 5, 2001L, "US"))
+      assertNoLogFiles(location)
     }
   }
 
-  testWithMergeHandles("Test MergeInto update is not filtered by the NOT MATCHED condition") {
+  testOnTableTypesAndMergeHandles("Test MergeInto update is not filtered by the NOT MATCHED condition") { tableType =>
     withTempDir { tmp =>
       val tableName = generateTableName
-      createTableWithRows(tableName, s"${tmp.getCanonicalPath}/$tableName")
+      val location = s"${tmp.getCanonicalPath}/$tableName"
+      createTableWithRows(tableName, location, tableType)
 
       // A nullable source, so the source and table schemas agree and only the clause handling is exercised.
       val sourceView = s"${tableName}_source"
@@ -158,6 +192,7 @@ class TestMergeIntoAcrossMergeHandles extends HoodieSparkSqlTestBase {
         Seq("a2", "nyc", 2, 1000L, "US"),
         Seq("a3", "toronto", 3, 1000L, "CA"),
         Seq("a4", "sf", 50, 2001L, "US"))
+      assertNoLogFiles(location)
     }
   }
 }
