@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.unstructured.storage;
 
+import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.EngineProperty;
 import org.apache.hudi.common.engine.TaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
@@ -32,6 +33,10 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 import org.apache.hudi.table.marker.TimelineServerBasedWriteMarkers;
+import org.apache.hudi.utilities.sources.unstructured.UnstructuredSourceConfig;
+import org.apache.hudi.utilities.sources.unstructured.UnstructuredSourceContract;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.UnstructuredTableTestProperties;
 
 import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
@@ -139,6 +144,54 @@ class TestOutOfLineWriter {
     }
   }
 
+  /** {@code props} merged into the job of the embedding stream, the one writer of out-of-line files (its default preprocessors store video frames). */
+  private static TypedProperties markers(TypedProperties props) {
+    TypedProperties job = TypedProperties.copy(props);
+    job.setProperty(UnstructuredSourceConfig.MODE.key(), "embedding");
+    job.setProperty(EmbeddingTableConfig.MODE.key(), EmbeddingTableConfig.MODE_PREP_ONLY);
+    job.setProperty(UnstructuredSourceConfig.CLOUD.key(), "s3");
+    return new UnstructuredSourceContract(job).prepareJob(job);
+  }
+
+  /**
+   * Unset marker settings are set to timeline-server markers and marker rollback, the same values are accepted, a conflicting one
+   * is refused by name; with out-of-line markers off, the job's own values are kept.
+   */
+  @Test
+  void markerSettingsAreSetAndConflictsRejectedUnlessDisabled() {
+    TypedProperties merged = markers(new TypedProperties());
+    assertEquals("TIMELINE_SERVER_BASED", merged.getString(HoodieWriteConfig.MARKERS_TYPE.key()));
+    assertEquals("true", merged.getString(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.key()));
+    TypedProperties required = new TypedProperties();
+    required.setProperty(HoodieWriteConfig.MARKERS_TYPE.key(), "timeline_server_based");
+    required.setProperty(HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.key(), "TRUE");
+    markers(required);
+    for (String key : new String[] {HoodieWriteConfig.MARKERS_TYPE.key(), HoodieWriteConfig.ROLLBACK_USING_MARKERS_ENABLE.key()}) {
+      TypedProperties conflicting = new TypedProperties();
+      String value = key.equals(HoodieWriteConfig.MARKERS_TYPE.key()) ? "DIRECT" : "false";
+      conflicting.setProperty(key, value);
+      IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> markers(conflicting));
+      assertTrue(refused.getMessage().startsWith("UnstructuredDataSource (mode embedding) requires " + key + "="), refused.getMessage());
+      conflicting.setProperty(HoodieWriteConfig.BLOB_MARKERS_ENABLE.key(), "false");
+      assertEquals(value, markers(conflicting).getString(key), "disabled markers keep the job's writer settings");
+    }
+  }
+
+  /**
+   * With the embedded timeline server off, Spark's default marker type is DIRECT: an unset marker type is set to
+   * TIMELINE_SERVER_BASED (a remote timeline server serves it), and disabled out-of-line markers set neither.
+   */
+  @Test
+  void markerTypeIsSetWithTheEmbeddedTimelineServerOff() {
+    TypedProperties unset = new TypedProperties();
+    unset.setProperty(HoodieWriteConfig.EMBEDDED_TIMELINE_SERVER_ENABLE.key(), "false");
+    assertEquals("TIMELINE_SERVER_BASED", markers(unset).getString(HoodieWriteConfig.MARKERS_TYPE.key()));
+
+    TypedProperties disabled = TypedProperties.copy(unset);
+    disabled.setProperty(HoodieWriteConfig.BLOB_MARKERS_ENABLE.key(), "false");
+    assertFalse(markers(disabled).containsKey(HoodieWriteConfig.MARKERS_TYPE.key()));
+  }
+
   @Test
   void existingVersionSixTargetIsRefusedWithAutoUpgradeOff() throws Exception {
     String base = temp.resolve("table").toUri().toString();
@@ -191,7 +244,7 @@ class TestOutOfLineWriter {
 
   private String initTable() throws IOException {
     String base = temp.resolve("table").toUri().toString();
-    HoodieTableMetaClient.newTableBuilder()
+    HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.layoutOne())
         .setTableName("blob_table").setTableType(HoodieTableType.COPY_ON_WRITE)
         .initTable(HadoopFSUtils.getStorageConf(new Configuration()), base);
     return base;

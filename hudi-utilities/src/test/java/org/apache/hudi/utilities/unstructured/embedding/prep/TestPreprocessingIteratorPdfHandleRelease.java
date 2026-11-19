@@ -140,7 +140,7 @@ public class TestPreprocessingIteratorPdfHandleRelease {
     props.setProperty(EmbeddingTableConfig.MODELS.key(), "m1");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX, "4");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, "dummy");
-    return new PreprocessingIterator(Arrays.asList(rows).iterator(), EmbeddingTableConfig.from(props),
+    return new PreprocessingIterator(Arrays.asList(rows).iterator(), EmbeddingTableConfig.from(props), "001",
         new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())), new PreprocessorRegistry(props),
         new WordCountTokenizer(),
         new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(), new LongAccumulator(),

@@ -115,7 +115,7 @@ class TestPdfDecodeLoss {
         "s3a://bucket/input.pdf", "input.pdf"}, sourceType);
     TypedProperties props = new TypedProperties();
     PrepCounters counters = PrepCounters.local();
-    try (PreprocessingIterator iterator = new PreprocessingIterator(List.of(row).iterator(), EmbeddingTableConfig.from(props),
+    try (PreprocessingIterator iterator = new PreprocessingIterator(List.of(row).iterator(), EmbeddingTableConfig.from(props), "001",
         new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())), new PreprocessorRegistry(props),
         new WordCountTokenizer(), counters, null)) {
       assertFalse(iterator.hasNext());

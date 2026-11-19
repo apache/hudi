@@ -72,7 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * by random access); every refusal is a quarantine entry of its file alone; a storage failure that is not the file's own fails the
  * round after the source's open retries.
  */
-public class TestImageInputPrepRows {
+class TestImageInputPrepRows {
 
   private static final StructType BLOB = (StructType) BlobType.dataType();
   private static final StructType REFERENCE = (StructType) BLOB.apply(HoodieSchema.Blob.EXTERNAL_REFERENCE).dataType();
@@ -91,21 +91,21 @@ public class TestImageInputPrepRows {
   private String embeddingTable;
 
   @BeforeEach
-  public void createTable() throws IOException {
+  void createTable() throws IOException {
     embeddingTable = temp.resolve("embedding").toUri().toString();
-    HoodieTableMetaClient.newTableBuilder().setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("embedding")
+    HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.layoutOne())
+        .setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("embedding")
         .setRecordKeyFields(String.join(",", EmbeddingTableSchema.KEY_COLUMNS))
-        .setAdditionalProperties(UnstructuredTableTestProperties.layoutOne())
         .initTable(HadoopFSUtils.getStorageConf(new Configuration()), embeddingTable);
   }
 
   @AfterEach
-  public void clearHooks() {
+  void clearHooks() {
     SourceOpenHooks.clear();
   }
 
   @Test
-  public void eachImageIsOneRowStoringTheSourceBlobValue() throws IOException {
+  void eachImageIsOneRowStoringTheSourceBlobValue() throws IOException {
     byte[] png = ImageFixtures.image("png", 97, 41);
     // libtiff layout: the directory after the pixel data, read by random access over the object
     byte[] tiff = ImageFixtures.singleStripTiff(400, 300);
@@ -129,7 +129,7 @@ public class TestImageInputPrepRows {
 
   /** Each refusal fails its own file (a quarantine entry, modality image) and the good file between them is still one row. */
   @Test
-  public void everyRefusalIsAQuarantineEntryOfItsFile() throws IOException {
+  void everyRefusalIsAQuarantineEntryOfItsFile() {
     TypedProperties props = props();
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_PIXELS.key(), "10000");
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_BYTES.key(), "200000");
@@ -164,7 +164,7 @@ public class TestImageInputPrepRows {
 
   /** A transient failure to open an image's object is retried in the round; the row is written once it opens. */
   @Test
-  public void transientOpenFailureIsRetried() throws IOException {
+  void transientOpenFailureIsRetried() throws IOException {
     byte[] png = ImageFixtures.image("png", 30, 20);
     Path local = bucketObject("retried.png", png);
     AtomicInteger attempts = new AtomicInteger();
@@ -184,7 +184,7 @@ public class TestImageInputPrepRows {
 
   /** A storage failure that outlasts the retries is no quarantine entry: the round fails, so a later run reads the file. */
   @Test
-  public void persistentStorageFailureFailsTheRound() throws IOException {
+  void persistentStorageFailureFailsTheRound() throws IOException {
     byte[] png = ImageFixtures.image("png", 30, 20);
     Path local = bucketObject("throttled.png", png);
     SourceOpenHooks.beforeOpen(local.toAbsolutePath().toString(), () -> {
@@ -195,6 +195,23 @@ public class TestImageInputPrepRows {
     RuntimeException failed = assertThrows(RuntimeException.class, () -> drain(iterator));
     assertNotNull(PrepFailures.roundFailure(failed), failed.toString());
     assertTrue(iterator.getSideOutputs().isEmpty(), iterator.getSideOutputs().toString());
+  }
+
+  @Test
+  void changedImageIsAFileFailureBeforeOpeningIt() throws IOException {
+    byte[] png = ImageFixtures.image("png", 30, 20);
+    Path local = bucketObject("changed.png", png);
+    Row row = referenceRow("sha-changed", "png", bucketPath("changed.png"), png.length);
+    Files.setLastModifiedTime(local, FileTime.fromMillis(2L));
+    AtomicInteger opens = new AtomicInteger();
+    SourceOpenHooks.beforeOpen(local.toAbsolutePath().toString(), opens::incrementAndGet);
+    PreprocessingIterator iterator = iterator(props(), bucketSource(new TransientRetry(2, 0L)), row);
+
+    assertTrue(drain(iterator).isEmpty());
+    assertEquals(1, iterator.getSideOutputs().size());
+    assertEquals(PrepSideOutput.STAGE_PREP, iterator.getSideOutputs().get(0).getStage());
+    assertContains(iterator.getSideOutputs().get(0).getError(), "changed since it was listed");
+    assertEquals(0, opens.get(), "a changed object is refused before its image bytes are opened");
   }
 
   private static void assertImageRow(Row row, String sha, int width, int height, String format) {
@@ -208,7 +225,8 @@ public class TestImageInputPrepRows {
     expectedAux.put(EmbeddingTableSchema.AUX_INPUT_WIDTH, String.valueOf(width));
     expectedAux.put(EmbeddingTableSchema.AUX_INPUT_HEIGHT, String.valueOf(height));
     expectedAux.put(EmbeddingTableSchema.AUX_INPUT_LOGIC, ImageInputPreprocessor.INPUT_LOGIC);
-    assertEquals(expectedAux, row.getJavaMap(EmbeddingTableSchema.BASE_COLUMNS.indexOf(EmbeddingTableSchema.AUX)));
+    Map<String, String> actualAux = new HashMap<>(row.getJavaMap(EmbeddingTableSchema.BASE_COLUMNS.indexOf(EmbeddingTableSchema.AUX)));
+    assertEquals(expectedAux, actualAux);
   }
 
   private static void assertContains(String text, String expected) {
@@ -235,6 +253,7 @@ public class TestImageInputPrepRows {
     return writeSource(file, bytes);
   }
 
+  /** Writes the same source version (mtime 1) that the fixture rows declare. */
   private static Path writeSource(Path file, byte[] bytes) throws IOException {
     Files.write(file, bytes);
     Files.setLastModifiedTime(file, FileTime.fromMillis(1L));
@@ -259,8 +278,15 @@ public class TestImageInputPrepRows {
   private PreprocessingIterator iterator(TypedProperties props, BlobBytesSource source, Row... rows) {
     PrepCounters counters = new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(),
         new LongAccumulator(), new LongAccumulator());
-    return new PreprocessingIterator(Arrays.asList(rows).iterator(), EmbeddingTableConfig.from(props), source,
-        new PreprocessorRegistry(props), new WordCountTokenizer(), counters, null);
+    return new PreprocessingIterator(
+        Arrays.asList(rows).iterator(),
+        EmbeddingTableConfig.from(props),
+        "001",
+        source,
+        new PreprocessorRegistry(props),
+        new WordCountTokenizer(),
+        counters,
+        null);
   }
 
   private static List<Row> drain(PreprocessingIterator iterator) {

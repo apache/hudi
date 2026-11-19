@@ -198,7 +198,7 @@ public class TestPrepRoundOutputRows {
                                           StructType outputSchema, StructType iteratorSchema) {
     return PrepRound.outputRows(source, config, new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
         new PreprocessorRegistry(props), new WordCountTokenizer(), PrepCounters.local(), "001", outputSchema,
-        PrepRound.layoutOf(outputSchema, iteratorSchema));
+        PrepRound.layoutOf(outputSchema, iteratorSchema), null);
   }
 
   private static Row blobRow(String sha, String extension, String text) {

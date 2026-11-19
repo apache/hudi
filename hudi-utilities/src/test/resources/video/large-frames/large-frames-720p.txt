@@ -1,0 +1,17 @@
+large-frames-720p.mp4: a fixture whose kept frames are JPEGs above Spark 3.5's 80 KiB (81920 bytes) inline cap for a binary value.
+
+Made by generate-large-frames.sh with the ffmpeg 7.1 program of org.bytedeco:ffmpeg:7.1-1.5.11 (linux-arm64-gpl, libx264).
+A rerun with the same binary writes the same bytes.
+
+Clip: 127425 bytes, sha256 bc7af88a4b1af8c3753c7b2997c68093e8ecfc1e883605600e945ae1e4724707
+  H.264 (High, CRF 28, preset medium, single-threaded), yuv420p, 1280x720, 25 fps, 3 s, no audio, mp4.
+  A keyframe every 25 frames (scene cut off): keyframes at 0, 1000 and 2000 ms; the P-frames cost under 3 KB together.
+  Picture: a zone plate centred on the frame with a ring frequency that steps up each second, over a cosine grating whose
+  direction turns each second, plus two slow chroma gratings. Still within a second, different between seconds, so every
+  keyframe survives the default dHash dedup (max distance 4).
+
+Kept frames through FfmpegKeyframeVideoFrameSource with the default video config (1000 ms keyframe interval, dHash dedup),
+each encoded by FrameJpegEncoder (JPEG q90, native size), measured by TestLargeFramesFixture:
+  frame 0  t=0 ms     1280x720  197922 bytes (193.3 KiB)
+  frame 1  t=1000 ms  1280x720  222383 bytes (217.2 KiB)
+  frame 2  t=2000 ms  1280x720  244151 bytes (238.4 KiB)

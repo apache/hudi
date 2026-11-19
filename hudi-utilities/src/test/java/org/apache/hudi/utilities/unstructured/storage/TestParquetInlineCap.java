@@ -21,10 +21,12 @@ package org.apache.hudi.utilities.unstructured.storage;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.sources.blob.BlobTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.LogCapture;
+import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -40,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the per-column statistics switch the default is 10 KiB and a larger configured value is capped at 80 KiB; with it the
  * configured value or the 1 MiB default is used as is.
  */
-public class TestParquetInlineCap {
+class TestParquetInlineCap {
 
   private static final String BLOB_KEY = "hoodie.blob.table.inline.max.bytes";
   private static final String[] KEYS = {BLOB_KEY};
@@ -77,7 +79,7 @@ public class TestParquetInlineCap {
 
   @ParameterizedTest
   @MethodSource("thresholds")
-  public void effectiveThresholdOnBothParquetCapabilities(String key, String configured, boolean statisticsSwitch, long expected) {
+  void effectiveThresholdOnBothParquetCapabilities(String key, String configured, boolean statisticsSwitch, long expected) {
     TypedProperties props = new TypedProperties();
     if (configured != null) {
       props.setProperty(key, configured);
@@ -88,7 +90,7 @@ public class TestParquetInlineCap {
   /** A value outside [0, 2^31-9] is refused before the cap, on both Parquet capabilities. */
   @ParameterizedTest
   @MethodSource("outOfRange")
-  public void outOfRangeValueIsRefusedOnBothCapabilities(String key, String configured, boolean statisticsSwitch) {
+  void outOfRangeValueIsRefusedOnBothCapabilities(String key, String configured, boolean statisticsSwitch) {
     TypedProperties props = new TypedProperties();
     props.setProperty(key, configured);
     IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> resolve(key, props, statisticsSwitch));
@@ -108,7 +110,7 @@ public class TestParquetInlineCap {
 
   @ParameterizedTest
   @ValueSource(strings = {BLOB_KEY})
-  public void warningNamesTheKeyTheValueAndTheCap(String key) {
+  void warningNamesTheKeyTheValueAndTheCap(String key) {
     assertEquals(key + "=81921 is above 81920 bytes, the largest inline threshold on a Parquet without per-column statistics "
         + "(before 1.14, e.g. the Spark 3.5 builds): 81920 is used", ParquetInlineCap.warning(key, 81921L));
   }
@@ -116,7 +118,7 @@ public class TestParquetInlineCap {
   /** The WARN is logged once per resolution above the cap, and only without the switch. */
   @ParameterizedTest
   @ValueSource(strings = {BLOB_KEY})
-  public void warnIsLoggedOnlyAboveTheCapWithoutTheSwitch(String key) {
+  void warnIsLoggedOnlyAboveTheCapWithoutTheSwitch(String key) {
     try (LogCapture logs = LogCapture.of(ParquetInlineCap.class)) {
       for (String configured : new String[] {"81920", "81921"}) {
         for (boolean statisticsSwitch : new boolean[] {true, false}) {
@@ -129,8 +131,30 @@ public class TestParquetInlineCap {
     }
   }
 
+  /**
+   * The embedding input store's threshold: unset, it is the cap itself without the switch (an encoded frame is already in
+   * memory, so every frame up to the cap stays in its row) and 1 MiB with it; a configured value is capped as the blob table's.
+   */
+  @ParameterizedTest
+  @CsvSource(value = {"null,false,81920", "10240,false,10240", "81921,false,81920", "null,true,1048576", "81921,true,81921"},
+      nullValues = "null")
+  void embeddingInputThresholdDefaultsToTheCapWithoutTheSwitch(String configured, boolean statisticsSwitch, long expected) {
+    TypedProperties props = new TypedProperties();
+    if (configured != null) {
+      props.setProperty(EmbeddingInputConfig.INLINE_MAX_BYTES.key(), configured);
+    }
+    assertEquals(expected, EmbeddingInputConfig.inlineMaxBytes(props, statisticsSwitch));
+  }
+
+  /** A default without the switch above the cap is the cap. */
   @Test
-  public void defaultAndCapAreBinaryKibibytes() {
+  void defaultWithoutTheSwitchIsAtMostTheCap() {
+    assertEquals(81920L, ParquetInlineCap.effective("k", null, 1L << 20, 1L << 20, false));
+    assertEquals(10240L, ParquetInlineCap.effective("k", null, 1L << 20, false));
+  }
+
+  @Test
+  void defaultAndCapAreBinaryKibibytes() {
     assertEquals(10240L, ParquetInlineCap.DEFAULT_BYTES);
     assertEquals(81920L, ParquetInlineCap.MAX_BYTES);
   }

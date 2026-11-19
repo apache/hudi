@@ -22,10 +22,16 @@ import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.exception.HoodieException;
-import org.apache.hudi.utilities.sources.blob.BlobTableConfig;
+import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
+import org.apache.hudi.utilities.unstructured.SourceCauses;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig;
+import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingPayloadWriteException;
+import org.apache.hudi.utilities.unstructured.embedding.input.PayloadDestination;
+import org.apache.hudi.utilities.unstructured.embedding.input.PreparedInputs;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobColumns;
 import org.apache.hudi.utilities.unstructured.embedding.source.FileMeta;
@@ -72,8 +78,9 @@ import scala.collection.JavaConverters;
  *       chunks to keep the {@link Chunk} contract (modality, payload and frame index), which the shipped preprocessors' tests
  *       hold them to;</li>
  *   <li>it stores a chunk's payload in {@code prepared_image}: a source payload as the source row's own blob value, unchanged (inline
- *       bytes, or the reference to the object), a derived one inline up to the source's inline threshold; a derived one above
- *       the threshold or not of its declared size fails that chunk;</li>
+ *       bytes, or the reference to the object), a derived one through the input store ({@link PreparedInputs}): inline up to
+ *       {@code hoodie.unstructured.embedding.input.inline.max.bytes}, above it written out of line under the embedding table
+ *       and referenced; a derived one not of its declared size fails that chunk; a failure to write its file fails the round;</li>
  *   <li>no silent loss on a key collision: every id it assigns is above the last id of the same (file, modality), else
  *       the file fails (a repeated key within a file is refused here, never dropped by the writer);</li>
  *   <li>a chunk whose payload cannot be stored fails that chunk only: chunk 0 fails its file-modality, whose later chunks are
@@ -121,8 +128,10 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private final int modelColumnCount;
   private final List<String> userPartitionColumns;
   private final ChunkIdScheme chunkIds;
-  /** The largest derived payload stored inline in {@code prepared_image}: the source's own inline threshold. */
+  /** The largest derived payload stored inline in {@code prepared_image}: the input store's inline threshold. */
   private final long payloadInlineMaxBytes;
+  /** Stores derived payloads, inline or out of line under the embedding table; null without a payload destination. */
+  private final PreparedInputs preparedInputs;
   /** Where failed and empty files go: never into the rows this iterator returns. */
   private final Consumer<PrepSideOutput> sideOutputs;
   /** The side outputs of an iterator built without a sink (tests); null otherwise. */
@@ -162,12 +171,29 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private Throwable failedWith;
 
   /**
+   * An iterator with no payload destination: a derived payload above the input store's inline threshold fails its chunk.
+   *
+   * @param instant               the prep instant; with no payload destination nothing is written under it, so this constructor
+   *                              does not read it (it keeps the same leading arguments as the one with a destination)
    * @param sideOutputs           receives every failed or empty file as it is met; null to keep them in memory
    *                              ({@link #getSideOutputs()})
    */
-  public PreprocessingIterator(Iterator<Row> blobRows, EmbeddingTableConfig config, BlobBytesSource bytesSource,
+  public PreprocessingIterator(Iterator<Row> blobRows, EmbeddingTableConfig config, String instant, BlobBytesSource bytesSource,
                                PreprocessorRegistry registry, Tokenizer tokenizer, PrepCounters counters,
                                Consumer<PrepSideOutput> sideOutputs) {
+    this(blobRows, config, instant, bytesSource, registry, tokenizer, counters, sideOutputs, null);
+  }
+
+  /**
+   * @param instant               the prep instant the rows are written at, named by every payload file
+   * @param sideOutputs           receives every failed or empty file as it is met; null to keep them in memory
+   *                              ({@link #getSideOutputs()})
+   * @param destination           where a derived payload above the input store's inline threshold is written as it is prepared;
+   *                              null for none
+   */
+  public PreprocessingIterator(Iterator<Row> blobRows, EmbeddingTableConfig config, String instant, BlobBytesSource bytesSource,
+                               PreprocessorRegistry registry, Tokenizer tokenizer, PrepCounters counters,
+                               Consumer<PrepSideOutput> sideOutputs, PayloadDestination destination) {
     this.collectedSideOutputs = sideOutputs == null ? new ArrayList<>() : null;
     Consumer<PrepSideOutput> sink = sideOutputs == null ? collectedSideOutputs::add : sideOutputs;
     this.sideOutputs = sideOutput -> {
@@ -183,7 +209,8 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     this.modelColumnCount = config.models().size() * EmbeddingTableSchema.COLUMNS_PER_MODEL;
     this.userPartitionColumns = EmbeddingTableSchema.userPartitionColumns(config.getProps());
     this.chunkIds = new SequentialChunkIdScheme();
-    this.payloadInlineMaxBytes = BlobTableConfig.inlineMaxBytes(config.getProps());
+    this.payloadInlineMaxBytes = EmbeddingInputConfig.inlineMaxBytes(config.getProps());
+    this.preparedInputs = destination == null ? null : new PreparedInputs(config.getProps(), instant, destination);
     TaskContext taskContext = TaskContext.get();
     if (taskContext != null) {
       taskContext.addTaskCompletionListener((TaskCompletionListener) context -> close());
@@ -245,11 +272,25 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
         return;
       }
       if (!blobRows.hasNext()) {
+        try {
+          if (preparedInputs != null) {
+            // every payload file of the task is written before the iterator reports its end, so the task succeeds only with
+            // its files; a failed write fails the task
+            preparedInputs.awaitWrites();
+          }
+          // by design: closed also when a write failed (nothing else closes an iterator outside a Spark task); the write's
+          // failure is the one thrown, a failure of the close suppressed on it
+        } catch (Throwable writeFailure) { // NOSONAR (by design: see above)
+          closeSuppressedInto(writeFailure);
+          throw writeFailure;
+        }
         close();
         return;
       }
-      openFile(blobRows.next());
-    } catch (Throwable t) {
+      Row next = blobRows.next();
+      openFile(next);
+      // by design: any failure, an Error included, marks the iterator failed before it propagates, so it is never reused
+    } catch (Throwable t) { // NOSONAR (by design: see above)
       failedWith = t;
       closeSuppressedInto(t);
       throw t;
@@ -273,7 +314,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
         // the id first: a chunk whose payload cannot be stored fails alone, under its own id
         chunkId = chunkIdOf(chunk);
         try {
-          preparedImage = preparedImage(chunk);
+          preparedImage = preparedImage(chunk, chunkId);
         } catch (PreprocessingException e) {
           failChunk(chunk, chunkId, e);
           return;
@@ -391,12 +432,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
    * task ends.
    */
   private static void rethrowInterruption(Exception e) {
-    TaskContext task = TaskContext.get();
-    boolean interrupted = Thread.currentThread().isInterrupted() || (task != null && task.isInterrupted());
-    for (Throwable t = e; t != null && !interrupted; t = t.getCause() == t ? null : t.getCause()) {
-      interrupted = t instanceof java.io.InterruptedIOException || t instanceof InterruptedException
-          || t instanceof java.nio.channels.ClosedByInterruptException; // an NIO read interrupted
-    }
+    boolean interrupted = PrepFailures.isInterrupted(e);
     if (interrupted) {
       throw e instanceof RuntimeException ? (RuntimeException) e : new HoodieException("Interrupted while preprocessing", e);
     }
@@ -438,10 +474,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     if (failure instanceof PreprocessingException) {
       return failure.getMessage();
     }
-    Throwable root = failure;
-    while (root.getCause() != null && root.getCause() != root) {
-      root = root.getCause();
-    }
+    Throwable root = SourceCauses.getRootCause(failure);
     String described = failure.getClass().getSimpleName() + ": " + failure.getMessage();
     return root == failure ? described
         : described + " (root cause " + root.getClass().getSimpleName() + ": " + root.getMessage() + ")";
@@ -449,12 +482,16 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
 
   /**
    * The {@code prepared_image} value of {@code chunk}: null without a payload; the source row's own blob value, unchanged, for a
-   * source payload (inline bytes, or the reference to the object); the payload's bytes inline for a derived one.
+   * source payload (inline bytes, or the reference to the object); for a derived one, its bytes inline up to the input store's
+   * inline threshold, above it a managed reference to the file the input store wrote ({@link PreparedInputs}).
    *
-   * @throws PreprocessingException a content failure of this chunk: a derived payload above the inline threshold, or one whose
-   *     bytes cannot be read or differ in size from the declared one
+   * @throws PreprocessingException a content failure of this chunk: a payload whose bytes cannot be read or differ in size
+   *     from the declared one, or a derived payload above the inline threshold of an iterator with no payload destination
+   * @throws EmbeddingPayloadWriteException when the payload file cannot be written: a round failure
+   *     ({@link PrepFailures#roundFailure})
+   * @throws PrepPlatformException when the input store's per-task inline ceiling refuses its threshold: a round failure
    */
-  private Row preparedImage(Chunk chunk) {
+  private Row preparedImage(Chunk chunk, long chunkId) {
     if (chunk.getPayload() == null) {
       return null;
     }
@@ -462,30 +499,32 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
       return currentBlob;
     }
     long size = chunk.getPayloadSizeBytes();
-    if (size > payloadInlineMaxBytes) {
-      throw new PreprocessingException("Payload of chunk " + fileChunks + " is " + size + " bytes, above the inline threshold "
-          + BlobTableConfig.INLINE_MAX_BYTES.key() + "=" + payloadInlineMaxBytes + ": a derived input is stored inline only");
-    }
-    byte[] bytes = new byte[(int) size];
-    try (InputStream in = chunk.getPayload().open()) {
-      int read = 0;
-      while (read < bytes.length) {
-        int n = in.read(bytes, read, bytes.length - read);
-        if (n < 0) {
-          throw new PreprocessingException("Payload of chunk " + fileChunks + " ended after " + read + " of its declared " + size
-              + " bytes");
-        }
-        read += n;
+    try {
+      if (preparedInputs != null) {
+        return preparedInputs.prepare(rowName(chunk, chunkId), null, chunk.getPayloadContentType(), chunk.getPayload(), size);
       }
-      if (in.read() >= 0) {
-        throw new PreprocessingException("Payload of chunk " + fileChunks + " is longer than its declared " + size + " bytes");
+      if (size > payloadInlineMaxBytes) {
+        throw new PreprocessingException("Payload of chunk " + fileChunks + " is " + size + " bytes, above the inline threshold "
+            + EmbeddingInputConfig.INLINE_MAX_BYTES.key() + "=" + payloadInlineMaxBytes + ", and this prep has no payload destination");
       }
-    } catch (IOException e) {
-      // a storage failure under the reader fails the round, as on every other per-file path
+      return RowFactory.create(HoodieSchema.Blob.INLINE,
+          PreparedInputs.readWhole(chunk.getPayload(), size), null);
+    } catch (IllegalArgumentException | HoodieIOException e) {
+      // A read's storage failure still fails the round; payload content failures fail this chunk.
       PrepFailures.rethrowRoundFailure(e);
-      throw new PreprocessingException("Payload of chunk " + fileChunks + " could not be read: " + e.getMessage(), e);
+      throw new PreprocessingException("Payload of chunk " + fileChunks + " could not be stored: " + e.getMessage(), e);
+    } catch (EmbeddingPayloadWriteException e) {
+      throw e;
+    } catch (HoodieValidationException e) {
+      throw new PrepPlatformException("The input store could not store the payload of " + rowName(chunk, chunkId) + ": "
+          + e.getMessage(), e);
     }
-    return RowFactory.create(HoodieSchema.Blob.INLINE, bytes, null);
+  }
+
+  /** The row a chunk's payload belongs to, by its record key fields, for the input store's failure messages. */
+  private String rowName(Chunk chunk, long chunkId) {
+    return "source_path_sha=" + currentFile.getSourcePathSha() + " source_modification_time=" + currentFile.getSourceModificationTime()
+        + " source_file_size=" + currentFile.getFileSize() + " modality=" + chunk.getModality() + " chunk_id=" + chunkId;
   }
 
   /** The row of {@code chunk}, in {@link EmbeddingTableSchema#build} column order. */
@@ -575,7 +614,13 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     try {
       closeCurrentFileQuietly();
     } finally {
-      closeRegistryIfUnowned();
+      try {
+        closeRegistryIfUnowned();
+      } finally {
+        if (preparedInputs != null) {
+          preparedInputs.close();
+        }
+      }
     }
   }
 

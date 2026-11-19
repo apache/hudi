@@ -100,8 +100,9 @@ public final class ComputeRound {
 
   /**
    * Embeds {@code rows} (in {@code tableSchema}) with {@code model}, reading image rows' {@code prepared_image} through
-   * {@code storedInputs}: the rows in {@code tableSchema} plus
-   * {@link #ERROR_WORKING_COLUMN}, persisted at {@code level} and counted, so every model call has run when it returns.
+   * {@code storedInputs} (built with the embedding table's base path, so a managed reference relative to it, as the input store
+   * writes one, resolves under the table): the rows in {@code tableSchema} plus {@link #ERROR_WORKING_COLUMN}, persisted at
+   * {@code level} and counted, so every model call has run when it returns.
    */
   public static Dataset<Row> embed(SparkSession spark, JavaRDD<Row> rows, StructType tableSchema, EmbeddingModelSpec model,
                                    TypedProperties props, BlobBytesSource storedInputs, ComputeCounters counters,

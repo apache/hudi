@@ -140,7 +140,7 @@ public class TestEmbeddingRoundGolden extends EmbeddingRoundTestBase {
 
   private static TypedProperties withBalance() {
     TypedProperties props = new TypedProperties();
-    props.setProperty(EmbeddingTableConfig.BALANCE_NUM_PARTITIONS.key(), "2");
+    props.setProperty(EmbeddingTableConfig.BALANCE_MIN_PARTITIONS.key(), "2");
     return props;
   }
 }

@@ -26,11 +26,9 @@ import org.apache.hudi.utilities.unstructured.embedding.source.BlobColumns;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.scheduler.SparkListener;
 import org.apache.spark.scheduler.SparkListenerTaskEnd;
-import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
-import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
@@ -64,13 +62,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Rebalancing of a prep batch, in two groups. The assignment contract, held by a ranked and a failing double of
- * {@link AssignmentBalancingStrategy}: {@code assign} names every version once with an INT partition in range, from the
+ * Rebalancing of a prep batch, in two groups. The assignment contract, held by {@link SizeTypeAwareBalancingStrategy} and a failing
+ * double of {@link AssignmentBalancingStrategy}: {@code assign} names every version once with an INT partition in range, from the
  * batch's versions alone, and the base class persists that assignment, joins it back and moves every full blob row, bytes included,
  * into exactly the partition it was assigned. The balance contract, held by both shipped strategies through
  * {@link RowBalancer#balance}: every row arrives exactly once with its blob, in a partition that depends on its version alone.
  */
-public class TestRowBalancer extends SparkClientFunctionalTestHarness {
+class TestRowBalancer extends SparkClientFunctionalTestHarness {
 
   private static final StructType ROWS = DataTypes.createStructType(new StructField[] {
       DataTypes.createStructField(BlobColumns.SOURCE_PATH_SHA, DataTypes.StringType, false),
@@ -90,6 +88,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
   private static TypedProperties props(int partitions) {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.BALANCE_NUM_PARTITIONS.key(), String.valueOf(partitions));
+    props.setProperty(EmbeddingTableConfig.BALANCE_MIN_PARTITIONS.key(), String.valueOf(partitions));
     return props;
   }
 
@@ -110,9 +109,9 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void balancerAppliesTheAssignmentExactlyAndKeepsEveryColumn() {
+  void balancerAppliesTheAssignmentExactlyAndKeepsEveryColumn() {
     Dataset<Row> batch = batch(5);
-    BalancedRows balanced = RowBalancer.balance(batch, new RankedAssignmentStrategy(), props(2));
+    BalancedRows balanced = RowBalancer.balance(batch, RowBalancer.strategyFrom(props(2)), props(2));
 
     assertEquals(2, balanced.getRows().getNumPartitions());
     Map<String, Integer> assigned = balanced.getAssignment().get().collectAsList().stream()
@@ -135,32 +134,11 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
 
   private static final long MIB = 1024L * 1024L;
 
-  /**
-   * An assignment strategy for the assignment contract: ranks the batch's versions over the whole batch ({@link SortedRanks}) and
-   * assigns rank i to partition {@code i mod P}, P = {@code hoodie.unstructured.embedding.prep.num.partitions}.
-   */
-  static final class RankedAssignmentStrategy extends AssignmentBalancingStrategy {
-    private static final long serialVersionUID = 1L;
-
-    @Override
-    public BalancingAssignment assign(Dataset<Row> rowsWithoutBlob, TypedProperties writerProps) {
-      int numPartitions = EmbeddingTableConfig.from(writerProps)
-          .balanceNumPartitions(rowsWithoutBlob.sparkSession().sparkContext().defaultParallelism());
-      Column[] key = BalancingAssignment.KEY_COLUMNS.stream().map(functions::col).toArray(Column[]::new);
-      Dataset<Row> versions = rowsWithoutBlob.select(key);
-      JavaRDD<Row> assignment = SortedRanks.of(versions, key)
-          .map(rowAndRank -> RowFactory.create(rowAndRank._1.get(0), rowAndRank._1.get(1), rowAndRank._1.get(2),
-              (int) (rowAndRank._2 % numPartitions)));
-      return new BalancingAssignment(numPartitions, rowsWithoutBlob.sparkSession().createDataFrame(assignment,
-          SortedRanks.assignmentSchema(versions.schema())));
-    }
-  }
-
   private static Row file(String sha, Long modificationTime, Long size, String extension, int blob) {
     return RowFactory.create(sha, modificationTime, size, extension, new byte[] {(byte) blob});
   }
 
-  /** The ranked assignment strategy, with the balancer's join planned by Spark and forced to a shuffle (sort-merge) join. */
+  /** Each shipped assignment strategy, with the balancer's join planned by Spark and forced to a shuffle (sort-merge) join. */
   static Stream<Arguments> assignmentStrategies() {
     return assignmentStrategiesOnly()
         .flatMap(strategy -> Stream.of(Arguments.of(strategy, false), Arguments.of(strategy, true)));
@@ -173,8 +151,9 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
   private static final int[] CONTRACT_PARTITIONS = {1, 3, 64};
 
   /**
-   * Batches for the strategy contract: empty, small, larger than the partitions, mixed extensions and sizes, versions of a path,
-   * and a seeded random batch of 500 versions over 350 paths with sizes up to 400 MiB and a mix of extensions.
+   * Batches for the strategy contract: empty, small, larger than the partitions, mixed groups and sizes, versions of a path, and a
+   * seeded random batch of 500 versions over 350 paths with sizes up to 400 MiB (solo files in every budgeted group) and every
+   * extension group.
    */
   private static Map<String, List<Row>> contractBatches() {
     Map<String, List<Row>> batches = new LinkedHashMap<>();
@@ -192,7 +171,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
       mixed.add(file("mixed-" + i, 1000L, (i + 1) * MIB, extensions[i], i));
     }
     mixed.add(file("solo", 1000L, 300 * MIB, "pdf", 20));
-    batches.put("mixed extensions and sizes", mixed);
+    batches.put("mixed groups and sizes", mixed);
     batches.put("versions of one path", Arrays.asList(file("same", 1000L, 10L, "pdf", 0),
         file("same", 2000L, 10L, "pdf", 1), file("same", 1000L, 20L, "pdf", 2)));
     Random random = new Random(42);
@@ -218,12 +197,12 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
 
   private static List<String> sorted(List<String> values) {
     List<String> copy = new ArrayList<>(values);
-    Collections.sort(copy);
+    copy.sort(null);
     return copy;
   }
 
   /**
-   * The contract {@link AssignmentBalancingStrategy} trusts a subclass to keep, held for the ranked assignment strategy: an INT
+   * The contract {@link AssignmentBalancingStrategy} trusts a subclass to keep, held for each shipped assignment strategy: an INT
    * partition column, every input version assigned exactly once to a partition in [0, numPartitions), and through the balancer
    * every input row arriving once, whole, in the Spark partition it was assigned; at each of {@link #CONTRACT_PARTITIONS}. A batch
    * whose assignment is over the broadcast threshold joins it by shuffle (sort-merge), so the contract is held under that join as
@@ -231,7 +210,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest(name = "{0}, shuffle join: {1}")
   @MethodSource("assignmentStrategies")
-  public void assignmentStrategyAssignsEveryVersionOnceToAPartitionInRange(AssignmentBalancingStrategy strategy,
+  void assignmentStrategyAssignsEveryVersionOnceToAPartitionInRange(AssignmentBalancingStrategy strategy,
                                                                            boolean shuffleJoin) {
     Map<String, String> previous = new HashMap<>();
     for (String key : Arrays.asList(BROADCAST_THRESHOLD, ADAPTIVE_BROADCAST_THRESHOLD)) {
@@ -311,7 +290,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest
   @MethodSource("strategies")
-  public void shippedStrategyBalancesEveryRowOnceWithItsBlob(RowBalancingStrategy strategy) {
+  void shippedStrategyBalancesEveryRowOnceWithItsBlob(RowBalancingStrategy strategy) {
     for (int contractPartitions : CONTRACT_PARTITIONS) {
       for (Map.Entry<String, List<Row>> scenario : contractBatches().entrySet()) {
         String label = strategy.getClass().getSimpleName() + ", P = " + contractPartitions + ", " + scenario.getKey();
@@ -333,7 +312,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource("strategies")
-  public void twoVersionsOfOnePathAreTwoFiles(RowBalancingStrategy strategy) {
+  void twoVersionsOfOnePathAreTwoFiles(RowBalancingStrategy strategy) {
     Dataset<Row> batch = spark().createDataFrame(Arrays.asList(
         RowFactory.create("sha-a", 1000L, 5L, "txt", new byte[] {1}),
         RowFactory.create("sha-a", 2000L, 5L, "txt", new byte[] {2}),
@@ -364,9 +343,9 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void closeReleasesTheAssignment() {
+  void closeReleasesTheAssignment() {
     Dataset<Row> batch = batch(2);
-    BalancedRows balanced = RowBalancer.balance(batch, new RankedAssignmentStrategy(), props(2));
+    BalancedRows balanced = RowBalancer.balance(batch, new SizeTypeAwareBalancingStrategy(), props(2));
     assertNotEquals(StorageLevel.NONE(), balanced.getAssignment().get().storageLevel());
 
     balanced.close();
@@ -376,7 +355,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
 
   @ParameterizedTest
   @MethodSource("strategies")
-  public void anEmptyBatchBalancesToNoRow(RowBalancingStrategy strategy) {
+  void anEmptyBatchBalancesToNoRow(RowBalancingStrategy strategy) {
     BalancedRows balanced = RowBalancer.balance(batch(0), strategy, props(2));
 
     assertEquals(0L, balanced.getRows().count());
@@ -384,14 +363,14 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void strategyComesFromTheConfiguredClass() {
+  void strategyComesFromTheConfiguredClass() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.BALANCE_STRATEGY_CLASS.key(), HashBalancingStrategy.class.getName());
     assertInstanceOf(HashBalancingStrategy.class, RowBalancer.strategyFrom(props));
   }
 
   @Test
-  public void exactPartitionerSendsKeyKToPartitionK() {
+  void exactPartitionerSendsKeyKToPartitionK() {
     ExactPartitioner partitioner = new ExactPartitioner(3);
 
     assertEquals(3, partitioner.numPartitions());
@@ -404,14 +383,14 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
     assertNotEquals(new ExactPartitioner(4), partitioner);
   }
 
-  /** The hash strategy and the ranked double, each held to a partition per version that depends on the batch's versions alone. */
+  /** The shipped strategies, each held to a partition per version that depends on the batch's versions alone. */
   static Stream<RowBalancingStrategy> strategies() {
-    return Stream.of(new HashBalancingStrategy(), new RankedAssignmentStrategy());
+    return Stream.of(new HashBalancingStrategy(), new SizeTypeAwareBalancingStrategy());
   }
 
-  /** The ranked assignment strategy, held to an assignment that depends on the batch's versions alone. */
+  /** The shipped assignment strategies, each held to an assignment that depends on the batch's versions alone. */
   static Stream<AssignmentBalancingStrategy> assignmentStrategiesOnly() {
-    return Stream.of(new RankedAssignmentStrategy());
+    return Stream.of(new SizeTypeAwareBalancingStrategy());
   }
 
   /** {@code rows} in {@code partitions} Spark partitions, each emitting its rows in a new random order every time it is computed. */
@@ -437,7 +416,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest
   @MethodSource("assignmentStrategiesOnly")
-  public void assignmentIsIndependentOfRowOrderAndRecomputation(AssignmentBalancingStrategy strategy) {
+  void assignmentIsIndependentOfRowOrderAndRecomputation(AssignmentBalancingStrategy strategy) {
     List<Row> rows = new ArrayList<>();
     for (int i = 0; i < 40; i++) {
       rows.add(file(String.format("sha-%02d", i), 1000L + i, (i % 7 + 1) * MIB, i % 4 == 0 ? "png" : "pdf", i));
@@ -487,7 +466,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest
   @MethodSource("strategies")
-  public void balancedPartitionsAreIndependentOfRowOrderAndRecomputation(RowBalancingStrategy strategy) {
+  void balancedPartitionsAreIndependentOfRowOrderAndRecomputation(RowBalancingStrategy strategy) {
     List<Row> rows = new ArrayList<>();
     for (int i = 0; i < 40; i++) {
       rows.add(file(String.format("sha-%02d", i), 1000L + i, (i % 7 + 1) * MIB, i % 4 == 0 ? "png" : "pdf", i));
@@ -548,7 +527,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest(name = "{0}, {1}")
   @MethodSource("strategiesAndJoinPlanning")
-  public void smallBatchShufflesItsBlobRowsOnce(RowBalancingStrategy strategy, JoinPlanning planning) throws Exception {
+  void smallBatchShufflesItsBlobRowsOnce(RowBalancingStrategy strategy, JoinPlanning planning) throws Exception {
     int files = 200;
     int blobBytes = 4096;
     Random random = new Random(11);
@@ -606,7 +585,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
    */
   @ParameterizedTest
   @MethodSource("strategies")
-  public void rowWithANullVersionColumnStillReachesItsPartition(RowBalancingStrategy strategy) {
+  void rowWithANullVersionColumnStillReachesItsPartition(RowBalancingStrategy strategy) {
     Dataset<Row> batch = spark().createDataFrame(Arrays.asList(file("sha-a", 1000L, MIB, "pdf", 1),
         file("sha-b", null, MIB, "pdf", 2), file("sha-c", 1000L, null, "pdf", 3)), ROWS);
     try (BalancedRows balanced = RowBalancer.balance(batch, strategy, props(2))) {
@@ -633,7 +612,7 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
 
   /** A failed Spark job while the balancer computes the assignment releases the assignment it persisted. */
   @Test
-  public void failedAssignmentJobReleasesTheAssignment() {
+  void failedAssignmentJobReleasesTheAssignment() {
     FailingAssignmentStrategy strategy = new FailingAssignmentStrategy();
     Dataset<Row> batch = batch(3);
     Exception failure = assertThrows(Exception.class, () -> RowBalancer.balance(batch, strategy, props(2)));
@@ -642,8 +621,9 @@ public class TestRowBalancer extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void anAssignmentNeedsAPartition() {
-    assertThrows(IllegalArgumentException.class, () -> new BalancingAssignment(0, batch(0)));
+  void anAssignmentNeedsAPartition() {
+    Dataset<Row> empty = batch(0);
+    assertThrows(IllegalArgumentException.class, () -> new BalancingAssignment(0, empty));
   }
 
   /** A strategy whose assignment leaves out one version: {@link #balance} trusts every version to be named. */

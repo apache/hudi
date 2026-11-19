@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.sources.unstructured;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.utilities.sources.blob.BlobTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig;
 
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +49,15 @@ class TestUnstructuredCreationPins {
     HoodieTableConfig table = table(required.tableProperties());
     table.getProps().setProperty("hoodie.table.blob.inline.max.bytes", "4096");
     assertThrows(IllegalArgumentException.class, () -> required.checkTable("file:/blob", table));
+  }
+
+  @Test
+  void embeddingCreationStoresInputAndColumnInfoLayout() {
+    TypedProperties props = mode("embedding");
+    props.setProperty(EmbeddingInputConfig.INLINE_MAX_BYTES.key(), "4096");
+    Properties pins = new UnstructuredSourceContract(props).tableProperties();
+    assertEquals("1", pins.getProperty("hoodie.table.embedding.column.info.layout.version"));
+    assertEquals("4096", pins.getProperty("hoodie.table.embedding.input.inline.max.bytes"));
   }
 
   @Test

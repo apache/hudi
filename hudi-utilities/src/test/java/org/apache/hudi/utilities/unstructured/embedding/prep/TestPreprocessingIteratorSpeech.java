@@ -257,7 +257,7 @@ public class TestPreprocessingIteratorSpeech {
     Row source = new GenericRowWithSchema(new Object[] {"sha-video", "mp4", (long) bytes.length, 1L, blob, "s3://bucket/sha-video.mp4", "sha-video.mp4"}, SOURCE_ROW);
     PrepCounters counters = new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(),
         new LongAccumulator(), new LongAccumulator());
-    return new PreprocessingIterator(Collections.singletonList(source).iterator(), EmbeddingTableConfig.from(props),
+    return new PreprocessingIterator(Collections.singletonList(source).iterator(), EmbeddingTableConfig.from(props), "001",
         new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())), new PreprocessorRegistry(props),
         new WordCountTokenizer(), counters, null);
   }

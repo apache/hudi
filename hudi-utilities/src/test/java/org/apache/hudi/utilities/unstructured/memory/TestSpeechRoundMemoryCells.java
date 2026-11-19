@@ -400,7 +400,7 @@ public class TestSpeechRoundMemoryCells extends EmbeddingRoundTestBase {
         EmbeddingTableConfig.CHUNK_OVERLAP_TOKENS.key(), "0",
         EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), "mp4",
         EmbeddingTableConfig.PREP_VIDEO_MAX_PIXELS.key(), String.valueOf(MAX_PIXELS),
-        EmbeddingTableConfig.BALANCE_NUM_PARTITIONS.key(), String.valueOf(TASKS),
+        EmbeddingTableConfig.BALANCE_MIN_PARTITIONS.key(), String.valueOf(TASKS),
         HoodieIncrSourceConfig.HOODIE_SRC_BASE_PATH.key(), objects.eventsPath());
     // the provider decides the client: the base's scripted client class is removed
     props.remove(model + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);

@@ -293,6 +293,7 @@ class TestStoredImageOutcomes {
     try (PreprocessingIterator prep = new PreprocessingIterator(
         Collections.singletonList(source).iterator(),
         EmbeddingTableConfig.from(props),
+        "001",
         storedInputs(),
         new PreprocessorRegistry(props),
         new WordCountTokenizer(),

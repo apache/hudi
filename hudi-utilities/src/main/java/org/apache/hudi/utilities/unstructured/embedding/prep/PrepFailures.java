@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.unstructured.embedding.prep;
 
 import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingPayloadWriteException;
 import org.apache.hudi.utilities.unstructured.embedding.source.PrepPlatformException;
 import org.apache.hudi.utilities.unstructured.embedding.source.PreprocessorConfigurationException;
 import org.apache.hudi.utilities.unstructured.embedding.source.SourceFailures;
@@ -138,6 +139,7 @@ public final class PrepFailures {
     return cause instanceof SourceReadException
         || cause instanceof PreprocessorConfigurationException
         || cause instanceof PrepPlatformException
+        || cause instanceof EmbeddingPayloadWriteException
         || (cause instanceof TokenizerException && ((TokenizerException) cause).kind() == TokenizerException.Kind.RETRYABLE);
   }
 }

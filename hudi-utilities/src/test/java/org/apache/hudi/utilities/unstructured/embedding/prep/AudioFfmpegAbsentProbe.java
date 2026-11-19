@@ -138,7 +138,7 @@ public class AudioFfmpegAbsentProbe implements Callable<String> {
         new LongAccumulator(), new LongAccumulator());
     PreprocessingIterator iterator = new PreprocessingIterator(
         Arrays.asList(sourceRow("sha-pdf", "pdf", pdf), sourceRow("sha-video", "mp4", NOT_A_VIDEO)).iterator(),
-        EmbeddingTableConfig.from(props), new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
+        EmbeddingTableConfig.from(props), "001", new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
         new PreprocessorRegistry(props), new WordCountTokenizer(), counters, null);
     List<Row> rows = new ArrayList<>();
     StringBuilder report = new StringBuilder();
