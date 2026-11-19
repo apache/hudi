@@ -381,10 +381,11 @@ public class EmbeddingTableConfig implements Serializable {
       .key("hoodie.unstructured.embedding.prep.preprocessor.<ext>.class")
       .noDefaultValue("<registry-dependent>")
       .markAdvanced()
-      .sinceVersion("1.3.0")
+      .sinceVersion(SINCE_1_3_0)
       .withDocumentation("The FilePreprocessor class for files with extension <ext>; when unset, the built-in preprocessor of "
-          + "that extension (pdf has one; png, jpg, jpeg, gif, bmp, tif and tiff map to ImageInputPreprocessor; other extensions "
-          + "have none). Replace <ext> with a file extension.");
+          + "that extension (pdf has one; png, jpg, jpeg, gif, bmp, tif and tiff map to ImageInputPreprocessor; mp4, mov, mkv, "
+          + "webm and avi to the class of hoodie.unstructured.embedding.prep.video.preprocessor.class, VideoFramePreprocessor "
+          + "(FFmpeg) by default; other extensions have none). Replace <ext> with a file extension.");
 
   /** Suffix of the per-extension preprocessor class key. */
   public static final String PREPROCESSOR_CLASS_SUFFIX = ".class";
@@ -442,6 +443,132 @@ public class EmbeddingTableConfig implements Serializable {
           + RAISED_CAP);
 
   public static final long DEFAULT_PREP_IMAGE_MAX_BYTES = Long.MAX_VALUE;
+
+  /**
+   * The preprocessor of every video extension ({@link org.apache.hudi.utilities.unstructured.embedding.prep.PreprocessorRegistry#VIDEO_EXTENSIONS}),
+   * so a job prepares all its video with one implementation, read once at start. Default
+   * {@link #DEFAULT_PREP_VIDEO_PREPROCESSOR_CLASS}, the FFmpeg frame preprocessor. Hudi does not ship FFmpeg (org.bytedeco): it is
+   * loaded only when the job's first video is opened, so a job without video runs without it, and a job that prepares video adds
+   * the FFmpeg jars to its class path (org.bytedeco javacv, javacpp and ffmpeg plus the javacpp and ffmpeg jars of the platform
+   * classifier, for example with {@code spark.jars}). The per-extension
+   * {@code <PREPROCESSOR_CLASS_PREFIX><ext>.class} key is a low-level override that wins for its extension when set. A job that
+   * must not prepare video sets {@link #PREP_FILE_EXTENSIONS} to the non-video extensions it prepares.
+   */
+  public static final ConfigProperty<String> PREP_VIDEO_PREPROCESSOR_CLASS = ConfigProperty
+      .key(PREP_PREFIX + "video.preprocessor.class")
+      .defaultValue("org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor")
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The preprocessor of every video extension (mp4, mov, mkv, webm and avi), so a job prepares all its video "
+          + "with one implementation, read once at start. Default "
+          + "org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor, the FFmpeg frame preprocessor. Hudi "
+          + "does not ship FFmpeg (org.bytedeco): it is loaded only when the job's first video is opened, so a job without "
+          + "video runs without it, and a job that prepares video adds the FFmpeg jars to its class path (org.bytedeco javacv, "
+          + "javacpp and ffmpeg plus the javacpp and ffmpeg jars of the platform classifier, for example with spark.jars). The "
+          + "per-extension "
+          + "hoodie.unstructured.embedding.prep.preprocessor.<ext>.class key is a low-level override that wins for its "
+          + "extension when set. A job that must not prepare video sets "
+          + "hoodie.unstructured.embedding.prep.file.extensions to the non-video extensions it prepares.");
+
+  /** Default video preprocessor: the FFmpeg frame preprocessor, named by class so this class does not depend on it. */
+  public static final String DEFAULT_PREP_VIDEO_PREPROCESSOR_CLASS = PREP_VIDEO_PREPROCESSOR_CLASS.defaultValue();
+
+  /**
+   * Video data prep: a video whose source row declares more bytes ({@code source_file_size}) fails data prep (a quarantine entry)
+   * before any byte is read. Default {@value #DEFAULT_PREP_VIDEO_MAX_BYTES} (20 GiB). A set value must be a positive byte count;
+   * 0 or a negative value is refused on the driver when the job starts. Not pinned: it only refuses a file, so it can be changed
+   * on an existing table; raising it does not re-prepare a file it already refused, whose quarantine entry stays until its source
+   * object changes. The video is read through seekable
+   * range reads with a fixed block buffer, so memory does not grow with its size; decode time and frame rows grow with its
+   * duration.
+   */
+  public static final long DEFAULT_PREP_VIDEO_MAX_BYTES = 20L * 1024 * 1024 * 1024;
+
+  public static final ConfigProperty<String> PREP_VIDEO_MAX_BYTES = ConfigProperty
+      .key(PREP_PREFIX + "video.max.bytes")
+      .defaultValue(Long.toString(DEFAULT_PREP_VIDEO_MAX_BYTES))
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Video data prep: a video whose source row declares more bytes (source_file_size) fails data prep (a quarantine "
+          + "entry) before any byte is read. Default 21474836480 (20 GiB). A set value must be a positive byte count (0 or a negative "
+          + "value is refused at job start). Not part of the table's stored prep contract: it only refuses a file, so it can be "
+          + "changed on an existing table." + RAISED_CAP);
+
+  /**
+   * X of the video frame source's "closest keyframe every X" ({@code video.FfmpegKeyframeVideoFrameSource}), in milliseconds;
+   * default {@link #DEFAULT_PREP_VIDEO_KEYFRAME_INTERVAL_MS}. A frame-extraction parameter, so part of the preprocessing style
+   * when set. The table pins its effective value as {@code hoodie.table.embedding.prep.video.keyframe.interval.ms}; a change
+   * requires a new table.
+   */
+  public static final ConfigProperty<Long> PREP_VIDEO_KEYFRAME_INTERVAL_MS = ConfigProperty
+      .key(PREP_PREFIX + "video.keyframe.interval.ms")
+      .defaultValue(1000L)
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("X of the video frame source's \"closest keyframe every X\" (the FFmpeg keyframe source), in milliseconds; "
+          + "default 1000. A frame-extraction parameter, so part of the preprocessing style when set. The table pins its effective value "
+          + "(hoodie.table.embedding.prep.video.keyframe.interval.ms); a change requires a new table.");
+
+  public static final long DEFAULT_PREP_VIDEO_KEYFRAME_INTERVAL_MS = 1000L;
+
+  public static final String DEFAULT_PREP_VIDEO_DEDUP_METHOD = "dhash";
+
+  /**
+   * How the video frame source drops a frame that repeats the last kept one: {@code dhash} (64-bit difference hash within
+   * {@link #PREP_VIDEO_DEDUP_MAX_DISTANCE}), {@code sha256} (identical encoded frame) or {@code none}; default
+   * {@link #DEFAULT_PREP_VIDEO_DEDUP_METHOD}. Preprocessing style when set.
+   */
+  public static final ConfigProperty<String> PREP_VIDEO_DEDUP_METHOD = ConfigProperty
+      .key(PREP_PREFIX + "video.dedup.method")
+      .defaultValue(DEFAULT_PREP_VIDEO_DEDUP_METHOD)
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("How the video frame source drops a frame that repeats the last kept one: dhash (64-bit difference hash "
+          + "within hoodie.unstructured.embedding.prep.video.dedup.max.distance), sha256 (identical encoded frame) or "
+          + "none; default dhash. Preprocessing style when set.");
+
+  /** The largest dHash Hamming distance (0..64) that counts as a repeat; default 4. Preprocessing style when set. */
+  public static final ConfigProperty<Long> PREP_VIDEO_DEDUP_MAX_DISTANCE = ConfigProperty
+      .key(PREP_PREFIX + "video.dedup.max.distance")
+      .defaultValue(4L)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The largest dHash Hamming distance (0..64) that counts as a repeat; default 4. Preprocessing style when "
+          + "set.");
+
+  public static final long DEFAULT_PREP_VIDEO_DEDUP_MAX_DISTANCE = 4L;
+
+  /**
+   * The most pixels per frame a video may declare; a larger one is its file's quarantine entry before any frame is decoded, which
+   * bounds the decoded frame and its raster per task. Default {@link #DEFAULT_PREP_VIDEO_MAX_PIXELS} (3840x2160). Preprocessing
+   * style when set.
+   */
+  public static final ConfigProperty<Long> PREP_VIDEO_MAX_PIXELS = ConfigProperty
+      .key(PREP_PREFIX + "video.max.pixels")
+      .defaultValue(8294400L)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The most pixels per frame a video may declare; a larger one is its file's quarantine entry before any frame "
+          + "is decoded, which bounds the decoded frame and its raster per task. Default 8294400 (3840x2160). "
+          + "Preprocessing style when set.");
+
+  public static final long DEFAULT_PREP_VIDEO_MAX_PIXELS = 3840L * 2160;
+
+  /**
+   * FFmpeg decoder threads per video ({@code thread_count}); default {@link #DEFAULT_VIDEO_FFMPEG_THREADS}, at most
+   * {@link #MAX_VIDEO_FFMPEG_THREADS}. Set explicitly because FFmpeg's own default (0) starts one thread per core the executor
+   * may use; parallelism comes from Spark tasks, one video per task at a time. Changes no output: not style.
+   */
+  public static final ConfigProperty<Long> VIDEO_FFMPEG_THREADS = ConfigProperty
+      .key(PREFIX + "video.ffmpeg.threads")
+      .defaultValue(1L)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("FFmpeg decoder threads per video (thread_count); default 1, at most 16. Set explicitly because FFmpeg's own "
+          + "default (0) starts one thread per core the executor may use; parallelism comes from Spark tasks, one video "
+          + "per task at a time. Changes no output: not style.");
+
+  public static final long DEFAULT_VIDEO_FFMPEG_THREADS = 1L;
+
+  public static final long MAX_VIDEO_FFMPEG_THREADS = 16L;
 
   /** Prefix of the row-balancing keys; they do not shape the preprocessing style. */
   public static final String BALANCE_PREFIX = PREP_PREFIX + "balance.";

@@ -93,11 +93,18 @@
                 <includes combine.children="append">
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.tika:tika-core</include>
+                  <!-- FFmpeg (org.bytedeco javacv / javacpp / ffmpeg, LGPL) is NOT bundled: a job that prepares video with
+                       FFmpeg adds those jars to the job classpath at launch. The root enforcer bans org.bytedeco at compile and
+                       runtime scope; scripts/ci/check_no_ffmpeg_in_bundles.sh checks a built bundle jar (run by hand, not in CI). -->
                   <!-- PDF chunker, as in hudi-utilities-bundle -->
                   <include>org.apache.pdfbox:pdfbox</include>
                   <include>org.apache.pdfbox:pdfbox-io</include>
                   <include>org.apache.pdfbox:fontbox</include>
                   <include>com.knuddels:jtokkit</include>
+                  <!-- JCodec 0.2.5 (FreeBSD / BSD 2-Clause, pure Java): the keyframe video frame source of hudi-utilities, which
+                       decodes H.264 in MP4 without FFmpeg. Its license notice is in the top-level LICENSE. -->
+                  <include>org.jcodec:jcodec</include>
+                  <include>org.jcodec:jcodec-javase</include>
 
                   <include>org.antlr:stringtemplate</include>
                   <!-- SPARK-43489 Spark 3.5+ has marked protobuf as provided -->

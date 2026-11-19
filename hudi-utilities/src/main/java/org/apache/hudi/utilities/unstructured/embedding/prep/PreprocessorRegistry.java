@@ -38,7 +38,9 @@ import java.util.Map;
 
 /**
  * Resolves configured file preprocessors by extension. The shipped defaults: PDF for {@code pdf}, {@link ImageInputPreprocessor}
- * for the {@link #IMAGE_EXTENSIONS}; a class configured for an extension replaces its default.
+ * for the {@link #IMAGE_EXTENSIONS}, and the video preprocessor of the job, {@link EmbeddingTableConfig#PREP_VIDEO_PREPROCESSOR_CLASS}
+ * (default {@link VideoFramePreprocessor}, FFmpeg loaded lazily), for every one of the {@link #VIDEO_EXTENSIONS}. A class
+ * configured for an extension replaces its default and wins over the video key.
  */
 public class PreprocessorRegistry {
 
@@ -47,6 +49,9 @@ public class PreprocessorRegistry {
   /** Image extensions mapped to {@link ImageInputPreprocessor} by default; WebP is not one (the JDK cannot decode it). */
   public static final List<String> IMAGE_EXTENSIONS =
       Collections.unmodifiableList(Arrays.asList("png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff"));
+  /** Video extensions, mapped to {@link EmbeddingTableConfig#PREP_VIDEO_PREPROCESSOR_CLASS}. */
+  public static final List<String> VIDEO_EXTENSIONS =
+      Collections.unmodifiableList(Arrays.asList("mp4", "mov", "mkv", "webm", "avi"));
   /** The shipped PDF preprocessor, by name: the prep package does not depend on its pdf sub-package. */
   public static final String PDF_PREPROCESSOR_CLASS = "org.apache.hudi.utilities.unstructured.embedding.prep.pdf.PdfFilePreprocessor";
   private static final Map<String, String> DEFAULTS = new HashMap<>();
@@ -60,8 +65,16 @@ public class PreprocessorRegistry {
 
   private final Map<String, String> classByExtension = new HashMap<>(DEFAULTS);
   private final Map<String, FilePreprocessor> instances = new HashMap<>();
+  /** The class named by {@link EmbeddingTableConfig#PREP_VIDEO_PREPROCESSOR_CLASS}, or its default. */
+  private final String videoClass;
 
   public PreprocessorRegistry(TypedProperties props) {
+    String video = ConfigUtils.getStringWithAltKeys(props, EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS,
+        EmbeddingTableConfig.DEFAULT_PREP_VIDEO_PREPROCESSOR_CLASS);
+    videoClass = video == null || video.trim().isEmpty() ? EmbeddingTableConfig.DEFAULT_PREP_VIDEO_PREPROCESSOR_CLASS : video.trim();
+    for (String extension : VIDEO_EXTENSIONS) {
+      classByExtension.put(extension, videoClass);
+    }
     String prefix = EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX;
     String suffix = EmbeddingTableConfig.PREPROCESSOR_CLASS_SUFFIX;
     for (String key : props.stringPropertyNames()) {
@@ -101,9 +114,17 @@ public class PreprocessorRegistry {
   }
 
   /**
-   * Validates the configuration of the preprocessor of every extension this registry resolves (driver side).
+   * Validates the configuration of the preprocessor of every extension this registry resolves (driver side), and that the video
+   * key names a preprocessor that reads videos ({@link SourceKind#VIDEO}). The default video preprocessor's check never loads
+   * FFmpeg ({@link VideoFramePreprocessor#validateConfig}).
    */
   public void validateConfig(TypedProperties props, Tokenizer tokenizer) {
+    SourceKind videoKind = instances.computeIfAbsent(videoClass, ReflectionUtils::loadClass).sourceKind();
+    if (videoKind != SourceKind.VIDEO) {
+      throw new IllegalArgumentException("Config " + EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key() + " = " + videoClass
+          + " is a " + videoKind + " preprocessor; it must name a video preprocessor (e.g. "
+          + EmbeddingTableConfig.DEFAULT_PREP_VIDEO_PREPROCESSOR_CLASS + ")");
+    }
     for (String extension : classByExtension.keySet()) {
       forExtension(extension).get().validateConfig(props, tokenizer);
     }

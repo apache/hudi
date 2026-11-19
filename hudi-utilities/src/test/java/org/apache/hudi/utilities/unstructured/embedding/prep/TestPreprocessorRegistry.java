@@ -24,6 +24,7 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSupplier;
 import org.apache.hudi.utilities.unstructured.embedding.source.FileMeta;
 import org.apache.hudi.utilities.unstructured.embedding.text.Tokenizer;
+import org.apache.hudi.utilities.unstructured.embedding.text.WordCountTokenizer;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * {@link PreprocessorRegistry}: a file extension resolves to the preprocessor class its
@@ -154,4 +157,42 @@ public class TestPreprocessorRegistry {
     assertEquals(0, CloseablePreprocessor.CLOSED.get());
   }
 
+  /**
+   * Unset, the video key maps every video extension to the FFmpeg {@link VideoFramePreprocessor}; validating a job with the
+   * default configuration (a PDF-only job included) checks it without loading FFmpeg (the class-graph proof, with the FFmpeg jars
+   * hidden, is {@code TestFfmpegAbsentClassGraph}).
+   */
+  @Test
+  public void videoExtensionsMapToTheFramePreprocessorByDefault() {
+    TypedProperties props = new TypedProperties();
+    PreprocessorRegistry registry = new PreprocessorRegistry(props);
+
+    assertEquals(VideoFramePreprocessor.class.getName(), EmbeddingTableConfig.DEFAULT_PREP_VIDEO_PREPROCESSOR_CLASS);
+    for (String extension : PreprocessorRegistry.VIDEO_EXTENSIONS) {
+      assertEquals(VideoFramePreprocessor.class, registry.forExtension(extension).get().getClass(), extension);
+    }
+    assertSame(registry.forExtension("mp4").get(), registry.forExtension("avi").get(), "one video preprocessor per job");
+    registry.validateConfig(props, new WordCountTokenizer());
+  }
+
+  @Test
+  public void anExtensionKeyWinsOverTheVideoKeyForItsExtension() {
+    TypedProperties props = props("mov", FailingClosePreprocessor.class.getName());
+    props.setProperty(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key(), CloseablePreprocessor.class.getName());
+    PreprocessorRegistry registry = new PreprocessorRegistry(props);
+
+    assertInstanceOf(FailingClosePreprocessor.class, registry.forExtension("mov").get());
+    assertEquals(CloseablePreprocessor.class, registry.forExtension("mp4").get().getClass());
+  }
+
+  @Test
+  public void theVideoKeyMustNameAVideoPreprocessor() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key(), CloseablePreprocessor.class.getName());
+
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+        () -> new PreprocessorRegistry(props).validateConfig(props, null));
+    assertTrue(e.getMessage().contains(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key() + " = "
+        + CloseablePreprocessor.class.getName() + " is a DOCUMENT preprocessor; it must name a video preprocessor"), e.getMessage());
+  }
 }

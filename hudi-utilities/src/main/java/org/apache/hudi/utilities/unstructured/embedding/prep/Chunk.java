@@ -40,6 +40,7 @@ public class Chunk {
   private final long payloadSizeBytes;
   private final String payloadContentType;
   private final boolean payloadIsSource;
+  private final Long frameIndex;
 
   /**
    * @param modality   embedding-table modality, e.g. {@code text} or {@code image}
@@ -50,11 +51,11 @@ public class Chunk {
    */
   public Chunk(String modality, String text, Integer tokenCount, Map<String, String> aux) {
     this(modality, text, tokenCount, aux == null ? Collections.emptyMap() : Collections.unmodifiableMap(new HashMap<>(aux)),
-        null, 0L, null, false);
+        null, 0L, null, false, null);
   }
 
   private Chunk(String modality, String text, Integer tokenCount, Map<String, String> aux, BlobBytesSupplier payload,
-                long payloadSizeBytes, String payloadContentType, boolean payloadIsSource) {
+                long payloadSizeBytes, String payloadContentType, boolean payloadIsSource, Long frameIndex) {
     this.modality = modality;
     this.text = text;
     this.tokenCount = tokenCount;
@@ -63,6 +64,7 @@ public class Chunk {
     this.payloadSizeBytes = payloadSizeBytes;
     this.payloadContentType = payloadContentType;
     this.payloadIsSource = payloadIsSource;
+    this.frameIndex = frameIndex;
   }
 
   /** A builder of a chunk of {@code modality}; every other field is optional. */
@@ -109,6 +111,14 @@ public class Chunk {
     return payloadIsSource;
   }
 
+  /**
+   * The index of a video's kept frame (dense from 0 per video, in emit order); null for every other chunk. The framework pins
+   * an image row carrying it at chunk_id = the index.
+   */
+  public Long getFrameIndex() {
+    return frameIndex;
+  }
+
   /** Builds an immutable {@link Chunk}; {@link #build()} copies the aux map. */
   public static final class Builder {
     private final String modality;
@@ -119,6 +129,7 @@ public class Chunk {
     private long payloadSizeBytes;
     private String payloadContentType;
     private boolean payloadIsSource;
+    private Long frameIndex;
 
     private Builder(String modality) {
       this.modality = Objects.requireNonNull(modality, "modality");
@@ -168,9 +179,21 @@ public class Chunk {
       return this;
     }
 
+    /**
+     * Marks the chunk as kept frame {@code index} of a video (dense from 0 per video, in emit order); the framework pins its row at
+     * chunk_id = {@code index}.
+     *
+     * @throws IllegalArgumentException if {@code index} is negative
+     */
+    public Builder frameIndex(long index) {
+      ValidationUtils.checkArgument(index >= 0, "frame index must be >= 0 but is " + index);
+      this.frameIndex = index;
+      return this;
+    }
+
     public Chunk build() {
       return new Chunk(modality, text, tokenCount, Collections.unmodifiableMap(new HashMap<>(aux)), payload,
-          payloadSizeBytes, payloadContentType, payloadIsSource);
+          payloadSizeBytes, payloadContentType, payloadIsSource, frameIndex);
     }
   }
 }
