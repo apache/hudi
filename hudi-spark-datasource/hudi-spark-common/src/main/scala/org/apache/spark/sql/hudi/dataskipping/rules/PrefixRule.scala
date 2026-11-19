@@ -23,7 +23,8 @@ import org.apache.spark.sql.hudi.dataskipping.{Increasing, RangeRule, Step}
 /**
  * String prefixes: `Left`.
  *
- * Shared guard: none; any length operand is accepted today.
+ * Shared guard: the length is constant. A length that references the column could reverse the
+ * ordering (for ex, left(s, length(s) - 1) maps 'ab' to 'a', but the larger 'b' to '').
  *
  * NOTE: Lower/Upper are not matched: case folding does not preserve the binary ordering of strings
  *       (for ex, "Zebra" < "apple", but lower("Zebra") = "zebra" > "apple")
@@ -34,7 +35,7 @@ object PrefixRule extends RangeRule {
   override def steps(term: Expression): Seq[Step] = term match {
     // Left API change: Improve RuntimeReplaceable
     // https://issues.apache.org/jira/browse/SPARK-38240
-    case org.apache.spark.sql.catalyst.expressions.Left(str, _) =>
+    case org.apache.spark.sql.catalyst.expressions.Left(str, len) if len.foldable =>
       Seq(Step(term, str, Increasing, fileGuard = None, partial = false))
 
     case _ => Nil
