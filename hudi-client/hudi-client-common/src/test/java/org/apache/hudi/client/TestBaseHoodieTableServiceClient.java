@@ -70,6 +70,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
@@ -448,6 +449,8 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
     HoodieException e = assertThrows(HoodieException.class,
         () -> client.completeCompaction(mock(HoodieCommitMetadata.class), table, compactionTime, Collections.emptyList()));
     assertTrue(e.getMessage().contains("Heartbeat for instant " + compactionTime + " has expired"), e.getMessage());
+    // the compaction must not be transitioned to completed
+    verify(table.getActiveTimeline(), never()).transitionCompactionInflightToComplete(anyBoolean(), any(), any());
   }
 
   @Test
@@ -459,6 +462,51 @@ class TestBaseHoodieTableServiceClient extends HoodieCommonTestHarness {
 
     // no heartbeat was started by this client for the instant, so there is nothing to check
     client.completeCompaction(mock(HoodieCommitMetadata.class), table, InProcessTimeGenerator.createNewInstantTime(), Collections.emptyList());
+    verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any());
+  }
+
+  @Test
+  void completeCompactionWithLiveHeartbeatSucceeds() throws Exception {
+    initMetaClient();
+    HoodieTable<String, String, String, String> table = mockTableForCompactionCommit();
+    TestTableServiceClient client = new TestTableServiceClient(buildLazyConfigWithShortHeartbeat(), Collections.singletonList(table).iterator(),
+        Option.empty(), Collections.emptyMap(), Collections.emptyIterator());
+    String compactionTime = InProcessTimeGenerator.createNewInstantTime();
+
+    client.getHeartbeatClient().start(compactionTime);
+    try {
+      assertFalse(client.getHeartbeatClient().isHeartbeatExpired(compactionTime));
+      client.completeCompaction(mock(HoodieCommitMetadata.class), table, compactionTime, Collections.emptyList());
+      verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any());
+    } finally {
+      client.getHeartbeatClient().stop(compactionTime);
+    }
+  }
+
+  @Test
+  void completeCompactionWithExpiredHeartbeatSucceedsForEagerPolicy() throws Exception {
+    initMetaClient();
+    HoodieTable<String, String, String, String> table = mockTableForCompactionCommit();
+    HoodieWriteConfig eagerConfig = HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withCleanConfig(HoodieCleanConfig.newBuilder()
+            .withFailedWritesCleaningPolicy(HoodieFailedWritesCleaningPolicy.EAGER)
+            .build())
+        .withHeartbeatIntervalInMs(1000)
+        .withHeartbeatTolerableMisses(1)
+        .build();
+    TestTableServiceClient client = new TestTableServiceClient(eagerConfig, Collections.singletonList(table).iterator(),
+        Option.empty(), Collections.emptyMap(), Collections.emptyIterator());
+    String compactionTime = InProcessTimeGenerator.createNewInstantTime();
+
+    // heartbeat expiry only fences the commit under the LAZY failed-writes policy
+    client.getHeartbeatClient().start(compactionTime);
+    client.getHeartbeatClient().stopHeartbeatTimers();
+    Thread.sleep(1500);
+    assertTrue(client.getHeartbeatClient().isHeartbeatExpired(compactionTime));
+
+    client.completeCompaction(mock(HoodieCommitMetadata.class), table, compactionTime, Collections.emptyList());
+    verify(table.getActiveTimeline()).transitionCompactionInflightToComplete(anyBoolean(), any(), any());
   }
 
   private HoodieTable<String, String, String, String> mockTableForCompactionCommit() {
