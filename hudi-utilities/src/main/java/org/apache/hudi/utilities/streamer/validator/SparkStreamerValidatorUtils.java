@@ -35,8 +35,7 @@ import org.apache.hudi.core.validator.ValidationContext;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieValidationException;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -65,9 +64,8 @@ import java.util.stream.Collectors;
  * are NOT compatible with {@code SparkValidatorUtils}. Do not mix them under the same
  * {@code hoodie.precommit.validators} config if both paths are active.</p>
  */
+@Slf4j
 public class SparkStreamerValidatorUtils {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkStreamerValidatorUtils.class);
 
   /**
    * Run all configured pre-commit validators.
@@ -121,21 +119,21 @@ public class SparkStreamerValidatorUtils {
       try {
         Class<?> clazz = Class.forName(className);
         if (!BasePreCommitValidator.class.isAssignableFrom(clazz)) {
-          LOG.warn("Skipping validator {} in HoodieStreamer path — it does not extend BasePreCommitValidator. "
+          log.warn("Skipping validator {} in HoodieStreamer path — it does not extend BasePreCommitValidator. "
               + "If this is a SparkPreCommitValidator (e.g. SqlQueryEqualityPreCommitValidator), "
               + "it must be invoked via SparkValidatorUtils in the standard Spark write path instead.", className);
           continue;
         }
         BasePreCommitValidator validator = (BasePreCommitValidator)
             ReflectionUtils.loadClass(className, new Class<?>[] {TypedProperties.class}, props);
-        LOG.info("Running pre-commit validator: {} for instant: {}", className, instantTime);
+        log.info("Running pre-commit validator: {} for instant: {}", className, instantTime);
         validator.validateWithMetadata(context);
-        LOG.info("Pre-commit validator {} passed for instant: {}", className, instantTime);
+        log.info("Pre-commit validator {} passed for instant: {}", className, instantTime);
       } catch (HoodieValidationException e) {
-        LOG.error("Pre-commit validator {} failed for instant: {}", className, instantTime, e);
+        log.error("Pre-commit validator {} failed for instant: {}", className, instantTime, e);
         throw e;
       } catch (Exception e) {
-        LOG.error("Failed to instantiate or run validator: {}", className, e);
+        log.error("Failed to instantiate or run validator: {}", className, e);
         throw new HoodieValidationException(
             "Failed to run pre-commit validator: " + className, e);
       }

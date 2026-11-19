@@ -46,6 +46,7 @@ import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieSnapshotExporterException;
 import org.apache.hudi.utilities.testutils.UtilitiesTestBase;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.function.ForeachFunction;
 import org.apache.spark.sql.Column;
@@ -59,8 +60,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -75,10 +74,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Slf4j
 @Tag("functional")
 public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness {
 
-  static final Logger LOG = LoggerFactory.getLogger(TestHoodieSnapshotExporter.class);
   static final int NUM_RECORDS = 100;
   static final String COMMIT_TIME = "20200101000000";
   static final String PARTITION_PATH = "2020";
@@ -112,7 +111,7 @@ public class TestHoodieSnapshotExporter extends SparkClientFunctionalTestHarness
     }
     List<StoragePathInfo> pathInfoList = storage.listFiles(new StoragePath(sourcePath));
     for (StoragePathInfo pathInfo : pathInfoList) {
-      LOG.info(">>> Prepared test file: {}", pathInfo.getPath());
+      log.info(">>> Prepared test file: {}", pathInfo.getPath());
     }
   }
 
