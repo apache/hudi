@@ -22,6 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.image.ImagePreparer;
+import org.apache.hudi.utilities.unstructured.embedding.image.ImagePreprocessingSpec;
+import org.apache.hudi.utilities.unstructured.embedding.image.SeekableBlobImageInputStream;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 
 import org.apache.spark.TaskContext;
@@ -58,8 +61,13 @@ import java.util.NoSuchElementException;
  * batch is buffered.
  *
  * <p>Image rows (modality {@code image}) are handed only to a {@link MultimodalEmbeddingClient}, as
- * {@link EmbeddingInput#storedImage} over their {@code prepared_image}. A client that embeds text only is never called for them:
- * each gets a PERMANENT failure naming the provider.
+ * {@link EmbeddingInput#storedImage} over their {@code prepared_image} and {@link EmbeddingInput#image()}: an
+ * {@link ImagePreparer} under the compute image settings ({@link EmbeddingTableConfig#imagePreprocessing()}) over a seekable
+ * stream of the stored input, run lazily per input when the client builds its request (never a batch of decoded images), which
+ * decodes and resizes the image in memory within the raster budget. A failure of the open, a read or a seek of the stored
+ * input, a premature EOF included, reaches the client as a storage failure ({@link SeekableBlobImageInputStream#openStoredInput});
+ * the client turns every preparation failure into that input's outcome with {@link ImageFailures#result}. A client that embeds
+ * text only is never called for image rows: each gets a PERMANENT failure naming the provider.
  *
  * <p>Output rows keep every prepared column as read. A failing {@link EmbeddingClient#close()} is only logged (WARN {@code EMBED-COMPUTE-CLIENT-CLOSE-FAILED}).
  */
@@ -90,6 +98,8 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
   private final BlobBytesSource storedInputs;
   /** Whether {@link #client} embeds images ({@link MultimodalEmbeddingClient}). */
   private final boolean multimodal;
+  /** Prepares the image inputs of a multimodal client; null for a client that embeds text only. */
+  private final ImagePreparer imagePreparer;
   private final EmbeddingClient client;
   private Iterator<Row> currentBatch = Collections.emptyIterator();
   private boolean closed;
@@ -120,6 +130,8 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     this.textIndex = schema.fieldIndex(EmbeddingTableSchema.PREPARED_TEXT_CHUNK);
     this.preparedImageIndex = schema.fieldIndex(EmbeddingTableSchema.PREPARED_IMAGE);
     this.storedInputs = storedInputs;
+    // validated before the client starts, so a bad image setting leaves no client to close
+    ImagePreprocessingSpec imageSpec = config.imagePreprocessing();
     EmbeddingClient created;
     try {
       created = EmbeddingClientFactory.create(model, props);
@@ -132,6 +144,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     }
     this.client = created;
     this.multimodal = created instanceof MultimodalEmbeddingClient;
+    this.imagePreparer = multimodal ? new ImagePreparer(imageSpec) : null;
     this.rows = rows;
     TaskContext taskContext = TaskContext.get();
     if (taskContext != null) {
@@ -341,7 +354,8 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
   }
 
   /**
-   * The input of an image row for a multimodal client: its {@code prepared_image}, opened through {@link #storedInputs}.
+   * The input of an image row for a multimodal client: its {@code prepared_image}, opened through {@link #storedInputs}, and the
+   * model input prepared from it lazily, through a seekable stream of the stored input, when the client asks for it.
    *
    * @throws EmbeddingComputePlatformException when the row has no {@code prepared_image} or this iterator has no stored-input reader:
    *     prep wrote every image row with one, so a missing one is a broken prep/compute invariant
@@ -356,8 +370,18 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     }
     Row stored = row.getStruct(preparedImageIndex);
     BlobBytesSource source = storedInputs;
-    return EmbeddingInput.storedImage(sourcePathSha, row.getLong(sourceModificationTimeIndex), row.getLong(sourceFileSizeIndex), modality,
-        chunkId, () -> source.open(stored), null);
+    ImagePreparer preparer = imagePreparer;
+    long modificationTime = row.getLong(sourceModificationTimeIndex);
+    long fileSize = row.getLong(sourceFileSizeIndex);
+    PreparedImageSupplier image = () -> preparer.prepare(
+        () -> SeekableBlobImageInputStream.openStoredInput(() -> {
+          source.checkVersion(stored, modificationTime, fileSize);
+          return source.openSeekable(stored);
+        }));
+    return EmbeddingInput.storedImage(sourcePathSha, modificationTime, fileSize, modality, chunkId, () -> {
+      source.checkVersion(stored, modificationTime, fileSize);
+      return source.open(stored);
+    }, image);
   }
 
   /**

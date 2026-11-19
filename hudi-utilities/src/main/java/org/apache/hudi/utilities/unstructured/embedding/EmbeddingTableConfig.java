@@ -29,6 +29,10 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingClientNames;
+import org.apache.hudi.utilities.unstructured.embedding.image.ImageDecoder;
+import org.apache.hudi.utilities.unstructured.embedding.image.ImageDecoderLogicMismatchException;
+import org.apache.hudi.utilities.unstructured.embedding.image.ImagePreprocessingSpec;
+import org.apache.hudi.utilities.unstructured.embedding.image.InProcessImageDecoder;
 import org.apache.hudi.utilities.unstructured.retry.TransientRetry;
 
 import org.apache.spark.storage.StorageLevel;
@@ -569,6 +573,90 @@ public class EmbeddingTableConfig implements Serializable {
   /** Cap of one wait between tries of a row: 60 s, the OpenAI-compatible client's default max backoff. */
   public static final long COMPUTE_RETRY_MAX_BACKOFF_MS = 60_000L;
 
+  /**
+   * Prefix of the image keys of the compute flow: prep stores an image's source bytes, and compute decodes and resizes them in
+   * memory into the model input of a multimodal model's client ({@link ImagePreprocessingSpec}). They do not change what prep
+   * stores, and like every compute key they are refused under {@value #MODE_PREP_ONLY}.
+   */
+  public static final String COMPUTE_IMAGE_PREFIX = PREFIX + "compute.image.";
+
+  /** The long side in pixels compute resizes an image to (never upscaled); default {@value ImagePreprocessingSpec#DEFAULT_LONG_SIDE}. */
+  public static final ConfigProperty<Integer> COMPUTE_IMAGE_LONG_SIDE = ConfigProperty
+      .key(COMPUTE_IMAGE_PREFIX + "long.side")
+      .defaultValue(ImagePreprocessingSpec.DEFAULT_LONG_SIDE)
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The long side in pixels compute resizes an image to before the model call (never upscaled); must be "
+          + "positive; default 512 (Vertex multimodalembedding resizes to 512x512 itself). Refused under prep_only.");
+
+  /**
+   * The most bytes the decoded raster may take: the decode subsampling grows until the raster fits; default 16 MiB. An image no
+   * subsampling fits is refused before decode (PERMANENT for its row).
+   */
+  public static final ConfigProperty<Long> COMPUTE_IMAGE_RASTER_BUDGET_BYTES = ConfigProperty
+      .key(COMPUTE_IMAGE_PREFIX + "raster.budget.bytes")
+      .defaultValue(ImagePreprocessingSpec.DEFAULT_RASTER_BUDGET_BYTES)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The most bytes the decoded raster of one image may take in compute: the decode subsampling grows until "
+          + "the raster fits, and an image no subsampling fits is refused before decode. Must be positive; default 16777216 "
+          + "(16 MiB). Refused under prep_only.");
+
+  /** Images whose header declares more pixels are refused by compute before decode; default 100,000,000. */
+  public static final ConfigProperty<Long> COMPUTE_IMAGE_MAX_PIXELS = ConfigProperty
+      .key(COMPUTE_IMAGE_PREFIX + "max.pixels")
+      .defaultValue(ImagePreprocessingSpec.DEFAULT_MAX_PIXELS)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Images whose header declares more pixels are refused by compute before decode (PERMANENT for the row). "
+          + "Must be positive; default 100000000. Refused under prep_only.");
+
+  /**
+   * The most bytes an image reader may need before subsampling applies (a full-resolution TIFF strip or tile, the coefficient
+   * buffers of a progressive JPEG), estimated from the image metadata; above it the image is refused before decode; default
+   * 64 MiB ({@link ImagePreprocessingSpec#DEFAULT_INTERMEDIATE_BUDGET_BYTES}).
+   */
+  public static final ConfigProperty<Long> COMPUTE_IMAGE_INTERMEDIATE_BUDGET_BYTES = ConfigProperty
+      .key(COMPUTE_IMAGE_PREFIX + "intermediate.budget.bytes")
+      .defaultValue(ImagePreprocessingSpec.DEFAULT_INTERMEDIATE_BUDGET_BYTES)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The most bytes an image reader may need before subsampling applies (a full-resolution TIFF strip or tile, "
+          + "a BMP RLE bitmap read whole, full-width PNG or uncompressed BMP rows, the coefficient buffers of a progressive JPEG), "
+          + "estimated from the image header; above it compute refuses the "
+          + "image before decode (PERMANENT for the row). Must be positive; default 67108864 (64 MiB). Refused under prep_only.");
+
+  /** The {@link ImageDecoder} compute decodes images with; it must run this code's decoding logic; default in-process. */
+  public static final ConfigProperty<String> COMPUTE_IMAGE_DECODER_CLASS = ConfigProperty
+      .key(COMPUTE_IMAGE_PREFIX + "decoder.class")
+      .defaultValue(InProcessImageDecoder.class.getName())
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The ImageDecoder implementation compute decodes and resizes images with, in this JVM or elsewhere; it "
+          + "must have a public no-arg constructor and run this code's decoding logic (image-resize-v2), else the job is "
+          + "refused at start. Default the in-process decoder. Refused under prep_only.");
+
+  /** {@link #COMPUTE_IMAGE_ENCODING} value: JPEG at {@link #COMPUTE_IMAGE_JPEG_QUALITY}. */
+  public static final String IMAGE_ENCODING_JPEG = ImagePreprocessingSpec.ENCODING_JPEG;
+
+  /** {@link #COMPUTE_IMAGE_ENCODING} value: lossless PNG. */
+  public static final String IMAGE_ENCODING_PNG = ImagePreprocessingSpec.ENCODING_PNG;
+
+  /** The encoding of the resized model input: {@value #IMAGE_ENCODING_JPEG} (default) or {@value #IMAGE_ENCODING_PNG}. */
+  public static final ConfigProperty<String> COMPUTE_IMAGE_ENCODING = ConfigProperty
+      .key(COMPUTE_IMAGE_PREFIX + "encoding")
+      .defaultValue(ImagePreprocessingSpec.DEFAULT_ENCODING)
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("The encoding of the resized image compute sends to the model: jpeg (default) or png, in any letter case. "
+          + "Refused under prep_only.");
+
+  /** JPEG quality in [1, 100] of the resized model input; default {@value ImagePreprocessingSpec#DEFAULT_JPEG_QUALITY}. */
+  public static final ConfigProperty<Integer> COMPUTE_IMAGE_JPEG_QUALITY = ConfigProperty
+      .key(COMPUTE_IMAGE_PREFIX + "jpeg.quality")
+      .defaultValue(ImagePreprocessingSpec.DEFAULT_JPEG_QUALITY)
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("JPEG quality in [1, 100] of the resized image compute sends to the model under the jpeg encoding; "
+          + "default 90. Refused under prep_only.");
+
   /** {@link #MODE}: prepare rows only; the job declares no model, so the table has no model column. */
   public static final String MODE_PREP_ONLY = "prep_only";
 
@@ -722,6 +810,50 @@ public class EmbeddingTableConfig implements Serializable {
     return backoff;
   }
 
+  /**
+   * How compute prepares image inputs ({@link #COMPUTE_IMAGE_PREFIX} keys), validated: positive numbers, an encoding of jpeg or
+   * png, a JPEG quality in [1, 100], and a decoder class that loads, is an {@link ImageDecoder} and runs this code's decoding
+   * logic.
+   *
+   * @throws IllegalArgumentException naming the offending key
+   * @throws ImageDecoderLogicMismatchException when the decoder runs another logic version
+   */
+  public ImagePreprocessingSpec imagePreprocessing() {
+    String decoderClass = ConfigUtils.getStringWithAltKeys(props, COMPUTE_IMAGE_DECODER_CLASS, InProcessImageDecoder.class.getName())
+        .trim();
+    ImagePreprocessingSpec spec = new ImagePreprocessingSpec(
+        (int) positiveLong(COMPUTE_IMAGE_LONG_SIDE.key(), ImagePreprocessingSpec.DEFAULT_LONG_SIDE, Integer.MAX_VALUE),
+        positiveLong(COMPUTE_IMAGE_RASTER_BUDGET_BYTES.key(), ImagePreprocessingSpec.DEFAULT_RASTER_BUDGET_BYTES, Long.MAX_VALUE),
+        positiveLong(COMPUTE_IMAGE_MAX_PIXELS.key(), ImagePreprocessingSpec.DEFAULT_MAX_PIXELS, Long.MAX_VALUE),
+        positiveLong(COMPUTE_IMAGE_INTERMEDIATE_BUDGET_BYTES.key(), ImagePreprocessingSpec.DEFAULT_INTERMEDIATE_BUDGET_BYTES,
+            Long.MAX_VALUE),
+        decoderClass,
+        computeImageEncoding(),
+        (int) positiveLong(COMPUTE_IMAGE_JPEG_QUALITY.key(), ImagePreprocessingSpec.DEFAULT_JPEG_QUALITY, 100));
+    try {
+      spec.newDecoder();
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("Config " + COMPUTE_IMAGE_DECODER_CLASS.key() + "=" + decoderClass + ": " + e.getMessage(),
+          e);
+    }
+    return spec;
+  }
+
+  /**
+   * The encoding of {@link #COMPUTE_IMAGE_ENCODING}, lower case.
+   *
+   * @throws IllegalArgumentException naming the key when it is neither jpeg nor png
+   */
+  private String computeImageEncoding() {
+    String raw = ConfigUtils.getStringWithAltKeys(props, COMPUTE_IMAGE_ENCODING, IMAGE_ENCODING_JPEG);
+    String value = raw.trim().toLowerCase(Locale.ROOT);
+    if (!IMAGE_ENCODING_JPEG.equals(value) && !IMAGE_ENCODING_PNG.equals(value)) {
+      throw new IllegalArgumentException("Config " + COMPUTE_IMAGE_ENCODING.key() + " must be " + IMAGE_ENCODING_JPEG + " or "
+          + IMAGE_ENCODING_PNG + ", got '" + raw + "'");
+    }
+    return value;
+  }
+
   private long positiveLong(String key, long defaultValue, long max) {
     String raw = ConfigUtils.getStringWithAltKeys(props, ConfigProperty.key(key).noDefaultValue(), null);
     if (raw == null || raw.trim().isEmpty()) {
@@ -868,7 +1000,10 @@ public class EmbeddingTableConfig implements Serializable {
 
   /**
    * Models the compute flow fills: the declared models named in {@link #ACTIVE_MODELS}, in declaration order, or every
-   * declared model when it is unset. An alias in {@link #ACTIVE_MODELS} that is not declared matches no model.
+   * declared model when it is unset.
+   *
+   * @throws IllegalArgumentException if {@link #ACTIVE_MODELS} names an alias not declared in {@link #MODELS}: a typo next to a
+   *     valid alias would otherwise be dropped silently and the job would run on the valid one alone
    */
   public List<EmbeddingModelSpec> activeModels() {
     String value = ConfigUtils.getStringWithAltKeys(props, ACTIVE_MODELS, "");

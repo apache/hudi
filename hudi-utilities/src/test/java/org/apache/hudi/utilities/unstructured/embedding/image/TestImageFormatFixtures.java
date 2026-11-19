@@ -48,13 +48,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * that format, and image prep stores it as one image row; a regeneration is byte-identical. (The near-bound images need a heap of
  * a few GiB to generate and are not written here.)
  */
-public class TestImageFormatFixtures {
+class TestImageFormatFixtures {
 
   @TempDir
   Path tempDir;
 
   @Test
-  public void smallFixturesDecodeAndArePrepared() throws IOException {
+  void smallFixturesDecodeAndArePrepared() throws IOException {
     int small = 0;
     for (ImageFormatFixtures.Fixture fixture : ImageFormatFixtures.catalog()) {
       if (fixture.isNearBound()) {
@@ -95,7 +95,7 @@ public class TestImageFormatFixtures {
   }
 
   @Test
-  public void regenerationIsByteIdentical() throws IOException {
+  void regenerationIsByteIdentical() throws IOException {
     for (ImageFormatFixtures.Fixture fixture : ImageFormatFixtures.catalog()) {
       if (fixture.isNearBound()) {
         continue;

@@ -60,7 +60,12 @@ public class DummyEmbeddingClient implements EmbeddingClient {
   }
 
   public static float[] vectorFor(String sourcePathSha, long chunkId, int dimension) {
-    Random random = new Random((sourcePathSha + "#" + chunkId).hashCode());
+    return unitVector((sourcePathSha + "#" + chunkId).hashCode(), dimension);
+  }
+
+  /** A pseudo-random unit vector of {@code dimension} floats, the same for the same {@code seed}. */
+  static float[] unitVector(long seed, int dimension) {
+    Random random = new Random(seed);
     float[] vector = new float[dimension];
     double norm = 0;
     for (int i = 0; i < dimension; i++) {

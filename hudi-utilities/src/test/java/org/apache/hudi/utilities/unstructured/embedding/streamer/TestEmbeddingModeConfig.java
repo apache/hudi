@@ -89,6 +89,23 @@ public class TestEmbeddingModeConfig {
   }
 
   @ParameterizedTest
+  @ValueSource(strings = {"hoodie.unstructured.embedding.compute.batch.size", "hoodie.unstructured.embedding.compute.max.attempts",
+      "hoodie.unstructured.embedding.compute.retry.backoff.ms", "hoodie.unstructured.embedding.compute.parallelism",
+      "hoodie.unstructured.embedding.compute.image.long.side", "hoodie.unstructured.embedding.compute.image.decoder.class",
+      "hoodie.unstructured.embedding.models", "hoodie.unstructured.embedding.active.models",
+      "hoodie.unstructured.embedding.model.m1.column", "hoodie.unstructured.embedding.model.m1.dimensions",
+      "hoodie.unstructured.embedding.model.m1.provider", "hoodie.unstructured.embedding.model.m1.name",
+      "hoodie.unstructured.embedding.model.m1.client.class"})
+  public void prepOnlyJobRefusesModelAndComputeSettings(String key) {
+    TypedProperties props = prepOnly();
+    props.setProperty(key, "1");
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(EmbeddingTableConfig.from(props)));
+    assertTrue(refused.getMessage().contains("[" + key + "]"), refused.getMessage());
+    assertTrue(refused.getMessage().contains("Nothing was written"), refused.getMessage());
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"hoodie.unstructured.embedding.models", "hoodie.unstructured.embedding.active.models"})
   public void prepOnlyJobRefusesAModelKeySetEvenToItsEmptyDefault(String key) {
     // a set key is refused whatever its value: a prep_only job carries no model setting at all
@@ -151,6 +168,17 @@ public class TestEmbeddingModeConfig {
     assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(props)));
     props.setProperty(EmbeddingTableConfig.ACTIVE_MODELS.key(), "m2");
     assertEquals("m2", EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(props)).getName());
+  }
+
+  @Test
+  public void anActiveModelThatIsNotDeclaredIsRefused() {
+    // one valid alias next to a typo must not pass: the typo would be ignored and the job would run on the valid one alone
+    TypedProperties props = props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
+    props.setProperty(EmbeddingTableConfig.ACTIVE_MODELS.key(), "m1,typo");
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(props)));
+    assertTrue(refused.getMessage().contains(EmbeddingTableConfig.ACTIVE_MODELS.key() + "=m1,typo"), refused.getMessage());
+    assertTrue(refused.getMessage().contains("[typo]") && refused.getMessage().contains("[m1]"), refused.getMessage());
   }
 
   @Test
