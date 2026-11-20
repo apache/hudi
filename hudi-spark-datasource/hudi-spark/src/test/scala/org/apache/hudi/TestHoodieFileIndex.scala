@@ -50,6 +50,7 @@ import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, H
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
@@ -176,13 +177,13 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val before = spark.read.format("hudi").load(basePath)
     before.cache()
     assertEquals(100, before.count())
-    val cacheManager = spark.sharedState.cacheManager
-    // A second read of the same snapshot matches the cached plan.
-    assertTrue(cacheManager.lookupCachedData(spark.read.format("hudi").load(basePath)).isDefined)
+    // storageLevel is resolved through CacheManager.lookupCachedData: a second read of the same
+    // snapshot matches the cached plan.
+    assertEquals(StorageLevel.MEMORY_AND_DISK, spark.read.format("hudi").load(basePath).storageLevel)
     write("001", 50, SaveMode.Append)
     // A read after the commit must see the new rows, not the plan cached for the earlier snapshot.
     val after = spark.read.format("hudi").load(basePath)
-    assertTrue(cacheManager.lookupCachedData(after).isEmpty)
+    assertEquals(StorageLevel.NONE, after.storageLevel)
     assertEquals(150, after.count())
     before.unpersist()
   }
