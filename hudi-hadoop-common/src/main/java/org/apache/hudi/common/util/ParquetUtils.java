@@ -452,10 +452,33 @@ public class ParquetUtils extends FileFormatUtils {
    */
   @Override
   public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath) {
+    // A schema-less read takes the schema from the file.
+    return readAvroRecords(readConf(storage), filePath);
+  }
+
+  @Override
+  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, HoodieSchema schema) {
+    Configuration conf = readConf(storage);
+    AvroReadSupport.setAvroReadSchema(conf, schema.toAvroSchema());
+    return readAvroRecords(conf, filePath);
+  }
+
+  /**
+   * A private copy of the storage configuration, so a read never changes the caller's configuration,
+   * without any read schema or projection a previous caller left on it, so neither leaks into this read.
+   */
+  private static Configuration readConf(HoodieStorage storage) {
+    Configuration conf = storage.getConf().unwrapCopyAs(Configuration.class);
+    conf.unset("parquet.avro.read.schema");
+    conf.unset(AvroReadSupport.AVRO_REQUESTED_PROJECTION);
+    return conf;
+  }
+
+  private static List<GenericRecord> readAvroRecords(Configuration conf, StoragePath filePath) {
     List<GenericRecord> records = new ArrayList<>();
     try (ParquetReader reader = AvroParquetReader.builder(new Path(filePath.toUri()))
         .withDataModel(GenericData.get())
-        .withConf(storage.getConf().unwrapAs(Configuration.class)).build()) {
+        .withConf(conf).build()) {
       Object obj = reader.read();
       while (obj != null) {
         if (obj instanceof GenericRecord) {
@@ -468,12 +491,6 @@ public class ParquetUtils extends FileFormatUtils {
 
     }
     return records;
-  }
-
-  @Override
-  public List<GenericRecord> readAvroRecords(HoodieStorage storage, StoragePath filePath, HoodieSchema schema) {
-    AvroReadSupport.setAvroReadSchema(storage.getConf().unwrapAs(Configuration.class), schema.toAvroSchema());
-    return readAvroRecords(storage, filePath);
   }
 
   /**

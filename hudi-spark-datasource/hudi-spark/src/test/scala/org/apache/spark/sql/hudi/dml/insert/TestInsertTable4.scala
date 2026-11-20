@@ -338,19 +338,25 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
       val stageClassName = classOf[HoodieSparkEngineContext].getSimpleName
-      spark.sparkContext.addSparkListener(new StageParallelismListener(stageName = stageClassName))
-      val df = spark.sql(
-        s"""
-           |select * from ${targetTable} where day='2023-10-12' and hour=11
-           |""".stripMargin)
-      var rddHead = df.rdd
-      while (rddHead.dependencies.size > 0) {
+      // The SparkContext outlives the suite in shared session mode, so the listener must not.
+      val listener = new StageParallelismListener(stageName = stageClassName)
+      spark.sparkContext.addSparkListener(listener)
+      try {
+        val df = spark.sql(
+          s"""
+             |select * from ${targetTable} where day='2023-10-12' and hour=11
+             |""".stripMargin)
+        var rddHead = df.rdd
+        while (rddHead.dependencies.size > 0) {
+          assertResult(1)(rddHead.partitions.size)
+          rddHead = rddHead.firstParent
+        }
         assertResult(1)(rddHead.partitions.size)
-        rddHead = rddHead.firstParent
+        countDownLatch.await(1, TimeUnit.MINUTES)
+        assert(listenerCallCount >= 1)
+      } finally {
+        spark.sparkContext.removeSparkListener(listener)
       }
-      assertResult(1)(rddHead.partitions.size)
-      countDownLatch.await(1, TimeUnit.MINUTES)
-      assert(listenerCallCount >= 1)
     }
   }
 
@@ -391,19 +397,25 @@ class TestInsertTable4 extends HoodieSparkSqlTestBase {
            |select '1' as id, 'aa' as name, 123 as dt, '2023-10-12' as `day`, 12 as `hour`
            |""".stripMargin)
       val stageClassName = classOf[HoodieSparkEngineContext].getSimpleName
-      spark.sparkContext.addSparkListener(new StageParallelismListener(stageName = stageClassName))
-      val df = spark.sql(
-        s"""
-           |select * from ${targetTable} where day='2023-10-12' and hour=11
-           |""".stripMargin)
-      var rddHead = df.rdd
-      while (rddHead.dependencies.size > 0) {
+      // The SparkContext outlives the suite in shared session mode, so the listener must not.
+      val listener = new StageParallelismListener(stageName = stageClassName)
+      spark.sparkContext.addSparkListener(listener)
+      try {
+        val df = spark.sql(
+          s"""
+             |select * from ${targetTable} where day='2023-10-12' and hour=11
+             |""".stripMargin)
+        var rddHead = df.rdd
+        while (rddHead.dependencies.size > 0) {
+          assertResult(1)(rddHead.partitions.size)
+          rddHead = rddHead.firstParent
+        }
         assertResult(1)(rddHead.partitions.size)
-        rddHead = rddHead.firstParent
+        countDownLatch.await(1, TimeUnit.MINUTES)
+        assert(listenerCallCount >= 1)
+      } finally {
+        spark.sparkContext.removeSparkListener(listener)
       }
-      assertResult(1)(rddHead.partitions.size)
-      countDownLatch.await(1, TimeUnit.MINUTES)
-      assert(listenerCallCount >= 1)
     }
   }
 
