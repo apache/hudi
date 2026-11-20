@@ -31,12 +31,19 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A test preprocessor for the extension a test maps to it ({@code EmbeddingRoundTestBase} maps {@code tif}): one text chunk per
- * {@code |}-separated part.
+ * {@code |}-separated part. A file whose text contains
+ * {@value #BROKEN} fails as a file failure. Counts the files it opens across every task of the JVM ({@link #OPENED}).
  */
 public class TextPipePreprocessor implements FilePreprocessor {
+
+  /** A file whose text contains this fails to preprocess. */
+  public static final String BROKEN = "BROKEN";
+  /** Files opened, over every task of the JVM; reset by the test. */
+  public static final AtomicInteger OPENED = new AtomicInteger();
 
   @Override
   public String name() {
@@ -51,9 +58,13 @@ public class TextPipePreprocessor implements FilePreprocessor {
   @Override
   public ClosableIterator<Chunk> open(BlobBytesSupplier bytes, FileMeta file, Tokenizer tokenizer, TypedProperties props)
       throws IOException {
+    OPENED.incrementAndGet();
     String text;
     try (InputStream in = bytes.open()) {
       text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    if (text.contains(BROKEN)) {
+      throw new PreprocessingException("TEST_BROKEN: the file is marked broken");
     }
     List<Chunk> chunks = new ArrayList<>();
     for (String part : text.split("\\|")) {

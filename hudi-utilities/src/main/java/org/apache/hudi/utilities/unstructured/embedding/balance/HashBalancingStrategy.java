@@ -28,7 +28,7 @@ import org.apache.spark.sql.functions;
 
 /**
  * Spreads the batch's rows over P Spark partitions by a hash of their source version key (sha, modification time, size), with
- * one shuffle of the rows ({@link HashSpread}); P = {@code hoodie.unstructured.embedding.prep.balance.num.partitions}, default
+ * one shuffle of the rows ({@link HashSpread}); P = {@code hoodie.unstructured.embedding.prep.num.partitions}, default
  * {@code spark.default.parallelism}. A row's partition depends on its own version and P alone, never on the batch's partitioning
  * or order, so a recomputed partition reads the same rows. Partition row counts are balanced in expectation (binomial(N, 1/P)),
  * not exactly equal. There is no assignment to persist, so the returned {@link BalancedRows} has none.
