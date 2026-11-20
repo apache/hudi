@@ -2901,6 +2901,11 @@ public class HoodieSchema implements Serializable {
 
   /**
    * Blob types represent raw binary data. The data can be stored in-line as a byte array or out-of-line as a reference to a file or offset and length within that file.
+   *
+   * <p>For blob layout version 1, an {@code external_path} without a URI scheme is relative to the table base path and denotes
+   * a Hudi-managed file ({@code managed=true}); a URI with a scheme denotes a user-managed reference ({@code managed=false})
+   * and is read as given. Unstructured writers refuse the other two combinations. Any future cleaner must delete only
+   * table-relative paths contained under {@code .hoodie/.blob/}, never a path based on the managed flag alone.
    */
   public static class Blob extends HoodieSchema {
     public static final String TYPE_DESCRIPTOR = "BLOB";

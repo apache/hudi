@@ -35,11 +35,15 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.index.HoodieIndex;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.table.marker.WriteMarkers;
 import org.apache.hudi.table.storage.HoodieStorageLayout;
 
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Function;
 
 import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMPACTION_ACTION;
@@ -187,5 +191,33 @@ class TestHoodieTable extends HoodieCommonTestHarness {
     // This should not throw and should be a no-op since auto-delete is disabled
     hoodieTable.deleteMetadataIndexIfNecessary();
     // If we reach here without exception, the test passes
+  }
+
+  @Test
+  void excludesOnlyRootMetadataPathsFromInvalidDataFiles() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+    HoodieTable table = new TestBaseHoodieTable(config, context, metaClient);
+    WriteMarkers markers = mock(WriteMarkers.class);
+    Set<String> dataPaths = new HashSet<>(Arrays.asList("partition/file.parquet", ".hoodie_extra/file.parquet",
+        "partition/.hoodie/file.parquet", ".hoodie"));
+    Set<String> markerPaths = new HashSet<>(dataPaths);
+    markerPaths.add(".hoodie/.blob/payload");
+    markerPaths.add(".hoodie/metadata/file.parquet");
+    when(markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism())).thenReturn(markerPaths);
+    assertEquals(dataPaths, table.getInvalidDataPaths(markers));
+  }
+
+  @Test
+  void keepsOrdinaryInvalidDataPaths() throws IOException {
+    initMetaClient();
+    HoodieWriteConfig config = HoodieWriteConfig.newBuilder().withPath(basePath).build();
+    HoodieEngineContext context = mock(HoodieEngineContext.class);
+    HoodieTable table = new TestBaseHoodieTable(config, context, metaClient);
+    WriteMarkers markers = mock(WriteMarkers.class);
+    Set<String> paths = new HashSet<>(Arrays.asList("a/file.parquet", "b/file.parquet"));
+    when(markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism())).thenReturn(paths);
+    assertEquals(paths, table.getInvalidDataPaths(markers));
   }
 }
