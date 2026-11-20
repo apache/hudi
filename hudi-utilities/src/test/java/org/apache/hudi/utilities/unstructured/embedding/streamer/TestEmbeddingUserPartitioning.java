@@ -91,7 +91,10 @@ public class TestEmbeddingUserPartitioning extends EmbeddingRoundTestBase {
             red.sourcePath, "b." + TEXT_EXTENSION, TEXT_EXTENSION, "gamma", 1, "red", "red"))),
         new HashSet<>(stored));
     for (Row row : rows.values()) {
-      assertTrue(row.getJavaMap(row.fieldIndex(EmbeddingTableSchema.AUX)).isEmpty(), row.toString());
+      assertEquals(Collections.singletonMap(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION,
+          EmbeddingStreamers.metaClient(table(), storage()).getTableConfig()
+              .getString("hoodie.table.embedding.prep.text.logic.version")),
+          row.getJavaMap(row.fieldIndex(EmbeddingTableSchema.AUX)), row.toString());
     }
     for (Row row : spark().read().format("hudi").load(table()).select(
         HoodieRecord.PARTITION_PATH_METADATA_FIELD, HoodieRecord.FILENAME_METADATA_FIELD).collectAsList()) {

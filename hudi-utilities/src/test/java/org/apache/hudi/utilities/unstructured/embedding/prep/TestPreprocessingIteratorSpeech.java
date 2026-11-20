@@ -26,6 +26,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.UnstructuredTableTestProperties;
 import org.apache.hudi.utilities.unstructured.embedding.audio.AudioConfigKeys;
 import org.apache.hudi.utilities.unstructured.embedding.audio.AudioInput;
 import org.apache.hudi.utilities.unstructured.embedding.audio.AudioRows;
@@ -69,6 +70,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.hudi.common.schema.HoodieSchema.Blob.INLINE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -97,7 +99,8 @@ public class TestPreprocessingIteratorSpeech {
   @BeforeEach
   public void createTable() throws IOException {
     embeddingTable = temp.resolve("embedding").toUri().toString();
-    HoodieTableMetaClient.newTableBuilder().setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("embedding")
+    HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.layoutOne())
+        .setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("embedding")
         .setRecordKeyFields(String.join(",", EmbeddingTableSchema.KEY_COLUMNS))
         .initTable(HadoopFSUtils.getStorageConf(new Configuration()), embeddingTable);
     ScriptedVideo.SCRIPT.clear();
@@ -134,33 +137,51 @@ public class TestPreprocessingIteratorSpeech {
     props.setProperty(AudioConfigKeys.TRANSCRIBER_CLASS.key(), LinkErrorTranscriber.class.getName());
     AudioStubs.stubChunker(props);
     ClosingSource.reset();
-    LinkErrorTranscriber.CLOSED.set(0);
+    LinkErrorTranscriber.INSTANCES.clear();
     PreprocessingIterator iterator = iterator(props, Files.readAllBytes(clip));
     List<Row> rows = new ArrayList<>();
     UnsatisfiedLinkError error = assertThrows(UnsatisfiedLinkError.class, () -> iterator.forEachRemaining(rows::add));
     assertEquals(LinkErrorTranscriber.MESSAGE, error.getMessage());
     assertEquals(2, rows.size(), "the two frames before the speech were yielded: " + rows);
     assertEquals(1, ClosingSource.SEGMENTS_CLOSED.get(), "the video's segments are closed");
-    assertEquals(1, ClosingSource.CLOSED.get(), "the task's segment source is closed");
-    assertEquals(1, LinkErrorTranscriber.CLOSED.get(), "the task's transcriber is closed");
+    assertAudioInstancesClosedOnce();
     iterator.close();
-    assertEquals(1, ClosingSource.CLOSED.get(), "closed once");
-    assertEquals(1, LinkErrorTranscriber.CLOSED.get(), "closed once");
+    assertAudioInstancesClosedOnce();
+  }
+
+  private static void assertAudioInstancesClosedOnce() {
+    assertEquals(1L, ClosingSource.INSTANCES.stream().filter(source -> source.used).count(), "one source reads the video");
+    assertFalse(ClosingSource.INSTANCES.stream().allMatch(source -> source.used), "logic identity uses a separate probe source");
+    for (ClosingSource source : ClosingSource.INSTANCES) {
+      assertEquals(1, source.closed.get(), source.used ? "runtime source closes once" : "probe source closes once");
+    }
+    assertEquals(1L, LinkErrorTranscriber.INSTANCES.stream().filter(transcriber -> transcriber.used).count(), "one transcriber handles speech");
+    assertFalse(LinkErrorTranscriber.INSTANCES.stream().allMatch(transcriber -> transcriber.used), "logic identity uses a separate probe transcriber");
+    for (LinkErrorTranscriber transcriber : LinkErrorTranscriber.INSTANCES) {
+      assertEquals(1, transcriber.closed.get(), transcriber.used ? "runtime transcriber closes once" : "probe transcriber closes once");
+    }
   }
 
   /** The stub segment source, counting the closes of its segments and of itself. */
   public static class ClosingSource extends StubAudioSegmentSource implements AutoCloseable {
     static final AtomicInteger SEGMENTS_CLOSED = new AtomicInteger();
-    static final AtomicInteger CLOSED = new AtomicInteger();
+    static final List<ClosingSource> INSTANCES = new ArrayList<>();
+    private final AtomicInteger closed = new AtomicInteger();
+    private boolean used;
+
+    public ClosingSource() {
+      INSTANCES.add(this);
+    }
 
     static void reset() {
       SEGMENTS_CLOSED.set(0);
-      CLOSED.set(0);
+      INSTANCES.clear();
     }
 
     @Override
     public ClosableIterator<AudioSegment> segments(AudioInput audio, long startSegment, long startMs, TypedProperties props)
         throws IOException {
+      used = true;
       ClosableIterator<AudioSegment> segments = super.segments(audio, startSegment, startMs, props);
       return new ClosableIterator<AudioSegment>() {
         @Override
@@ -183,23 +204,30 @@ public class TestPreprocessingIteratorSpeech {
 
     @Override
     public void close() {
-      CLOSED.incrementAndGet();
+      closed.incrementAndGet();
     }
   }
 
   /** A transcriber whose native engine does not link: an Error at the first segment; counts its closes. */
   public static class LinkErrorTranscriber extends StubSegmentTranscriber implements AutoCloseable {
     static final String MESSAGE = "no native engine for this platform (injected)";
-    static final AtomicInteger CLOSED = new AtomicInteger();
+    static final List<LinkErrorTranscriber> INSTANCES = new ArrayList<>();
+    private final AtomicInteger closed = new AtomicInteger();
+    private boolean used;
+
+    public LinkErrorTranscriber() {
+      INSTANCES.add(this);
+    }
 
     @Override
     public ClosableIterator<TranscriptSegment> transcribe(AudioSegment segment, TypedProperties props) {
+      used = true;
       throw new UnsatisfiedLinkError(MESSAGE);
     }
 
     @Override
     public void close() {
-      CLOSED.incrementAndGet();
+      closed.incrementAndGet();
     }
   }
 

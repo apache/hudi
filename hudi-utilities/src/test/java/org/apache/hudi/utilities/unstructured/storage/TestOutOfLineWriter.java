@@ -95,6 +95,20 @@ class TestOutOfLineWriter {
   }
 
   @Test
+  void managedWriterRefusesAnAbsoluteUriBeforeCreatingAFile() throws Exception {
+    String base = temp.resolve("table").toUri().toString();
+    String absolute = temp.resolve("user-owned.bin").toUri().toString();
+    HoodieStorage storage = new HoodieHadoopStorage(new StoragePath(base), HadoopFSUtils.getStorageConf(new Configuration()));
+    OutOfLineWriter writer = new OutOfLineWriter(storage, base, INSTANT, Option.empty());
+    IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+        () -> writer.writeAt(absolute, out -> out.write(1)));
+    assertTrue(failure.getMessage().contains("managed=false"), failure.getMessage());
+    assertTrue(failure.getMessage().contains(absolute), failure.getMessage());
+    assertFalse(Files.exists(temp.resolve("user-owned.bin")));
+    assertFalse(Files.exists(temp.resolve("table/.hoodie/.blob")));
+  }
+
+  @Test
   void failedStreamingRemovesPartial() throws Exception {
     String base = temp.toUri().toString();
     HoodieStorage storage = new HoodieHadoopStorage(new StoragePath(base), HadoopFSUtils.getStorageConf(new Configuration()));
@@ -196,7 +210,7 @@ class TestOutOfLineWriter {
   void existingVersionSixTargetIsRefusedWithAutoUpgradeOff() throws Exception {
     String base = temp.resolve("table").toUri().toString();
     StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
-    HoodieTableMetaClient.newTableBuilder().setTableName("blob_table").setTableType(HoodieTableType.COPY_ON_WRITE)
+    HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(layoutProperties()).setTableName("blob_table").setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableVersion(6).initTable(conf, base);
     Properties props = new Properties();
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "9");
@@ -291,6 +305,12 @@ class TestOutOfLineWriter {
     public Supplier<Integer> getStageAttemptNumberSupplier() {
       return () -> 0;
     }
+  }
+
+  private static Properties layoutProperties() {
+    Properties props = new Properties();
+    props.setProperty("hoodie.table.blob.layout.version", "1");
+    return props;
   }
 
 }

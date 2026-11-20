@@ -170,9 +170,10 @@ public class TestSpeechEmbeddingRound extends EmbeddingRoundTestBase {
       assertTrue(chunk.getText().contains("Utterance of audio segment"), chunk.getText());
       assertNull(row.getAs(EmbeddingTableSchema.PREPARED_IMAGE), "a speech row stores no image");
       scala.collection.Map<String, String> aux = row.getAs(EmbeddingTableSchema.AUX);
-      for (String auxKey : Arrays.asList(AudioRows.AUX_START_MS, AudioRows.AUX_END_MS, AudioRows.AUX_AUDIO_LOGIC)) {
+      for (String auxKey : Arrays.asList(AudioRows.AUX_START_MS, AudioRows.AUX_END_MS)) {
         assertEquals(chunk.getAux().get(auxKey), aux.apply(auxKey), "speech chunk " + k + " " + auxKey);
       }
+      assertEquals(prepLogicVersion("audio"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
       long start = Long.parseLong(aux.apply(AudioRows.AUX_START_MS));
       long end = Long.parseLong(aux.apply(AudioRows.AUX_END_MS));
       assertTrue(start < end && start >= previousStart, "chunk " + k + " spans [" + start + ", " + end + ") after "

@@ -21,7 +21,9 @@ package org.apache.hudi.utilities.sources.unstructured;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.utilities.sources.blob.BlobTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig;
+import org.apache.hudi.utilities.unstructured.embedding.prep.PrepLogicVersions;
 
 import org.junit.jupiter.api.Test;
 
@@ -58,6 +60,14 @@ class TestUnstructuredCreationPins {
     Properties pins = new UnstructuredSourceContract(props).tableProperties();
     assertEquals("1", pins.getProperty("hoodie.table.embedding.column.info.layout.version"));
     assertEquals("4096", pins.getProperty("hoodie.table.embedding.input.inline.max.bytes"));
+  }
+
+  @Test
+  void refusalOnlyInputCapsDoNotChangePreparationIdentity() {
+    TypedProperties defaults = new TypedProperties();
+    TypedProperties capped = new TypedProperties();
+    capped.setProperty(EmbeddingTableConfig.PDF_MAX_INPUT_BYTES.key(), "536870912");
+    assertEquals(PrepLogicVersions.from(defaults).tableProperties(), PrepLogicVersions.from(capped).tableProperties());
   }
 
   @Test

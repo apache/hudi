@@ -37,6 +37,7 @@ import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Schema evolution appends the nullable image BLOB while preserving table and customer columns. */
@@ -98,5 +99,25 @@ class TestEmbeddingOutputSchema {
     assertEquals(table, EmbeddingTableTransformer.outputSchema(config, Option.of(table), Option.empty()));
     assertEquals(table, EmbeddingTableTransformer.outputSchema(config, Option.empty(), Option.empty())
         .add(DataTypes.createStructField("customer_note", DataTypes.StringType, true)));
+  }
+
+  /** A complete existing schema retains its columns and their order. */
+  @Test
+  void existingTableColumnsAreKeptAsTheyAre() {
+    EmbeddingTableConfig config = config(false);
+    StructType table = EmbeddingTableSchema.build(config).add("customer_column", DataTypes.StringType, true);
+    StructType round = EmbeddingTableTransformer.outputSchema(config, Option.of(table), Option.empty());
+    assertArrayEquals(table.fields(), round.fields());
+  }
+
+  /** Missing identity columns are refused even when image migration is supported. */
+  @Test
+  void missingIdentityColumnIsRefused() {
+    EmbeddingTableConfig config = config(false);
+    StructType table = new StructType(Arrays.stream(EmbeddingTableSchema.build(config).fields())
+        .filter(field -> !field.name().equals(EmbeddingTableSchema.SOURCE_PATH_SHA)).toArray(StructField[]::new));
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> EmbeddingTableTransformer.outputSchema(config, Option.of(table), Option.empty()));
+    assertTrue(refused.getMessage().contains(EmbeddingTableSchema.SOURCE_PATH_SHA), refused.getMessage());
   }
 }

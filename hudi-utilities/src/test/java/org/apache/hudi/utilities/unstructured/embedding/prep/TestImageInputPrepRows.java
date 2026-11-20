@@ -224,8 +224,10 @@ class TestImageInputPrepRows {
     expectedAux.put(ImageInputPreprocessor.AUX_FORMAT, format);
     expectedAux.put(EmbeddingTableSchema.AUX_INPUT_WIDTH, String.valueOf(width));
     expectedAux.put(EmbeddingTableSchema.AUX_INPUT_HEIGHT, String.valueOf(height));
-    expectedAux.put(EmbeddingTableSchema.AUX_INPUT_LOGIC, ImageInputPreprocessor.INPUT_LOGIC);
     Map<String, String> actualAux = new HashMap<>(row.getJavaMap(EmbeddingTableSchema.BASE_COLUMNS.indexOf(EmbeddingTableSchema.AUX)));
+    String version = actualAux.remove(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION);
+    assertNotNull(version);
+    assertEquals(PrepLogicVersions.from(new TypedProperties()).version("image"), version);
     assertEquals(expectedAux, actualAux);
   }
 

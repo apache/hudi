@@ -65,7 +65,7 @@ class TestOutOfLineWriterTaskAttempts {
   void retriedTaskWritesUnderANewWriteToken() throws Exception {
     String base = temp.resolve("table").toUri().toString();
     StorageConfiguration<?> conf = HadoopFSUtils.getStorageConf(new Configuration());
-    HoodieTableMetaClient.newTableBuilder()
+    HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(layoutProperties())
         .setTableName("blob_table").setTableType(HoodieTableType.COPY_ON_WRITE).initTable(conf, base);
     Properties props = new Properties();
     props.setProperty(HoodieWriteConfig.BLOB_MARKERS_ENABLE.key(), "false");
@@ -115,4 +115,11 @@ class TestOutOfLineWriterTaskAttempts {
     assertNotEquals(first[2], retried[2], "a different task attempt");
     assertFalse(Files.exists(temp.resolve("table").resolve(".hoodie/.temp/" + INSTANT)), "no marker folder for the instant");
   }
+
+  private static Properties layoutProperties() {
+    Properties props = new Properties();
+    props.setProperty("hoodie.table.blob.layout.version", "1");
+    return props;
+  }
+
 }

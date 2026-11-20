@@ -19,10 +19,14 @@
 package org.apache.hudi.utilities.unstructured.storage;
 
 import org.apache.hudi.common.model.IOType;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.marker.TimelineServerBasedWriteMarkers;
 import org.apache.hudi.table.marker.WriteMarkers;
+import org.apache.hudi.utilities.unstructured.embedding.UnstructuredTableTestProperties;
 
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
@@ -36,6 +40,7 @@ import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 /** Keeps direct prep unit tests independent of a running streamer while exercising the real shared writer and storage. */
 public class OutOfLineWriterTestExtension implements BeforeEachCallback, AfterEachCallback {
@@ -48,10 +53,20 @@ public class OutOfLineWriterTestExtension implements BeforeEachCallback, AfterEa
         .thenAnswer(invocation -> new MarkingFactory(invocation.getArgument(1)));
   }
 
-  /** Needs no table: each writer's markers accept every CREATE marker. */
+  /** Declares layout 1 and accepts CREATE markers while keeping the shared writer and storage real. */
   private static final class MarkingFactory extends OutOfLineWriter.Factory {
     MarkingFactory(String basePath) {
-      super(basePath, null);
+      super(basePath, layoutOneTable());
+    }
+
+    private static HoodieTable<?, ?, ?, ?> layoutOneTable() {
+      HoodieTable<?, ?, ?, ?> table = mock(HoodieTable.class, withSettings().serializable());
+      HoodieTableMetaClient metaClient = mock(HoodieTableMetaClient.class, withSettings().serializable());
+      HoodieTableConfig config = new HoodieTableConfig();
+      config.getProps().putAll(UnstructuredTableTestProperties.layoutOne());
+      when(table.getMetaClient()).thenReturn(metaClient);
+      when(metaClient.getTableConfig()).thenReturn(config);
+      return table;
     }
 
     @Override

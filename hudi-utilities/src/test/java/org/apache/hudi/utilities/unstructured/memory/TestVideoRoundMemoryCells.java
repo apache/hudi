@@ -34,9 +34,7 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.FixtureFile;
 import org.apache.hudi.utilities.unstructured.embedding.compute.DummyMultimodalEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig;
-import org.apache.hudi.utilities.unstructured.embedding.prep.JcodecVideoFramePreprocessor;
 import org.apache.hudi.utilities.unstructured.embedding.prep.VideoFrameHeapCheck;
-import org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor;
 import org.apache.hudi.utilities.unstructured.embedding.prep.video.ExtractedFrame;
 import org.apache.hudi.utilities.unstructured.embedding.prep.video.FrameExtractionStrategy;
 import org.apache.hudi.utilities.unstructured.embedding.source.FileMeta;
@@ -119,14 +117,14 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *   <li>{@code video-fixed-term}: the {@code video-ffmpeg} job at the SMALLEST executor heap the start check accepts with the
  *   default fixed term ({@link EmbeddingTableConfig#DEFAULT_PREP_VIDEO_HEAP_FIXED_BYTES}, 64 MiB): the heap is searched in whole
  *   MiB with the check itself ({@link #smallestAdmittedHeapMib}). For the cells' settings (4 slots, 1920x1080, Spark's 300 MiB
- *   reserved memory, 1 MiB G1 regions) that is 4 x (6 x 2073600 + 16 MiB) + 4 x 6 x 1 MiB + 300 MiB + 64 MiB = 523722752
- *   bytes, so 500 MiB. Passing says the default fixed term covers the rest of the executor heap of this round; an exhausted
+ *   reserved memory, 1 MiB G1 regions) that is 4 x (6 x 2073600 + 16 MiB + 10 MiB) + 4 x 6 x 1 MiB + 300 MiB + 64 MiB =
+ *   565665792 bytes, so 540 MiB. Passing says the default fixed term covers the rest of the executor heap of this round; an exhausted
  *   heap says it does not.</li>
  *   <li>{@code video-length-light} and {@code video-length}: the {@code video-ffmpeg} round over a short video and then over a
  *   long one, in two children; the live heap must not grow with the video's length ({@link #heapDoesNotGrowWithVideoLength}).</li>
  * </ul>
  */
-public class TestVideoRoundMemoryCells extends EmbeddingRoundTestBase {
+class TestVideoRoundMemoryCells extends EmbeddingRoundTestBase {
 
   static final String REFERENCE_HEAP = TestEmbeddingRoundMemoryCells.REFERENCE_HEAP;
   private static final long CELL_TIMEOUT_MINUTES = 15;
@@ -153,7 +151,7 @@ public class TestVideoRoundMemoryCells extends EmbeddingRoundTestBase {
 
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"video-light", "video-ffmpeg", "video-jcodec", "video-store", FIXED_TERM_CELL})
-  public void cellPassesAtItsHeap(String cell) throws Exception {
+  void cellPassesAtItsHeap(String cell) throws Exception {
     assumeTrue(selectedCells().contains(cell), "memory cell " + cell + " not selected (-Dvideo.memory.cells)");
     Path work = localPath(basePath()).resolve("cell-" + cell);
     Files.createDirectories(work);
@@ -240,9 +238,13 @@ public class TestVideoRoundMemoryCells extends EmbeddingRoundTestBase {
     assertEquals(0L, table.filter(functions.col(EmbeddingStreamers.MODEL_COLUMN).isNull()).count(), "every row has its embedding");
     assertEquals(Collections.singletonMap(EmbeddingTableSchema.MODALITY_IMAGE, rows),
         counts(table, functions.col(EmbeddingTableSchema.MODALITY)), "every row is a frame");
-    assertEquals(Collections.singletonMap(jcodec ? JcodecVideoFramePreprocessor.NAME : VideoFramePreprocessor.INPUT_LOGIC, rows),
-        counts(table, functions.col(EmbeddingTableSchema.AUX).getItem(EmbeddingTableSchema.AUX_INPUT_LOGIC)),
-        "every frame is the expected preprocessor's");
+    // row assembly replaces the preprocessor's logic hint with the table-pinned video contract, which names the cell's
+    // preprocessor class; which preprocessor decoded is graded above (FFMPEG_ON_CLASS_PATH, VIDEO_DECODES)
+    String videoContract = prepLogicVersion("video");
+    assertTrue(videoContract != null && !videoContract.isEmpty(), "the table pins a video prep contract");
+    assertEquals(Collections.singletonMap(videoContract, rows),
+        counts(table, functions.col(EmbeddingTableSchema.AUX).getItem(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION)),
+        "every frame carries the table's video prep contract");
     Map<String, Long> storage = counts(table, functions.col(EmbeddingTableSchema.PREPARED_IMAGE).getField(HoodieSchema.Blob.TYPE));
     long payloadFiles = payloadFiles();
     if (store) {
@@ -293,7 +295,7 @@ public class TestVideoRoundMemoryCells extends EmbeddingRoundTestBase {
    */
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"video-length-light", "video-length"})
-  public void heapDoesNotGrowWithVideoLength(String cell) throws Exception {
+  void heapDoesNotGrowWithVideoLength(String cell) throws Exception {
     assumeTrue(selectedCells().contains(cell), "memory cell " + cell + " not selected (-Dvideo.memory.cells)");
     boolean light = "video-length-light".equals(cell);
     int shortSeconds = light ? 20 : 2 * 60;
@@ -466,7 +468,8 @@ public class TestVideoRoundMemoryCells extends EmbeddingRoundTestBase {
   static long smallestAdmittedHeapMib(TypedProperties props) {
     EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
     long ceiling = 64 * 1024;
-    assertDoesNotThrow(() -> VideoFrameHeapCheck.check(config, executor(ceiling)), "the job fits some heap");
+    SparkConf ceilingExecutor = executor(ceiling);
+    assertDoesNotThrow(() -> VideoFrameHeapCheck.check(config, ceilingExecutor), "the job fits some heap");
     long low = 1;
     long high = ceiling;
     while (low < high) {
@@ -478,7 +481,8 @@ public class TestVideoRoundMemoryCells extends EmbeddingRoundTestBase {
       }
     }
     long smallest = low;
-    assertThrows(HoodieValidationException.class, () -> VideoFrameHeapCheck.check(config, executor(smallest - 1)));
+    SparkConf belowSmallest = executor(smallest - 1);
+    assertThrows(HoodieValidationException.class, () -> VideoFrameHeapCheck.check(config, belowSmallest));
     return smallest;
   }
 

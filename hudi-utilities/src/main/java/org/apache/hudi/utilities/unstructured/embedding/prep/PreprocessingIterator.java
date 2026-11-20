@@ -123,6 +123,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private final EmbeddingTableConfig config;
   private final BlobBytesSource bytesSource;
   private final PreprocessorRegistry registry;
+  private final PrepLogicVersions logicVersions;
   private final Tokenizer tokenizer;
   private final PrepCounters counters;
   private final int modelColumnCount;
@@ -219,6 +220,13 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     this.config = config;
     this.bytesSource = bytesSource;
     this.registry = registry;
+    this.logicVersions = PrepLogicVersions.from(config.getProps());
+    try {
+      this.logicVersions.checkExecution(config.getProps());
+    } catch (RuntimeException e) {
+      registry.close();
+      throw e;
+    }
     this.tokenizer = tokenizer;
     this.counters = counters;
     this.modelColumnCount = config.models().size() * EmbeddingTableSchema.COLUMNS_PER_MODEL;
@@ -559,7 +567,12 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     values[7] = currentFile.getFileExtension();
     values[8] = chunk.getText();
     values[9] = chunk.getTokenCount();
-    Map<String, String> aux = chunk.getAux();
+    Map<String, String> aux = chunk.getAux() == null ? new HashMap<>() : new HashMap<>(chunk.getAux());
+    aux.remove("input_logic");
+    aux.remove("video_logic");
+    aux.remove("audio_logic");
+    aux.put(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION,
+        logicVersions.forRow(currentPreprocessor.sourceKind(), chunk.getModality()));
     // the Row encoder accepts only a Scala map for MapType
     values[10] = aux == null ? null : JavaConverters.mapAsScalaMap(aux);
     for (int i = 0; i < userPartitionColumns.size(); i++) {

@@ -57,9 +57,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
@@ -75,13 +77,13 @@ import java.util.stream.Collectors;
  *
  * <p>One round:
  * <ol>
- *   <li>releases the previous round's caches for this table (a transformer has no hook after the commit);</li>
+ *   <li>releases the previous round's caches for this table;</li>
  *   <li>checks, at the start of the round (after the streamer fetched the batch and moved the instant to INFLIGHT, before any prep
  *   work; a refusal rolls the instant back): the table's version; under
  *   {@code prep_only} no model and no compute setting; under {@code prep_and_compute} exactly one active model, whose column and
  *   dimensions name and size the VECTOR column (an existing table's column of that name has the model's dimensions), with a
- *   loadable client; no Spark speculation; the prep extension allow-list; the preprocessors' configuration; when the job preps
- *   video, that the executor heap holds its frame decodes ({@link VideoFrameHeapCheck});</li>
+ *   loadable client; the column's model identity (auxiliary history and commit-time fence); no Spark speculation; the prep
+ *   extension allow-list; the preprocessors' configuration; when the job preps video, that the executor heap holds its frame decodes ({@link VideoFrameHeapCheck});</li>
  *   <li>takes the output schema: an existing table's latest writer schema without meta fields, its columns beyond the base
  *   ones nullable, with the model's column added
  *   when missing; else {@link EmbeddingTableSchema#build}, which has no VECTOR column under {@code prep_only};</li>
@@ -92,6 +94,11 @@ import java.util.stream.Collectors;
  *   returns the data rows, one error-only row per PERMANENT input, and prep's error rows. With no row left to embed it skips
  *   compute and returns prep's error rows.</li>
  * </ol>
+ * Inside the data commit, {@link #onPreCommit} rechecks the round's model identities against those committed meanwhile and
+ * fences them ({@link EmbeddingColumnInfoStore#validateBeforeCommit}); a conflict fails the commit before any row is durable.
+ * After the table commits, {@link #onCommit} publishes the committed identities to the auxiliary history file. A publication
+ * failure fails post-commit processing and retains the completed table commit; the fence keeps its identities for the next
+ * round's repair.
  * One model per embedding table: a round fills the active model's VECTOR column only. Switching the active model adds the new
  * model's column, and every row the new model writes carries NULL in the old model's column.
  * A row carrying {@code _corrupt_record} goes to the job's error table ({@code CUSTOM_TRANSFORMER_FAILURE}); with the error
@@ -112,6 +119,10 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
 
   private final ConcurrentMap<String, ComputeCheck> pendingCompute = new ConcurrentHashMap<>();
 
+  /** Driver-only publication plans; a failed table commit never publishes them. */
+  private final ConcurrentMap<String, PendingColumnInfo> pendingColumnInfo = new ConcurrentHashMap<>();
+  private final ConcurrentMap<String, StartedColumnInfo> startedColumnInfo = new ConcurrentHashMap<>();
+
   @Override
   public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset, TypedProperties properties) {
     throw new HoodieException(getClass().getSimpleName() + " writes every row of a round under the round's instant: it runs only "
@@ -127,7 +138,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     EmbeddingTableConfig config = EmbeddingTableConfig.from(properties);
     Option<StructType> table = EmbeddingTableSchema.writerReadSchema(config.targetTablePath(),
         HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
-    StructType schema = roundSchema(config, table);
+    StructType schema = EmbeddingTableSchema.roundSchema(config, table);
     return PrepRound.errorTableEnabled(properties)
         ? schema.add(DataTypes.createStructField(PrepRound.CORRUPT_RECORD, DataTypes.StringType, true)) : schema;
   }
@@ -139,19 +150,91 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     String target = config.targetTablePath();
     releaseRound(target);
     ownedRoundCaches.remove(target);
+    pendingColumnInfo.remove(target);
     pendingCompute.remove(target);
     StorageConfiguration<?> storageConf = HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration());
     // the table first: its minimum version
     PrepRound.checkTable(config, storageConf);
     Option<StructType> table = EmbeddingTableSchema.writerReadSchema(target, storageConf);
     Option<EmbeddingModelSpec> model = checkRound(config, sparkSession, table);
-    StructType tableSchema = outputSchema(config, table, model);
+    StructType tableSchema = EmbeddingTableSchema.outputSchema(config, table, model);
+    Map<String, Integer> writtenVectors = EmbeddingColumnInfoConfig.vectorColumns(Option.of(tableSchema));
+    Map<String, EmbeddingColumnInfoStore.Identity> identities = new LinkedHashMap<>();
+    for (EmbeddingModelSpec declared : config.models()) {
+      if (writtenVectors.containsKey(declared.getColumn())) {
+        identities.put(declared.getColumn(), EmbeddingColumnInfoConfig.identity(declared, properties));
+      }
+    }
+    Map<String, Integer> existingVectorColumns = EmbeddingColumnInfoConfig.vectorColumns(table);
+    Set<String> retiredColumns = EmbeddingColumnInfoConfig.retiredColumns(properties);
+    StartedColumnInfo started = startedColumnInfo.compute(target, (path, previous) -> {
+      boolean sameProperties = previous != null && previous.properties.equals(properties);
+      if (sameProperties && previous.identities.equals(identities)) {
+        return previous;
+      }
+      EmbeddingColumnInfoStore store = sameProperties ? previous.store : new EmbeddingColumnInfoStore(target, storageConf, properties);
+      EmbeddingColumnInfoStore.Update update = sameProperties
+          ? store.refreshAtStart(identities, existingVectorColumns, retiredColumns, previous.update)
+          : store.checkAtStart(identities, existingVectorColumns, retiredColumns);
+      return new StartedColumnInfo(properties, identities, store, update);
+    });
     try {
-      return round(jsc, sparkSession, rowDataset, config, model, storageConf, tableSchema, instantTime);
+      Dataset<Row> output = round(jsc, sparkSession, rowDataset, config, model, storageConf, tableSchema, instantTime);
+      pendingColumnInfo.put(target, new PendingColumnInfo(instantTime, started.store,
+          started.update.withExistingColumns(EmbeddingColumnInfoConfig.vectorColumns(table))));
+      return output;
     } catch (Exception e) {
       // every Spark job of the round may fail with a checked SparkException: wrapped, so the streamer's rollback of the instant runs
       throw e instanceof RuntimeException ? (RuntimeException) e
           : new HoodieException("Embedding round of " + target + " failed at instant " + instantTime, e);
+    }
+  }
+
+  /** Publishes this driver's column history only after the corresponding table commit succeeds. */
+  @Override
+  public void onPreCommit(JavaSparkContext jsc, SparkSession sparkSession, TypedProperties properties, String instantTime,
+                          HoodieTableMetaClient metaClient) {
+    String target = EmbeddingTableConfig.from(properties).targetTablePath();
+    ComputeCheck compute = pendingCompute.get(target);
+    if (compute != null && compute.instant.equals(instantTime)) {
+      try {
+        ComputeRound.checkRefused(compute.model, compute.counters);
+      } catch (EmbeddingClientConfigException refusal) {
+        throw new HoodiePreCommitRefusalException(refusal.getMessage(), refusal);
+      }
+    }
+    PendingColumnInfo pending = pendingColumnInfo.get(target);
+    if (pending != null && pending.instant.equals(instantTime)) {
+      pending.store.validateBeforeCommit(metaClient, instantTime, pending.update);
+    }
+  }
+
+  @Override
+  public void onCommit(JavaSparkContext jsc, SparkSession sparkSession, TypedProperties properties, String instantTime) {
+    String target = EmbeddingTableConfig.from(properties).targetTablePath();
+    pendingCompute.computeIfPresent(target, (path, compute) -> compute.instant.equals(instantTime) ? null : compute);
+    PendingColumnInfo pending = pendingColumnInfo.get(target);
+    if (pending != null && pending.instant.equals(instantTime) && pendingColumnInfo.remove(target, pending)) {
+      try {
+        pending.store.publishCommittedState(instantTime, pending.update);
+        // by design: the operator-facing log says the committed data is kept; the rethrow fails the job
+      } catch (RuntimeException failure) { // NOSONAR (by design: see above)
+        LOG.error("Embedding column information publication failed after successful commit {} for table {}; committed data is retained",
+            instantTime, target, failure);
+        throw failure;
+      }
+    }
+  }
+
+  private static final class PendingColumnInfo {
+    private final String instant;
+    private final EmbeddingColumnInfoStore store;
+    private final EmbeddingColumnInfoStore.Update update;
+
+    private PendingColumnInfo(String instant, EmbeddingColumnInfoStore store, EmbeddingColumnInfoStore.Update update) {
+      this.instant = instant;
+      this.store = store;
+      this.update = update;
     }
   }
 
@@ -468,23 +551,18 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     }
   }
 
-  @Override
-  public void onPreCommit(JavaSparkContext jsc, SparkSession sparkSession, TypedProperties properties, String instantTime,
-                          HoodieTableMetaClient metaClient) {
-    String target = EmbeddingTableConfig.from(properties).targetTablePath();
-    ComputeCheck compute = pendingCompute.get(target);
-    if (compute != null && compute.instant.equals(instantTime)) {
-      try {
-        ComputeRound.checkRefused(compute.model, compute.counters);
-      } catch (EmbeddingClientConfigException refusal) {
-        throw new HoodiePreCommitRefusalException(refusal.getMessage(), refusal);
-      }
-    }
-  }
+  private static final class StartedColumnInfo {
+    private final TypedProperties properties;
+    private final Map<String, EmbeddingColumnInfoStore.Identity> identities;
+    private final EmbeddingColumnInfoStore store;
+    private final EmbeddingColumnInfoStore.Update update;
 
-  @Override
-  public void onCommit(JavaSparkContext jsc, SparkSession sparkSession, TypedProperties properties, String instantTime) {
-    String target = EmbeddingTableConfig.from(properties).targetTablePath();
-    pendingCompute.computeIfPresent(target, (path, compute) -> compute.instant.equals(instantTime) ? null : compute);
+    private StartedColumnInfo(TypedProperties properties, Map<String, EmbeddingColumnInfoStore.Identity> identities,
+                              EmbeddingColumnInfoStore store, EmbeddingColumnInfoStore.Update update) {
+      this.properties = TypedProperties.copy(properties);
+      this.identities = Collections.unmodifiableMap(new LinkedHashMap<>(identities));
+      this.store = store;
+      this.update = update;
+    }
   }
 }

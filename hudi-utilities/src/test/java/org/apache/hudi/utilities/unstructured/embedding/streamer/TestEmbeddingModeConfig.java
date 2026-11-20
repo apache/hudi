@@ -64,6 +64,23 @@ public class TestEmbeddingModeConfig {
   }
 
   @Test
+  public void existingTableRequiresBaseColumnsAndEvolvesNullableImage() {
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(prepOnly());
+    StructType full = EmbeddingTableSchema.build(config);
+    for (String column : EmbeddingTableSchema.BASE_COLUMNS) {
+      StructType missing = new StructType(Arrays.stream(full.fields())
+          .filter(field -> !field.name().equals(column)).toArray(org.apache.spark.sql.types.StructField[]::new));
+      if (EmbeddingTableSchema.PREPARED_IMAGE.equals(column)) {
+        assertEquals(full, EmbeddingTableTransformer.roundSchema(config, Option.of(missing)),
+            "the nullable image field is restored with its original type and metadata");
+      } else {
+        assertThrows(IllegalArgumentException.class,
+            () -> EmbeddingTableTransformer.roundSchema(config, Option.of(missing)), column);
+      }
+    }
+  }
+
+  @Test
   public void theModeIsRequired() {
     IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
         () -> EmbeddingTableConfig.from(props(null)).mode());
@@ -206,6 +223,8 @@ public class TestEmbeddingModeConfig {
   public void prepAndComputeRoundOnATableWithAnotherDimensionIsRefusedAtStart() {
     StructType tableAt8 = EmbeddingTableSchema.build(EmbeddingTableConfig.from(props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE)));
     TypedProperties at16 = props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
+    at16.setProperty(MODEL + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, EmbeddingTableSchema.MODALITY_TEXT);
+    at16.setProperty(EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), "pdf");
     at16.setProperty(MODEL + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX, "16");
     at16.setProperty(HoodieWriteConfig.BASE_PATH.key(), "/tables/emb");
     EmbeddingTableConfig config = EmbeddingTableConfig.from(at16);

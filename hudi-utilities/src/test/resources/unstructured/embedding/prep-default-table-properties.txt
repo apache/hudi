@@ -1,0 +1,67 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Golden stored prep contract of a default embedding job (TestPrepLogicVersions#defaultJobStoresTheGoldenPrepContract).
+# One key=value per line, sorted. ${java.specification.version} is the running JVM's specification version.
+# Changing a line changes what existing tables accept: change it on purpose, in the same change as the code.
+hoodie.table.embedding.prep.audio.enabled=false
+hoodie.table.embedding.prep.audio.logic.version=prep-logic-v3;jtokkit=jtokkit-bpe-encoding-v1;normalizer=text-normalizer-v2;source-version-check=mtime-size-v1
+hoodie.table.embedding.prep.audio.max.duration.ms=14400000
+hoodie.table.embedding.prep.audio.sample.rate=16000
+hoodie.table.embedding.prep.audio.segment.max.bytes=1048576
+hoodie.table.embedding.prep.audio.segment.max.ms=30000
+hoodie.table.embedding.prep.audio.vad.min.silence.ms=500
+hoodie.table.embedding.prep.audio.vad.threshold.db=-35
+hoodie.table.embedding.prep.chunk.max.tokens=256
+hoodie.table.embedding.prep.chunk.max.words=256
+hoodie.table.embedding.prep.chunk.normalize.dehyphenate=false
+hoodie.table.embedding.prep.chunk.overlap.tokens=128
+hoodie.table.embedding.prep.chunk.sentence.locale=en
+hoodie.table.embedding.prep.chunk.tokenizer.encoding=cl100k_base
+hoodie.table.embedding.prep.chunk.tokenizer.type=openai-bpe
+hoodie.table.embedding.prep.chunk.window.max.chars=8192
+hoodie.table.embedding.prep.extension.avi=org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor;video-frames-v1
+hoodie.table.embedding.prep.extension.bmp=org.apache.hudi.utilities.unstructured.embedding.prep.ImageInputPreprocessor;image-input-v1
+hoodie.table.embedding.prep.extension.gif=org.apache.hudi.utilities.unstructured.embedding.prep.ImageInputPreprocessor;image-input-v1
+hoodie.table.embedding.prep.extension.jpeg=org.apache.hudi.utilities.unstructured.embedding.prep.ImageInputPreprocessor;image-input-v1
+hoodie.table.embedding.prep.extension.jpg=org.apache.hudi.utilities.unstructured.embedding.prep.ImageInputPreprocessor;image-input-v1
+hoodie.table.embedding.prep.extension.mkv=org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor;video-frames-v1
+hoodie.table.embedding.prep.extension.mov=org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor;video-frames-v1
+hoodie.table.embedding.prep.extension.mp4=org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor;video-frames-v1
+hoodie.table.embedding.prep.extension.pdf=org.apache.hudi.utilities.unstructured.embedding.prep.pdf.PdfFilePreprocessor;pdf-chunker/5;pdf-text-extraction-v1
+hoodie.table.embedding.prep.extension.png=org.apache.hudi.utilities.unstructured.embedding.prep.ImageInputPreprocessor;image-input-v1
+hoodie.table.embedding.prep.extension.tif=org.apache.hudi.utilities.unstructured.embedding.prep.ImageInputPreprocessor;image-input-v1
+hoodie.table.embedding.prep.extension.tiff=org.apache.hudi.utilities.unstructured.embedding.prep.ImageInputPreprocessor;image-input-v1
+hoodie.table.embedding.prep.extension.webm=org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor;video-frames-v1
+hoodie.table.embedding.prep.image.header.max.bytes=1048576
+hoodie.table.embedding.prep.image.logic.version=prep-logic-v3;source-version-check=mtime-size-v1
+hoodie.table.embedding.prep.image.max.pixels=100000000
+hoodie.table.embedding.prep.java.specification.version=${java.specification.version}
+hoodie.table.embedding.prep.pdf.max.decoded.stream.bytes=33554432
+hoodie.table.embedding.prep.pdf.max.graphics.depth=1024
+hoodie.table.embedding.prep.pdf.max.page.chars=262144
+hoodie.table.embedding.prep.pdf.max.page.font.bytes=50331648
+hoodie.table.embedding.prep.pdf.max.page.glyphs=262144
+hoodie.table.embedding.prep.pdf.max.pages=10000
+hoodie.table.embedding.prep.text.logic.version=prep-logic-v3;jtokkit=jtokkit-bpe-encoding-v1;normalizer=text-normalizer-v2;source-version-check=mtime-size-v1
+hoodie.table.embedding.prep.tokenizer.class=org.apache.hudi.utilities.unstructured.embedding.text.OpenAiBpeTokenizer
+hoodie.table.embedding.prep.tokenizer.id=openai-bpe:cl100k_base
+hoodie.table.embedding.prep.video.dedup.max.distance=4
+hoodie.table.embedding.prep.video.dedup.method=dhash
+hoodie.table.embedding.prep.video.keyframe.interval.ms=1000
+hoodie.table.embedding.prep.video.logic.version=prep-logic-v3;ffmpeg=video-keyframe-v3;jcodec=video-keyframe-h264mp4-v2;jcodec.decode=jcodec-decode-v1;source-version-check=mtime-size-v1
+hoodie.table.embedding.prep.video.max.pixels=8294400

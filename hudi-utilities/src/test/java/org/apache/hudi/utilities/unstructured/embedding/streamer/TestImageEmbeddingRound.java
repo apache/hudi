@@ -296,7 +296,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
     assertTrue(EmbeddingStreamers.commits(table(), storage()).isEmpty());
   }
 
-  private static void assertImageRow(Row row, FixtureFile file, int width, int height, String format) {
+  private void assertImageRow(Row row, FixtureFile file, int width, int height, String format) {
     assertEquals(file.sha, row.getAs(EmbeddingTableSchema.SOURCE_PATH_SHA));
     assertEquals(EmbeddingTableSchema.MODALITY_IMAGE, row.getAs(EmbeddingTableSchema.MODALITY));
     assertEquals(0L, (long) row.getAs(EmbeddingTableSchema.CHUNK_ID));
@@ -309,7 +309,7 @@ public class TestImageEmbeddingRound extends EmbeddingRoundTestBase {
     assertEquals(String.valueOf(width), aux.apply(ImageInputPreprocessor.AUX_WIDTH));
     assertEquals(String.valueOf(height), aux.apply(ImageInputPreprocessor.AUX_HEIGHT));
     assertEquals(format, aux.apply(ImageInputPreprocessor.AUX_FORMAT));
-    assertEquals(ImageInputPreprocessor.INPUT_LOGIC, aux.apply(EmbeddingTableSchema.AUX_INPUT_LOGIC));
+    assertEquals(prepLogicVersion("image"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
   }
 
   /** Each row as text, with the inline bytes of its prepared image by value. */

@@ -56,6 +56,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("functional")
 public class TestBlobQuarantineTransformer extends UtilitiesTestBase {
   private static final String CORRUPT_RECORD = BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
+  private static final String KEY_FIELDS = BlobTableSchema.SOURCE_PATH_SHA + "," + BlobTableSchema.SOURCE_MODIFICATION_TIME + ","
+      + BlobTableSchema.SOURCE_FILE_SIZE;
 
   @BeforeAll
   public static void startServices() throws Exception {
@@ -67,16 +69,13 @@ public class TestBlobQuarantineTransformer extends UtilitiesTestBase {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
-  private TypedProperties properties(boolean errorTable) {
+  private static TypedProperties properties(boolean errorTable) {
     TypedProperties props = new TypedProperties();
     props.setProperty("hoodie.datasource.write.recordkey.field", KEY_FIELDS);
     props.setProperty("hoodie.datasource.write.partitionpath.field", BlobTableSchema.SOURCE_FILE_EXTENSION);
     props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), Boolean.toString(errorTable));
     return props;
   }
-
-  private static final String KEY_FIELDS = BlobTableSchema.SOURCE_PATH_SHA + "," + BlobTableSchema.SOURCE_MODIFICATION_TIME + ","
-      + BlobTableSchema.SOURCE_FILE_SIZE;
 
   /** The record key the complex key generator builds for {@code row} (a schemaless RowFactory row: columns by schema index). */
   private static String recordKey(Row row) {

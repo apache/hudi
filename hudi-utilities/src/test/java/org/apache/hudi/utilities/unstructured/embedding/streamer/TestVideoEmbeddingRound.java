@@ -155,7 +155,7 @@ public class TestVideoEmbeddingRound extends EmbeddingRoundTestBase {
       assertEquals(frame.getDedupKey(), aux.apply(VideoFramePreprocessor.AUX_DEDUP_KEY));
       assertEquals(String.valueOf(frame.getWidth()), aux.apply(EmbeddingTableSchema.AUX_INPUT_WIDTH));
       assertEquals(String.valueOf(frame.getHeight()), aux.apply(EmbeddingTableSchema.AUX_INPUT_HEIGHT));
-      assertEquals(VideoFramePreprocessor.INPUT_LOGIC, aux.apply(EmbeddingTableSchema.AUX_INPUT_LOGIC));
+      assertEquals(prepLogicVersion("video"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
       assertEquals(ImageContentTypes.JPEG, frame.getMimeType());
 
       Row prepared = row.getAs(EmbeddingTableSchema.PREPARED_IMAGE);

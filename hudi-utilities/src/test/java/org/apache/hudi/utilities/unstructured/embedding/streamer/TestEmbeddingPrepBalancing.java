@@ -157,11 +157,12 @@ public class TestEmbeddingPrepBalancing extends EmbeddingRoundTestBase {
   @Test
   public void prepRoundKeepsBothSourceVersionsOfAPath() throws Exception {
     String target = table("versions");
-    // the round's table exists before the transformer runs (the streamer starts the instant first); prep writes large payloads
-    // under it
     TypedProperties props = props(target, EmbeddingTableConfig.MODE_PREP_ONLY,
         EmbeddingTableConfig.BALANCE_STRATEGY_CLASS.key(), RecordingStrategy.class.getName());
-    HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.embedding(props)).setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("versions")
+    // the round's table exists before the transformer runs (the streamer starts the instant first); prep writes large payloads
+    // under it
+    HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.embedding(props))
+        .setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("versions")
         .setRecordKeyFields(String.join(",", EmbeddingTableSchema.KEY_COLUMNS)).initTable(storage(), target);
     byte[] first = PdfFixtures.text("Alpha from the first version.");
     byte[] second = PdfFixtures.text("Beta from the second version.");

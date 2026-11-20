@@ -38,7 +38,9 @@ import org.apache.hudi.utilities.sources.blob.BlobPhysicalPins;
 import org.apache.hudi.utilities.sources.blob.BlobSourceSetup;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig;
+import org.apache.hudi.utilities.unstructured.embedding.prep.PrepLogicVersions;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PreprocessorRegistry;
+import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingColumnInfoStore;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -66,6 +68,9 @@ public class UnstructuredSourceContract implements SourceContract {
 
   private final UnstructuredMode mode;
   private final UnstructuredTableProperties tablePins;
+  private TypedProperties preparedProperties;
+  private String checkedTablePath;
+  private Properties checkedTableProperties;
 
   /**
    * The contract of the job of {@code props}.
@@ -74,23 +79,40 @@ public class UnstructuredSourceContract implements SourceContract {
    */
   public UnstructuredSourceContract(TypedProperties props) {
     this.mode = UnstructuredMode.from(props);
-    String name = UnstructuredSchemaContract.sourceName(mode);
-    UnstructuredTableProperties.Builder pins = UnstructuredTableVersion.tablePropertiesBuilder(name, mode.configValue());
-    if (mode == UnstructuredMode.BLOB) {
-      Map<String, String> physical = BlobPhysicalPins.of(props);
-      pins.requireTableProperties(physical, (source, base, table) -> BlobPhysicalPins.check(source, base, table, physical));
-    }
+    String sourceName = UnstructuredSchemaContract.sourceName(mode);
     if (mode == UnstructuredMode.EMBEDDING) {
-      String threshold = Long.toString(EmbeddingInputConfig.inlineMaxBytes(props));
-      TypedProperties job = TypedProperties.copy(props);
-      pins.requireTableProperties(Collections.singletonMap(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key(), threshold),
-          (source, base, table) -> {
-            if (!threshold.equals(table.getProperty(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key())) && storesInputs(mode, job)) {
-              EmbeddingInputConfig.checkTable(source, base, table, threshold);
-            }
-          });
+      this.tablePins = embeddingTablePins(sourceName, props);
+    } else {
+      Map<String, String> physical = BlobPhysicalPins.of(props);
+      this.tablePins = UnstructuredTableVersion.tablePropertiesBuilder(sourceName, mode.configValue())
+          .requireTableProperties(physical, (name, basePath, table) -> BlobPhysicalPins.check(name, basePath, table, physical))
+          .build();
     }
-    this.tablePins = pins.build();
+  }
+
+  /**
+   * The embedding table's pins for the job of {@code props}, the one list that the streamer's contract and a direct transformer
+   * run ({@link org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableChecks}) both write and check: the layout pins
+   * of every unstructured table, the column-info layout version, the input store's inline threshold and the prep contract
+   * ({@link PrepLogicVersions}). The threshold is written at creation by every job, and checked only for a job whose
+   * preprocessors store inputs ({@link #storesInputs}): it decides no byte of a job that stores none.
+   *
+   * @param sourceName the job, as the refusals name it
+   */
+  public static UnstructuredTableProperties embeddingTablePins(String sourceName, TypedProperties props) {
+    String inlineMaxBytes = Long.toString(EmbeddingInputConfig.inlineMaxBytes(props));
+    TypedProperties job = TypedProperties.copy(props);
+    UnstructuredTableProperties.Builder pins = UnstructuredTableVersion.tablePropertiesBuilder(sourceName, UnstructuredMode.EMBEDDING.configValue())
+        .requireTableProperty(EmbeddingColumnInfoStore.LAYOUT_VERSION, EmbeddingColumnInfoStore.CURRENT_LAYOUT_VERSION)
+        .requireTableProperties(Collections.singletonMap(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key(), inlineMaxBytes),
+            (name, basePath, table) -> {
+              if (!inlineMaxBytes.equals(table.getProperty(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key()))
+                  && storesInputs(UnstructuredMode.EMBEDDING, job)) {
+                EmbeddingInputConfig.checkTable(name, basePath, table, inlineMaxBytes);
+              }
+            });
+    PrepLogicVersions.from(props).requireTableProperties(pins);
+    return pins.build();
   }
 
   /** The job this contract is of. */
@@ -101,6 +123,9 @@ public class UnstructuredSourceContract implements SourceContract {
   /** Merges this mode's settings once, before any job consumer reads them. */
   @Override
   public TypedProperties prepareJob(TypedProperties jobProps) {
+    if (isPreparedJob(jobProps)) {
+      return jobProps;
+    }
     TypedProperties merged = TypedProperties.copy(jobProps);
     require(merged, KeyGeneratorOptions.RECORDKEY_FIELD_NAME, String.join(",", mode.keyColumns()),
         UnstructuredSourceContract::fields, " (these fields, in this order)");
@@ -120,7 +145,35 @@ public class UnstructuredSourceContract implements SourceContract {
     merged = tablePins.apply(merged);
     checkKeyGenerator(UnstructuredSchemaContract.sourceName(mode), merged);
     validateJob(merged);
+    preparedProperties = TypedProperties.copy(merged);
     return merged;
+  }
+
+  /**
+   * Whether the job writes files beside its data files (out-of-line inputs, which need timeline-server markers so a failed
+   * round's rollback removes them): only an embedding job whose allowed preprocessors store inputs (images, video frames). A blob job
+   * never does: a file above its inline threshold is referenced where it is.
+   */
+  private static boolean storesInputs(UnstructuredMode mode, TypedProperties props) {
+    if (mode == UnstructuredMode.BLOB) {
+      return false;
+    }
+    PreprocessorRegistry registry = new PreprocessorRegistry(props);
+    try {
+      return registry.storesInputs(EmbeddingTableConfig.from(props));
+    } finally {
+      registry.close();
+    }
+  }
+
+  @Override
+  public Properties tableProperties() {
+    return tablePins.tableProperties();
+  }
+
+  /** The stream's exact persisted pins, independent of Hudi's generic source preparation. */
+  public UnstructuredTableProperties requiredTableProperties() {
+    return tablePins;
   }
 
   private void require(TypedProperties props, ConfigProperty<?> key, String value, UnaryOperator<String> normalize, String hint) {
@@ -164,8 +217,8 @@ public class UnstructuredSourceContract implements SourceContract {
 
   /**
    * Reads the job and the cloud, refuses a key of the other cloud, and validates the job's other properties
-   * ({@link BlobSourceSetup#validate}), the table-version floor among them; returns {@code props} unchanged. The streamer runs it
-   * with the merge, before it builds anything or creates the table, and the source again as it is built: one copy of the checks.
+   * ({@link BlobSourceSetup#validate}), the table-version floor among them; returns validated properties. The streamer runs it
+   * with the merge, before it builds anything or creates the table, and the source reuses the result while the properties are unchanged.
    *
    * @throws IllegalArgumentException          naming the setting and {@code UnstructuredDataSource (mode ...)}
    */
@@ -175,6 +228,11 @@ public class UnstructuredSourceContract implements SourceContract {
     String name = UnstructuredSchemaContract.sourceName(mode);
     cloud.validate(props, name);
     return BlobSourceSetup.validate(props, mode, name);
+  }
+
+  @Override
+  public boolean isPreparedJob(TypedProperties props) {
+    return preparedProperties != null && preparedProperties.equals(props);
   }
 
   /**
@@ -188,51 +246,24 @@ public class UnstructuredSourceContract implements SourceContract {
     }
   }
 
-  @Override
-  public void checkTable(String basePath, HoodieTableConfig tableConfig) {
-    UnstructuredDataSource.validate(mode, basePath, tableConfig);
-    tablePins.checkTable(basePath, tableConfig);
-  }
-
+  /** Checks the chain and the schemas against the mode's contract, before the source is built or any input is read. */
   @Override
   public void checkJob(JavaSparkContext jsc, SparkSession spark, List<String> chain, TypedProperties props,
                        Option<HoodieSchema> targetSchema, Option<StructType> tableSchema) {
     UnstructuredDataSource.validate(mode, jsc, spark, chain, props, targetSchema, tableSchema);
   }
 
+  /** Checks the table's pins next to the record-key validation, before source construction. */
   @Override
-  public Properties tableProperties() {
-    return tablePins.tableProperties();
-  }
-
-  /** Exact persisted pins, shared by source startup and direct table checks. */
-  public UnstructuredTableProperties requiredTableProperties() {
-    return tablePins;
-  }
-
-  public static UnstructuredTableProperties embeddingTablePins(String sourceName, TypedProperties props) {
-    String inlineMaxBytes = Long.toString(EmbeddingInputConfig.inlineMaxBytes(props));
-    TypedProperties job = TypedProperties.copy(props);
-    UnstructuredTableProperties.Builder pins = UnstructuredTableVersion.tablePropertiesBuilder(sourceName, UnstructuredMode.EMBEDDING.configValue())
-        .requireTableProperties(Collections.singletonMap(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key(), inlineMaxBytes),
-            (name, basePath, table) -> {
-              if (!inlineMaxBytes.equals(table.getProperty(EmbeddingInputConfig.TABLE_INLINE_MAX_BYTES.key()))
-                  && storesInputs(UnstructuredMode.EMBEDDING, job)) {
-                EmbeddingInputConfig.checkTable(name, basePath, table, inlineMaxBytes);
-              }
-            });
-    return pins.build();
-  }
-
-  private static boolean storesInputs(UnstructuredMode mode, TypedProperties props) {
-    if (mode == UnstructuredMode.BLOB) {
-      return false;
+  public void checkTable(String basePath, HoodieTableConfig table) {
+    if (basePath.equals(checkedTablePath) && table.getProps().equals(checkedTableProperties)) {
+      return;
     }
-    PreprocessorRegistry registry = new PreprocessorRegistry(props);
-    try {
-      return registry.storesInputs(EmbeddingTableConfig.from(props));
-    } finally {
-      registry.close();
-    }
+    UnstructuredDataSource.validate(mode, basePath, table);
+    tablePins.checkTable(basePath, table);
+    checkedTablePath = basePath;
+    checkedTableProperties = new Properties();
+    checkedTableProperties.putAll(table.getProps());
   }
+
 }
