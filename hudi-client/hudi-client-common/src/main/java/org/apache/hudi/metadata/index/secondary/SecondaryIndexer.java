@@ -28,10 +28,12 @@ import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ValidationUtils;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
+import org.apache.hudi.metadata.HoodieSecondaryIndexEntrySizeEstimator;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
@@ -49,12 +51,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.PARTITION_NAME_SECONDARY_INDEX_PREFIX;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.RECORD_INDEX_AVERAGE_RECORD_SIZE;
 import static org.apache.hudi.metadata.HoodieTableMetadataUtil.getSecondaryIndexPartitionsToInit;
-import static org.apache.hudi.metadata.MetadataPartitionType.RECORD_INDEX;
 import static org.apache.hudi.metadata.MetadataPartitionType.SECONDARY_INDEX;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.convertWriteStatsToSecondaryIndexRecords;
 import static org.apache.hudi.metadata.SecondaryIndexRecordGenerationUtils.readSecondaryKeysFromFileSlices;
@@ -99,13 +101,30 @@ public class SecondaryIndexer extends BaseIndexer {
         indexDefinition,
         dataTableWriteConfig.getProps());
 
-    // Initialize the file groups - using the same estimation logic as that of record index
-    final int fileGroupCount = HoodieTableMetadataUtil.estimateFileGroupCount(RECORD_INDEX, records::count,
-        RECORD_INDEX_AVERAGE_RECORD_SIZE, dataTableWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount(),
-        dataTableWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount(), dataTableWriteConfig.getRecordIndexGrowthFactor(),
-        dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
+    // Initialize the file groups with the bounds of the global record index
+    final int fileGroupCount = estimateFileGroupCount(records);
 
     return Collections.singletonList(IndexInitializationPlan.of(fileGroupCount, indexName, records));
+  }
+
+  /**
+   * Estimates the file group count from the records the index is initialized with. Entries take the size set by
+   * {@code hoodie.metadata.record.index.average.record.size} when set. Otherwise, when the count is not fixed, the pass
+   * that counts the records also samples their keys, from which the size of an entry is estimated.
+   */
+  private int estimateFileGroupCount(HoodieData<HoodieRecord> records) {
+    int minFileGroupCount = dataTableWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount();
+    int maxFileGroupCount = dataTableWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount();
+    Supplier<Long> recordCount = records::count;
+    Option<Integer> configuredRecordSize = dataTableWriteConfig.getRecordIndexAverageRecordSize();
+    int averageRecordSize = configuredRecordSize.orElse(RECORD_INDEX_AVERAGE_RECORD_SIZE);
+    if (!configuredRecordSize.isPresent() && (minFileGroupCount != maxFileGroupCount || minFileGroupCount == 0)) {
+      HoodieSecondaryIndexEntrySizeEstimator.KeySample sample = HoodieSecondaryIndexEntrySizeEstimator.countAndSampleKeys(records);
+      recordCount = sample::getCount;
+      averageRecordSize = HoodieSecondaryIndexEntrySizeEstimator.estimateEntrySize(sample.getKeys());
+    }
+    return HoodieTableMetadataUtil.estimateFileGroupCount(SECONDARY_INDEX, recordCount, averageRecordSize, minFileGroupCount,
+        maxFileGroupCount, dataTableWriteConfig.getRecordIndexGrowthFactor(), dataTableWriteConfig.getRecordIndexMaxFileGroupSizeBytes());
   }
 
   @Override

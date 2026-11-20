@@ -1904,7 +1904,7 @@ public class HoodieTableMetadataUtil {
       // Number of records to estimate for
       final long expectedNumRecords = (long) Math.ceil((float) recordCount * growthFactor);
       // Maximum records that should be written to each file group so that it does not go over the size limit required
-      final long maxRecordsPerFileGroup = maxFileGroupSizeBytes / Math.max(averageRecordSize, 1L);
+      final long maxRecordsPerFileGroup = Math.max(1L, maxFileGroupSizeBytes / Math.max(averageRecordSize, 1L));
       final long estimatedFileGroupCount = expectedNumRecords / maxRecordsPerFileGroup;
 
       if (estimatedFileGroupCount >= maxFileGroupCount) {
