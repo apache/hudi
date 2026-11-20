@@ -44,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.io.IOException;
@@ -90,7 +91,9 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
       "8, org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource, false",
       "8, org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource, false",
       "8, org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource, false",
-      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource, false"
+      "8, org.apache.hudi.utilities.sources.MockGcsEventsHoodieIncrSource, false",
+      "8, org.apache.hudi.utilities.sources.UnstructuredDataSource, false",
+      "9, org.apache.hudi.utilities.sources.UnstructuredDataSource, false"
   })
   void testShouldTargetCheckpointV2(int version, String sourceClassName, boolean expectedV2) {
     assertEquals(expectedV2, StreamerCheckpointUtils.shouldTargetCheckpointV2(version, sourceClassName));
@@ -118,6 +121,12 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
         CHECKPOINT_TO_RESUME);
     assertInstanceOf(StreamerCheckpointV1.class, hoodieIncrV6);
     assertEquals(CHECKPOINT_TO_RESUME, hoodieIncrV6.getCheckpointKey());
+
+    String objectCheckpoint = CHECKPOINT_TO_RESUME + "#folder/object.txt";
+    Checkpoint unstructuredV9 = StreamerCheckpointUtils.buildCheckpointFromConfigOverride(
+        "org.apache.hudi.utilities.sources.UnstructuredDataSource", HoodieTableVersion.NINE.versionCode(), objectCheckpoint);
+    assertInstanceOf(StreamerCheckpointV1.class, unstructuredV9);
+    assertEquals(objectCheckpoint, unstructuredV9.getCheckpointKey());
   }
 
   @Test
@@ -441,8 +450,9 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     StreamerCheckpointUtils.assertNoCheckpointOverrideDuringUpgradeForHoodieIncSource(metaClient, streamerConfig, props);
   }
 
-  @Test
-  public void testAssertNoCheckpointOverrideDuringUpgradeFailure() throws IOException {
+  @ParameterizedTest
+  @ValueSource(strings = {"org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource", "org.apache.hudi.utilities.sources.UnstructuredDataSource"})
+  public void testAssertNoCheckpointOverrideDuringUpgradeFailure(String sourceClassName) throws IOException {
     metaClient =
         HoodieTableMetaClient.newTableBuilder()
             .setDatabaseName("dataset")
@@ -455,7 +465,7 @@ public class TestStreamerCheckpointUtils extends SparkClientFunctionalTestHarnes
     // Set checkpoint override
     streamerConfig.checkpoint = "test-cp";
     streamerConfig.targetBasePath = "dummyVal";
-    streamerConfig.sourceClassName = "org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource";
+    streamerConfig.sourceClassName = sourceClassName;
     // Enable auto-upgrade and set newer write version
     props.setProperty(HoodieWriteConfig.AUTO_UPGRADE_VERSION.key(), "true");
     props.setProperty(HoodieWriteConfig.WRITE_TABLE_VERSION.key(), "8");

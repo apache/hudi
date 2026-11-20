@@ -49,6 +49,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.File;
@@ -503,5 +504,36 @@ public class TestCloudObjectsSelectorCommon extends HoodieSparkClientTestHarness
       EXISTS_CALL_THREADS.add(Thread.currentThread().getName());
       return super.exists(f);
     }
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = CloudObjectsSelectorCommon.Type.class, names = {"S3", "GCS"})
+  void injectedMaterializerPreservesSizeAndPathFilters(CloudObjectsSelectorCommon.Type type) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(CloudSourceConfig.DATAFILE_FORMAT.key(), "json");
+    props.setProperty(CloudSourceConfig.SELECT_RELATIVE_PATH_PREFIX.key(), "docs/");
+    CloudObjectMaterializer materializer = new ColumnarFileMaterializer(props) {
+      @Override
+      public String objectKeyPredicate(String objectKey, TypedProperties properties) {
+        return " and " + objectKey + " like '%.pdf'";
+      }
+    };
+    List<Row> objects = Arrays.asList(
+        RowFactory.create("docs/keep.pdf", 10L),
+        RowFactory.create("docs/other.json", 10L),
+        RowFactory.create("else/other.pdf", 10L),
+        RowFactory.create("docs/zero.pdf", 0L));
+    StructType objectSchema = new StructType().add("name", DataTypes.StringType).add("size", DataTypes.LongType);
+    String objectKey = "name";
+    if (type == CloudObjectsSelectorCommon.Type.S3) {
+      objectSchema = new StructType().add("s3", new StructType().add("object",
+          new StructType().add("key", DataTypes.StringType).add("size", DataTypes.LongType)));
+      objects = objects.stream().map(row -> RowFactory.create(RowFactory.create(row))).collect(Collectors.toList());
+      objectKey = "s3.object.key";
+    }
+    Dataset<Row> selected = sparkSession.createDataFrame(objects, objectSchema)
+        .filter(CloudObjectsSelectorCommon.generateFilter(type, props, materializer));
+    Assertions.assertEquals(Collections.singletonList(RowFactory.create("docs/keep.pdf")),
+        selected.selectExpr(objectKey + " as path").collectAsList());
   }
 }
