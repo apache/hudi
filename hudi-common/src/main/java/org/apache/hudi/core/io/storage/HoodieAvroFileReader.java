@@ -54,6 +54,16 @@ public abstract class HoodieAvroFileReader implements HoodieFileReader<IndexedRe
     return getIndexedRecordIterator(readerSchema, requestedSchema, Collections.emptyMap());
   }
 
+  /**
+   * Reads records within an inclusive, lexicographic range on a string column.
+   * Readers may push down this hint; callers must still apply their record filter.
+   * Bounds use strings so common readers do not require file-format-specific predicate classes.
+   */
+  public ClosableIterator<IndexedRecord> getIndexedRecordIteratorInRange(HoodieSchema readerSchema, HoodieSchema requestedSchema,
+                                                                        String column, String lowerBound, String upperBound) throws IOException {
+    return getIndexedRecordIterator(readerSchema, requestedSchema);
+  }
+
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordIterator(HoodieSchema readerSchema, HoodieSchema requestedSchema, Map<String, String> renamedColumns) throws IOException;
 
   public abstract ClosableIterator<IndexedRecord> getIndexedRecordsByKeysIterator(List<String> keys,

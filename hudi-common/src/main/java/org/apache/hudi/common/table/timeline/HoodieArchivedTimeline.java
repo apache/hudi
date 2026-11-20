@@ -135,6 +135,14 @@ public interface HoodieArchivedTimeline extends HoodieTimeline {
       return InstantComparison.isInClosedRange(instantTime, this.startTs, this.endTs);
     }
 
+    public String getStartTs() {
+      return startTs;
+    }
+
+    public String getEndTs() {
+      return endTs;
+    }
+
     public boolean isInRange(HoodieInstant instant) {
       return InstantComparison.isInClosedRange(instant.requestedTime(), this.startTs, this.endTs);
     }
