@@ -43,6 +43,7 @@ import static org.apache.hudi.common.table.timeline.TimelineUtils.HollowCommitHa
 public class CheckpointUtils {
 
   public static final Set<String> DATASOURCES_NOT_SUPPORTED_WITH_CKPT_V2 = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+      "org.apache.hudi.utilities.sources.UnstructuredDataSource",
       "org.apache.hudi.utilities.sources.S3EventsHoodieIncrSource",
       "org.apache.hudi.utilities.sources.GcsEventsHoodieIncrSource",
       "org.apache.hudi.utilities.sources.MockS3EventsHoodieIncrSource",
