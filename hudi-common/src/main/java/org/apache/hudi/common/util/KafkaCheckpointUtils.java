@@ -21,8 +21,11 @@ package org.apache.hudi.common.util;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Utility methods for parsing and working with streaming checkpoints.
@@ -55,6 +58,70 @@ import java.util.Map;
  */
 @Slf4j
 public class KafkaCheckpointUtils {
+
+  /**
+   * Result of comparing offsets from two checkpoints.
+   *
+   * <p>The known offset difference only includes partitions whose offsets can be compared
+   * exactly. A comparison is incomplete when either checkpoint has no partition offsets,
+   * partitions were added or removed, or an offset reset is detected, since the checkpoints
+   * do not contain enough information to calculate the full offset difference.</p>
+   */
+  public static final class OffsetComparisonResult {
+    private final long knownOffsetDifference;
+    private final boolean previousCheckpointHasOffsets;
+    private final boolean currentCheckpointHasOffsets;
+    private final Set<Integer> addedPartitions;
+    private final Set<Integer> resetPartitions;
+    private final Set<Integer> missingPartitions;
+
+    private OffsetComparisonResult(long knownOffsetDifference,
+                                   boolean previousCheckpointHasOffsets,
+                                   boolean currentCheckpointHasOffsets,
+                                   Set<Integer> addedPartitions,
+                                   Set<Integer> resetPartitions,
+                                   Set<Integer> missingPartitions) {
+      this.knownOffsetDifference = knownOffsetDifference;
+      this.previousCheckpointHasOffsets = previousCheckpointHasOffsets;
+      this.currentCheckpointHasOffsets = currentCheckpointHasOffsets;
+      this.addedPartitions = Collections.unmodifiableSet(addedPartitions);
+      this.resetPartitions = Collections.unmodifiableSet(resetPartitions);
+      this.missingPartitions = Collections.unmodifiableSet(missingPartitions);
+    }
+
+    public long getKnownOffsetDifference() {
+      return knownOffsetDifference;
+    }
+
+    public boolean hasPreviousCheckpointOffsets() {
+      return previousCheckpointHasOffsets;
+    }
+
+    public boolean hasCurrentCheckpointOffsets() {
+      return currentCheckpointHasOffsets;
+    }
+
+    public Set<Integer> getAddedPartitions() {
+      return addedPartitions;
+    }
+
+    public Set<Integer> getResetPartitions() {
+      return resetPartitions;
+    }
+
+    public Set<Integer> getMissingPartitions() {
+      return missingPartitions;
+    }
+
+    /**
+     * Returns whether both checkpoints contain partition offsets and the offset difference
+     * covers every partition in both checkpoints.
+     */
+    public boolean isExact() {
+      return previousCheckpointHasOffsets && currentCheckpointHasOffsets
+          && addedPartitions.isEmpty() && resetPartitions.isEmpty() && missingPartitions.isEmpty();
+    }
+  }
 
   /**
    * Supported checkpoint formats across engines and sources.
@@ -109,28 +176,32 @@ public class KafkaCheckpointUtils {
   }
 
   /**
-   * Calculate offset difference between two checkpoints.
-   * Handles partition additions, removals, and resets.
+   * Compare two checkpoints while preserving whether the resulting offset difference is exact.
    *
-   * Algorithm:
-   * 1. For each partition in current checkpoint:
-   *    - If partition exists in previous: diff = current - previous
-   *    - If partition is new: skip (start offset unknown, would overcount)
-   *    - If diff is negative (reset): skip (start offset unknown, would overcount)
-   * 2. Sum all partition diffs
+   * <p>Offsets for partitions present in both checkpoints are included when they move forward or
+   * remain unchanged. Partitions with an unknown start offset are reported separately and excluded
+   * from the known difference.</p>
    *
    * @param format Checkpoint format
    * @param previousCheckpoint Previous checkpoint string
    * @param currentCheckpoint Current checkpoint string
-   * @return Total offset difference across all partitions
+   * @return Offset comparison result containing the known difference and incomparable partitions
    */
-  public static long calculateOffsetDifference(CheckpointFormat format,
-                                                String previousCheckpoint,
-                                                String currentCheckpoint) {
+  public static OffsetComparisonResult compareOffsets(CheckpointFormat format,
+                                                       String previousCheckpoint,
+                                                       String currentCheckpoint) {
     Map<Integer, Long> previousOffsets = parseCheckpoint(format, previousCheckpoint);
     Map<Integer, Long> currentOffsets = parseCheckpoint(format, currentCheckpoint);
 
     long totalDiff = 0;
+    Set<Integer> addedPartitions = new TreeSet<>();
+    Set<Integer> resetPartitions = new TreeSet<>();
+    Set<Integer> missingPartitions = new TreeSet<>();
+    for (Integer partition : previousOffsets.keySet()) {
+      if (!currentOffsets.containsKey(partition)) {
+        missingPartitions.add(partition);
+      }
+    }
 
     for (Map.Entry<Integer, Long> entry : currentOffsets.entrySet()) {
       int partition = entry.getKey();
@@ -142,26 +213,20 @@ public class KafkaCheckpointUtils {
         long diff = currentOffset - previousOffset;
 
         if (diff < 0) {
-          // Offset reset detected (topic/partition recreated or compaction).
-          // We cannot reliably determine how many records were processed since
-          // the start offset of the new topic may not be 0. Log a warning and
-          // skip this partition to avoid overcounting.
-          log.warn("Detected offset reset for partition {}. Previous offset: {}, current offset: {}. "
-              + "Skipping partition from diff calculation to avoid overcounting.", partition, previousOffset, currentOffset);
+          // The checkpoint does not record the start offset used after a reset, so this
+          // partition cannot contribute to an exact offset difference.
+          resetPartitions.add(partition);
         } else {
           totalDiff += diff;
         }
       } else {
-        // New partition appeared. The start offset may not be 0 (e.g., compacted
-        // topics), so counting from 0 would overcount. Log a warning and skip
-        // this partition to avoid inflating the diff.
-        log.warn("New partition {} detected (not in previous checkpoint). "
-            + "Skipping partition from diff calculation (start offset unknown, "
-            + "current offset: {}).", partition, currentOffset);
+        // A new partition's start offset is not available in the previous checkpoint.
+        addedPartitions.add(partition);
       }
     }
 
-    return totalDiff;
+    return new OffsetComparisonResult(totalDiff, !previousOffsets.isEmpty(), !currentOffsets.isEmpty(),
+        addedPartitions, resetPartitions, missingPartitions);
   }
 
   /**

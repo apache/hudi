@@ -21,6 +21,7 @@ package org.apache.hudi.sink.validator;
 
 import org.apache.hudi.common.util.KafkaCheckpointUtils;
 import org.apache.hudi.common.util.KafkaCheckpointUtils.CheckpointFormat;
+import org.apache.hudi.common.util.KafkaCheckpointUtils.OffsetComparisonResult;
 
 import org.junit.jupiter.api.Test;
 
@@ -66,20 +67,22 @@ public class TestFlinkKafkaCheckpointParsing {
   }
 
   @Test
-  public void testCalculateOffsetDifference() {
+  public void testCompareOffsets() {
     String prev = "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Aevents%3A1:200";
     String curr = "kafka_metadata%3Aevents%3A0:300;kafka_metadata%3Aevents%3A1:500";
     // Diff = (300-100) + (500-200) = 200 + 300 = 500
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(CheckpointFormat.FLINK_KAFKA, prev, curr);
-    assertEquals(500L, diff);
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(CheckpointFormat.FLINK_KAFKA, prev, curr);
+    assertTrue(result.isExact());
+    assertEquals(500L, result.getKnownOffsetDifference());
   }
 
   @Test
-  public void testCalculateOffsetDifferenceWithClusterMetadata() {
+  public void testCompareOffsetsWithClusterMetadata() {
     String prev = "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Akafka_cluster%3Aevents%3A:cluster1";
     String curr = "kafka_metadata%3Aevents%3A0:200;kafka_metadata%3Akafka_cluster%3Aevents%3A:cluster1";
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(CheckpointFormat.FLINK_KAFKA, prev, curr);
-    assertEquals(100L, diff);
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(CheckpointFormat.FLINK_KAFKA, prev, curr);
+    assertTrue(result.isExact());
+    assertEquals(100L, result.getKnownOffsetDifference());
   }
 
   @Test
@@ -104,13 +107,27 @@ public class TestFlinkKafkaCheckpointParsing {
   }
 
   @Test
+  public void testCompareClusterOnlyCheckpointsIsIncomplete() {
+    String checkpoint = "kafka_metadata%3Akafka_cluster%3Aevents%3A:my-cluster";
+
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.FLINK_KAFKA, checkpoint, checkpoint);
+
+    assertFalse(result.isExact());
+    assertFalse(result.hasPreviousCheckpointOffsets());
+    assertFalse(result.hasCurrentCheckpointOffsets());
+    assertEquals(0L, result.getKnownOffsetDifference());
+  }
+
+  @Test
   public void testOffsetResetSkippedInDiff() {
     // Partition 0 offset goes backward (reset). Should be skipped, only partition 1 counted.
     String prev = "kafka_metadata%3Aevents%3A0:500;kafka_metadata%3Aevents%3A1:100";
     String curr = "kafka_metadata%3Aevents%3A0:200;kafka_metadata%3Aevents%3A1:300";
     // Partition 0: 200-500 = -300 (skipped). Partition 1: 300-100 = 200.
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(CheckpointFormat.FLINK_KAFKA, prev, curr);
-    assertEquals(200L, diff);
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(CheckpointFormat.FLINK_KAFKA, prev, curr);
+    assertFalse(result.isExact());
+    assertEquals(200L, result.getKnownOffsetDifference());
   }
 
   @Test
@@ -146,8 +163,10 @@ public class TestFlinkKafkaCheckpointParsing {
   @Test
   public void testZeroOffsetDifference() {
     String checkpoint = "kafka_metadata%3Aevents%3A0:100;kafka_metadata%3Aevents%3A1:200";
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(CheckpointFormat.FLINK_KAFKA, checkpoint, checkpoint);
-    assertEquals(0L, diff);
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(
+        CheckpointFormat.FLINK_KAFKA, checkpoint, checkpoint);
+    assertTrue(result.isExact());
+    assertEquals(0L, result.getKnownOffsetDifference());
   }
 
   @Test
@@ -155,8 +174,9 @@ public class TestFlinkKafkaCheckpointParsing {
     // Test with large offset values to ensure no overflow
     String prev = "kafka_metadata%3Aevents%3A0:" + Long.MAX_VALUE / 2;
     String curr = "kafka_metadata%3Aevents%3A0:" + (Long.MAX_VALUE / 2 + 1000);
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(CheckpointFormat.FLINK_KAFKA, prev, curr);
-    assertEquals(1000L, diff);
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(CheckpointFormat.FLINK_KAFKA, prev, curr);
+    assertTrue(result.isExact());
+    assertEquals(1000L, result.getKnownOffsetDifference());
   }
 
   @Test
@@ -165,7 +185,9 @@ public class TestFlinkKafkaCheckpointParsing {
     String prev = "kafka_metadata%3Aevents%3A0:100";
     String curr = "kafka_metadata%3Aevents%3A0:200;kafka_metadata%3Aevents%3A1:50";
     // Only partition 0 diff counted: 200-100 = 100. Partition 1 skipped (new).
-    long diff = KafkaCheckpointUtils.calculateOffsetDifference(CheckpointFormat.FLINK_KAFKA, prev, curr);
-    assertEquals(100L, diff);
+    OffsetComparisonResult result = KafkaCheckpointUtils.compareOffsets(CheckpointFormat.FLINK_KAFKA, prev, curr);
+    assertFalse(result.isExact());
+    assertEquals(100L, result.getKnownOffsetDifference());
+    assertEquals(1, result.getAddedPartitions().size());
   }
 }
