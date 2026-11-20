@@ -22,12 +22,18 @@ package org.apache.hudi.exception;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collections;
 
 import static org.apache.hudi.exception.ExceptionUtil.throwAsIOExceptionOrRuntimeException;
 import static org.apache.hudi.exception.ExceptionUtil.validateErrorMsg;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TestExceptionUtil {
@@ -56,6 +62,44 @@ class TestExceptionUtil {
     RuntimeException exceptionWithoutMessage = new RuntimeException();
     // Empty string should not be found in any message (including null)
     assertFalse(validateErrorMsg(exceptionWithoutMessage, ""));
+  }
+
+  @Test
+  void causeCycleTerminatesWhenNoExceptionMatches() {
+    IOException first = new IOException("first");
+    IOException second = new IOException("second", first);
+    first.initCause(second);
+    assertTrue(ExceptionUtil.isCausedBy(first, IOException.class));
+    assertTimeoutPreemptively(Duration.ofSeconds(1),
+        () -> assertFalse(ExceptionUtil.isCausedBy(first, IllegalArgumentException.class)));
+  }
+
+  @Test
+  void getCausesListsTheChainInOrderWithoutSuppressed() {
+    IllegalStateException root = new IllegalStateException("root");
+    IOException middle = new IOException("middle", root);
+    RuntimeException top = new RuntimeException("top", middle);
+    top.addSuppressed(new IllegalArgumentException("suppressed"));
+    assertEquals(Arrays.asList(top, middle, root), ExceptionUtil.getCauses(top));
+    assertSame(root, ExceptionUtil.getRootCause(top));
+  }
+
+  @Test
+  void getCausesStopsBeforeACycleRepeats() {
+    IOException first = new IOException("first");
+    IOException second = new IOException("second", first);
+    first.initCause(second);
+    assertEquals(Arrays.asList(first, second), ExceptionUtil.getCauses(first));
+    assertSame(second, ExceptionUtil.getRootCause(first));
+  }
+
+  @Test
+  void getCausesOfNullIsEmpty() {
+    assertEquals(Collections.emptyList(), ExceptionUtil.getCauses(null));
+    assertNull(ExceptionUtil.getRootCause(null));
+    IOException alone = new IOException("alone");
+    assertEquals(Collections.singletonList(alone), ExceptionUtil.getCauses(alone));
+    assertSame(alone, ExceptionUtil.getRootCause(alone));
   }
 
   @Test

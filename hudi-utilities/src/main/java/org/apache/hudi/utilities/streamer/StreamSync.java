@@ -32,6 +32,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.common.HoodieSparkEngineContext;
 import org.apache.hudi.client.embedded.EmbeddedTimelineServerHelper;
 import org.apache.hudi.client.embedded.EmbeddedTimelineService;
+import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.commit.BaseDatasetBulkInsertCommitActionExecutor;
 import org.apache.hudi.commit.HoodieStreamerDatasetBulkInsertCommitActionExecutor;
 import org.apache.hudi.common.config.HoodieConfig;
@@ -41,6 +42,7 @@ import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.config.metrics.HoodieMetricsConfig;
 import org.apache.hudi.common.model.DefaultHoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
@@ -102,6 +104,7 @@ import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallback;
 import org.apache.hudi.utilities.callback.kafka.HoodieWriteCommitKafkaCallbackConfig;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallback;
 import org.apache.hudi.utilities.callback.pulsar.HoodieWriteCommitPulsarCallbackConfig;
+import org.apache.hudi.utilities.exception.HoodiePreCommitRefusalException;
 import org.apache.hudi.utilities.exception.HoodieSchemaFetchException;
 import org.apache.hudi.utilities.exception.HoodieSourceTimeoutException;
 import org.apache.hudi.utilities.exception.HoodieStreamerException;
@@ -114,7 +117,10 @@ import org.apache.hudi.utilities.schema.SchemaSet;
 import org.apache.hudi.utilities.schema.SimpleSchemaProvider;
 import org.apache.hudi.utilities.sources.InputBatch;
 import org.apache.hudi.utilities.sources.Source;
+import org.apache.hudi.utilities.sources.SourceContract;
+import org.apache.hudi.utilities.sources.SourceContracts;
 import org.apache.hudi.utilities.streamer.validator.SparkStreamerValidatorUtils;
+import org.apache.hudi.utilities.transform.InstantAwareTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
 import com.codahale.metrics.Timer;
@@ -130,6 +136,7 @@ import org.apache.spark.rdd.RDD;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.storage.StorageLevel;
 
@@ -142,8 +149,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -211,7 +221,11 @@ public class StreamSync implements Serializable, Closeable {
   /**
    * Allows transforming source to target table before writing.
    */
-  private transient Option<Transformer> transformer;
+  private transient Option<Transformer> transformer = Option.empty();
+  private final AtomicBoolean transformerClosed = new AtomicBoolean();
+
+  /** The contract of the job's source, which prepared {@link #props}; {@link SourceContracts#NONE} for a source without one. */
+  private transient SourceContract sourceContract = SourceContracts.NONE;
 
   private final String keyGenClassName;
 
@@ -283,6 +297,10 @@ public class StreamSync implements Serializable, Closeable {
 
   private final boolean autoGenerateRecordKeys;
   private final boolean isErrorTableWriteUnificationEnabled;
+  /** The instant this round started before its transformer and has not yet handed to its write. */
+  private transient Option<String> instantStartedBeforeTransformer = Option.empty();
+  /** Whether this round already retried the last pending inline table service, before it started its instant. */
+  private transient boolean tableServicesRetriedThisRound;
 
   @VisibleForTesting
   StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession,
@@ -322,7 +340,26 @@ public class StreamSync implements Serializable, Closeable {
                     TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
                     FileSystem fs, Configuration conf,
                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, StreamContext streamContext) throws IOException {
+    this(cfg, sparkSession, HoodieStreamer.StreamSyncService.prepareJob(cfg, props), hoodieSparkContext, fs, conf,
+        onInitializingHoodieWriteClient, streamContext);
+  }
+
+  private StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, Pair<SourceContract, TypedProperties> prepared,
+                     HoodieSparkEngineContext hoodieSparkContext, FileSystem fs, Configuration conf,
+                     Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient, StreamContext streamContext) throws IOException {
+    this(cfg, sparkSession, prepared.getRight(), hoodieSparkContext, fs, conf, onInitializingHoodieWriteClient, streamContext,
+        prepared.getLeft());
+  }
+
+  /**
+   * For callers that have already prepared {@code props} with {@code contract} ({@link HoodieStreamer.StreamSyncService} does it
+   * before it builds its schema provider and validates its table).
+   */
+  StreamSync(HoodieStreamer.Config cfg, SparkSession sparkSession, TypedProperties props, HoodieSparkEngineContext hoodieSparkContext,
+             FileSystem fs, Configuration conf, Function<SparkRDDWriteClient, Boolean> onInitializingHoodieWriteClient,
+             StreamContext streamContext, SourceContract contract) throws IOException {
     this.cfg = cfg;
+    this.sourceContract = contract;
     this.hoodieSparkContext = hoodieSparkContext;
     this.sparkSession = sparkSession;
     this.storage = HoodieStorageUtils.getStorage(
@@ -346,12 +383,43 @@ public class StreamSync implements Serializable, Closeable {
       this.errorWriteFailureStrategy = ErrorTableUtils.getErrorWriteFailureStrategy(props);
     }
     this.isErrorTableWriteUnificationEnabled = getBooleanWithAltKeys(props, ENABLE_ERROR_TABLE_WRITE_UNIFICATION);
-    initializeMetaClient();
-    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, streamContext);
+    HoodieTableMetaClient metaClient = initializeMetaClient();
+    // the contract's checks run before the source is built, so a job they refuse never builds its source; the chain's own syntax
+    // is checked when the transformer is created, after it
+    contract.checkTable(cfg.targetBasePath, metaClient.getTableConfig());
+    List<String> chain = contract.transformerChain(cfg.transformerClassNames);
+    if (contract != SourceContracts.NONE) {
+      // a source without a contract reads nothing more at start than without contracts
+      TypedProperties jobProps = TypedProperties.copy(props);
+      jobProps.setProperty(HoodieWriteConfig.BASE_PATH.key(), cfg.targetBasePath);
+      contract.checkJob(hoodieSparkContext.jsc(), sparkSession, chain == null ? Collections.emptyList() : chain, jobProps,
+          userTargetSchema(), tableSchemaWithoutMetaFields(metaClient));
+    }
+    // a source without a contract gets its caller's context unchanged
+    StreamContext sourceContext = contract == SourceContracts.NONE
+        ? streamContext
+        : new DefaultStreamContext(streamContext.getSchemaProvider(), streamContext.getSourceProfileSupplier(), contract);
+    Source source = UtilHelpers.createSource(cfg.sourceClassName, props, hoodieSparkContext.jsc(), sparkSession, metrics, sourceContext);
     this.formatAdapter = new SourceFormatAdapter(source, this.errorTableWriter, Option.of(props));
 
     Supplier<Option<HoodieSchema>> schemaSupplier = schemaProvider == null ? Option::empty : () -> Option.ofNullable(schemaProvider.getSourceHoodieSchema());
-    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(cfg.transformerClassNames), schemaSupplier, this.errorTableWriter.isPresent());
+    this.transformer = UtilHelpers.createTransformer(Option.ofNullable(chain), schemaSupplier, this.errorTableWriter.isPresent());
+  }
+
+  /** The target schema of the job's schema provider, when it gives one. */
+  private Option<HoodieSchema> userTargetSchema() {
+    if (userProvidedSchemaProvider == null) {
+      return Option.empty();
+    }
+    HoodieSchema target = userProvidedSchemaProvider.getTargetHoodieSchema();
+    return target == null || target.getType() == HoodieSchemaType.NULL ? Option.empty() : Option.of(target);
+  }
+
+  /** The table's latest writer schema without its meta columns; empty for a table with no commit. */
+  private Option<StructType> tableSchemaWithoutMetaFields(HoodieTableMetaClient metaClient) {
+    return UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient)
+        .map(schema -> new StructType(Arrays.stream(HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema).fields())
+            .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name())).toArray(StructField[]::new)));
   }
 
   /**
@@ -467,7 +535,8 @@ public class StreamSync implements Serializable, Closeable {
         DataSourceWriteOptions.PARTITION_EXTRACTOR_CLASS().key(),
         props.getString(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
             HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.defaultValue()));
-    return tableBuilder.setTableType(cfg.tableType)
+    return tableBuilder.setAdditionalProperties(sourceContract == null ? new Properties() : sourceContract.tableProperties())
+        .setTableType(cfg.tableType)
         .setTableName(cfg.targetTableName)
         .setArchiveLogFolder(TIMELINE_HISTORY_PATH.defaultValue())
         .setPayloadClassName(payloadClass)
@@ -533,6 +602,7 @@ public class StreamSync implements Serializable, Closeable {
     try {
       // Refresh Timeline
       HoodieTableMetaClient metaClient = initializeMetaClientAndRefreshTimeline();
+      tableServicesRetriedThisRound = false;
 
       Pair<InputBatch, Boolean> inputBatchAndUseRowWriter = readFromSource(metaClient);
 
@@ -549,7 +619,11 @@ public class StreamSync implements Serializable, Closeable {
       metrics.updateStreamerSyncMetrics(System.currentTimeMillis());
       return result;
     } finally {
-      this.formatAdapter.getSource().releaseResources();
+      try {
+        releaseInstantStartedBeforeTransformer();
+      } finally {
+        this.formatAdapter.getSource().releaseResources();
+      }
     }
   }
 
@@ -579,6 +653,17 @@ public class StreamSync implements Serializable, Closeable {
       }
     }
 
+    if (!tableServicesRetriedThisRound) {
+      retryLastPendingInlineTableService(metaClient);
+    }
+  }
+
+  /**
+   * Completes the last pending inline compaction or clustering when the job asks for it. A round that starts its instant before
+   * its transformer runs this before it starts the instant ({@link #startCommitBeforeTransformer}), so the table service does not
+   * run against the round's own pending instant.
+   */
+  private void retryLastPendingInlineTableService(HoodieTableMetaClient metaClient) throws IOException {
     // complete the pending compaction before writing to sink
     if (cfg.retryLastPendingInlineCompactionJob && writeClient.getConfig().inlineCompactionEnabled()) {
       Option<String> pendingCompactionInstant = getLastPendingCompactionInstant(allCommitsTimelineOpt);
@@ -586,7 +671,12 @@ public class StreamSync implements Serializable, Closeable {
         HoodieWriteMetadata<JavaRDD<WriteStatus>> writeMetadata = writeClient.compact(pendingCompactionInstant.get());
         writeClient.commitCompaction(pendingCompactionInstant.get(), writeMetadata, Option.empty());
         initializeMetaClientAndRefreshTimeline();
-        reInitWriteClient(schemaProvider.getSourceHoodieSchema(), schemaProvider.getTargetHoodieSchema(), null, metaClient);
+        if (schemaProvider != null) {
+          reInitWriteClient(schemaProvider.getSourceHoodieSchema(), schemaProvider.getTargetHoodieSchema(), null, metaClient);
+        } else {
+          // before the round's first batch (startCommitBeforeTransformer): the client is the one built from the table schema
+          initWriteClientFromTableSchema(metaClient);
+        }
       }
     } else if (cfg.retryLastPendingInlineClusteringJob && writeClient.getConfig().inlineClusteringEnabled()) {
       // complete the pending clustering before writing to sink
@@ -670,7 +760,7 @@ public class StreamSync implements Serializable, Closeable {
     final Checkpoint checkpoint = inputBatch.getCheckpointForNextBatch();
 
     // handle no new data and no change in checkpoint
-    if (!cfg.allowCommitOnNoCheckpointChange && checkpoint.equals(resumeCheckpoint.orElse(null))) {
+    if (isNoNewData(resumeCheckpoint, checkpoint)) {
       log.info("No new data, source checkpoint has not changed. Nothing to commit. Old checkpoint=({}). New Checkpoint=({})",
           resumeCheckpoint, checkpoint);
       String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
@@ -681,6 +771,11 @@ public class StreamSync implements Serializable, Closeable {
     // handle empty batch with change in checkpoint
     hoodieSparkContext.setJobStatus(this.getClass().getSimpleName(), "Checking if input is empty: " + cfg.targetTableName);
     return Pair.of(inputBatch, useRowWriter);
+  }
+
+  /** Whether an unchanged checkpoint ends the round before starting an instant or transforming its input. */
+  private boolean isNoNewData(Option<Checkpoint> resumeCheckpoint, Checkpoint checkpoint) {
+    return !cfg.allowCommitOnNoCheckpointChange && checkpoint.equals(resumeCheckpoint.orElse(null));
   }
 
   @VisibleForTesting
@@ -714,14 +809,25 @@ public class StreamSync implements Serializable, Closeable {
       // to generic records for writing
       InputBatch<Dataset<Row>> dataAndCheckpoint =
           formatAdapter.fetchNewDataInRowFormat(resumeCheckpoint, cfg.sourceLimit);
+      checkpoint = dataAndCheckpoint.getCheckpointForNextBatch();
 
-      Option<Dataset<Row>> transformed =
-          dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(hoodieSparkContext.jsc(), sparkSession, data, props));
+      Option<Dataset<Row>> transformed;
+      boolean startsInstant = startsInstantBeforeTransformer();
+      if (startsInstant && isNoNewData(resumeCheckpoint, checkpoint)) {
+        // the caller ends the round on the unchanged checkpoint: no instant is started and nothing is transformed
+        return Pair.of(new InputBatch(Option.empty(), checkpoint, dataAndCheckpoint.getSchemaProvider()), false);
+      }
+      if (startsInstant && dataAndCheckpoint.getBatch().isPresent()) {
+        // the source returned data (its driver-side result, no Spark action): start the commit before the transformer
+        String instantTime = startCommitBeforeTransformer(metaClient);
+        transformed = applyTransformerForInstant(dataAndCheckpoint.getBatch(), instantTime, metaClient);
+      } else {
+        transformed = dataAndCheckpoint.getBatch().map(data -> transformer.get().apply(hoodieSparkContext.jsc(), sparkSession, data, props));
+      }
 
       transformed = formatAdapter.processErrorEvents(transformed,
           ErrorEvent.ErrorReason.CUSTOM_TRANSFORMER_FAILURE);
 
-      checkpoint = dataAndCheckpoint.getCheckpointForNextBatch();
       if (this.userProvidedSchemaProvider != null && this.userProvidedSchemaProvider.getTargetHoodieSchema() != null
           && this.userProvidedSchemaProvider.getTargetHoodieSchema() != HoodieSchema.NULL_SCHEMA) {
         // Let's deduce the schema provider for writer side first!
@@ -815,6 +921,160 @@ public class StreamSync implements Serializable, Closeable {
   }
 
   /**
+   * Tells the transformer about the commit of a round that started its instant before the transformer
+   * ({@link #startCommitBeforeTransformer}); a successful return can also mean an empty commit was skipped, so only a durable one.
+   * Any other round, including a round of an instant-aware stream whose source returned no rows, runs as stock: it reads no
+   * timeline here and is not called back, as upstream.
+   */
+  private void notifyTransformerOfCommit(HoodieTableMetaClient metaClient, String instantTime, boolean startedBeforeTransformer) {
+    if (startedBeforeTransformer && CompletedWrite.exists(metaClient, instantTime)) {
+      transformer.get().onCommit(hoodieSparkContext.jsc(), sparkSession,
+          TypedProperties.copy(writeClient.getConfig().getProps()), instantTime);
+    }
+  }
+
+  /**
+   * The transformer's {@link Transformer#onPreCommit} as the write client's pre-commit function: it runs inside the commit
+   * transaction, so a transformer can refuse the round before its instant completes. It is passed in every round with a
+   * transformer, stock or instant-aware, unlike {@link Transformer#onCommit}; the default is a no-op, so a stock transformer
+   * sees no change.
+   */
+  private Option<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>> transformerPreCommit(String instantTime) {
+    return transformer.<BiConsumer<HoodieTableMetaClient, HoodieCommitMetadata>>map(roundTransformer -> (metaClient, metadata) ->
+        roundTransformer.onPreCommit(hoodieSparkContext.jsc(), sparkSession, TypedProperties.copy(writeClient.getConfig().getProps()),
+            instantTime, metaClient));
+  }
+
+  /**
+   * Rolls back a data-table instant that failed before commit and returns the original failure for the caller to throw.
+   * A rollback failure is suppressed so that it cannot mask the round's original failure.
+   */
+  private <E extends RuntimeException> E rolledBack(String instantTime, E failure) {
+    return rolledBack(() -> writeClient.rollback(instantTime), failure);
+  }
+
+  @VisibleForTesting
+  static <E extends RuntimeException> E rolledBack(Runnable rollback, E failure) {
+    try {
+      rollback.run();
+    } catch (RuntimeException rollbackFailure) {
+      failure.addSuppressed(rollbackFailure);
+    }
+    return failure;
+  }
+
+  /**
+   * Whether the round starts its instant before the transformer: the transformer is an {@link InstantAwareTransformer} that
+   * needs the instant, or a chain with one ({@link InstantAwareTransformer#needsInstant()}). A stream without one runs as stock.
+   * False before the transformer is created: the constructor builds its metrics-only write config first, and every write client
+   * is built after the transformer.
+   */
+  private boolean startsInstantBeforeTransformer() {
+    return transformer != null && transformer.isPresent() && transformer.get() instanceof InstantAwareTransformer
+        && ((InstantAwareTransformer) transformer.get()).needsInstant();
+  }
+
+  /**
+   * For an instant-aware transformer ({@link #startsInstantBeforeTransformer()}): builds the write client from the table schema
+   * if there is none yet and starts the commit of the round (REQUESTED). The transformer moves it to INFLIGHT right before the
+   * first instant-aware transformer ({@link #applyTransformerForInstant}), so every file it writes is written under an inflight
+   * instant after its marker, as in any write, and a failed round is rolled back by the standard marker-based rollback.
+   *
+   * @return the REQUESTED instant, held until the round's write takes it
+   */
+  private String startCommitBeforeTransformer(HoodieTableMetaClient metaClient) {
+    // an earlier attempt of this round (readFromSource retries a source timeout) may still hold an instant
+    releaseInstantStartedBeforeTransformer();
+    try {
+      if (writeClient == null) {
+        initWriteClientFromTableSchema(metaClient);
+      }
+      if (!tableServicesRetriedThisRound) {
+        // the pending table service runs before the round's instant exists, not against it
+        retryLastPendingInlineTableService(metaClient);
+        tableServicesRetriedThisRound = true;
+      }
+    } catch (IOException e) {
+      throw new HoodieIOException("Cannot prepare the write client of " + cfg.targetBasePath, e);
+    }
+    String instantTime = startCommit(metaClient, !autoGenerateRecordKeys);
+    instantStartedBeforeTransformer = Option.of(instantTime);
+    return instantTime;
+  }
+
+  /**
+   * Builds the write client from the latest table schema; an empty table has none, so its client carries no schema and is
+   * re-created from the batch schema after the transformer.
+   */
+  private void initWriteClientFromTableSchema(HoodieTableMetaClient metaClient) throws IOException {
+    Option<HoodieSchema> tableSchema = UtilHelpers.getLatestTableSchema(hoodieSparkContext.jsc(), storage, cfg.targetBasePath, metaClient);
+    if (tableSchema.isPresent()) {
+      reInitWriteClient(null, tableSchema.get(), Option.empty(), metaClient);
+    } else {
+      replaceWriteClient(getHoodieClientConfigAndWriterSchema(null, false, metaClient).getLeft(), metaClient);
+    }
+  }
+
+  /**
+   * Applies the instant-aware transformer with the REQUESTED instant started before it, and the transition that moves the
+   * instant to INFLIGHT, which it runs right before the first transformer that writes for the instant. The round's write takes
+   * the instant as the transformer leaves it: INFLIGHT, or still REQUESTED when the transition did not run. A throw rolls the
+   * instant back and stops its heartbeat before it propagates.
+   */
+  private Option<Dataset<Row>> applyTransformerForInstant(Option<Dataset<Row>> batch, String instantTime, HoodieTableMetaClient metaClient) {
+    InstantAwareTransformer t = (InstantAwareTransformer) transformer.get();
+    TypedProperties transformerProps = TypedProperties.copy(props);
+    // the write client's file-system view settings (its timeline server), passed to the transformer
+    transformerProps.putAll(writeClient.getConfig().getViewStorageConfig().getProps());
+    transformerProps.setProperty(HoodieWriteConfig.BASE_PATH.key(), cfg.targetBasePath);
+    String commitActionType = CommitUtils.getCommitActionType(cfg.operation, HoodieTableType.valueOf(cfg.tableType));
+    AtomicBoolean inflight = new AtomicBoolean();
+    // The instant-aware client's same-instant handoff lets the write replace this marker with its workload profile, so a blocking
+    // clustering waits for a marked commit or delta commit (PreferWriterConflictResolutionStrategy).
+    Option<HoodieCommitMetadata> pendingProfile = marksInflightPendingProfile(commitActionType, cfg.operation)
+        ? Option.of(ConcurrentOperation.pendingWorkloadProfileMetadata(cfg.operation)) : Option.empty();
+    Runnable toInflight = () -> {
+      if (inflight.compareAndSet(false, true)) {
+        metaClient.getActiveTimeline().transitionRequestedToInflight(
+            metaClient.createNewInstant(HoodieInstant.State.REQUESTED, commitActionType, instantTime), pendingProfile);
+      }
+    };
+    try {
+      return batch.map(data -> t.apply(hoodieSparkContext.jsc(), sparkSession, data, transformerProps, instantTime, toInflight));
+    } catch (RuntimeException e) {
+      log.warn("The transformer failed for instant {}; rolling the instant back", instantTime);
+      try {
+        throw rolledBack(instantTime, e);
+      } finally {
+        releaseInstantStartedBeforeTransformer();
+      }
+    }
+  }
+
+  /**
+   * Whether the streamer marks the round's inflight as pending its workload profile. A marker is only safe where the write later
+   * overwrites the inflight with its profile ({@code saveWorkloadProfileMetadataToInflight}, through the same-instant handoff),
+   * since that is what removes it before the write ends: insert and upsert ({@code BaseSparkCommitActionExecutor}) and delete
+   * ({@code HoodieDeleteHelper}, or that executor) do, so their commit or delta commit is marked. A bulk insert saves no profile
+   * (its inflight transition only creates the file, so a marker would stay for the whole write) and writes only new file groups,
+   * so it is not marked. A replace commit (insert overwrite, delete partition) does save a profile, but it is left unmarked as
+   * upstream: its inflight is replace metadata that conflict resolution reads by file group. A write that stops saving a profile
+   * must leave this predicate first.
+   */
+  static boolean marksInflightPendingProfile(String commitActionType, WriteOperationType operation) {
+    return !HoodieTimeline.REPLACE_COMMIT_ACTION.equals(commitActionType) && operation != WriteOperationType.BULK_INSERT;
+  }
+
+  /** Stops the heartbeat of an instant started before the transformer that the round's write never took. */
+  private void releaseInstantStartedBeforeTransformer() {
+    if (instantStartedBeforeTransformer.isPresent()) {
+      String instantTime = instantStartedBeforeTransformer.get();
+      instantStartedBeforeTransformer = Option.empty();
+      releaseResources(instantTime);
+    }
+  }
+
+  /**
    * Apply schema reconcile and schema evolution rules(schema on read) and generate new target schema provider.
    *
    * @param incomingSchema schema of the source data
@@ -858,6 +1118,10 @@ public class StreamSync implements Serializable, Closeable {
     }
     hoodieConfig.setValue(HoodieWriteConfig.KEYGENERATOR_CLASS_NAME.key(), HoodieSparkKeyGeneratorFactory.getKeyGeneratorClassName(props));
     hoodieConfig.setValue("path", cfg.targetBasePath);
+    if (startsInstantBeforeTransformer()) {
+      // This round takes the instant prepared by its transformer; generic writers retain their configured guard.
+      hoodieConfig.setValue(HoodieWriteConfig.ALLOW_MULTI_WRITE_ON_SAME_INSTANT_ENABLE, "true");
+    }
     return HoodieSparkSqlWriter.getBulkInsertRowConfig(writerSchema != HoodieSchema.NULL_SCHEMA ? Option.of(writerSchema) : Option.empty(),
         hoodieConfig, cfg.targetBasePath, cfg.targetTableName);
   }
@@ -877,7 +1141,14 @@ public class StreamSync implements Serializable, Closeable {
                                                                               HoodieIngestionMetrics metrics,
                                                                               Timer.Context overallTimerContext) {
     boolean releaseResourcesInvoked = false;
-    String instantTime = startCommit(metaClient, !autoGenerateRecordKeys);
+    String instantTime;
+    boolean startedBeforeTransformer = instantStartedBeforeTransformer.isPresent();
+    if (startedBeforeTransformer) {
+      instantTime = instantStartedBeforeTransformer.get();
+      instantStartedBeforeTransformer = Option.empty();
+    } else {
+      instantTime = startCommit(metaClient, !autoGenerateRecordKeys);
+    }
     try {
       Option<String> scheduledCompactionInstant = Option.empty();
       // write to hudi and fetch result
@@ -915,12 +1186,22 @@ public class StreamSync implements Serializable, Closeable {
             HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.key(),
             HoodiePreCommitValidatorConfig.VALIDATOR_CLASS_NAMES.defaultValue()));
 
-        // Step 1: Commit the error table BEFORE running validators or the write-error gate.
+        // Step 1: Count before error-table commit releases its write-status cache; a later read would repeat the error write.
+        SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
+            writeStatuses, errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
+        totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
+        log.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
+            instantTime, counts.getTotalRecords(), counts.getTotalErrorRecords(),
+            counts.getTotalSuccessfulRecords());
+        if (counts.getTotalRecords() == 0) {
+          log.info("No new data, perform empty commit.");
+        }
+        // Step 2: Commit the error table BEFORE running validators or the write-error gate.
         // Error records captured here are a genuine artifact of the write attempt and should
         // survive even when a validator later blocks the data-table commit (otherwise the
         // operator loses the captured errors and the next run has nothing to triage against).
         // Latent design quirk (preserved from HSWSV): if error-table commit succeeds and any
-        // subsequent step fails (Step 2 validator including the offset validator, Step 4 gate,
+        // subsequent step fails (Step 3 validator including the offset validator, Step 4 gate,
         // or writeClient.commit), the error table will have a committed instant for a data-table
         // instant that never lands. Downstream consumers of the error table should tolerate this
         // divergence.
@@ -933,8 +1214,7 @@ public class StreamSync implements Serializable, Closeable {
               case ROLLBACK_COMMIT:
                 // Roll back the inflight data-table instant so it doesn't leak under LAZY
                 // failed-writes cleanup policy (preserves HSWSV behavior).
-                writeClient.rollback(instantTime);
-                throw new HoodieStreamerWriteException("Error table commit failed for instant " + instantTime);
+                throw rolledBack(instantTime, new HoodieStreamerWriteException("Error table commit failed for instant " + instantTime));
               case LOG_ERROR:
                 log.error("Error table write failed for instant {}", instantTime);
                 break;
@@ -944,33 +1224,21 @@ public class StreamSync implements Serializable, Closeable {
           }
         }
 
-        // Step 2: Run user-configured pre-commit validators (offset, custom, and the opt-in
+        // Step 3: Run user-configured pre-commit validators (offset, custom, and the opt-in
         // SparkWriteErrorValidator). Validators are intentionally stronger than commitOnErrors
         // — a failure here aborts the data-table commit regardless of the gate in Step 4.
         // Roll back the inflight data-table instant on validation failure so it doesn't leak
-        // under LAZY failed-writes cleanup policy (consistent with Step 1 ROLLBACK_COMMIT and
-        // the Step 4 gate below). Error-table records already committed in Step 1 are preserved
-        // by design — see Step 1's latent-quirk note.
+        // under LAZY failed-writes cleanup policy (consistent with Step 2 ROLLBACK_COMMIT and
+        // the Step 4 gate below). Error-table records already committed in Step 2 are preserved
+        // by design — see Step 2's latent-quirk note.
         if (validatorsConfigured) {
           try {
             SparkStreamerValidatorUtils.runValidators(props, instantTime, writeStatuses,
                 checkpointCommitMetadata, metaClient);
           } catch (HoodieValidationException e) {
             log.error("Pre-commit validators failed for instant {}", instantTime, e);
-            writeClient.rollback(instantTime);
-            throw new HoodieStreamerWriteException("Pre-commit validators failed for instant " + instantTime, e);
+            throw rolledBack(instantTime, new HoodieStreamerWriteException("Pre-commit validators failed for instant " + instantTime, e));
           }
-        }
-
-        // Step 3: Count records. Drives the runMetaSync() decision below the try/finally.
-        SuccessfulRecordCounter.Counts counts = SuccessfulRecordCounter.compute(
-            writeStatuses, errorTableWriteStatusRDDOpt, isErrorTableWriteUnificationEnabled);
-        totalSuccessfulRecords.set(counts.getTotalSuccessfulRecords());
-        log.info("instantTime={}, totalRecords={}, totalErrorRecords={}, totalSuccessfulRecords={}",
-            instantTime, counts.getTotalRecords(), counts.getTotalErrorRecords(),
-            counts.getTotalSuccessfulRecords());
-        if (counts.getTotalRecords() == 0) {
-          log.info("No new data, perform empty commit.");
         }
 
         // Step 4: Apply the legacy HSWSV write-error gate.
@@ -991,14 +1259,19 @@ public class StreamSync implements Serializable, Closeable {
             WriteErrorReporter.logTopErrors(writeStatuses);
             // Roll back the inflight data-table instant so it doesn't leak under LAZY
             // failed-writes cleanup policy (preserves HSWSV behavior).
-            writeClient.rollback(instantTime);
-            throw new HoodieStreamerWriteException("Commit " + instantTime + " has write errors and commitOnErrors=false");
+            throw rolledBack(instantTime, new HoodieStreamerWriteException("Commit " + instantTime + " has write errors and commitOnErrors=false"));
           }
         }
 
-        // Step 5: Commit. No WriteStatusValidator callback — all checks are above.
-        success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata),
-            commitActionType, partitionToReplacedFileIds, Option.empty());
+        // Step 5: Commit. No WriteStatusValidator callback — all checks are above. A refusal from the transformer's
+        // pre-commit propagates out of the commit after it released the commit lock, and is rolled back like Steps 2-4.
+        try {
+          success = writeClient.commit(instantTime, writeStatusRDD, Option.of(checkpointCommitMetadata),
+              commitActionType, partitionToReplacedFileIds, transformerPreCommit(instantTime));
+        } catch (HoodiePreCommitRefusalException e) {
+          log.error("Transformer refused commit {}", instantTime, e);
+          throw rolledBack(instantTime, e);
+        }
       } finally {
         if (shouldUnpersist) {
           writeStatusRDD.unpersist();
@@ -1009,6 +1282,8 @@ public class StreamSync implements Serializable, Closeable {
         log.info("Commit {} successful!", instantTime);
         this.formatAdapter.getSource().onCommit(inputBatch.getCheckpointForNextBatch() != null
             ? inputBatch.getCheckpointForNextBatch().getCheckpointKey() : null);
+        // A successful return can also mean that an empty commit was skipped. Notify only a durable completed instant.
+        notifyTransformerOfCommit(metaClient, instantTime, startedBeforeTransformer);
         // Schedule compaction if needed
         if (cfg.isAsyncCompactionEnabled()) {
           scheduledCompactionInstant = writeClient.scheduleCompaction(Option.empty());
@@ -1238,7 +1513,15 @@ public class StreamSync implements Serializable, Closeable {
     final HoodieWriteConfig writeConfig = SparkSampleWritesUtils
         .getWriteConfigWithRecordSizeEstimate(hoodieSparkContext.jsc(), recordsOpt, initialWriteConfig)
         .orElse(initialWriteConfig);
+    replaceWriteClient(writeConfig, metaClient);
+  }
 
+  /**
+   * Closes the current write client, if any, and creates one with {@code writeConfig}. The new client keeps the heartbeat of
+   * an instant started before the transformer: closing the old one stopped its refresh, and the commit fails on an expired
+   * heartbeat.
+   */
+  private void replaceWriteClient(HoodieWriteConfig writeConfig, HoodieTableMetaClient metaClient) throws IOException {
     if (writeConfig.isEmbeddedTimelineServerEnabled()) {
       if (!embeddedTimelineService.isPresent()) {
         embeddedTimelineService = Option.of(EmbeddedTimelineServerHelper.createEmbeddedTimelineService(hoodieSparkContext, writeConfig));
@@ -1259,6 +1542,10 @@ public class StreamSync implements Serializable, Closeable {
       if (previousWriteClient != null) {
         previousWriteClient.close();
       }
+    }
+    if (instantStartedBeforeTransformer.isPresent() && writeConfig.getFailedWritesCleanPolicy().isLazy()) {
+      // startCommit started the heartbeat only under LAZY failed-writes cleaning
+      writeClient.getHeartbeatClient().start(instantStartedBeforeTransformer.get());
     }
   }
 
@@ -1302,6 +1589,9 @@ public class StreamSync implements Serializable, Closeable {
             .withRecordMergeImplClasses(cfg.recordMergeImplClasses)
             .forTable(cfg.targetTableName)
             .withProps(props);
+    if (startsInstantBeforeTransformer()) {
+      builder.withAllowMultiWriteOnSameInstant(true);
+    }
     // Merge strategy id can be NULL.
     if (!StringUtils.isNullOrEmpty(cfg.recordMergeStrategyId)) {
       builder.withRecordMergeStrategyId(cfg.recordMergeStrategyId);
@@ -1425,24 +1715,25 @@ public class StreamSync implements Serializable, Closeable {
    */
   @Override
   public void close() {
-    if (writeClient != null) {
-      writeClient.close();
-      writeClient = null;
-    }
+    try (Transformer closeTransformer = transformerClosed.compareAndSet(false, true) ? transformer.orElse(null) : null) {
+      if (writeClient != null) {
+        writeClient.close();
+        writeClient = null;
+      }
 
-    if (formatAdapter != null) {
-      formatAdapter.close();
-    }
+      if (formatAdapter != null) {
+        formatAdapter.close();
+      }
 
-    log.info("Shutting down embedded timeline server");
-    if (embeddedTimelineService.isPresent()) {
-      embeddedTimelineService.get().stopForBasePath(cfg.targetBasePath);
-    }
+      log.info("Shutting down embedded timeline server");
+      if (embeddedTimelineService.isPresent()) {
+        embeddedTimelineService.get().stopForBasePath(cfg.targetBasePath);
+      }
 
-    if (metrics != null) {
-      metrics.shutdown();
+      if (metrics != null) {
+        metrics.shutdown();
+      }
     }
-
   }
 
   /**
