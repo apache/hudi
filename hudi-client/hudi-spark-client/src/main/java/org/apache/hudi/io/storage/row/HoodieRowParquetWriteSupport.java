@@ -37,6 +37,7 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.ValidationUtils;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.avro.AvroWriteSupport;
 import org.apache.parquet.hadoop.api.WriteSupport;
@@ -70,8 +71,6 @@ import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.types.YearMonthIntervalType;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.apache.spark.util.VersionUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -112,9 +111,9 @@ import static org.apache.parquet.schema.Type.Repetition.REQUIRED;
  *   <li>The scale of the timestamps is determined by the Hudi writer schema instead of relying on Spark configuration</li>
  * </ul>
  */
+@Slf4j
 public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
 
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieRowParquetWriteSupport.class);
   private static final HoodieSchema MAP_KEY_SCHEMA = HoodieSchema.create(HoodieSchemaType.STRING);
   private static final String MAP_REPEATED_NAME = "key_value";
   private static final String MAP_KEY_NAME = "key";
@@ -263,7 +262,7 @@ public class HoodieRowParquetWriteSupport extends WriteSupport<InternalRow> {
             continue;
           }
         } else {
-          LOG.warn("Variant field '{}' has no corresponding HoodieSchema; "
+          log.warn("Variant field '{}' has no corresponding HoodieSchema; "
               + "shredding will be skipped. This may indicate a schema mismatch.", field.name());
         }
       }

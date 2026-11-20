@@ -28,8 +28,7 @@ import org.apache.hudi.common.util.collection.FlatLists;
 import org.apache.hudi.table.BucketIndexBulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.Partitioner;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.sql.HoodieUTF8StringFactory;
@@ -43,9 +42,8 @@ import scala.Tuple2;
  * Abstract of bucket index bulk_insert partitioner
  */
 
+@Slf4j
 public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsertPartitioner<JavaRDD<HoodieRecord<T>>> {
-
-  public static final Logger LOG = LogManager.getLogger(RDDBucketIndexPartitioner.class);
 
   private final HoodieUTF8StringFactory utf8StringFactory;
 
@@ -119,7 +117,7 @@ public abstract class RDDBucketIndexPartitioner<T> extends BucketIndexBulkInsert
    */
   private JavaRDD<HoodieRecord<T>> doPartitionAndSortByRecordKey(JavaRDD<HoodieRecord<T>> records, Partitioner partitioner) {
     if (table.getConfig().getBulkInsertSortMode() == BulkInsertSortMode.GLOBAL_SORT) {
-      LOG.warn("Bucket index does not support global sort mode, the sort will only be done within each data partition");
+      log.warn("Bucket index does not support global sort mode, the sort will only be done within each data partition");
     }
 
     Comparator<HoodieKey> comparator = table.getMetaClient().getTableConfig().isLSMTreeStorageLayout()

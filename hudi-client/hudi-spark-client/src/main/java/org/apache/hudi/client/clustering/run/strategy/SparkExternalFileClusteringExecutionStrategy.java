@@ -33,8 +33,7 @@ import org.apache.hudi.io.ExternalFileClusteringWriteHandle;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 import java.util.Map;
@@ -43,10 +42,9 @@ import java.util.Map;
  * This class gives skeleton implementation for set of clustering execution strategy
  * that use external file transformation commands.
  */
+@Slf4j
 public abstract class SparkExternalFileClusteringExecutionStrategy<T extends HoodieRecordPayload<T>>
     extends SingleSparkJobExecutionStrategy<T> {
-
-  private static final Logger LOG = LoggerFactory.getLogger(SparkExternalFileClusteringExecutionStrategy.class);
 
   public SparkExternalFileClusteringExecutionStrategy(
       HoodieTable table, HoodieEngineContext engineContext, HoodieWriteConfig writeConfig) {
@@ -61,7 +59,7 @@ public abstract class SparkExternalFileClusteringExecutionStrategy<T extends Hoo
                                                         HoodieSchema schema,
                                                         TaskContextSupplier taskContextSupplier,
                                                         String instantTime) {
-    LOG.info("Starting clustering operation on input file ids.");
+    log.info("Starting clustering operation on input file ids.");
     if (!preserveHoodieMetadata) {
       throw new HoodieClusteringException(
           "External file clustering strategy cannot rewrite Hudi metadata fields. preserveHoodieMetadata must be true.");
@@ -87,7 +85,7 @@ public abstract class SparkExternalFileClusteringExecutionStrategy<T extends Hoo
       try {
         getHoodieTable().getStorage().deleteFile(writeHandler.getPath());
       } catch (Exception deleteEx) {
-        LOG.warn("Failed to clean up partial output file: {}", writeHandler.getPath(), deleteEx);
+        log.warn("Failed to clean up partial output file: {}", writeHandler.getPath(), deleteEx);
       }
       throw new HoodieClusteringException("Failed to transform file: " + dataFilePathStr, e);
     }

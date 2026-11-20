@@ -40,6 +40,8 @@ import org.apache.hudi.metadata.index.EngineIndexerSupport;
 import org.apache.hudi.metadata.index.model.IndexPartitionAndRecords;
 import org.apache.hudi.storage.StorageConfiguration;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -55,6 +57,7 @@ import static org.apache.hudi.common.table.timeline.InstantComparison.compareTim
  * HoodieBackedTableMetadataWriter for tables with version 6. The class derives most of the functionality from HoodieBackedTableMetadataWriter
  * and overrides some behaviour to make it compatible for version 6.
  */
+@Slf4j
 public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> extends HoodieBackedTableMetadataWriter<I, O> {
 
   private static final int PARTITION_INITIALIZATION_TIME_SUFFIX = 10;
@@ -106,11 +109,11 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
 
       if (!allBlockingInstantsBeingRolledBack) {
         metrics.ifPresent(m -> m.updateMetrics(HoodieMetadataMetrics.BOOTSTRAP_ERR_STR, 1));
-        LOG.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
+        log.warn("Cannot initialize metadata table as operation(s) are in progress on the dataset: {}",
             Arrays.toString(blockingPendingInstants.toArray()));
         return false;
       }
-      LOG.info("Allowing metadata table initialization as pending instants {} are being rolled back",
+      log.info("Allowing metadata table initialization as pending instants {} are being rolled back",
           Arrays.toString(blockingPendingInstants.toArray()));
     }
     return true;
@@ -166,7 +169,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
 
     if (!pendingInstants.isEmpty()) {
       checkNumDeltaCommits(metadataMetaClient, dataWriteConfig.getMetadataConfig().getMaxNumDeltacommitsWhenPending());
-      LOG.info(
+      log.info(
           "Cannot compact metadata table as there are {} inflight instants in data table before latest deltacommit in metadata table: {}. Inflight instants in data table: {}",
           pendingInstants.size(), latestDeltaCommitTimeInMetadataTable, Arrays.toString(pendingInstants.toArray()));
       return false;
@@ -179,7 +182,7 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     Option<HoodieInstant> pendingCompactionInstant =
         metadataMetaClient.getActiveTimeline().filterPendingCompactionTimeline().firstInstant();
     if (pendingLogCompactionInstant.isPresent() || pendingCompactionInstant.isPresent()) {
-      LOG.info("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
+      log.info("Not scheduling compaction or logCompaction, since a pending compaction instant {} or logCompaction {} instant is present",
           pendingCompactionInstant, pendingLogCompactionInstant);
       return false;
     }
@@ -234,12 +237,12 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
 
       String rollbackInstantTime = createRollbackTimestamp(instantTime);
       if (metadataMetaClient.getActiveTimeline().containsInstant(deltaCommitInstant)) {
-        LOG.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
+        log.info("Rolling back MDT deltacommit {}", commitToRollbackInstantTime);
         if (!getWriteClient().rollback(commitToRollbackInstantTime, rollbackInstantTime)) {
           throw new HoodieMetadataException("Failed to rollback deltacommit at " + commitToRollbackInstantTime);
         }
       } else {
-        LOG.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
+        log.info("Ignoring rollback of instant {} at {}. The commit to rollback is not found in MDT",
             commitToRollbackInstantTime, instantTime);
       }
       closeInternal();
@@ -300,11 +303,11 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
     // and again w/ C6, we will re-attempt compaction at which point latest delta commit is C4 in MDT.
     // and so we try compaction w/ instant C4001. So, we can avoid compaction if we already have compaction w/ same instant time.
     if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(compactionInstantTime)) {
-      LOG.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
+      log.info("Compaction with same {} time is already present in the timeline.", compactionInstantTime);
     } else if (writeClient.scheduleCompactionAtInstant(compactionInstantTime, Option.empty())) {
-      LOG.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
+      log.info("Compaction is scheduled for timestamp {}", compactionInstantTime);
       if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.compaction)) {
-        LOG.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
+        log.info("Skipping execution of compaction on MDT as it is delegated to table service manager.");
       } else {
         writeClient.compact(compactionInstantTime, true);
       }
@@ -314,11 +317,11 @@ public abstract class HoodieBackedTableMetadataWriterTableVersionSix<I, O> exten
       // metadata table.
       final String logCompactionInstantTime = createLogCompactionTimestamp(latestDeltaCommitTimeOpt.get());
       if (metadataMetaClient.getActiveTimeline().filterCompletedInstants().containsInstant(logCompactionInstantTime)) {
-        LOG.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
+        log.info("Log compaction with same {} time is already present in the timeline.", logCompactionInstantTime);
       } else if (writeClient.scheduleLogCompactionAtInstant(logCompactionInstantTime, Option.empty())) {
-        LOG.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
+        log.info("Log compaction is scheduled for timestamp {}", logCompactionInstantTime);
         if (shouldDelegateToTableServiceManager(metadataWriteConfig, ActionType.logcompaction)) {
-          LOG.info("Skipping execution of log compaction on MDT as it is delegated to table service manager.");
+          log.info("Skipping execution of log compaction on MDT as it is delegated to table service manager.");
         } else {
           writeClient.logCompact(logCompactionInstantTime, true);
         }

@@ -37,8 +37,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.cluster.ClusteringPlanActionExecutor;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -51,8 +50,8 @@ import static org.apache.hudi.common.table.timeline.HoodieTimeline.COMMIT_ACTION
 /**
  * Only take care of partitions related to active timeline, instead of do full partition listing.
  */
+@Slf4j(topic = "org.apache.hudi.client.clustering.plan.strategy.FlinkSizeBasedClusteringPlanStrategy")
 public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBasedClusteringPlanStrategy<T> {
-  private static final Logger LOG = LoggerFactory.getLogger(FlinkSizeBasedClusteringPlanStrategy.class);
   public FlinkSizeBasedClusteringPlanStrategyRecently(HoodieTable table,
                                                       HoodieEngineContext engineContext,
                                                       HoodieWriteConfig writeConfig) {
@@ -69,7 +68,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
     }
 
     HoodieTableMetaClient metaClient = getHoodieTable().getMetaClient();
-    LOG.info("Scheduling clustering for {}", metaClient.getBasePath());
+    log.info("Scheduling clustering for {}", metaClient.getBasePath());
 
     List<String> partitionPaths = getPartitionPathInActiveTimeline(hoodieTable);
 
@@ -92,7 +91,7 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
             .collect(Collectors.toList());
 
     if (clusteringGroups.isEmpty()) {
-      LOG.info("No data available to cluster");
+      log.info("No data available to cluster");
       return Option.empty();
     }
 
@@ -124,11 +123,11 @@ public class FlinkSizeBasedClusteringPlanStrategyRecently<T> extends FlinkSizeBa
         partitions.addAll(metadata.getWritePartitionPaths());
       } catch (IOException e) {
         // ignore Exception here
-        LOG.warn("Failed to get details from commit metadata for instant [{}].", instant, e);
+        log.warn("Failed to get details from commit metadata for instant [{}].", instant, e);
       }
     });
 
-    LOG.info("Partitions related to active timeline: {}", partitions);
+    log.info("Partitions related to active timeline: {}", partitions);
     return new ArrayList<>(partitions);
   }
 }
