@@ -526,10 +526,10 @@ public class TestAvroSchemaConverter {
 
   @Test
   public void testDecimalIntegerType() throws Exception {
+    // an INT32 decimal surfaces as the fixed decimal of the minimal width for its precision
     HoodieSchema expected = HoodieSchema.createRecord("myrecord", null, null, false,
-        Collections.singletonList(HoodieSchemaField.of("dec", HoodieSchema.create(HoodieSchemaType.INT), null, null)));
+        Collections.singletonList(HoodieSchemaField.of("dec", HoodieSchema.createDecimal("dec", null, null, 9, 2, 4), null, null)));
 
-    // the decimal portion is lost because it isn't valid in Avro
     testParquetToAvroConversion(
         expected, "message myrecord {\n" + "  required int32 dec (DECIMAL(9,2));\n" + "}\n");
   }
@@ -538,11 +538,10 @@ public class TestAvroSchemaConverter {
   public void testDecimalLongType() throws Exception {
     HoodieSchema expected = HoodieSchema.createRecord(
         "myrecord", null, null, false,
-        Collections.singletonList(HoodieSchemaField.of("dec", HoodieSchema.create(HoodieSchemaType.LONG), null, null)));
+        Collections.singletonList(HoodieSchemaField.of("dec", HoodieSchema.createDecimal("dec", null, null, 18, 4, 8), null, null)));
 
-    // the decimal portion is lost because it isn't valid in Avro
     testParquetToAvroConversion(
-        expected, "message myrecord {\n" + "  required int64 dec (DECIMAL(9,2));\n" + "}\n");
+        expected, "message myrecord {\n" + "  required int64 dec (DECIMAL(18,4));\n" + "}\n");
   }
 
   @Test
