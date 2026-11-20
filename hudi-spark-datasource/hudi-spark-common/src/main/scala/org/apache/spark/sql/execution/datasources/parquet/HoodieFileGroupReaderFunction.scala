@@ -27,7 +27,7 @@ import org.apache.hudi.common.table.ParquetTableSchemaResolver
 import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader, TableState}
 import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
-import org.apache.hudi.common.util.{ConfigUtils, Option => HOption}
+import org.apache.hudi.common.util.{CloseableUtils, ConfigUtils, Option => HOption}
 import org.apache.hudi.common.util.collection.ClosableIterator
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieException
@@ -199,13 +199,15 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
                   .build()
               }
             // Append partition values to rows and project to output schema
-            appendPartitionAndProject(
-              reader.getClosableIterator,
-              state.projectionInputSchema,
-              state.remainingPartitionSchema,
-              state.outputSchema,
-              fileSliceMapping.getPartitionValues,
-              state.fixedPartitionIndexes)
+            HoodieFileGroupReaderFunction.closeOnFailure(reader) {
+              appendPartitionAndProject(
+                reader.getClosableIterator,
+                state.projectionInputSchema,
+                state.remainingPartitionSchema,
+                state.outputSchema,
+                fileSliceMapping.getPartitionValues,
+                state.fixedPartitionIndexes)
+            }
 
           case _ =>
             readBaseFile(file, state, conf)
@@ -226,7 +228,8 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
       case _ =>
         readBaseFile(file, state, conf)
     }
-    CloseableIteratorListener.addListener(iter)
+    // Release each exhausted file reader before opening another file in the task's split.
+    CloseableIteratorListener.addListenerReleasedOnExhaustion(iter)
   }
 
   private def readBaseFile(file: PartitionedFile,
@@ -282,6 +285,22 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
 
 private[parquet] object HoodieFileGroupReaderFunction {
 
+  /**
+   * Builds the rows `body` returns over the file group `reader`. No task listener holds the reader until those rows are
+   * returned, so a failure while building them (loading the log files after the base file is open, or a projection's code
+   * generation) closes the reader here; a failure to close is added to the original failure as suppressed.
+   */
+  private[parquet] def closeOnFailure[T](reader: AutoCloseable)(body: => T): T = {
+    try {
+      body
+    } catch {
+      case failure: Throwable =>
+        // A close failure is suppressed into the original one, unless the reader rethrows that same failure
+        CloseableUtils.closeSuppressing(reader, failure)
+        throw failure
+    }
+  }
+
   private def appendPartitionAndProject(iter: ClosableIterator[InternalRow],
                                         inputSchema: StructType,
                                         partitionSchema: StructType,
@@ -330,7 +349,7 @@ private[parquet] object HoodieFileGroupReaderFunction {
 
   private def makeCloseableFileGroupMappingRecordIterator(closeableFileGroupRecordIterator: ClosableIterator[InternalRow],
                                                           mappingFunction: Function[InternalRow, InternalRow]): Iterator[InternalRow] = {
-    CloseableIteratorListener.addListener(closeableFileGroupRecordIterator)
+    // Closed through this mapping iterator by the per-file releasing listener.
     new Iterator[InternalRow] with Closeable {
       override def hasNext: Boolean = closeableFileGroupRecordIterator.hasNext
 

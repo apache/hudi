@@ -59,6 +59,14 @@ import static org.apache.hudi.common.util.CommitUtils.getPartitionAndFileIdWitho
 @ToString(onlyExplicitlyIncluded = true)
 public class ConcurrentOperation {
 
+  /**
+   * Extra-metadata key a writer sets on the inflight commit metadata it writes when it moves its instant to INFLIGHT before the
+   * write has a workload profile (for example, a writer that starts its instant before it knows the files it writes). The write
+   * replaces that metadata with its profile, which does not carry the key; a write that writes no profile (bulk insert) must not
+   * be marked.
+   */
+  public static final String WORKLOAD_PROFILE_PENDING_KEY = "hoodie.write.workload.profile.pending";
+
   @Getter
   private WriteOperationType operationType;
   private final HoodieMetadataWrapper metadataWrapper;
@@ -75,6 +83,9 @@ public class ConcurrentOperation {
   private Set<Pair<String, String>> mutatedPartitionAndFileIds = Collections.emptySet();
   @Getter
   private String rolledbackCommit;
+  /** Whether the instant's inflight metadata carries {@link #WORKLOAD_PROFILE_PENDING_KEY}. */
+  @Getter
+  private boolean workloadProfilePending;
 
   public ConcurrentOperation(HoodieInstant instant, HoodieTableMetaClient metaClient) throws IOException {
     // Replace inflight compaction and clustering to requested since inflight does not contain the plan.
@@ -104,6 +115,18 @@ public class ConcurrentOperation {
       // This should never happen since we are initializing with commit metadata
       throw new RuntimeException("Failed to initialize ConcurrentOperation for instant: " + instant, e);
     }
+  }
+
+  /**
+   * The inflight commit metadata a writer writes when it moves a commit or delta commit instant to INFLIGHT before its write has a
+   * workload profile: no write stats, the write's {@code operation}, and {@link #WORKLOAD_PROFILE_PENDING_KEY} set. The operation
+   * must be known: the timeline reads inflight metadata of operation UNKNOWN as an empty file, which drops the key.
+   */
+  public static HoodieCommitMetadata pendingWorkloadProfileMetadata(WriteOperationType operation) {
+    HoodieCommitMetadata metadata = new HoodieCommitMetadata();
+    metadata.setOperationType(operation);
+    metadata.addMetadata(WORKLOAD_PROFILE_PENDING_KEY, Boolean.TRUE.toString());
+    return metadata;
   }
 
   public String getInstantActionState() {
@@ -138,6 +161,8 @@ public class ConcurrentOperation {
           if (avroCommitMeta != null) {
             this.mutatedPartitionAndFileIds = getPartitionAndFileIdWithoutSuffixFromSpecificRecord(avroCommitMeta.getPartitionToWriteStats());
             this.operationType = WriteOperationType.fromValue(avroCommitMeta.getOperationType());
+            this.workloadProfilePending = avroCommitMeta.getExtraMetadata() != null
+                && Boolean.parseBoolean(avroCommitMeta.getExtraMetadata().get(WORKLOAD_PROFILE_PENDING_KEY));
           }
           break;
         case ROLLBACK_ACTION:
@@ -200,6 +225,7 @@ public class ConcurrentOperation {
         case LOG_COMPACTION_ACTION:
           this.mutatedPartitionAndFileIds = CommitUtils.getPartitionAndFileIdWithoutSuffix(this.metadataWrapper.getCommitMetadata().getPartitionToWriteStats());
           this.operationType = this.metadataWrapper.getCommitMetadata().getOperationType();
+          this.workloadProfilePending = Boolean.parseBoolean(this.metadataWrapper.getCommitMetadata().getMetadata(WORKLOAD_PROFILE_PENDING_KEY));
           if (this.operationType.equals(WriteOperationType.CLUSTER) || WriteOperationType.isOverwrite(this.operationType)) {
             HoodieReplaceCommitMetadata replaceCommitMetadata = (HoodieReplaceCommitMetadata) this.metadataWrapper.getCommitMetadata();
             mutatedPartitionAndFileIds.addAll(CommitUtils.flattenPartitionToReplaceFileIds(replaceCommitMetadata.getPartitionToReplaceFileIds()));

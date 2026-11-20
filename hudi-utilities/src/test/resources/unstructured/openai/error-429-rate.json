@@ -1,0 +1,1 @@
+{"error": {"message": "Rate limit reached for text-embedding-3-small on requests per min (RPM): Limit 3000, Used 3000, Requested 1. Please try again in 20ms.", "type": "requests", "param": null, "code": "rate_limit_exceeded"}}
