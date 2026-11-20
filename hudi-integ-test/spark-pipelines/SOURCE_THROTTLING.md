@@ -31,6 +31,19 @@ Invalid options are rejected at `readStream.load()`.
 service offsets, completion-time ties, unbounded/Once behavior, invalid limits,
 and an initially empty AvailableNow run.
 
+## Upgrade note for Spark V1 checkpoints
+
+When a Spark V1 stream in `BLOCK` mode resumes an older checkpoint, it uses the
+last checkpointed instant's requested time as the lower bound. Older readers
+configured with `hoodie.write.table.version` 8 or later used that instant's
+completion time as the bound. During the first catch-up after upgrading, the
+stream may re-emit records it previously read from commits requested after the
+checkpointed instant's requested time and at or before its completion time.
+This can occur with asynchronous compaction or concurrent writers, including
+when the commit cap is unset.
+
+## Recovery integration
+
 Admission counts archived and active completed writes. Snapshot fallback and
 recovery reads are not split into capped reads. #20516 is an independent change:
 whichever PR lands second must test recovery at a capped intermediate end,

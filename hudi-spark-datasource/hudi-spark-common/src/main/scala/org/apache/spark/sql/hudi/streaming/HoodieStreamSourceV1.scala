@@ -38,8 +38,6 @@ import org.apache.spark.sql.hudi.streaming.HoodieSourceOffset.INIT_OFFSET
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 
-import scala.collection.JavaConverters._
-
 /**
  * The Struct Stream Source for Hudi to consume the data by streaming job.
  * @param sqlContext
@@ -106,12 +104,13 @@ class HoodieStreamSourceV1(sqlContext: SQLContext,
 
   override protected def admissionInitialOffset: HoodieSourceOffset = initialOffsets
 
-  override protected def completedWriteOffsets: Seq[String] = {
+  override protected def completedWriteOffsets(start: String): Seq[String] = {
     metaClient.reloadActiveTimeline()
+    val byCompletionTime = hollowCommitHandlingMode == USE_TRANSITION_TIME
     val timeline = handleHollowCommitIfNeeded(
-      HoodieSourceAdmissionControl.readTimeline(metaClient, parameters), metaClient, hollowCommitHandlingMode)
-    timeline.getInstants.asScala.map(instant =>
-      if (hollowCommitHandlingMode == USE_TRANSITION_TIME) instant.getCompletionTime else instant.requestedTime()).toSeq
+      HoodieSourceAdmissionControl.readTimeline(metaClient, parameters, start, byCompletionTime),
+      metaClient, hollowCommitHandlingMode)
+    HoodieSourceAdmissionControl.commitOffsets(timeline, byCompletionTime)
   }
 
   override def schema: StructType = {

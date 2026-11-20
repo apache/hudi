@@ -79,7 +79,8 @@ public class TestSparkSqlHudiPackageStructure {
       "org.apache.spark.sql.hudi.ddl",
       "org.apache.spark.sql.hudi.dml",
       "org.apache.spark.sql.hudi.feature",
-      "org.apache.spark.sql.hudi.procedure"
+      "org.apache.spark.sql.hudi.procedure",
+      "org.apache.spark.sql.hudi.streaming"
   ));
 
   @Test

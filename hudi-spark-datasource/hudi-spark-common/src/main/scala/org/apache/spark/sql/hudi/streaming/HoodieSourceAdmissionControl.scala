@@ -20,16 +20,20 @@ package org.apache.spark.sql.hudi.streaming
 import org.apache.hudi.DataSourceReadOptions.{INCREMENTAL_READ_SKIP_COMPACT, STREAMING_MAX_COMMITS_PER_TRIGGER}
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.read.IncrementalQueryAnalyzer
-import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.common.table.timeline.{HoodieInstantTimeGenerator, HoodieTimeline}
 
 import org.apache.spark.sql.connector.read.streaming.{Offset => ConnectorOffset, ReadLimit, SupportsTriggerAvailableNow}
 import org.apache.spark.sql.execution.streaming.Source
+
+import java.util.concurrent.TimeUnit
+
+import scala.collection.JavaConverters._
 
 /** Commit boundaries are indivisible: this limits commits, not rows or bytes. */
 private[streaming] trait HoodieSourceAdmissionControl extends Source with SupportsTriggerAvailableNow {
   protected def admissionParameters: Map[String, String]
   protected def admissionInitialOffset: HoodieSourceOffset
-  protected def completedWriteOffsets: Seq[String]
+  protected def completedWriteOffsets(start: String): Seq[String]
 
   private lazy val configuredLimit = HoodieSourceAdmissionControl.readLimit(admissionParameters)
 
@@ -50,9 +54,10 @@ private[streaming] trait HoodieSourceAdmissionControl extends Source with Suppor
     val end = availableNowEnd.getOrElse(getOffset.map(HoodieSourceOffset(_)))
     end.map { latest =>
       limit match {
+        case HoodieSourceCommitLimit(_) if start.offsetCommitTime >= latest.offsetCommitTime => latest
         case HoodieSourceCommitLimit(count) =>
-          val candidates = completedWriteOffsets.sorted.filter(time =>
-            time > start.offsetCommitTime && time <= latest.offsetCommitTime)
+          val candidates = completedWriteOffsets(start.offsetCommitTime).filter(time =>
+            time > start.offsetCommitTime && time <= latest.offsetCommitTime).sorted
           // When the backlog fits, also advance past clean/rollback offsets without counting them.
           if (candidates.size > count) HoodieSourceOffset(candidates(count - 1)) else latest
         case all if all == ReadLimit.allAvailable() => latest
@@ -81,14 +86,38 @@ object HoodieSourceAdmissionControl {
   }
 
   private[streaming] def readTimeline(metaClient: HoodieTableMetaClient,
-                                     parameters: Map[String, String]): HoodieTimeline = {
-    // Include archived writes before selecting the boundary. Active-only selection would
-    // admit the entire archived gap in the first micro-batch after a stale checkpoint.
-    val timeline = metaClient.getArchivedTimeline("", false).getWriteTimeline.filterCompletedInstants()
-      .mergeTimeline(metaClient.getActiveTimeline.getWriteTimeline.filterCompletedInstants())
+                                     parameters: Map[String, String],
+                                     start: String,
+                                     byCompletionTime: Boolean): HoodieTimeline = {
+    val active = metaClient.getActiveTimeline
+    val activeWrites = active.getWriteTimeline.filterCompletedInstants()
+    // Archive bounds use requested time. For completion offsets, use the incremental reader's
+    // one-day lookback so a write requested before the checkpoint can still be counted.
+    val archiveStart = if (byCompletionTime && start > HoodieTimeline.INIT_INSTANT_TS) {
+      HoodieInstantTimeGenerator.instantTimeMinusMillis(start, TimeUnit.DAYS.toMillis(1))
+    } else {
+      start
+    }
+    val activeWritesAndSavepoints = active.getTimelineOfActions(HoodieTimeline.WRITE_AND_SAVEPOINT_ACTIONS)
+      .filterCompletedInstants()
+    val timeline = if (!activeWritesAndSavepoints.getFirstNonSavepointCommit.isPresent ||
+      activeWritesAndSavepoints.isBeforeTimelineStarts(archiveStart)) {
+      metaClient.getArchivedTimeline(archiveStart, false).getWriteTimeline.filterCompletedInstants()
+        .mergeTimeline(activeWrites)
+    } else {
+      activeWrites
+    }
     // Spark incremental reads do not support skipping clustering/insert-overwrite yet.
     IncrementalQueryAnalyzer.filterInstantsAsPerUserConfigs(metaClient, timeline,
       parameters.getOrElse(INCREMENTAL_READ_SKIP_COMPACT.key,
         INCREMENTAL_READ_SKIP_COMPACT.defaultValue.toString).toBoolean, false, false)
+  }
+
+  private[streaming] def commitOffsets(timeline: HoodieTimeline, byCompletionTime: Boolean): Seq[String] = {
+    // An archival race can expose the same instant in both timelines. Deduplicate instants
+    // before projecting timestamps so separate writes with equal completion times still count.
+    val instants = timeline.getInstants.asScala.distinct
+    if (byCompletionTime) instants.flatMap(instant => Option(instant.getCompletionTime)).toSeq
+    else instants.map(_.requestedTime()).toSeq
   }
 }
