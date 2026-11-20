@@ -1,0 +1,64 @@
+<!--
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements. See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to You under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+# Structured-streaming source recovery: 1.3.0 migration note
+
+The streaming source supports insert/upsert/delete plus compaction and clustering.
+`INSERT OVERWRITE` (table or partition), `delete_partition` writes and partition
+TTL on an upstream table require recovery for downstream consumers and fail by
+default. This includes TTL run inline with `hoodie.partition.ttl.inline`, which
+writes `DELETE_PARTITION` replace commits. `READ_LATEST` drops the overwrite's
+new rows along with the unread range; `READ_UPTO_LATEST_COMMIT` replays the whole
+table, including unaffected partitions. Latest-state reads do not propagate hard
+deletes to downstream tables.
+
+Latest-state Hudi structured-streaming readers now default to **failing** when a
+saved offset cannot be read safely because history was archived/cleaned or the
+upstream table was reset/recreated. This affects plain `readStream` users as well
+as Spark Declarative Pipelines. Previously incremental full-table-scan fallback
+could silently scan after history loss.
+
+The new `hoodie.datasource.read.streaming.recovery.strategy` takes precedence
+over `hoodie.datasource.read.incr.fallback.fulltablescan.enable` on resumed incremental reads. Fresh earliest starts retain the configured
+full-scan fallback for rebuilding from retained table state:
+
+- `FAIL` (default): stop with an actionable error; coordinate rebuilding the
+  downstream tables and checkpoints.
+- `READ_UPTO_LATEST_COMMIT`: explicitly recover with one full snapshot batch,
+  then resume increments. Append targets can duplicate rows and upsert targets
+  can retain keys deleted upstream. It is not downstream reconciliation.
+- `READ_LATEST`: explicitly skip the unread range and accept data loss.
+
+Initial start-offset selection and CDC reads are unchanged. Restart queries to
+change the strategy. SDP internal sources must pass explicit recovery through
+`spark.hoodie.datasource.read.streaming.recovery.strategy` in flow SQLConf.
+See [source recovery and operational limits](../hudi-integ-test/spark-pipelines/SOURCE_SAFETY.md).
+
+`FAIL` requires the sink to propagate batch execution errors. Safety rejections
+are deferred until execution so Spark can discard the last committed batch plan
+on restart. For Hudi sinks, keep
+`hoodie.datasource.write.streaming.ignore.failed.batch=false` (the default).
+Setting it to `true`, or swallowing errors in a custom sink, can acknowledge a
+rejected batch and advance the checkpoint past unread data even under `FAIL`.
+Healthy batches retain their scan relations for column pruning and filter pushdown.
+
+Before a v6 to v8+ source-table upgrade, pin existing requested-time readers with
+`hoodie.datasource.read.streaming.table.version=6` on every restart of the existing
+checkpoint. The unversioned offset cannot safely switch to V2 completion-time
+semantics automatically. `USE_TRANSITION_TIME` readers already use completion times.
+See the operational guide's table-upgrade section for migration and legacy
+service-checkpoint limitations. Return to `FAIL` after explicit recovery.
