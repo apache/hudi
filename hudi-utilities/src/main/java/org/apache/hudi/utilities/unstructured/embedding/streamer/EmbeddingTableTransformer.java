@@ -76,7 +76,7 @@ import java.util.stream.Collectors;
  * <p>One round:
  * <ol>
  *   <li>releases the previous round's caches for this table (a transformer has no hook after the commit);</li>
- *   <li>checks, at the start of the round (after the streamer fetched the batch and started the instant, before any prep
+ *   <li>checks, at the start of the round (after the streamer fetched the batch and moved the instant to INFLIGHT, before any prep
  *   work; a refusal rolls the instant back): the table's version; under
  *   {@code prep_only} no model and no compute setting; under {@code prep_and_compute} exactly one active model, whose column and
  *   dimensions name and size the VECTOR column (an existing table's column of that name has the model's dimensions), with a
