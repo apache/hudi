@@ -114,6 +114,9 @@ host Ollama or download host models automatically.
 
 ### Containerized Ollama
 
+If `.env` selects an API provider, first set `GATEWAY_LLM_PROVIDER=ollama` and
+choose an Ollama model. `--local-llm` rejects a conflicting provider configuration.
+
 No host Ollama installation is required:
 
 ```bash
@@ -229,6 +232,14 @@ The seed container creates, populates and validates missing demo tables through
 Spark Connect SQL. Existing tables are preserved, including user changes and empty
 tables. If a missing table's storage path is still occupied, initialization fails
 without overwriting its files.
+
+On a seed timeout, the client requests cancellation of its Spark queries, with a
+15-second limit for cancellation and cleanup. Stop the installation with
+`lakehouse.sh down` before retrying to ensure server-side work has stopped.
+An interrupted CTAS can leave files in MinIO without an HMS table; a retry does
+not reuse that occupied path. For a disposable demo, use the `down --volumes`
+command above, then `lakehouse.sh up` to start fresh. This deletes **all installation
+data**, including user-created tables; preserve any needed data before resetting.
 
 Startup checks MCP query availability. Use `lakehouse.sh test` for strict demo-data
 validation.

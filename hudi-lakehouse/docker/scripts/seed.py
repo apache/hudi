@@ -17,6 +17,7 @@
 """Initialize missing demo tables; preserve existing tables and all user changes."""
 import argparse
 import signal
+import sys
 
 DEMO_TABLES = {
     'drivers': """CREATE TABLE default.drivers USING hudi
@@ -86,15 +87,34 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--verify-only', action='store_true')
     args = parser.parse_args()
+
+    def timed_out(signum, frame):
+        raise TimeoutError('Seed exceeded its 600-second timeout')
+
+    spark = None
+    signal.signal(signal.SIGALRM, timed_out)
     signal.alarm(600)
-    spark = SparkSession.builder.remote("sc://spark-connect:15002").getOrCreate()
     try:
+        spark = SparkSession.builder.remote("sc://spark-connect:15002").getOrCreate()
         if args.verify_only:
             verify(spark)
         else:
             seed(spark)
+    except TimeoutError as error:
+        # Bound cancellation/cleanup too, even if the Connect server is unreachable.
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+        signal.alarm(15)
+        print(f'{error}; requesting cancellation. Run lakehouse.sh down before retrying.', file=sys.stderr)
+        if spark is not None:
+            try:
+                spark.interruptAll()
+            except Exception as cancellation_error:
+                print(f'Could not confirm cancellation: {cancellation_error}', file=sys.stderr)
+        raise SystemExit(124)
     finally:
-        spark.stop()
+        if spark is not None:
+            spark.stop()
+        signal.alarm(0)
 
 
 if __name__ == '__main__':

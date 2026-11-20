@@ -55,7 +55,7 @@ services:
   # Stores database/table schemas, locations and partition metadata in persistent
   # Derby storage. Serves the internal Hive Metastore Thrift endpoint on port 9083.
   hive-metastore:
-    image: apache/hive:3.1.3
+    image: ${HIVE_IMAGE:-apache/hive:3.1.3@sha256:d102ba29ad07e93c303894896203a80b903c0001d80221f1cb9fea92dcac06e4}
     # The existing local-dev HMS image is amd64-only (emulated on ARM).
     platform: linux/amd64
     depends_on:

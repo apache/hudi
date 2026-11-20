@@ -15,6 +15,7 @@
 # limitations under the License.
 
 """Compose contracts and installer failures; no daemon or Python dependencies needed."""
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -32,7 +35,7 @@ DOCKER = ROOT / 'docker'
 
 def clean_env():
     return {k: v for k, v in os.environ.items() if not k.startswith(
-        ('GATEWAY_', 'COMPOSE_', 'OPENAI_', 'ANTHROPIC_', 'MINIO_', 'SPARK_CONNECT_', 'OLLAMA_'))}
+        ('GATEWAY_', 'COMPOSE_', 'OPENAI_', 'ANTHROPIC_', 'MINIO_', 'SPARK_CONNECT_', 'OLLAMA_', 'HIVE_'))}
 
 
 @unittest.skipUnless(shutil.which('docker'), 'Docker Compose CLI required (no daemon needed)')
@@ -66,6 +69,7 @@ class ComposeContractTest(unittest.TestCase):
 
     def test_images_match_existing_charts_and_build_contexts_exist(self):
         services = self.config('-f', str(DOCKER / 'compose.build.yaml'))
+        self.assertRegex(services['hive-metastore']['image'], r'^apache/hive:3\.1\.3@sha256:[0-9a-f]{64}$')
         for service, chart in [('gateway', 'hudi-agent-gateway'), ('spark-connect', 'hudi-spark-connect')]:
             values = (ROOT / 'charts' / chart / 'values.yaml').read_text()
             repo = re.search(r'^  repository: (.+)$', values, re.M)[1]
@@ -319,12 +323,44 @@ if 'port' in args:
         self.assertFalse(any('up' in call and 'gateway' in call for call in calls))
         self.assertNotIn('Chat UI:', result.stdout)
 
-    def test_explicit_local_llm_takes_precedence_over_ambient_api_credentials(self):
+    @unittest.skipUnless(shutil.which('docker'), 'Real Compose resolver required')
+    def test_local_llm_accepts_ambient_keys_but_rejects_explicit_api_provider(self):
         result, calls = self.run_installer(['up', '--local-llm'],
                                           environment={'OPENAI_API_KEY': 'test-secret'})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn('Set GATEWAY_LLM_MODEL', result.stderr)
         self.assertTrue(any(call[-3:] == ['ollama', 'pull', 'qwen3:8b'] for call in calls))
+        settings = {'GATEWAY_LLM_PROVIDER': 'openai', 'GATEWAY_LLM_MODEL': 'gpt-4o'}
+        for config in ({'environment': settings},
+                       {'env_file': '\n'.join(f'{k}={v}' for k, v in settings.items())}):
+            with self.subTest(source=list(config)):
+                result, calls = self.run_installer(['up', '--local-llm', '--build'], **config)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('--local-llm conflicts with GATEWAY_LLM_PROVIDER=openai', result.stderr)
+                self.assertIn('gpt-4o', result.stderr)
+                self.assertFalse(any('build' in c or 'up' in c or 'pull' in c for c in calls))
+
+    def test_seed_timeout_cancels_before_cleanup_with_bounded_grace(self):
+        spec = importlib.util.spec_from_file_location('seed', DOCKER / 'scripts/seed.py')
+        seed = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(seed)
+        for cancellation_error in (None, RuntimeError('server unavailable')):
+            with self.subTest(cancellation_error=cancellation_error):
+                spark = MagicMock()
+                spark.interruptAll.side_effect = cancellation_error
+                session = MagicMock()
+                session.builder.remote.return_value.getOrCreate.return_value = spark
+                with patch.dict(sys.modules, {'pyspark.sql': SimpleNamespace(SparkSession=session)}), \
+                        patch.object(sys, 'argv', ['seed.py']), \
+                        patch.object(seed, 'seed', side_effect=TimeoutError('test timeout')), \
+                        patch.object(seed.signal, 'signal') as handler, \
+                        patch.object(seed.signal, 'alarm') as alarm:
+                    with self.assertRaises(SystemExit) as error:
+                        seed.main()
+                    self.assertEqual(error.exception.code, 124)
+                    self.assertEqual([c.args[0] for c in alarm.call_args_list], [600, 15, 0])
+                    handler.assert_called_with(seed.signal.SIGALRM, seed.signal.SIG_DFL)
+                self.assertEqual([c[0] for c in spark.mock_calls], ['interruptAll', 'stop'])
 
     def test_test_command_does_not_start_or_seed(self):
         result, calls = self.run_installer(['test'])

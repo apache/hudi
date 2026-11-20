@@ -81,7 +81,6 @@ if [[ "$BUILD" == 1 ]]; then
   COMPOSE+=(-f "$HERE/compose.build.yaml")
 fi
 if [[ "$LOCAL_LLM" == 1 ]]; then
-  export GATEWAY_LLM_PROVIDER=ollama GATEWAY_OLLAMA_BASE_URL=http://ollama:11434
   COMPOSE+=(--profile local-llm)
 fi
 case "$ACTION" in
@@ -106,6 +105,13 @@ if [[ "$ACTION" == up ]]; then
     esac
   done <<< "$CONFIG_ENV"
   unset CONFIG_ENV
+  if [[ "$LOCAL_LLM" == 1 ]]; then
+    if [[ "$LLM_PROVIDER" != ollama ]]; then
+      echo "--local-llm conflicts with GATEWAY_LLM_PROVIDER=$LLM_PROVIDER (model: ${LLM_MODEL:-unset}). Set GATEWAY_LLM_PROVIDER=ollama and GATEWAY_LLM_MODEL to an Ollama model, then retry." >&2
+      exit 2
+    fi
+    export GATEWAY_LLM_PROVIDER=ollama GATEWAY_OLLAMA_BASE_URL=http://ollama:11434
+  fi
   if [[ "$LLM_PROVIDER" != ollama && -z "$LLM_MODEL" ]]; then
     CHAT_CONFIG_ERROR='Set GATEWAY_LLM_MODEL to your API provider model and run lakehouse.sh up again.'
   fi
