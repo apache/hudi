@@ -97,6 +97,12 @@
                   <include>org.apache.hudi:hudi-spark-client</include>
                   <include>org.apache.hudi:hudi-utilities_${scala.binary.version}</include>
                   <include>org.apache.tika:tika-core</include>
+                  <!-- PDF chunker: PDFBox text extraction and the OpenAI BPE tokenizer,
+                       relocated below -->
+                  <include>org.apache.pdfbox:pdfbox</include>
+                  <include>org.apache.pdfbox:pdfbox-io</include>
+                  <include>org.apache.pdfbox:fontbox</include>
+                  <include>com.knuddels:jtokkit</include>
                   <include>org.apache.hudi:hudi-spark-common_${scala.binary.version}</include>
                   <include>org.apache.hudi:hudi-spark_${scala.binary.version}</include>
                   <include>org.apache.hudi:${hudi.spark.module}_${scala.binary.version}</include>
@@ -174,6 +180,18 @@
                 <relocation>
                   <pattern>org.apache.spark.sql.avro.</pattern>
                   <shadedPattern>org.apache.hudi.org.apache.spark.sql.avro.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.pdfbox.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.pdfbox.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>org.apache.fontbox.</pattern>
+                  <shadedPattern>org.apache.hudi.org.apache.fontbox.</shadedPattern>
+                </relocation>
+                <relocation>
+                  <pattern>com.knuddels.jtokkit.</pattern>
+                  <shadedPattern>org.apache.hudi.com.knuddels.jtokkit.</shadedPattern>
                 </relocation>
                 <relocation>
                   <pattern>com.yammer.metrics.</pattern>
