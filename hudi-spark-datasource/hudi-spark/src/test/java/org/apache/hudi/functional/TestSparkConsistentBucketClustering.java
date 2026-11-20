@@ -19,6 +19,7 @@
 package org.apache.hudi.functional;
 
 import org.apache.hudi.HoodieSchemaConversionUtils;
+import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.client.WriteClientTestUtils;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.SparkConsistentBucketClusteringPlanStrategy;
@@ -28,8 +29,10 @@ import org.apache.hudi.client.timeline.TimelineArchiverV2;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.fs.ConsistencyGuardConfig;
 import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.fs.FileNameParser;
 import org.apache.hudi.common.model.HoodieConsistentHashingMetadata;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieReplaceCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
@@ -38,7 +41,10 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.ClusteringUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieClusteringConfig;
@@ -48,6 +54,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.execution.bulkinsert.BulkInsertSortMode;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.index.bucket.ConsistentBucketIdentifier;
 import org.apache.hudi.index.bucket.ConsistentBucketIndexUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
@@ -72,17 +79,21 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.hudi.common.model.HoodieRecord.FILENAME_METADATA_FIELD;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
 import static org.apache.hudi.config.HoodieClusteringConfig.DAYBASED_LOOKBACK_PARTITIONS;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_PARTITION_FILTER_MODE;
 import static org.apache.hudi.config.HoodieClusteringConfig.PLAN_STRATEGY_SKIP_PARTITIONS_FROM_LATEST;
@@ -177,6 +188,77 @@ public class TestSparkConsistentBucketClustering extends HoodieSparkClientTestHa
         Assertions.assertTrue(fs.getBaseFile().isPresent());
         Assertions.assertTrue(fs.getLogFiles().count() == 0);
       });
+    });
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  public void testLsmSingleJobResizing(boolean isSplit) throws IOException {
+    final int maxFileSize = isSplit ? 5120 : 128 * 1024 * 1024;
+    final int targetBucketNum = isSplit ? 14 : 4;
+    Map<String, String> options = new HashMap<>();
+    options.put(HoodieTableConfig.TABLE_STORAGE_LAYOUT.key(),
+        HoodieTableConfig.TableStorageLayout.LSM_TREE.configValue());
+    options.put(HoodieTableConfig.ORDERING_FIELDS.key(), "timestamp");
+    options.put(HoodieStorageConfig.LOGFILE_DATA_BLOCK_FORMAT.key(), "parquet");
+    setup(maxFileSize, options, true, false);
+    config.setValue("hoodie.datasource.write.row.writer.enable", "false");
+    config.setValue("hoodie.metadata.enable", "false");
+    writeData(2000, true);
+
+    String clusteringTime = (String) writeClient.scheduleClustering(Option.empty()).get();
+    HoodieClusteringPlan plan = ClusteringUtils.getClusteringPlan(
+        metaClient, INSTANT_GENERATOR.getClusteringCommitRequestedInstant(clusteringTime))
+        .map(Pair::getRight).get();
+    if (isSplit) {
+      Assertions.assertTrue(plan.getInputGroups().stream()
+          .anyMatch(group -> group.getNumOutputFileGroups() > 1 && group.getSlices().size() == 1));
+    } else {
+      Assertions.assertTrue(plan.getInputGroups().stream()
+          .anyMatch(group -> group.getNumOutputFileGroups() == 1 && group.getSlices().size() > 1));
+    }
+    Map<String, Set<String>> expectedReplacedFileIds = plan.getInputGroups().stream()
+        .flatMap(group -> group.getSlices().stream())
+        .collect(Collectors.groupingBy(
+            slice -> slice.getPartitionPath().toString(),
+            Collectors.mapping(slice -> slice.getFileId().toString(), Collectors.toSet())));
+
+    writeClient.cluster(clusteringTime, true);
+    metaClient = HoodieTableMetaClient.reload(metaClient);
+    HoodieReplaceCommitMetadata replaceMetadata = metaClient.getActiveTimeline().readReplaceCommitMetadata(
+        metaClient.getActiveTimeline().getCompletedReplaceTimeline().getInstants()
+            .stream().filter(instant -> instant.requestedTime().equals(clusteringTime)).findFirst().get());
+    Map<String, Set<String>> actualReplacedFileIds = replaceMetadata.getPartitionToReplaceFileIds().entrySet().stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new HashSet<>(entry.getValue())));
+    Assertions.assertEquals(expectedReplacedFileIds, actualReplacedFileIds);
+
+    HoodieTable table = HoodieSparkTable.create(config, context, metaClient);
+    Assertions.assertEquals(2000, readRecords().size());
+    Arrays.stream(dataGen.getPartitionPaths()).forEach(partition -> {
+      HoodieConsistentHashingMetadata metadata = ConsistentBucketIndexUtils.loadMetadata(table, partition).get();
+      Assertions.assertEquals(targetBucketNum, metadata.getNodes().size());
+      ConsistentBucketIdentifier identifier = new ConsistentBucketIdentifier(metadata);
+
+      table.getSliceView().getLatestFileSlices(partition).forEach(fileSlice -> {
+        Assertions.assertTrue(fileSlice.getBaseFile().isPresent());
+        Assertions.assertEquals(0, fileSlice.getLogFiles().count());
+        List<String> actualKeys = sparkSession.read().parquet(fileSlice.getBaseFile().get().getPath())
+            .select(HoodieRecord.RECORD_KEY_METADATA_FIELD)
+            .collectAsList().stream().map(row -> row.getString(0)).collect(Collectors.toList());
+        List<String> expectedKeys = new ArrayList<>(actualKeys);
+        expectedKeys.sort(StringUtils::compareUtf8Bytes);
+        Assertions.assertEquals(expectedKeys, actualKeys);
+      });
+
+      readRecords().stream()
+          .filter(row -> partition.equals(row.getAs(HoodieRecord.PARTITION_PATH_METADATA_FIELD)))
+          .forEach(row -> {
+            String recordKey = row.getAs(HoodieRecord.RECORD_KEY_METADATA_FIELD);
+            String fileId = FSUtils.getFileId(row.getAs(FILENAME_METADATA_FIELD));
+            String expectedFileIdPrefix = identifier.getBucket(recordKey, "_row_key").getFileIdPrefix();
+            Assertions.assertEquals(expectedFileIdPrefix, FileNameParser.getFileIdPfxFromFileId(fileId));
+            Assertions.assertEquals(FSUtils.createNewFileId(expectedFileIdPrefix, 0), fileId);
+          });
     });
   }
 
