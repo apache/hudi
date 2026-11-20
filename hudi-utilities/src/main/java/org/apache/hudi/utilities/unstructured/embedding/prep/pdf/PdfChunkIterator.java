@@ -95,7 +95,7 @@ public final class PdfChunkIterator implements ClosableIterator<PdfChunk> {
     this.config = config;
     this.factory = factory;
     this.warnings = warnings;
-    this.normalizer = new TextNormalizer(Integer.MAX_VALUE);
+    this.normalizer = new TextNormalizer(config.maxPageChars());
     this.packer = new ChunkPacker(new TokenBudget(config.tokenizer(), config.maxTokens(), config.maxWords(),
         config.windowChars(), PdfFileFailure.PACK_FAILURES), config.overlapTokens(), config.locale());
     this.tokenizerId = config.tokenizer().id();
@@ -178,10 +178,10 @@ public final class PdfChunkIterator implements ClosableIterator<PdfChunk> {
       sourceExhausted = true;
       return;
     }
-    if (stats.pagesSeen >= Integer.MAX_VALUE) {
+    if (stats.pagesSeen >= config.maxPages()) {
       pageLimitHit = true;
       sourceExhausted = true;
-      pageWarning(PdfFailureCode.PAGE_LIMIT, stats.pagesSeen + 1, "stopped after " + Integer.MAX_VALUE + " pages", null);
+      pageWarning(PdfFailureCode.PAGE_LIMIT, stats.pagesSeen + 1, "stopped after " + config.maxPages() + " pages", null);
       return;
     }
     int page = (int) ++stats.pagesSeen;
@@ -208,7 +208,7 @@ public final class PdfChunkIterator implements ClosableIterator<PdfChunk> {
     TextNormalizer.Result normalized = normalizer.normalize(raw.text());
     if (raw.truncated() || normalized.truncated()) {
       stats.pagesTruncated++;
-      pageWarning(PdfFailureCode.PAGE_TRUNCATED, page, "text beyond " + Integer.MAX_VALUE + " chars dropped", null);
+      pageWarning(PdfFailureCode.PAGE_TRUNCATED, page, "text beyond " + config.maxPageChars() + " chars dropped", null);
     }
     if (normalized.unpairedSurrogates() > 0) {
       pageWarning(null, page, normalized.unpairedSurrogates() + " unpaired surrogates replaced by U+FFFD", null);
@@ -244,8 +244,9 @@ public final class PdfChunkIterator implements ClosableIterator<PdfChunk> {
   private void accept(PackedChunk cut) {
     stats.chunksEmitted++;
     stats.forcedSplits = packer.forcedSplits();
-    PdfChunk chunk = new PdfChunk(meta.sourcePathSha(), ordinal++, cut.text(), cut.tokenCount(), tokenizerId, cut.wordCount(),
-        cut.overlapChars(), cut.firstMark(), cut.lastMark(), PdfChunk.Status.OK, null);
+    PdfChunk.Measures measures = new PdfChunk.Measures(cut.tokenCount(), tokenizerId, cut.wordCount(), cut.overlapChars(), cut.firstMark(),
+        cut.lastMark());
+    PdfChunk chunk = new PdfChunk(meta.sourcePathSha(), ordinal++, cut.text(), measures, PdfChunk.Status.OK, null);
     if (held != null) {
       ready = held;                                    // a chunk is returned once the next one is cut
     }
@@ -279,7 +280,7 @@ public final class PdfChunkIterator implements ClosableIterator<PdfChunk> {
     if (pageLimitHit) {
       // the pages past max.pages were never read, so the file is not known to have no text
       end(PdfChunk.marker(meta.sourcePathSha(), tokenizerId, PdfChunk.Status.FAILED, PdfFailureCode.PAGE_LIMIT.name()
-          + ": no text in the first " + Integer.MAX_VALUE + " pages, " + lossSummary()));
+          + ": no text in the first " + config.maxPages() + " pages, " + lossSummary()));
     } else if (otherPageFailures || decodeLoss) {
       PdfFailureCode code = decodeLoss && !otherPageFailures ? PdfFailureCode.DECODE_ERROR : PdfFailureCode.ALL_PAGES_FAILED;
       end(PdfChunk.marker(meta.sourcePathSha(), tokenizerId, PdfChunk.Status.FAILED, code.name()

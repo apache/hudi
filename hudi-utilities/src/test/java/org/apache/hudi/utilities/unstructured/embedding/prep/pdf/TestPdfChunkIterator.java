@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class TestPdfChunkIterator {
 
   private static final Tokenizer WORDS = new WordCountTokenizer();
-  private static final PdfFileMeta META = new PdfFileMeta("fid-1", "file:///docs/x.pdf");
+  private static final PdfFileMeta META = new PdfFileMeta("fid-1", "file:///docs/x.pdf", 100);
 
   /** One page of a fake source: returns text or throws. */
   @FunctionalInterface
@@ -558,6 +558,34 @@ class TestPdfChunkIterator {
   }
 
   @Test
+  void incrementalPackingKeepsOnlyBoundedText() {
+    List<FakePage> pages = new ArrayList<>();
+    StringBuilder expected = new StringBuilder();
+    for (int p = 0; p < 20; p++) {
+      String page = sentences("page" + p + "sentence", 4);
+      pages.add(text(page));
+      if (p > 0) {
+        expected.append(' ');
+      }
+      expected.append(page);
+    }
+    PdfChunkIterator iterator = open(config(WORDS, EmbeddingTableConfig.CHUNK_MAX_TOKENS.key(), "20",
+        EmbeddingTableConfig.CHUNK_OVERLAP_TOKENS.key(), "0", EmbeddingTableConfig.CHUNK_WINDOW_MAX_CHARS.key(), "256",
+        EmbeddingTableConfig.PDF_MAX_PAGE_CHARS.key(), "1000", EmbeddingTableConfig.PDF_MAX_PAGE_GLYPHS.key(), "1000"), pages);
+    assertTrue(iterator.hasNext());
+    assertTrue(iterator.stats().pagesSeen() < pages.size(), "first chunk is emitted before all pages are read");
+    List<PdfChunk> chunks = drain(iterator);
+    StringBuilder actual = new StringBuilder();
+    for (PdfChunk chunk : chunks) {
+      assertEquals(PdfChunk.Status.OK, chunk.status());
+      assertEquals(0, chunk.overlapChars());
+      actual.append(chunk.text());
+    }
+    assertEquals(expected.toString(), actual.toString());
+    assertEquals(20, iterator.stats().pagesSeen());
+  }
+
+  @Test
   void warnLinesBoundedPerFile() {
     List<FakePage> pages = new ArrayList<>();
     for (int i = 0; i < 50; i++) {
@@ -603,6 +631,37 @@ class TestPdfChunkIterator {
   }
 
   @Test
+  void maxPagesStopsWithWarning() {
+    PdfChunkerConfig config = config(WORDS, EmbeddingTableConfig.CHUNK_MAX_TOKENS.key(), "20", EmbeddingTableConfig.CHUNK_OVERLAP_TOKENS.key(),
+        "0", EmbeddingTableConfig.PDF_MAX_PAGES.key(), "3");
+    List<FakePage> pages = new ArrayList<>();
+    for (int p = 1; p <= 5; p++) {
+      pages.add(text(sentences("p" + p + "s", 2)));
+    }
+    List<PdfChunk> chunks = drain(open(config, pages));
+    assertTrue(chunks.stream().noneMatch(c -> c.text().contains("p4s") || c.text().contains("p5s")));
+    assertTrue(chunks.stream().anyMatch(c -> c.text().contains("p3s1")));
+    assertTrue(chunks.get(chunks.size() - 1).statusDetail().contains("page_limit=true"));
+    assertTrue(warnings.stream().anyMatch(w -> w.contains("code=PAGE_LIMIT")));
+  }
+
+  @Test
+  void pageLimitedScanWithoutTextFailsWithItsLosses() {
+    // pages past max.pages were never read, so the file is not known to have no text: it fails with a durable PAGE_LIMIT
+    PdfChunkerConfig config = config(WORDS, EmbeddingTableConfig.PDF_MAX_PAGES.key(), "2");
+    List<PdfChunk> chunks = drain(open(config, Arrays.asList(text(""), text(""), text("late text."), text(""))));
+    assertEquals(1, chunks.size());
+    assertEquals(PdfChunk.Status.FAILED, chunks.get(0).status());
+    assertEquals("PAGE_LIMIT: no text in the first 2 pages, PAGES_LOST failed=0 truncated=0 glyph_limited=0 decode_limited=0 "
+        + "graphics_limited=0 page_limit=true file_error=none", chunks.get(0).statusDetail());
+    List<PdfChunk> failed = drain(open(config, Arrays.asList(throwing(new RuntimeException("x")), text(""), text("late."))));
+    assertEquals(1, failed.size());
+    assertEquals(PdfChunk.Status.FAILED, failed.get(0).status());
+    assertEquals("PAGE_LIMIT: no text in the first 2 pages, PAGES_LOST failed=1 truncated=0 glyph_limited=0 decode_limited=0 "
+        + "graphics_limited=0 page_limit=true file_error=none", failed.get(0).statusDetail());
+  }
+
+  @Test
   public void truncatedPrefixesThatNormalizeEmptyProduceDurableFailures() {
     String[] prefixes = {"", " \t\n", "\u2060\uFEFF\u00AD"};
     for (String prefix : prefixes) {
@@ -615,6 +674,17 @@ class TestPdfChunkIterator {
       assertEquals(1, iterator.stats().pagesEmpty());
       assertEquals(0, iterator.stats().chunksEmitted());
     }
+  }
+
+  @Test
+  public void normalizationCuttingWhitespaceBeforeVisibleTextProducesADurableFailure() {
+    PdfChunkerConfig config = config(WORDS, EmbeddingTableConfig.CHUNK_MAX_WORDS.key(), "16",
+        EmbeddingTableConfig.CHUNK_WINDOW_MAX_CHARS.key(), "256", EmbeddingTableConfig.PDF_MAX_PAGE_CHARS.key(), "256");
+    PdfChunkIterator iterator = open(config, Collections.singletonList(text(" ".repeat(257) + "Visible text.")));
+    List<PdfChunk> chunks = drain(iterator);
+    assertEquals(PdfChunk.Status.FAILED, chunks.get(0).status());
+    assertTrue(chunks.get(0).statusDetail().contains("PAGES_LOST failed=0 truncated=1"));
+    assertEquals(1, iterator.stats().pagesTruncated());
   }
 
   @Test

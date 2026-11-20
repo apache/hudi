@@ -235,6 +235,137 @@ public class EmbeddingTableConfig implements Serializable {
       .sinceVersion(SINCE_1_3_0)
       .withDocumentation("De-hyphenation of -\\n line breaks; only false is supported.");
 
+  /**
+   * The input size caps' note on raising a cap on an existing table: prep reads a file again only when its source row changes,
+   * so a file a cap refused keeps its refusal, and the table's content for that file depends on when it arrived.
+   */
+  private static final String RAISED_CAP = " Raising it does not re-prepare a file it already refused: that file keeps its refusal "
+      + "(a FAILED row or a quarantine entry) until its source object changes, while a new file of the same size is prepared.";
+
+  /** Prefix of the PDF extraction keys; every set one is part of the style, except the input size cap. */
+  public static final String PDF_PREFIX = UNSTRUCTURED_PREFIX + "pdf.";
+
+  /**
+   * Largest PDF chunked (bytes): a larger one is a FAILED {@code INPUT_LIMIT} row, refused before any read when its size is
+   * declared. Default {@value #DEFAULT_PDF_MAX_INPUT_BYTES} (20 GiB). A set value must be a positive byte count; 0 or a negative
+   * value is refused when the job starts. The file is staged to local disk whole and PDFBox reads it from there, so the cap bounds disk, not heap
+   * (heap follows the per-page and per-stream caps). When the key is set explicitly (to any value, the default included), PDFBox's
+   * scratch storage is also held to this many bytes; when it is unset, that scratch storage is not bounded. Not pinned: it only
+   * refuses a file, so it can be changed on an existing table; raising it does not re-prepare a file it already refused, whose
+   * {@code INPUT_LIMIT} row stays until its source object changes.
+   */
+  public static final long DEFAULT_PDF_MAX_INPUT_BYTES = 20L * 1024 * 1024 * 1024;
+
+  public static final ConfigProperty<String> PDF_MAX_INPUT_BYTES = ConfigProperty
+      .key(PDF_PREFIX + "max.input.bytes")
+      .defaultValue(Long.toString(DEFAULT_PDF_MAX_INPUT_BYTES))
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Largest PDF chunked (bytes); a larger one is a FAILED INPUT_LIMIT row, refused before any read when its "
+          + "size is declared. Default 21474836480 (20 GiB). A set value must be a positive byte count (0 or a negative value is "
+          + "refused at job start). The file is staged whole to local disk, so the cap bounds disk use, not heap. When set "
+          + "explicitly (to any value, the default included), PDFBox's scratch storage is also held to this many bytes; when "
+          + "unset, it is not. Not part of the table's stored prep contract: it only refuses a file, so it can be changed on an "
+          + "existing table." + RAISED_CAP);
+
+  /**
+   * Pages read per PDF; the rest is dropped with a {@code PAGE_LIMIT} warning, and a file without text in the pages read
+   * fails with {@code PAGE_LIMIT}; default 10 000.
+   */
+  public static final ConfigProperty<Integer> PDF_MAX_PAGES = ConfigProperty
+      .key(PDF_PREFIX + "max.pages")
+      .defaultValue(10000)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Pages read per PDF; the rest is dropped with a PAGE_LIMIT warning, and a file without text in the pages "
+          + "read fails with PAGE_LIMIT; default 10 000.");
+
+  public static final int DEFAULT_PDF_MAX_PAGES = 10_000;
+
+  /** Chars kept per page, raw and after NFKC; at least the window; default 262 144. */
+  public static final ConfigProperty<Integer> PDF_MAX_PAGE_CHARS = ConfigProperty
+      .key(PDF_PREFIX + "max.page.chars")
+      .defaultValue(262144)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Chars kept per page, raw and after NFKC; at least the window; default 262 144.");
+
+  public static final int DEFAULT_PDF_MAX_PAGE_CHARS = 262_144;
+
+  /**
+   * Glyphs per PDF page before the page fails {@code PAGE_GLYPH_LIMIT}; at least max.page.chars; default 262 144.
+   * Size extraction live heap as floor + k * (256 * glyphs + max.page.font.bytes + max.decoded.stream.bytes), in bytes,
+   * then add collector/allocation headroom. Here k is concurrent PDF tasks in one executor, and floor is measured non-page
+   * job state. The 256 B/glyph allowance rounds up the measured 201-205 B/glyph graph; it is 64 MiB/task at the default.
+   * Glyphs and fonts can coexist on the SAME page: their terms add. Pages beyond the one-page TrueType k=8 combined reference
+   * (other font programs, k>8, large files) remain unqualified.
+   * This glyph term belongs only to PDF extraction; vanilla structured rows have no PDFBox page graph. Ordinary Spark and
+   * writer memory still need their own sizing. Raising this cap leaves the qualified envelope; the cap is not heap admission.
+   */
+  public static final ConfigProperty<Integer> PDF_MAX_PAGE_GLYPHS = ConfigProperty
+      .key(PDF_PREFIX + "max.page.glyphs")
+      .defaultValue(262144)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Glyphs per PDF page before the page fails PAGE_GLYPH_LIMIT; at least max.page.chars; default 262 144. Size "
+          + "extraction live heap as floor + k * (256 * glyphs + max.page.font.bytes + max.decoded.stream.bytes), in "
+          + "bytes, then add collector/allocation headroom. Here k is concurrent PDF tasks in one executor, and floor "
+          + "is measured non-page job state. The 256 B/glyph allowance rounds up the measured 201-205 B/glyph graph; it "
+          + "is 64 MiB/task at the default. Glyphs and fonts can coexist on the SAME page: their terms add. Pages "
+          + "beyond the one-page TrueType k=8 combined reference (other font programs, k>8, large files) remain "
+          + "unqualified. This glyph term belongs only to PDF extraction; vanilla structured rows have no PDFBox page "
+          + "graph. Ordinary Spark and writer memory still need their own sizing. Raising this cap leaves the qualified "
+          + "envelope; the cap is not heap admission.");
+
+  public static final int DEFAULT_PDF_MAX_PAGE_GLYPHS = 262_144;
+
+  /**
+   * Decoded bytes per pre-checked stream, and of a page's filtered /Contents streams together (a repeated stream counted
+   * per listing), before the page fails {@code DECODE_LIMIT}; default 32 MiB.
+   */
+  public static final ConfigProperty<Long> PDF_MAX_DECODED_STREAM_BYTES = ConfigProperty
+      .key(PDF_PREFIX + "max.decoded.stream.bytes")
+      .defaultValue(33554432L)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Decoded bytes per pre-checked stream, and of a page's filtered /Contents streams together "
+          + "(a repeated stream counted per listing), before the page fails DECODE_LIMIT; default 32 MiB.");
+
+  public static final long DEFAULT_PDF_MAX_DECODED_STREAM_BYTES = 32L * 1024 * 1024;
+
+  /**
+   * Static per-page decoded font bytes, charged per dictionary before DECODE_LIMIT; default 48 MiB admits one 31 MiB font.
+   * Size this term per concurrent PDF task together with the glyph graph and one decoded stream (see {@link #PDF_MAX_PAGE_GLYPHS});
+   * at the defaults the font allowance is 48 MiB + 32 MiB = 80 MiB/task, in addition to glyphs and the executor's job floor.
+   * Repeated per-use font materialization is outside this static bound. The default is not corpus-calibrated; raising it leaves the qualified envelope.
+   */
+  public static final ConfigProperty<Long> PDF_MAX_PAGE_FONT_BYTES = ConfigProperty
+      .key(PDF_PREFIX + "max.page.font.bytes")
+      .defaultValue(50331648L)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Static per-page decoded font bytes, charged per dictionary before DECODE_LIMIT; default 48 MiB admits one "
+          + "31 MiB font. Size this term per concurrent PDF task together with the glyph graph and one decoded stream "
+          + "(see hoodie.unstructured.pdf.max.page.glyphs); at the defaults the font allowance is 48 MiB + 32 MiB = 80 "
+          + "MiB/task, in addition to glyphs and the executor's job floor. Repeated per-use font materialization is "
+          + "outside this static bound. The default is not corpus-calibrated; raising it leaves the qualified envelope.");
+
+  public static final long DEFAULT_PDF_MAX_PAGE_FONT_BYTES = 48L * 1024 * 1024;
+
+  /**
+   * Graphics-state and marked-content depth of a page, the states of the forms it draws included, before the page fails
+   * {@code GRAPHICS_DEPTH_LIMIT}; at least 16; default 1 024.
+   */
+  public static final ConfigProperty<Integer> PDF_MAX_GRAPHICS_DEPTH = ConfigProperty
+      .key(PDF_PREFIX + "max.graphics.depth")
+      .defaultValue(1024)
+      .markAdvanced()
+      .sinceVersion(SINCE_1_3_0)
+      .withDocumentation("Graphics-state and marked-content depth of a page, the states of the forms it draws included, before the "
+          + "page fails GRAPHICS_DEPTH_LIMIT; at least 16; default 1 024.");
+
+  public static final int DEFAULT_PDF_MAX_GRAPHICS_DEPTH = 1024;
+
   /** Prefix of every data-prep key. */
   public static final String PREP_PREFIX = PREFIX + "prep.";
 
