@@ -345,6 +345,7 @@ public class StreamerUtil {
           .setTableName(conf.get(FlinkOptions.TABLE_NAME))
           .setTableVersion(conf.get(FlinkOptions.WRITE_TABLE_VERSION))
           .setTableFormat(conf.get(FlinkOptions.WRITE_TABLE_FORMAT))
+          .setTableFormatConfigs(conf.toMap())
           .setBaseFileFormat(conf.getString(HoodieTableConfig.BASE_FILE_FORMAT.key(), null))
           .setTableStorageLayout(OptionsResolver.getTableStorageLayout(conf).configValue())
           .setRecordMergeMode(getMergeMode(conf))

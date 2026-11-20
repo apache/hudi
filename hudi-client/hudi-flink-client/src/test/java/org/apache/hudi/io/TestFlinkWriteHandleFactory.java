@@ -26,6 +26,7 @@ import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.exception.HoodieNotSupportedException;
 import org.apache.hudi.io.v2.RowDataInlineLogWriteHandle;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.HoodieTable;
@@ -43,9 +44,11 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -177,6 +180,19 @@ class TestFlinkWriteHandleFactory {
           new HashMap<>(), bucketInfo, writeConfig, "002", table, records);
       assertSame(mocked.constructed().get(0), handle);
     }
+  }
+
+  @Test
+  void testMergeOnReadLogHandlesRejectedWhenWritingUpdatesAsDeletesAndInserts() {
+    when(tableConfig.getTableType()).thenReturn(HoodieTableType.MERGE_ON_READ);
+    when(writeConfig.shouldWriteUpdatesAsDeletesAndInserts()).thenReturn(true);
+    HoodieNotSupportedException exception = assertThrows(HoodieNotSupportedException.class, () -> factory(false));
+    assertTrue(exception.getMessage().contains(HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()));
+
+    // Overwrites and duplicate-allowing inserts write base files, so they stay available
+    assertDoesNotThrow(() -> factory(true));
+    when(writeConfig.allowDuplicateInserts()).thenReturn(true);
+    assertDoesNotThrow(() -> factory(false));
   }
 
   @Test

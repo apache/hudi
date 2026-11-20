@@ -954,6 +954,21 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Whether to write record positions to the block header for data blocks containing updates and delete blocks. "
           + "The record positions can be used to improve the performance of merging records from base and log files.");
 
+  public static final ConfigProperty<Boolean> WRITE_UPDATES_AS_DELETES_AND_INSERTS = ConfigProperty
+      .key("hoodie.write.updates.as.deletes.and.inserts")
+      .defaultValue(false)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When enabled on a merge-on-read table, an upsert routes each update as a positional "
+          + "delete to the record's current file group plus an insert of the new version routed by the insert "
+          + "partitioner, instead of appending an update record to the current file group's log. Log files then "
+          + "carry only positional deletes and every live record stays in a base file, so table formats based on "
+          + "deletion vectors can represent the table exactly. Upserts, inserts and deletes require write table "
+          + "version 8 or higher, " + WRITE_RECORD_POSITIONS.key() + ", the BLOOM or SIMPLE index (the global "
+          + "variants do not produce record positions on merge-on-read tables, and other index types write inserts "
+          + "to log files), and commit-time ordering merge semantics. Prepped upserts, inserts and deletes are not "
+          + "supported on merge-on-read tables.");
+
   public static final ConfigProperty<String> WRITE_PARTIAL_UPDATE_SCHEMA = ConfigProperty
       .key("hoodie.write.partial.update.schema")
       .defaultValue("")
@@ -2520,6 +2535,10 @@ public class HoodieWriteConfig extends HoodieConfig {
     return getBoolean(WRITE_RECORD_POSITIONS);
   }
 
+  public boolean shouldWriteUpdatesAsDeletesAndInserts() {
+    return getBoolean(WRITE_UPDATES_AS_DELETES_AND_INSERTS);
+  }
+
   public boolean shouldWritePartialUpdates() {
     return !StringUtils.isNullOrEmpty(getString(WRITE_PARTIAL_UPDATE_SCHEMA));
   }
@@ -3836,6 +3855,11 @@ public class HoodieWriteConfig extends HoodieConfig {
 
     public Builder withWriteRecordPositionsEnabled(boolean shouldWriteRecordPositions) {
       writeConfig.setValue(WRITE_RECORD_POSITIONS, String.valueOf(shouldWriteRecordPositions));
+      return this;
+    }
+
+    public Builder withWriteUpdatesAsDeletesAndInserts(boolean updatesAsDeletesAndInserts) {
+      writeConfig.setValue(WRITE_UPDATES_AS_DELETES_AND_INSERTS, String.valueOf(updatesAsDeletesAndInserts));
       return this;
     }
 
