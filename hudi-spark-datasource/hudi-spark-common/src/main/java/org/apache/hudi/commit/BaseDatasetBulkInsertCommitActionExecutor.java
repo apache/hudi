@@ -88,7 +88,7 @@ public abstract class BaseDatasetBulkInsertCommitActionExecutor implements Seria
 
   protected Option<HoodieData<WriteStatus>> doExecute(Dataset<Row> records, boolean arePartitionRecordsSorted) {
     table.getActiveTimeline().transitionRequestedToInflight(table.getMetaClient().createNewInstant(HoodieInstant.State.REQUESTED,
-        getCommitActionType(), instantTime), Option.empty());
+        getCommitActionType(), instantTime), Option.empty(), writeConfig.shouldAllowMultiWriteOnSameInstant());
     return Option.of(HoodieDatasetBulkInsertHelper
         .bulkInsert(records, instantTime, table, writeConfig, arePartitionRecordsSorted, false));
   }
