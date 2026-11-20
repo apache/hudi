@@ -37,6 +37,14 @@
         "name":"version",
         "type":["int", "null"],
         "default": 1
+     },
+     {
+        "name":"extraMetadata",
+        "type":["null", {
+           "type":"map",
+           "values":"string"
+        }],
+        "default": null
      }
  ]
 }
