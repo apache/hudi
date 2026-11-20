@@ -227,6 +227,11 @@
                         "name":"numUpdates",
                         "type":["null","long"],
                         "default" : null
+                     },
+                     {
+                        "name":"sourcePartitionPath",
+                        "type":["null","string"],
+                        "default" : null
                      }
                   ]
                }
