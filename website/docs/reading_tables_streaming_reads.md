@@ -137,6 +137,17 @@ count. Snapshot fallback and recovery reads are not divided into capped reads.
 Retain timeline history and data files long enough for consumers to catch up;
 this option does not restore cleaned files.
 
+### Resuming a Spark V1 checkpoint after upgrading
+
+Spark V1 streams in `BLOCK` mode use the last checkpointed instant's requested
+time as the lower bound after upgrading to Hudi 1.3.0. Older readers configured
+with `hoodie.write.table.version` 8 or later used that instant's completion time.
+During the first catch-up after upgrading, the stream may re-emit records it
+previously read from commits requested after the checkpointed instant's
+requested time and at or before its completion time. This can occur with
+asynchronous compaction or concurrent writers, including when the commit cap is
+unset.
+
 ## Flink Streaming Read
 
 Flink can continuously consume new commits from a Hudi table as a streaming source. Enable this by setting `read.streaming.enabled=true` and optionally a `read.start-commit`.
