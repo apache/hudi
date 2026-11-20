@@ -64,12 +64,14 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -968,6 +970,45 @@ public class TestBlobTableStreamer extends UtilitiesTestBase {
     assertTrue(BlobJobHarness.quarantinedErrors(errors).get(goneKey).contains("gone since announced"), BlobJobHarness.quarantinedErrors(errors).toString());
     assertEquals(1, commits(table()).size());
     assertEquals(commits(harness.eventsPath()).get(0).requestedTime() + "#zz-gone.pdf", checkpoint(table()), "the checkpoint advances past the gone object");
+  }
+
+  /** A denial wrapped as missing holds the last checkpoint; fixing access retries that same event instead of skipping it. */
+  @ParameterizedTest
+  @CsvSource({"status,false", "status,true", "open,false", "open,true"})
+  public void nestedSourceDenialHoldsCheckpointUntilItCanBeRead(String stage, boolean errorTable) throws Exception {
+    BlobJobHarness harness = harness();
+    String errors = tempDir.resolve("denial-errors").toString();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    if (errorTable) {
+      BlobJobHarness.withErrorTable(props, errors);
+    }
+    Map<String, byte[]> before = new TreeMap<>(harness.putAndAnnounce(sparkSession, Collections.singletonMap("seed.pdf", 32)));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    String previousCheckpoint = checkpoint(table());
+    Map<String, Integer> sizes = new TreeMap<>();
+    sizes.put("good.pdf", 32);
+    sizes.put(NestedDenialFileSystem.DENIED_FILE, 32);
+    Map<String, byte[]> expected = new TreeMap<>(before);
+    expected.putAll(harness.putAndAnnounce(sparkSession, sizes));
+    String nextEvent = commits(harness.eventsPath()).get(1).requestedTime();
+    NestedDenialFileSystem.install(jsc.hadoopConfiguration(), harness.objectsRoot(), stage);
+    try {
+      Exception failure = assertThrows(Exception.class, () -> runStreamer(props, table(), Long.MAX_VALUE));
+      assertTrue(EmbeddingStreamers.causeOf(failure, AccessDeniedException.class).isPresent(), EmbeddingStreamers.causes(failure));
+    } finally {
+      harness.install(jsc.hadoopConfiguration());
+    }
+    assertEquals(previousCheckpoint, checkpoint(table()), "an access denial cannot consume the event");
+    assertEquals(1, commits(table()).size());
+    assertContent(table(), before);
+    assertEquals(Collections.emptyList(), BlobJobHarness.quarantinedRecordKeys(errors), "a denial is never a content quarantine");
+
+    runStreamer(props, table(), Long.MAX_VALUE);
+
+    assertEquals(2, commits(table()).size());
+    assertEquals(nextEvent + "#" + NestedDenialFileSystem.DENIED_FILE, checkpoint(table()));
+    assertContent(table(), expected);
+    assertEquals(Collections.emptyList(), BlobJobHarness.quarantinedRecordKeys(errors));
   }
 
   /** With the error table off nothing can record the gone object, so the round fails as every content fault does. */

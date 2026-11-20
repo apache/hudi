@@ -26,6 +26,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -85,6 +87,29 @@ class TestTextProviderAvailability {
       assertEquals("Bearer fake-local-key", authorization.get());
     } finally {
       server.stop(0);
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "bedrock,amazon.titan-embed-text-v2:0,256,bedrock.BedrockTitanTextEmbeddingClient",
+      "bedrock,cohere.embed-v4:0,256,bedrock.BedrockCohereEmbeddingClient",
+      "vertex-multimodal,multimodalembedding@001,128,vertex.VertexMultimodalEmbeddingClient",
+      "jina,jina-embeddings-v3,256,jina.JinaEmbeddingClient"
+  })
+  void remainingTextProvidersInitializeThroughFactory(String provider, String model, int dimensions,
+                                                            String expectedClass) throws Exception {
+    Path key = temp.resolve("fake-provider.key");
+    Files.writeString(key, "fake-local-token");
+    TypedProperties props = new TypedProperties();
+    String prefix = "hoodie.unstructured.embedding.model.local";
+    props.setProperty(prefix + ".endpoint", "http://127.0.0.1:1/publishers/google/models/multimodalembedding@001:predict");
+    props.setProperty(prefix + ".credential.file", key.toString());
+    props.setProperty(prefix + ".bedrock.region", "us-east-1");
+    EmbeddingModelSpec spec = new EmbeddingModelSpec("local", "emb_local", dimensions, null, provider, model);
+    EmbeddingClientFactory.checkConfig(spec, props);
+    try (EmbeddingClient client = EmbeddingClientFactory.create(spec, props)) {
+      assertEquals("org.apache.hudi.utilities.unstructured.embedding.compute." + expectedClass, client.getClass().getName());
     }
   }
 

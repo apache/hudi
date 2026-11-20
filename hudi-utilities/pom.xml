@@ -673,6 +673,13 @@
       <artifactId>sts</artifactId>
       <version>${aws.sdk.version}</version>
     </dependency>
+    <!-- Bedrock runtime client of the Bedrock embedding provider (embedding/compute/bedrock). Like the other AWS SDK
+         clients here it is not shaded into the utilities bundles. -->
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>bedrockruntime</artifactId>
+      <version>${aws.sdk.version}</version>
+    </dependency>
     <!-- Hive - Test -->
     <dependency>
       <groupId>${hive.groupid}</groupId>

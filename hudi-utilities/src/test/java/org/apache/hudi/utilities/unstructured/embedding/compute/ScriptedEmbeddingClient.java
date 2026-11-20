@@ -26,6 +26,7 @@ import org.apache.spark.TaskContext;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A test client whose behaviour the test scripts through static state (local Spark runs every task in the test's JVM): the
@@ -47,6 +48,10 @@ public class ScriptedEmbeddingClient implements EmbeddingClient {
   public static final AtomicInteger FAIL_FIRST_ATTEMPT_OF_PARTITION = new AtomicInteger(-1);
   public static final AtomicInteger TASK_FAILURES = new AtomicInteger();
   public static final AtomicInteger CALLS = new AtomicInteger();
+  /** When set, every call is refused for good with this message ({@link EmbeddingClientConfigException}). */
+  public static final AtomicReference<String> REFUSAL = new AtomicReference<>();
+  /** Calls made by a re-attempted Spark task (attempt number above 0). */
+  public static final AtomicInteger REATTEMPT_CALLS = new AtomicInteger();
 
   private EmbeddingModelSpec spec;
 
@@ -56,6 +61,8 @@ public class ScriptedEmbeddingClient implements EmbeddingClient {
     FAIL_FIRST_ATTEMPT_OF_PARTITION.set(-1);
     TASK_FAILURES.set(0);
     CALLS.set(0);
+    REFUSAL.set(null);
+    REATTEMPT_CALLS.set(0);
   }
 
   @Override
@@ -72,6 +79,12 @@ public class ScriptedEmbeddingClient implements EmbeddingClient {
   public List<EmbeddingResult> embed(List<EmbeddingInput> inputs) {
     CALLS.incrementAndGet();
     TaskContext task = TaskContext.get();
+    if (task != null && task.attemptNumber() > 0) {
+      REATTEMPT_CALLS.incrementAndGet();
+    }
+    if (REFUSAL.get() != null) {
+      throw new EmbeddingClientConfigException(REFUSAL.get());
+    }
     if (task != null && task.attemptNumber() == 0 && task.partitionId() == FAIL_FIRST_ATTEMPT_OF_PARTITION.get()) {
       TASK_FAILURES.incrementAndGet();
       throw new EmbeddingComputePlatformException("injected failure of the first attempt of compute task " + task.partitionId());

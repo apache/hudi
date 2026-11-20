@@ -231,6 +231,14 @@ public final class ComputeRound {
     return functions.col(fields[fields.length - 1].name());
   }
 
+  /** Refuses a write whose recomputation observed a permanent provider refusal after initial materialization. */
+  public static void checkRefused(EmbeddingModelSpec model, ComputeCounters counters) {
+    if (counters.getCallsRefused().value() > 0) {
+      throw new EmbeddingClientConfigException(REFUSED_PREFIX.trim() + " model=" + model.getName()
+          + ": the provider refused during write recomputation; nothing was committed");
+    }
+  }
+
   private static void checkRefused(Dataset<Row> embedded, EmbeddingModelSpec model, ComputeCounters counters) {
     if (counters.getCallsRefused().value() > 0) {
       throw new EmbeddingClientConfigException(refusal(embedded, model));

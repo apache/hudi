@@ -23,15 +23,33 @@ import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
+import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockClientConfig;
+import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockCohereEmbeddingClient;
+import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockModelFamily;
+import org.apache.hudi.utilities.unstructured.embedding.compute.bedrock.BedrockTitanTextEmbeddingClient;
+import org.apache.hudi.utilities.unstructured.embedding.compute.jina.JinaClientConfig;
+import org.apache.hudi.utilities.unstructured.embedding.compute.jina.JinaEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiClientConfig;
 import org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiCompatibleEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiProvider;
+import org.apache.hudi.utilities.unstructured.embedding.compute.vertex.VertexClientConfig;
+import org.apache.hudi.utilities.unstructured.embedding.compute.vertex.VertexMultimodalEmbeddingClient;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * Builds the {@link EmbeddingClient} of a model: the {@code hoodie.unstructured.embedding.model.<alias>.client.class}
- * when set, else the built-in client of the model's provider.
+ * Resolves configured text embedding clients and validates their static configuration.
  */
 public final class EmbeddingClientFactory {
+
+  /** The client class of each Bedrock model family. */
+  private static final Map<BedrockModelFamily, String> BEDROCK_CLIENTS = new HashMap<>();
+
+  static {
+    BEDROCK_CLIENTS.put(BedrockModelFamily.TITAN_EMBED_TEXT_V2, BedrockTitanTextEmbeddingClient.class.getName());
+    BEDROCK_CLIENTS.put(BedrockModelFamily.COHERE_EMBED_V4, BedrockCohereEmbeddingClient.class.getName());
+  }
 
   private EmbeddingClientFactory() {
   }
@@ -75,6 +93,17 @@ public final class EmbeddingClientFactory {
     return EmbeddingClientNames.clientClassName(spec);
   }
 
+  /**
+   * Validates on the driver the static configuration of a built-in endpoint client, so a misconfigured model fails the
+   * run before any Spark work rather than leaving every task's rows untouched: for the three OpenAI-compatible providers,
+   * a {@code .client.class} naming {@link OpenAiCompatibleEmbeddingClient}, {@link VertexMultimodalEmbeddingClient}, the Bedrock
+   * family clients and the Jina clients, whether chosen by provider or named by {@code .client.class}. A no-op for the dummy provider and
+   * for any other explicit client class, whose configuration the client itself checks in {@link EmbeddingClient#init}. The
+   * rate-limit keys ({@link RequestRateLimiter}) are checked for every model.
+   *
+   * @throws IllegalArgumentException naming the offending key
+   * @throws EmbeddingClientConfigException naming a bad rate-limit key
+   */
   public static void checkConfig(EmbeddingModelSpec spec, TypedProperties props) {
     // every model, whatever its client: a bad rate or burst is configuration, refused before any provider call
     RequestRateLimiter.validate(spec, props);
@@ -85,6 +114,17 @@ public final class EmbeddingClientFactory {
     if (builtIn || explicit) {
       OpenAiClientConfig.from(spec, props);
     }
-    clientClassName(spec);
+    String className = clientClassName(spec);
+    if (VertexMultimodalEmbeddingClient.class.getName().equals(className)) {
+      VertexClientConfig.from(spec, props);
+    }
+    for (Map.Entry<BedrockModelFamily, String> bedrock : BEDROCK_CLIENTS.entrySet()) {
+      if (bedrock.getValue().equals(className)) {
+        BedrockClientConfig.from(spec, props, bedrock.getKey());
+      }
+    }
+    if (JinaEmbeddingClient.class.getName().equals(className)) {
+      JinaClientConfig.from(spec, props);
+    }
   }
 }
