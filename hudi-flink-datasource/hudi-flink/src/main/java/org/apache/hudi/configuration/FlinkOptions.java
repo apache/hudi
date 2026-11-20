@@ -1510,11 +1510,13 @@ public class FlinkOptions extends HoodieConfig {
           .defaultValue(false)
           .withDescription("Whether to enable async lookup join.");
 
+  /** @deprecated Async lookup uses one worker per function. */
+  @Deprecated
   public static final ConfigOption<Integer> LOOKUP_ASYNC_THREAD_NUMBER =
       key("lookup.async-thread-number")
           .intType()
-          .defaultValue(16)
-          .withDescription("The thread number for lookup async.");
+          .defaultValue(1)
+          .withDescription("Deprecated. Async lookup uses one worker per function and ignores this option.");
 
   public static final ConfigOption<String> LOOKUP_JOIN_CACHE_TYPE =
       key("lookup.join.cache.type")

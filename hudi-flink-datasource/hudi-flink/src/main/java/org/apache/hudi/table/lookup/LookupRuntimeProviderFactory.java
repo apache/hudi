@@ -25,9 +25,9 @@ import org.apache.flink.table.connector.source.lookup.LookupFunctionProvider;
 /** Factory to create {@link LookupRuntimeProvider}. */
 public class LookupRuntimeProviderFactory {
 
-  public static LookupRuntimeProvider create(HoodieLookupFunction function, boolean enableAsync, int asyncThreadNumber) {
+  public static LookupRuntimeProvider create(HoodieLookupFunction function, boolean enableAsync) {
     return enableAsync
-        ? AsyncLookupFunctionProvider.of(new AsyncLookupFunctionWrapper(function, asyncThreadNumber))
+        ? AsyncLookupFunctionProvider.of(new AsyncLookupFunctionWrapper(function))
         : LookupFunctionProvider.of(function);
   }
 }
