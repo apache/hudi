@@ -22,9 +22,9 @@ package org.apache.hudi.utilities.sources.helpers.unstructured;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.ValidationUtils;
 
 import org.apache.hadoop.fs.FSDataInputStream;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.Row;
@@ -70,6 +70,11 @@ public class UnstructuredFileRecordBuilder implements Serializable {
   public UnstructuredFileRecordBuilder(TypedProperties props) {
     this.props = props;
     this.inlineMaxBytes = getLongWithAltKeys(props, BLOB_INLINE_MAX_BYTES);
+    // readFully narrows the size to int, so a threshold past Integer.MAX_VALUE would
+    // surface as a NegativeArraySizeException on the first oversized file instead
+    ValidationUtils.checkArgument(inlineMaxBytes >= 0 && inlineMaxBytes <= Integer.MAX_VALUE,
+        BLOB_INLINE_MAX_BYTES.key() + " must be between 0 and " + Integer.MAX_VALUE
+            + ", got " + inlineMaxBytes);
     this.parseEnabled = getBooleanWithAltKeys(props, PARSE_ENABLED);
     this.parseMaxBytes = getLongWithAltKeys(props, PARSE_MAX_BYTES);
     this.parseMaxTextChars = getIntWithAltKeys(props, PARSE_MAX_TEXT_CHARS);
@@ -78,10 +83,12 @@ public class UnstructuredFileRecordBuilder implements Serializable {
         getIntWithAltKeys(props, CHUNK_OVERLAP_CHARS));
   }
 
-  public Row buildRow(FileSystem fs, String pathStr) throws IOException {
+  public Row buildRow(FileSystem fs, UnstructuredFilePathSelector.FileEntry entry) throws IOException {
+    String pathStr = entry.path;
     Path path = new Path(pathStr);
-    FileStatus status = fs.getFileStatus(path);
-    long size = status.getLen();
+    // size and modification time come from the driver's listing; re-statting here would be a
+    // second full round of metadata requests against the object store
+    long size = entry.size;
     String fileName = path.getName();
 
     byte[] inlineBytes = null;
@@ -90,7 +97,13 @@ public class UnstructuredFileRecordBuilder implements Serializable {
       inlineBytes = readFully(fs, path, (int) size);
       blob = RowFactory.create(HoodieSchema.Blob.INLINE, inlineBytes, null);
     } else {
-      Row reference = RowFactory.create(pathStr, null, null, false);
+      // length records what was ingested, so a reference that no longer matches the file can be
+      // detected from metadata alone. A replaced file is normally re-ingested because its
+      // modification time moves, but a copy that preserves mtime would otherwise diverge silently,
+      // and a historical row's reference always resolves to the file's current bytes.
+      // Valid as an integrity signal only because the blob is the whole file; a future sub-range
+      // reference (offset + length) would need the check to account for that.
+      Row reference = RowFactory.create(pathStr, null, size, false);
       blob = RowFactory.create(HoodieSchema.Blob.OUT_OF_LINE, null, reference);
     }
 
@@ -104,7 +117,7 @@ public class UnstructuredFileRecordBuilder implements Serializable {
         fileName,
         extensionOf(fileName),
         size,
-        status.getModificationTime(),
+        entry.modificationTime,
         blob,
         parseResult.getText(),
         // Spark's Row encoder requires a scala Map as the external type for MapType
