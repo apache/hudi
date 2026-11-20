@@ -20,8 +20,12 @@ package org.apache.hudi.utilities.unstructured.embedding.compute;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ReflectionUtils;
+import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
+import org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiClientConfig;
+import org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiCompatibleEmbeddingClient;
+import org.apache.hudi.utilities.unstructured.embedding.compute.openai.OpenAiProvider;
 
 /**
  * Builds the {@link EmbeddingClient} of a model: the {@code hoodie.unstructured.embedding.model.<alias>.client.class}
@@ -71,4 +75,16 @@ public final class EmbeddingClientFactory {
     return EmbeddingClientNames.clientClassName(spec);
   }
 
+  public static void checkConfig(EmbeddingModelSpec spec, TypedProperties props) {
+    // every model, whatever its client: a bad rate or burst is configuration, refused before any provider call
+    RequestRateLimiter.validate(spec, props);
+    boolean builtIn = StringUtils.isNullOrEmpty(spec.getClientClass())
+        && OpenAiProvider.fromId(spec.getProvider()).isPresent();
+    boolean explicit = !StringUtils.isNullOrEmpty(spec.getClientClass())
+        && OpenAiCompatibleEmbeddingClient.class.getName().equals(spec.getClientClass().trim());
+    if (builtIn || explicit) {
+      OpenAiClientConfig.from(spec, props);
+    }
+    clientClassName(spec);
+  }
 }

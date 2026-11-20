@@ -63,6 +63,10 @@ import java.util.List;
  */
 public final class ComputeRound {
 
+  /** A task marker for a permanent refusal of the configured provider request. */
+  static final String ROW_ERROR_ESCAPE = "\0";
+  public static final String REFUSED_PREFIX = "EMBED-COMPUTE-PROVIDER-REFUSED ";
+
   /** The column the streamer routes to the error table. */
   public static final String CORRUPT_RECORD = BaseErrorTableWriter.ERROR_TABLE_CURRUPT_RECORD_COL_NAME;
   /**
@@ -115,6 +119,7 @@ public final class ComputeRound {
     try {
       // the action that runs every model call before the write
       persisted.count();
+      checkRefused(persisted, model, counters);
     } catch (Exception e) {
       // a failed Spark job surfaces as a checked SparkException: the output is released for it too
       persisted.unpersist(false);
@@ -163,7 +168,9 @@ public final class ComputeRound {
   public static Dataset<Row> errorRows(Dataset<Row> embedded, StructType outputSchema, EmbeddingModelSpec model) {
     Column error = errorColumn(embedded);
     // struct fields in key order: to_json writes them in that order with no whitespace, the canonical spelling
-    Column record = functions.to_json(functions.struct(error.as(ERROR_RECORD_ERROR),
+    Column message = functions.when(error.startsWith(ROW_ERROR_ESCAPE),
+        functions.substring(error, 2, Integer.MAX_VALUE)).otherwise(error);
+    Column record = functions.to_json(functions.struct(message.as(ERROR_RECORD_ERROR),
         functions.col(EmbeddingTableSchema.SOURCE_PATH_SHA),
         functions.col(EmbeddingTableSchema.SOURCE_MODIFICATION_TIME),
         functions.col(EmbeddingTableSchema.SOURCE_FILE_SIZE),
@@ -176,7 +183,13 @@ public final class ComputeRound {
           : field.nullable() ? functions.lit(null).cast(field.dataType()) : placeholder(field.dataType());
       columns.add(column.as(field.name(), field.metadata()));
     }
-    return embedded.filter(error.isNotNull()).select(columns.toArray(new Column[0]));
+    return embedded.filter(error.isNotNull().and(functions.not(error.startsWith(REFUSED_PREFIX))))
+        .select(columns.toArray(new Column[0]));
+  }
+
+  /** Escape reserved working tags without changing any custom client's stored diagnostic. */
+  static String rowError(String error) {
+    return error.startsWith(REFUSED_PREFIX) || error.startsWith(ROW_ERROR_ESCAPE) ? ROW_ERROR_ESCAPE + error : error;
   }
 
   private static Column placeholder(DataType type) {
@@ -216,5 +229,20 @@ public final class ComputeRound {
   public static Column errorColumn(Dataset<Row> embedded) {
     StructField[] fields = embedded.schema().fields();
     return functions.col(fields[fields.length - 1].name());
+  }
+
+  private static void checkRefused(Dataset<Row> embedded, EmbeddingModelSpec model, ComputeCounters counters) {
+    if (counters.getCallsRefused().value() > 0) {
+      throw new EmbeddingClientConfigException(refusal(embedded, model));
+    }
+  }
+
+  private static String refusal(Dataset<Row> persisted, EmbeddingModelSpec model) {
+    Column errorColumn = errorColumn(persisted);
+    List<Row> marker = persisted.filter(errorColumn.startsWith(REFUSED_PREFIX))
+        .select(errorColumn).limit(1).collectAsList();
+    String refusal = marker.isEmpty() ? "(the refusal message was not found)" : marker.get(0).getString(0).substring(REFUSED_PREFIX.length());
+    return REFUSED_PREFIX.trim() + " model=" + model.getName() + ": the provider refused for good, so the round stops after the "
+        + "first refusal of each task, with no task re-attempt and no further request; nothing was written: " + refusal;
   }
 }
