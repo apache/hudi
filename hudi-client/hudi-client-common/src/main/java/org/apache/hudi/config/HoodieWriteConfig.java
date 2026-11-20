@@ -573,6 +573,19 @@ public class HoodieWriteConfig extends HoodieConfig {
       .sinceVersion("0.9.0")
       .withDocumentation(MarkerType.class);
 
+  public static final ConfigProperty<Boolean> BLOB_MARKERS_ENABLE = ConfigProperty
+      .key("hoodie.write.blob.markers.enable")
+      .defaultValue(true)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Whether out-of-line files (prepared payloads the embedding stream stores under .hoodie/.blob/) are tracked "
+          + "with markers and rolled back with their write. When true (the default, so a failed write leaves no out-of-line "
+          + "file behind), each out-of-line file gets a timeline-server CREATE marker of the write instant before it is "
+          + "created, the writer sets hoodie.write.markers.type=TIMELINE_SERVER_BASED and hoodie.rollback.using.markers=true "
+          + "when unset and refuses other values, and a rollback of a failed write deletes its out-of-line files. When false, "
+          + "no marker is created for out-of-line files, neither setting is required, and the out-of-line files of a failed "
+          + "write are left under .hoodie/.blob/, referenced by no row.");
+
   public static final ConfigProperty<Integer> MARKERS_TIMELINE_SERVER_BASED_BATCH_NUM_THREADS = ConfigProperty
       .key("hoodie.markers.timeline_server_based.batch.num_threads")
       .defaultValue(20)
@@ -717,8 +730,10 @@ public class HoodieWriteConfig extends HoodieConfig {
       .withDocumentation("Only applicable when \"hoodie.write.concurrency.mode\" is set to OCC or NBCC and the conflict "
           + "resolution strategy (\"hoodie.write.conflict.resolution.strategy\") is set to "
           + "PreferWriterConflictResolutionStrategy. When enabled, proactively prevents clustering from committing if "
-          + "there are any ongoing ingestion writes that have not transitioned from requested to inflight yet and have "
-          + "an active heartbeat, since ingestion may be targeting the same files and should have precedence.");
+          + "there are any ongoing ingestion writes that have an active heartbeat and do not name the files they write yet: "
+          + "requested, or inflight with an inflight file its writer marked as pending its workload profile "
+          + "(hoodie.write.workload.profile.pending), since ingestion may be targeting the same files and should have "
+          + "precedence. Any other inflight ingestion write is resolved by the file groups it names.");
 
   public static final ConfigProperty<String> WRITE_CONCURRENCY_MODE = ConfigProperty
       .key("hoodie.write.concurrency.mode")
@@ -1761,6 +1776,10 @@ public class HoodieWriteConfig extends HoodieConfig {
 
   public int getMarkersDeleteParallelism() {
     return getInt(MARKERS_DELETE_PARALLELISM_VALUE);
+  }
+
+  public boolean isBlobMarkersEnabled() {
+    return getBooleanOrDefault(BLOB_MARKERS_ENABLE);
   }
 
   public boolean isEmbeddedTimelineServerEnabled() {
