@@ -111,6 +111,20 @@
       <artifactId>tika-core</artifactId>
       <version>${tika.version}</version>
     </dependency>
+    <!-- PDFBox: in-JVM PDF text extraction of the PDF chunker (Apache-2.0). Declared directly, at the version tika pins,
+         so the PDF chunker does not depend on tika. -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
+    </dependency>
+    <!-- jtokkit: pure-Java port of OpenAI's tiktoken BPE tokenizers (MIT, no dependencies, vocabularies bundled),
+         used to size chunks and validate inputs for OpenAI embedding models. -->
+    <dependency>
+      <groupId>com.knuddels</groupId>
+      <artifactId>jtokkit</artifactId>
+      <version>${jtokkit.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.tika</groupId>
       <artifactId>tika-parsers-standard-package</artifactId>

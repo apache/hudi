@@ -23,15 +23,18 @@ import org.apache.hudi.common.avro.VariantSchemaUtils;
 import org.apache.hudi.common.avro.VariantShreddingRuntime;
 import org.apache.hudi.common.avro.VariantShreddingSchemaInferrer;
 import org.apache.hudi.common.bloom.BloomFilter;
-import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.config.HoodieConfig;
 import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.ParquetUtils;
+import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.io.storage.HoodieSparkLanceWriter;
+import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.table.HoodieTable;
@@ -69,7 +72,7 @@ public class HoodieInternalRowFileWriterFactory {
       throws IOException {
     final String extension = FSUtils.getFileExtension(path.getName());
     if (PARQUET.getFileExtension().equals(extension)) {
-      return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema, tryInstantiateBloomFilter(writeConfig));
+      return newParquetInternalRowFileWriter(path, hoodieTable, writeConfig, schema);
     } else if (LANCE.getFileExtension().equals(extension)) {
       long maxFileSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_MAX_FILE_SIZE);
       long allocatorSize = writeConfig.getLongOrDefault(HoodieStorageConfig.LANCE_WRITE_ALLOCATOR_SIZE_BYTES);
@@ -82,8 +85,7 @@ public class HoodieInternalRowFileWriterFactory {
   private static HoodieInternalRowFileWriter newParquetInternalRowFileWriter(StoragePath path,
                                                                              HoodieTable table,
                                                                              HoodieWriteConfig writeConfig,
-                                                                             StructType structType,
-                                                                             Option<BloomFilter> bloomFilterOpt
+                                                                             StructType structType
   )
       throws IOException {
     // The row write support resolves its HoodieSchema from the config (hoodie.write.schema /
@@ -102,12 +104,12 @@ public class HoodieInternalRowFileWriterFactory {
             inferableColumns,
             VariantShreddingInferenceInternalRowFileWriter.resolveOrdinals(structType, inferableColumns),
             inferrer.get(),
-            inferred -> createParquetInternalRowFileWriter(path, table, writeConfig,
-                VariantSchemaUtils.applyInferredShreddingToConfig(writeConfig, inferred), structType, bloomFilterOpt),
+            inferred -> createParquetInternalRowFileWriter(path, table,
+                VariantSchemaUtils.applyInferredShreddingToConfig(writeConfig, inferred), structType, writeConfig.populateMetaFields()),
             writeConfig.getParquetMaxFileSize());
       }
     }
-    return createParquetInternalRowFileWriter(path, table, writeConfig, writeConfig, structType, bloomFilterOpt);
+    return createParquetInternalRowFileWriter(path, table, writeConfig, structType, writeConfig.populateMetaFields());
   }
 
   /** Whether any top-level column is a variant; inference applies to no other position. */
@@ -122,25 +124,31 @@ public class HoodieInternalRowFileWriterFactory {
 
   private static HoodieInternalRowFileWriter createParquetInternalRowFileWriter(StoragePath path,
                                                                                 HoodieTable table,
-                                                                                HoodieWriteConfig writeConfig,
                                                                                 HoodieConfig writeSupportConfig,
                                                                                 StructType structType,
-                                                                                Option<BloomFilter> bloomFilterOpt)
+                                                                                boolean populateMetaFields)
       throws IOException {
+    // The Parquet config injectors apply here as on the record writer path (HoodieSparkFileWriterFactory), so a
+    // bulk insert or a clustering through the row writer keeps the table's Parquet settings, the bloom filter included.
+    Pair<StorageConfiguration, HoodieConfig> injectedConfigs =
+        ParquetUtils.injectParquetWriterConfigs(path, table.getStorageConf(), writeSupportConfig);
+    HoodieConfig config = injectedConfigs.getRight();
+    // NOTE: Currently Bloom Filter is only going to be populated if meta-fields are populated
+    Option<BloomFilter> bloomFilterOpt = populateMetaFields ? Option.of(HoodieFileWriterFactory.createBloomFilter(config)) : Option.empty();
     HoodieRowParquetWriteSupport writeSupport = HoodieRowParquetWriteSupport
-        .getHoodieRowParquetWriteSupport((Configuration) table.getStorageConf().unwrap(), structType, bloomFilterOpt, writeSupportConfig);
+        .getHoodieRowParquetWriteSupport((Configuration) injectedConfigs.getLeft().unwrap(), structType, bloomFilterOpt, config);
 
     return new HoodieInternalRowParquetWriter(
         path,
         new HoodieParquetConfig<>(
             writeSupport,
-            getCompressionCodecName(writeConfig.getParquetCompressionCodec()),
-            writeConfig.getParquetBlockSize(),
-            writeConfig.getParquetPageSize(),
-            writeConfig.getParquetMaxFileSize(),
+            getCompressionCodecName(config.getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME)),
+            config.getIntOrDefault(HoodieStorageConfig.PARQUET_BLOCK_SIZE),
+            config.getIntOrDefault(HoodieStorageConfig.PARQUET_PAGE_SIZE),
+            config.getLongOrDefault(HoodieStorageConfig.PARQUET_MAX_FILE_SIZE),
             new HadoopStorageConfiguration(writeSupport.getHadoopConf()),
-            writeConfig.getParquetCompressionRatio(),
-            writeConfig.parquetDictionaryEnabled()
+            config.getDoubleOrDefault(HoodieStorageConfig.PARQUET_COMPRESSION_RATIO_FRACTION),
+            config.getBooleanOrDefault(HoodieStorageConfig.PARQUET_DICTIONARY_ENABLED)
         ));
   }
 
@@ -160,20 +168,5 @@ public class HoodieInternalRowFileWriterFactory {
         .allocatorSize(allocatorSize)
         .flushByteWatermark(flushByteWatermark)
         .build();
-  }
-
-  private static Option<BloomFilter> tryInstantiateBloomFilter(HoodieWriteConfig writeConfig) {
-    // NOTE: Currently Bloom Filter is only going to be populated if meta-fields are populated
-    if (writeConfig.populateMetaFields()) {
-      BloomFilter bloomFilter = BloomFilterFactory.createBloomFilter(
-          writeConfig.getBloomFilterNumEntries(),
-          writeConfig.getBloomFilterFPP(),
-          writeConfig.getDynamicBloomFilterMaxNumEntries(),
-          writeConfig.getBloomFilterType());
-
-      return Option.of(bloomFilter);
-    }
-
-    return Option.empty();
   }
 }

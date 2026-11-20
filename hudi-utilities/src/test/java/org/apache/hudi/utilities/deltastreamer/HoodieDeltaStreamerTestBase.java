@@ -46,7 +46,6 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hive.HiveSyncConfigHolder;
 import org.apache.hudi.hive.MultiPartKeysValueExtractor;
-import org.apache.hudi.hive.testutils.HiveTestService;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.sync.common.HoodieSyncConfig;
 import org.apache.hudi.utilities.config.HoodieStreamerConfig;
@@ -284,7 +283,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
     props.setProperty("hoodie.streamer.schemaprovider.target.schema.file", dfsBasePath + "/target.avsc");
 
     // Hive Configs
-    props.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), HiveTestService.HS2_JDBC_URL);
+    props.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
     props.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb1");
     props.setProperty(HoodieSyncConfig.META_SYNC_TABLE_NAME.key(), "hive_trips");
     props.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
@@ -325,7 +324,7 @@ public class HoodieDeltaStreamerTestBase extends UtilitiesTestBase {
 
   protected static void populateCommonHiveProps(TypedProperties props) {
     // Hive Configs
-    props.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), HiveTestService.HS2_JDBC_URL);
+    props.setProperty(HiveSyncConfigHolder.HIVE_URL.key(), hiveTestService.getJdbcHive2Url());
     props.setProperty(HoodieSyncConfig.META_SYNC_DATABASE_NAME.key(), "testdb2");
     props.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_FIELDS.key(), "datestr");
     props.setProperty(HoodieSyncConfig.META_SYNC_PARTITION_EXTRACTOR_CLASS.key(),
