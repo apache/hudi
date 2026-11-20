@@ -54,8 +54,8 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
   }
 
   @Override
-  public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
-                            TypedProperties properties) {
+  protected Dataset<Row> applyChain(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rowDataset,
+                                    TypedProperties properties, Option<String> instantTime, Runnable toInflight) {
     Dataset<Row> dataset = rowDataset;
     // Until the source supplies the column or a transformer keeps it, it is known to be all null.
     boolean corruptRecordMayHaveValues = ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset);
@@ -63,7 +63,7 @@ public class ErrorTableAwareChainedTransformer extends ChainedTransformer {
     for (TransformerInfo transformerInfo : transformers) {
       Transformer transformer = transformerInfo.getTransformer();
       Dataset<Row> input = dataset;
-      dataset = transformer.apply(jsc, sparkSession, input, transformerInfo.getProperties(properties, transformers));
+      dataset = applyOne(transformerInfo, jsc, sparkSession, input, properties, instantTime, toInflight);
       if (ErrorTableUtils.isErrorTableCorruptRecordColumnPresent(dataset)) {
         corruptRecordMayHaveValues = true;
       } else {

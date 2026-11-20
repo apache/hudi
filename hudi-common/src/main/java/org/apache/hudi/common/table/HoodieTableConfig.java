@@ -181,6 +181,14 @@ public class HoodieTableConfig extends HoodieConfig {
           + " to identify what upgrade/downgrade paths happened on the table. This is only configured "
           + "when the table is initially setup.");
 
+  // No sinceVersion: older table versions already retain this key as an opaque property.
+  public static final ConfigProperty<String> BLOB_LAYOUT_VERSION = ConfigProperty
+      .key("hoodie.table.blob.layout.version")
+      .noDefaultValue()
+      .withDocumentation("Version of the BLOB reference layout. Version 1 resolves paths without a URI scheme "
+          + "relative to the table base path, including paths with a leading slash. References with a URI scheme "
+          + "are read as given. When absent, legacy path resolution applies.");
+
   /**
    * @deprecated Use {@link #ORDERING_FIELDS} instead
    */
