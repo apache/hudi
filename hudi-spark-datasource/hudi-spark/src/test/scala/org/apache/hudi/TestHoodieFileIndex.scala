@@ -46,13 +46,13 @@ import org.apache.hudi.util.JFunction
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, EqualTo, Expression, GetStructField, GreaterThanOrEqual, LessThan, Literal, Or}
-import org.apache.spark.sql.execution.datasources.{FileIndex, HadoopFsRelation, LogicalRelation, NoopCache, PartitionDirectory, PartitionedFile}
+import org.apache.spark.sql.execution.datasources.{FileIndex, FileStatusCache, HadoopFsRelation, LogicalRelation, NoopCache, PartitionDirectory, PartitionedFile}
 import org.apache.spark.sql.functions.{lit, struct}
 import org.apache.spark.sql.hudi.HoodieSparkSessionExtension
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 import org.junit.jupiter.api.{BeforeEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, CsvSource, EnumSource, MethodSource, ValueSource}
 
@@ -145,6 +145,46 @@ class TestHoodieFileIndex extends HoodieSparkClientTestBase with ScalaAssertionS
     val result = fileIndex.parsePartitionColumnValues(partitionColumns, partitionPath)
     assertEquals(1, result.length)
     assertEquals(UTF8String.fromString(partitionPath), result(0))
+  }
+
+  @Test
+  def testEqualityIgnoresFileStatusCache(): Unit = {
+    // Production relations pass FileStatusCache.getOrCreate, which returns a new client per call;
+    // equality must not depend on it.
+    val first = HoodieFileIndex(spark, metaClient, None, queryOpts, FileStatusCache.getOrCreate(spark))
+    val second = HoodieFileIndex(spark, metaClient, None, queryOpts, FileStatusCache.getOrCreate(spark))
+    assertNotEquals(first.fileStatusCache, second.fileStatusCache)
+    assertEquals(first, second)
+    assertEquals(first.hashCode(), second.hashCode())
+    val otherOpts = queryOpts ++ Map("hoodie.test.equality.marker" -> "x")
+    assertNotEquals(first, HoodieFileIndex(spark, metaClient, None, otherOpts, FileStatusCache.getOrCreate(spark)))
+  }
+
+  @Test
+  def testCachedReadNotReusedAfterCommit(): Unit = {
+    initMetaClient()
+    def write(instant: String, n: Int, mode: SaveMode): Unit = {
+      val records = dataGen.generateInsertsContainsAllPartitions(instant, n)
+      spark.read.json(spark.sparkContext.parallelize(recordsToStrings(records).asScala.toSeq, 2))
+        .write.format("hudi")
+        .options(commonOpts)
+        .option(DataSourceWriteOptions.OPERATION.key, DataSourceWriteOptions.INSERT_OPERATION_OPT_VAL)
+        .mode(mode)
+        .save(basePath)
+    }
+    write("000", 100, SaveMode.Overwrite)
+    val before = spark.read.format("hudi").load(basePath)
+    before.cache()
+    assertEquals(100, before.count())
+    val cacheManager = spark.sharedState.cacheManager
+    // A second read of the same snapshot matches the cached plan.
+    assertTrue(cacheManager.lookupCachedData(spark.read.format("hudi").load(basePath)).isDefined)
+    write("001", 50, SaveMode.Append)
+    // A read after the commit must see the new rows, not the plan cached for the earlier snapshot.
+    val after = spark.read.format("hudi").load(basePath)
+    assertTrue(cacheManager.lookupCachedData(after).isEmpty)
+    assertEquals(150, after.count())
+    before.unpersist()
   }
 
   @ParameterizedTest
