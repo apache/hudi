@@ -24,6 +24,7 @@ import org.apache.hudi.utilities.sources.blob.BlobParquetConfigInjector;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.transform.Transformer;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingParquetConfigInjector;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
@@ -63,7 +64,8 @@ public enum UnstructuredMode {
   BLOB("blob", BlobTableSchema.KEY_COLUMNS, BlobQuarantineTransformer.class, EmbeddingTableTransformer.class,
       BlobParquetConfigInjector.class.getName(), BlobParquetConfigInjector.DELEGATE_CLASS),
   /** Writes the embedding table, through {@link EmbeddingTableTransformer}. */
-  EMBEDDING("embedding", EmbeddingTableSchema.KEY_COLUMNS, EmbeddingTableTransformer.class, BlobQuarantineTransformer.class, null, null);
+  EMBEDDING("embedding", EmbeddingTableSchema.KEY_COLUMNS, EmbeddingTableTransformer.class, BlobQuarantineTransformer.class,
+      EmbeddingParquetConfigInjector.class.getName(), EmbeddingParquetConfigInjector.DELEGATE_CLASS);
 
   private final String configValue;
   private final List<String> keyColumns;
@@ -111,12 +113,12 @@ public enum UnstructuredMode {
     return Collections.singleton(excludedTransformer);
   }
 
-  /** The Parquet config injector the job's table is written with; null for the embedding job, whose table takes Hudi's writer. */
+  /** The Parquet config injector the job's table is written with. */
   public String injectorClass() {
     return injectorClass;
   }
 
-  /** The key under which a job's own Parquet config injector goes; it runs before {@link #injectorClass()}. Null for the embedding job. */
+  /** The key under which a job's own Parquet config injector goes; it runs before {@link #injectorClass()}. */
   public String injectorDelegateKey() {
     return injectorDelegateKey;
   }

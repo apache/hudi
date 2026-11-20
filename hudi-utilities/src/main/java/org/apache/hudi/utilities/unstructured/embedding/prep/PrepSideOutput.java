@@ -22,9 +22,9 @@ import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * One input a prep round does not turn into embedding rows: a file whose preprocessing failed ({@link #STAGE_PREP}), or a file
- * that yields no chunk or has no preprocessor ({@link #STAGE_EMPTY}, error {@link #NO_TEXT} or {@link #NO_PREPROCESSOR}). Goes
- * to the job's error table when it is on; never an embedding row.
+ * One input a prep round does not turn into embedding rows: a file whose preprocessing failed or a chunk whose payload could
+ * not be stored ({@link #STAGE_PREP}), or a file that yields no chunk or has no preprocessor ({@link #STAGE_EMPTY}, error
+ * {@link #NO_TEXT} or {@link #NO_PREPROCESSOR}). Goes to the job's error table when it is on; never an embedding row.
  */
 public final class PrepSideOutput implements Serializable {
 

@@ -800,6 +800,8 @@ public class TestBlobTableStreamer extends UtilitiesTestBase {
     TypedProperties keySet = harness.jobProperties(THRESHOLD);
     keySet.setProperty("hoodie.unstructured.source.mode", "embedding");
     keySet.setProperty("hoodie.unstructured.embedding.mode", "prep_only");
+    keySet.setProperty(HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS.key(),
+        "org.apache.hudi.utilities.unstructured.embedding.EmbeddingParquetConfigInjector");
     String setRefusal = modeSwitchRefusal(embeddingCfg, keySet);
     assertTrue(setRefusal.startsWith("UnstructuredDataSource (mode embedding) requires hoodie.datasource.write.recordkey.field="),
         setRefusal);

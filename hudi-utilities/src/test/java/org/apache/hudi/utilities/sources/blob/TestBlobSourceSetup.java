@@ -27,6 +27,7 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.utilities.sources.UnstructuredDataSource;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredMode;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingParquetConfigInjector;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,12 +45,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class TestBlobSourceSetup {
 
+  private static final String INJECTOR_KEY = HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS.key();
+
+  /** The injector each job's properties name. */
+  private static String injectorOf(UnstructuredMode job) {
+    return job == UnstructuredMode.BLOB ? BlobParquetConfigInjector.class.getName() : EmbeddingParquetConfigInjector.class.getName();
+  }
+
   /**
-   * Properties of {@code job} as the streamer hands them to its source: one of the settings it merges in, the round's instant
-   * handed to the transformer. Validation does not check it; it is here so each case reads as a real job.
+   * Properties of {@code job} as the streamer hands them to its source: two of the settings it merges in, the round's instant
+   * handed to the transformer and the job's injector. Validation checks neither; they are here so each case reads as a real job.
    */
   private static TypedProperties job(UnstructuredMode job) {
     TypedProperties props = new TypedProperties();
+    props.setProperty(INJECTOR_KEY, injectorOf(job));
     if (job == UnstructuredMode.EMBEDDING) {
       props.setProperty("hoodie.unstructured.embedding.mode", "prep_only");
     }

@@ -18,6 +18,7 @@
 
 package org.apache.hudi.utilities.unstructured.embedding;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.RecordMergeMode;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieCommitMetadata;
@@ -111,6 +112,7 @@ public final class EmbeddingStreamers {
     props.setProperty("hoodie.clean.automatic", "false");
     props.setProperty("hoodie.upsert.shuffle.parallelism", "2");
     props.setProperty("hoodie.insert.shuffle.parallelism", "2");
+    props.setProperty(HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS.key(), EmbeddingParquetConfigInjector.class.getName());
     props.setProperty(EmbeddingTableConfig.MODE.key(), mode);
     if (EmbeddingTableConfig.MODE_PREP_AND_COMPUTE.equals(mode)) {
       // a prep_only job declares no model: its table has no model column

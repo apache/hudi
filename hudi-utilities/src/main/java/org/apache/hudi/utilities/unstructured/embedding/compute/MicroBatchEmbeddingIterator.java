@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 
 import org.apache.spark.TaskContext;
 import org.apache.spark.sql.Row;
@@ -56,6 +57,10 @@ import java.util.NoSuchElementException;
  * retried and fails the task. No retry state is stored in a row. At most one
  * batch is buffered.
  *
+ * <p>Image rows (modality {@code image}) are handed only to a {@link MultimodalEmbeddingClient}, as
+ * {@link EmbeddingInput#storedImage} over their {@code prepared_image}. A client that embeds text only is never called for them:
+ * each gets a PERMANENT failure naming the provider.
+ *
  * <p>Output rows keep every prepared column as read. A failing {@link EmbeddingClient#close()} is only logged (WARN {@code EMBED-COMPUTE-CLIENT-CLOSE-FAILED}).
  */
 public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable {
@@ -79,13 +84,25 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
   private final int chunkIdIndex;
   private final int modalityIndex;
   private final int textIndex;
+  /** The index of {@code prepared_image} in {@code schema}, a column every embedding table has. */
+  private final int preparedImageIndex;
+  /** Opens image rows' stored inputs; null for an iterator built for text rows only. */
+  private final BlobBytesSource storedInputs;
+  /** Whether {@link #client} embeds images ({@link MultimodalEmbeddingClient}). */
+  private final boolean multimodal;
   private final EmbeddingClient client;
   private Iterator<Row> currentBatch = Collections.emptyIterator();
   private boolean closed;
 
-  /** Creates the task's text embedding iterator. */
+  /** Creates the task's embedding iterator for text rows only: an image row fails the task (no stored-input reader). */
   MicroBatchEmbeddingIterator(Iterator<Row> rows, EmbeddingModelSpec model, TypedProperties props,
                               StructType schema, int batchSize, ComputeCounters counters) {
+    this(rows, model, props, schema, batchSize, counters, null);
+  }
+
+  /** Creates the task's embedding iterator; {@code storedInputs} opens image rows' {@code prepared_image}. */
+  MicroBatchEmbeddingIterator(Iterator<Row> rows, EmbeddingModelSpec model, TypedProperties props,
+                              StructType schema, int batchSize, ComputeCounters counters, BlobBytesSource storedInputs) {
     this.model = model;
     this.batchSize = batchSize;
     EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
@@ -101,6 +118,8 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     this.chunkIdIndex = schema.fieldIndex(EmbeddingTableSchema.CHUNK_ID);
     this.modalityIndex = schema.fieldIndex(EmbeddingTableSchema.MODALITY);
     this.textIndex = schema.fieldIndex(EmbeddingTableSchema.PREPARED_TEXT_CHUNK);
+    this.preparedImageIndex = schema.fieldIndex(EmbeddingTableSchema.PREPARED_IMAGE);
+    this.storedInputs = storedInputs;
     EmbeddingClient created;
     try {
       created = EmbeddingClientFactory.create(model, props);
@@ -112,6 +131,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
           + ": the embedding client could not start", e);
     }
     this.client = created;
+    this.multimodal = created instanceof MultimodalEmbeddingClient;
     this.rows = rows;
     TaskContext taskContext = TaskContext.get();
     if (taskContext != null) {
@@ -139,21 +159,40 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     return currentBatch.next();
   }
 
-  /** Reads one micro batch and calls the model once for its inputs. */
+  /**
+   * Reads one micro batch and calls the model once for its inputs; an image row a text-only client cannot embed is refused
+   * without a call, in its place in the batch.
+   */
   private Iterator<Row> embedNextBatch() {
     List<Row> batch = new ArrayList<>(batchSize);
+    List<EmbeddingResult> refused = new ArrayList<>(batchSize);
     List<EmbeddingInput> inputs = new ArrayList<>(batchSize);
     while (batch.size() < batchSize && rows.hasNext()) {
       Row row = rows.next();
       batch.add(row);
-      inputs.add(toInput(row));
+      EmbeddingResult refusal = refusal(row);
+      refused.add(refusal);
+      if (refusal == null) {
+        inputs.add(toInput(row));
+      }
     }
-    List<EmbeddingResult> results = embedWithRetries(inputs);
+    List<EmbeddingResult> results = inputs.isEmpty() ? Collections.emptyList() : embedWithRetries(inputs);
     List<Row> processed = new ArrayList<>(batch.size());
+    int called = 0;
     for (int i = 0; i < batch.size(); i++) {
-      processed.add(withOutcome(batch.get(i), results.get(i)));
+      EmbeddingResult result = refused.get(i) != null ? refused.get(i) : results.get(called++);
+      processed.add(withOutcome(batch.get(i), result));
     }
     return processed.iterator();
+  }
+
+  /** The PERMANENT result of an image row given to a client that embeds text only; null for a row the client is called for. */
+  private EmbeddingResult refusal(Row row) {
+    if (multimodal || !EmbeddingTableSchema.MODALITY_IMAGE.equals(row.getString(modalityIndex))) {
+      return null;
+    }
+    return EmbeddingResult.permanent("EMBED-COMPUTE-IMAGE-NOT-SUPPORTED model=" + model.getName() + " provider="
+        + model.getProvider() + ": this provider's client embeds text only; an image row needs a multimodal client");
   }
 
   /**
@@ -294,8 +333,31 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     String modality = row.getString(modalityIndex);
     String sourcePathSha = row.getString(sourcePathShaIndex);
     long chunkId = row.getLong(chunkIdIndex);
+    if (EmbeddingTableSchema.MODALITY_IMAGE.equals(modality)) {
+      return storedImageInput(row, sourcePathSha, chunkId, modality);
+    }
     return new EmbeddingInput(sourcePathSha, row.getLong(sourceModificationTimeIndex), row.getLong(sourceFileSizeIndex), modality, chunkId,
         row.isNullAt(textIndex) ? null : row.getString(textIndex));
+  }
+
+  /**
+   * The input of an image row for a multimodal client: its {@code prepared_image}, opened through {@link #storedInputs}.
+   *
+   * @throws EmbeddingComputePlatformException when the row has no {@code prepared_image} or this iterator has no stored-input reader:
+   *     prep wrote every image row with one, so a missing one is a broken prep/compute invariant
+   */
+  private EmbeddingInput storedImageInput(Row row, String sourcePathSha, long chunkId, String modality) {
+    if (storedInputs == null || row.isNullAt(preparedImageIndex)) {
+      // the five key columns in key order, as EmbeddingInput#describeIdentity names them: two versions of one file stay apart
+      throw new EmbeddingComputePlatformException("EMBED-COMPUTE-NO-STORED-IMAGE model=" + model.getName() + " source_path_sha="
+          + sourcePathSha + " source_modification_time=" + row.get(sourceModificationTimeIndex) + " source_file_size="
+          + row.get(sourceFileSizeIndex) + " modality=" + modality + " chunk_id=" + chunkId + ": an image row reached compute without a "
+          + EmbeddingTableSchema.PREPARED_IMAGE + (storedInputs == null ? " reader" : ""));
+    }
+    Row stored = row.getStruct(preparedImageIndex);
+    BlobBytesSource source = storedInputs;
+    return EmbeddingInput.storedImage(sourcePathSha, row.getLong(sourceModificationTimeIndex), row.getLong(sourceFileSizeIndex), modality,
+        chunkId, () -> source.open(stored), null);
   }
 
   /**

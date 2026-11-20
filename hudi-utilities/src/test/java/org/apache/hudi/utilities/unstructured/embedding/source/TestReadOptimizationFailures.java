@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.unstructured.embedding.source;
 
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
+import org.apache.hudi.utilities.unstructured.embedding.image.SeekableBlobImageInputStream;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -29,8 +30,10 @@ import org.apache.hadoop.fs.FilterFileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
@@ -48,6 +51,60 @@ import static org.mockito.Mockito.when;
 
 /** Speculative reads may retry ordinary I/O, but never erase a JVM failure. */
 class TestReadOptimizationFailures {
+
+  @ParameterizedTest
+  @CsvSource({"image,false,0", "image,false,1", "image,false,2", "image,true,0", "image,true,1", "image,true,2"})
+  void speculativeReadsPropagateCauseAndSuppressedJvmFailures(String kind, boolean partial, int form) throws Exception {
+    LinkageError fatal = new LinkageError("source runtime unavailable");
+    FailingBlob source = new FailingBlob(wrapped(fatal, form), partial);
+    try (ReadView view = view(kind, source)) {
+      assertSame(fatal, assertThrows(LinkageError.class, view::read));
+      assertEquals(partial ? 2 : 1, source.reads, "a JVM failure never starts a fallback read");
+    }
+    assertEquals(1, source.closes, "the reader retains its source owner when a failure propagates");
+  }
+
+  @ParameterizedTest
+  @CsvSource({"image,false", "image,true"})
+  void ordinarySpeculativeIoFailureStillFallsBack(String kind, boolean partial) throws Exception {
+    FailingBlob source = new FailingBlob(new IOException("speculative read unavailable"), partial);
+    try (ReadView view = view(kind, source)) {
+      assertEquals(7, view.read());
+    }
+    assertEquals(1, source.closes);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"image"})
+  void virtualMachineFailureIsNotFallback(String kind) throws Exception {
+    InternalError fatal = new InternalError("source runtime unavailable");
+    try (ReadView view = view(kind, new FailingBlob(new IOException("source read failed", fatal), false))) {
+      assertSame(fatal, assertThrows(InternalError.class, view::read));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"image"})
+  void causeCycleDoesNotHideSuppressedJvmFailure(String kind) throws Exception {
+    LinkageError fatal = new LinkageError("source runtime unavailable");
+    IOException first = new IOException("first wrapper");
+    IOException second = new IOException("second wrapper");
+    first.initCause(second);
+    second.initCause(first);
+    second.addSuppressed(fatal);
+    try (ReadView view = view(kind, new FailingBlob(first, false))) {
+      assertSame(fatal, assertThrows(LinkageError.class, view::read));
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"image"})
+  void wrappedInputNestingKeepsItsExistingFallback(String kind) throws Exception {
+    IOException failure = new IOException("input nesting", new StackOverflowError("input nesting"));
+    try (ReadView view = view(kind, new FailingBlob(failure, false))) {
+      assertEquals(7, view.read());
+    }
+  }
 
   @ParameterizedTest
   @ValueSource(ints = {-1, 0, 1, 2})
@@ -140,6 +197,96 @@ class TestReadOptimizationFailures {
         throw (Error) wrapper.getCause();
       }
       throw (Exception) wrapper.getCause();
+    }
+  }
+
+  private static ReadView view(String kind, FailingBlob source) throws Exception {
+    if ("image".equals(kind)) {
+      SeekableBlobImageInputStream stream = new SeekableBlobImageInputStream(source, 4);
+      return new ReadView(stream, stream::read);
+    }
+    Class<?> type = Class.forName("org.apache.hudi.utilities.unstructured.embedding.video.BlockBufferedBlob");
+    Constructor<?> constructor = type.getDeclaredConstructor(SeekableBlob.class, int.class);
+    constructor.setAccessible(true);
+    SeekableBlob blob = (SeekableBlob) constructor.newInstance(source, 4);
+    return new ReadView(blob, () -> {
+      byte[] one = new byte[1];
+      return blob.read(one, 0, 1) > 0 ? one[0] : -1;
+    });
+  }
+
+  @FunctionalInterface
+  private interface Read {
+    int read() throws Exception;
+  }
+
+  private static final class ReadView implements AutoCloseable {
+    private final Closeable owner;
+    private final Read read;
+
+    private ReadView(Closeable owner, Read read) {
+      this.owner = owner;
+      this.read = read;
+    }
+
+    int read() throws Exception {
+      return read.read();
+    }
+
+    @Override
+    public void close() throws IOException {
+      owner.close();
+    }
+  }
+
+  private static final class FailingBlob implements SeekableBlob {
+    private final Exception failure;
+    private final boolean partial;
+    private long pos;
+    private int reads;
+    private int closes;
+
+    private FailingBlob(Exception failure, boolean partial) {
+      this.failure = failure;
+      this.partial = partial;
+    }
+
+    @Override
+    public long length() {
+      return 4;
+    }
+
+    @Override
+    public long getPos() {
+      return pos;
+    }
+
+    @Override
+    public void seek(long position) {
+      pos = position;
+    }
+
+    @Override
+    public int read(byte[] bytes, int offset, int len) throws IOException {
+      reads++;
+      if (reads == (partial ? 2 : 1)) {
+        if (failure instanceof IOException) {
+          throw (IOException) failure;
+        }
+        throw (RuntimeException) failure;
+      }
+      int count = (int) Math.min(partial && reads == 1 ? 1 : len, length() - pos);
+      if (count <= 0) {
+        return -1;
+      }
+      java.util.Arrays.fill(bytes, offset, offset + count, (byte) 7);
+      pos += count;
+      return count;
+    }
+
+    @Override
+    public void close() {
+      closes++;
     }
   }
 

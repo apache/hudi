@@ -48,6 +48,7 @@ import java.util.TreeMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -80,6 +81,7 @@ class TestPdfFilePreprocessor {
     assertTrue(chunks.size() > 2);
     for (Chunk chunk : chunks) {
       assertEquals("text", chunk.getModality());
+      assertNull(chunk.getPayload(), "a text chunk carries no payload");
       assertEquals(BPE.countTokens(chunk.getText()), (int) chunk.getTokenCount());
       assertTrue(Integer.parseInt(chunk.getAux().get(PdfFilePreprocessor.AUX_PAGE_START)) >= 1);
       assertTrue(chunk.getAux().containsKey(PdfFilePreprocessor.AUX_PAGE_END));

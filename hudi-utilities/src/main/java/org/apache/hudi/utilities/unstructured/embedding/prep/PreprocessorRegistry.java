@@ -29,21 +29,33 @@ import org.apache.hudi.utilities.unstructured.embedding.text.Tokenizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Resolves configured file preprocessors by extension; PDF is the shipped document default. */
+/**
+ * Resolves configured file preprocessors by extension. The shipped defaults: PDF for {@code pdf}, {@link ImageInputPreprocessor}
+ * for the {@link #IMAGE_EXTENSIONS}; a class configured for an extension replaces its default.
+ */
 public class PreprocessorRegistry {
 
   private static final Logger LOG = LoggerFactory.getLogger(PreprocessorRegistry.class);
 
+  /** Image extensions mapped to {@link ImageInputPreprocessor} by default; WebP is not one (the JDK cannot decode it). */
+  public static final List<String> IMAGE_EXTENSIONS =
+      Collections.unmodifiableList(Arrays.asList("png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff"));
   /** The shipped PDF preprocessor, by name: the prep package does not depend on its pdf sub-package. */
   public static final String PDF_PREPROCESSOR_CLASS = "org.apache.hudi.utilities.unstructured.embedding.prep.pdf.PdfFilePreprocessor";
   private static final Map<String, String> DEFAULTS = new HashMap<>();
 
   static {
     DEFAULTS.put("pdf", PDF_PREPROCESSOR_CLASS);
+    for (String extension : IMAGE_EXTENSIONS) {
+      DEFAULTS.put(extension, ImageInputPreprocessor.class.getName());
+    }
   }
 
   private final Map<String, String> classByExtension = new HashMap<>(DEFAULTS);

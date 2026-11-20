@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.unstructured.embedding;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.storage.StorageConfiguration;
@@ -30,6 +31,7 @@ import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingInput;
 import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingResult;
 
 import org.apache.spark.sql.types.ArrayType;
+import org.apache.spark.sql.types.BlobType;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
@@ -51,6 +53,58 @@ public class TestEmbeddingTableSchema {
 
   @TempDir
   Path tempDir;
+
+  @Test
+  void schemaHasTheKeyColumnsThenSourceColumnsThenOneVectorColumnPerModel() {
+    StructType schema = EmbeddingTableSchema.build(EmbeddingTableConfig.from(dummyModel("m1", "4")));
+    assertEquals(Arrays.asList("source_path_sha", "source_modification_time", "source_file_size", "modality", "chunk_id",
+        "source_file_path", "source_file_name", "source_file_extension", "prepared_text_chunk", "chunk_token_count", "aux", "prepared_image",
+        "emb_m1"), Arrays.asList(schema.fieldNames()));
+    for (int index = 0; index < 8; index++) {
+      assertFalse(schema.fields()[index].nullable(), schema.fields()[index].name());
+    }
+    for (int index = 8; index < schema.fields().length; index++) {
+      assertTrue(schema.fields()[index].nullable(), schema.fields()[index].name());
+    }
+    for (String name : Arrays.asList("source_modification_time", "source_file_size", "chunk_id")) {
+      assertEquals(DataTypes.LongType, schema.apply(name).dataType(), name);
+    }
+    assertEquals(DataTypes.IntegerType, schema.apply("chunk_token_count").dataType());
+    assertEquals(DataTypes.createMapType(DataTypes.StringType, DataTypes.StringType), schema.apply("aux").dataType());
+  }
+
+  @Test
+  void userPathPartitionColumnsFollowTheModelColumns() {
+    TypedProperties props = dummyModel("m1", "4");
+    props.setProperty("hoodie.streamer.source.cloud.data.partition.fields.from.path", "team, region");
+    StructType schema = EmbeddingTableSchema.build(EmbeddingTableConfig.from(props));
+    assertEquals(Arrays.asList("emb_m1", "team", "region"), Arrays.asList(schema.fieldNames()).subList(12, 15));
+    for (String name : Arrays.asList("team", "region")) {
+      assertEquals(DataTypes.StringType, schema.apply(name).dataType());
+      assertTrue(schema.apply(name).nullable());
+    }
+  }
+
+  @Test
+  void partitionColumnNamedLikeAFixedColumnIsNotAppended() {
+    TypedProperties props = dummyModel("m1", "4");
+    props.setProperty("hoodie.streamer.source.cloud.data.partition.fields.from.path", "Source_File_Extension,team");
+    StructType schema = EmbeddingTableSchema.build(EmbeddingTableConfig.from(props));
+    assertEquals(Arrays.asList("source_path_sha", "source_modification_time", "source_file_size", "modality", "chunk_id",
+        "source_file_path", "source_file_name", "source_file_extension", "prepared_text_chunk", "chunk_token_count", "aux", "prepared_image", "emb_m1",
+        "team"),
+        Arrays.asList(schema.fieldNames()));
+  }
+
+  @Test
+  void preparedImageIsANullableHudiBlobColumnBeforeTheModelColumns() {
+    StructType schema = EmbeddingTableSchema.build(EmbeddingTableConfig.from(dummyModel("m1", "4")));
+    StructField field = schema.apply(EmbeddingTableSchema.PREPARED_IMAGE);
+    assertEquals(EmbeddingTableSchema.BASE_COLUMN_COUNT - 1, schema.fieldIndex(EmbeddingTableSchema.PREPARED_IMAGE));
+    assertTrue(field.nullable());
+    assertEquals(BlobType.dataType(), field.dataType());
+    assertEquals(HoodieSchemaType.BLOB.name(), field.metadata().getString(HoodieSchema.TYPE_METADATA_FIELD));
+  }
 
   @Test
   void vectorColumnIsANullableVectorOfNonNullFloatsNamedByTheModelWithNoComment() {
@@ -119,16 +173,6 @@ public class TestEmbeddingTableSchema {
     assertEquals(repeat('a', max - 1), EmbeddingTableSchema.truncateError(pairAtCut));
     String pairBeforeCut = repeat('a', max - 2) + pair + "tail";
     assertEquals(pairBeforeCut.substring(0, max), EmbeddingTableSchema.truncateError(pairBeforeCut));
-  }
-
-  /** A partition field named as a fixed column is that column, and is not added again; other fields follow the model columns. */
-  @Test
-  void partitionFieldsFollowTheModelColumnsAndAFixedColumnIsNotAddedAgain() {
-    TypedProperties props = dummyModel("m1", "4");
-    props.setProperty(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key(), "region, source_file_extension,date");
-    StructType schema = EmbeddingTableSchema.build(EmbeddingTableConfig.from(props));
-    List<String> names = Arrays.asList(schema.fieldNames());
-    assertEquals(Arrays.asList("emb_m1", "region", "date"), names.subList(EmbeddingTableSchema.BASE_COLUMN_COUNT, names.size()));
   }
 
   /** A model column that is also a partition field (ignoring case, as Spark resolves columns) is refused before any write. */

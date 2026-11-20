@@ -87,9 +87,9 @@ public class UnstructuredSourceContract implements SourceContract {
     TypedProperties merged = TypedProperties.copy(jobProps);
     require(merged, KeyGeneratorOptions.RECORDKEY_FIELD_NAME, String.join(",", mode.keyColumns()),
         UnstructuredSourceContract::fields, " (these fields, in this order)");
+    require(merged, HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS, mode.injectorClass(), String::trim,
+        " (a job's own injector goes under " + mode.injectorDelegateKey() + ", and runs first)");
     if (mode == UnstructuredMode.BLOB) {
-      require(merged, HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS, mode.injectorClass(), String::trim,
-          " (a job's own injector goes under " + mode.injectorDelegateKey() + ", and runs first)");
       setDefault(merged, HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "uncompressed");
       setDefault(merged, HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED, "false");
     }

@@ -34,6 +34,7 @@ import org.apache.hudi.utilities.unstructured.embedding.compute.ComputeCounters;
 import org.apache.hudi.utilities.unstructured.embedding.compute.ComputeRound;
 import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingClientFactory;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PreprocessorRegistry;
+import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 import org.apache.hudi.utilities.unstructured.embedding.text.TokenizerFactory;
 
 import org.apache.spark.api.java.JavaSparkContext;
@@ -87,7 +88,7 @@ import java.util.stream.Collectors;
  * One model per embedding table: a round fills the active model's VECTOR column only. Switching the active model adds the new
  * model's column, and every row the new model writes carries NULL in the old model's column.
  * A row carrying {@code _corrupt_record} goes to the job's error table ({@code CUSTOM_TRANSFORMER_FAILURE}); with the error
- * table off a failed file or PERMANENT input fails the round. Every cache of a round is at
+ * table off a failed file, chunk or PERMANENT input fails the round. Every cache of a round is at
  * {@code hoodie.write.tagged.record.storage.level}; the source batch is released once prep has run, and the prep output, the
  * balancer's assignment and the compute output stay until the table's next round or this transformer closes.
  */
@@ -278,10 +279,16 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     if (!table.isPresent()) {
       return EmbeddingTableSchema.build(config);
     }
+    StructType existing = table.get();
+    // Preserve nullable-image evolution for tables created before image preparation.
+    if (Arrays.stream(existing.fields()).noneMatch(field -> field.name().equalsIgnoreCase(EmbeddingTableSchema.PREPARED_IMAGE))) {
+      existing = existing.add(EmbeddingTableSchema.preparedImageField());
+    }
+    EmbeddingTableSchema.checkBaseColumns(existing);
     // every column of the table is in the round's rows, so the write keeps the table's schema; one beyond the base columns (a path
     // partition, a model's VECTOR, a column a customer's transformer added) is nullable, since prep writes null in a column it
     // does not make. A customer's transformer that adds its column again in the round wins over that null (UnstructuredSchemaGuard)
-    List<StructField> fields = Arrays.stream(table.get().fields())
+    List<StructField> fields = Arrays.stream(existing.fields())
         .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
         .map(field -> EmbeddingTableSchema.BASE_COLUMNS.contains(field.name()) || field.nullable() ? field
             : new StructField(field.name(), field.dataType(), true, field.metadata()))
@@ -349,7 +356,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
       int parallelism = config.computeParallelism(jsc.defaultParallelism());
       ComputeCounters counters = ComputeCounters.register(jsc.sc());
       Dataset<Row> embedded = ComputeRound.embed(spark, ComputeRound.hashPartitionByKey(toEmbed, parallelism), tableSchema, model, props,
-          counters, level);
+          new BlobBytesSource(storageConf, config.prepSourceRetry()), counters, level);
       caches.outputs.add(embedded);
       LOG.info("Embedding round of {} at instant {}: model {} over {} task(s): {} row(s) embedded, {} failed for good", target,
           instant, model.getName(), parallelism, counters.getRowsEmbedded().value(), counters.getRowsPermanent().value());
