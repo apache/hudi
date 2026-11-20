@@ -25,12 +25,14 @@ import org.apache.hudi.common.bloom.BloomFilterFactory;
 import org.apache.hudi.common.bloom.BloomFilterTypeCode;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.engine.LocalTaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieFileFormat;
 import org.apache.hudi.common.model.HoodieRecord.HoodieRecordType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
 import org.apache.hudi.core.io.storage.HoodieAvroFileReader;
 import org.apache.hudi.core.io.storage.HoodieAvroFileWriter;
+import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.core.io.storage.HoodieOrcConfig;
 import org.apache.hudi.io.storage.hadoop.HoodieAvroOrcWriter;
@@ -38,12 +40,16 @@ import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 
+import org.apache.avro.generic.GenericData;
+import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.orc.CompressionKind;
 import org.apache.orc.OrcFile;
 import org.apache.orc.Reader;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -106,6 +112,31 @@ public class TestHoodieOrcReaderWriter extends TestHoodieReaderWriterBase {
     } else if ("/exampleSchemaWithUDT.avsc".equals(schemaPath)) {
       assertEquals("struct<_row_key:string,time:string,number:int,driver:struct<driver_name:string,list:array<int>,map:map<string,string>>>",
           orcReader.getSchema().toString());
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"log, false", "deletes, false", "base, true"})
+  void testNativeLogBloomPolicy(String fileType, boolean expectedBloom) throws Exception {
+    HoodieSchema schema = HoodieSchema.parse("{\"type\":\"record\",\"name\":\"test\",\"fields\":["
+        + "{\"name\":\"_hoodie_record_key\",\"type\":\"string\"}]}");
+    HoodieStorageConfig config = HoodieStorageConfig.newBuilder().build();
+    config.setValue("hoodie.index.type", "GLOBAL_BLOOM");
+    String fileName = "base".equals(fileType) ? "file-1_1-0-1_001.orc"
+        : FSUtils.makeNativeLogFileName("file-1", "1-0-1", "002", 1, fileType, HoodieFileFormat.ORC);
+    StoragePath path = new StoragePath(tempDir.toString(), fileName);
+    HoodieStorage storage = HoodieTestUtils.getStorage(path);
+    GenericRecord record = new GenericData.Record(schema.toAvroSchema());
+    record.put("_hoodie_record_key", "key-1");
+    try (HoodieAvroFileWriter writer = (HoodieAvroFileWriter) HoodieFileWriterFactory.getFileWriter(
+        "002", path, storage, config, schema, new LocalTaskContextSupplier(), HoodieRecordType.AVRO)) {
+      writer.writeAvro("key-1", record);
+    }
+    try (Reader reader = OrcFile.createReader(new Path(path.toUri()), OrcFile.readerOptions(storage.getConf().unwrapAs(Configuration.class)))) {
+      assertEquals(expectedBloom, reader.hasMetadataValue(HOODIE_AVRO_BLOOM_FILTER_METADATA_KEY));
+      assertEquals(expectedBloom, reader.hasMetadataValue(HoodieBloomFilterWriteSupport.HOODIE_MIN_RECORD_KEY_FOOTER));
+      assertEquals(expectedBloom, reader.hasMetadataValue(HoodieBloomFilterWriteSupport.HOODIE_MAX_RECORD_KEY_FOOTER));
+      assertEquals(1L, reader.getNumberOfRows());
     }
   }
 

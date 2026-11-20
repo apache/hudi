@@ -30,6 +30,7 @@ import org.apache.hudi.common.config.HoodieParquetConfig;
 import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.TaskContextSupplier;
+import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.MetaFieldsMode;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
@@ -116,7 +117,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
     StorageConfiguration storageConfiguration = injectedConfigs.getLeft();
     HoodieConfig hoodieConfig = injectedConfigs.getRight();
 
-    HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, hoodieConfig, storageConfiguration, enableBloomFilter(metaFieldsMode, hoodieConfig));
+    HoodieAvroWriteSupport writeSupport = getHoodieAvroWriteSupport(schema, hoodieConfig, storageConfiguration,
+        enableBloomFilter(metaFieldsMode, hoodieConfig, path));
 
     String compressionCodecName = hoodieConfig.getString(HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME);
     // Support PARQUET_COMPRESSION_CODEC_NAME is ""
@@ -170,7 +172,8 @@ public class HoodieAvroFileWriterFactory extends HoodieFileWriterFactory {
   protected HoodieFileWriter newOrcFileWriter(
       String instantTime, StoragePath path, HoodieConfig config, HoodieSchema schema,
       TaskContextSupplier taskContextSupplier) throws IOException {
-    BloomFilter filter = createBloomFilter(config);
+    // bloom indexes only consume base files; native ORC log readers do not use this filter.
+    BloomFilter filter = FSUtils.isNativeLogFile(path.getName()) ? null : createBloomFilter(config);
     HoodieOrcConfig orcConfig = new HoodieOrcConfig(storage.getConf(),
         CompressionKind.valueOf(config.getString(HoodieStorageConfig.ORC_COMPRESSION_CODEC_NAME)),
         config.getInt(HoodieStorageConfig.ORC_STRIPE_SIZE),
