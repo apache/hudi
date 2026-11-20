@@ -114,6 +114,9 @@ elif [[ ${SPARK_RUNTIME} == 'spark3.5.9' && ${SCALA_PROFILE} == 'scala-2.12' ]];
   elif [[ ${FLINK_PROFILE} == 'flink2.2' ]]; then
     IMAGE_TAG=flink221hive313spark359
     FLINK_VERSION=2.2.1
+  elif [[ ${FLINK_PROFILE} == 'flink2.3' ]]; then
+    IMAGE_TAG=flink230hive313spark359
+    FLINK_VERSION=2.3.0
   else
     echo "Unsupported Flink profile ${FLINK_PROFILE}"
     exit 1
@@ -258,6 +261,8 @@ else
     HUDI_FLINK_BUNDLE_NAME=hudi-flink2.1-bundle
   elif [[ ${FLINK_PROFILE} == 'flink2.2' ]]; then
     HUDI_FLINK_BUNDLE_NAME=hudi-flink2.2-bundle
+  elif [[ ${FLINK_PROFILE} == 'flink2.3' ]]; then
+    HUDI_FLINK_BUNDLE_NAME=hudi-flink2.3-bundle
   fi
 
   echo "Downloading bundle jars from base URL - $REPO_BASE_URL ..."
@@ -282,6 +287,14 @@ TMP_DATA_DIR=/tmp/data/$(date +%s)
 mkdir -p $TMP_DATA_DIR/stocks/data
 cp ${GITHUB_WORKSPACE}/docker/demo/data/*.json $TMP_DATA_DIR/stocks/data/
 cp ${GITHUB_WORKSPACE}/docker/demo/config/schema.avsc $TMP_DATA_DIR/stocks/
+
+# TEMPORARY, to be removed before merge: the base image for Flink 2.3.0 is not on apachehudi yet.
+# Take it by digest from the contributor's Docker Hub repository until a maintainer publishes it.
+if [[ ${IMAGE_TAG} == 'flink230hive313spark359' ]]; then
+  TMP_BASE_IMAGE=nestdream/hudi-ci-bundle-validation-base@sha256:d3a4584605165f03dc574be58422c90fc521cd2099a3a9b78c072ad45e10b0eb
+  docker pull $TMP_BASE_IMAGE || exit 1
+  docker tag $TMP_BASE_IMAGE apachehudi/hudi-ci-bundle-validation-base:$IMAGE_TAG || exit 1
+fi
 
 # build docker image
 cd ${GITHUB_WORKSPACE}/packaging/bundle-validation || exit 1

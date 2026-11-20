@@ -26,6 +26,7 @@ import org.apache.hudi.utils.TestConfigurations;
 
 import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.connector.ChangelogMode;
+import org.apache.flink.types.RowKind;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -59,6 +60,53 @@ class TestHoodieTableSink {
         WriteOperationType.DELETE.value(),
         copied.getConf().get(FlinkOptions.OPERATION));
     assertEquals(WriteOperationType.UPSERT.value(), conf.get(FlinkOptions.OPERATION));
+  }
+
+  @Test
+  void testChangelogModeForInsertOnlyInput() {
+    HoodieTableSink sink = new HoodieTableSink(new Configuration(), TestConfigurations.TABLE_SCHEMA);
+
+    // an insert-only input is accepted as it is
+    assertEquals(ChangelogMode.insertOnly(), sink.getChangelogMode(ChangelogMode.insertOnly()));
+    assertEquals(ChangelogMode.insertOnly(), sink.copy().getChangelogMode(ChangelogMode.insertOnly()));
+  }
+
+  @Test
+  void testChangelogModeForInputWithUpdatesOrDeletes() {
+    HoodieTableSink sink = new HoodieTableSink(new Configuration(), TestConfigurations.TABLE_SCHEMA);
+
+    // the row kinds of an input with updates or deletes are kept, UPDATE_BEFORE is not needed
+    assertEquals(ChangelogModes.UPSERT, sink.getChangelogMode(ChangelogMode.all()));
+    assertEquals(ChangelogModes.UPSERT, sink.getChangelogMode(ChangelogMode.upsert()));
+    assertEquals(
+        changelogMode(RowKind.INSERT, RowKind.UPDATE_AFTER),
+        sink.getChangelogMode(changelogMode(RowKind.INSERT, RowKind.UPDATE_BEFORE, RowKind.UPDATE_AFTER)));
+    assertEquals(
+        changelogMode(RowKind.INSERT, RowKind.DELETE),
+        sink.getChangelogMode(changelogMode(RowKind.INSERT, RowKind.DELETE)));
+    assertEquals(
+        changelogMode(RowKind.UPDATE_AFTER),
+        sink.getChangelogMode(changelogMode(RowKind.UPDATE_AFTER)));
+  }
+
+  @Test
+  void testChangelogModeWithChangelogEnabled() {
+    Configuration conf = new Configuration();
+    conf.set(FlinkOptions.CHANGELOG_ENABLED, true);
+    HoodieTableSink sink = new HoodieTableSink(conf, TestConfigurations.TABLE_SCHEMA);
+
+    // changelog.enabled keeps all the changes, whatever the input carries
+    assertEquals(ChangelogModes.FULL, sink.getChangelogMode(ChangelogMode.insertOnly()));
+    assertEquals(ChangelogModes.FULL, sink.getChangelogMode(ChangelogMode.upsert()));
+    assertEquals(ChangelogModes.FULL, sink.getChangelogMode(ChangelogMode.all()));
+  }
+
+  private static ChangelogMode changelogMode(RowKind... kinds) {
+    ChangelogMode.Builder builder = ChangelogMode.newBuilder();
+    for (RowKind kind : kinds) {
+      builder.addContainedKind(kind);
+    }
+    return builder.build();
   }
 
   @Test
