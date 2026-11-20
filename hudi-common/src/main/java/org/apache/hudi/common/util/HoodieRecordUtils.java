@@ -57,6 +57,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
@@ -240,6 +241,14 @@ public class HoodieRecordUtils {
     return mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING
         ? Collections.emptyList()
         : metaClient.getTableConfig().getOrderingFields();
+  }
+
+  public static String[] getOrderingFieldNames(RecordMergeMode mergeMode, Properties recordProperties) {
+    if (mergeMode == RecordMergeMode.COMMIT_TIME_ORDERING) {
+      return new String[0];
+    }
+    String[] orderingFields = ConfigUtils.getOrderingFields(recordProperties);
+    return orderingFields == null ? new String[0] : orderingFields;
   }
 
   public static List<String> getOrderingFieldNames(RecordMergeMode mergeMode,

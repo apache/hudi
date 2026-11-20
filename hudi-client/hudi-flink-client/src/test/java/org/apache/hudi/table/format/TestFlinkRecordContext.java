@@ -20,6 +20,8 @@
 package org.apache.hudi.table.format;
 
 import org.apache.hudi.client.model.HoodieFlinkRecord;
+import org.apache.hudi.common.avro.HoodieAvroUtils;
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.model.HoodieEmptyRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieOperation;
@@ -27,28 +29,42 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.apache.hudi.common.schema.HoodieSchemaType;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.OrderingValues;
+import org.apache.hudi.common.util.collection.ArrayComparable;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
+import org.apache.flink.table.data.DecimalData;
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.data.StringData;
 import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.columnar.ColumnarRowData;
 import org.apache.flink.table.data.columnar.vector.ColumnVector;
 import org.apache.flink.table.data.columnar.vector.VectorizedColumnBatch;
 import org.apache.flink.table.data.columnar.vector.heap.HeapBytesVector;
 import org.apache.flink.table.data.columnar.vector.heap.HeapIntVector;
+import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -65,7 +81,8 @@ class TestFlinkRecordContext {
         Collections.singletonList(HoodieSchemaField.of("ts", HoodieSchema.createTimestampMillis())));
     TimestampData orderingValue = TimestampData.fromEpochMillis(60);
     RowData row = hasRowData ? GenericRowData.of(orderingValue) : null;
-    FlinkRecordContext context = FlinkRecordContext.getDeleteCheckingInstance();
+    FlinkRecordContext context = new FlinkRecordContext(new HoodieTableConfig(), new HadoopStorageConfiguration(new Configuration()));
+    context.initOrderingValueConverter(schema, Collections.singletonList("ts"));
     BufferedRecord<RowData> buffered = new BufferedRecord<>("id1", orderingValue, row, context.encodeSchema(schema), HoodieOperation.DELETE);
 
     HoodieRecord<RowData> record = context.constructHoodieRecord(buffered, "par1").newInstance(new HoodieKey("id1", "par2"));
@@ -74,14 +91,89 @@ class TestFlinkRecordContext {
     assertSame(row, record.getData());
     assertEquals(HoodieOperation.DELETE, record.getOperation());
     assertTrue(record.isDelete(null, new Properties()));
-    if (hasRowData) {
-      assertEquals(60L, record.getOrderingValueAsJava(schema, new Properties(), new String[] {"ts"}));
-    }
+    assertEquals(60L, context.convertOrderingValueToJava(
+        record.getOrderingValue(schema, new Properties(), new String[] {"ts"})));
     assertSame(orderingValue, record.getOrderingValue(schema, new Properties(), new String[] {"ts"}));
     BufferedRecord<RowData> roundTrip = BufferedRecords.fromHoodieRecord(record, schema, context, new Properties(), new String[] {"ts"}, true);
     assertTrue(roundTrip.isDelete());
     assertSame(row, roundTrip.getRecord());
     assertSame(orderingValue, roundTrip.getOrderingValue());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testOrderingValueJavaConversion(boolean utcTimezone) {
+    TimeZone previousTimezone = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"));
+    try {
+      HoodieSchema nested = HoodieSchema.createRecord("nested_ordering", null, null, Arrays.asList(
+          HoodieSchemaField.of("amount", HoodieSchema.createDecimal(10, 2)),
+          HoodieSchemaField.of("ts", HoodieSchema.createTimestampMicros())));
+      HoodieSchema schema = HoodieSchema.createRecord("ordering", null, null, Arrays.asList(
+          HoodieSchemaField.of("name", HoodieSchema.create(HoodieSchemaType.STRING)),
+          HoodieSchemaField.of("amount", HoodieSchema.createDecimal(10, 2)),
+          HoodieSchemaField.of("ts", HoodieSchema.createTimestampMicros()),
+          HoodieSchemaField.of("millis", HoodieSchema.createTimestampMillis()),
+          HoodieSchemaField.of("nested", HoodieSchema.createNullable(nested))));
+      StringData stringValue = StringData.fromString("060");
+      BigDecimal decimalValue = new BigDecimal("60.25");
+      DecimalData engineDecimal = DecimalData.fromBigDecimal(decimalValue, 10, 2);
+      TimestampData timestamp = TimestampData.fromLocalDateTime(LocalDateTime.of(2024, 1, 2, 3, 4, 5, 123456000));
+      Instant instant = utcTimezone ? timestamp.toInstant() : timestamp.toTimestamp().toInstant();
+      long micros = instant.getEpochSecond() * 1_000_000 + instant.getNano() / 1_000;
+      long millis = instant.toEpochMilli();
+      ArrayComparable engineValue = new ArrayComparable(new Comparable[] {timestamp, stringValue, engineDecimal, null, OrderingValues.getDefault()});
+      Configuration conf = new Configuration();
+      conf.setBoolean("read.utc-timezone", utcTimezone);
+      conf.setBoolean(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), utcTimezone);
+      FlinkRecordContext context = new FlinkRecordContext(new HoodieTableConfig(), new HadoopStorageConfiguration(conf));
+      context.initOrderingValueConverter(schema, Arrays.asList("nested.ts", "name", "nested.amount", "ts", "amount"));
+      assertEquals(new ArrayComparable(new Comparable[] {micros, "060", decimalValue, null, OrderingValues.getDefault()}),
+          context.convertOrderingValueToJava(engineValue));
+      assertNull(context.convertOrderingValueToJava(null));
+      assertEquals(OrderingValues.getDefault(), context.convertOrderingValueToJava(OrderingValues.getDefault()));
+      FlinkRecordContext commitTimeContext = new FlinkRecordContext(new HoodieTableConfig(), new HadoopStorageConfiguration(conf));
+      commitTimeContext.initOrderingValueConverter(schema, Collections.emptyList());
+      commitTimeContext.initOrderingValueConverter(schema, Collections.singletonList("ts"));
+      assertEquals(millis, commitTimeContext.convertOrderingValueToJava(millis));
+      assertSame(engineValue, commitTimeContext.convertOrderingValueToJava(engineValue));
+    } finally {
+      TimeZone.setDefault(previousTimezone);
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true,true", "true,false", "false,true", "false,false"})
+  void testDeleteOrderingMatchesDataWriteTimezone(boolean readUtcTimezone, boolean writeUtcTimezone) throws IOException {
+    TimeZone previousTimezone = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("America/Los_Angeles"));
+    try {
+      Configuration conf = new Configuration();
+      conf.setBoolean("read.utc-timezone", readUtcTimezone);
+      conf.setBoolean(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), writeUtcTimezone);
+      Properties writeProps = new Properties();
+      writeProps.setProperty(HoodieStorageConfig.WRITE_UTC_TIMEZONE.key(), String.valueOf(writeUtcTimezone));
+      for (boolean micros : new boolean[] {false, true}) {
+        HoodieSchema schema = HoodieSchema.createRecord("ordering", null, null, Arrays.asList(
+            HoodieSchemaField.of("ts", micros ? HoodieSchema.createTimestampMicros() : HoodieSchema.createTimestampMillis()),
+            HoodieSchemaField.of("other", HoodieSchema.createTimestampMicros())));
+        Instant instant = Instant.parse(micros ? "2024-01-02T08:00:00.123456Z" : "2024-01-02T08:00:00.123Z");
+        long storedValue = micros ? instant.getEpochSecond() * 1_000_000 + instant.getNano() / 1_000 : instant.toEpochMilli();
+        FlinkRecordContext context = new FlinkRecordContext(new HoodieTableConfig(), new HadoopStorageConfiguration(conf));
+        context.initOrderingValueConverter(schema, Collections.singletonList("ts"));
+        TimestampData readValue = (TimestampData) context.convertOrderingValueToEngineType(storedValue);
+        assertEquals(readUtcTimezone ? TimestampData.fromInstant(instant)
+            : TimestampData.fromTimestamp(java.sql.Timestamp.from(instant)), readValue);
+        // Compaction must retain the reader's ordering fields and precision on repeated initialization.
+        context.initOrderingValueConverter(schema, Collections.singletonList("other"));
+        HoodieFlinkRecord dataRecord = new HoodieFlinkRecord(GenericRowData.of(readValue, readValue));
+        Object writtenTimestamp = HoodieAvroUtils.bytesToAvro(
+            dataRecord.getAvroBytes(schema, writeProps).toByteArray(), schema.toAvroSchema()).get("ts");
+        assertEquals(writtenTimestamp, context.convertOrderingValueToJava(readValue));
+      }
+    } finally {
+      TimeZone.setDefault(previousTimezone);
+    }
   }
 
   @Test
