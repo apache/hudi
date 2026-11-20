@@ -33,7 +33,6 @@ import org.apache.hudi.utilities.unstructured.embedding.image.ImageFixtures;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImagePreparer;
 import org.apache.hudi.utilities.unstructured.embedding.prep.JcodecVideoFramePreprocessor;
 import org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor;
-import org.apache.hudi.utilities.unstructured.embedding.video.JcodecKeyframeVideoFrameSource;
 import org.apache.hudi.utilities.unstructured.storage.ParquetInlineCap;
 
 import org.apache.spark.sql.Row;
@@ -150,8 +149,7 @@ public class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
       long timeMs = Long.parseLong(aux.apply(VideoFramePreprocessor.AUX_TIMESTAMP_MS));
       assertTrue(i == 0 ? timeMs == 0 : timeMs > previousTimeMs, "frame times rise strictly from 0: " + previousTimeMs + ", " + timeMs);
       previousTimeMs = timeMs;
-      assertEquals(JcodecVideoFramePreprocessor.NAME, aux.apply(EmbeddingTableSchema.AUX_INPUT_LOGIC));
-      assertEquals(JcodecKeyframeVideoFrameSource.LOGIC_VERSION, aux.apply(VideoFramePreprocessor.AUX_VIDEO_LOGIC));
+      assertEquals(prepLogicVersion("video"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
       assertEquals("mp4", aux.apply(VideoFramePreprocessor.AUX_EXTENSION));
       assertEquals(String.valueOf(h264.bytes.length), aux.apply(VideoFramePreprocessor.AUX_SIZE_BYTES));
       byte[] jpeg = inlineImage(frame);

@@ -92,7 +92,7 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
   public void customerWorkingNamesSurviveTwoRoundsAndPrepOnlyTransition(boolean prepOnlyFirst, boolean errorTable) throws Exception {
     FixtureFile first = text("a", "alpha");
     announce(first);
-    TypedProperties initial = props(table(), prepOnlyFirst ? EmbeddingTableConfig.MODE_PREP_ONLY : EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
+    TypedProperties initial = textOnlyProps(table(), prepOnlyFirst ? EmbeddingTableConfig.MODE_PREP_ONLY : EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
         HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), String.valueOf(errorTable));
     Round firstRound = EmbeddingStreamers.round(spark(), initial, cfg -> cfg.transformerClassNames = Arrays.asList(
         EmbeddingTableTransformer.class.getName(), AddCustomerColumns.class.getName()));
@@ -102,7 +102,7 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
 
     FixtureFile second = text("b", "beta");
     announce(second);
-    Round secondRound = round(props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
+    Round secondRound = round(textOnlyProps(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
         HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), String.valueOf(errorTable)));
 
     assertTrue(secondRound.getErrors().isEmpty(), secondRound.toString());
@@ -128,12 +128,12 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
   @ValueSource(booleans = {false, true})
   public void permanentOutcomeUsesPrivateColumnWithEitherErrorTableSetting(boolean errorTable) throws Exception {
     announce(text("a", "alpha"));
-    EmbeddingStreamers.round(spark(), props(table(), EmbeddingTableConfig.MODE_PREP_ONLY,
+    EmbeddingStreamers.round(spark(), textOnlyProps(table(), EmbeddingTableConfig.MODE_PREP_ONLY,
         HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), String.valueOf(errorTable)), cfg -> cfg.transformerClassNames = Arrays.asList(
             EmbeddingTableTransformer.class.getName(), AddCustomerColumns.class.getName()));
     FixtureFile failed = text("b", "beta " + ScriptedEmbeddingClient.PERMANENT);
     announce(failed);
-    TypedProperties next = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
+    TypedProperties next = textOnlyProps(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
         HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), String.valueOf(errorTable));
     if (!errorTable) {
       Exception failure = assertThrows(Exception.class, () -> round(next));
@@ -158,7 +158,7 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
   @ParameterizedTest
   @ValueSource(strings = {"_embedding_compute_error", "_EMBEDDING_COMPUTE_ERROR"})
   public void computePreservesCustomerValuesAndRoutesOnlyItsOwnErrors(String customer) {
-    TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
+    TypedProperties props = textOnlyProps(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
     EmbeddingModelSpec model = config.model(EmbeddingStreamers.MODEL);
     StructType schema = EmbeddingTableSchema.build(config).add(customer, DataTypes.StringType, true)
@@ -208,7 +208,7 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
   @ParameterizedTest
   @CsvSource({"prep_only,false", "prep_only,true", "prep_and_compute,false", "prep_and_compute,true"})
   public void legacyTableMigratesBeforePrepOrTextComputeAndContinuesIntoCompute(String mode, boolean errorTable) throws Exception {
-    TypedProperties legacyProps = props(table(), EmbeddingTableConfig.MODE_PREP_ONLY);
+    TypedProperties legacyProps = textOnlyProps(table(), EmbeddingTableConfig.MODE_PREP_ONLY);
     StructType legacy = new StructType(Arrays.stream(EmbeddingTableSchema.build(EmbeddingTableConfig.from(legacyProps)).fields())
         .filter(field -> !EmbeddingTableSchema.PREPARED_IMAGE.equals(field.name())).toArray(StructField[]::new))
         .add("legacy_note", DataTypes.StringType, true);
@@ -220,7 +220,11 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
     FixtureFile added = prepOnly ? object("b.png", png) : text("b", "beta");
     announce(added);
 
-    Round upgraded = round(props(table(), mode, HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), String.valueOf(errorTable)));
+    TypedProperties upgradeProps = textOnlyProps(table(), mode, HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), String.valueOf(errorTable));
+    if (prepOnly) {
+      upgradeProps.setProperty(EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), "png," + TEXT_EXTENSION);
+    }
+    Round upgraded = round(upgradeProps);
 
     assertTrue(upgraded.getErrors().isEmpty(), upgraded.toString());
     assertEquals(latestEventsCheckpoint(), EmbeddingStreamers.checkpoint(table(), storage(), upgraded.getCommit().get()));
@@ -247,7 +251,7 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
 
     FixtureFile next = text("c", "gamma");
     announce(next);
-    Round computed = round(props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
+    Round computed = round(textOnlyProps(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE,
         HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), String.valueOf(errorTable)));
     assertTrue(computed.getErrors().isEmpty(), computed.toString());
     assertEquals(3, EmbeddingStreamers.commits(table(), storage()).size());
@@ -286,5 +290,12 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
     // The fixture models an older writer schema within the declared table contract.
     HoodieTableMetaClient meta = HoodieTableMetaClient.builder().setBasePath(table()).setConf(storage()).build();
     HoodieTableConfig.update(meta.getStorage(), meta.getMetaPath(), UnstructuredTableTestProperties.embedding(props));
+  }
+
+  /** The compute fixtures announce text and use a text-only model, including when their error table is disabled. */
+  private TypedProperties textOnlyProps(String table, String mode, String... overrides) {
+    TypedProperties props = props(table, mode, overrides);
+    props.setProperty(EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), TEXT_EXTENSION);
+    return props;
   }
 }

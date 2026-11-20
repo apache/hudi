@@ -25,6 +25,7 @@ import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
+import org.apache.hudi.utilities.unstructured.embedding.UnstructuredTableTestProperties;
 import org.apache.hudi.utilities.unstructured.embedding.prep.pdf.PdfFixtures;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobColumns;
@@ -93,7 +94,8 @@ public class TestPreprocessingIteratorPdfHandleRelease {
     // outside Spark the PDF staging root is java.io.tmpdir; a live SparkEnv may point it at a Spark local dir instead
     assumeTrue(SparkEnv.get() == null, "no SparkEnv: the PDF staging root is java.io.tmpdir");
     embeddingTable = temp.resolve("embedding").toUri().toString();
-    HoodieTableMetaClient.newTableBuilder().setTableType(HoodieTableType.MERGE_ON_READ).setTableName("embedding")
+    HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.layoutOne())
+        .setTableType(HoodieTableType.MERGE_ON_READ).setTableName("embedding")
         .setRecordKeyFields(String.join(",", EmbeddingTableSchema.KEY_COLUMNS))
         .initTable(HadoopFSUtils.getStorageConf(new Configuration()), embeddingTable);
     staging = Files.createDirectory(temp.resolve("staging"));

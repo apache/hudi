@@ -96,6 +96,14 @@ class TestUnstructuredSourceContract {
     TypedProperties job = mode(contract.mode().configValue());
     Map<String, String> added = asMap(contract.prepareJob(job));
     added.keySet().removeAll(job.stringPropertyNames());
+    for (String kind : new String[] {"text", "image", "video", "audio"}) {
+      String version = added.get("hoodie.table.embedding.prep." + kind + ".logic.version");
+      if (contract.mode() == UnstructuredMode.EMBEDDING) {
+        assertTrue(version.startsWith("prep-logic-v3;") && version.contains(";source-version-check=mtime-size-v1"), kind);
+      }
+    }
+    // the embedding prep contract is its own family of table properties (TestPrepLogicVersions)
+    added.keySet().removeIf(key -> key.startsWith("hoodie.table.embedding.prep."));
     return added;
   }
 
@@ -197,6 +205,25 @@ class TestUnstructuredSourceContract {
     assertThrows(IllegalArgumentException.class, () -> required.checkTable("file:/tables/blob", table));
   }
 
+  @Test
+  void embeddingCreationPinsLogicAndRefusesChangedLogic() {
+    TypedProperties props = mode("embedding");
+    UnstructuredTableProperties settings = contract("embedding").requiredTableProperties();
+    TypedProperties merged = settings.apply(props);
+    assertEquals("embedding", merged.getProperty("hoodie.table.unstructured.kind"));
+    for (String kind : new String[] {"text", "image", "video", "audio"}) {
+      String key = "hoodie.table.embedding.prep." + kind + ".logic.version";
+      assertTrue(merged.containsKey(key), key);
+      HoodieTableConfig table = new HoodieTableConfig();
+      table.getProps().putAll(merged);
+      table.setValue(HoodieTableConfig.RECORDKEY_FIELDS, EMBEDDING_KEY);
+      settings.checkTable("file:/tables/embedding", table);
+      table.getProps().setProperty(key, "other-logic");
+      assertThrows(IllegalArgumentException.class,
+          () -> settings.checkTable("file:/tables/embedding", table), key);
+    }
+  }
+
   /** An embedding table is created with its column-info layout version among its pins; a table without it, or another, is refused. */
   @Test
   void embeddingCreationPinsTheColumnInfoLayoutVersion() {
@@ -218,6 +245,23 @@ class TestUnstructuredSourceContract {
     IllegalArgumentException missing = assertThrows(IllegalArgumentException.class,
         () -> settings.checkTable("file:/tables/embedding", table));
     assertTrue(missing.getMessage().contains(key + "=1: the table at file:/tables/embedding stores none"), missing.getMessage());
+  }
+
+  /** The embedding contract is checked key by key: a setting an older table does not store compares as its default. */
+  @Test
+  void embeddingTableWithoutANewerSettingKeepsItsDefault() {
+    UnstructuredTableProperties settings = contract("embedding").requiredTableProperties();
+    HoodieTableConfig table = new HoodieTableConfig();
+    table.getProps().putAll(settings.tableProperties());
+    table.setValue(HoodieTableConfig.RECORDKEY_FIELDS, EMBEDDING_KEY);
+    table.getProps().remove("hoodie.table.embedding.prep.chunk.max.words");
+    settings.checkTable("file:/tables/embedding", table);
+    table.getProps().setProperty("hoodie.table.embedding.prep.chunk.max.tokens", "128");
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> settings.checkTable("file:/tables/embedding", table));
+    assertTrue(refused.getMessage().contains("hoodie.table.embedding.prep.chunk.max.tokens=256 (set by hoodie.unstructured.chunk.max.tokens;"
+        + " the table stores 128)"), refused.getMessage());
+    assertTrue(refused.getMessage().endsWith("write this job to a new table"), refused.getMessage());
   }
 
   @Test

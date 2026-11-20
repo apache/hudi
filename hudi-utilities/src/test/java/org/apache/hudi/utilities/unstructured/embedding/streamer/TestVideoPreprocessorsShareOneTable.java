@@ -32,7 +32,6 @@ import org.apache.hudi.utilities.unstructured.embedding.compute.DummyMultimodalE
 import org.apache.hudi.utilities.unstructured.embedding.image.ImageFixtures;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImagePreparer;
 import org.apache.hudi.utilities.unstructured.embedding.prep.JcodecVideoFramePreprocessor;
-import org.apache.hudi.utilities.unstructured.embedding.prep.VideoFramePreprocessor;
 import org.apache.hudi.utilities.unstructured.embedding.prep.video.ExtractedFrame;
 import org.apache.hudi.utilities.unstructured.embedding.prep.video.FrameExtractionStrategy;
 import org.apache.hudi.utilities.unstructured.embedding.source.FileMeta;
@@ -65,8 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Frames prepared by FFmpeg and by JCodec share one embedding table: a round with the default (FFmpeg) video preprocessor, then a
  * round with the video key set to {@link JcodecVideoFramePreprocessor} over another video, on the same table. Both videos' frames
- * are {@code image} rows of the same shape, each naming its own preprocessor as {@code input_logic} and its strategy as
- * {@code video_logic}; compute embeds both; the second round leaves the first round's rows as they were.
+ * are {@code image} rows of the same shape, each carrying the table-pinned {@code prep_logic_version}; compute embeds both; the second round leaves the first round's rows as they were.
  */
 @Tag("functional")
 public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase {
@@ -82,6 +80,8 @@ public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase 
         model + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, "text,image");
     // the provider decides the client: the base's scripted client class is removed
     props.remove(model + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX);
+    props.setProperty(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + "mp4" + EmbeddingTableConfig.PREPROCESSOR_CLASS_SUFFIX,
+        JcodecVideoFramePreprocessor.class.getName());
     return props;
   }
 
@@ -89,7 +89,7 @@ public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase 
   @EnumSource(HoodieTableType.class)
   public void ffmpegAndJcodecFramesShareOneTable(HoodieTableType tableType) throws Exception {
     byte[] clip = Files.readAllBytes(CLIP);
-    FixtureFile byFfmpeg = object("videos/by-ffmpeg.mp4", clip);
+    FixtureFile byFfmpeg = object("videos/by-ffmpeg.mov", clip);
     FixtureFile byJcodec = object("videos/by-jcodec.mp4", clip);
 
     TypedProperties ffmpegProps = computeProps();
@@ -99,7 +99,6 @@ public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase 
     Map<String, String> ffmpegRows = describe(rows(table()), byFfmpeg);
 
     TypedProperties jcodecProps = computeProps();
-    jcodecProps.setProperty(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key(), JcodecVideoFramePreprocessor.class.getName());
     announce(byJcodec);
     Round second = EmbeddingStreamers.round(spark(), jcodecProps, cfg -> cfg.tableType = tableType.name());
     assertEquals(1, second.getCompleted().size(), second.toString());
@@ -121,8 +120,8 @@ public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase 
     assertEquals(expectedKeys, rows.keySet(), "both videos' frames, and nothing else, are the table's rows");
 
     ImagePreparer preparer = new ImagePreparer(EmbeddingTableConfig.from(jcodecProps).imagePreprocessing());
-    assertFrames(rows, byFfmpeg, ffmpegImages, VideoFramePreprocessor.INPUT_LOGIC, FfmpegKeyframeVideoFrameSource.LOGIC_VERSION, preparer);
-    assertFrames(rows, byJcodec, jcodecImages, JcodecVideoFramePreprocessor.NAME, JcodecKeyframeVideoFrameSource.LOGIC_VERSION, preparer);
+    assertFrames(rows, byFfmpeg, ffmpegImages, preparer);
+    assertFrames(rows, byJcodec, jcodecImages, preparer);
     assertEquals(ffmpegRows, describe(rows, byFfmpeg), "the JCodec round leaves the FFmpeg rows as they were");
   }
 
@@ -140,15 +139,13 @@ public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase 
     assertTrue(images.size() > 1, strategy.name() + " keeps several frames: " + images.size());
   }
 
-  private void assertFrames(Map<String, Row> rows, FixtureFile video, List<byte[]> images, String inputLogic, String videoLogic,
-      ImagePreparer preparer) throws IOException {
+  private void assertFrames(Map<String, Row> rows, FixtureFile video, List<byte[]> images, ImagePreparer preparer) throws IOException {
     for (int k = 0; k < images.size(); k++) {
       Row row = rows.get(key(video, EmbeddingTableSchema.MODALITY_IMAGE, k));
       assertEquals(video.sourcePath, row.getAs(EmbeddingTableSchema.SOURCE_FILE_PATH));
       scala.collection.Map<String, String> aux = row.getAs(EmbeddingTableSchema.AUX);
       assertEquals(String.valueOf(k), aux.apply(EmbeddingTableSchema.AUX_FRAME_INDEX));
-      assertEquals(inputLogic, aux.apply(EmbeddingTableSchema.AUX_INPUT_LOGIC), video.sourcePath);
-      assertEquals(videoLogic, aux.apply(VideoFramePreprocessor.AUX_VIDEO_LOGIC), video.sourcePath);
+      assertEquals(prepLogicVersion("video"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION), video.sourcePath);
       Row prepared = row.getAs(EmbeddingTableSchema.PREPARED_IMAGE);
       assertEquals(HoodieSchema.Blob.INLINE, prepared.getAs(HoodieSchema.Blob.TYPE), "a frame is stored inline");
       assertArrayEquals(images.get(k), (byte[]) prepared.getAs(HoodieSchema.Blob.INLINE_DATA_FIELD), video.sourcePath + " frame " + k);

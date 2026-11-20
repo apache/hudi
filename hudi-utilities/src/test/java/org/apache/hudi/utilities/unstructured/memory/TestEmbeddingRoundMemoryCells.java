@@ -95,7 +95,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *   {@link #PDF_OVER_HEAP_BULK_MIB}.</li>
  * </ul>
  */
-public class TestEmbeddingRoundMemoryCells extends EmbeddingRoundTestBase {
+class TestEmbeddingRoundMemoryCells extends EmbeddingRoundTestBase {
 
   static final String REFERENCE_HEAP = "576m";
   private static final long CELL_TIMEOUT_MINUTES = 15;
@@ -112,9 +112,8 @@ public class TestEmbeddingRoundMemoryCells extends EmbeddingRoundTestBase {
    * (PdfBoxPageSource.java:136-146). PDFBox resolves objects from the exact xref only when they are reached, and nothing reaches
    * the bulk stream: the decode guard walks only each page's /Contents and the forms and fonts of its /Resources
    * (StreamDecodeGuard.java:167-186, 201-228), and the stripper extracts one page's content (PdfBoxPageSource.java:257-260). The
-   * file is above the PDF max input bytes default (512 MiB), so the cell raises that key to
-   * {@value #PDF_OVER_HEAP_MAX_INPUT_BYTES} in its job (outside the benchmarked envelope, which the chunker logs); the light cell
-   * sets the same key so both run the same code path.
+   * PDF max input bytes key defaults to 20 GiB; the cell sets it to {@value #PDF_OVER_HEAP_MAX_INPUT_BYTES} in its job so
+   * the capped path is exercised, and the light cell sets the same key so both run the same code path.
    *
    * <p>Asserted: one round and one commit; the PDF's text chunks are in the table, each with an embedding; the PDF row's stored
    * size equals the fixture's and, in the heavy cell, exceeds the child's {@code Runtime.maxMemory()} (both printed); the source
@@ -135,7 +134,7 @@ public class TestEmbeddingRoundMemoryCells extends EmbeddingRoundTestBase {
 
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"small", "4instants", "skew-light", "skew", "1k", "prep-only", "pdf-over-heap-light", "pdf-over-heap"})
-  public void cellPassesAtTheReferenceHeap(String cell) throws Exception {
+  void cellPassesAtTheReferenceHeap(String cell) throws Exception {
     // a report of an earlier run must not stand for this one
     Files.deleteIfExists(Paths.get("target", "memory-cells", cell + ".txt"));
     assumeTrue(selectedCells().contains(cell), "memory cell " + cell + " not selected (-Dembedding.memory.cells)");

@@ -21,6 +21,7 @@ package org.apache.hudi.utilities.unstructured.embedding;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredTableProperties;
 import org.apache.hudi.utilities.sources.unstructured.UnstructuredTableVersion;
+import org.apache.hudi.utilities.unstructured.embedding.prep.PrepLogicVersions;
 
 import java.util.Properties;
 
@@ -46,6 +47,7 @@ public final class UnstructuredTableTestProperties {
     settings.requireTableProperty(org.apache.hudi.common.config.ConfigProperty
         .key("hoodie.table.embedding.input.inline.max.bytes").noDefaultValue(),
         Long.toString(org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingInputConfig.inlineMaxBytes(jobProps)));
+    PrepLogicVersions.from(jobProps).requireTableProperties(settings);
     return settings.build().tableProperties();
   }
 }

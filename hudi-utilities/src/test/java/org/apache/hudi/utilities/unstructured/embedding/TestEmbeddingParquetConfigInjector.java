@@ -44,7 +44,10 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.parquet.column.Encoding;
+import org.apache.parquet.column.page.PageReadStore;
+import org.apache.parquet.column.page.PageReader;
 import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.hadoop.ParquetWriter;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.hadoop.util.HadoopInputFile;
@@ -153,6 +156,55 @@ public class TestEmbeddingParquetConfigInjector {
     TypedProperties plain = new TypedProperties();
     ColumnChunkMetaData control = write(new HoodieConfig(TypedProperties.copy(plain)), "control").get(DATA);
     assertTrue(hasDictionary(control), control.getEncodings().toString());
+  }
+
+  /** A 4 KB inline value exceeds the 2 KB page target; supported builders check each row, older builders keep their cadence. */
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void inlineRowsAboveThePageTargetAreFlushedAfterEachRow(boolean explicitInternalCadence) throws Exception {
+    TypedProperties props = embeddingJobProps();
+    props.setProperty(HoodieStorageConfig.PARQUET_PAGE_SIZE.key(), "2048");
+    if (explicitInternalCadence) {
+      props.setProperty(EmbeddingParquetConfigInjector.DELEGATE_CLASS, PageCheckControlInjector.class.getName());
+    }
+    String name = "page-checks-" + explicitInternalCadence;
+    write(new HoodieConfig(props), name);
+    try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+        new org.apache.hadoop.fs.Path(tempDir.resolve(name + ".parquet").toUri()), new Configuration()))) {
+      PageReadStore rowGroup = reader.readNextRowGroup();
+      try {
+        PageReader pages = rowGroup.getPageReader(reader.getFileMetaData().getSchema().getColumnDescription(DATA.split("\\.")));
+        int count = 0;
+        while (pages.readPage() != null) {
+          count++;
+        }
+        assertEquals(supportsPageSizeCheckCadence() ? 8 : 1, count, "per-row checks when supported, otherwise the legacy cadence");
+      } finally {
+        if (rowGroup instanceof AutoCloseable) {
+          ((AutoCloseable) rowGroup).close();
+        }
+      }
+    }
+  }
+
+  private static boolean supportsPageSizeCheckCadence() {
+    try {
+      ParquetWriter.Builder.class.getMethod("withMinRowCountForPageSizeCheck", int.class);
+      ParquetWriter.Builder.class.getMethod("withMaxRowCountForPageSizeCheck", int.class);
+      return true;
+    } catch (NoSuchMethodException e) {
+      return false;
+    }
+  }
+
+  /** Passing control: an explicit internal cadence reaches the real writer even on the earlier injector. */
+  public static class PageCheckControlInjector implements HoodieParquetConfigInjector {
+    @Override
+    public Pair<StorageConfiguration, HoodieConfig> injectConfig(StoragePath path, StorageConfiguration storage, HoodieConfig config) {
+      storage.set(HoodieBaseParquetWriter.INTERNAL_MIN_ROW_COUNT_FOR_PAGE_SIZE_CHECK, "1");
+      storage.set(HoodieBaseParquetWriter.INTERNAL_MAX_ROW_COUNT_FOR_PAGE_SIZE_CHECK, "1");
+      return Pair.of(storage, config);
+    }
   }
 
   /** The embedding job's Parquet setting, as the job sets it, validated as its source validates it. */

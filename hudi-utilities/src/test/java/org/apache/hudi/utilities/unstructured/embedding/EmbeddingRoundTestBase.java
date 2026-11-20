@@ -202,6 +202,12 @@ public abstract class EmbeddingRoundTestBase extends SparkClientFunctionalTestHa
     return props(table, mode, INLINE_MAX_BYTES, overrides);
   }
 
+  /** The committed contract the rows of this source kind must carry. */
+  protected String prepLogicVersion(String kind) {
+    return org.apache.hudi.common.table.HoodieTableMetaClient.builder().setBasePath(table()).setConf(storage()).build()
+        .getTableConfig().getProps().getProperty("hoodie.table.embedding.prep." + kind + ".logic.version");
+  }
+
   protected Round round(TypedProperties props) {
     return EmbeddingStreamers.round(spark(), props);
   }

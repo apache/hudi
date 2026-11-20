@@ -66,13 +66,14 @@ public class TestPrepRoundTwoVersions extends SparkClientFunctionalTestHarness {
       DataTypes.createStructField(BlobColumns.BLOB, BlobType.dataType(), false),
       DataTypes.createStructField("team", DataTypes.StringType, true)});
 
+  private String textPrepVersion;
+
   private static Row source(Long time, Long size, String text) {
     return RowFactory.create("sha-a", time, size, "s3a://bucket/a.txt", "a.txt", "txt",
         RowFactory.create(HoodieSchema.Blob.INLINE, text.getBytes(StandardCharsets.UTF_8), null), "blue");
   }
 
   private PrepRound.Prepared prepare(Row... rows) throws Exception {
-    // the round's table exists before prep runs (the streamer starts the instant first); prep writes large payloads under it
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieWriteConfig.BASE_PATH.key(), basePath());
     props.setProperty(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + "txt" + EmbeddingTableConfig.PREPROCESSOR_CLASS_SUFFIX,
@@ -81,12 +82,16 @@ public class TestPrepRoundTwoVersions extends SparkClientFunctionalTestHarness {
     props.setProperty(EmbeddingTableConfig.BALANCE_MIN_PARTITIONS.key(), "2");
     props.setProperty(HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "true");
     props.setProperty(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key(), "team");
+    // the round's table exists before prep runs (the streamer starts the instant first); prep writes large payloads under it
     Path meta = new Path(basePath(), HoodieTableMetaClient.METAFOLDER_NAME);
     if (!meta.getFileSystem(jsc().hadoopConfiguration()).exists(meta)) {
-      HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.embedding(props)).setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("embedding")
+      HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.embedding(props))
+          .setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("embedding")
           .setRecordKeyFields(String.join(",", EmbeddingTableSchema.KEY_COLUMNS))
           .initTable(HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()), basePath());
     }
+    textPrepVersion = HoodieTableMetaClient.builder().setConf(HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()))
+        .setBasePath(basePath()).build().getTableConfig().getString("hoodie.table.embedding.prep.text.logic.version");
     EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
     StructType table = EmbeddingTableSchema.build(config);
     StructType output = table.add(PrepRound.CORRUPT_RECORD, DataTypes.StringType, true);
@@ -98,12 +103,14 @@ public class TestPrepRoundTwoVersions extends SparkClientFunctionalTestHarness {
     return rows.filter(functions.col(PrepRound.CORRUPT_RECORD).isNull())
         .orderBy(EmbeddingTableSchema.SOURCE_MODIFICATION_TIME, EmbeddingTableSchema.SOURCE_FILE_SIZE, EmbeddingTableSchema.CHUNK_ID)
         .selectExpr("source_path_sha", "source_modification_time", "source_file_size", "modality", "chunk_id",
-            "source_file_path", "source_file_name", "source_file_extension", "prepared_text_chunk", "chunk_token_count", "to_json(aux)", "team")
+            "source_file_path", "source_file_name", "source_file_extension", "prepared_text_chunk", "chunk_token_count",
+            "aux['part']", "aux['prep_logic_version']", "size(aux)", "team")
         .collectAsList();
   }
 
-  private static Row expected(long time, long size, long chunk, String text) {
-    return RowFactory.create("sha-a", time, size, "text", chunk, "s3a://bucket/a.txt", "a.txt", "txt", text, 1, "{\"part\":\"" + chunk + "\"}", "blue");
+  private Row expected(long time, long size, long chunk, String text) {
+    return RowFactory.create("sha-a", time, size, "text", chunk, "s3a://bucket/a.txt", "a.txt", "txt", text, 1,
+        String.valueOf(chunk), textPrepVersion, 2, "blue");
   }
 
   private static void close(PrepRound.Prepared prepared) {

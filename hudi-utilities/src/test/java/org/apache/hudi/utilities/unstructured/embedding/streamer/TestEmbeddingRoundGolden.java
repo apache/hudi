@@ -108,6 +108,10 @@ public class TestEmbeddingRoundGolden extends EmbeddingRoundTestBase {
     round(EmbeddingStreamers.jobProps(table(), objects().eventsPath(), BucketFolderFileSystem.SCHEME, INLINE_MAX_BYTES,
         EmbeddingTableConfig.MODE_PREP_AND_COMPUTE, withBalance()));
 
+    String prepVersion = org.apache.hudi.common.table.HoodieTableMetaClient.builder().setBasePath(table())
+        .setConf(org.apache.hudi.common.testutils.HoodieTestUtils.getDefaultStorageConf()).build()
+        .getTableConfig().getProps().getProperty("hoodie.table.embedding.prep.text.logic.version");
+    assertNotNull(prepVersion);
     // golden line: sha, modality, chunk, token count, aux, text, vector; this round's rows in the golden's coordinates
     TreeMap<String, String> lines = new TreeMap<>();
     for (Row row : rows(table()).values()) {
@@ -118,6 +122,7 @@ public class TestEmbeddingRoundGolden extends EmbeddingRoundTestBase {
       assertArrayEquals(DummyEmbeddingClient.vectorFor(sha, chunk, EmbeddingStreamers.MODEL_DIMENSIONS), vector(row),
           "every row carries the vector of its own key: " + row);
       Map<String, String> aux = new TreeMap<>(row.getJavaMap(row.fieldIndex(EmbeddingTableSchema.AUX)));
+      assertEquals(prepVersion, aux.remove(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
       lines.put(goldenSha + "\t" + modality + "\t" + String.format("%06d", chunk), goldenSha + "\t" + modality + "\t" + chunk + "\t"
           + row.getAs(EmbeddingTableSchema.CHUNK_TOKEN_COUNT) + "\t" + JsonUtils.getObjectMapper().writeValueAsString(aux) + "\t"
           + JsonUtils.getObjectMapper().writeValueAsString(row.<String>getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK)));

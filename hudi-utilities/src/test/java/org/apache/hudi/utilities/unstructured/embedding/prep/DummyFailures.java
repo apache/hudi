@@ -28,8 +28,8 @@ import org.apache.hudi.utilities.unstructured.embedding.source.FileMeta;
  */
 public final class DummyFailures {
 
-  /** Comma list of source_path_shas the dummy preprocessors fail on; default empty. A test-only key. */
-  public static final String FAIL_SOURCE_PATH_SHAS = EmbeddingTableConfig.PREP_PREFIX + "dummy.fail.source_path_shas";
+  /** Comma list of source_path_shas the dummy preprocessors fail on; default empty. A test-only key, outside the prep prefixes (a key there must be a recognized prep setting). */
+  public static final String FAIL_SOURCE_PATH_SHAS = EmbeddingTableConfig.PREFIX + "test.dummy.fail.source_path_shas";
 
   private DummyFailures() {
   }
