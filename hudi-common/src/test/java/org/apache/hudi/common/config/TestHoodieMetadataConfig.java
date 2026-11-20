@@ -22,6 +22,8 @@ package org.apache.hudi.common.config;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Properties;
 
@@ -268,6 +270,37 @@ class TestHoodieMetadataConfig {
         HoodieMetadataConfig.newBuilder()
             .withTableServiceManagerEnabled(true)
             .build());
+  }
+
+  @Test
+  void testRecordIndexAverageRecordSize() {
+    assertFalse(HoodieMetadataConfig.newBuilder().build().getRecordIndexAverageRecordSize().isPresent());
+    assertEquals(120, HoodieMetadataConfig.newBuilder().withRecordIndexAverageRecordSize(120).build()
+        .getRecordIndexAverageRecordSize().get());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "-5", "abc"})
+  void testRecordIndexAverageRecordSizeRejectsInvalidValues(String size) {
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.RECORD_INDEX_AVERAGE_RECORD_SIZE_PROP.key(), size);
+    assertThrows(IllegalArgumentException.class, () -> HoodieMetadataConfig.newBuilder().fromProperties(props).build());
+  }
+
+  @Test
+  void testRecordIndexEntrySizeKeyFactor() {
+    assertEquals(1.3f, HoodieMetadataConfig.newBuilder().build().getRecordIndexEntrySizeKeyFactor());
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.RECORD_INDEX_ENTRY_SIZE_KEY_FACTOR_PROP.key(), "1.1");
+    assertEquals(1.1f, HoodieMetadataConfig.newBuilder().fromProperties(props).build().getRecordIndexEntrySizeKeyFactor());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "-1", "Infinity", "NaN"})
+  void testRecordIndexEntrySizeKeyFactorRejectsNonPositiveValues(String factor) {
+    Properties props = new Properties();
+    props.put(HoodieMetadataConfig.RECORD_INDEX_ENTRY_SIZE_KEY_FACTOR_PROP.key(), factor);
+    assertThrows(IllegalArgumentException.class, () -> HoodieMetadataConfig.newBuilder().fromProperties(props).build());
   }
 
   @Test

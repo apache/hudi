@@ -431,6 +431,32 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       .withDocumentation("The current number of records are multiplied by this number when estimating the number of "
           + "file groups to create automatically. This helps account for growth in the number of records in the dataset.");
 
+  public static final ConfigProperty<String> RECORD_INDEX_AVERAGE_RECORD_SIZE_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.average.record.size")
+      .noDefaultValue()
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("Average size in bytes of a record index or secondary index entry, used with "
+          + RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key() + " to work out the number of file groups when the index is "
+          + "initialized. When not set, the global record index estimates it from the record keys in the base file footers "
+          + "and the file slices, the secondary index from a sample of its keys, and the partitioned record index uses 48 "
+          + "bytes.");
+
+  public static final ConfigProperty<Float> RECORD_INDEX_ENTRY_SIZE_KEY_FACTOR_PROP = ConfigProperty
+      .key(METADATA_PREFIX + ".record.index.entry.size.key.factor")
+      .defaultValue(1.3f)
+      .markAdvanced()
+      .sinceVersion("1.3.0")
+      .withDocumentation("When estimating the number of file groups of the global record index, the size of an entry is "
+          + "estimated as the compressed size of its value plus this factor times the compressed size of its record key, "
+          + "as the record key column of the base file footers reports it. The record index HFiles compress the keys with "
+          + "GZ in key order, which takes more bytes than the base files take, so the factor scales the footer size up to "
+          + "the size the keys take in the record index. The default is measured on keys led by a random UUID and the "
+          + "default GZ compression of the metadata table HFiles. Keys whose neighbours differ in a few characters, such "
+          + "as some keys of several fields or sequential numbers, compress far better in the base files than in the HFiles "
+          + "and can be estimated up to about 20% short; a higher factor, or " + RECORD_INDEX_AVERAGE_RECORD_SIZE_PROP.key()
+          + ", covers them.");
+
   public static final ConfigProperty<Boolean> DEFER_RLI_INIT_FOR_FRESH_TABLE = ConfigProperty
       .key(METADATA_PREFIX + ".record.level.index.defer.init")
       .defaultValue(false)
@@ -871,6 +897,34 @@ public final class HoodieMetadataConfig extends HoodieConfig {
     return getFloat(RECORD_INDEX_GROWTH_FACTOR_PROP);
   }
 
+  /**
+   * Returns the average size of a record index or secondary index entry set to override the estimated one, or empty
+   * when the entry size is estimated. {@link Builder#build()} rejects a value that is not a positive number of bytes.
+   */
+  public Option<Integer> getRecordIndexAverageRecordSize() {
+    String value = getString(RECORD_INDEX_AVERAGE_RECORD_SIZE_PROP);
+    if (value == null) {
+      return Option.empty();
+    }
+    String invalidValueMessage = RECORD_INDEX_AVERAGE_RECORD_SIZE_PROP.key() + " must be a positive number of bytes, but is " + value;
+    int averageRecordSize;
+    try {
+      averageRecordSize = Integer.parseInt(value.trim());
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(invalidValueMessage, e);
+    }
+    checkArgument(averageRecordSize > 0, invalidValueMessage);
+    return Option.of(averageRecordSize);
+  }
+
+  /**
+   * Returns the factor that scales the compressed record key size reported by the base file footers up to the size the
+   * keys take in the global record index. {@link Builder#build()} rejects a factor that is not a positive finite number.
+   */
+  public float getRecordIndexEntrySizeKeyFactor() {
+    return getFloat(RECORD_INDEX_ENTRY_SIZE_KEY_FACTOR_PROP);
+  }
+
   public long getRecordIndexMaxFileGroupSizeBytes() {
     return getLong(RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP);
   }
@@ -1283,6 +1337,11 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       return this;
     }
 
+    public Builder withRecordIndexAverageRecordSize(int sizeInBytes) {
+      metadataConfig.setValue(RECORD_INDEX_AVERAGE_RECORD_SIZE_PROP, String.valueOf(sizeInBytes));
+      return this;
+    }
+
     public Builder withRecordIndexGrowthFactor(float factor) {
       metadataConfig.setValue(RECORD_INDEX_GROWTH_FACTOR_PROP, String.valueOf(factor));
       return this;
@@ -1433,6 +1492,8 @@ public final class HoodieMetadataConfig extends HoodieConfig {
       // fix me: disable when schema on read is enabled.
       metadataConfig.setDefaults(HoodieMetadataConfig.class.getName());
 
+      validateRecordIndexEntrySizeSettings();
+
       String tsmActions = metadataConfig.getString(TABLE_SERVICE_MANAGER_ACTIONS);
       if (tsmActions != null && !tsmActions.isEmpty()) {
         validateTableServiceManagerActions(tsmActions);
@@ -1444,6 +1505,17 @@ public final class HoodieMetadataConfig extends HoodieConfig {
             + " (supported: " + SUPPORTED_TABLE_SERVICE_MANAGER_ACTIONS + ").");
       }
       return metadataConfig;
+    }
+
+    /**
+     * Rejects a record index entry size or key factor that is not a positive number, so that a bad setting fails when the
+     * config is built rather than when an index is initialized.
+     */
+    private void validateRecordIndexEntrySizeSettings() {
+      metadataConfig.getRecordIndexAverageRecordSize();
+      float keyFactor = metadataConfig.getFloat(RECORD_INDEX_ENTRY_SIZE_KEY_FACTOR_PROP);
+      checkArgument(keyFactor > 0 && !Float.isInfinite(keyFactor),
+          RECORD_INDEX_ENTRY_SIZE_KEY_FACTOR_PROP.key() + " must be a positive number, but is " + keyFactor);
     }
 
     private boolean getDefaultMetadataEnable(EngineType engineType) {

@@ -19,23 +19,28 @@
 package org.apache.hudi.functional
 
 import org.apache.hudi.DataSourceWriteOptions._
-import org.apache.hudi.common.config.{HoodieMetadataConfig, TypedProperties}
+import org.apache.hudi.common.config.{HoodieMetadataConfig, HoodieStorageConfig, TypedProperties}
 import org.apache.hudi.common.data.HoodieListData
-import org.apache.hudi.common.model.HoodieTableType
+import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.{FileSlice, HoodieBaseFile, HoodieTableType}
 import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.timeline.HoodieInstant
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator.recordsToStrings
 import org.apache.hudi.common.util.HoodieDataUtils
 import org.apache.hudi.common.util.Option
 import org.apache.hudi.config.{HoodieClusteringConfig, HoodieWriteConfig}
-import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.keygen.ComplexKeyGenerator
+import org.apache.hudi.metadata.{HoodieBackedTableMetadata, HoodieMetadataPayload, HoodieRecordIndexEntrySizeEstimator, HoodieTableMetadataUtil, MetadataPartitionType}
+import org.apache.hudi.metadata.model.FileSliceAndPartition
+import org.apache.hudi.storage.StoragePath
 import org.apache.hudi.testutils.HoodieSparkClientTestBase
 
 import org.apache.spark.sql._
+import org.apache.spark.sql.functions.{col, concat, concat_ws, lit, lpad, sha2, substring, when}
 import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource}
 
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -216,5 +221,84 @@ class TestMetadataRecordIndex extends HoodieSparkClientTestBase {
       .join(prevDf, prevDf.columns, "leftanti")
     assertEquals(0, nonMatchingRecords.count())
     assertEquals(readDf.count(), prevDf.count())
+  }
+
+  /**
+   * The global record index takes its file group count from an entry size estimated from the base file footers and
+   * file slices, and that estimate covers, without far overshooting, the bytes its entries take in the HFiles for keys
+   * of one uuid column. Wide keys of several columns whose neighbours differ in a few characters compress far better in
+   * the base files than in the HFiles, so they may be estimated up to about 20% short. An entry size set in the config
+   * takes the place of the estimate.
+   */
+  @ParameterizedTest
+  @CsvSource(Array("uuid,", "composite,", "uuid,48"))
+  def testGlobalRecordIndexFileGroupsFollowTheEstimatedEntrySize(keyShape: String, configuredEntrySize: String): Unit = {
+    val rows = 200000L
+    val id = col("id")
+    val hash = sha2(id.cast("string"), 256)
+    val uuid = concat_ws("-", substring(hash, 1, 8), substring(hash, 9, 4), substring(hash, 13, 4), substring(hash, 17, 4),
+      substring(hash, 21, 12))
+    // six key columns joined by the complex key generator as name:value pairs
+    val compositeKeyFields = Seq("customer_account_id", "store_number", "department_code", "item_upc", "order_channel", "line_number")
+    val keyColumns = if (keyShape == "composite") {
+      Seq(concat(lit("CA"), lpad((id % 50000).cast("string"), 10, "0")).as(compositeKeyFields(0)),
+        (id % 4700).cast("string").as(compositeKeyFields(1)), lpad((id % 97).cast("string"), 3, "0").as(compositeKeyFields(2)),
+        lpad((id * 7919 % 1000000007L).cast("string"), 12, "0").as(compositeKeyFields(3)),
+        when(id % 2 === 0, "ONLINE").otherwise("STORE").as(compositeKeyFields(4)), id.cast("string").as(compositeKeyFields(5)))
+    } else {
+      Seq(uuid.as("_row_key"))
+    }
+    val df = spark.range(rows).select(keyColumns ++ Seq(when(id % 2 === 0, "p1").otherwise("p2").as("partition"), id.as("timestamp")): _*)
+    val keyOpts = if (keyShape == "composite") {
+      Map(RECORDKEY_FIELD.key -> compositeKeyFields.mkString(","), KEYGENERATOR_CLASS_NAME.key -> classOf[ComplexKeyGenerator].getName)
+    } else {
+      Map.empty[String, String]
+    }
+    val entrySizeOpts = scala.Option(configuredEntrySize)
+      .map(size => Map(HoodieMetadataConfig.RECORD_INDEX_AVERAGE_RECORD_SIZE_PROP.key -> size)).getOrElse(Map.empty[String, String])
+    val writeOpts = commonOpts ++ keyOpts
+    df.write.format("hudi").options(writeOpts + (HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_ENABLE_PROP.key -> "false"))
+      .option(OPERATION.key, BULK_INSERT_OPERATION_OPT_VAL).mode(SaveMode.Overwrite).save(basePath)
+
+    metaClient = HoodieTableMetaClient.reload(metaClient)
+    val fileSlices = storage.listFiles(new StoragePath(basePath)).asScala
+      .filter(f => f.getPath.getName.endsWith(".parquet") && !f.getPath.toString.contains("/.hoodie/"))
+      .map { f =>
+        val baseFile = new HoodieBaseFile(f)
+        val partition = FSUtils.getRelativePartitionPath(new StoragePath(basePath), f.getPath.getParent)
+        val fileSlice = new FileSlice(partition, baseFile.getCommitTime, baseFile.getFileId)
+        fileSlice.setBaseFile(baseFile)
+        FileSliceAndPartition.of(partition, fileSlice)
+      }
+    lazy val entrySize = HoodieRecordIndexEntrySizeEstimator.estimateEntrySize(context, metaClient, fileSlices.asJava,
+      HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_UUID,
+      HoodieMetadataConfig.RECORD_INDEX_ENTRY_SIZE_KEY_FACTOR_PROP.defaultValue().toDouble)
+
+    // 1MB file groups, so that the 200k entries spread over several; the HFile bloom filters are left out so that the
+    // HFile sizes are those of the entries
+    val maxFileGroupBytes = 1024 * 1024L
+    df.limit(10).write.format("hudi").options(writeOpts ++ entrySizeOpts ++ Map(
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MIN_FILE_GROUP_COUNT_PROP.key -> "1",
+      HoodieMetadataConfig.GLOBAL_RECORD_LEVEL_INDEX_MAX_FILE_GROUP_COUNT_PROP.key -> "1000",
+      HoodieMetadataConfig.RECORD_INDEX_MAX_FILE_GROUP_SIZE_BYTES_PROP.key -> maxFileGroupBytes.toString,
+      HoodieStorageConfig.HFILE_WITH_BLOOM_FILTER_ENABLED.key -> "false"))
+      .option(OPERATION.key, UPSERT_OPERATION_OPT_VAL).mode(SaveMode.Append).save(basePath)
+
+    val indexDir = new StoragePath(metaClient.getMetaPath, "metadata/" + MetadataPartitionType.RECORD_INDEX.getPartitionPath)
+    val hfiles = storage.listDirectEntries(indexDir).asScala.filter(f => FSUtils.isBaseFile(f.getPath))
+    val fileGroups = hfiles.map(f => FSUtils.getFileId(f.getPath.getName)).distinct.size
+    def fileGroupsFor(size: Int): Int = math.max(1L, (rows * 2) / (maxFileGroupBytes / size)).toInt
+    if (configuredEntrySize != null) {
+      assertEquals(fileGroupsFor(configuredEntrySize.toInt), fileGroups)
+    } else {
+      // the writer evaluates the value size over its own file slice order, which can round the entry size a byte apart
+      val expectedFileGroups = (entrySize - 1 to entrySize + 1).map(fileGroupsFor)
+      assertTrue(expectedFileGroups.contains(fileGroups), s"$fileGroups file groups, expected one of $expectedFileGroups")
+      // the index is initialized in one commit, so each file group has one base file holding its share of the entries
+      val actualEntrySize = hfiles.map(_.getLength).sum.toDouble / rows
+      val lowestEntrySize = if (keyShape == "composite") 0.8 * actualEntrySize else actualEntrySize
+      assertTrue(entrySize >= lowestEntrySize && entrySize <= 1.5 * actualEntrySize,
+        s"estimated $entrySize bytes per entry against $actualEntrySize in the HFiles")
+    }
   }
 }

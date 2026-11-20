@@ -64,6 +64,7 @@ import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.metadata.BaseFileRecordParsingUtils;
 import org.apache.hudi.metadata.HoodieMetadataPayload;
+import org.apache.hudi.metadata.HoodieRecordIndexEntrySizeEstimator;
 import org.apache.hudi.metadata.HoodieTableMetadataUtil;
 import org.apache.hudi.metadata.MetadataPartitionType;
 import org.apache.hudi.metadata.index.BaseIndexer;
@@ -124,7 +125,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
         dataTableWriteConfig);
 
     // Initialize the file groups
-    final int fileGroupCount = estimateFileGroupCount(records);
+    final int fileGroupCount = estimateFileGroupCount(records, latestMergedPartitionFileSliceList);
     log.info("Initializing record index with {} file groups.", fileGroupCount);
     return new DataPartitionAndRecords(fileGroupCount, Option.ofNullable(dataPartition), records);
   }
@@ -342,15 +343,29 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
         : HoodieMetadataPayload.RECORD_INDEX_FIELD_FILEID_ENCODING_RAW_STRING;
   }
 
-  protected int estimateFileGroupCount(HoodieData<HoodieRecord> records) {
-    int minFileGroupCount;
-    int maxFileGroupCount;
-    if (dataTableWriteConfig.isRecordLevelIndexEnabled()) {
-      minFileGroupCount = dataTableWriteConfig.getRecordLevelIndexMinFileGroupCount();
-      maxFileGroupCount = dataTableWriteConfig.getRecordLevelIndexMaxFileGroupCount();
+  /**
+   * Estimates the file group count from the records the index is initialized with. Entries take the size set by
+   * {@code hoodie.metadata.record.index.average.record.size} when set. Otherwise, when the file group count of the global
+   * record index is not fixed, its entries are sized from the file slices the records are read from; the partitioned
+   * record index, and a fixed file group count, use {@link HoodieTableMetadataUtil#RECORD_INDEX_AVERAGE_RECORD_SIZE} bytes.
+   */
+  protected int estimateFileGroupCount(HoodieData<HoodieRecord> records, List<FileSliceAndPartition> fileSlices) {
+    boolean partitioned = dataTableWriteConfig.isRecordLevelIndexEnabled();
+    int minFileGroupCount = partitioned
+        ? dataTableWriteConfig.getRecordLevelIndexMinFileGroupCount() : dataTableWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount();
+    int maxFileGroupCount = partitioned
+        ? dataTableWriteConfig.getRecordLevelIndexMaxFileGroupCount() : dataTableWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount();
+    Option<Integer> configuredRecordSize = dataTableWriteConfig.getRecordIndexAverageRecordSize();
+    int averageRecordSize;
+    if (configuredRecordSize.isPresent()) {
+      averageRecordSize = configuredRecordSize.get();
+    } else if (partitioned || (minFileGroupCount == maxFileGroupCount && minFileGroupCount != 0)) {
+      // The partitioned record index keeps the fixed size, and a fixed file group count needs none, so the footers are
+      // read only when the file group count of the global record index is estimated.
+      averageRecordSize = RECORD_INDEX_AVERAGE_RECORD_SIZE;
     } else {
-      minFileGroupCount = dataTableWriteConfig.getGlobalRecordLevelIndexMinFileGroupCount();
-      maxFileGroupCount = dataTableWriteConfig.getGlobalRecordLevelIndexMaxFileGroupCount();
+      averageRecordSize = HoodieRecordIndexEntrySizeEstimator.estimateEntrySize(engineContext, dataTableMetaClient, fileSlices,
+          getFileIdEncoding(dataTableMetaClient, dataTableWriteConfig), dataTableWriteConfig.getRecordIndexEntrySizeKeyFactor());
     }
     Supplier<Long> recordCountSupplier = () -> {
       records.persist("MEMORY_AND_DISK_SER");
@@ -361,7 +376,7 @@ public abstract class BaseRecordIndexer extends BaseIndexer {
     return HoodieTableMetadataUtil.estimateFileGroupCount(
         MetadataPartitionType.RECORD_INDEX,
         recordCountSupplier,
-        RECORD_INDEX_AVERAGE_RECORD_SIZE,
+        averageRecordSize,
         minFileGroupCount,
         maxFileGroupCount,
         dataTableWriteConfig.getRecordIndexGrowthFactor(),
