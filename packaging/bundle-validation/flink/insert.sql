@@ -18,9 +18,6 @@
  */
 
 SET 'table.dml-sync' = 'true';
--- Flink 2.3 rejects an INSERT whose upsert key differs from the primary key of the sink table
--- unless it has an ON CONFLICT clause (FLINK-38927), restore the behavior of earlier versions.
-SET 'table.exec.sink.require-on-conflict' = 'false';
 
 CREATE TABLE t1
 (

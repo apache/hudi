@@ -114,9 +114,6 @@ public final class HoodieFlinkQuickstart {
       // configure not to retry after failure
       execConf.setString("restart-strategy", "fixed-delay");
       execConf.setString("restart-strategy.fixed-delay.attempts", "0");
-      // Flink 2.3 rejects an INSERT whose upsert key differs from the primary key of the sink table
-      // unless it has an ON CONFLICT clause (FLINK-38927), restore the behavior of earlier versions.
-      execConf.setString("table.exec.sink.require-on-conflict", "false");
       this.tableEnvironment = streamTableEnv;
     }
   }
