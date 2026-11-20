@@ -28,6 +28,7 @@ import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.testutils.NetworkTestUtils;
 import org.apache.hudi.common.testutils.minicluster.HdfsTestService;
 import org.apache.hudi.common.testutils.minicluster.ZookeeperTestService;
 import org.apache.hudi.common.util.AvroOrcUtils;
@@ -63,6 +64,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.MiniDFSCluster;
+import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.ql.exec.vector.ColumnVector;
 import org.apache.hadoop.hive.ql.exec.vector.VectorizedRowBatch;
 import org.apache.hive.service.server.HiveServer2;
@@ -164,6 +166,8 @@ public class UtilitiesTestBase {
 
     hadoopConf.set("hive.exec.scratchdir", basePath + "/.tmp/hive");
     if (needsHive) {
+      // a free HiveServer2 port instead of HiveTestService's fixed default, so concurrent test JVMs do not collide
+      hadoopConf.setInt(HiveConf.ConfVars.HIVE_SERVER2_THRIFT_PORT.varname, NetworkTestUtils.nextFreePort());
       hiveTestService = new HiveTestService(hadoopConf);
       hiveServer = hiveTestService.start();
       clearHiveDb(basePath + "/dummy" + System.currentTimeMillis());
