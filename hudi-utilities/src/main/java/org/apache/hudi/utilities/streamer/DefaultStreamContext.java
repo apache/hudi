@@ -20,6 +20,8 @@ package org.apache.hudi.utilities.streamer;
 
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.utilities.schema.SchemaProvider;
+import org.apache.hudi.utilities.sources.SourceContract;
+import org.apache.hudi.utilities.sources.SourceContracts;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -35,4 +37,9 @@ public class DefaultStreamContext implements StreamContext {
 
   private final SchemaProvider schemaProvider;
   private final Option<SourceProfileSupplier> sourceProfileSupplier;
+  private final SourceContract sourceContract;
+
+  public DefaultStreamContext(SchemaProvider schemaProvider, Option<SourceProfileSupplier> sourceProfileSupplier) {
+    this(schemaProvider, sourceProfileSupplier, SourceContracts.NONE);
+  }
 }

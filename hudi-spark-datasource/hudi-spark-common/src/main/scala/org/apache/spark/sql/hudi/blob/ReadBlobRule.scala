@@ -41,7 +41,7 @@ import scala.collection.mutable.ArrayBuffer
  */
 case class ReadBlobRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
-  override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
+  override def apply(plan: LogicalPlan): LogicalPlan = plan transformUp {
     case Project(projectList, Filter(condition, child))
       if containsReadBlobExpression(projectList)
         && containsReadBlobInExpression(condition)
