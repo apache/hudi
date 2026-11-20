@@ -27,6 +27,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.util.collection.Pair;
+import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.configuration.HadoopConfigurations;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.source.HoodieScanContext;
@@ -40,6 +41,7 @@ import org.apache.hadoop.conf.Configuration;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -48,14 +50,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+
+import static org.apache.hudi.common.table.timeline.InstantComparison.LESSER_THAN_OR_EQUALS;
+import static org.apache.hudi.common.table.timeline.InstantComparison.compareTimestamps;
 
 /**
  * Default implementation of HoodieContinuousSplitDiscover.
  */
 @Slf4j
 public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover {
+  private static final TreeMap<String, long[]> EMPTY_WRITES = new TreeMap<>();
+
   private final HoodieScanContext scanContext;
   private final IncrementalInputSplits incrementalInputSplits;
   private final Configuration hadoopConf;
@@ -100,9 +108,12 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
         scanContext.isSkipCompaction(),
         scanContext.isSkipClustering(),
         scanContext.isSkipInsertOverwrite());
+    // commits completed after the end commit are never read
+    String endCommit = scanContext.getConf().get(FlinkOptions.READ_END_COMMIT);
     return timeline.getInstantsAsStream()
         .map(HoodieInstant::getCompletionTime)
         .filter(completionTime -> completionTime != null && completionTime.compareTo(offset) > 0)
+        .filter(completionTime -> endCommit == null || compareTimestamps(completionTime, LESSER_THAN_OR_EQUALS, endCommit))
         .sorted()
         .collect(Collectors.toList());
   }
@@ -120,50 +131,96 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
       return HoodieContinuousSplitDiscover.super.getLagInfo(splits);
     }
     Map<String, Pair<HoodieInstant, HoodieTimeline>> commits = getCommits(splits);
-    Map<String, Map<String, long[]>> writesByCommit = new HashMap<>();
+    Map<String, String> completionTimes = new HashMap<>();
+    commits.forEach((instantTime, commit) -> completionTimes.put(instantTime, commit.getLeft().getCompletionTime()));
+    // the writes of the exact-match commits by file id, then by instant time, so that each split only
+    // visits the commits that wrote its file group
+    Map<String, TreeMap<String, long[]>> writesByFileId = new HashMap<>();
+    Set<String> unknownCommits = new TreeSet<>();
     for (String commit : getExactMatchCommits(splits)) {
-      if (commits.containsKey(commit)) {
-        writesByCommit.put(commit, getWritesByFileId(commits.get(commit).getLeft(), commits.get(commit).getRight()));
+      Pair<HoodieInstant, HoodieTimeline> instant = commits.get(commit);
+      if (instant == null) {
+        unknownCommits.add(commit);
+        continue;
       }
+      getWritesByFileId(instant.getLeft(), instant.getRight()).forEach(
+          (fileId, write) -> writesByFileId.computeIfAbsent(fileId, k -> new TreeMap<>()).put(commit, write));
     }
     Map<String, HoodieSourceSplitLagInfo> lagInfos = new HashMap<>();
     for (HoodieSourceSplit split : splits) {
-      lagInfos.put(split.splitId(), getLagInfo(split, commits, writesByCommit));
+      lagInfos.put(split.splitId(), getLagInfo(split, completionTimes, writesByFileId, unknownCommits));
     }
     return lagInfos;
   }
 
+  /**
+   * Returns the lag info of the splits from the commits of their ranges in the timeline of the last
+   * discovery, without reading the commit metadata.
+   */
+  @Override
+  public Map<String, HoodieSourceSplitLagInfo> getRangeLagInfo(Collection<HoodieSourceSplit> splits) {
+    if (metaClient == null || splits.isEmpty()) {
+      return HoodieContinuousSplitDiscover.super.getRangeLagInfo(splits);
+    }
+    Set<String> instantTimes = getRangeCommits(splits);
+    Map<String, String> completionTimes = new HashMap<>();
+    metaClient.getCommitsTimeline().filterCompletedInstants().getInstantsAsStream()
+        .filter(instant -> instantTimes.contains(instant.requestedTime()))
+        .forEach(instant -> completionTimes.put(instant.requestedTime(), instant.getCompletionTime()));
+    Map<String, HoodieSourceSplitLagInfo> lagInfos = new HashMap<>();
+    for (HoodieSourceSplit split : splits) {
+      Collection<String> rangeCommits = HoodieSourceSplitLagInfo.getRangeCommits(split);
+      lagInfos.put(split.splitId(), new HoodieSourceSplitLagInfo(rangeCommits, getOldestCompletionTime(rangeCommits, completionTimes), 0L, 0L));
+    }
+    return lagInfos;
+  }
+
+  @Override
+  public ZoneId getTimelineZone() {
+    return metaClient == null ? HoodieContinuousSplitDiscover.super.getTimelineZone() : metaClient.getTableConfig().getTimelineTimezone().getZoneId();
+  }
+
   private static HoodieSourceSplitLagInfo getLagInfo(
       HoodieSourceSplit split,
-      Map<String, Pair<HoodieInstant, HoodieTimeline>> commits,
-      Map<String, Map<String, long[]>> writesByCommit) {
+      Map<String, String> completionTimes,
+      Map<String, TreeMap<String, long[]>> writesByFileId,
+      Set<String> unknownCommits) {
     Collection<String> rangeCommits = HoodieSourceSplitLagInfo.getRangeCommits(split);
     List<String> readCommits = new ArrayList<>();
     long records = 0L;
     long bytes = 0L;
     if (isExactMatch(split)) {
-      for (String commit : new TreeSet<>(rangeCommits)) {
-        Map<String, long[]> writes = writesByCommit.get(commit);
-        long[] write = writes == null ? null : writes.get(split.getFileId());
-        if (writes == null || write != null) {
-          // a commit whose metadata is unknown may have written the file group
-          readCommits.add(commit);
-        }
-        if (write != null) {
-          records += write[0];
-          bytes = write[1];
+      Set<String> range = ((InstantRange.ExactMatchRange) split.getInstantRange().get()).getInstants();
+      TreeSet<String> commits = new TreeSet<>();
+      // a commit whose metadata is unknown may have written the file group
+      unknownCommits.stream().filter(range::contains).forEach(commits::add);
+      Map<String, long[]> writes = writesByFileId.getOrDefault(split.getFileId(), EMPTY_WRITES);
+      for (Map.Entry<String, long[]> write : writes.entrySet()) {
+        if (range.contains(write.getKey())) {
+          commits.add(write.getKey());
+          records += write.getValue()[0];
+          bytes = write.getValue()[1];
         }
       }
+      readCommits.addAll(commits);
     }
     Collection<String> lagCommits = readCommits.isEmpty() ? rangeCommits : readCommits;
-    String oldestCompletionTime = lagCommits.stream()
-        .map(commits::get)
-        .filter(Objects::nonNull)
-        .map(commit -> commit.getLeft().getCompletionTime())
+    return new HoodieSourceSplitLagInfo(lagCommits, getOldestCompletionTime(lagCommits, completionTimes), records, bytes);
+  }
+
+  @Nullable
+  private static String getOldestCompletionTime(Collection<String> commits, Map<String, String> completionTimes) {
+    return commits.stream()
+        .map(completionTimes::get)
         .filter(Objects::nonNull)
         .min(String::compareTo)
         .orElse(null);
-    return new HoodieSourceSplitLagInfo(lagCommits, oldestCompletionTime, records, bytes);
+  }
+
+  private static Set<String> getRangeCommits(Collection<HoodieSourceSplit> splits) {
+    return splits.stream()
+        .flatMap(split -> HoodieSourceSplitLagInfo.getRangeCommits(split).stream())
+        .collect(Collectors.toSet());
   }
 
   /**
@@ -171,9 +228,7 @@ public class DefaultHoodieSplitDiscover implements HoodieContinuousSplitDiscover
    * metadata from, looking up the archived timeline for the commits that are not active anymore.
    */
   private Map<String, Pair<HoodieInstant, HoodieTimeline>> getCommits(Collection<HoodieSourceSplit> splits) {
-    Set<String> instantTimes = splits.stream()
-        .flatMap(split -> HoodieSourceSplitLagInfo.getRangeCommits(split).stream())
-        .collect(Collectors.toSet());
+    Set<String> instantTimes = getRangeCommits(splits);
     Map<String, Pair<HoodieInstant, HoodieTimeline>> commits = new HashMap<>();
     HoodieTimeline activeTimeline = metaClient.getCommitsTimeline().filterCompletedInstants();
     activeTimeline.getInstantsAsStream()

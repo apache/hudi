@@ -20,11 +20,15 @@ package org.apache.hudi.source.split;
 
 import org.apache.hudi.common.model.HoodieCommitMetadata;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.model.HoodieWriteStat;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.log.InstantRange;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.testutils.HoodieCommonTestHarness;
 import org.apache.hudi.common.testutils.HoodieTestUtils;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.configuration.FlinkOptions;
 import org.apache.hudi.source.HoodieScanContext;
 import org.apache.hudi.storage.StoragePath;
@@ -43,8 +47,12 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -387,6 +395,88 @@ public class TestDefaultHoodieSplitDiscover extends HoodieCommonTestHarness {
     List<String> undiscovered = discover.getUndiscoveredCommits(offset, true);
 
     assertEquals(Collections.singletonList(getCompletedCommits().get(1).getCompletionTime()), undiscovered);
+  }
+
+  @Test
+  void testGetUndiscoveredCommitsStopAtTheEndCommit() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    List<HoodieInstant> commits = getCompletedCommits();
+    conf.set(FlinkOptions.READ_END_COMMIT, commits.get(1).getCompletionTime());
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+
+    assertEquals(Collections.singletonList(commits.get(1).getCompletionTime()),
+        discover.getUndiscoveredCommits(commits.get(0).getCompletionTime(), true));
+    assertTrue(discover.getUndiscoveredCommits(commits.get(1).getCompletionTime(), false).isEmpty(),
+        "the commits after the end commit are never read");
+  }
+
+  @Test
+  void testLagInfoCountsTheRangeCommitsWithUnknownMetadataAsRead() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT.subList(0, 2), conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+    List<HoodieInstant> commits = getCompletedCommits();
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+    HoodieSourceSplit discovered = discover.discoverSplits(commits.get(0).getCompletionTime()).getSplits().stream()
+        .filter(split -> split.getPartitionPath().equals("par1")).findFirst().get();
+    String unknownCommit = "20000101000000000";
+    Set<String> range = new HashSet<>(((InstantRange.ExactMatchRange) discovered.getInstantRange().get()).getInstants());
+    range.add(unknownCommit);
+    HoodieSourceSplit split = new HoodieSourceSplit(discovered.getSplitNum(), discovered.getBasePath().get(), discovered.getLogPaths(),
+        discovered.getTablePath(), discovered.getPartitionPath(), discovered.getMergeType(), discovered.getLatestCommit(),
+        discovered.getFileId(), Option.of(new InstantRange.ExactMatchRange(range)));
+
+    HoodieSourceSplitLagInfo lagInfo = discover.getLagInfo(Collections.singletonList(split)).get(split.splitId());
+
+    assertEquals(Arrays.asList(unknownCommit, commits.get(1).requestedTime(), commits.get(2).requestedTime()), lagInfo.getReadCommits());
+    assertEquals(commits.get(1).getCompletionTime(), lagInfo.getOldestCommitCompletionTime());
+    assertEquals(getWrittenRecords(commits.subList(1, 3)).get(split.getFileId()), lagInfo.getEstimatedRecords());
+    assertEquals(new File(new StoragePath(split.getBasePath().get()).toUri().getPath()).length(), lagInfo.getEstimatedBytes());
+  }
+
+  @Test
+  void testRangeLagInfoReadsAllTheCommitsOfTheRange() throws Exception {
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    conf.set(FlinkOptions.READ_AS_STREAMING, true);
+    TestData.writeData(TestData.DATA_SET_INSERT, conf);
+    // the second commit only writes par1
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT.subList(0, 2), conf);
+    TestData.writeData(TestData.DATA_SET_UPDATE_INSERT, conf);
+    List<HoodieInstant> commits = getCompletedCommits();
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+    Collection<HoodieSourceSplit> splits = discover.discoverSplits(commits.get(0).getCompletionTime()).getSplits();
+
+    Map<String, HoodieSourceSplitLagInfo> lagInfos = discover.getRangeLagInfo(splits);
+
+    assertFalse(splits.isEmpty());
+    for (HoodieSourceSplit split : splits) {
+      HoodieSourceSplitLagInfo lagInfo = lagInfos.get(split.splitId());
+      assertEquals(new TreeSet<>(Arrays.asList(commits.get(1).requestedTime(), commits.get(2).requestedTime())),
+          new TreeSet<>(lagInfo.getReadCommits()));
+      assertEquals(commits.get(1).getCompletionTime(), lagInfo.getOldestCommitCompletionTime());
+      assertEquals(0L, lagInfo.getEstimatedRecords());
+      assertEquals(0L, lagInfo.getEstimatedBytes());
+    }
+  }
+
+  @Test
+  void testTimelineZoneIsTheZoneOfTheTable() throws Exception {
+    Properties properties = new Properties();
+    properties.setProperty(HoodieTableConfig.TIMELINE_TIMEZONE.key(), HoodieTimelineTimeZone.UTC.name());
+    metaClient = HoodieTestUtils.init(basePath, HoodieTableType.COPY_ON_WRITE, properties);
+    Configuration conf = TestConfigurations.getDefaultConf(basePath);
+    DefaultHoodieSplitDiscover discover = new DefaultHoodieSplitDiscover(createScanContext(conf));
+
+    assertEquals(HoodieTimelineTimeZone.UTC.getZoneId(), discover.getTimelineZone());
   }
 
   @Test

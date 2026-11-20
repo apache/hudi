@@ -492,6 +492,26 @@ public class TestHoodieContinuousSplitEnumerator {
   }
 
   @Test
+  public void testDiscoveredSplitsArePublishedBeforeTheirLagInfoIsResolved() {
+    CapturingMetricGroup lagMetricGroup = new CapturingMetricGroup();
+    MockSplitEnumeratorContext metricContext = new MockSplitEnumeratorContext(mockMetricGroup(lagMetricGroup));
+    splitDiscover.setLagInfo(split1.splitId(), new HoodieSourceSplitLagInfo(Collections.singletonList("20231201000000000"), null, 10L, 100L));
+    List<Integer> publishedSplitsOnLagInfo = new ArrayList<>();
+    splitDiscover.setOnLagInfo(() -> publishedSplitsOnLagInfo.add(splitProvider.pendingSplitCount()));
+    splitDiscover.setNextBatch(new HoodieContinuousSplitBatch(
+        Arrays.asList(split1, split2), "20231201000000000", "20231201120000000"));
+    enumerator = new HoodieContinuousSplitEnumerator(
+        TABLE_NAME, metricContext, splitProvider, splitDiscover, scanContext, Option.empty());
+    enumerator.start();
+
+    metricContext.executeAsyncCallbacks();
+
+    assertEquals(Collections.singletonList(2), publishedSplitsOnLagInfo, "the lag info is resolved after the splits are published");
+    assertEquals(10L, lagMetricGroup.gauge("pendingRecords"));
+    assertEquals(2L, lagMetricGroup.gauge("pendingSplits"));
+  }
+
+  @Test
   public void testLagMetricsReportUndiscoveredCommits() {
     CapturingMetricGroup lagMetricGroup = new CapturingMetricGroup();
     MockSplitEnumeratorContext metricContext = new MockSplitEnumeratorContext(mockMetricGroup(lagMetricGroup));
@@ -680,6 +700,7 @@ public class TestHoodieContinuousSplitEnumerator {
     private final List<Pair<String, Boolean>> undiscoveredCommitsQueries = new ArrayList<>();
     private final Map<String, HoodieSourceSplitLagInfo> lagInfos = new HashMap<>();
     private boolean throwOnLagInfo = false;
+    private Runnable onLagInfo = () -> { };
 
     public void setNextBatch(HoodieContinuousSplitBatch batch) {
       this.nextBatch = batch;
@@ -701,8 +722,13 @@ public class TestHoodieContinuousSplitEnumerator {
       this.throwOnLagInfo = throwOnLagInfo;
     }
 
+    public void setOnLagInfo(Runnable onLagInfo) {
+      this.onLagInfo = onLagInfo;
+    }
+
     @Override
     public Map<String, HoodieSourceSplitLagInfo> getLagInfo(Collection<HoodieSourceSplit> splits) {
+      onLagInfo.run();
       if (throwOnLagInfo) {
         throw new RuntimeException("Mock exception while resolving the lag info");
       }
@@ -787,7 +813,9 @@ public class TestHoodieContinuousSplitEnumerator {
 
     @SuppressWarnings("unchecked")
     public void executeAsyncCallbacks() {
-      for (AsyncTask<?> task : asyncTasks) {
+      // the handlers may schedule more tasks, which run in the same pass
+      for (int i = 0; i < asyncTasks.size(); i++) {
+        AsyncTask<?> task = asyncTasks.get(i);
         try {
           Object result = task.callable.call();
           ((BiConsumer<Object, Throwable>) task.handler).accept(result, null);

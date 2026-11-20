@@ -18,7 +18,6 @@
 
 package org.apache.hudi.metrics;
 
-import org.apache.hudi.common.table.timeline.HoodieInstantTimeGenerator;
 import org.apache.hudi.source.split.HoodieSourceSplitLagInfo;
 
 import org.apache.flink.metrics.Gauge;
@@ -27,7 +26,6 @@ import org.apache.flink.metrics.groups.UnregisteredMetricsGroup;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.text.ParseException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,6 +35,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.TimeZone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -57,11 +56,37 @@ class TestFlinkStreamReadLagMetrics {
   private FlinkStreamReadLagMetrics metrics;
 
   @BeforeEach
-  void setUp() throws ParseException {
+  void setUp() {
     metricGroup = new CapturingMetricGroup();
-    clock = new MutableClock(toInstant(COMPLETION_3));
-    metrics = new FlinkStreamReadLagMetrics(metricGroup, "test_table", clock);
+    clock = new MutableClock(Instant.parse("2026-11-09T12:00:00Z"));
+    metrics = new FlinkStreamReadLagMetrics(metricGroup, "test_table", ZoneOffset.UTC, clock);
     metrics.registerMetrics();
+  }
+
+  @Test
+  void testCompletionTimesAreParsedInTheTimelineZone() {
+    TimeZone defaultZone = TimeZone.getDefault();
+    TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
+    try {
+      metrics.setUndiscoveredCommits(Collections.singletonList(COMPLETION_3));
+      clock.advance(Duration.ofSeconds(90));
+
+      assertEquals(90L, gauge("readLagSeconds"));
+    } finally {
+      TimeZone.setDefault(defaultZone);
+    }
+  }
+
+  @Test
+  void testCompletionTimesOfALocalTimelineAreParsedInItsZone() {
+    CapturingMetricGroup shanghaiGroup = new CapturingMetricGroup();
+    FlinkStreamReadLagMetrics shanghaiMetrics = new FlinkStreamReadLagMetrics(
+        shanghaiGroup, "test_table", ZoneId.of("Asia/Shanghai"), new MutableClock(Instant.parse("2026-11-09T04:01:00Z")));
+    shanghaiMetrics.registerMetrics();
+
+    shanghaiMetrics.setUndiscoveredCommits(Collections.singletonList(COMPLETION_3));
+
+    assertEquals(60L, shanghaiGroup.gauges.get("readLagSeconds").getValue());
   }
 
   @Test
@@ -201,10 +226,6 @@ class TestFlinkStreamReadLagMetrics {
   private static HoodieSourceSplitLagInfo lagInfo(
       String oldestCommitCompletionTime, long records, long bytes, String... commits) {
     return new HoodieSourceSplitLagInfo(Arrays.asList(commits), oldestCommitCompletionTime, records, bytes);
-  }
-
-  private static Instant toInstant(String instantTime) throws ParseException {
-    return HoodieInstantTimeGenerator.parseDateFromInstantTime(instantTime).toInstant();
   }
 
   private static class CapturingMetricGroup extends UnregisteredMetricsGroup {

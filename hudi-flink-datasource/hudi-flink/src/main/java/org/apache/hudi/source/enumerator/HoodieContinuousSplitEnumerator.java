@@ -61,8 +61,8 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
   // Read lag metrics, null when the context has no metric group
   private final FlinkStreamReadLagMetrics lagMetrics;
 
-  // Splits restored from the state, whose lag info is resolved once the enumerator starts
-  private final List<HoodieSourceSplit> restoredSplits;
+  // Splits restored from the state, whose lag info is resolved once the enumerator starts, released then
+  private List<HoodieSourceSplit> restoredSplits;
 
   public HoodieContinuousSplitEnumerator(
       String tableName,
@@ -87,7 +87,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     }
 
     if (enumeratorContext.metricGroup() != null) {
-      this.lagMetrics = new FlinkStreamReadLagMetrics(enumeratorContext.metricGroup(), tableName);
+      this.lagMetrics = new FlinkStreamReadLagMetrics(enumeratorContext.metricGroup(), tableName, splitDiscover.getTimelineZone());
       this.lagMetrics.registerMetrics();
     } else {
       this.lagMetrics = null;
@@ -97,7 +97,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
         : Collections.emptyList();
     if (!restoredSplits.isEmpty()) {
       // track the restored splits right away, so that the ones finished before their lag info is resolved are not left over
-      lagMetrics.addSplits(getSplitLagInfo(restoredSplits));
+      lagMetrics.addSplits(HoodieSourceSplitLagInfo.ofSplits(restoredSplits));
     }
   }
 
@@ -109,16 +109,10 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
         this::processDiscoveredSplits,
         0L,
         scanContext.getScanInterval().toMillis());
-    if (!restoredSplits.isEmpty()) {
-      enumeratorContext.callAsync(
-          () -> splitDiscover.getLagInfo(restoredSplits),
-          (lagInfos, throwable) -> {
-            if (throwable != null) {
-              log.warn("Failed to resolve the lag info of the restored splits", throwable);
-            } else {
-              lagMetrics.updateSplits(lagInfos);
-            }
-          });
+    List<HoodieSourceSplit> splits = restoredSplits;
+    restoredSplits = Collections.emptyList();
+    if (!splits.isEmpty()) {
+      resolveLagInfo(splits, "restored");
     }
   }
 
@@ -142,13 +136,14 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
   @Override
   void onSplitsAddedBack(List<HoodieSourceSplit> splits) {
     if (lagMetrics != null) {
-      lagMetrics.addSplits(getSplitLagInfo(splits));
+      lagMetrics.addSplits(HoodieSourceSplitLagInfo.ofSplits(splits));
     }
   }
 
   /**
-   * Returns the discovered splits, with their lag info and the completion times of the commits left to
-   * discover, which are null when the metrics are disabled or failed to be resolved.
+   * Returns the discovered splits, with the lag info known from their ranges and the completion times
+   * of the commits left to discover, which are null when the metrics are disabled or failed to be
+   * resolved. The lag info read from the commit metadata is resolved once the splits are published.
    */
   private DiscoveryResult discoverSplits() {
     String issuedOffset = position.get().getIssuedOffset().orElse(null);
@@ -161,20 +156,36 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     }
     HoodieContinuousSplitBatch batch = splitDiscover.discoverSplits(issuedOffset);
     String nextOffset = StringUtils.isNullOrEmpty(batch.getOffset()) ? issuedOffset : batch.getOffset();
-    return new DiscoveryResult(batch, resolveLagInfo(batch.getSplits()), getUndiscoveredCommits(nextOffset, false));
+    return new DiscoveryResult(batch, getRangeLagInfo(batch.getSplits()), getUndiscoveredCommits(nextOffset, false));
   }
 
   @Nullable
-  private Map<String, HoodieSourceSplitLagInfo> resolveLagInfo(Collection<HoodieSourceSplit> splits) {
+  private Map<String, HoodieSourceSplitLagInfo> getRangeLagInfo(Collection<HoodieSourceSplit> splits) {
     if (lagMetrics == null || splits.isEmpty()) {
       return null;
     }
     try {
-      return splitDiscover.getLagInfo(splits);
+      return splitDiscover.getRangeLagInfo(splits);
     } catch (Exception e) {
-      log.warn("Failed to resolve the lag info of {} discovered splits", splits.size(), e);
+      log.warn("Failed to get the lag info of {} discovered splits from their ranges", splits.size(), e);
       return null;
     }
+  }
+
+  /**
+   * Resolves the lag info of the tracked splits from the commit metadata in the worker thread, so that
+   * it does not delay the splits.
+   */
+  private void resolveLagInfo(Collection<HoodieSourceSplit> splits, String kind) {
+    enumeratorContext.callAsync(
+        () -> splitDiscover.getLagInfo(splits),
+        (lagInfos, throwable) -> {
+          if (throwable != null) {
+            log.warn("Failed to resolve the lag info of {} {} splits", splits.size(), kind, throwable);
+          } else {
+            lagMetrics.updateSplits(lagInfos);
+          }
+        });
   }
 
   @Nullable
@@ -190,10 +201,6 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
     }
   }
 
-  private static Map<String, HoodieSourceSplitLagInfo> getSplitLagInfo(Collection<HoodieSourceSplit> splits) {
-    return splits.stream().collect(Collectors.toMap(HoodieSourceSplit::splitId, HoodieSourceSplitLagInfo::of, (first, second) -> first));
-  }
-
   private void processDiscoveredSplits(DiscoveryResult discovery, Throwable throwable) {
     if (throwable != null) {
       throw new RuntimeException("Failed to discover new splits", throwable);
@@ -201,7 +208,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
 
     HoodieContinuousSplitBatch result = discovery.batch;
     if (lagMetrics != null) {
-      lagMetrics.addSplits(discovery.lagInfos != null ? discovery.lagInfos : getSplitLagInfo(result.getSplits()));
+      lagMetrics.addSplits(discovery.rangeLagInfos != null ? discovery.rangeLagInfos : HoodieSourceSplitLagInfo.ofSplits(result.getSplits()));
       if (discovery.undiscoveredCommits != null) {
         lagMetrics.setUndiscoveredCommits(discovery.undiscoveredCommits);
       }
@@ -230,6 +237,9 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
       position.set(HoodieEnumeratorPosition.of(result.getEndInstant(), result.getOffset()));
       log.info("Update enumerator position to {}", position.get());
     }
+    if (lagMetrics != null && !result.getSplits().isEmpty()) {
+      resolveLagInfo(result.getSplits(), "discovered");
+    }
   }
 
   /**
@@ -239,7 +249,7 @@ public class HoodieContinuousSplitEnumerator extends AbstractHoodieSplitEnumerat
   private static class DiscoveryResult {
     private final HoodieContinuousSplitBatch batch;
     @Nullable
-    private final Map<String, HoodieSourceSplitLagInfo> lagInfos;
+    private final Map<String, HoodieSourceSplitLagInfo> rangeLagInfos;
     @Nullable
     private final List<String> undiscoveredCommits;
   }

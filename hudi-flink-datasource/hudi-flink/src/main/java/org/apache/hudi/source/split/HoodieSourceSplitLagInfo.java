@@ -29,6 +29,8 @@ import javax.annotation.Nullable;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * What a split reads, used by the enumerator to report the read lag and the pending work.
@@ -66,6 +68,13 @@ public class HoodieSourceSplitLagInfo {
    */
   public static HoodieSourceSplitLagInfo of(HoodieSourceSplit split) {
     return new HoodieSourceSplitLagInfo(getRangeCommits(split), null, 0L, 0L);
+  }
+
+  /**
+   * Returns the lag info known from the splits alone, see {@link #of(HoodieSourceSplit)}, keyed by split id.
+   */
+  public static Map<String, HoodieSourceSplitLagInfo> ofSplits(Collection<HoodieSourceSplit> splits) {
+    return splits.stream().collect(Collectors.toMap(HoodieSourceSplit::splitId, split -> of(split), (first, second) -> first));
   }
 
   /**

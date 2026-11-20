@@ -22,11 +22,11 @@ import org.apache.flink.annotation.Internal;
 
 import javax.annotation.Nullable;
 
+import java.time.ZoneId;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Interface for continuously discover new splits from active timeline.
@@ -39,7 +39,8 @@ public interface HoodieContinuousSplitDiscover {
 
   /**
    * Returns the completion times of the completed commits in the active timeline after {@code offset},
-   * which the next discoveries are going to read, in ascending order.
+   * and at or before the configured end commit if any, which the next discoveries are going to read, in
+   * ascending order.
    *
    * @param offset         the consumption offset issued so far, nothing is returned if null
    * @param reloadTimeline whether to reload the timeline, otherwise the one of the last discovery is used
@@ -52,6 +53,22 @@ public interface HoodieContinuousSplitDiscover {
    * Returns the lag info of the splits, keyed by split id, using the timeline of the last discovery.
    */
   default Map<String, HoodieSourceSplitLagInfo> getLagInfo(Collection<HoodieSourceSplit> splits) {
-    return splits.stream().collect(Collectors.toMap(HoodieSourceSplit::splitId, HoodieSourceSplitLagInfo::of, (first, second) -> first));
+    return HoodieSourceSplitLagInfo.ofSplits(splits);
+  }
+
+  /**
+   * Returns the lag info of the splits known without reading the commit metadata, keyed by split id,
+   * using the timeline of the last discovery: the splits read all the commits of their ranges, with
+   * unknown estimates.
+   */
+  default Map<String, HoodieSourceSplitLagInfo> getRangeLagInfo(Collection<HoodieSourceSplit> splits) {
+    return HoodieSourceSplitLagInfo.ofSplits(splits);
+  }
+
+  /**
+   * Returns the time zone of the instant and completion times of the table.
+   */
+  default ZoneId getTimelineZone() {
+    return ZoneId.systemDefault();
   }
 }

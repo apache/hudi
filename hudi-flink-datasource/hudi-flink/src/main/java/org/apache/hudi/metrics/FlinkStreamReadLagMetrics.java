@@ -25,9 +25,11 @@ import org.apache.hudi.source.split.HoodieSourceSplitLagInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.flink.metrics.MetricGroup;
 
-import java.text.ParseException;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +51,11 @@ import java.util.TreeMap;
 public class FlinkStreamReadLagMetrics extends HoodieFlinkMetrics {
 
   private final Clock clock;
+
+  /**
+   * Time zone of the completion times of the table.
+   */
+  private final ZoneId timelineZone;
 
   /**
    * Lag info of the discovered splits that are not finished yet, keyed by split id.
@@ -76,13 +83,14 @@ public class FlinkStreamReadLagMetrics extends HoodieFlinkMetrics {
 
   private long pendingBytes;
 
-  public FlinkStreamReadLagMetrics(MetricGroup metricGroup, String tableName) {
-    this(metricGroup, tableName, Clock.systemUTC());
+  public FlinkStreamReadLagMetrics(MetricGroup metricGroup, String tableName, ZoneId timelineZone) {
+    this(metricGroup, tableName, timelineZone, Clock.systemUTC());
   }
 
   @VisibleForTesting
-  FlinkStreamReadLagMetrics(MetricGroup metricGroup, String tableName, Clock clock) {
+  FlinkStreamReadLagMetrics(MetricGroup metricGroup, String tableName, ZoneId timelineZone, Clock clock) {
     super(metricGroup.addGroup("table", tableName));
+    this.timelineZone = timelineZone;
     this.clock = clock;
   }
 
@@ -155,8 +163,10 @@ public class FlinkStreamReadLagMetrics extends HoodieFlinkMetrics {
       return 0L;
     }
     try {
-      return Duration.between(HoodieInstantTimeGenerator.parseDateFromInstantTime(oldest).toInstant(), clock.instant()).getSeconds();
-    } catch (ParseException e) {
+      LocalDateTime completionTime = LocalDateTime.parse(
+          HoodieInstantTimeGenerator.fixInstantTimeCompatibility(oldest), HoodieInstantTimeGenerator.MILLIS_INSTANT_TIME_FORMATTER);
+      return Duration.between(completionTime.atZone(timelineZone).toInstant(), clock.instant()).getSeconds();
+    } catch (DateTimeParseException e) {
       log.warn("Invalid commit completion time: {}", oldest);
       return 0L;
     }
