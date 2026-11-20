@@ -268,6 +268,9 @@ public class HudiAvroSerializer
                         // scale, which returns the BigDecimal unchanged, before taking the unscaled value back out.
                         type.writeLong(output, new BigInteger(fixed.bytes()).longValueExact());
                     }
+                    else if (value instanceof ByteBuffer buffer) {
+                        type.writeLong(output, readUnscaledDecimal(buffer).longValueExact());
+                    }
                     else {
                         throw new TrinoException(GENERIC_INTERNAL_ERROR,
                                 format("Unhandled type for %s: %s | value type: %s", javaType.getSimpleName(), type, value.getClass().getName()));
@@ -482,6 +485,12 @@ public class HudiAvroSerializer
             if (value instanceof SqlDecimal sqlDecimal) {
                 valueAsBigDecimal = sqlDecimal.toBigDecimal();
             }
+            else if (value instanceof GenericData.Fixed fixed) {
+                valueAsBigDecimal = new BigDecimal(new BigInteger(fixed.bytes()), decimalType.getScale());
+            }
+            else if (value instanceof ByteBuffer buffer) {
+                valueAsBigDecimal = new BigDecimal(readUnscaledDecimal(buffer), decimalType.getScale());
+            }
             else {
                 throw new TrinoException(GENERIC_INTERNAL_ERROR,
                         format("Unhandled type for %s: %s | value type: %s", type.getJavaType().getSimpleName(), type, value.getClass().getName()));
@@ -493,6 +502,14 @@ public class HudiAvroSerializer
         else {
             throw new TrinoException(GENERIC_INTERNAL_ERROR, "Unhandled type for Object: " + type.getTypeDescriptor());
         }
+    }
+
+    private static BigInteger readUnscaledDecimal(ByteBuffer buffer)
+    {
+        // Avro bytes occupy the buffer's remaining region; preserve its position for repeated reads.
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.duplicate().get(bytes);
+        return new BigInteger(bytes);
     }
 
     private static void writeArray(ArrayBlockBuilder output, List<?> value, ArrayType arrayType)
