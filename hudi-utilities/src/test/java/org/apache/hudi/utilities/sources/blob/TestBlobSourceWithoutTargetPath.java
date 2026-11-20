@@ -186,7 +186,7 @@ public class TestBlobSourceWithoutTargetPath extends UtilitiesTestBase {
       assertNotNull(receivedInstant);
       assertEquals(1, pendingAtApply.size(), pendingAtApply.toString());
       assertEquals(receivedInstant, pendingAtApply.get(0).requestedTime());
-      assertEquals(HoodieInstant.State.INFLIGHT, pendingAtApply.get(0).getState());
+      assertEquals(HoodieInstant.State.INFLIGHT, pendingAtApply.get(0).getState(), "the instant is INFLIGHT at apply");
       received.add(receivedInstant);
     }
 
