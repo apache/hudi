@@ -44,13 +44,6 @@ class TestHoodieDataUtils extends HoodieSparkSqlTestBase {
     context = new HoodieSparkEngineContext(jsc)
   }
 
-  override def afterAll(): Unit = {
-    if (jsc != null) {
-      jsc.close()
-    }
-    super.afterAll()
-  }
-
   // Helper method to create a Pair from key and value
   private def pair(key: String, value: String): Pair[String, String] = {
     Pair.of(key, value)
