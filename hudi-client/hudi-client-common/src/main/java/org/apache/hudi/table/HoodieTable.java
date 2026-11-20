@@ -777,9 +777,20 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
 
   /**
    * Returns the possible invalid data file name with given marker files.
+   *
+   * <p>Only data files of the table are judged: a marked file under the table's meta folder is never one. A writer that
+   * marks a file there (so a rollback of its instant removes it) owns the file's lifecycle after the commit, and the commit's
+   * write stats need not list it.
    */
   protected Set<String> getInvalidDataPaths(WriteMarkers markers) throws IOException {
-    return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism());
+    return markers.createdAndMergedDataPaths(context, config.getFinalizeWriteParallelism()).stream()
+        .filter(path -> !isUnderMetaFolder(path))
+        .collect(Collectors.toSet());
+  }
+
+  /** Whether {@code relativePath}, relative to the table's base path, lies under the table's meta folder. */
+  static boolean isUnderMetaFolder(String relativePath) {
+    return relativePath.startsWith(HoodieTableMetaClient.METAFOLDER_NAME + "/");
   }
 
   /**
