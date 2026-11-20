@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="520" viewBox="0 0 960 520" font-family="Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="960" height="520" fill="#ffffff"/>
+
+  <!-- Titles -->
+  <text x="240" y="34" text-anchor="middle" font-size="18" font-weight="bold" fill="#1f2937">Today: assembled by each user</text>
+  <text x="720" y="34" text-anchor="middle" font-size="18" font-weight="bold" fill="#1f2937">Proposed: one packaged lakehouse</text>
+  <line x1="480" y1="16" x2="480" y2="504" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="6 5"/>
+
+  <!-- LEFT: question -->
+  <rect x="40" y="56" width="400" height="40" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="240" y="81" text-anchor="middle" font-size="14" fill="#312e81">"What were gross bookings per city last week?"</text>
+
+  <!-- LEFT: scattered pieces -->
+  <g font-size="13" fill="#7c2d12">
+    <rect x="40"  y="118" width="120" height="44" rx="6" fill="#fff7ed" stroke="#f97316" stroke-dasharray="5 4"/>
+    <text x="100" y="137" text-anchor="middle">LLM + tools</text>
+    <text x="100" y="153" text-anchor="middle" font-size="11">hand-wired</text>
+
+    <rect x="180" y="118" width="120" height="44" rx="6" fill="#fff7ed" stroke="#f97316" stroke-dasharray="5 4"/>
+    <text x="240" y="137" text-anchor="middle">Metric logic</text>
+    <text x="240" y="153" text-anchor="middle" font-size="11">guessed per prompt</text>
+
+    <rect x="320" y="118" width="120" height="44" rx="6" fill="#fff7ed" stroke="#f97316" stroke-dasharray="5 4"/>
+    <text x="380" y="137" text-anchor="middle">Catalog lookup</text>
+    <text x="380" y="153" text-anchor="middle" font-size="11">ad hoc</text>
+
+    <rect x="40"  y="180" width="190" height="44" rx="6" fill="#fff7ed" stroke="#f97316" stroke-dasharray="5 4"/>
+    <text x="135" y="199" text-anchor="middle">Spark + Hudi bundle</text>
+    <text x="135" y="215" text-anchor="middle" font-size="11">versions aligned by hand</text>
+
+    <rect x="250" y="180" width="190" height="44" rx="6" fill="#fff7ed" stroke="#f97316" stroke-dasharray="5 4"/>
+    <text x="345" y="199" text-anchor="middle">Metastore + database</text>
+    <text x="345" y="215" text-anchor="middle" font-size="11">deployed separately</text>
+
+    <rect x="40"  y="242" width="400" height="44" rx="6" fill="#fff7ed" stroke="#f97316" stroke-dasharray="5 4"/>
+    <text x="240" y="261" text-anchor="middle">Install toolchain</text>
+    <text x="240" y="277" text-anchor="middle" font-size="11">JDK · Maven · minikube · kubectl · helm · image builds from source</text>
+  </g>
+
+  <!-- LEFT: Hudi foundation -->
+  <rect x="40" y="318" width="400" height="96" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="240" y="342" text-anchor="middle" font-size="15" font-weight="bold" fill="#065f46">Apache Hudi: the database kernel for the lake</text>
+  <text x="240" y="364" text-anchor="middle" font-size="12" fill="#065f46">timeline · metadata table · indexes · table services</text>
+  <text x="240" y="382" text-anchor="middle" font-size="12" fill="#065f46">catalog sync (Hive, Glue, DataHub) · engine integrations</text>
+  <text x="240" y="400" text-anchor="middle" font-size="12" fill="#065f46">open files on object storage</text>
+
+  <text x="240" y="448" text-anchor="middle" font-size="13" fill="#9a3412">Days of integration · answers vary between runs</text>
+
+  <!-- RIGHT: question -->
+  <rect x="520" y="56" width="400" height="40" rx="8" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="720" y="81" text-anchor="middle" font-size="14" fill="#312e81">Claude · ChatGPT · any MCP client · chat UI</text>
+  <line x1="720" y1="96" x2="720" y2="116" stroke="#6366f1" stroke-width="2"/>
+  <polygon points="714,110 726,110 720,118" fill="#6366f1"/>
+
+  <!-- RIGHT: gateway -->
+  <rect x="520" y="118" width="400" height="168" rx="10" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+  <text x="720" y="142" text-anchor="middle" font-size="15" font-weight="bold" fill="#0f172a">Hudi Lakehouse Gateway</text>
+  <g font-size="12" fill="#0f172a">
+    <rect x="536" y="156" width="88" height="80" rx="6" fill="#e0f2fe" stroke="#0284c7"/>
+    <text x="580" y="186" text-anchor="middle">Spark SQL</text>
+    <text x="580" y="202" text-anchor="middle">Connect</text>
+
+    <rect x="632" y="156" width="88" height="80" rx="6" fill="#e0f2fe" stroke="#0284c7"/>
+    <text x="676" y="186" text-anchor="middle">Data</text>
+    <text x="676" y="202" text-anchor="middle">catalog</text>
+
+    <rect x="728" y="156" width="88" height="80" rx="6" fill="#e0f2fe" stroke="#0284c7"/>
+    <text x="772" y="186" text-anchor="middle">Semantic</text>
+    <text x="772" y="202" text-anchor="middle">layer</text>
+
+    <rect x="824" y="156" width="80" height="80" rx="6" fill="#f1f5f9" stroke="#94a3b8" stroke-dasharray="5 4"/>
+    <text x="864" y="186" text-anchor="middle" fill="#475569">Governance</text>
+    <text x="864" y="202" text-anchor="middle" fill="#475569">(future)</text>
+  </g>
+  <text x="720" y="268" text-anchor="middle" font-size="12" fill="#334155">approved metrics → validated SQL → same answer every time</text>
+
+  <line x1="720" y1="286" x2="720" y2="316" stroke="#334155" stroke-width="2"/>
+  <polygon points="714,310 726,310 720,318" fill="#334155"/>
+
+  <!-- RIGHT: Hudi foundation -->
+  <rect x="520" y="318" width="400" height="96" rx="8" fill="#ecfdf5" stroke="#10b981"/>
+  <text x="720" y="342" text-anchor="middle" font-size="15" font-weight="bold" fill="#065f46">Apache Hudi: the database kernel for the lake</text>
+  <text x="720" y="364" text-anchor="middle" font-size="12" fill="#065f46">timeline · metadata table · indexes · table services</text>
+  <text x="720" y="382" text-anchor="middle" font-size="12" fill="#065f46">catalog sync (Hive, Glue, DataHub) · engine integrations</text>
+  <text x="720" y="400" text-anchor="middle" font-size="12" fill="#065f46">open files on object storage</text>
+
+  <text x="720" y="448" text-anchor="middle" font-size="13" fill="#065f46">One command · published images · PoC to production</text>
+
+  <text x="480" y="496" text-anchor="middle" font-size="12" fill="#6b7280">Figure 1. Hudi supplies the bottom half of a database for the lake; the part that turns a question into a trustworthy answer is left to each user.</text>
+</svg>
