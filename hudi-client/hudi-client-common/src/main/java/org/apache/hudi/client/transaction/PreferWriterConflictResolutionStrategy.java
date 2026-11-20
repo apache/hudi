@@ -36,6 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -53,6 +54,8 @@ public class PreferWriterConflictResolutionStrategy
     extends SimpleConcurrentFileWritesConflictResolutionStrategy {
 
   private boolean isClusteringBlockForPendingIngestion;
+  /** Whether the writer of an instant still holds an active heartbeat; set with the candidates of a blocking clustering. */
+  private Predicate<String> isWriterHeartbeatActive = instantTime -> true;
 
   /**
    * For tableservices like replacecommit and compaction commits this method also returns ingestion inflight commits.
@@ -115,8 +118,10 @@ public class PreferWriterConflictResolutionStrategy
    *
    * <p>If the current write is clustering and
    * {@code hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution} is enabled,
-   * also includes ingestion {@code .requested} instants (filtering out those with expired heartbeats)
-   * so they can be evaluated by {@link #hasConflict} and {@link #resolveConflict}.</p>
+   * also includes ingestion {@code .requested} instants (filtering out those with expired heartbeats) so they can be evaluated
+   * by {@link #hasConflict} and {@link #resolveConflict}. Ingestion {@code .inflight} instants are candidates as without the
+   * setting; one whose writer marked it as pending its workload profile
+   * ({@link ConcurrentOperation#WORKLOAD_PROFILE_PENDING_KEY}) is treated like a .requested one while its heartbeat is active.</p>
    */
   private Stream<HoodieInstant> getCandidateInstantsForTableServicesCommits(
       HoodieActiveTimeline activeTimeline, HoodieInstant currentInstant,
@@ -135,6 +140,7 @@ public class PreferWriterConflictResolutionStrategy
       HoodieWriteConfig writeConfig = writeConfigOpt.get();
       long maxHeartbeatIntervalMs = writeConfig.getHoodieClientHeartbeatIntervalInMs()
           * (writeConfig.getHoodieClientHeartbeatTolerableMisses() + 1);
+      this.isWriterHeartbeatActive = instantTime -> isHeartbeatActive(metaClient, instantTime, maxHeartbeatIntervalMs);
       inflightIngestionCommitsStream = activeTimeline
           .getTimelineOfActions(CollectionUtils.createSet(COMMIT_ACTION, DELTA_COMMIT_ACTION, REPLACE_COMMIT_ACTION))
           .filterInflightsAndRequested()
@@ -142,12 +148,7 @@ public class PreferWriterConflictResolutionStrategy
           .filter(i -> !ClusteringUtils.isClusteringInstant(activeTimeline, i, metaClient.getInstantGenerator()))
           .filter(i -> {
             if (i.isRequested()) {
-              try {
-                return !HoodieHeartbeatUtils.isHeartbeatExpired(i.requestedTime(), maxHeartbeatIntervalMs,
-                    metaClient.getStorage(), metaClient.getBasePath().toString());
-              } catch (IOException e) {
-                throw new RuntimeException(e);
-              }
+              return isHeartbeatActive(metaClient, i.requestedTime(), maxHeartbeatIntervalMs);
             }
             return i.isInflight();
           });
@@ -165,11 +166,20 @@ public class PreferWriterConflictResolutionStrategy
     return instantsToConsider.stream();
   }
 
+  private static boolean isHeartbeatActive(HoodieTableMetaClient metaClient, String instantTime, long maxHeartbeatIntervalMs) {
+    try {
+      return !HoodieHeartbeatUtils.isHeartbeatExpired(instantTime, maxHeartbeatIntervalMs,
+          metaClient.getStorage(), metaClient.getBasePath().toString());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   @Override
   public boolean hasConflict(ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
     if (isClusteringBlockForPendingIngestion
         && WriteOperationType.CLUSTER.equals(thisOperation.getOperationType())
-        && isRequestedIngestionInstant(otherOperation)) {
+        && isPendingIngestionWithoutWorkloadProfile(otherOperation)) {
       log.info("Clustering operation {} conflicts with pending ingestion instant {} "
           + "that has an active heartbeat", thisOperation, otherOperation);
       return true;
@@ -182,22 +192,37 @@ public class PreferWriterConflictResolutionStrategy
       ConcurrentOperation thisOperation, ConcurrentOperation otherOperation) {
     if (isClusteringBlockForPendingIngestion
         && WriteOperationType.CLUSTER.equals(thisOperation.getOperationType())
-        && isRequestedIngestionInstant(otherOperation)) {
+        && isPendingIngestionWithoutWorkloadProfile(otherOperation)) {
       throw new HoodieWriteConflictException(
           HoodieWriteConflictException.ConflictCategory.TABLE_SERVICE_VS_INGESTION,
-          String.format("Pending ingestion instant %s with active heartbeat has not transitioned to "
-              + "inflight yet but may potentially conflict with current clustering operation %s",
+          String.format("Pending ingestion instant %s with active heartbeat has not written its workload profile "
+              + "yet but may potentially conflict with current clustering operation %s",
               otherOperation, thisOperation));
     }
     return super.resolveConflict(table, thisOperation, otherOperation);
   }
 
-  private boolean isRequestedIngestionInstant(ConcurrentOperation operation) {
+  /**
+   * Whether {@code operation} is an ingestion instant that does not name the file groups it writes yet: a .requested one, or an
+   * INFLIGHT one its writer marked as pending its workload profile ({@link ConcurrentOperation#isWorkloadProfilePending()}) while
+   * that writer's heartbeat is active. Clustering cannot tell which file groups such an instant writes. Any other inflight,
+   * including an empty one a writer keeps for its whole write, is resolved by the file groups it names, as upstream.
+   */
+  private boolean isPendingIngestionWithoutWorkloadProfile(ConcurrentOperation operation) {
     String state = operation.getInstantActionState();
     String actionType = operation.getInstantActionType();
-    return HoodieInstant.State.REQUESTED.name().equals(state)
-        && (COMMIT_ACTION.equals(actionType) || DELTA_COMMIT_ACTION.equals(actionType)
-            || (REPLACE_COMMIT_ACTION.equals(actionType) && !WriteOperationType.CLUSTER.equals(operation.getOperationType())));
+    boolean ingestionAction = COMMIT_ACTION.equals(actionType) || DELTA_COMMIT_ACTION.equals(actionType)
+        || (REPLACE_COMMIT_ACTION.equals(actionType) && !WriteOperationType.CLUSTER.equals(operation.getOperationType()));
+    if (!ingestionAction) {
+      return false;
+    }
+    if (HoodieInstant.State.REQUESTED.name().equals(state)) {
+      return true;
+    }
+    return HoodieInstant.State.INFLIGHT.name().equals(state)
+        && operation.isWorkloadProfilePending()
+        && operation.getMutatedPartitionAndFileIds().isEmpty()
+        && isWriterHeartbeatActive.test(operation.getInstantTimestamp());
   }
 
   @Override

@@ -19,13 +19,27 @@
 
 package org.apache.hudi.utilities.transform;
 
+import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
+import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
+
+import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.types.DataTypes;
+import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.List;
 
 import static org.apache.spark.sql.types.DataTypes.IntegerType;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestChainedTransformer {
   @Test
@@ -36,5 +50,54 @@ public class TestChainedTransformer {
     List<String> classNames = transformer.getTransformersNames();
     assertEquals(t1.getClass().getName(), classNames.get(0));
     assertEquals(t2.getClass().getName(), classNames.get(1));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", " first : "})
+  void trimsNamesAndIdentifiers(String identifier) {
+    ChainedTransformer chain = new ChainedTransformer(Arrays.asList(" " + identifier + SchemaTransformer.class.getName() + " "), Option::empty);
+    assertEquals(Arrays.asList(SchemaTransformer.class.getName()), chain.getTransformersNames());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", " ", "id:", " :org.apache.hudi.utilities.transform.TestChainedTransformer$SchemaTransformer", "id: "})
+  void rejectsEmptyIdentifierOrClass(String configured) {
+    assertThrows(HoodieTransformPlanException.class, () -> new ChainedTransformer(Arrays.asList(configured), Option::empty));
+  }
+
+  @Test
+  void scopesSchemaPropertiesToEachIdentifier() {
+    ChainedTransformer chain = new ChainedTransformer(Arrays.asList(" first :" + SchemaTransformer.class.getName(),
+        " second :" + SchemaTransformer.class.getName()),
+        () -> Option.of(HoodieSchema.parse("{\"type\":\"record\",\"name\":\"input\",\"fields\":[]}")));
+    TypedProperties props = new TypedProperties();
+    props.setProperty("column", "global");
+    props.setProperty("column.first", "first_column");
+    props.setProperty("column.second", "second_column");
+    StructType schema = chain.transformedSchema(null, null, new StructType(), props);
+    assertEquals(Arrays.asList("first_column", "second_column"), Arrays.asList(schema.fieldNames()));
+    assertEquals("global", props.getString("column"));
+    assertEquals("first_column", props.getString("column.first"));
+  }
+
+  @Test
+  void unscopedSchemaPropertiesStillWork() {
+    ChainedTransformer chain = new ChainedTransformer(Arrays.asList(SchemaTransformer.class.getName()),
+        () -> Option.of(HoodieSchema.parse("{\"type\":\"record\",\"name\":\"input\",\"fields\":[]}")));
+    TypedProperties props = new TypedProperties();
+    props.setProperty("column", "global");
+    assertEquals(Arrays.asList("global"), Arrays.asList(chain.transformedSchema(null, null, new StructType(), props).fieldNames()));
+  }
+
+  public static class SchemaTransformer implements Transformer {
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession spark, Dataset<Row> dataset, TypedProperties props) {
+      return dataset;
+    }
+
+    @Override
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession spark, StructType schema, TypedProperties props) {
+      return schema.add(props.getString("column"), DataTypes.StringType);
+    }
   }
 }

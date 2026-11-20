@@ -20,18 +20,24 @@ package org.apache.hudi.common.schema;
 
 import org.apache.hudi.common.util.Option;
 
-import javax.annotation.concurrent.NotThreadSafe;
+import javax.annotation.concurrent.ThreadSafe;
 
+import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A HoodieSchema cache implementation for managing different versions of schemas.
- * This is a local cache; the versionId only works for local thread in one container/executor.
- * A map of {version_id, schema} is maintained.
+ * A map of {version_id, schema} is maintained; a version id is only meaningful inside the JVM that issued it.
+ *
+ * <p>Thread-safe: the static field-accessor record contexts (e.g. {@code AvroRecordContext.getFieldAccessorInstance()})
+ * hold one instance that every task thread of an executor shares, so a version id issued on one thread must resolve
+ * to its schema from any other thread. Lookups are lock-free; issuing a new id is serialized so that an equal schema
+ * never receives two ids and an id is visible in {@link #getSchema} before it is returned.
  */
-@NotThreadSafe
+@ThreadSafe
 public class LocalHoodieSchemaCache implements Serializable {
 
   private static final long serialVersionUID = 1L;
@@ -39,11 +45,14 @@ public class LocalHoodieSchemaCache implements Serializable {
   private final Map<Integer, HoodieSchema> versionIdToSchema; // the mapping from version_id -> schema
   private final Map<HoodieSchema, Integer> schemaToVersionId; // the mapping from schema -> version_id
 
+  // guarded by this
   private int nextVersionId = 0;
+  // the id issued for a null schema (a concurrent map cannot hold a null key); guarded by this
+  private Integer nullSchemaVersionId;
 
   private LocalHoodieSchemaCache() {
-    this.versionIdToSchema = new HashMap<>();
-    this.schemaToVersionId = new HashMap<>();
+    this.versionIdToSchema = new ConcurrentHashMap<>();
+    this.schemaToVersionId = new ConcurrentHashMap<>();
   }
 
   /**
@@ -53,17 +62,48 @@ public class LocalHoodieSchemaCache implements Serializable {
     return new LocalHoodieSchemaCache();
   }
 
+  /**
+   * Returns the version id of {@code schema}, issuing a new one the first time an equal schema is seen.
+   */
   public Integer cacheSchema(HoodieSchema schema) {
+    if (schema != null) {
+      Integer versionId = this.schemaToVersionId.get(schema);
+      if (versionId != null) {
+        return versionId;
+      }
+    }
+    return issueVersionId(schema);
+  }
+
+  private synchronized Integer issueVersionId(HoodieSchema schema) {
+    if (schema == null) {
+      if (nullSchemaVersionId == null) {
+        nullSchemaVersionId = nextVersionId++;
+      }
+      return nullSchemaVersionId;
+    }
     Integer versionId = this.schemaToVersionId.get(schema);
     if (versionId == null) {
       versionId = nextVersionId++;
-      this.schemaToVersionId.put(schema, versionId);
+      // publish id -> schema first, so any thread that can see the id can resolve it
       this.versionIdToSchema.put(versionId, schema);
+      this.schemaToVersionId.put(schema, versionId);
     }
     return versionId;
   }
 
+  /**
+   * Serializes under the lock that guards id issuing, so a copy never pairs a counter with maps from a different
+   * moment (which would let the copy re-issue an id it already holds).
+   */
+  private synchronized void writeObject(ObjectOutputStream out) throws IOException {
+    out.defaultWriteObject();
+  }
+
+  /**
+   * Returns the schema issued under {@code versionId}, or empty for a null or unknown id (e.g. a delete record).
+   */
   public Option<HoodieSchema> getSchema(Integer versionId) {
-    return Option.ofNullable(this.versionIdToSchema.get(versionId));
+    return versionId == null ? Option.empty() : Option.ofNullable(this.versionIdToSchema.get(versionId));
   }
 }
