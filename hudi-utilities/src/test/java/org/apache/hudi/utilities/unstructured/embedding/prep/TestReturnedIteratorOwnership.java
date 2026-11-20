@@ -127,6 +127,7 @@ class TestReturnedIteratorOwnership {
       when(row.getAs(BlobColumns.BLOB)).thenReturn(mock(Row.class));
       TypedProperties props = new TypedProperties();
       props.setProperty(EmbeddingTableConfig.MODE.key(), EmbeddingTableConfig.MODE_PREP_ONLY);
+      props.setProperty(EmbeddingTableConfig.PREP_PREFETCH_MAX_BYTES.key(), "0");
       iterator = new PreprocessingIterator(Collections.singletonList(row).iterator(), EmbeddingTableConfig.from(props), "001",
           source, registry, new WordCountTokenizer(), PrepCounters.local(), null);
     }

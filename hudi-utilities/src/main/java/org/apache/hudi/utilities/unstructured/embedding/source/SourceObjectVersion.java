@@ -76,7 +76,7 @@ final class SourceObjectVersion {
     }
   }
 
-  private void recheck(HoodieStorage storage) throws IOException {
+  void recheck(HoodieStorage storage) throws IOException {
     SourceObjectVersion after = read(storage, path);
     // Without an ETag/version, an equal-size overwrite inside one mtime tick remains undetectable on older connectors.
     // A version marker (for example S3's literal "null") must not hide a changed ETag.

@@ -94,6 +94,11 @@ public class PdfFilePreprocessor implements FilePreprocessor {
   }
 
   @Override
+  public long prefetchLimit(TypedProperties props, Tokenizer tokenizer) {
+    return config.get(props, tokenizer).maxInputBytes();
+  }
+
+  @Override
   public ClosableIterator<Chunk> open(BlobBytesSupplier bytes, FileMeta file, Tokenizer tokenizer, TypedProperties props) {
     String logPath = file.getSourcePathSha() + "." + file.getFileExtension();
     PdfChunkerConfig cfg;

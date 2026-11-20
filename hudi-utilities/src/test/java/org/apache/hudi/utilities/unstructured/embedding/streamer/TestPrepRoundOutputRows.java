@@ -28,7 +28,7 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PrepCounters;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PrepSideOutput;
 import org.apache.hudi.utilities.unstructured.embedding.prep.PreprocessorRegistry;
-import org.apache.hudi.utilities.unstructured.embedding.prep.TestPreprocessingIterator;
+import org.apache.hudi.utilities.unstructured.embedding.prep.TextPipePreprocessor;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobColumns;
 import org.apache.hudi.utilities.unstructured.embedding.text.WordCountTokenizer;
@@ -101,7 +101,7 @@ public class TestPrepRoundOutputRows {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieWriteConfig.BASE_PATH.key(), embeddingTable);
     props.setProperty(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + "txt" + EmbeddingTableConfig.PREPROCESSOR_CLASS_SUFFIX,
-        TestPreprocessingIterator.PipeSplitPreprocessor.class.getName());
+        TextPipePreprocessor.class.getName());
     props.setProperty(EmbeddingTableConfig.MODELS.key(), "");
     EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
     List<Row> source = new ArrayList<>();
@@ -170,7 +170,7 @@ public class TestPrepRoundOutputRows {
     TypedProperties props = new TypedProperties();
     props.setProperty(HoodieWriteConfig.BASE_PATH.key(), embeddingTable);
     props.setProperty(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + "txt" + EmbeddingTableConfig.PREPROCESSOR_CLASS_SUFFIX,
-        TestPreprocessingIterator.PipeSplitPreprocessor.class.getName());
+        TextPipePreprocessor.class.getName());
     props.setProperty(EmbeddingTableConfig.MODELS.key(), "");
     EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
     StructType iteratorSchema = EmbeddingTableSchema.build(config);
@@ -198,7 +198,7 @@ public class TestPrepRoundOutputRows {
                                           StructType outputSchema, StructType iteratorSchema) {
     return PrepRound.outputRows(source, config, new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
         new PreprocessorRegistry(props), new WordCountTokenizer(), PrepCounters.local(), "001", outputSchema,
-        PrepRound.layoutOf(outputSchema, iteratorSchema), null);
+        PrepRound.layoutOf(outputSchema, iteratorSchema), null, 0L);
   }
 
   private static Row blobRow(String sha, String extension, String text) {

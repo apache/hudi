@@ -77,6 +77,11 @@ public interface FilePreprocessor {
     return false;
   }
 
+  /** Largest object worth reading ahead before this preprocessor's declared input-size refusal. */
+  default long prefetchLimit(TypedProperties props, Tokenizer tokenizer) {
+    return Long.MAX_VALUE;
+  }
+
   /**
    * Validates this preprocessor's configuration on the DRIVER before the job reads any file, so a bad key fails the job
    * once instead of failing every file as an isolated error.
