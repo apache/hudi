@@ -27,6 +27,7 @@ import org.apache.hudi.metadata.index.bloomfilters.BloomFiltersIndexer;
 import org.apache.hudi.metadata.index.columnstats.ColumnStatsIndexer;
 import org.apache.hudi.metadata.index.expression.ExpressionIndexer;
 import org.apache.hudi.metadata.index.files.FilesIndexer;
+import org.apache.hudi.metadata.index.fulltext.FullTextIndexer;
 import org.apache.hudi.metadata.index.partitionstats.PartitionStatsIndexer;
 import org.apache.hudi.metadata.index.record.PartitionedRecordIndexer;
 import org.apache.hudi.metadata.index.record.RecordIndexer;
@@ -65,6 +66,8 @@ public class IndexerFactory {
         return new PartitionStatsIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
       case SECONDARY_INDEX:
         return new SecondaryIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
+      case FULL_TEXT_INDEX:
+        return new FullTextIndexer(engineContext, dataTableWriteConfig, dataTableMetaClient);
       default:
         throw new HoodieNotSupportedException("Unsupported metadata partition type for indexing: " + partitionType);
     }

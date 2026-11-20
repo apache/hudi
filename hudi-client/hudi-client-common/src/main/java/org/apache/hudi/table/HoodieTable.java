@@ -1199,6 +1199,7 @@ public abstract class HoodieTable<T, I, K, O> implements Serializable {
       // and do not delete unless DROP INDEX is called.
       case EXPRESSION_INDEX:
       case SECONDARY_INDEX:
+      case FULL_TEXT_INDEX:
         metadataIndexDisabled = !partitionType.isMetadataPartitionAvailable(metaClient);
         break;
       default:
