@@ -121,7 +121,7 @@ class ConnectQuickstartTest(unittest.TestCase):
             tools = pathlib.Path(directory)
             calls_file = tools / "calls.jsonl"
             # A restricted PATH also checks that Connect needs no host Maven/JDK/curl.
-            for name in ("bash", "dirname", "basename", "grep", "head", "seq", "sleep", "cat"):
+            for name in ("bash", "dirname", "basename", "grep", "head", "seq", "sleep", "cat", "cksum", "sed"):
                 (tools / name).symlink_to(shutil.which(name))
             legacy_tools = ("mvn", "java", "curl", "ls", "cp", "rm", "mkdir") if (
                 "--spark-connect" not in args or "--run-example" in args) else ()
@@ -184,14 +184,17 @@ if name == 'kubectl' and 'exec' in args:
 
     def assert_connect_deployment(self, calls):
         helm_calls = [call for call in calls if call[0] == "helm"]
-        self.assertEqual(len(helm_calls), 1)
-        self.assertEqual(helm_calls[0][:4], ["helm", "upgrade", "--install", "hudi-spark-connect"])
+        self.assertEqual(len(helm_calls), 2)
+        preflight, upgrade = helm_calls
+        self.assertEqual(preflight[:2], ["helm", "template"])
+        self.assertEqual(preflight[2:], upgrade[3:upgrade.index("--wait")])
+        self.assertEqual(upgrade[:4], ["helm", "upgrade", "--install", "hudi-spark-connect"])
         manifests = [pathlib.Path(call[-1]).name for call in calls if call[:3] == ["kubectl", "apply", "-f"]]
-        self.assertEqual(manifests, ["namespace.yaml", "minio.yaml", "-", "hive-metastore.yaml",
+        self.assertEqual(manifests, ["namespace.yaml", "minio.yaml", "-", "-",
                                      "minio-bucket-job.yaml", "spark-connect-secret.yaml"])
         for workload in ("deploy/minio", "deploy/hive-metastore", "job/minio-make-bucket"):
             wait = next(call for call in calls if workload in call)
-            self.assertLess(calls.index(wait), calls.index(helm_calls[0]))
+            self.assertLess(calls.index(wait), calls.index(upgrade))
         self.assertFalse(any(call[1:3] == ["delete", "namespace"] for call in calls))
 
     def test_connect_only_builds_and_deploys_without_legacy_tools(self):

@@ -46,7 +46,7 @@ loopback, restart it reachable from the cluster:
   OLLAMA_HOST=0.0.0.0 ollama serve
 {{- end }}
 
-{{- if eq .Values.readinessPath "/health" }}
+{{- if eq .Values.readinessProbePath "/health" }}
 Pod readiness checks the process only, keeping MCP routable without an LLM.
 Verify SQL/MCP separately; /ready still reports SQL and LLM dependency status.
 {{- else }}

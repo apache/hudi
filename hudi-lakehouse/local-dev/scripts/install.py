@@ -16,6 +16,7 @@
 
 """Local minikube installation; Python standard library only on the host."""
 import argparse
+from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parent
@@ -38,10 +40,17 @@ def run(args, *, capture=False, check=True, **kwargs):
 
 
 def image_values(image, policy):
-    if '@' in image or not re.fullmatch(r'[\w./:-]+:[\w.-]+', image) or ':' not in image.rsplit('/', 1)[-1]:
+    if '@' in image:
+        repository, _, digest = image.partition('@')
+        if policy != 'IfNotPresent':
+            raise ValueError('Use --pull-images for application images pinned by digest.')
+        if not re.fullmatch(r'[\w./:-]+', repository) or not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
+            raise ValueError('Expected repository@sha256:<64 lowercase hex digits>: ' + image)
+        return {'repository': repository, 'digest': digest, 'pullPolicy': policy}
+    if not re.fullmatch(r'[\w./:-]+:[\w.-]+', image) or ':' not in image.rsplit('/', 1)[-1]:
         raise ValueError('Application images require an explicit repository:tag: ' + image)
     repository, tag = image.rsplit(':', 1)
-    return {'repository': repository, 'tag': tag, 'pullPolicy': policy}
+    return {'repository': repository, 'tag': tag, 'digest': '', 'pullPolicy': policy}
 
 
 class Installation:
@@ -53,11 +62,11 @@ class Installation:
         self.env = dict(os.environ, HUDI_KUBE_CONTEXT=self.profile)
 
     def kubectl(self, *args, **kwargs):
-        return run([*self.kube, *args], **kwargs)
+        return run([*self.kube, *args], env=self.env, **kwargs)
 
-    def exec_script(self, deployment, script, *args, check=True):
+    def exec_script(self, deployment, script, *args, check=True, timeout=None):
         return self.kubectl('exec', '-i', 'deploy/' + deployment, '--', 'python3', '-', *args,
-                            input=script.read_text(), check=check)
+                            input=script.read_text(), check=check, timeout=timeout)
 
     def assert_gateway_backend(self):
         # Do not repoint an existing Trino gateway when selecting an old profile.
@@ -78,13 +87,13 @@ class Installation:
             run(['docker', 'build', '-t', args.gateway_image, ROOT.parent / 'hudi-agent-gateway'])
         if args.pull_images:
             print('Using registry application images (IfNotPresent)', flush=True)
-            return
-        cached = json.loads(run([*self.mini, 'image', 'ls', '--format=json'], capture=True).stdout)
+            return {}
+        cached = json.loads(run([*self.mini, 'image', 'ls', '--format=json'], env=self.env, capture=True).stdout)
 
         def normalize(name):
             return re.sub(r'^(docker.io/)?library/|^docker.io/', '', name)
 
-        def load_image(image, required):
+        def load_image(image, *, required=False, deployment=None):
             entries = [entry for entry in cached if any(normalize(tag) == normalize(image)
                                                         for tag in entry.get('repoTags', []))]
             local = run(['docker', 'image', 'inspect', image], capture=True,
@@ -93,21 +102,34 @@ class Installation:
                 identity = json.loads(local.stdout)[0]['Id'].split(':')[-1]
                 if any(entry['id'].split(':')[-1] == identity for entry in entries):
                     print(f'Reusing unchanged cluster image {image}', flush=True)
-                    return
+                    return identity
                 print(f'Loading local image {image}', flush=True)
-                run([*self.mini, 'image', 'load', '--daemon', '--overwrite=true', image])
+                run([*self.mini, 'image', 'load', '--daemon', '--overwrite=true', image], env=self.env)
+                return identity
             elif entries:
                 print(f'Reusing cluster image {image}', flush=True)
+                if deployment:
+                    # A kubelet pull warms the cache without changing the running image.
+                    # Only track cache IDs for infrastructure we already annotated.
+                    annotation = r'jsonpath={.spec.template.metadata.annotations.hudi\.apache\.org/local-image-id}'
+                    tracked = self.kubectl('get', 'deployment', deployment, '--ignore-not-found',
+                                           '-o', annotation, capture=True).stdout.strip()
+                    if not tracked:
+                        return None
+                return entries[0]['id'].split(':')[-1]
             elif required:
                 raise ValueError(f'Image {image} is absent locally and in this profile. '
                                  'Use up --build, or explicit registry images with --pull-images. '
                                  'Default application tags are not published releases.')
 
+        identities = {}
         for image in (args.connect_image, args.gateway_image):
-            load_image(image, required=True)
+            identities[image] = load_image(image, required=True)
         # Infrastructure can be pulled by Kubernetes if not present locally.
-        for image in (args.minio_image, args.mc_image, args.hms_image):
-            load_image(image, required=False)
+        for image, deployment in ((args.minio_image, 'minio'), (args.hms_image, 'hive-metastore')):
+            identities[image] = load_image(image, deployment=deployment)
+        load_image(args.mc_image)  # The bucket Job is recreated on each up.
+        return identities
 
     def up(self):
         args = self.args
@@ -118,29 +140,23 @@ class Installation:
         for path in (args.connect_values, args.gateway_values):
             if path and not Path(path).is_file():
                 raise ValueError('Values file does not exist: ' + path)
-        status = run([*self.mini, 'status'], capture=True, check=False, stderr=subprocess.DEVNULL)
-        if status.returncode:
-            run([*self.mini, 'start', '--driver', args.driver, '--cpus', args.cpus,
-                 '--memory', args.memory, '--keep-context'])
-        else:
-            print(f'Reusing running minikube profile {self.profile}', flush=True)
+        with self.verified_profile(install=True):
+            self.install_workloads(connect, gateway)
+
+    def install_workloads(self, connect, gateway):
+        args = self.args
         self.assert_gateway_backend()
-        self.images()
+        identities = self.images()
+        for image, values in ((args.connect_image, connect), (args.gateway_image, gateway)):
+            if image in identities:
+                values['podAnnotations'] = {'hudi.apache.org/local-image-id': identities[image]}
         with tempfile.TemporaryDirectory(prefix='hudi-minikube-') as directory:
             temp = Path(directory)
             for name, values in (('connect', connect), ('gateway', gateway)):
                 # Helm merges the user's file before installer-owned image selection.
                 source = getattr(args, name + '_values')
-                files = ['-f', str(Path(source).resolve())] if source else []
                 image_file = temp / (name + '-image.json')
                 image_file.write_text(json.dumps(values))
-                chart = ROOT / 'charts' / ('hudi-spark-connect' if name == 'connect' else 'hudi-agent-gateway')
-                image_file = temp / (name + '-image.json')
-                image_file.write_text(json.dumps(values))
-                chart = ROOT / 'charts' / ('hudi-spark-connect' if name == 'connect' else 'hudi-agent-gateway')
-                # Reject malformed values before applying Kubernetes resources.
-                run(['helm', 'template', 'preflight', chart,
-                     '-f', chart / 'values-local-dev.yaml', *files, '-f', image_file], capture=True)
                 prefix = 'SPARK_CONNECT' if name == 'connect' else 'GATEWAY'
                 self.env[prefix + '_VALUES'] = str(Path(source).resolve()) if source else ''
                 self.env[prefix + '_IMAGE_VALUES'] = str(image_file)
@@ -154,20 +170,154 @@ class Installation:
                 if not re.fullmatch(r'[\w./:@-]+', new):
                     raise ValueError('Invalid infrastructure image: ' + new)
                 path = manifests / name
-                path.write_text(path.read_text().replace('image: ' + old,
-                                                         'image: ' + new))
+                manifest = path.read_text()
+                if manifest.count('image: ' + old + '\n') != 1:
+                    raise ValueError(f'Expected one image {old} in {name}')
+                manifest = manifest.replace('image: ' + old + '\n', 'image: ' + new + '\n')
+                if identities.get(new):
+                    # The bucket Job is recreated on every up. Only Deployments need a rollout.
+                    annotation = 'hudi.apache.org/local-image-id: '
+                    if manifest.count(annotation + '""') != 1:
+                        raise ValueError(f'Expected one empty image ID annotation in {name}')
+                    manifest = manifest.replace(annotation + '""', annotation + json.dumps(identities[new]))
+                path.write_text(manifest)
             self.env['LOCAL_DEV_MANIFEST_DIR'] = str(manifests)
             run(['bash', HERE / 'scripts/up.sh', '--spark-connect', '--with-agent-gateway'], env=self.env)
-        if args.build:
-            for deployment in ('hudi-spark-connect', 'hudi-agent-gateway'):
-                self.kubectl('rollout', 'restart', 'deploy/' + deployment)
-                self.kubectl('rollout', 'status', 'deploy/' + deployment, '--timeout=600s')
+        self.wait_for_catalog()
         print('Initializing only missing sample tables', flush=True)
         self.exec_script('hudi-spark-connect', ROOT / 'docker/scripts/seed.py',
                          '--connect-uri', 'sc://127.0.0.1:15002')
-        self.verify(strict=False)
+        self.verify_mcp(strict=False)
         self.chat(required=False)
         self.endpoints()
+
+    def profile_registration(self, env):
+        result = run([*self.kube, 'config', 'view', '--minify', '-o', 'json'], env=env, capture=True)
+        generated = json.loads(result.stdout)
+        cluster = generated['clusters'][0]['cluster']
+        cluster.pop('extensions', None)  # minikube timestamps these on every update-context.
+        user = generated['users'][0]['user']
+        # Only the last verified URL is stored alongside minikube's per-profile certificate.
+        last_server = Path(user['client-certificate']).with_name('hudi-lakehouse-last-server')
+        return cluster, user, last_server
+
+    def host_profile_entries(self):
+        # Kubeconfig uses the first entry of each name across files. Certificate
+        # paths in `kubectl config view` are relative to the file defining them.
+        paths = self.env.get('KUBECONFIG') or str(Path.home() / '.kube/config')
+        entries = {}
+        for path in filter(None, paths.split(os.pathsep)):
+            env = dict(self.env, KUBECONFIG=path)
+            host = json.loads(run([*self.kube, 'config', 'view', '-o', 'json'], env=env, capture=True).stdout)
+            for key in ('context', 'cluster', 'user'):
+                if key in entries:
+                    continue
+                entry = next((e[key] for e in host.get(key + 's') or [] if e['name'] == self.profile), None)
+                if entry is not None:
+                    for field in ('certificate-authority', 'client-certificate', 'client-key'):
+                        if entry.get(field):
+                            entry[field] = os.path.abspath(Path(path).parent / entry[field])
+                    entries[key] = entry
+        return entries
+
+    def sync_profile_context(self, cluster, user, last_server, create):
+        config = ['kubectl', '--context', self.profile, 'config']
+        entries = self.host_profile_entries()
+        server = cluster['server']
+        context = entries.get('context')
+        registered = entries.get('cluster')
+        if registered is not None:
+            registered.pop('extensions', None)
+        if context is not None:
+            # A matching old URL alone is insufficient: the context and credentials
+            # must still identify this profile before changing the host cluster entry.
+            if (registered != cluster and last_server.is_file()
+                    and context.get('cluster') == context.get('user') == self.profile
+                    and entries.get('user') == user
+                    and registered == dict(cluster, server=last_server.read_text())):
+                run([*config, 'set-cluster', self.profile, '--server', server], env=self.env)
+            return
+        # set-cluster is the first registration write. A retry can find a
+        # running profile with that entry but no credentials or context yet.
+        if not create and registered != cluster:
+            return
+        for key, wanted in (('cluster', cluster), ('user', user)):
+            existing = entries.get(key)
+            if existing is not None and existing != wanted:
+                raise ValueError(f'Name {self.profile!r} already exists in kubeconfig {key}. Use another --profile.')
+        if registered is None:
+            run([*config, 'set-cluster', self.profile, '--server', server,
+                 '--certificate-authority', cluster['certificate-authority']], env=self.env)
+        if 'user' not in entries:
+            run([*config, 'set-credentials', self.profile, '--client-certificate', user['client-certificate'],
+                 '--client-key', user['client-key']], env=self.env)
+        run([*config, 'set-context', self.profile, '--cluster', self.profile, '--user', self.profile], env=self.env)
+
+    @contextmanager
+    def verified_profile(self, *, install=False):
+        """Pin workload operations to the profile independently of later host context changes."""
+        with tempfile.TemporaryDirectory(prefix='hudi-minikube-') as directory:
+            profile_env = dict(self.env, KUBECONFIG=str(Path(directory) / 'kubeconfig'))
+            # Helm's API server override takes precedence over the selected context.
+            profile_env.pop('HELM_KUBEAPISERVER', None)
+            start = False
+            if install:
+                status = run([*self.mini, 'status'], capture=True, check=False, stderr=subprocess.DEVNULL)
+                # Exit code 4 alone means the host kubeconfig is stale while
+                # the VM, kubelet and API server are running.
+                start = status.returncode not in (0, 4)
+                if not start:
+                    print(f'Reusing running minikube profile {self.profile}', flush=True)
+            if start:
+                run([*self.mini, 'start', '--driver', self.args.driver, '--cpus', self.args.cpus,
+                     '--memory', self.args.memory, '--keep-context', '--embed-certs=false'], env=profile_env)
+            else:
+                run([*self.mini, 'update-context'], env=profile_env, capture=True)
+            cluster, user, last_server = self.profile_registration(profile_env)
+            if install:
+                self.sync_profile_context(cluster, user, last_server, create=start)
+            # A host context can share the profile's name while pointing to another API server.
+            configured = self.kubectl('config', 'view', '--minify', '-o', 'jsonpath={.clusters[0].cluster.server}',
+                                      capture=True).stdout.strip()
+            if not configured or configured != cluster['server']:
+                raise ValueError(f'kubectl context {self.profile!r} does not '
+                                 'point to the running minikube profile.')
+            if install:
+                last_server.write_text(configured)
+            host_env = self.env
+            self.env = profile_env
+            try:
+                yield
+            finally:
+                self.env = host_env
+
+    def stop(self):
+        # minikube stop removes kubeconfig entries even if the profile is already stopped.
+        with tempfile.TemporaryDirectory(prefix='hudi-minikube-') as directory:
+            env = dict(self.env, KUBECONFIG=str(Path(directory) / 'kubeconfig'))
+            current = run([*self.mini, 'update-context'], env=env, capture=True, check=False, stderr=subprocess.DEVNULL)
+            if current.returncode == 0:
+                # Existing installs may be stopped before their first up with this version.
+                cluster, _, last_server = self.profile_registration(env)
+                if not last_server.exists():
+                    last_server.write_text(cluster['server'])
+            run([*self.mini, 'stop'], env=env)
+
+    def down(self):
+        with self.verified_profile():
+            run(['bash', HERE / 'scripts/down.sh'], env=self.env)
+
+    def wait_for_catalog(self):
+        # A resumed Pod can accept TCP before Spark can query the Hive Metastore.
+        for attempt in range(6):
+            try:
+                self.exec_script('hudi-spark-connect', ROOT / 'docker/scripts/check-connect.py', timeout=35)
+                return
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                if attempt == 5:
+                    raise ValueError('Spark Connect could not query the Hive Metastore before seeding.') from error
+                print('Waiting for Spark Connect to query the Hive Metastore...', flush=True)
+                time.sleep(5)
 
     def verify(self, strict):
         if strict:
@@ -175,9 +325,16 @@ class Installation:
                              '--connect-uri', 'sc://127.0.0.1:15002', '--verify-only')
         else:
             self.exec_script('hudi-spark-connect', ROOT / 'docker/scripts/check-connect.py')
+        self.verify_mcp(strict)
+
+    def verify_mcp(self, strict):
         try:
+            port = self.kubectl('get', 'service', 'hudi-agent-gateway', '-o',
+                                'jsonpath={.spec.ports[?(@.name=="http")].port}', capture=True).stdout.strip()
+            if not port.isdigit() or not 1 <= int(port) <= 65535:
+                raise ValueError('Gateway Service is missing a valid named http port.')
             self.exec_script('hudi-agent-gateway', ROOT / 'docker/scripts/smoke-test.py',
-                             '--gateway-url', f'http://hudi-agent-gateway.{NS}.svc:8000',
+                             '--gateway-url', f'http://hudi-agent-gateway.{NS}.svc:{port}',
                              *(['--verify-sample'] if strict else []))
         except subprocess.CalledProcessError:
             print('MCP verification FAILED; this is independent of LLM availability.', file=sys.stderr)
@@ -207,7 +364,6 @@ Spark Connect: kubectl --context {self.profile} -n {NS} port-forward --address 1
 MinIO console: kubectl --context {self.profile} -n {NS} port-forward --address 127.0.0.1 svc/minio 9001:9001''', flush=True)
 
     def inspect(self, diagnostics=False):
-        run([*self.mini, 'status'], check=False)
         self.kubectl('get', 'deploy,pods,svc,pvc,jobs', '-o', 'wide')
         if diagnostics:
             self.kubectl('get', 'events', '--sort-by=.lastTimestamp', check=False)
@@ -259,20 +415,26 @@ def main(argv=None):
     try:
         if args.action == 'up':
             installation.up()
-        elif args.action in ('status', 'doctor'):
-            installation.inspect(diagnostics=args.action == 'doctor')
         elif args.action == 'down':
-            run(['bash', HERE / 'scripts/down.sh'], env=installation.env)
+            installation.down()
         elif args.action == 'stop':
-            run([*installation.mini, 'stop'])
-        elif args.action == 'test':
-            installation.verify(strict=True)
-        elif args.action == 'chat':
-            installation.verify(strict=False)
-            installation.chat(required=True)
-        elif args.action == 'forward':
-            installation.kubectl('port-forward', '--address', '127.0.0.1',
-                                 'svc/hudi-agent-gateway', f'{args.port}:8000')
+            installation.stop()
+        else:
+            if args.action in ('status', 'doctor'):
+                status = run([*installation.mini, 'status'], check=False)
+                if status.returncode:
+                    return status.returncode
+            with installation.verified_profile():
+                if args.action in ('status', 'doctor'):
+                    installation.inspect(diagnostics=args.action == 'doctor')
+                elif args.action == 'test':
+                    installation.verify(strict=True)
+                elif args.action == 'chat':
+                    installation.verify(strict=False)
+                    installation.chat(required=True)
+                elif args.action == 'forward':
+                    installation.kubectl('port-forward', '--address', '127.0.0.1',
+                                         'svc/hudi-agent-gateway', f'{args.port}:http')
         return 0
     except (ValueError, OSError, subprocess.CalledProcessError) as error:
         print(f'FAILED: {error}\nInspect with lakehouse.sh doctor --profile {args.profile}. '

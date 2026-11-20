@@ -59,7 +59,10 @@ table, registers it in the metastore, and queries it back through Trino:
  sao_paulo     |    33
 ```
 
-Tear down with `./hudi-lakehouse/local-dev/scripts/down.sh`.
+To resume with your existing data, run `./hudi-lakehouse/scripts/quickstart.sh`.
+Adding `--run-example` rewrites the `trips` table. See the
+[Trino developer guide](local-dev/README.md#developer-quickstart-trino) for
+commands to stop workloads or permanently clear the local tables and catalog.
 
 To query the same example through Spark Connect instead of Trino:
 
@@ -128,7 +131,7 @@ catalog, and query engines are independent. This directory keeps the
 | `local-dev/scripts/run-example.sh` | uploads the example job and submits it as a `SparkApplication` |
 | `local-dev/scripts/smoke-test.sh` | end-to-end assert: up → example → Trino row counts |
 | `local-dev/scripts/test-spark-connect.sh --restart-endpoint` | opt-in ADBC CRUD, endpoint restart, and persistence assertions against an existing Connect deployment |
-| `local-dev/scripts/down.sh` | full teardown |
+| `local-dev/scripts/down.sh` | stop workloads and preserve the catalog and table data |
 
 ## Deploying `hudi-trino` against real infrastructure
 

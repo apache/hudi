@@ -33,6 +33,9 @@ spec:
       labels:
         {{- include "hudi-spark-connect.selectorLabels" . | nindent 8 }}
       annotations:
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       automountServiceAccountToken: {{ .Values.serviceAccount.automountToken }}
@@ -51,7 +54,7 @@ spec:
         fsGroup: 185
       containers:
         - name: spark-connect
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "hudi-spark-connect.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- if hasPrefix "k8s://" (include "hudi-spark-connect.master" .) }}
           # In client mode executors connect directly to this driver pod.

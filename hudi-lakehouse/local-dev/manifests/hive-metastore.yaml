@@ -51,6 +51,10 @@ spec:
       app.kubernetes.io/name: hive-metastore
   template:
     metadata:
+      annotations:
+        hudi.apache.org/bootstrap-checksum: "HMS_BOOTSTRAP_CHECKSUM"
+        # Filled by the installer when loading a local image.
+        hudi.apache.org/local-image-id: ""
       labels:
         app.kubernetes.io/name: hive-metastore
     spec:

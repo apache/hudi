@@ -23,7 +23,11 @@
 nameOverride: ""
 fullnameOverride: ""
 
+podAnnotations: {}
+
 image:
+  # Optional immutable registry digest. Takes precedence over tag.
+  digest: ""
   # Built by hudi-lakehouse/scripts/build-images.sh from hudi-agent-gateway/.
   repository: hudi-lakehouse-agent-gateway
   tag: "0.1.0"
@@ -87,7 +91,7 @@ sessions:
 
 # /health keeps MCP routable without an LLM; installers must verify SQL separately.
 # Preserve dependency readiness for existing chart users.
-readinessPath: /ready
+readinessProbePath: /ready
 
 mcpEnabled: true
 logLevel: INFO

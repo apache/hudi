@@ -694,8 +694,19 @@ Remove only the endpoint; external table data is retained:
 helm uninstall hudi-spark-connect -n hudi-lakehouse
 ```
 
-To delete the entire local-dev namespace, including its PVCs and local data:
+To stop the full local-dev stack and keep its data, run this from the repository
+root. Set `profile` to the target context (`minikube` for the developer quickstart).
 
 ```bash
-./hudi-lakehouse/local-dev/scripts/down.sh
+profile=minikube
+HUDI_KUBE_CONTEXT="$profile" ./hudi-lakehouse/local-dev/scripts/down.sh
+```
+
+For a full data reset, stop the stack and delete its namespace. This permanently
+deletes the MinIO and Hive Metastore PVCs, including the table data and catalog.
+
+```bash
+profile=minikube
+HUDI_KUBE_CONTEXT="$profile" ./hudi-lakehouse/local-dev/scripts/down.sh &&
+  kubectl --context "$profile" delete namespace hudi-lakehouse
 ```

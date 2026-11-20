@@ -59,7 +59,17 @@ kubectl -n hudi-lakehouse exec deploy/hudi-trino -- \
 ./hudi-lakehouse/local-dev/scripts/smoke-test.sh
 
 # stop workloads (preserves namespace, Helm releases and PVCs)
-./hudi-lakehouse/local-dev/scripts/down.sh
+HUDI_KUBE_CONTEXT=minikube ./hudi-lakehouse/local-dev/scripts/down.sh
+```
+
+For a clean start, set `profile` to the developer quickstart's context. The
+following commands permanently remove its MinIO and Hive Metastore PVCs,
+including the table data and catalog.
+
+```bash
+profile=minikube
+HUDI_KUBE_CONTEXT="$profile" ./hudi-lakehouse/local-dev/scripts/down.sh &&
+  kubectl --context "$profile" delete namespace hudi-lakehouse
 ```
 
 Consoles (via `kubectl -n hudi-lakehouse port-forward`):

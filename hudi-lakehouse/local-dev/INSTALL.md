@@ -15,7 +15,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 -->
-# Local minikube installation (RFC-117)
+# Local minikube installation
 
 This checkout-based installer runs MinIO, a persistent Hive Metastore, Spark
 Connect and the Agent Gateway (Chat UI and MCP). It reuses the local-dev
@@ -42,11 +42,16 @@ From the repository root:
 ./hudi-lakehouse/local-dev/lakehouse.sh up
 ```
 
-The default profile is **hudi-lakehouse**, with namespace **hudi-lakehouse**.
-Every kubectl/Helm operation targets that profile explicitly; minikube starts
-with `--keep-context`. Existing default minikube/Trino installations are not
-selected. Use `--profile my-lakehouse` on **every command** or export
-`HUDI_MINIKUBE_PROFILE=my-lakehouse`. The namespace is fixed because the existing
+By default, all `lakehouse.sh` commands use the **hudi-lakehouse** profile and
+namespace. You can omit `--profile`. To use a different profile for the shell
+session, run `export HUDI_MINIKUBE_PROFILE=my-lakehouse`. An explicit
+`--profile` overrides that setting for a single command.
+
+The installer starts minikube with a temporary kubeconfig. On first install it
+adds the profile to your kubeconfig and preserves your current context.
+Before accessing workloads, it checks that the host context named for the
+profile points to the profile's API server. If that name belongs to another
+cluster, choose a different profile. The namespace is fixed because the existing
 manifests, service DNS names and charts use it. Use separate profiles for
 isolated installations. An existing Trino Gateway in the selected profile
 causes `up` to refuse to repoint it.
@@ -60,6 +65,10 @@ is a deployment failure, not a successful MCP installation.
 
 No arguments or `--help` prints help without contacting Docker or Kubernetes.
 Use `--driver`, `--cpus`, and `--memory` to configure a new minikube profile.
+When restarting a stopped profile created with a non-Docker driver, pass the
+same `--driver` to `up`. If the initial install was interrupted before its
+context was registered, run `lakehouse.sh stop` for that profile and repeat
+your original `up` command.
 
 ## Images and Helm overrides
 
@@ -87,7 +96,7 @@ For images you have already built under different tags:
   --connect-image my-connect:dev --gateway-image my-gateway:dev
 ```
 
-For your own registry images (explicit tags required):
+Registry images accept an explicit tag or a digest (`repository@sha256:<64 hex digits>`):
 
 ```bash
 ./hudi-lakehouse/local-dev/lakehouse.sh up --pull-images \
@@ -96,10 +105,10 @@ For your own registry images (explicit tags required):
 ```
 
 `--pull-images` uses `IfNotPresent`, performs no builds or host image loads,
-and relies on cluster registry access. Use new tags to deploy changed images;
-loading a different image under an unchanged tag does not restart existing pods.
-`--build` also accepts custom application tags, restarts the application
-deployments after loading the rebuilt images, and never pushes images.
+and relies on cluster registry access. Use a new tag or digest for each registry
+update. In local-image mode, a plain `up` compares the image IDs and updates the
+affected Deployments even when you rebuild under the same tag. Unchanged images
+keep their running pods. `--build` also accepts custom application tags.
 `SPARK_CONNECT_IMAGE`, `GATEWAY_IMAGE`, `MINIO_IMAGE`, `MINIO_CLIENT_IMAGE` and
 `HMS_IMAGE` provide equivalent image defaults; infrastructure CLI overrides are
 `--minio-image`, `--mc-image`, `--hms-image`.
@@ -193,7 +202,10 @@ drivers and count trips by home city.”
 
 The local install sets the Gateway readiness probe to `/health` so Kubernetes
 keeps routing MCP even when the LLM is absent. `/ready` still reports both SQL
-and LLM status. The chart's default remains `/ready` for existing users.
+and LLM status. The chart defaults to `readinessProbePath: /ready`. Small local
+models can answer the probe without calling the SQL tool. If MCP passed and chat
+reports a missing tool call, retry `lakehouse.sh chat` or select a model with
+more reliable tool calling.
 
 ## Status, diagnostics and lifecycle
 
@@ -203,10 +215,12 @@ and LLM status. The chart's default remains `/ready` for existing users.
 | `doctor` | Status plus events, bounded service logs and separate LLM readiness output |
 | `test` | Read-only strict sample verification: counts, city totals, partition and MCP join checks; never reseeds |
 | `chat` | SQL/MCP probes, provider readiness and actual built-in chat SQL tool call |
-| `down` | Stops workloads, preserves namespace, Helm configuration and PVCs |
+| `down` | Checks that the named context points to the running minikube profile, then stops workloads and preserves the namespace, Helm releases and PVCs |
 | `stop` | Stops the minikube profile, preserving its local disks |
 | `up` | Starts/resumes and creates only missing sample tables |
 
+For a stopped profile, `status` and `doctor` print the minikube status, skip
+workload queries and return minikube's exit code.
 `doctor` logs may contain application/query information; review before sharing.
 Image errors: inspect pod events and use `up --build`, load local images, or
 supply registry tags with `--pull-images`. Pending PVCs: check the minikube
@@ -237,6 +251,12 @@ avoid concurrent writers to a local volume. HMS reuses its existing database;
 an incomplete database fails validation rather than being initialized over.
 The bootstrap and S3 configuration are shared with the Docker installation.
 
+On the first upgrade from the previous local-dev manifest, HMS finds a Derby
+database without a `.schema-initialized` marker. It runs `schematool -validate`
+before writing the marker. In a minikube upgrade test, both PVCs retained their
+UIDs, HMS logged `Done with metastore validation: [SUCCESS]`, and Spark Connect
+read back a Hudi row written before the upgrade.
+
 Sample initialization uses the existing Docker seed: it creates only missing
 `default.trips` and `default.drivers`, validates newly created samples, and skips
 all existing tables, including empty or modified tables. It does not repair,
@@ -255,10 +275,14 @@ while their operator is alive, before stopping the operator. The original
 The new installer opts in with `--with-agent-gateway`. No Trino or Spark 3.5
 writer image build is required by this installation.
 
-There is intentionally no installer purge/reset command. Explicit
-`kubectl delete namespace` or `minikube delete` can destroy both volumes;
-back up first. Local PVC retention is not a backup and does not protect against
-manual profile deletion, host disk loss or Docker reset.
+To permanently erase local tables and the catalog, back up both volumes first.
+Set `profile` to the installed profile, then stop workloads and delete the namespace:
+
+```bash
+profile=${HUDI_MINIKUBE_PROFILE:-hudi-lakehouse}
+./hudi-lakehouse/local-dev/lakehouse.sh down --profile "$profile" &&
+  kubectl --context "$profile" delete namespace hudi-lakehouse
+```
 
 ## Tests
 
