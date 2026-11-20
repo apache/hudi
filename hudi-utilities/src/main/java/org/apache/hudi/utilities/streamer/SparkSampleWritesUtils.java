@@ -41,11 +41,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.FlatMapFunction;
+import org.apache.spark.storage.StorageLevel;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 import static org.apache.hudi.common.table.HoodieTableMetaClient.SAMPLE_WRITES_FOLDER_PATH;
 import static org.apache.hudi.common.util.ValidationUtils.checkState;
@@ -115,33 +118,61 @@ public class SparkSampleWritesUtils {
     try (SparkRDDWriteClient sampleWriteClient = new SparkRDDWriteClient(new HoodieSparkEngineContext(jsc), sampleWriteConfig, Option.empty())) {
       int size = writeConfig.getIntOrDefault(SAMPLE_WRITES_SIZE);
       return recordsOpt.map(records -> {
-        // Empty partition path so all sampled records write to a single non-partitioned file,
-        // instead of fanning out into one tiny file per source partition and skewing the estimate.
-        List<HoodieRecord> samples = records.coalesce(1).take(size).stream()
-            .map(r -> r.newInstance(new HoodieKey(r.getRecordKey(), "")))
-            .collect(Collectors.toList());
-        if (samples.isEmpty()) {
-          return emptyRes;
-        }
-        String instantTime = sampleWriteClient.startCommit();
-        JavaRDD<WriteStatus> writeStatusRDD = sampleWriteClient.bulkInsert(jsc.parallelize(samples, 1), instantTime);
-        if (writeStatusRDD.filter(WriteStatus::hasErrors).count() > 0) {
-          log.error("sample writes for table {} failed with errors.", writeConfig.getTableName());
-          if (log.isTraceEnabled()) {
-            log.trace("Printing out the top 100 errors");
-            writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
-              log.trace("Global error :", ws.getGlobalError());
-              ws.getErrors().forEach((key, throwable) ->
-                  log.trace("Error for key: {}", key, throwable));
-            });
+        // Feed bulkInsert a single-partition RDD directly so the sample moves through the block manager
+        // instead of a driver round trip, keeping it off the spark.driver.maxResultSize /
+        // spark.rpc.message.maxSize limits regardless of record size. persist() pins it because it is
+        // read more than once (isEmpty, bulkInsert, commit).
+        JavaRDD<HoodieRecord> samples = records.coalesce(1)
+            .mapPartitions((FlatMapFunction<Iterator<HoodieRecord>, HoodieRecord>) sourceRecords ->
+                takeSample(sourceRecords, size))
+            .persist(StorageLevel.MEMORY_AND_DISK());
+        try {
+          if (samples.isEmpty()) {
+            return emptyRes;
           }
-          return emptyRes;
-        } else {
-          sampleWriteClient.commit(instantTime, writeStatusRDD);
-          return Pair.of(true, sampleWritesBasePath);
+          String instantTime = sampleWriteClient.startCommit();
+          JavaRDD<WriteStatus> writeStatusRDD = sampleWriteClient.bulkInsert(samples, instantTime);
+          if (writeStatusRDD.filter(WriteStatus::hasErrors).count() > 0) {
+            log.error("sample writes for table {} failed with errors.", writeConfig.getTableName());
+            if (log.isTraceEnabled()) {
+              log.trace("Printing out the top 100 errors");
+              writeStatusRDD.filter(WriteStatus::hasErrors).take(100).forEach(ws -> {
+                log.trace("Global error :", ws.getGlobalError());
+                ws.getErrors().forEach((key, throwable) ->
+                    log.trace("Error for key: {}", key, throwable));
+              });
+            }
+            return emptyRes;
+          } else {
+            sampleWriteClient.commit(instantTime, writeStatusRDD);
+            return Pair.of(true, sampleWritesBasePath);
+          }
+        } finally {
+          samples.unpersist();
         }
       }).orElse(emptyRes);
     }
+  }
+
+  /**
+   * Takes up to {@code maxCount} records from {@code sourceRecords}, re-keying each with an empty
+   * partition path so the whole sample writes to a single non-partitioned file, instead of fanning
+   * out into one tiny file per source partition and skewing the estimate.
+   *
+   * <p>The cap is applied per input partition, so callers coalesce to a single partition for it to
+   * bound the whole sample.
+   *
+   * @param sourceRecords the source records to sample from
+   * @param maxCount      the maximum number of records to sample
+   * @return an iterator over the sample
+   */
+  private static Iterator<HoodieRecord> takeSample(Iterator<HoodieRecord> sourceRecords, int maxCount) {
+    List<HoodieRecord> samples = new ArrayList<>();
+    while (sourceRecords.hasNext() && samples.size() < maxCount) {
+      HoodieRecord source = sourceRecords.next();
+      samples.add(source.newInstance(new HoodieKey(source.getRecordKey(), "")));
+    }
+    return samples.iterator();
   }
 
   private static String getSampleWritesBasePath(JavaSparkContext jsc, HoodieWriteConfig writeConfig, String uniqueId) throws IOException {
