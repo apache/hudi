@@ -28,6 +28,7 @@ import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.OrderingValues;
 import org.apache.hudi.util.HoodieSchemaConverter;
 
 import org.apache.flink.table.api.DataTypes;
@@ -35,9 +36,13 @@ import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -135,6 +140,26 @@ public class TestHoodieFlinkRecordMerger {
     BufferedRecord<RowData> newRecord = BufferedRecords.fromEngineRecord(newRow, schema, recordContext, 1L, RECORD_KEY, false);
 
     CommitTimeFlinkRecordMerger merger = new CommitTimeFlinkRecordMerger();
+    BufferedRecord<RowData> mergingResult = merger.merge(oldRecord, newRecord, recordContext, new TypedProperties());
+    assertEquals(newRecord.getRecord(), mergingResult.getRecord());
+  }
+
+  static Stream<Arguments> storedNullOrderingValues() {
+    return Stream.of(Arguments.of((Comparable) null), Arguments.of(OrderingValues.getDefault()));
+  }
+
+  @ParameterizedTest
+  @MethodSource("storedNullOrderingValues")
+  void testMergingWithStoredNullOrderingValue(Comparable storedOrderingValue) throws IOException {
+    HoodieSchema schema = HoodieSchemaConverter.convertToSchema(RECORD_ROWTYPE);
+    HoodieKey key = new HoodieKey(RECORD_KEY, PARTITION);
+    RowData oldRow = createRow(key, "001", "001_01", "file1", 1, "str_val1", 1L);
+    BufferedRecord<RowData> oldRecord = BufferedRecords.fromEngineRecord(oldRow, schema, recordContext, storedOrderingValue, RECORD_KEY, false);
+
+    RowData newRow = createRow(key, "001", "001_02", "file1", 2, "str_val2", 100L);
+    BufferedRecord<RowData> newRecord = BufferedRecords.fromEngineRecord(newRow, schema, recordContext, 100L, RECORD_KEY, false);
+
+    EventTimeFlinkRecordMerger merger = new EventTimeFlinkRecordMerger();
     BufferedRecord<RowData> mergingResult = merger.merge(oldRecord, newRecord, recordContext, new TypedProperties());
     assertEquals(newRecord.getRecord(), mergingResult.getRecord());
   }

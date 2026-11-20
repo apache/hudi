@@ -61,7 +61,7 @@ public class ArrayComparable implements Comparable<ArrayComparable>, Serializabl
 
   public boolean isValueSameClass(ArrayComparable other) {
     for (int i = 0; i < this.values.length; i++) {
-      if (this.values[i].getClass() != other.values[i].getClass()) {
+      if (this.values[i] == null || other.values[i] == null || this.values[i].getClass() != other.values[i].getClass()) {
         return false;
       }
     }

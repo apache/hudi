@@ -26,14 +26,19 @@ import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecords;
+import org.apache.hudi.common.util.OrderingValues;
 
 import org.apache.flink.table.data.GenericRowData;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.data.StringData;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -180,6 +185,27 @@ public class TestPartialUpdateFlinkRecordMerger {
     when(recordContext.getSchemaFromBufferRecord(record2)).thenReturn(schemaWithoutMetaField);
     BufferedRecord<RowData> expected = createRecordWithoutMetaField(new HoodieKey("1", "par1"),  2L, "NY1", "A");
     mergingResult = recordMerger.merge(record1, record2, recordContext, new TypedProperties());
+    assertEquals(expected.getRecord(), mergingResult.getRecord());
+  }
+
+  static Stream<Arguments> storedNullOrderingValues() {
+    return Stream.of(Arguments.of((Comparable) null), Arguments.of(OrderingValues.getDefault()));
+  }
+
+  /**
+   * A stored record without an ordering value loses to the incoming record, which takes its missing fields from it.
+   */
+  @ParameterizedTest
+  @MethodSource("storedNullOrderingValues")
+  void testMergingWithStoredNullOrderingValue(Comparable storedOrderingValue) throws IOException {
+    when(recordContext.getSchemaFromBufferRecord(any())).thenReturn(schema);
+    PartialUpdateFlinkRecordMerger recordMerger = new PartialUpdateFlinkRecordMerger();
+    BufferedRecord<RowData> stored = createRecord(new HoodieKey("1", "par1"), "001", "001_1", "file", 1L, "NY", "A");
+    BufferedRecord<RowData> oldRecord = new BufferedRecord<>(stored.getRecordKey(), storedOrderingValue, stored.getRecord(), stored.getSchemaId(), null);
+    BufferedRecord<RowData> newRecord = createRecord(new HoodieKey("1", "par1"), "001", "001_2", "file", 2L, null, "B");
+    BufferedRecord<RowData> expected = createRecord(new HoodieKey("1", "par1"), "001", "001_2", "file", 2L, "NY", "B");
+
+    BufferedRecord<RowData> mergingResult = recordMerger.merge(oldRecord, newRecord, recordContext, new TypedProperties());
     assertEquals(expected.getRecord(), mergingResult.getRecord());
   }
 

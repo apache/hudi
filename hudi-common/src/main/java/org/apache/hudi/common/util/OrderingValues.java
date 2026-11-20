@@ -96,10 +96,10 @@ public class OrderingValues {
   }
 
   /**
-   * Returns whether the given two ordering values belong to the same class.
+   * Returns whether the given two ordering values belong to the same class. A null value belongs to no class.
    */
   public static boolean isSameClass(Comparable val1, Comparable val2) {
-    if (val1.getClass() != val2.getClass()) {
+    if (val1 == null || val2 == null || val1.getClass() != val2.getClass()) {
       return false;
     } else if (val1 instanceof ArrayComparable) {
       return ((ArrayComparable) val1).isValueSameClass((ArrayComparable) val2);
@@ -116,5 +116,41 @@ public class OrderingValues {
 
   public static boolean isCommitTimeOrderingValue(Comparable orderingValue) {
     return orderingValue == null || OrderingValues.isDefault(orderingValue);
+  }
+
+  /**
+   * Returns whether the base (older) ordering value strictly outranks the incoming (newer) one under event-time
+   * ordering, so that ties keep the incoming record.
+   *
+   * <p>A base value that is null, or that is the default value while the incoming value has another class, carries
+   * no ordering position (a null stored in the ordering column) and ranks below any incoming value. Multi-field
+   * ordering values apply this per field. Any other pair of values of different classes cannot be ordered and fails
+   * with an {@link IllegalArgumentException}.
+   */
+  public static boolean isBaseOrderingHigher(Comparable baseOrderingValue, Comparable incomingOrderingValue) {
+    return compareBaseToIncoming(baseOrderingValue, incomingOrderingValue) > 0;
+  }
+
+  private static int compareBaseToIncoming(Comparable base, Comparable incoming) {
+    if (base instanceof ArrayComparable && incoming instanceof ArrayComparable) {
+      List<Comparable> baseValues = ((ArrayComparable) base).getValues();
+      List<Comparable> incomingValues = ((ArrayComparable) incoming).getValues();
+      ValidationUtils.checkArgument(baseValues.size() == incomingValues.size(), "The values should be of the same size");
+      for (int i = 0; i < baseValues.size(); i++) {
+        int result = compareBaseToIncoming(baseValues.get(i), incomingValues.get(i));
+        if (result != 0) {
+          return result;
+        }
+      }
+      return 0;
+    }
+    if (isSameClass(base, incoming)) {
+      return base.compareTo(incoming);
+    }
+    if (isCommitTimeOrderingValue(base)) {
+      return -1;
+    }
+    throw new IllegalArgumentException(String.format("Cannot compare ordering values of different types: %s and %s",
+        base.getClass().getName(), incoming == null ? null : incoming.getClass().getName()));
   }
 }
