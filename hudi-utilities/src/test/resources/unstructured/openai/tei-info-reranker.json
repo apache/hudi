@@ -1,0 +1,1 @@
+{"model_id": "BAAI/bge-reranker-base", "model_type": {"reranker": {"id2label": {"0": "LABEL_0"}, "label2id": {"LABEL_0": 0}}}, "max_concurrent_requests": 512, "max_input_length": 512, "max_batch_tokens": 16384, "max_client_batch_size": 32, "version": "1.9.4"}

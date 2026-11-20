@@ -79,7 +79,6 @@ import static org.apache.hudi.common.util.ConfigUtils.containsConfigProperty;
 import static org.apache.hudi.common.util.ConfigUtils.getBooleanWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getIntWithAltKeys;
 import static org.apache.hudi.common.util.ConfigUtils.getStringWithAltKeys;
-import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_DATAFILE_EXTENSION;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.CLOUD_INCREMENTAL_MERGE_SCHEMA;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARALLELISM;
 import static org.apache.hudi.utilities.config.CloudSourceConfig.EXISTS_CHECK_PARTITIONS;
@@ -260,7 +259,17 @@ public class CloudObjectsSelectorCommon {
 
   public static String generateFilter(Type type,
                                       TypedProperties props) {
-    String fileFormat = CloudDataFetcher.getFileFormat(props);
+    return generateFilter(type, props, new ColumnarFileMaterializer(props));
+  }
+
+  /**
+   * Builds the filter restricting which cloud objects a batch selects. The size and relative-path
+   * restrictions are common to every payload; which object keys are eligible is not, and so comes
+   * from {@code materializer}.
+   */
+  public static String generateFilter(Type type,
+                                      TypedProperties props,
+                                      CloudObjectMaterializer materializer) {
     Option<String> selectRelativePathPrefix = getPropVal(props, SELECT_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathPrefix = getPropVal(props, IGNORE_RELATIVE_PATH_PREFIX);
     Option<String> ignoreRelativePathSubStr = getPropVal(props, IGNORE_RELATIVE_PATH_SUBSTR);
@@ -302,11 +311,38 @@ public class CloudObjectsSelectorCommon {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
     }
 
-    // Match files with a given extension, or use the fileFormat as the default.
-    getPropVal(props, CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
-        .map(val -> filter.append(SPACE_DELIMTER).append(String.format("and %s like '%%%s'", objectKey, val)));
+    filter.append(materializer.objectKeyPredicate(objectKey, props));
 
     return filter.toString();
+  }
+
+  /**
+   * Splits a comma separated extension value into the entries that can actually be matched on,
+   * dropping blanks so a value like "pdf, ,docx" yields two extensions and "," yields none.
+   */
+  static List<String> usableExtensions(String extensions) {
+    return Arrays.stream(extensions.split(","))
+        .map(String::trim)
+        .filter(extension -> !extension.isEmpty())
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Renders the file extension predicate. More than one extension matches any one of them, so a
+   * prefix holding several file types can be selected in a single sync; a single extension renders
+   * exactly the predicate it always did. Empty only when neither the configured extensions nor the
+   * fileFormat yields anything to match on, which leaves the filter unchanged.
+   */
+  static String extensionClause(String objectKey, List<String> extensions) {
+    List<String> predicates = extensions.stream()
+        .map(extension -> String.format("%s like '%%%s'", objectKey, extension))
+        .collect(Collectors.toList());
+    if (predicates.isEmpty()) {
+      return "";
+    }
+    return predicates.size() == 1
+        ? SPACE_DELIMTER + "and " + predicates.get(0)
+        : SPACE_DELIMTER + "and (" + String.join(" or ", predicates) + ")";
   }
 
   /**
@@ -651,7 +687,7 @@ public class CloudObjectsSelectorCommon {
     return !modifiedNestedSchema.equals(rowField.dataType()) || !field.aliases().isEmpty();
   }
 
-  private static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {
+  static Option<String> getPropVal(TypedProperties props, ConfigProperty<String> configProperty) {
     String value = getStringWithAltKeys(props, configProperty, true);
     if (!StringUtils.isNullOrEmpty(value)) {
       return Option.of(value);

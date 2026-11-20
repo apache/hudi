@@ -1,0 +1,1 @@
+{"error": {"message": "This model does not support specifying dimensions.", "type": "invalid_request_error", "param": "dimensions", "code": null}}

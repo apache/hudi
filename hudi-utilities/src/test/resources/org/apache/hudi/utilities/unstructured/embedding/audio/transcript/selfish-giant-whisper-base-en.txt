@@ -1,0 +1,44 @@
+# whisper utterances recorded with whisper-cpp-1.7.1-base.en/en/transcribe, the first 180 s of hpot_03_selfish_giant.mp3
+# (LibriVox, public domain, https://archive.org/download/hpot_librivox/hpot_03_selfish_giant.mp3, sha-256 b12913bc2655b02bc8649766c506cc862e790d613afbc5dd6cceec0f5c70540f) in 30 s segments
+# columns: segment index, start ms, end ms, text (video timeline; tab separated)
+0	0	8040	This is a LibriVox recording. All LibriVox recordings are in the public domain. For more
+0	8040	15280	information and to find out how you can volunteer please visit LibriVox.org. Recording by Joy
+0	15280	21760	Chan. The Happy Prince and Other Tales by Oscar Wilde.
+0	21760	27840	The Selfish Giant. Every afternoon as they were coming from school the children used
+0	27840	29640	to go and play in the giant's garden.
+1	30000	34480	It was a large lovely garden with soft green grass.
+1	34480	38960	Here and there for the grass stood beautiful flowers like stars, and there were twelve peach
+1	38960	44440	trees that in the springtime broke out into delicate blossoms of pink and pearl, and in
+1	44440	46920	the autumn bore rich fruit.
+1	46920	50960	The birds sat on the trees and sang so sweetly that the children used to stop their games
+1	50960	53680	in order to listen to them.
+1	53680	58200	How happy we are here they cried to each other.
+1	58200	59520	One day the giant came back.
+2	60000	66600	He had been to visit his friend, the Cornish ogre, and had stayed with him for seven years.
+2	66600	70920	After the seven years were over, he had said all that he had to say, for his conversation
+2	70920	76000	was limited, and he determined to return to his own castle.
+2	76000	79120	When he arrived, he saw the children playing in the garden.
+2	79120	85000	"What are you doing here?" he cried in a very gruff voice, and the children ran away.
+2	85000	88400	My own garden is my own garden, set the giant.
+2	88400	89960	Anyone can understand that.
+3	90000	98000	and I will allow nobody to play in it myself, so he built a high wall all round it and put up a notice board.
+3	98000	104000	Tress passes will be prosecuted. He was a very selfish giant.
+3	104000	114000	The poor children had now nowhere to play. They tried to play on the road but the road was very dusty and full of hard stones and they did not like it.
+3	115000	120000	They used to wander around the high wall when their lessons were over and talk about the beauty.
+4	120000	122860	beautiful garden inside.
+4	122860	127160	How happy we were there, they said to each other.
+4	127160	132920	Then the spring came, and all over the country there were little blossoms and little birds.
+4	132920	136780	Only in the garden of the surface giant it was still winter.
+4	136780	141680	The birds did not care to sing in it, as there were no children, and the trees forgot to
+4	141680	143480	blossom.
+4	143480	147560	Once a beautiful flower put its head out from the grass, but when it saw the notice
+4	147560	149960	board. It was so sorry for the children.
+5	150000	154200	But it slipped back into the ground again and went off to sleep.
+5	154200	158240	The only people who were pleased were the snow in the frost.
+5	158240	163840	Spring has forgotten this garden they cried, so we will live here all the year round.
+5	163840	168040	The snow covered up the grass with a great white cloak, and the frost painted all the
+5	168040	169880	trees silver.
+5	169880	173800	Then they invited the North wind to stay with them, and he came.
+5	173800	177920	He was wrapped in furs and he roared all day about the garden and blew the chimney pots
+5	177920	178920	down.
+5	178920	179920	This is it.
