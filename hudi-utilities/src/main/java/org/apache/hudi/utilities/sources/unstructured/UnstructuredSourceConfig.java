@@ -38,13 +38,15 @@ public class UnstructuredSourceConfig extends HoodieConfig {
 
   public static final String PREFIX = "hoodie.unstructured.source.";
 
-  /** The job: {@code blob} writes the blob table ({@link UnstructuredMode}). */
+  /** The job: {@code blob} writes the blob table, {@code embedding} the embedding table ({@link UnstructuredMode}). */
   public static final ConfigProperty<String> MODE = ConfigProperty
       .key(PREFIX + "mode")
       .noDefaultValue("<required>")
       .sinceVersion("1.3.0")
       .withDocumentation("Which table the unstructured data source's job writes: blob (the blob table, through the quarantine "
-          + "transformer). Required, no default.");
+          + "transformer) or embedding (the embedding table, through the embedding transformer; it also needs "
+          + "hoodie.unstructured.embedding.mode). Required, no default. A table keeps the mode it was created with: the record "
+          + "key check refuses an existing table written in the other mode.");
 
   /** The cloud whose events table the source reads: {@code s3} or {@code gcs} ({@link UnstructuredCloud}). */
   public static final ConfigProperty<String> CLOUD = ConfigProperty

@@ -112,6 +112,8 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private final Consumer<PrepSideOutput> sideOutputs;
   /** The side outputs of an iterator built without a sink (tests); null otherwise. */
   private final List<PrepSideOutput> collectedSideOutputs;
+  /** Side outputs handed to {@link #sideOutputs} so far: {@link #advanceToRowOrSideOutput()} stops at the next one. */
+  private long sideOutputCount;
 
   /** Protects ownership transfers; storage and preprocessor calls never hold this lock. */
   private final Object lifecycle = new Object();
@@ -144,7 +146,11 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
                                PreprocessorRegistry registry, Tokenizer tokenizer, PrepCounters counters,
                                Consumer<PrepSideOutput> sideOutputs) {
     this.collectedSideOutputs = sideOutputs == null ? new ArrayList<>() : null;
-    this.sideOutputs = sideOutputs == null ? collectedSideOutputs::add : sideOutputs;
+    Consumer<PrepSideOutput> sink = sideOutputs == null ? collectedSideOutputs::add : sideOutputs;
+    this.sideOutputs = sideOutput -> {
+      sideOutputCount++;
+      sink.accept(sideOutput);
+    };
     this.blobRows = blobRows;
     this.config = config;
     this.bytesSource = bytesSource;
@@ -170,13 +176,32 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
 
   @Override
   public boolean hasNext() {
-    if (failedWith != null) {
-      throw new IllegalStateException("Prep iterator failed earlier; it does not continue a half-read file", failedWith);
-    }
+    checkNotFailed();
     while (pending == null && !closed) {
       advance();
     }
     return pending != null;
+  }
+
+  /**
+   * Advances until a row is ready, the input ends, or a side output was handed to the sink during this call, whichever comes
+   * first; returns whether a row is ready ({@link #next()} then returns it without advancing). A caller that queues side outputs
+   * drains its queue between calls, so the queue holds those of one file step at most, however long a run of files that yield
+   * no row is. {@link #hasNext()} instead advances past any number of such files.
+   */
+  public boolean advanceToRowOrSideOutput() {
+    checkNotFailed();
+    long seen = sideOutputCount;
+    while (pending == null && !closed && sideOutputCount == seen) {
+      advance();
+    }
+    return pending != null;
+  }
+
+  private void checkNotFailed() {
+    if (failedWith != null) {
+      throw new IllegalStateException("Prep iterator failed earlier; it does not continue a half-read file", failedWith);
+    }
   }
 
   @Override

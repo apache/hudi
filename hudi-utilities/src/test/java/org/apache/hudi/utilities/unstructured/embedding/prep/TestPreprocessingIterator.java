@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.unstructured.embedding.prep;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -230,6 +231,29 @@ public class TestPreprocessingIterator {
     assertEquals(5L, chunks.value());
   }
 
+  /**
+   * The embedding job reads an object only by its absolute path: an OUT_OF_LINE source row with a relative reference (the blob
+   * table's managed form, which SQL read_blob resolves against that table's base) is a reference error of that file alone, and
+   * the files beside it are prepared.
+   */
+  @Test
+  public void relativeOutOfLineReferenceFailsTheFileOnly() {
+    PreprocessingIterator iterator = iterator(props("m1"), outOfLineRow("sha-rel", ".hoodie/.blob/txt/a.bin"),
+        blobRow("sha-b", "txt", "d|e"));
+    List<Row> rows = drain(iterator);
+
+    assertEquals(2, rows.size(), "the file beside the failed one is prepared");
+    for (Row row : rows) {
+      assertEquals("sha-b", row.get(0));
+    }
+    assertEquals(1L, filesOk.value());
+    assertEquals(1, iterator.getSideOutputs().size(), iterator.getSideOutputs().toString());
+    PrepSideOutput failure = iterator.getSideOutputs().get(0);
+    assertEquals("sha-rel", failure.getSourcePathSha());
+    assertEquals(PrepSideOutput.STAGE_PREP, failure.getStage());
+    assertTrue(failure.getError().contains("relative external_path"), failure.getError());
+  }
+
   /** A source row with no blob at all. A mapped extension fails the file as gone since announced. */
   private static Row goneRow(String sha, String extension) {
     return new GenericRowWithSchema(new Object[] {sha, extension, 5L, MODIFICATION_TIME, null,
@@ -263,6 +287,14 @@ public class TestPreprocessingIterator {
     PrepSideOutput none = iterator.getSideOutputs().get(0);
     assertEquals(PrepSideOutput.STAGE_EMPTY, none.getStage());
     assertEquals(PrepSideOutput.NO_PREPROCESSOR, none.getError());
+  }
+
+  /** A source row whose blob is an OUT_OF_LINE managed reference at {@code externalPath}, no range. */
+  private static Row outOfLineRow(String sha, String externalPath) {
+    StructType reference = (StructType) BLOB.apply(HoodieSchema.Blob.EXTERNAL_REFERENCE).dataType();
+    Row blob = new GenericRowWithSchema(new Object[] {HoodieSchema.Blob.OUT_OF_LINE, null,
+        new GenericRowWithSchema(new Object[] {externalPath, null, null, true}, reference)}, BLOB);
+    return new GenericRowWithSchema(new Object[] {sha, "txt", 1L, MODIFICATION_TIME, blob, "s3a://bucket/dir/a.txt", "a.txt", "blue"}, BLOB_ROW);
   }
 
   @Test

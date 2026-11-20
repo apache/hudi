@@ -153,7 +153,7 @@ public class TestStreamSyncSourceSettingsOrder extends UtilitiesTestBase {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"blob"})
+  @ValueSource(strings = {"blob", "embedding"})
   void streamCreationPersistsKeyEncodingAndTablePins(String mode) throws Exception {
     TypedProperties props = jobProps();
     props.setProperty(UnstructuredSourceConfig.MODE.key(), mode);
@@ -171,7 +171,7 @@ public class TestStreamSyncSourceSettingsOrder extends UtilitiesTestBase {
   }
 
   @ParameterizedTest
-  @CsvSource({"blob,missing", "blob,2"})
+  @CsvSource({"blob,missing", "blob,2", "embedding,missing", "embedding,2"})
   void streamRefusesKeyEncodingBeforeConstructingSource(String mode, String version) throws Exception {
     TypedProperties props = jobProps();
     props.setProperty(UnstructuredSourceConfig.MODE.key(), mode);

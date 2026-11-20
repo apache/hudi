@@ -22,7 +22,10 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.transform.Transformer;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
@@ -43,7 +46,9 @@ import java.util.Map;
  * whose instant the streamer rolls back. It backs the start-time plan of the chain for a transformer whose output depends on the
  * data. The source adds it; a job does not name it.
  *
- * <p>A column the rows name twice resolves to the last one, at the first one's place.
+ * <p>A column the table gained from a customer's transformer is in the rows the embedding transformer makes (null), and the
+ * customer's transformer adds it again in the round: the rows then name it twice, and the guard keeps the last, the customer's
+ * value, at the first one's place.
  */
 public class UnstructuredSchemaGuard implements Transformer {
 
@@ -53,9 +58,18 @@ public class UnstructuredSchemaGuard implements Transformer {
     StructType fixed = UnstructuredSchemaContract.contract(mode, props, Option.empty());
     StructType schema = UnstructuredSchemaContract.lastWins(mode, fixed, rows.schema(), "the rows of the round");
     Dataset<Row> resolved = schema.fields().length == rows.schema().fields().length ? rows : lastWins(rows);
-    UnstructuredSchemaContract.checkOutput(mode, UnstructuredSchemaContract.contract(mode, props, Option.empty()),
+    UnstructuredSchemaContract.checkOutput(mode, UnstructuredSchemaContract.contract(mode, props, tableSchema(mode, jsc, props)),
         fixed, resolved.schema(), "the rows of the round", ConfigUtils.getBooleanWithAltKeys(props, HoodieErrorTableConfig.ERROR_TABLE_ENABLED));
     return resolved;
+  }
+
+  /** The schema the round's rows are checked against: an existing embedding table's, as the embedding transformer writes it. */
+  private static Option<StructType> tableSchema(UnstructuredMode mode, JavaSparkContext jsc, TypedProperties props) {
+    if (mode != UnstructuredMode.EMBEDDING) {
+      return Option.empty();
+    }
+    return EmbeddingTableSchema.writerReadSchema(EmbeddingTableConfig.from(props).targetTablePath(),
+        HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()));
   }
 
   /** {@code rows} with each column name once: the last column of a name, at the first one's place. */

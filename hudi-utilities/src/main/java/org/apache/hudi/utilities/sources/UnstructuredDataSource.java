@@ -68,17 +68,19 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
 
 /**
  * The source of every unstructured stream: raw unstructured bytes of the objects a cloud events Hudi table announces, selected
- * incrementally with requested-time checkpoints, for the blob job and one of two clouds.
+ * incrementally with requested-time checkpoints, for one of two jobs and one of two clouds.
  * <ul>
  *   <li>The job is {@code hoodie.unstructured.source.mode} ({@link UnstructuredMode}): {@code blob} writes the blob table through
- *   the copy transformer. The streamer runs that transformer in every round ({@link UnstructuredSourceContract}), with the job's
- *   own {@code --transformer-class} entries after it.</li>
+ *   the quarantine transformer, {@code embedding} the embedding table through the embedding transformer. The streamer runs that
+ *   transformer in every round ({@link UnstructuredSourceContract}), with the job's own {@code --transformer-class} entries after it,
+ *   and refuses the other job's transformer.</li>
  *   <li>The cloud is {@code hoodie.unstructured.source.cloud} ({@link UnstructuredCloud}): {@code s3} reads the events table of the
  *   S3 events source, {@code gcs} the one of the GCS events source. Only the events table's key and size columns and the selector
  *   type differ; the selection, the status call and the bytes are read the same way on both.</li>
  * </ul>
  * Small objects become inline blob rows; large objects carry pending references whose path stays null: the blob job's copy
- * transformer copies the bytes and fills it.
+ * transformer copies the bytes and fills it, and the embedding job's transformer reads the object from its
+ * {@code source_file_path}.
  *
  * <p>The job's requirements are its contract's ({@link UnstructuredSourceContract}): the settings it runs with, which the streamer
  * merges into a copy of the job's properties before anything reads them, the transformers and the schema check. The source is

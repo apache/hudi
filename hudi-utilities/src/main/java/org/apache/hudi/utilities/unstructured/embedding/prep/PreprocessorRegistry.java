@@ -24,6 +24,7 @@ import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
+import org.apache.hudi.utilities.unstructured.embedding.text.Tokenizer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,6 +86,15 @@ public class PreprocessorRegistry {
       }
     }
     instances.clear();
+  }
+
+  /**
+   * Validates the configuration of the preprocessor of every extension this registry resolves (driver side).
+   */
+  public void validateConfig(TypedProperties props, Tokenizer tokenizer) {
+    for (String extension : classByExtension.keySet()) {
+      forExtension(extension).get().validateConfig(props, tokenizer);
+    }
   }
 
 }
