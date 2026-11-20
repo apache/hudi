@@ -425,9 +425,12 @@ public class HoodieMetadataPayload implements HoodieRecordPayload<HoodieMetadata
     }
 
     // TODO: feature(schema): Swap this over to HOODIE_METADATA_SCHEMA after HoodieRecordPayload implementations are using HoodieSchema
-    // Reference equality against the generated class's SCHEMA$ singleton held in HOODIE_METADATA_AVRO_SCHEMA.
-    if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA) {
-      // If the schema is same or none is provided, we can return the record directly
+    // The reference check is the fast path. The metadata schema has no meta fields, so an equal copy of it
+    // (parsed from its string form, for example on an executor) also gets the generated record: the
+    // branch below expects a schema that starts with the meta fields.
+    if (schema == null || schema == HOODIE_METADATA_AVRO_SCHEMA
+        || schema.getField(HoodieRecord.RECORD_KEY_METADATA_FIELD) == null) {
+      // No schema, or one without meta fields: return the generated record directly
       HoodieMetadataRecord record = new HoodieMetadataRecord(key, type, filesystemMetadata, bloomFilterMetadata,
           columnStatMetadata, recordIndexMetadata, secondaryIndexMetadata);
       return Option.of(record);
