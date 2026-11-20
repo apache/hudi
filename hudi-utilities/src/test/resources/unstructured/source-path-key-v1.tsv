@@ -1,0 +1,37 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Key encoding version 1: UTF-8 canonical input; SHA-256 first 32 lowercase hex characters.
+# Source path	Canonical input	source_path_sha
+s3://bucket/dir/a.pdf	bucket/dir/a.pdf	6096cee73fb68d4b59859b904c91e9fc
+s3a://bucket/dir/a.pdf	bucket/dir/a.pdf	6096cee73fb68d4b59859b904c91e9fc
+s3n://bucket/dir/a.pdf	bucket/dir/a.pdf	6096cee73fb68d4b59859b904c91e9fc
+s3://bucket/dir//../my scan%2F+?.pdf#part	bucket/dir//../my scan%2F+?.pdf#part	15366f1708dcd7215a0853d7ae24e2f8
+s3a://bucket/dir//../my scan%2F+?.pdf#part	bucket/dir//../my scan%2F+?.pdf#part	15366f1708dcd7215a0853d7ae24e2f8
+s3n://bucket/dir//../my scan%2F+?.pdf#part	bucket/dir//../my scan%2F+?.pdf#part	15366f1708dcd7215a0853d7ae24e2f8
+s3://bucket/a%2Fb.pdf	bucket/a%2Fb.pdf	a73462d128f190bd5787d60f65120704
+s3a://bucket/a%2Fb.pdf	bucket/a%2Fb.pdf	a73462d128f190bd5787d60f65120704
+s3n://bucket/a%2Fb.pdf	bucket/a%2Fb.pdf	a73462d128f190bd5787d60f65120704
+s3://bucket/a/b.pdf	bucket/a/b.pdf	87461f210437237721670a2b2600522d
+s3a://bucket/a/b.pdf	bucket/a/b.pdf	87461f210437237721670a2b2600522d
+s3n://bucket/a/b.pdf	bucket/a/b.pdf	87461f210437237721670a2b2600522d
+s3://bucket/图像/café.png	bucket/图像/café.png	352decfa909b192a47e48cd1a9de6324
+s3a://bucket/图像/café.png	bucket/图像/café.png	352decfa909b192a47e48cd1a9de6324
+s3n://bucket/图像/café.png	bucket/图像/café.png	352decfa909b192a47e48cd1a9de6324
+s3://bucket/dir/	bucket/dir/	234b92e011beda83dcaffd96f52ee015
+s3a://bucket/dir/	bucket/dir/	234b92e011beda83dcaffd96f52ee015
+s3n://bucket/dir/	bucket/dir/	234b92e011beda83dcaffd96f52ee015
+gs://gcs-bucket/dir/a.pdf	gcs-bucket/dir/a.pdf	d0e6a27ae64ec36300488b894f47e722
