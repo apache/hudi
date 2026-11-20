@@ -25,12 +25,15 @@ import org.apache.hudi.exception.HoodieValidationException;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 import org.apache.hudi.utilities.exception.HoodieTransformException;
 import org.apache.hudi.utilities.transform.ErrorTableAwareChainedTransformer;
+import org.apache.hudi.utilities.transform.InstantAwareTransformer;
 import org.apache.hudi.utilities.transform.Transformer;
 
+import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructField;
@@ -40,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -88,6 +92,38 @@ public class TestErrorTableAwareChainedTransformer extends SparkClientFunctional
     properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
     ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(t1, t2, t3));
     assertThrows(HoodieValidationException.class, () -> transformer.apply(jsc(), spark(), original, properties));
+  }
+
+  @Test
+  void testInstantAwareMemberGetsTheInstantRightAfterItsInflightTransition() {
+    List<String> events = new ArrayList<>();
+    Transformer plain = (jsc, sparkSession, dataset, props) -> {
+      events.add("plain");
+      return dataset;
+    };
+    InstantAwareTransformer instantAware = new InstantAwareTransformer() {
+      @Override
+      public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession,
+                                Dataset<Row> dataset, TypedProperties props) {
+        events.add("instant-aware without an instant");
+        return dataset;
+      }
+
+      @Override
+      public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession,
+                                Dataset<Row> dataset, TypedProperties props, String instantTime) {
+        events.add("instant-aware@" + instantTime);
+        return dataset;
+      }
+    };
+    ErrorTableAwareChainedTransformer transformer = new ErrorTableAwareChainedTransformer(Arrays.asList(plain, instantAware));
+    TypedProperties properties = new TypedProperties();
+    properties.setProperty(ERROR_TABLE_ENABLED.key(), "true");
+
+    assertTrue(transformer.needsInstant(), "a chain with an instant-aware member needs the round's instant");
+    Dataset<Row> transformed = transformer.apply(jsc(), spark(), getTestDataset(), properties, "001", () -> events.add("toInflight"));
+    assertEquals(Arrays.asList("plain", "toInflight", "instant-aware@001"), events);
+    assertCorruptRecordColumnAllNull(transformed);
   }
 
   @Test
