@@ -44,9 +44,8 @@ import static java.util.Objects.requireNonNull;
 /**
  * Maps {@link HoodieSchema} to Trino types directly, one Trino type per {@link HoodieSchemaType}.
  * <p>
- * The connector does not use this mapping yet: its column types still come from the Hive type strings in the
- * metastore. That path gives different types for the rows marked below, because it goes through what Hive can
- * declare. Moving the connector onto this mapping changes those column types and is a separate, gated step.
+ * The connector types data columns with this mapping; partition columns keep the types of their Hive type strings in
+ * the metastore. The last column notes where the Hive type a sync writes into the metastore cannot carry the type.
  * <table>
  * <caption>HoodieSchema to Trino</caption>
  * <tr><th>HoodieSchema</th><th>Trino</th><th>Type identity</th></tr>

@@ -14,7 +14,6 @@
 package io.trino.plugin.hudi.testing;
 
 import com.google.common.collect.ImmutableList;
-import io.trino.metastore.Column;
 import org.apache.avro.JsonProperties;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
@@ -29,11 +28,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 
 /**
  * Creates a non-partitioned Merge-On-Read table whose merge semantics come from the
@@ -58,16 +52,6 @@ public class OverwriteNonDefaultsPayloadHudiTablesInitializer
     public OverwriteNonDefaultsPayloadHudiTablesInitializer()
     {
         super(TABLE_NAME);
-    }
-
-    @Override
-    protected List<Column> dataColumns()
-    {
-        return ImmutableList.of(
-                new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("a", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("b", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
     }
 
     @Override

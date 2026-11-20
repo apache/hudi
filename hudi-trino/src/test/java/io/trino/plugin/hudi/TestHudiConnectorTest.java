@@ -15,11 +15,14 @@ package io.trino.plugin.hudi;
 
 import io.trino.plugin.hudi.testing.TpchHudiTablesInitializer;
 import io.trino.testing.BaseConnectorTest;
+import io.trino.testing.MaterializedResult;
 import io.trino.testing.QueryRunner;
 import io.trino.testing.TestingConnectorBehavior;
 import org.junit.jupiter.api.Test;
 
 import static io.trino.plugin.hudi.testing.HudiTestUtils.COLUMNS_TO_HIDE;
+import static io.trino.spi.type.VarcharType.VARCHAR;
+import static io.trino.testing.MaterializedResult.resultBuilder;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TestHudiConnectorTest
@@ -64,6 +67,26 @@ public class TestHudiConnectorTest
         };
     }
 
+    /**
+     * The data columns are typed from the Hudi table schema, which holds the TPC-H varchar columns as Avro strings: they
+     * read as unbounded varchar, whatever bound the metastore declares.
+     */
+    @Override
+    protected MaterializedResult getDescribeOrdersResult()
+    {
+        return resultBuilder(getSession(), VARCHAR, VARCHAR, VARCHAR, VARCHAR)
+                .row("orderkey", "bigint", "", "")
+                .row("custkey", "bigint", "", "")
+                .row("orderstatus", "varchar", "", "")
+                .row("totalprice", "double", "", "")
+                .row("orderdate", "date", "", "")
+                .row("orderpriority", "varchar", "", "")
+                .row("clerk", "varchar", "", "")
+                .row("shippriority", "integer", "", "")
+                .row("comment", "varchar", "", "")
+                .build();
+    }
+
     @Test
     @Override
     public void testShowCreateTable()
@@ -73,13 +96,13 @@ public class TestHudiConnectorTest
                 .matches("\\QCREATE TABLE hudi." + schema + ".orders (\n" +
                         "   orderkey bigint,\n" +
                         "   custkey bigint,\n" +
-                        "   orderstatus varchar(1),\n" +
+                        "   orderstatus varchar,\n" +
                         "   totalprice double,\n" +
                         "   orderdate date,\n" +
-                        "   orderpriority varchar(15),\n" +
-                        "   clerk varchar(15),\n" +
+                        "   orderpriority varchar,\n" +
+                        "   clerk varchar,\n" +
                         "   shippriority integer,\n" +
-                        "   comment varchar(79)\n" +
+                        "   comment varchar\n" +
                         ")\n" +
                         "WITH (\n" +
                         "   location = \\E'.*/orders'\n\\Q" +

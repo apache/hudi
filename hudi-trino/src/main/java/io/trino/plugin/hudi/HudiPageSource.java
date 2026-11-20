@@ -14,7 +14,7 @@
 package io.trino.plugin.hudi;
 
 import io.trino.plugin.hive.HiveColumnHandle;
-import io.trino.plugin.hudi.util.HudiAvroSerializer;
+import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer;
 import io.trino.plugin.hudi.util.PrefilledColumnValues;
 import io.trino.spi.Page;
 import io.trino.spi.PageBuilder;
@@ -42,7 +42,7 @@ public class HudiPageSource
     // Reads flow through fileGroupReader; pageSource is kept for stats/isBlocked delegation
     private final ConnectorPageSource pageSource;
     private final PageBuilder pageBuilder;
-    private final HudiAvroSerializer avroSerializer;
+    private final HoodieSchemaAvroSerializer avroSerializer;
     private final ClosableIterator<IndexedRecord> recordIterator;
 
     public HudiPageSource(
@@ -54,7 +54,7 @@ public class HudiPageSource
         this.pageSource = pageSource;
         this.fileGroupReader = fileGroupReader;
         this.pageBuilder = new PageBuilder(columnHandles.stream().map(HiveColumnHandle::getType).toList());
-        this.avroSerializer = new HudiAvroSerializer(columnHandles, prefilledColumnValues);
+        this.avroSerializer = new HoodieSchemaAvroSerializer(columnHandles, prefilledColumnValues);
         try {
             this.recordIterator = fileGroupReader.getClosableIterator();
         }

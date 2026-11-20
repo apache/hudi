@@ -15,6 +15,8 @@ package io.trino.plugin.hudi.benchmark;
 
 import io.trino.plugin.hudi.reader.HudiTrinoReaderContext;
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
+import io.trino.spi.type.TypeOperators;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -182,7 +184,7 @@ final class HudiMergeBufferBenchmark
     private static HudiTrinoReaderContext readerContext(HoodieTableConfig tableConfig, TypedProperties props, HoodieSchema schema, Path tablePath)
     {
         // Same initialization order as HoodieFileGroupReader for a split with log files.
-        HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(new TrinoStorageConfiguration(), tableConfig, null, List.of(), null, null, props);
+        HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(new TrinoStorageConfiguration(), tableConfig, null, List.of(), null, props, new TrinoTypeMapper(new TypeOperators()));
         readerContext.setHasLogFiles(true);
         readerContext.getRecordContext().setPartitionPath("ss_sold_date_sk=2451000");
         readerContext.initRecordMerger(props);

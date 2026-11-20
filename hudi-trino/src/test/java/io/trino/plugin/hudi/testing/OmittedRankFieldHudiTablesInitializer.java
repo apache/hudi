@@ -28,11 +28,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 
 /**
  * Creates a non-partitioned Merge-On-Read table using the projection-compatible {@link MaxRankRecordMerger}
@@ -59,15 +56,13 @@ public class OmittedRankFieldHudiTablesInitializer
     }
 
     @Override
-    protected List<Column> dataColumns()
+    protected List<Column> adjustHiveSyncColumns(List<Column> hiveSyncColumns)
     {
         // No merge_rank column: the fixture's whole point is a metastore that does not know the column the
         // merger declares mandatory.
-        return ImmutableList.of(
-                new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("value", HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
+        return hiveSyncColumns.stream()
+                .filter(column -> !column.getName().equals(RANK_FIELD))
+                .collect(toImmutableList());
     }
 
     @Override
