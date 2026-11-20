@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.sources.unstructured;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.utilities.sources.blob.BlobParquetConfigInjector;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
@@ -33,6 +34,7 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -118,10 +120,14 @@ public class TestUnstructuredModeAndCloud {
     assertEquals(BlobTableSchema.KEY_COLUMNS, UnstructuredMode.BLOB.keyColumns());
     assertEquals(BlobQuarantineTransformer.class, UnstructuredMode.BLOB.requiredTransformer());
     assertEquals(Collections.singleton(EmbeddingTableTransformer.class), UnstructuredMode.BLOB.excludedTransformers());
+    assertEquals(BlobParquetConfigInjector.class.getName(), UnstructuredMode.BLOB.injectorClass());
+    assertEquals(BlobParquetConfigInjector.DELEGATE_CLASS, UnstructuredMode.BLOB.injectorDelegateKey());
 
     assertEquals(EmbeddingTableSchema.KEY_COLUMNS, UnstructuredMode.EMBEDDING.keyColumns());
     assertEquals(EmbeddingTableTransformer.class, UnstructuredMode.EMBEDDING.requiredTransformer());
     assertEquals(Collections.singleton(BlobQuarantineTransformer.class), UnstructuredMode.EMBEDDING.excludedTransformers());
+    assertNull(UnstructuredMode.EMBEDDING.injectorClass());
+    assertNull(UnstructuredMode.EMBEDDING.injectorDelegateKey());
   }
 
   @Test

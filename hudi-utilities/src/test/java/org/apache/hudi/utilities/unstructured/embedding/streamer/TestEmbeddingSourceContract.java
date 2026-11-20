@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.unstructured.embedding.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.utilities.sources.blob.BlobJobHarness;
 import org.apache.hudi.utilities.sources.blob.BlobTableConfig;
 import org.apache.hudi.utilities.sources.blob.S3EventsTableFixture;
@@ -42,6 +43,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -184,6 +186,63 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
     assertTrue(round.getErrors().isEmpty(), round.toString());
     assertEquals(2, round.getRowsWritten(), round.toString());
     assertEquals(2, failures.get(), "one failed open, one retried open");
+  }
+
+  @Test
+  public void anInlineObjectGoneBeforeTheReadIsQuarantinedAsGoneSinceAnnounced() throws Exception {
+    FixtureFile a = text("a", "alpha");
+    FixtureFile b = text("b", "beta");
+    announce(a, b);
+    String path = local(a);
+    long observedTime = Files.getLastModifiedTime(java.nio.file.Paths.get(path)).toMillis();
+    // the object disappears after the source's status call and before its inline read
+    SourceOpenHooks.beforeOpen(path, () -> Files.deleteIfExists(java.nio.file.Paths.get(path)));
+
+    Round round = round(prepOnly());
+
+    assertEquals(Collections.singleton("b." + TEXT_EXTENSION), committedObjects());
+    assertEquals(1, round.getErrors().size(), round.toString());
+    Map<String, Object> error = round.getErrors().get(0);
+    assertEquals(a.sha, error.get("source_path_sha"));
+    assertEquals("prep", error.get("stage"));
+    assertEquals("gone since announced", error.get("error"));
+    assertEquals(observedTime, ((Number) error.get("source_modification_time")).longValue(), "the version the status call observed");
+    assertEquals((long) a.bytes.length, ((Number) error.get("source_file_size")).longValue());
+    assertEquals(latestEventsCheckpoint(), EmbeddingStreamers.checkpoint(table(), storage(), round.getCommit().get()),
+        "the round commits past the gone object");
+  }
+
+  /** A1 on the embedding job: gone before the source's status call, the error record carries no observed version (0, the announced size). */
+  @Test
+  public void anInlineObjectGoneBeforeTheStatusCallIsQuarantinedWithTheAnnouncedSize() throws Exception {
+    FixtureFile a = text("a", "alpha");
+    FixtureFile b = text("b", "beta");
+    announce(a, b);
+    Files.delete(java.nio.file.Paths.get(local(a)));
+
+    Round round = round(prepOnly());
+
+    assertEquals(Collections.singleton("b." + TEXT_EXTENSION), committedObjects());
+    assertEquals(1, round.getErrors().size(), round.toString());
+    Map<String, Object> error = round.getErrors().get(0);
+    assertEquals(a.sha, error.get("source_path_sha"));
+    assertEquals("gone since announced", error.get("error"));
+    assertEquals(0L, ((Number) error.get("source_modification_time")).longValue(), "nothing was observed");
+    assertEquals((long) a.bytes.length, ((Number) error.get("source_file_size")).longValue(), "the announced size");
+    assertEquals(latestEventsCheckpoint(), EmbeddingStreamers.checkpoint(table(), storage(), round.getCommit().get()));
+  }
+
+  /** With the error table off nothing can record the gone object, so the round fails as every failed file does. */
+  @Test
+  public void goneObjectWithoutAnErrorTableFailsTheRound() throws Exception {
+    FixtureFile a = text("a", "alpha");
+    announce(a);
+    Files.delete(java.nio.file.Paths.get(local(a)));
+
+    Exception failure = assertThrows(Exception.class, () -> round(prepOnly(HoodieErrorTableConfig.ERROR_TABLE_ENABLED.key(), "false")));
+
+    assertTrue(EmbeddingStreamers.causes(failure).contains("gone since announced"), EmbeddingStreamers.causes(failure));
+    assertTrue(EmbeddingStreamers.commits(table(), storage()).isEmpty(), "nothing is committed");
   }
 
   @Test

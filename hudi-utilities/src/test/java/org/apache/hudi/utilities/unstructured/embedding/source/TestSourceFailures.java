@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.unstructured.embedding.source;
 
 import org.apache.hudi.exception.HoodieIOException;
 
+import com.google.cloud.hadoop.repackaged.gcs.com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import org.apache.hadoop.fs.UnsupportedFileSystemException;
 import org.apache.hadoop.security.AccessControlException;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -52,6 +53,13 @@ public class TestSourceFailures {
         Arguments.of("hdfs permission check", new AccessControlException("Permission denied"), false, false),
         Arguments.of("hdfs permission check carrying a file not found",
             withCause(new AccessControlException("Permission denied"), new FileNotFoundException("gone")), false, false),
+        Arguments.of("gcs connector 403", gcs(403, "Forbidden"), false, false),
+        Arguments.of("gcs connector 403, wrapped", new IOException("open failed", gcs(403, "Forbidden")), false, false),
+        Arguments.of("gcs connector 403 carrying a file not found",
+            withCause(new FileNotFoundException("gone"), gcs(403, "Forbidden")), false, false),
+        Arguments.of("gcs connector 503", gcs(503, "Service Unavailable"), false, true),
+        Arguments.of("gcs connector 403 rate limit", gcsRateLimit("rateLimitExceeded"), false, true),
+        Arguments.of("gcs connector 403 per-user rate limit", gcsRateLimit("userRateLimitExceeded"), false, true),
         Arguments.of("truncated blob", new BlobTruncatedException("ended early"), true, false),
         Arguments.of("malformed reference", new BlobReferenceException("relative path"), true, false),
         Arguments.of("bare EOF: a dropped connection", new EOFException("connection closed"), false, true),
@@ -81,8 +89,19 @@ public class TestSourceFailures {
   }
 
   /** The GCS connector's wording of a refused request: the request error, its JSON response as the cause. */
+  private static IOException gcs(int statusCode, String statusMessage) {
+    String object = "gs://bucket/a.pdf";
+    return new IOException("Error accessing " + object, new GoogleJsonResponseException(statusCode, statusMessage,
+        "GET https://storage.googleapis.com/storage/v1/b/bucket/o/a.pdf\n{\"code\": " + statusCode + "}"));
+  }
 
   /** A 403 whose JSON error names a rate-limit {@code reason}: a quota the next attempt may pass. */
+  private static IOException gcsRateLimit(String reason) {
+    String object = "gs://bucket/a.pdf";
+    return new IOException("Error accessing " + object, new GoogleJsonResponseException(403, "Forbidden",
+        "GET https://storage.googleapis.com/storage/v1/b/bucket/o/a.pdf\n{\"code\": 403, \"errors\": [{\"domain\": "
+            + "\"usageLimits\", \"reason\": \"" + reason + "\"}]}"));
+  }
 
   private static <T extends Throwable> T withCause(T failure, Throwable cause) {
     failure.initCause(cause);

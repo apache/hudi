@@ -18,17 +18,27 @@
 
 package org.apache.hudi.utilities.sources.blob;
 
+import org.apache.hudi.common.config.HoodieStorageConfig;
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.fs.FSUtils;
+import org.apache.hudi.common.model.HoodieLogFile;
+import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.checkpoint.StreamerCheckpointV1;
+import org.apache.hudi.common.table.log.HoodieLogFormat;
+import org.apache.hudi.common.table.log.block.HoodieDataBlock;
+import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.common.util.collection.ClosableIterator;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.keygen.constant.KeyGeneratorType;
+import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.exception.HoodieTransformPlanException;
@@ -40,6 +50,8 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
 
+import org.apache.avro.generic.GenericRecord;
+import org.apache.avro.generic.IndexedRecord;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
@@ -52,27 +64,37 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Actual single-writer commits over a real S3 events Hudi table. */
+/** Blob job commits over a real S3 events Hudi table. */
 @Tag("functional")
 public class TestBlobTableStreamer extends UtilitiesTestBase {
   private static final long THRESHOLD = 64;
@@ -215,6 +237,45 @@ public class TestBlobTableStreamer extends UtilitiesTestBase {
     assertFalse(blobFolderExists(table()), "nothing is copied under .hoodie/.blob");
   }
 
+  /** A small real commit at the actual default threshold, including an out-of-line reference larger than the default streaming buffer. */
+  @Test
+  public void defaultThresholdBatchPreservesInlineAndOutOfLineBytes() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    props.remove(BlobTableConfig.INLINE_MAX_BYTES.key());
+    long threshold = BlobTableConfig.inlineMaxBytes(props);
+    boolean statisticsSwitch;
+    try {
+      org.apache.parquet.hadoop.ParquetWriter.Builder.class.getMethod("withStatisticsEnabled", String.class, boolean.class);
+      statisticsSwitch = true;
+    } catch (NoSuchMethodException e) {
+      statisticsSwitch = false;
+    }
+    assertEquals(statisticsSwitch ? 1048576L : 10240L, threshold);
+    int inlineBytes = Math.toIntExact(threshold);
+    Map<String, Integer> sizes = new TreeMap<>();
+    sizes.put("docs/near.pdf", inlineBytes - 1024);
+    sizes.put("img/below.png", inlineBytes - 1);
+    sizes.put("img/at.png", inlineBytes);
+    sizes.put("video/above.mp4", inlineBytes + 1);
+    Map<String, byte[]> expected = harness.putAndAnnounce(sparkSession, sizes);
+
+    runStreamer(props, table(), Long.MAX_VALUE);
+
+    assertEquals(1, commits(table()).size());
+    assertContent(table(), expected);
+    for (Row row : rows(table())) {
+      Row blob = row.getAs(BlobTableSchema.BLOB);
+      long length = row.getAs(BlobTableSchema.SOURCE_FILE_SIZE);
+      assertEquals(length <= threshold ? HoodieSchema.Blob.INLINE : HoodieSchema.Blob.OUT_OF_LINE, blob.getString(0));
+    }
+    assertFalse(blobFolderExists(table()), "nothing is copied under .hoodie/.blob");
+    HoodieSchema schema = new TableSchemaResolver(metaClient(table())).getTableSchema(false);
+    assertEquals(new HashSet<>(Arrays.asList(BlobTableSchema.schema().fieldNames())),
+        schema.getFields().stream().map(field -> field.name()).collect(Collectors.toSet()));
+    assertTrue(schema.toAvroSchema().getField(BlobTableSchema.BLOB).schema().toString().contains("\"logicalType\":\"blob\""));
+  }
+
   /** Stock key-generator inference for no partition column and no key generator: the non-partitioned generator. */
   @Test
   public void nonPartitionedJobWithNoKeyGeneratorWritesNonPartitionedRows() throws Exception {
@@ -267,6 +328,373 @@ public class TestBlobTableStreamer extends UtilitiesTestBase {
     assertContent(table(), expected);
     runStreamer(props, table(), 64);
     assertEquals(2, commits(table()).size());
+  }
+
+  /**
+   * Both version-tag fields independently retain history; reannouncing current versions also exercises real MOR log payloads.
+   * Once a large object is overwritten, its version rows reference the same source file: every row reads its full current
+   * content, including when several versions are read together with {@code read_blob}.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void versionHistoryKeepsMetadataAndOverwrittenReferencesShareTheSourceFile(HoodieTableType tableType) throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    long firstTime = Instant.parse("2026-01-02T10:00:00Z").toEpochMilli();
+    long secondTime = Instant.parse("2026-01-02T10:00:01Z").toEpochMilli();
+    ExpectedBlobVersion inlineV1 = new ExpectedBlobVersion("docs/inline.pdf", firstTime, BlobJobHarness.fileBytes("inline v1", 32));
+    ExpectedBlobVersion referenceV1 = new ExpectedBlobVersion("docs/reference.pdf", firstTime, BlobJobHarness.fileBytes("reference v1", 128));
+    harness.announce(sparkSession, putVersions(harness, inlineV1, referenceV1));
+    runStreamer(props, table(), Long.MAX_VALUE, tableType);
+    String firstCommit = commits(table()).get(0).requestedTime();
+    assertEquals(tableType, metaClient(table()).getTableType());
+    Map<String, ExpectedBlobVersion> expected = new TreeMap<>();
+    expected.put(inlineV1.recordKey(), inlineV1);
+    expected.put(referenceV1.recordKey(), referenceV1);
+    assertHistory(expected);
+
+    // Same length and changed mtime; changed length and unchanged mtime: each key component creates a new version.
+    ExpectedBlobVersion inlineV2 = new ExpectedBlobVersion("docs/inline.pdf", secondTime, BlobJobHarness.fileBytes("inline v2", 32));
+    ExpectedBlobVersion referenceV2 = new ExpectedBlobVersion("docs/reference.pdf", firstTime, BlobJobHarness.fileBytes("reference v2", 257));
+    List<S3EventsTableFixture.Event> currentEvents = putVersions(harness, inlineV2, referenceV2);
+    harness.announce(sparkSession, currentEvents);
+    runStreamer(props, table(), Long.MAX_VALUE, tableType);
+    assertEquals(2, commits(table()).size());
+    expected.put(inlineV2.recordKey(), inlineV2);
+    expected.put(referenceV2.recordKey(), referenceV2);
+    Map<String, Row> before = assertHistory(expected);
+    assertFalse(blobFolderExists(table()), "no version is copied under .hoodie/.blob");
+
+    harness.announce(sparkSession, currentEvents);
+    runStreamer(props, table(), Long.MAX_VALUE, tableType);
+    assertEquals(3, commits(table()).size(), "the unchanged announcements are consumed");
+    String reannouncementCommit = commits(table()).get(2).requestedTime();
+    Map<String, Row> after = assertHistory(expected);
+    assertEquals(firstCommit, after.get(inlineV1.recordKey()).getAs("_hoodie_commit_time"));
+    assertEquals(firstCommit, after.get(referenceV1.recordKey()).getAs("_hoodie_commit_time"));
+    assertEquals(reannouncementCommit, after.get(inlineV2.recordKey()).getAs("_hoodie_commit_time"));
+    assertEquals(reannouncementCommit, after.get(referenceV2.recordKey()).getAs("_hoodie_commit_time"));
+    assertEquals(referencePath(before.get(referenceV2.recordKey())), referencePath(after.get(referenceV2.recordKey())),
+        "a re-announced object is referenced where it is, as before");
+    assertEquals(BlobJobHarness.sourcePath(referenceV2.objectKey), referencePath(after.get(referenceV2.recordKey())));
+
+    if (tableType == HoodieTableType.MERGE_ON_READ) {
+      Map<String, ExpectedBlobVersion> updated = new TreeMap<>();
+      updated.put(inlineV2.recordKey(), inlineV2);
+      updated.put(referenceV2.recordKey(), referenceV2);
+      assertLogPayloads(reannouncementCommit, updated, after);
+      List<Row> baseRows = sparkSession.read().format("hudi").option("hoodie.datasource.query.type", "read_optimized")
+          .load(table()).collectAsList();
+      assertFalse(baseRows.isEmpty(), "the initial insert supplies base files");
+      for (Row row : baseRows) {
+        assertNotEquals(reannouncementCommit, row.getAs("_hoodie_commit_time"), "current-version provenance must come from logs");
+        assertArrayEquals(expectedRead(expected.get(row.<String>getAs("_hoodie_record_key"))), storedBytes(table(), row));
+      }
+    }
+    runStreamer(props, table(), Long.MAX_VALUE, tableType);
+    assertEquals(3, commits(table()).size(), "no-new-data retry must not commit");
+    assertHistory(expected);
+  }
+
+  private static List<S3EventsTableFixture.Event> putVersions(BlobJobHarness harness, ExpectedBlobVersion... versions) throws IOException {
+    List<S3EventsTableFixture.Event> events = new ArrayList<>();
+    for (ExpectedBlobVersion version : versions) {
+      events.add(harness.put(version.objectKey, version.bytes));
+      harness.touch(version.objectKey, Instant.ofEpochMilli(version.modificationTime));
+    }
+    return events;
+  }
+
+  /**
+   * Exact historical metadata. An INLINE version keeps its own bytes; an OUT_OF_LINE version references the object where it is, so
+   * it reads the whole object as it is now: a later overwrite is not frozen (an accepted cost of referencing in place).
+   */
+  private Map<String, Row> assertHistory(Map<String, ExpectedBlobVersion> expected) throws Exception {
+    List<Row> snapshot = rows(table());
+    assertEquals(expected.size(), snapshot.size());
+    Map<String, Row> actual = snapshot.stream().collect(Collectors.toMap(row -> row.<String>getAs("_hoodie_record_key"), row -> row));
+    assertEquals(expected.keySet(), actual.keySet());
+    for (Map.Entry<String, ExpectedBlobVersion> entry : expected.entrySet()) {
+      ExpectedBlobVersion version = entry.getValue();
+      Row row = actual.get(entry.getKey());
+      String path = BlobJobHarness.sourcePath(version.objectKey);
+      assertEquals(BlobJobHarness.sha256Hex(path.getBytes(StandardCharsets.UTF_8)).substring(0, 32), row.getAs(BlobTableSchema.SOURCE_PATH_SHA));
+      assertEquals(version.modificationTime, row.<Long>getAs(BlobTableSchema.SOURCE_MODIFICATION_TIME));
+      assertEquals(path, row.getAs(BlobTableSchema.SOURCE_FILE_PATH));
+      assertEquals(version.objectKey.substring(version.objectKey.lastIndexOf('/') + 1), row.getAs(BlobTableSchema.SOURCE_FILE_NAME));
+      assertEquals("pdf", row.getAs(BlobTableSchema.SOURCE_FILE_EXTENSION));
+      assertEquals("application/pdf", row.getAs(BlobTableSchema.CONTENT_TYPE));
+      assertEquals((long) version.bytes.length, row.<Long>getAs(BlobTableSchema.SOURCE_FILE_SIZE));
+      Row blob = row.getAs(BlobTableSchema.BLOB);
+      assertEquals(version.bytes.length <= THRESHOLD ? HoodieSchema.Blob.INLINE : HoodieSchema.Blob.OUT_OF_LINE, blob.getString(0));
+      assertArrayEquals(expectedRead(version), storedBytes(table(), row), entry.getKey());
+    }
+    sparkSession.read().format("hudi").load(table()).createOrReplaceTempView("versioned_blob_snapshot");
+    List<Row> resolved = sparkSession.sql("select _hoodie_record_key, read_blob(blob) as data from versioned_blob_snapshot").collectAsList();
+    assertEquals(expected.keySet(), resolved.stream().map(row -> row.getString(0)).collect(Collectors.toSet()));
+    for (Row row : resolved) {
+      assertArrayEquals(expectedRead(expected.get(row.getString(0))), row.getAs("data"), row.getString(0));
+    }
+    return actual;
+  }
+
+  /** What a read of {@code version} returns: its own bytes when inline, else the object's full current bytes. */
+  private byte[] expectedRead(ExpectedBlobVersion version) throws IOException {
+    if (version.bytes.length <= THRESHOLD) {
+      return version.bytes;
+    }
+    return Files.readAllBytes(harness().file(version.objectKey));
+  }
+
+  private static String referencePath(Row row) {
+    Row blob = row.getAs(BlobTableSchema.BLOB);
+    return blob.getStruct(2).getString(0);
+  }
+
+  /** Decodes the current round's physical data blocks: inline bytes and the exact reference returned by the live snapshot. */
+  private void assertLogPayloads(String instant, Map<String, ExpectedBlobVersion> expected, Map<String, Row> snapshot) throws Exception {
+    HoodieTableMetaClient meta = metaClient(table());
+    HoodieSchema schema = new TableSchemaResolver(meta).getTableSchema(true);
+    List<HoodieWriteStat> writes = meta.getActiveTimeline().readCommitMetadata(commits(table()).get(2)).getWriteStats();
+    assertEquals(2L, writes.stream().mapToLong(HoodieWriteStat::getNumWrites).sum());
+    Set<String> seen = new HashSet<>();
+    for (String path : writes.stream().map(HoodieWriteStat::getPath).collect(Collectors.toSet())) {
+      assertTrue(FSUtils.isLogFile(path), path);
+      assertTrue(Files.size(Paths.get(java.net.URI.create(table() + "/" + path))) > 0);
+      HoodieLogFile file = new HoodieLogFile(new StoragePath(table(), path));
+      try (HoodieLogFormat.Reader reader = HoodieLogFormat.newReader(meta, file, schema)) {
+        while (reader.hasNext()) {
+          HoodieLogBlock block = reader.next();
+          if (!(block instanceof HoodieDataBlock) || !instant.equals(block.getLogBlockHeader().get(HoodieLogBlock.HeaderMetadataType.INSTANT_TIME))) {
+            continue;
+          }
+          assertLogBlock((HoodieDataBlock) block, instant, expected, snapshot, seen);
+        }
+      }
+    }
+    assertEquals(expected.keySet(), seen, "both inline data and the unmanaged reference must be present in actual log blocks");
+  }
+
+  private static void assertLogBlock(HoodieDataBlock block, String instant, Map<String, ExpectedBlobVersion> expected,
+      Map<String, Row> snapshot, Set<String> seen) {
+    try (ClosableIterator<HoodieRecord<IndexedRecord>> records = block.getRecordIterator(HoodieRecord.HoodieRecordType.AVRO)) {
+      while (records.hasNext()) {
+        GenericRecord record = (GenericRecord) records.next().getData();
+        String key = record.get("_hoodie_record_key").toString();
+        assertTrue(seen.add(key), "one log record per current version: " + key);
+        ExpectedBlobVersion version = expected.get(key);
+        assertNotNull(version, key);
+        assertLogVersion(record, version, snapshot.get(key), instant);
+      }
+    }
+  }
+
+  private static void assertLogVersion(GenericRecord record, ExpectedBlobVersion version, Row snapshot, String instant) {
+    assertEquals(instant, record.get("_hoodie_commit_time").toString());
+    assertEquals(version.modificationTime, record.get(BlobTableSchema.SOURCE_MODIFICATION_TIME));
+    assertEquals((long) version.bytes.length, record.get(BlobTableSchema.SOURCE_FILE_SIZE));
+    GenericRecord blob = (GenericRecord) record.get(BlobTableSchema.BLOB);
+    if (version.bytes.length <= THRESHOLD) {
+      assertEquals(HoodieSchema.Blob.INLINE, blob.get("type").toString());
+      assertNull(blob.get("reference"));
+      ByteBuffer data = ((ByteBuffer) blob.get("data")).duplicate();
+      byte[] bytes = new byte[data.remaining()];
+      data.get(bytes);
+      assertArrayEquals(version.bytes, bytes, version.recordKey());
+    } else {
+      assertEquals(HoodieSchema.Blob.OUT_OF_LINE, blob.get("type").toString());
+      assertNull(blob.get("data"));
+      GenericRecord reference = (GenericRecord) blob.get("reference");
+      assertEquals(referencePath(snapshot), reference.get("external_path").toString());
+      assertNull(reference.get("offset"));
+      assertNull(reference.get("length"));
+      assertEquals(Boolean.FALSE, reference.get("managed"));
+    }
+  }
+
+  private static class ExpectedBlobVersion {
+    private final String objectKey;
+    private final long modificationTime;
+    private final byte[] bytes;
+
+    private ExpectedBlobVersion(String objectKey, long modificationTime, byte[] bytes) {
+      this.objectKey = objectKey;
+      this.modificationTime = modificationTime;
+      this.bytes = bytes;
+    }
+
+    private String recordKey() {
+      return BlobJobHarness.versionKey(BlobJobHarness.sourcePath(objectKey), modificationTime, bytes.length);
+    }
+  }
+
+  /**
+   * An overwrite is a new version of the object: its row is added and the earlier version's row stays. Both reference the object
+   * where it is, so both rows read the whole replacement: an overwrite is not frozen.
+   */
+  @Test
+  public void overwriteAddsAVersionRow() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    harness.putAndAnnounce(sparkSession, Collections.singletonMap("docs/a.pdf", 128));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    String firstKey = harness.versionKey("docs/a.pdf");
+    byte[] replacement = BlobJobHarness.fileBytes("replacement", 257);
+    harness.announce(sparkSession, Collections.singletonList(harness.put("docs/a.pdf", replacement)));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    String secondKey = harness.versionKey("docs/a.pdf");
+    assertNotEquals(firstKey, secondKey, "the overwrite is another version");
+    Map<String, byte[]> versions = new TreeMap<>();
+    versions.put(firstKey, replacement);
+    versions.put(secondKey, replacement);
+    assertVersions(table(), versions);
+    assertEquals(2, commits(table()).size());
+    assertFalse(blobFolderExists(table()), "no version is copied under .hoodie/.blob");
+  }
+
+  /** The same object announced again in a later batch has the same version tag: the upsert replaces the row, nothing is added. */
+  @Test
+  public void unchangedObjectInALaterBatchIsIdempotent() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    byte[] bytes = harness.putAndAnnounce(sparkSession, Collections.singletonMap("a.pdf", 32)).get("a.pdf");
+    runStreamer(props, table(), Long.MAX_VALUE);
+    String key = harness.versionKey("a.pdf");
+    // announced again without touching the object
+    harness.announce(sparkSession, Collections.singletonList(S3EventsTableFixture.created(BlobJobHarness.BUCKET, "a.pdf", 32, BlobJobHarness.EVENT_TIME)));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    assertEquals(2, commits(table()).size(), "the second batch is consumed");
+    assertVersions(table(), Collections.singletonMap(key, bytes));
+  }
+
+  /**
+   * Stock selection keeps one entry per (path, announced size): two same-size notifications collapse, a differently announced size
+   * stays a second entry. Every entry reads the object as it is now, so one version is written: one row.
+   */
+  @Test
+  public void sameBatchRepeatedEventsOfOnePathEndAsOneRow() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    byte[] bytes = BlobJobHarness.fileBytes("a.pdf", 32);
+    harness.put("a.pdf", bytes);
+    harness.announce(sparkSession, Arrays.asList(
+        S3EventsTableFixture.created(BlobJobHarness.BUCKET, "a.pdf", 32, BlobJobHarness.EVENT_TIME).withSequencer("01"),
+        S3EventsTableFixture.created(BlobJobHarness.BUCKET, "a.pdf", 32, BlobJobHarness.EVENT_TIME).withSequencer("02"),
+        S3EventsTableFixture.created(BlobJobHarness.BUCKET, "a.pdf", 48, BlobJobHarness.EVENT_TIME).withSequencer("03")));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    assertEquals(1, commits(table()).size());
+    assertVersions(table(), Collections.singletonMap(harness.versionKey("a.pdf"), bytes));
+  }
+
+  /**
+   * The first version's event, processed after the second version replaced the object, reads the second version (a no-op upsert
+   * of its key); the first version is never ingested, since it is gone.
+   */
+  @Test
+  public void outOfOrderEventsIngestOnlyTheCurrentVersion() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    byte[] v1 = BlobJobHarness.fileBytes("v1", 32);
+    S3EventsTableFixture.Event firstEvent = harness.put("a.pdf", v1);
+    harness.touch("a.pdf", Instant.parse("2026-01-02T10:00:00Z"));
+    byte[] v2 = BlobJobHarness.fileBytes("v2", 48);
+    S3EventsTableFixture.Event secondEvent = harness.put("a.pdf", v2);
+    harness.touch("a.pdf", Instant.parse("2026-01-02T10:00:01Z"));
+    harness.announce(sparkSession, Collections.singletonList(secondEvent));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    harness.announce(sparkSession, Collections.singletonList(firstEvent));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    assertEquals(2, commits(table()).size());
+    assertVersions(table(), Collections.singletonMap(
+        BlobJobHarness.versionKey(BlobJobHarness.sourcePath("a.pdf"), Instant.parse("2026-01-02T10:00:01Z").toEpochMilli(), 48L), v2));
+  }
+
+  /** Two uploads of the same length are two versions when their modification times differ. */
+  @Test
+  public void sameSizeOverwriteWithALaterModificationTimeAddsAVersionRow() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    byte[] first = BlobJobHarness.fileBytes("first", 32);
+    harness.announce(sparkSession, Collections.singletonList(harness.put("a.pdf", first)));
+    harness.touch("a.pdf", Instant.parse("2026-01-02T10:00:00Z"));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    byte[] second = BlobJobHarness.fileBytes("second", 32);
+    harness.announce(sparkSession, Collections.singletonList(harness.put("a.pdf", second)));
+    harness.touch("a.pdf", Instant.parse("2026-01-02T10:00:01Z"));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    Map<String, byte[]> versions = new TreeMap<>();
+    versions.put(BlobJobHarness.versionKey(BlobJobHarness.sourcePath("a.pdf"), Instant.parse("2026-01-02T10:00:00Z").toEpochMilli(), 32L), first);
+    versions.put(BlobJobHarness.versionKey(BlobJobHarness.sourcePath("a.pdf"), Instant.parse("2026-01-02T10:00:01Z").toEpochMilli(), 32L), second);
+    assertVersions(table(), versions);
+  }
+
+  /** A4: an inline object that shrank between the status call and the read fails the round; the next round reads the new version. */
+  @Test
+  public void shrunkBetweenTheStatusCallAndTheInlineReadFailsTheRoundThenSelfHeals() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    byte[] bytes = harness.putAndAnnounce(sparkSession, Collections.singletonMap("a.pdf", 32)).get("a.pdf");
+    byte[] shorter = Arrays.copyOf(bytes, 16);
+    Path file = harness.file("a.pdf");
+    // once: the object is overwritten by a shorter version after the status call and before the read
+    SourceOpenHooks.beforeOpen(file.toAbsolutePath().toString(), () -> {
+      SourceOpenHooks.clear();
+      Files.write(file, shorter);
+    });
+    try {
+      Exception failure = assertThrows(Exception.class, () -> runStreamer(props, table(), Long.MAX_VALUE));
+      StringBuilder causes = new StringBuilder();
+      for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+        causes.append(cause.getClass().getName()).append(": ").append(cause.getMessage()).append("\n");
+      }
+      assertTrue(causes.toString().contains("EOFException"), causes.toString());
+    } finally {
+      SourceOpenHooks.clear();
+    }
+    assertEquals(0, commits(table()).size(), "the round failed before any commit");
+    runStreamer(props, table(), Long.MAX_VALUE);
+    assertEquals(1, commits(table()).size());
+    assertVersions(table(), Collections.singletonMap(harness.versionKey("a.pdf"), shorter));
+  }
+
+  /** Exactly one row per expected version: the rows by record key, each with its version's bytes. */
+  private static void assertVersions(String table, Map<String, byte[]> expectedByKey) throws Exception {
+    List<Row> rows = rows(table);
+    assertEquals(expectedByKey.size(), rows.size(), "one row per version");
+    assertEquals(expectedByKey.keySet(), rows.stream().map(row -> row.<String>getAs("_hoodie_record_key")).collect(Collectors.toSet()));
+    for (Row row : rows) {
+      String key = row.getAs("_hoodie_record_key");
+      // The expected version key identifies the observed size, which can differ from the current file's bytes.
+      assertEquals(key, BlobJobHarness.versionKey(row.getAs(BlobTableSchema.SOURCE_FILE_PATH),
+          row.getAs(BlobTableSchema.SOURCE_MODIFICATION_TIME), row.getAs(BlobTableSchema.SOURCE_FILE_SIZE)));
+      assertArrayEquals(expectedByKey.get(key), storedBytes(table, row), key);
+    }
+  }
+
+  @Test
+  public void failedCommitKeepsCheckpointAndRetryReferencesResolve() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    Map<String, byte[]> expected = new TreeMap<>(harness.putAndAnnounce(sparkSession, Collections.singletonMap("a.pdf", 128)));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    String checkpoint = checkpoint(table());
+    expected.putAll(harness.putAndAnnounce(sparkSession, Collections.singletonMap("b.pdf", 256)));
+    TypedProperties failing = TypedProperties.copy(props);
+    failing.setProperty("hoodie.precommit.validators", "org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator");
+    failing.setProperty("hoodie.precommit.validators.single.value.sql.queries", "select count(*) from <TABLE_NAME>#999");
+    Exception failure = assertThrows(Exception.class, () -> runStreamer(failing, table(), Long.MAX_VALUE));
+    StringBuilder causes = new StringBuilder();
+    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+      causes.append(cause.getMessage()).append("\n");
+    }
+    assertTrue(causes.toString().contains("validation"), causes.toString());
+    assertEquals(checkpoint, checkpoint(table()));
+    assertEquals(1, commits(table()).size());
+    assertFalse(blobFolderExists(table()), "the failed round copied nothing");
+    runStreamer(props, table(), Long.MAX_VALUE);
+    assertEquals(2, commits(table()).size());
+    assertContent(table(), expected);
+    assertFalse(blobFolderExists(table()), "nothing is copied under .hoodie/.blob");
   }
 
   /**
@@ -332,15 +760,28 @@ public class TestBlobTableStreamer extends UtilitiesTestBase {
   }
 
   /**
-   * The blob table's Parquet settings are the job's (blob-table.properties: uncompressed, no record-key bloom filter), and the
-   * source does not change them.
+   * The blob table's Parquet settings are the job's when it sets them (blob-table.properties: uncompressed, no record-key bloom
+   * filter, the blob column injector); a job naming its own injector there instead of under the delegate key is refused at start,
+   * before its table is initialized.
    */
   @Test
-  public void parquetSettingsAreTheJobs() throws Exception {
+  public void parquetSettingsAreTheJobsAndAnotherInjectorIsRefused() throws Exception {
     BlobJobHarness harness = harness();
     harness.putAndAnnounce(sparkSession, Collections.singletonMap("small.pdf", 32));
     runStreamer(harness.jobProperties(THRESHOLD), table(), Long.MAX_VALUE);
     ParquetFooters.assertBaseFiles(jsc.hadoopConfiguration(), table(), CompressionCodecName.UNCOMPRESSED, false);
+
+    String otherInjector = tempDir.resolve("other-injector").toUri().toString();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    props.setProperty(HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS.key(), "com.example.JobInjector");
+    Exception failure = assertThrows(Exception.class, () -> new HoodieStreamer(BlobJobHarness.streamerConfig(otherInjector), jsc,
+        Option.of(props)).sync());
+    String refusal = EmbeddingStreamers.causeOf(failure, IllegalArgumentException.class)
+        .orElseThrow(() -> new AssertionError(EmbeddingStreamers.causes(failure))).getMessage();
+    assertTrue(refusal.startsWith("UnstructuredDataSource (mode blob) requires " + HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS.key() + "="
+        + BlobParquetConfigInjector.class.getName()), refusal);
+    assertFalse(Files.exists(Paths.get(java.net.URI.create(otherInjector + "/.hoodie/hoodie.properties"))),
+        "the job is refused before its table is initialized");
   }
 
   /**
@@ -413,4 +854,142 @@ public class TestBlobTableStreamer extends UtilitiesTestBase {
     assertTrue(commits(table()).isEmpty(), "nothing was written");
   }
 
+  /** Fails any open of {@code large.pdf}: the round must never read the bytes of an object above the inline threshold. */
+  public static class RefuseLargeOpenFileSystem extends BucketFolderFileSystem {
+    @Override
+    public org.apache.hadoop.fs.FSDataInputStream open(org.apache.hadoop.fs.Path path, int bufferSize) throws java.io.IOException {
+      if (path.getName().equals("large.pdf")) {
+        throw new java.io.IOException("injected: the round opened an object above the inline threshold");
+      }
+      return super.open(path, bufferSize);
+    }
+  }
+
+  /**
+   * A file above the inline threshold stays where it is: the round reads only its status, never its bytes, and commits an
+   * unmanaged reference to it beside the inline row; nothing is quarantined and nothing is written under .hoodie/.blob.
+   */
+  @ParameterizedTest
+  @EnumSource(HoodieTableType.class)
+  public void largeObjectIsReferencedInPlaceWithoutBeingRead(HoodieTableType tableType) throws Exception {
+    BlobJobHarness harness = harness();
+    Map<String, Integer> sizes = new TreeMap<>();
+    sizes.put("small.pdf", 32);
+    sizes.put("large.pdf", 256);
+    Map<String, byte[]> expected = new TreeMap<>(harness.putAndAnnounce(sparkSession, sizes));
+    String errors = tempDir.resolve("in-place-errors").toString();
+    TypedProperties props = BlobJobHarness.withErrorTable(harness.jobProperties(THRESHOLD), errors);
+    jsc.hadoopConfiguration().set("fs.bucketfs.impl", RefuseLargeOpenFileSystem.class.getName());
+    try {
+      runStreamer(props, table(), Long.MAX_VALUE, tableType);
+    } finally {
+      harness.install(jsc.hadoopConfiguration());
+    }
+    assertEquals(1, commits(table()).size());
+    assertEquals(Collections.emptyList(), BlobJobHarness.quarantinedRecordKeys(errors));
+    assertContent(table(), expected);
+    assertFalse(blobFolderExists(table()), "nothing is copied under .hoodie/.blob");
+  }
+
+  /** A1: an inline object deleted between its event and the round is quarantined as gone since announced; the round commits. */
+  @Test
+  public void goneBeforeTheStatusCallIsQuarantinedAndTheRoundCommits() throws Exception {
+    BlobJobHarness harness = harness();
+    Map<String, Integer> sizes = new TreeMap<>();
+    sizes.put("good.pdf", 32);
+    sizes.put("zz-gone.pdf", 32);
+    Map<String, byte[]> expected = new TreeMap<>(harness.putAndAnnounce(sparkSession, sizes));
+    expected.remove("zz-gone.pdf");
+    Files.delete(harness.file("zz-gone.pdf"));
+    String errors = tempDir.resolve("gone-errors").toString();
+    runStreamer(BlobJobHarness.withErrorTable(harness.jobProperties(THRESHOLD), errors), table(), Long.MAX_VALUE);
+    assertContent(table(), expected);
+    assertEquals(Collections.singletonList(BlobJobHarness.versionKey(BlobJobHarness.sourcePath("zz-gone.pdf"), 0L, 32L)),
+        BlobJobHarness.quarantinedRecordKeys(errors), "nothing was observed: no modification time and the announced size");
+    assertTrue(BlobJobHarness.quarantinedErrors(errors).values().iterator().next().contains("gone since announced"),
+        BlobJobHarness.quarantinedErrors(errors).toString());
+    assertEquals(1, commits(table()).size());
+    // the stock checkpoint names the batch's greatest key: the gone object itself, which sorts after good.pdf
+    assertEquals(commits(harness.eventsPath()).get(0).requestedTime() + "#zz-gone.pdf", checkpoint(table()), "the checkpoint advances past the gone object");
+  }
+
+  /**
+   * Objects gone before the round, inline-size and out-of-line-size, are quarantined; the round commits only the objects it read,
+   * and no committed row has a null blob.
+   */
+  @Test
+  public void goneObjectsOfEitherSizeAreQuarantinedAndNoCommittedRowHasANullBlob() throws Exception {
+    BlobJobHarness harness = harness();
+    Map<String, Integer> sizes = new TreeMap<>();
+    sizes.put("good-small.pdf", 32);
+    sizes.put("good-large.pdf", (int) THRESHOLD * 2);
+    sizes.put("gone-small.pdf", 32);
+    sizes.put("gone-large.pdf", (int) THRESHOLD * 2);
+    Map<String, byte[]> expected = new TreeMap<>(harness.putAndAnnounce(sparkSession, sizes));
+    expected.remove("gone-small.pdf");
+    expected.remove("gone-large.pdf");
+    Files.delete(harness.file("gone-small.pdf"));
+    Files.delete(harness.file("gone-large.pdf"));
+    String errors = tempDir.resolve("gone-either-errors").toString();
+    runStreamer(BlobJobHarness.withErrorTable(harness.jobProperties(THRESHOLD), errors), table(), Long.MAX_VALUE);
+    assertContent(table(), expected);
+    assertEquals(Stream.of(BlobJobHarness.versionKey(BlobJobHarness.sourcePath("gone-large.pdf"), 0L, THRESHOLD * 2),
+        BlobJobHarness.versionKey(BlobJobHarness.sourcePath("gone-small.pdf"), 0L, 32L)).sorted().collect(Collectors.toList()),
+        BlobJobHarness.quarantinedRecordKeys(errors).stream().sorted().collect(Collectors.toList()),
+        "nothing was observed: no modification time and the announced size");
+    assertTrue(BlobJobHarness.quarantinedErrors(errors).values().stream().allMatch(error -> error.contains("gone since announced")),
+        BlobJobHarness.quarantinedErrors(errors).toString());
+    assertEquals(1, commits(table()).size());
+    assertFalse(blobFolderExists(table()), "nothing is copied under .hoodie/.blob");
+  }
+
+  /** A2: an inline object deleted after the status call and before the read is quarantined under the version the status observed. */
+  @Test
+  public void goneBetweenTheStatusCallAndTheInlineReadIsQuarantined() throws Exception {
+    BlobJobHarness harness = harness();
+    Map<String, Integer> sizes = new TreeMap<>();
+    sizes.put("good.pdf", 32);
+    sizes.put("zz-gone.pdf", 32);
+    Map<String, byte[]> expected = new TreeMap<>(harness.putAndAnnounce(sparkSession, sizes));
+    expected.remove("zz-gone.pdf");
+    String goneKey = harness.versionKey("zz-gone.pdf");
+    Path gone = harness.file("zz-gone.pdf");
+    SourceOpenHooks.beforeOpen(gone.toAbsolutePath().toString(), () -> Files.deleteIfExists(gone));
+    String errors = tempDir.resolve("gone-errors").toString();
+    try {
+      runStreamer(BlobJobHarness.withErrorTable(harness.jobProperties(THRESHOLD), errors), table(), Long.MAX_VALUE);
+    } finally {
+      SourceOpenHooks.clear();
+    }
+    assertContent(table(), expected);
+    assertEquals(Collections.singletonList(goneKey), BlobJobHarness.quarantinedRecordKeys(errors), "the version the status call observed");
+    assertTrue(BlobJobHarness.quarantinedErrors(errors).get(goneKey).contains("gone since announced"), BlobJobHarness.quarantinedErrors(errors).toString());
+    assertEquals(1, commits(table()).size());
+    assertEquals(commits(harness.eventsPath()).get(0).requestedTime() + "#zz-gone.pdf", checkpoint(table()), "the checkpoint advances past the gone object");
+  }
+
+  /** With the error table off nothing can record the gone object, so the round fails as every content fault does. */
+  @Test
+  public void goneObjectWithoutAnErrorTableFailsTheRoundAndHoldsTheCheckpoint() throws Exception {
+    BlobJobHarness harness = harness();
+    TypedProperties props = harness.jobProperties(THRESHOLD);
+    Map<String, byte[]> expected = new TreeMap<>(harness.putAndAnnounce(sparkSession, Collections.singletonMap("seed.pdf", 32)));
+    runStreamer(props, table(), Long.MAX_VALUE);
+    String previousCheckpoint = checkpoint(table());
+    Map<String, Integer> sizes = new TreeMap<>();
+    sizes.put("good.pdf", 32);
+    sizes.put("zz-gone.pdf", 32);
+    harness.putAndAnnounce(sparkSession, sizes);
+    Files.delete(harness.file("zz-gone.pdf"));
+    Exception failure = assertThrows(Exception.class, () -> runStreamer(props, table(), Long.MAX_VALUE));
+    StringBuilder causes = new StringBuilder();
+    for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+      causes.append(cause.getMessage()).append("\n");
+    }
+    assertTrue(causes.toString().contains("without an error table"), causes.toString());
+    assertTrue(causes.toString().contains("gone since announced"), causes.toString());
+    assertEquals(previousCheckpoint, checkpoint(table()));
+    assertEquals(1, commits(table()).size());
+    assertContent(table(), expected);
+  }
 }

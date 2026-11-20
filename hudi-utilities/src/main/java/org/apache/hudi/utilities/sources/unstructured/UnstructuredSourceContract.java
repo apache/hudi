@@ -88,6 +88,8 @@ public class UnstructuredSourceContract implements SourceContract {
     require(merged, KeyGeneratorOptions.RECORDKEY_FIELD_NAME, String.join(",", mode.keyColumns()),
         UnstructuredSourceContract::fields, " (these fields, in this order)");
     if (mode == UnstructuredMode.BLOB) {
+      require(merged, HoodieStorageConfig.HOODIE_PARQUET_CONFIG_INJECTOR_CLASS, mode.injectorClass(), String::trim,
+          " (a job's own injector goes under " + mode.injectorDelegateKey() + ", and runs first)");
       setDefault(merged, HoodieStorageConfig.PARQUET_COMPRESSION_CODEC_NAME, "uncompressed");
       setDefault(merged, HoodieStorageConfig.PARQUET_WITH_BLOOM_FILTER_ENABLED, "false");
     }
@@ -138,7 +140,7 @@ public class UnstructuredSourceContract implements SourceContract {
 
   /**
    * Reads the job and the cloud, refuses a key of the other cloud, and validates the job's other properties
-   * ({@link BlobSourceSetup#validate}), returns {@code props} unchanged. The streamer runs it
+   * ({@link BlobSourceSetup#validate}), the table-version floor among them; returns {@code props} unchanged. The streamer runs it
    * with the merge, before it builds anything or creates the table, and the source again as it is built: one copy of the checks.
    *
    * @throws IllegalArgumentException          naming the setting and {@code UnstructuredDataSource (mode ...)}

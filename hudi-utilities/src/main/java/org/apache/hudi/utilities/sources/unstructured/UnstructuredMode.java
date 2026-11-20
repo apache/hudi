@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.unstructured;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.sources.blob.BlobParquetConfigInjector;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -59,21 +60,26 @@ import java.util.Set;
 public enum UnstructuredMode {
 
   /** Writes the blob table, through {@link BlobQuarantineTransformer}. */
-  BLOB("blob", BlobTableSchema.KEY_COLUMNS, BlobQuarantineTransformer.class, EmbeddingTableTransformer.class),
+  BLOB("blob", BlobTableSchema.KEY_COLUMNS, BlobQuarantineTransformer.class, EmbeddingTableTransformer.class,
+      BlobParquetConfigInjector.class.getName(), BlobParquetConfigInjector.DELEGATE_CLASS),
   /** Writes the embedding table, through {@link EmbeddingTableTransformer}. */
-  EMBEDDING("embedding", EmbeddingTableSchema.KEY_COLUMNS, EmbeddingTableTransformer.class, BlobQuarantineTransformer.class);
+  EMBEDDING("embedding", EmbeddingTableSchema.KEY_COLUMNS, EmbeddingTableTransformer.class, BlobQuarantineTransformer.class, null, null);
 
   private final String configValue;
   private final List<String> keyColumns;
   private final Class<? extends Transformer> requiredTransformer;
   private final Class<? extends Transformer> excludedTransformer;
+  private final String injectorClass;
+  private final String injectorDelegateKey;
 
   UnstructuredMode(String configValue, List<String> keyColumns, Class<? extends Transformer> requiredTransformer,
-                   Class<? extends Transformer> excludedTransformer) {
+                   Class<? extends Transformer> excludedTransformer, String injectorClass, String injectorDelegateKey) {
     this.configValue = configValue;
     this.keyColumns = keyColumns;
     this.requiredTransformer = requiredTransformer;
     this.excludedTransformer = excludedTransformer;
+    this.injectorClass = injectorClass;
+    this.injectorDelegateKey = injectorDelegateKey;
   }
 
   /**
@@ -103,6 +109,16 @@ public enum UnstructuredMode {
   /** The other job's transformer, which this job refuses in its chain. */
   public Set<Class<? extends Transformer>> excludedTransformers() {
     return Collections.singleton(excludedTransformer);
+  }
+
+  /** The Parquet config injector the job's table is written with; null for the embedding job, whose table takes Hudi's writer. */
+  public String injectorClass() {
+    return injectorClass;
+  }
+
+  /** The key under which a job's own Parquet config injector goes; it runs before {@link #injectorClass()}. Null for the embedding job. */
+  public String injectorDelegateKey() {
+    return injectorDelegateKey;
   }
 
   /**
