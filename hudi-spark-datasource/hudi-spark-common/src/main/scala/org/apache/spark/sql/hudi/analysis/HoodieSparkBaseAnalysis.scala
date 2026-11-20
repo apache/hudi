@@ -18,6 +18,9 @@
 package org.apache.spark.sql.hudi.analysis
 
 import org.apache.hudi.{DataSourceReadOptions, DefaultSource, SparkAdapterSupport}
+import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.timeline.HoodieTimeline
+import org.apache.hudi.hadoop.fs.HadoopFSUtils
 import org.apache.hudi.storage.StoragePath
 
 import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
@@ -25,7 +28,7 @@ import org.apache.spark.sql.BaseHoodieCatalystPlanUtils.MatchResolvedTable
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NamedRelation, ResolvedFieldName, UnresolvedAttribute, UnresolvedFieldName, UnresolvedPartitionSpec, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.analysis.SimpleAnalyzer.resolveExpressionByPlanChildren
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogUtils}
-import org.apache.spark.sql.catalyst.expressions.{Expression, SubqueryExpression}
+import org.apache.spark.sql.catalyst.expressions.{Expression, Literal, SubqueryExpression, UnaryMinus}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.Origin
@@ -40,6 +43,8 @@ import org.apache.spark.sql.hudi.catalog.HoodieInternalV2Table
 import org.apache.spark.sql.hudi.command.{AlterHoodieTableDropPartitionCommand, ShowHoodieTablePartitionsCommand, TruncateHoodieTableCommand}
 import org.apache.spark.sql.hudi.command.exception.HoodieAnalysisException
 import org.apache.spark.sql.types.{ArrayType, DecimalType, DoubleType, FloatType, IntegerType, LongType}
+
+import scala.collection.JavaConverters._
 
 /**
  * NOTE: PLEASE READ CAREFULLY
@@ -59,12 +64,17 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
 
   def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp {
     case TimeTravelRelation(ResolvesToHudiTable(table), timestamp, version) =>
-      if (timestamp.isEmpty && version.nonEmpty) {
-        throw new HoodieAnalysisException("Version expression is not supported for time travel")
+      if (timestamp.nonEmpty && version.nonEmpty) {
+        throw new HoodieAnalysisException("Cannot specify both timestamp and version for time travel")
       }
       if (timestamp.exists(_.references.nonEmpty) || timestamp.exists(SubqueryExpression.hasSubquery)) {
         throw new HoodieAnalysisException("timestamp expression cannot refer to any columns or contain subqueries")
       }
+
+      // Delta Lake style version-based time travel: resolve the requested version to the
+      // corresponding completed commit instant on the timeline, then reuse the timestamp path.
+      val asOfInstant = timestamp.map(_.toString)
+        .orElse(version.map(resolveVersionToInstant(table, _)))
 
       val pathOption = table.storage.locationUri.map("path" -> CatalogUtils.URIToString(_))
       val dataSource =
@@ -75,7 +85,7 @@ case class ResolveReferences(spark: SparkSession) extends Rule[LogicalPlan]
           bucketSpec = table.bucketSpec,
           className = table.provider.get,
           options = table.storage.properties ++ pathOption ++ Map(
-            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> timestamp.get.toString()),
+            DataSourceReadOptions.TIME_TRAVEL_AS_OF_INSTANT.key -> asOfInstant.get),
           catalogTable = Some(table))
 
       val relation = dataSource.resolveRelation(checkFilesExist = false)
@@ -436,6 +446,85 @@ case class PostAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan
 
       case _ => plan
     }
+  }
+
+  /**
+   * Resolves a Delta Lake style `VERSION AS OF <version>` time-travel version to the
+   * corresponding commit instant on the table's timeline.
+   *
+   * Versions are 0-indexed, matching Delta Lake semantics: version 0 is the table's first
+   * completed commit, version 1 the second, and so on. Instants are ordered by requested time,
+   * which is what Hudi's time-travel read path filters on, so every version maps to a valid
+   * historical snapshot.
+   *
+   * Versions are resolved against the full commit history (archived + active timelines), so
+   * version numbers stay stable even after archival moves old commits off the active timeline.
+   * Nothing is silently dropped: instants without a known completion time (old archive entries)
+   * still count toward version numbering.
+   *
+   * Data-producing commits (commit, delta-commit) as well as clustering replace commits all
+   * count as versions, mirroring Delta Lake where OPTIMIZE also bumps the table version.
+   *
+   * Limitation: correct snapshots require commits to have completed in requested order (always
+   * true for single-writer). If out-of-order multi-writer completion is detected among instants
+   * with known completion times, resolution fails with an actionable error instead of returning
+   * a misleading snapshot; use TIMESTAMP AS OF in that case.
+   */
+  private def resolveVersionToInstant(table: CatalogTable, versionExpr: Expression): String = {
+    val version = versionExpr match {
+      case Literal(v: Int, IntegerType) => v.toLong
+      case Literal(v: Long, LongType) => v
+      case UnaryMinus(Literal(v: Int, IntegerType)) => -v.toLong
+      case UnaryMinus(Literal(v: Long, LongType)) => -v
+      case _ =>
+        throw new HoodieAnalysisException(
+          s"Version expression for time travel must be an integer literal, got: ${versionExpr.sql}")
+    }
+    if (version < 0) {
+      throw new HoodieAnalysisException(s"Version for time travel must be non-negative, got: $version")
+    }
+    val basePath = table.storage.locationUri.map(CatalogUtils.URIToString(_)).getOrElse(
+      throw new HoodieAnalysisException("Unable to resolve table location for version-based time travel"))
+    val metaClient = HoodieTableMetaClient.builder()
+      .setBasePath(basePath)
+      .setConf(HadoopFSUtils.getStorageConf(spark.sessionState.newHadoopConf()))
+      .build()
+
+    val activeTimeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants
+    val archivedTimeline = metaClient.getArchivedTimeline.getCommitsTimeline.filterCompletedInstants
+
+    // All completed instants, ordered by requested time. Unlike getInstantsOrderedByCompletionTime,
+    // nothing is dropped here: instants with unknown completion time still count.
+    val allInstants = (activeTimeline.getInstants.asScala ++ archivedTimeline.getInstants.asScala).toSeq
+      .sortBy(_.requestedTime)
+
+    // Completion rank for instants with known completion times (archived always completed first,
+    // so concatenation yields the global completion order). Used only to detect out-of-order
+    // multi-writer completion; instants without a known completion time are not checked.
+    val completionRank = {
+      val activeOrdered = activeTimeline.getInstantsOrderedByCompletionTime.iterator().asScala.map(_.requestedTime)
+      val archivedOrdered = archivedTimeline.getInstantsOrderedByCompletionTime.iterator().asScala.map(_.requestedTime)
+      (archivedOrdered ++ activeOrdered).toSeq.zipWithIndex.toMap
+    }
+    // Fail loudly on out-of-order completion instead of returning a misleading snapshot.
+    // Only data commits are checked: replace (clustering) commits are logically transparent and
+    // cannot produce a wrong snapshot.
+    val dataCommitRanks = allInstants
+      .filter(i => i.getAction == HoodieTimeline.COMMIT_ACTION || i.getAction == HoodieTimeline.DELTA_COMMIT_ACTION)
+      .flatMap(i => completionRank.get(i.requestedTime))
+    if (dataCommitRanks != dataCommitRanks.sorted) {
+      throw new HoodieAnalysisException(
+        "Cannot resolve version-based time travel: the table has commits that completed out of requested order " +
+          "(concurrent writers). Version numbers would map to misleading snapshots; " +
+          "use TIMESTAMP AS OF instead.")
+    }
+
+    if (version >= allInstants.size) {
+      throw new HoodieAnalysisException(
+        s"Version $version is out of range: table has ${allInstants.size} completed commit(s), " +
+          s"valid versions are 0 to ${allInstants.size - 1}")
+    }
+    allInstants(version.toInt).requestedTime
   }
 }
 
