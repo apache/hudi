@@ -585,6 +585,7 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     // Read and verify data
     val readDf = spark.read.format("hudi").load(tablePath)
+    assertEquals(3L, readDf.count(), "Count after delete must match surviving records")
     val actual = readDf.select("id", "name", "age", "score")
 
     val expectedDf = createDataFrame(Seq(
@@ -2321,14 +2322,214 @@ class TestLanceDataSource extends HoodieSparkClientTestBase {
 
     val readDf = spark.read.format("hudi").load(tablePath)
     val actual = readDf.select("id", "name", "age", "score")
-    // Use collect().length instead of count() — Spark's count optimization pushes down an
-    // empty schema which SparkLanceReaderBase short-circuits to Iterator.empty (separate bug).
-    val total = actual.collect().length
+    val total = actual.count()
+    val dfTotal = readDf.count()
     val distinct = actual.select("id").distinct().count()
     assertEquals(100, total, "Lance read should not produce duplicate rows")
+    assertEquals(100, dfTotal, "Total count from readDf should match")
     assertEquals(100, distinct, "All record keys should be unique")
     assertTrue(inputDf.except(actual).isEmpty)
     assertTrue(actual.except(inputDf).isEmpty)
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testEmptyProjectionAndCountUnpartitioned(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_count_unpart_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Initial batch: 50 records without partitioning (requiredSchema.isEmpty && partitionSchema.isEmpty)
+    val records1 = (1 to 50).map(i => (i, s"name_$i", 20 + i))
+    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite,
+      operation = Some("insert"))
+
+    // Second batch (multi-commit): 50 more records
+    val records2 = (51 to 100).map(i => (i, s"name_$i", 20 + i))
+    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, df2, saveMode = SaveMode.Append,
+      operation = Some("insert"))
+
+    val readDf = spark.read.format("hudi").load(tablePath)
+    readDf.createOrReplaceTempView(tableName)
+
+    // 1. DataFrame.count() and projection on empty required and partition schema
+    assertEquals(100L, readDf.count(), "DataFrame count() should return 100 on unpartitioned table")
+
+    // 2. SQL COUNT(*) and COUNT(1)
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName")(Seq(100L))
+    checkAnswer(s"SELECT COUNT(1) FROM $tableName")(Seq(100L))
+
+    // 3. SELECT 1 FROM table (empty data schema returning N constant rows)
+    val constRows = spark.sql(s"SELECT 1 FROM $tableName").collect()
+    assertEquals(100, constRows.length, "SELECT 1 should return 100 rows on unpartitioned table")
+    constRows.foreach(r => assertEquals(1, r.getInt(0)))
+
+    // 4. SELECT 1 FROM table LIMIT 1
+    val limitRows = spark.sql(s"SELECT 1 FROM $tableName LIMIT 1").collect()
+    assertEquals(1, limitRows.length)
+    assertEquals(1, limitRows(0).getInt(0))
+
+    // 5. EXISTS subquery
+    val existsRows = spark.sql(s"SELECT EXISTS(SELECT 1 FROM $tableName)").collect()
+    assertEquals(1, existsRows.length)
+    assertEquals(true, existsRows(0).getBoolean(0))
+
+    // 6. Data-filtered COUNT regression
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE age > 70")(Seq(50L))
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE age > 9999")(Seq(0L))
+
+    // 7. Delete 20 records (uncompacted delta delete on MOR, standard delete on COW)
+    // Ensures MOR count merges base + log files and does NOT naively return base file row count.
+    val recordsToDelete = (1 to 20).map(i => (i, s"name_$i", 20 + i))
+    val deleteDf = spark.createDataFrame(recordsToDelete).toDF("id", "name", "age").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, deleteDf, saveMode = SaveMode.Append,
+      operation = Some("delete"))
+
+    val postDeleteDf = spark.read.format("hudi").load(tablePath)
+    postDeleteDf.createOrReplaceTempView(tableName)
+
+    assertEquals(80L, postDeleteDf.count(), "Count after delete must reflect deleted records, not base file count")
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName")(Seq(80L))
+    checkAnswer(s"SELECT COUNT(1) FROM $tableName")(Seq(80L))
+    val postDeleteConstRows = spark.sql(s"SELECT 1 FROM $tableName").collect()
+    assertEquals(80, postDeleteConstRows.length, "SELECT 1 after delete must return exactly surviving row count")
+
+    // 8. Delete all remaining 80 records and verify zero-row empty count
+    val remainingRecords = (21 to 100).map(i => (i, s"name_$i", 20 + i))
+    val deleteRemainingDf = spark.createDataFrame(remainingRecords).toDF("id", "name", "age").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, deleteRemainingDf, saveMode = SaveMode.Append,
+      operation = Some("delete"))
+
+    val allDeletedDf = spark.read.format("hudi").load(tablePath)
+    allDeletedDf.createOrReplaceTempView(tableName)
+
+    assertEquals(0L, allDeletedDf.count(), "Count after deleting all records must return 0")
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName")(Seq(0L))
+    checkAnswer(s"SELECT COUNT(1) FROM $tableName")(Seq(0L))
+    val allDeletedConstRows = spark.sql(s"SELECT 1 FROM $tableName").collect()
+    assertEquals(0, allDeletedConstRows.length, "SELECT 1 on fully deleted table must return 0 rows")
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testEmptyProjectionAndCountPartitioned(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_count_part_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Initial batch: 50 records with partition column 'department'
+    val records1 = (1 to 50).map(i => (i, s"name_$i", 20 + i, if (i % 2 == 0) "engineering" else "sales"))
+    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age", "department").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite,
+      operation = Some("insert"), extraOptions = Map(PARTITIONPATH_FIELD.key() -> "department"))
+
+    // Second batch (multi-commit): 50 more records
+    val records2 = (51 to 100).map(i => (i, s"name_$i", 20 + i, if (i % 2 == 0) "engineering" else "sales"))
+    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "department").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, df2, saveMode = SaveMode.Append,
+      operation = Some("insert"), extraOptions = Map(PARTITIONPATH_FIELD.key() -> "department"))
+
+    val readDf = spark.read.format("hudi").load(tablePath)
+    readDf.createOrReplaceTempView(tableName)
+
+    // 1. DataFrame.count() and projection on empty required schema with partition column
+    assertEquals(100L, readDf.count(), "DataFrame count() should return 100")
+
+    // 2. SQL COUNT(*) and COUNT(1)
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName")(Seq(100L))
+    checkAnswer(s"SELECT COUNT(1) FROM $tableName")(Seq(100L))
+
+    // 3. SELECT 1 FROM table (empty data schema returning N constant rows)
+    val constRows = spark.sql(s"SELECT 1 FROM $tableName").collect()
+    assertEquals(100, constRows.length, "SELECT 1 should return 100 rows")
+    constRows.foreach(r => assertEquals(1, r.getInt(0)))
+
+    // 4. SELECT 1 FROM table LIMIT 1
+    val limitRows = spark.sql(s"SELECT 1 FROM $tableName LIMIT 1").collect()
+    assertEquals(1, limitRows.length)
+    assertEquals(1, limitRows(0).getInt(0))
+
+    // 5. EXISTS subquery
+    val existsRows = spark.sql(s"SELECT EXISTS(SELECT 1 FROM $tableName)").collect()
+    assertEquals(1, existsRows.length)
+    assertEquals(true, existsRows(0).getBoolean(0))
+
+    // 6. Partitioned count pushdown (queries only partition column without reading data columns)
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE department = 'engineering'")(Seq(50L))
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE department = 'sales'")(Seq(50L))
+
+    // 7. Data-filtered COUNT regression
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE age > 70")(Seq(50L))
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE age > 9999")(Seq(0L))
+
+    // 8. Delete 20 records (uncompacted delta delete on MOR, standard delete on COW)
+    // Ensures MOR count merges base + log files and does NOT naively return base file row count.
+    val recordsToDelete = (1 to 20).map(i => (i, s"name_$i", 20 + i, if (i % 2 == 0) "engineering" else "sales"))
+    val deleteDf = spark.createDataFrame(recordsToDelete).toDF("id", "name", "age", "department").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, deleteDf, saveMode = SaveMode.Append,
+      operation = Some("delete"), extraOptions = Map(PARTITIONPATH_FIELD.key() -> "department"))
+
+    val postDeleteDf = spark.read.format("hudi").load(tablePath)
+    postDeleteDf.createOrReplaceTempView(tableName)
+
+    assertEquals(80L, postDeleteDf.count(), "Count after delete must reflect deleted records, not base file count")
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName")(Seq(80L))
+    checkAnswer(s"SELECT COUNT(1) FROM $tableName")(Seq(80L))
+    val postDeleteConstRows = spark.sql(s"SELECT 1 FROM $tableName").collect()
+    assertEquals(80, postDeleteConstRows.length, "SELECT 1 after delete must return exactly surviving row count")
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE department = 'engineering'")(Seq(40L))
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE department = 'sales'")(Seq(40L))
+  }
+
+  /**
+   * Tests schema evolution where an older file slice does not contain a newly added column.
+   * When Spark selects only the new column ("new_col"), filterSchemaByFileSchema produces an
+   * empty iteratorSchema for the older file slice.
+   * Verifies that the older file slice safely takes empty projection (numRows() metadata count)
+   * and null padding synthesizes NULLs, correctly yielding NULL for V1 records while V2 records
+   * retain their actual values.
+   */
+  @ParameterizedTest
+  @EnumSource(value = classOf[HoodieTableType])
+  def testSchemaEvolutionMissingColumn(tableType: HoodieTableType): Unit = {
+    val tableName = s"test_lance_schema_evolution_${tableType.name().toLowerCase}"
+    val tablePath = s"$basePath/$tableName"
+
+    // Commit 1: Schema V1 has (id, name, age, score)
+    val records1 = (1 to 10).map(i => (i, s"name_$i", 20 + i, 90.0 + i))
+    val df1 = spark.createDataFrame(records1).toDF("id", "name", "age", "score").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, df1, saveMode = SaveMode.Overwrite,
+      extraOptions = Map("hoodie.schema.on.read.enable" -> "true"))
+
+    // Commit 2: Schema V2 adds "new_col"
+    val records2 = (11 to 20).map(i => (i, s"name_$i", 20 + i, 90.0 + i, s"v2_$i"))
+    val df2 = spark.createDataFrame(records2).toDF("id", "name", "age", "score", "new_col").coalesce(1)
+    writeDataframe(tableType, tableName, tablePath, df2, saveMode = SaveMode.Append,
+      extraOptions = Map("hoodie.schema.on.read.enable" -> "true"))
+
+    val readDf = spark.read.format("hudi")
+      .option("hoodie.schema.on.read.enable", "true")
+      .load(tablePath)
+    readDf.createOrReplaceTempView(tableName)
+
+    assertEquals(20L, readDf.count(), "Total record count across evolved commits must be 20")
+
+    // Selecting ONLY the evolved column:
+    // File 1 has no "new_col", so filterSchemaByFileSchema produces iteratorSchema = {} (empty).
+    // File 1 takes empty projection (metadata-only numRows() = 10) + null-padding to produce NULLs.
+    // File 2 has "new_col", so it reads the column data.
+    val rows = spark.sql(s"SELECT new_col FROM $tableName").collect()
+    assertEquals(20, rows.length)
+    val nullCount = rows.count(_.isNullAt(0))
+    val nonNullValues = rows.filterNot(_.isNullAt(0)).map(_.getString(0)).sorted
+    assertEquals(10, nullCount, "V1 records must have NULL for newly added column")
+    assertEquals((11 to 20).map(i => s"v2_$i"), nonNullValues.toSeq, "V2 records must have non-null values")
+
+    // WHERE new_col IS NULL returns exactly the 10 records from V1
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE new_col IS NULL")(Seq(10L))
+
+    // WHERE new_col IS NOT NULL returns exactly the 10 records from V2
+    checkAnswer(s"SELECT COUNT(*) FROM $tableName WHERE new_col IS NOT NULL")(Seq(10L))
   }
 
   private def createDataFrame(records: Seq[(Int, String, Int, Double)]) = {
