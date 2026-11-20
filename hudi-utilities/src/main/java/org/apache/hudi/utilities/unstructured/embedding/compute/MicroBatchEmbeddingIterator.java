@@ -101,8 +101,12 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
   /** Prepares the image inputs of a multimodal client; null for a client that embeds text only. */
   private final ImagePreparer imagePreparer;
   private final EmbeddingClient client;
+  /** A permanent initialization refusal is delivered as a normal task outcome, after the factory closes the client. */
+  private final EmbeddingClientConfigException initializationRefusal;
   private Iterator<Row> currentBatch = Collections.emptyIterator();
   private boolean closed;
+  /** A permanent provider refusal stops further source reads and model calls. */
+  private boolean refused;
 
   /** Creates the task's embedding iterator for text rows only: an image row fails the task (no stored-input reader). */
   MicroBatchEmbeddingIterator(Iterator<Row> rows, EmbeddingModelSpec model, TypedProperties props,
@@ -132,17 +136,22 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     this.storedInputs = storedInputs;
     // validated before the client starts, so a bad image setting leaves no client to close
     ImagePreprocessingSpec imageSpec = config.imagePreprocessing();
-    EmbeddingClient created;
+    EmbeddingClient created = null;
+    EmbeddingClientConfigException rejected = null;
     try {
-      created = EmbeddingClientFactory.create(model, props);
+      // Empty partitions have no row on which to report a client initialization refusal.
+      if (rows.hasNext()) {
+        created = EmbeddingClientFactory.create(model, props);
+      }
     } catch (EmbeddingClientConfigException e) {
-      throw e;
+      rejected = e;
     } catch (Exception e) {
       // a client that cannot start fails the task
       throw new EmbeddingComputeTransientException("EMBED-COMPUTE-CLIENT-INIT-FAILED model=" + model.getName()
           + ": the embedding client could not start", e);
     }
     this.client = created;
+    this.initializationRefusal = rejected;
     this.multimodal = created instanceof MultimodalEmbeddingClient;
     this.imagePreparer = multimodal ? new ImagePreparer(imageSpec) : null;
     this.rows = rows;
@@ -154,7 +163,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
 
   @Override
   public boolean hasNext() {
-    while (!currentBatch.hasNext() && rows.hasNext()) {
+    while (!refused && !currentBatch.hasNext() && rows.hasNext()) {
       currentBatch = embedNextBatch();
     }
     if (!currentBatch.hasNext()) {
@@ -177,23 +186,31 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
    * without a call, in its place in the batch.
    */
   private Iterator<Row> embedNextBatch() {
+    if (initializationRefusal != null) {
+      return refusedTask(rows.next(), initializationRefusal);
+    }
     List<Row> batch = new ArrayList<>(batchSize);
-    List<EmbeddingResult> refused = new ArrayList<>(batchSize);
+    List<EmbeddingResult> refusals = new ArrayList<>(batchSize);
     List<EmbeddingInput> inputs = new ArrayList<>(batchSize);
     while (batch.size() < batchSize && rows.hasNext()) {
       Row row = rows.next();
       batch.add(row);
       EmbeddingResult refusal = refusal(row);
-      refused.add(refusal);
+      refusals.add(refusal);
       if (refusal == null) {
         inputs.add(toInput(row));
       }
     }
-    List<EmbeddingResult> results = inputs.isEmpty() ? Collections.emptyList() : embedWithRetries(inputs);
+    List<EmbeddingResult> results;
+    try {
+      results = inputs.isEmpty() ? Collections.emptyList() : embedWithRetries(inputs);
+    } catch (EmbeddingClientConfigException e) {
+      return refusedTask(batch.get(0), e);
+    }
     List<Row> processed = new ArrayList<>(batch.size());
     int called = 0;
     for (int i = 0; i < batch.size(); i++) {
-      EmbeddingResult result = refused.get(i) != null ? refused.get(i) : results.get(called++);
+      EmbeddingResult result = refusals.get(i) != null ? refusals.get(i) : results.get(called++);
       processed.add(withOutcome(batch.get(i), result));
     }
     return processed.iterator();
@@ -227,6 +244,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
         }
       }
       if (retryable.isEmpty()) {
+        checkNotRejectedAsAWhole(inputs, results);
         return results;
       }
       if (tries >= maxAttempts) {
@@ -242,6 +260,26 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
         results.set(i, embedAlone(inputs.get(i)));
       }
     }
+  }
+
+  /** Alike permanent rejections across files fail the round unless the client promises independent input answers. */
+  private void checkNotRejectedAsAWhole(List<EmbeddingInput> inputs, List<EmbeddingResult> results) {
+    if (client.answersEachInputAlone() || results.stream().allMatch(EmbeddingResult::isKnownInputFailure)) {
+      return;
+    }
+    String error = results.isEmpty() ? null : results.get(0).getError();
+    for (EmbeddingResult result : results) {
+      if (result.getStatus() != EmbeddingResult.Status.PERMANENT_FAILURE || error == null || !error.equals(result.getError())) {
+        return;
+      }
+    }
+    if (inputs.stream().map(EmbeddingInput::getSourcePathSha).distinct().count() < 2) {
+      return;
+    }
+    throw new EmbeddingClientConfigException("EMBED-COMPUTE-REJECTED-AS-A-WHOLE model=" + model.getName() + ": all "
+        + results.size() + " inputs of one call, of more than one file, first " + inputs.get(0).describeIdentity()
+        + ", were rejected with the same error and none was embedded, so the provider "
+        + "rejects the request, not an input: " + error + "; the compute commit fails and the next sync retries from the same checkpoint");
   }
 
   /** The wait before try {@code tries + 1}: {@link #backoffMs} doubled per earlier retry, capped. */
@@ -293,6 +331,8 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
           inputs.size(), inputs.get(0).describeIdentity(), e);
       counters.getBatchesFailed().add(1);
       return Collections.nCopies(inputs.size(), EmbeddingResult.retryable(describe(e)));
+    } finally {
+      addRateLimitWait();
     }
   }
 
@@ -310,6 +350,16 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     } catch (Exception e) {
       LOG.warn("EMBED-COMPUTE-INPUT-FAILED model={} {}", model.getName(), input.describeIdentity(), e);
       return EmbeddingResult.retryable(describe(e));
+    } finally {
+      addRateLimitWait();
+    }
+  }
+
+  /** Includes pacing from successful and throwing calls in the round counters. */
+  private void addRateLimitWait() {
+    EmbeddingCallStats stats = client.lastCallStats();
+    if (stats != null && stats.getRateLimitWaitMillis() > 0) {
+      counters.getRateLimitWaitMillis().add(stats.getRateLimitWaitMillis());
     }
   }
 
@@ -405,6 +455,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
         // a PERMANENT result always carries an error
         error = result.getError() == null || result.getError().isEmpty() ? "PERMANENT result without a message"
             : EmbeddingTableSchema.truncateError(result.getError());
+        error = ComputeRound.rowError(error);
         counters.getRowsPermanent().add(1);
         break;
       default:
@@ -432,5 +483,20 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
         }
       }
     }
+  }
+
+  /** Returns one refusal marker, then ends this task normally without further requests. */
+  private Iterator<Row> refusedTask(Row first, EmbeddingClientConfigException refusal) {
+    refused = true;
+    counters.getCallsRefused().add(1);
+    LOG.warn("EMBED-COMPUTE-PROVIDER-REFUSED model={}: the task stops at the first permanent refusal; no task re-attempt",
+        model.getName(), refusal);
+    Object[] values = new Object[outputWidth];
+    for (int i = 0; i < outputWidth; i++) {
+      values[i] = first.get(i);
+    }
+    values[vectorIndex] = null;
+    values[errorIndex] = EmbeddingTableSchema.truncateError(ComputeRound.REFUSED_PREFIX + refusal.getMessage());
+    return Collections.singletonList(RowFactory.create(values)).iterator();
   }
 }

@@ -40,11 +40,17 @@ public final class EmbeddingResult {
   private final Status status;
   private final float[] vector;
   private final String error;
+  private final boolean knownInputFailure;
 
   private EmbeddingResult(Status status, float[] vector, String error) {
+    this(status, vector, error, false);
+  }
+
+  private EmbeddingResult(Status status, float[] vector, String error, boolean knownInputFailure) {
     this.status = status;
     this.vector = vector;
     this.error = error;
+    this.knownInputFailure = knownInputFailure;
   }
 
   /**
@@ -63,6 +69,16 @@ public final class EmbeddingResult {
 
   public static EmbeddingResult permanent(String error) {
     return new EmbeddingResult(Status.PERMANENT_FAILURE, null, error);
+  }
+
+  /** An input rejected locally before any provider request, independent of other inputs in its call. */
+  public static EmbeddingResult invalidInput(String error) {
+    return new EmbeddingResult(Status.PERMANENT_FAILURE, null, error, true);
+  }
+
+  /** Whether local validation established this input's failure without inferring a provider request refusal. */
+  public boolean isKnownInputFailure() {
+    return knownInputFailure;
   }
 
   public Status getStatus() {

@@ -25,18 +25,26 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
- * The client class of a model, resolved from a table of provider ids and class NAMES, so the table config and the model
- * identity can name a model's client without linking any provider package (or its SDK). The client factory
- * ({@code EmbeddingClientFactory}) resolves through it.
+ * The client class of a model, resolved from a table of provider ids and class NAMES, so table configuration
+ * can name a model's client without linking any provider package (or its SDK). {@link EmbeddingClientFactory}
+ * resolves through it; a test pins every name and id here to the provider's own class and constant.
  */
 public final class EmbeddingClientNames {
 
   private static final String PKG = "org.apache.hudi.utilities.unstructured.embedding.compute.";
 
+  /** The ids of the OpenAI-compatible providers ({@code openai.OpenAiProvider}), in declaration order. */
+  static final List<String> OPENAI_PROVIDERS = Collections.unmodifiableList(Arrays.asList("openai", "azure-openai", "hf-tei"));
+  static final String OPENAI_COMPATIBLE_CLIENT = PKG + "openai.OpenAiCompatibleEmbeddingClient";
+
   /** The provider ids with a built-in client, as {@code hoodie.unstructured.embedding.model.<alias>.provider} names them. */
-  public static final List<String> PROVIDERS = Collections.unmodifiableList(Arrays.asList(DummyEmbeddingClient.PROVIDER, DummyMultimodalEmbeddingClient.PROVIDER));
+  public static final List<String> PROVIDERS = Collections.unmodifiableList(
+      Stream.concat(Stream.of(DummyEmbeddingClient.PROVIDER, DummyMultimodalEmbeddingClient.PROVIDER), OPENAI_PROVIDERS.stream())
+          .collect(Collectors.toList()));
 
   private EmbeddingClientNames() {
   }
@@ -70,6 +78,9 @@ public final class EmbeddingClientNames {
     }
     if (DummyMultimodalEmbeddingClient.PROVIDER.equals(spec.getProvider())) {
       return DummyMultimodalEmbeddingClient.class.getName();
+    }
+    if (OPENAI_PROVIDERS.contains(spec.getProvider())) {
+      return OPENAI_COMPATIBLE_CLIENT;
     }
     throw new UnsupportedOperationException("provider " + spec.getProvider() + " of model " + spec.getName()
         + " has no built-in embedding client; providers: " + String.join(", ", PROVIDERS) + ", or set " + EmbeddingTableConfig.MODEL_PREFIX + spec.getName()
