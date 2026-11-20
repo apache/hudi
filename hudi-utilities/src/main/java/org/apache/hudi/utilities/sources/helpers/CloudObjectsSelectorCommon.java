@@ -302,11 +302,40 @@ public class CloudObjectsSelectorCommon {
       filter.append(SPACE_DELIMTER).append(String.format("and %s not like '%%%s%%'", objectKey, ignoreRelativePathSubStr.get()));
     }
 
-    // Match files with a given extension, or use the fileFormat as the default.
-    getPropVal(props, CLOUD_DATAFILE_EXTENSION).or(() -> Option.of(fileFormat))
-        .map(val -> filter.append(SPACE_DELIMTER).append(String.format("and %s like '%%%s'", objectKey, val)));
+    // Fall back to the file format when the configured list has no usable extension.
+    List<String> extensions = usableExtensions(getPropVal(props, CLOUD_DATAFILE_EXTENSION).orElse(""));
+    filter.append(extensionClause(objectKey, extensions.isEmpty() ? usableExtensions(fileFormat) : extensions));
 
     return filter.toString();
+  }
+
+  /**
+   * Splits a comma separated extension value into the entries that can actually be matched on,
+   * dropping blanks so a value like "pdf, ,docx" yields two extensions and "," yields none.
+   */
+  static List<String> usableExtensions(String extensions) {
+    return Arrays.stream(extensions.split(","))
+        .map(String::trim)
+        .filter(extension -> !extension.isEmpty())
+        .collect(Collectors.toList());
+  }
+
+  /**
+   * Renders the file extension predicate. More than one extension matches any one of them, so a
+   * prefix holding several file types can be selected in a single sync; a single extension renders
+   * exactly the predicate it always did. Empty only when neither the configured extensions nor the
+   * fileFormat yields anything to match on, which leaves the filter unchanged.
+   */
+  static String extensionClause(String objectKey, List<String> extensions) {
+    List<String> predicates = extensions.stream()
+        .map(extension -> String.format("%s like '%%%s'", objectKey, extension))
+        .collect(Collectors.toList());
+    if (predicates.isEmpty()) {
+      return "";
+    }
+    return predicates.size() == 1
+        ? SPACE_DELIMTER + "and " + predicates.get(0)
+        : SPACE_DELIMTER + "and (" + String.join(" or ", predicates) + ")";
   }
 
   /**
