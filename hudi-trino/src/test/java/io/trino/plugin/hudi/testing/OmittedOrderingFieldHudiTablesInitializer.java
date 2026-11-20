@@ -29,11 +29,8 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 
 /**
  * Creates a non-partitioned Merge-On-Read table in {@link RecordMergeMode#EVENT_TIME_ORDERING} whose
@@ -58,13 +55,12 @@ public class OmittedOrderingFieldHudiTablesInitializer
     }
 
     @Override
-    protected List<Column> dataColumns()
+    protected List<Column> adjustHiveSyncColumns(List<Column> hiveSyncColumns)
     {
         // No ts column: the fixture's whole point is a metastore that does not know the ordering field.
-        return ImmutableList.of(
-                new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("value", HIVE_LONG, Optional.empty(), Map.of()));
+        return hiveSyncColumns.stream()
+                .filter(column -> !column.getName().equals(ORDERING_FIELD))
+                .collect(toImmutableList());
     }
 
     @Override

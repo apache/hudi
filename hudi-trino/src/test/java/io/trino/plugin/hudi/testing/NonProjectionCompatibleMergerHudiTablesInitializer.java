@@ -14,7 +14,6 @@
 package io.trino.plugin.hudi.testing;
 
 import com.google.common.collect.ImmutableList;
-import io.trino.metastore.Column;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -28,11 +27,6 @@ import org.apache.hudi.config.HoodieWriteConfig;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 
 /**
  * Creates a non-partitioned Merge-On-Read table at test runtime configured with the
@@ -58,17 +52,6 @@ public class NonProjectionCompatibleMergerHudiTablesInitializer
     }
 
     @Override
-    protected List<Column> dataColumns()
-    {
-        return ImmutableList.of(
-                new Column(RECORD_KEY_FIELD, HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("name", HIVE_STRING, Optional.empty(), Map.of()),
-                new Column("value", HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(RANK_FIELD, HIVE_LONG, Optional.empty(), Map.of()),
-                new Column(ORDERING_FIELD, HIVE_LONG, Optional.empty(), Map.of()));
-    }
-
-    @Override
     protected Schema avroSchema()
     {
         List<Schema.Field> fields = ImmutableList.of(
@@ -76,7 +59,10 @@ public class NonProjectionCompatibleMergerHudiTablesInitializer
                 new Schema.Field("name", Schema.create(Schema.Type.STRING)),
                 new Schema.Field("value", Schema.create(Schema.Type.LONG)),
                 new Schema.Field(RANK_FIELD, Schema.create(Schema.Type.LONG)),
-                new Schema.Field(ORDERING_FIELD, Schema.create(Schema.Type.LONG)));
+                new Schema.Field(ORDERING_FIELD, Schema.create(Schema.Type.LONG)),
+                // Always null, as schema inference gives a column that is null in every row; the full-schema read this
+                // table's merger forces must leave it out instead of failing to type it
+                new Schema.Field("always_null", Schema.create(Schema.Type.NULL), null, Schema.Field.NULL_DEFAULT_VALUE));
         return Schema.createRecord(TABLE_NAME, null, null, false, new ArrayList<>(fields));
     }
 

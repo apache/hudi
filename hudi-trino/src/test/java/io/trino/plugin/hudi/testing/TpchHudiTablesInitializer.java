@@ -13,7 +13,6 @@
  */
 package io.trino.plugin.hudi.testing;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
 import io.trino.filesystem.Location;
@@ -22,7 +21,6 @@ import io.trino.filesystem.TrinoFileSystemFactory;
 import io.trino.metastore.Column;
 import io.trino.metastore.HiveMetastore;
 import io.trino.metastore.HiveMetastoreFactory;
-import io.trino.metastore.HiveType;
 import io.trino.metastore.PrincipalPrivileges;
 import io.trino.metastore.StorageFormat;
 import io.trino.metastore.Table;
@@ -37,6 +35,7 @@ import io.trino.tpch.TpchColumn;
 import io.trino.tpch.TpchColumnType;
 import io.trino.tpch.TpchColumnTypes;
 import io.trino.tpch.TpchTable;
+import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
@@ -65,31 +64,24 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Verify.verify;
 import static com.google.common.io.MoreFiles.deleteRecursively;
 import static com.google.common.io.RecursiveDeleteOption.ALLOW_INSECURE;
 import static io.trino.hive.formats.HiveClassNames.HUDI_PARQUET_INPUT_FORMAT;
 import static io.trino.hive.formats.HiveClassNames.MAPRED_PARQUET_OUTPUT_FORMAT_CLASS;
 import static io.trino.hive.formats.HiveClassNames.PARQUET_HIVE_SERDE_CLASS;
-import static io.trino.metastore.HiveType.HIVE_DATE;
-import static io.trino.metastore.HiveType.HIVE_DOUBLE;
-import static io.trino.metastore.HiveType.HIVE_INT;
-import static io.trino.metastore.HiveType.HIVE_LONG;
-import static io.trino.metastore.HiveType.HIVE_STRING;
 import static io.trino.plugin.hive.TableType.EXTERNAL_TABLE;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.hiveSyncStorageSchema;
+import static io.trino.plugin.hudi.testing.HudiTestUtils.metastoreDataColumns;
 import static java.lang.String.format;
 import static java.nio.file.Files.createTempDirectory;
-import static java.util.Collections.unmodifiableList;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE;
 
@@ -100,12 +92,6 @@ public class TpchHudiTablesInitializer
     private static final CatalogSchemaName TPCH_TINY = new CatalogSchemaName("tpch", "tiny");
     private static final String PARTITION_PATH = "";
     private static final Logger log = Logger.get(TpchHudiTablesInitializer.class);
-    private static final List<Column> HUDI_META_COLUMNS = ImmutableList.of(
-            new Column("_hoodie_commit_time", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_commit_seqno", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_record_key", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_partition_path", HIVE_STRING, Optional.empty(), Map.of()),
-            new Column("_hoodie_file_name", HIVE_STRING, Optional.empty(), Map.of()));
 
     private final List<TpchTable<?>> tpchTables;
 
@@ -138,7 +124,9 @@ public class TpchHudiTablesInitializer
                 Location tableLocation = dataLocation.appendPath(tpchTable.getTableName());
                 ResourceHudiTablesInitializer.copyDir(tempTableDir, fileSystem, tableLocation);
 
-                Table table = createTableDefinition(schemaName, tpchTable, tableLocation);
+                // Hive sync's columns for the table as written (its HMS path, support_timestamp off as by default)
+                List<Column> columns = metastoreDataColumns(hiveSyncStorageSchema(createMetaClient(tempTableDir), false), false);
+                Table table = createTableDefinition(schemaName, tpchTable, tableLocation, columns);
                 metastore.createTable(table, PrincipalPrivileges.NO_PRIVILEGES);
             }
         }
@@ -181,11 +169,16 @@ public class TpchHudiTablesInitializer
         return builder.toString();
     }
 
-    private static Table createTableDefinition(String schemaName, TpchTable<?> table, Location location)
+    private static HoodieTableMetaClient createMetaClient(java.nio.file.Path tableDirectory)
     {
-        List<Column> columns = Stream.of(HUDI_META_COLUMNS, createMetastoreColumns(table))
-                .flatMap(Collection::stream)
-                .toList();
+        return HoodieTableMetaClient.builder()
+                .setConf(new HadoopStorageConfiguration(new Configuration()))
+                .setBasePath(new Path(tableDirectory.toUri()).toString())
+                .build();
+    }
+
+    private static Table createTableDefinition(String schemaName, TpchTable<?> table, Location location, List<Column> columns)
+    {
         StorageFormat storageFormat = StorageFormat.create(
                 PARQUET_HIVE_SERDE_CLASS,
                 HUDI_PARQUET_INPUT_FORMAT,
@@ -282,30 +275,16 @@ public class TpchHudiTablesInitializer
         List<Schema.Field> fields = new ArrayList<>(tpchColumns.size() + 1);
         for (TpchColumn<?> column : tpchColumns) {
             String columnName = column.getSimplifiedColumnName();
-            Schema.Type columnSchemaType = toSchemaType(column.getType());
-            // Schema.createUnion(Schema.create(Schema.Type.NULL), Schema.create(type));
-            fields.add(new Schema.Field(columnName, Schema.create(columnSchemaType)));
+            fields.add(new Schema.Field(columnName, toSchema(column.getType())));
         }
         fields.add(new Schema.Field(FIELD_UUID, Schema.create(Schema.Type.STRING)));
         String name = table.getTableName();
         return Schema.createRecord(name, null, null, false, fields);
     }
 
-    private static List<Column> createMetastoreColumns(TpchTable<?> table)
+    private static Schema toSchema(TpchColumnType columnType)
     {
-        List<? extends TpchColumn<?>> tpchColumns = table.getColumns();
-        List<Column> columns = new ArrayList<>(tpchColumns.size() + 1);
-        for (TpchColumn<?> c : tpchColumns) {
-            HiveType hiveType = TpchColumnTypeAdapter.toHiveType(c.getType());
-            columns.add(new Column(c.getSimplifiedColumnName(), hiveType, Optional.empty(), Map.of()));
-        }
-        columns.add(new Column(FIELD_UUID, HIVE_STRING, Optional.empty(), Map.of()));
-        return unmodifiableList(columns);
-    }
-
-    private static Schema.Type toSchemaType(TpchColumnType columnType)
-    {
-        return TpchColumnTypeAdapter.of(columnType).avroType;
+        return TpchColumnTypeAdapter.of(columnType).avroSchema.get();
     }
 
     private static Function<Object, Object> avroEncoderOf(TpchColumnType columnType)
@@ -320,11 +299,12 @@ public class TpchHudiTablesInitializer
 
     private enum TpchColumnTypeAdapter
     {
-        INTEGER(Schema.Type.INT, hiveTypeOf(HIVE_INT), Function.identity()),
-        IDENTIFIER(Schema.Type.LONG, hiveTypeOf(HIVE_LONG), Function.identity()),
-        DATE(Schema.Type.INT, hiveTypeOf(HIVE_DATE), TpchColumnTypeAdapter::convertDate),
-        DOUBLE(Schema.Type.DOUBLE, hiveTypeOf(HIVE_DOUBLE), Function.identity()),
-        VARCHAR(Schema.Type.STRING, TpchColumnTypeAdapter::hiveVarcharOf, Function.identity()),
+        INTEGER(() -> Schema.create(Schema.Type.INT), Function.identity()),
+        IDENTIFIER(() -> Schema.create(Schema.Type.LONG), Function.identity()),
+        // The connector types columns from the table schema, so a date has to be written as one
+        DATE(() -> LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT)), TpchColumnTypeAdapter::convertDate),
+        DOUBLE(() -> Schema.create(Schema.Type.DOUBLE), Function.identity()),
+        VARCHAR(() -> Schema.create(Schema.Type.STRING), Function.identity()),
         /**/;
 
         static TpchColumnTypeAdapter of(TpchColumnType columnType)
@@ -349,34 +329,13 @@ public class TpchHudiTablesInitializer
             }
         }
 
-        static HiveType toHiveType(TpchColumnType columnType)
-        {
-            return of(columnType).hiveTypeConverter.apply(columnType);
-        }
-
-        private final Schema.Type avroType;
-        private final Function<TpchColumnType, HiveType> hiveTypeConverter;
+        private final Supplier<Schema> avroSchema;
         private final Function<Object, Object> avroEncoder;
 
-        TpchColumnTypeAdapter(
-                Schema.Type avroType,
-                Function<TpchColumnType, HiveType> hiveTypeConverter,
-                Function<Object, Object> avroEncoder)
+        TpchColumnTypeAdapter(Supplier<Schema> avroSchema, Function<Object, Object> avroEncoder)
         {
-            this.avroType = avroType;
-            this.hiveTypeConverter = hiveTypeConverter;
+            this.avroSchema = avroSchema;
             this.avroEncoder = avroEncoder;
-        }
-
-        private static Function<TpchColumnType, HiveType> hiveTypeOf(HiveType hiveType)
-        {
-            return _ -> hiveType;
-        }
-
-        private static HiveType hiveVarcharOf(TpchColumnType type)
-        {
-            verify(type.getPrecision().isPresent());
-            return HiveType.valueOf("varchar(" + type.getPrecision().get() + ")");
         }
 
         private static Object convertDate(Object input)

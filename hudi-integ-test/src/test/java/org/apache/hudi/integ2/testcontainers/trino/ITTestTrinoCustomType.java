@@ -32,9 +32,9 @@ import static org.apache.hudi.integ2.testcontainers.TestcontainersConfig.Paths;
  * Trino read coverage for Hudi's custom logical types (BLOB struct, VECTOR
  * fixed_len_byte_array, VARIANT), complementing {@link ITTestCustomTypeHiveSync}
  * which asserts the same fixtures round-trip through the Hive serde. A flip in
- * either direction (e.g. VECTOR decoded as array&lt;float&gt; instead of
- * binary, BLOB struct field projection broken, VARIANT row count off) shows up
- * here.
+ * either direction (e.g. VECTOR surfacing as raw binary instead of
+ * array(real), BLOB struct field projection broken, VARIANT row count off)
+ * shows up here.
  *
  * <p>This test reuses the same {@code sparksql-*-sql.commands} fixtures that
  * {@code ITTestCustomTypeHiveSync} drives. The two run in either order without
@@ -230,28 +230,26 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
   }
 
   @Test
-  public void testTrinoVectorRoundTripsAsBinary() throws Exception {
+  public void testTrinoVectorReadsAsRealArray() throws Exception {
     // Per RFC-99, VECTOR(3) is stored on disk as fixed_len_byte_array(12) and Hive
-    // sync maps it to BINARY. The native plugin should expose the column as VARBINARY
-    // of the same 12 bytes (3 floats * 4 bytes). length() returning 12 confirms the
-    // round-trip; a return of 3 would mean the plugin decoded it as array<float>,
-    // a real regression worth a separate ticket. Pairs with the Hive assertion at
+    // sync maps it to BINARY. The native plugin types the column from the table's
+    // HoodieSchema, not the metastore, so it surfaces as array(real) with one
+    // element per dimension. A varbinary type here would mean the plugin fell back
+    // to the Hive-synced type. Hive itself still sees BINARY, see the assertion at
     // ITTestCustomTypeHiveSync:228-235.
-    trino.execute("SELECT length(embedding) FROM vector_test WHERE id = 1")
+    trino.execute("SELECT typeof(embedding), cardinality(embedding) FROM vector_test WHERE id = 1")
         .expectToSucceed()
-        .assertStdOutContains("12");
+        .assertStdOutContains("array(real),3");
   }
 
   @Test
-  public void testTrinoVectorBytesDecodeToExpectedFloats() throws Exception {
+  public void testTrinoVectorDecodesToExpectedFloats() throws Exception {
     // The 12 bytes of VECTOR(3) are 3 IEEE-754 floats in little-endian (Parquet's
-    // default). reverse(substr(..., n, 4)) flips each 4-byte chunk to big-endian
-    // so from_ieee754_32 returns the actual value. round(., 1) sidesteps float-
-    // precision noise in Trino's CSV rendering (0.9f decodes to ~0.90000004).
-    // For id=1's post-UPDATE state the fixture writes (0.9f, 0.8f, 0.7f).
-    trino.execute("SELECT round(from_ieee754_32(reverse(substr(embedding, 1, 4))), 1), "
-            + "round(from_ieee754_32(reverse(substr(embedding, 5, 4))), 1), "
-            + "round(from_ieee754_32(reverse(substr(embedding, 9, 4))), 1) "
+    // default), which the plugin decodes into the array elements. round(., 1)
+    // sidesteps float-precision noise in Trino's CSV rendering (0.9f decodes to
+    // ~0.90000004). For id=1's post-UPDATE state the fixture writes
+    // (0.9f, 0.8f, 0.7f).
+    trino.execute("SELECT round(embedding[1], 1), round(embedding[2], 1), round(embedding[3], 1) "
             + "FROM vector_test WHERE id = 1")
         .expectToSucceed()
         .assertStdOutContains("0.9,0.8,0.7");
@@ -262,24 +260,23 @@ public class ITTestTrinoCustomType extends ITTestBaseTestcontainers {
     // id=2 was MATCHED by the MERGE clause and rewritten to (0.41f, 0.51f, 0.61f).
     // round(., 2) keeps it readable; complements id=1's UPDATE path to confirm
     // both write paths land at the same on-disk layout.
-    trino.execute("SELECT round(from_ieee754_32(reverse(substr(embedding, 1, 4))), 2), "
-            + "round(from_ieee754_32(reverse(substr(embedding, 5, 4))), 2), "
-            + "round(from_ieee754_32(reverse(substr(embedding, 9, 4))), 2) "
+    trino.execute("SELECT round(embedding[1], 2), round(embedding[2], 2), round(embedding[3], 2) "
             + "FROM vector_test WHERE id = 2")
         .expectToSucceed()
         .assertStdOutContains("0.41,0.51,0.61");
   }
 
   @Test
-  public void testTrinoVectorAllRowsAreFixedLength12() throws Exception {
-    // Invariant: every row's embedding is exactly 12 bytes. count(DISTINCT length(...))
-    // = 1 AND min/max = 12 catches the case where some rows decode at a different
-    // width (e.g. an older row written before a layout fix). Stronger than the
-    // single-row length() check in testTrinoVectorRoundTripsAsBinary.
-    trino.execute("SELECT count(DISTINCT length(embedding)), min(length(embedding)), "
-            + "max(length(embedding)) FROM vector_test")
+  public void testTrinoVectorAllRowsHaveDimension3() throws Exception {
+    // Invariant: every row's embedding has exactly 3 elements.
+    // count(DISTINCT cardinality(...)) = 1 AND min/max = 3 catches the case where
+    // some rows decode at a different width (e.g. an older row written before a
+    // layout fix). Stronger than the single-row check in
+    // testTrinoVectorReadsAsRealArray.
+    trino.execute("SELECT count(DISTINCT cardinality(embedding)), min(cardinality(embedding)), "
+            + "max(cardinality(embedding)) FROM vector_test")
         .expectToSucceed()
-        .assertStdOutContains("1,12,12");
+        .assertStdOutContains("1,3,3");
   }
 
   // ---------- VARIANT (variant_test) ----------

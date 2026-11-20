@@ -20,6 +20,9 @@ import io.trino.spi.predicate.Range;
 import io.trino.spi.predicate.TupleDomain;
 import io.trino.spi.predicate.ValueSet;
 import io.trino.spi.type.IntegerType;
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.schema.HoodieSchemaField;
+import org.apache.hudi.common.schema.HoodieSchemaType;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -291,7 +294,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = TupleDomain.withColumnDomains(domains);
         List<String> recordKeys = List.of("key1");
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         // The code should take the first value from the IN list for building the key
         assertThat(result).hasSize(3);
@@ -310,7 +313,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = TupleDomain.withColumnDomains(domains);
         List<String> recordKeys = List.of("part1", "part2");
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         assertThat(result).hasSize(3);
         // Expecting the first value of the IN clause to be used
@@ -328,7 +331,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = TupleDomain.withColumnDomains(domains);
         List<String> recordKeys = List.of("part1", "part2");
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         // Verify only the first value from each IN clause is used
         assertThat(result).hasSize(6);
@@ -354,7 +357,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = TupleDomain.withColumnDomains(domains);
         List<String> recordKeys = List.of("part1", "part2", "part3");
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         // Can only handle IN and EQUAL cases
         assertThat(result).isEmpty();
@@ -366,7 +369,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = createStringTupleDomain(Map.of("key1", "value1"));
         List<String> recordKeys = null;
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         assertThat(result).isEmpty();
     }
@@ -377,7 +380,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = createStringTupleDomain(Map.of("key1", "value1"));
         List<String> recordKeys = Collections.emptyList();
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         assertThat(result).isEmpty();
     }
@@ -388,7 +391,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = TupleDomain.withColumnDomains(Collections.emptyMap());
         List<String> recordKeys = List.of("key1");
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         assertThat(result).isEmpty();
     }
@@ -399,7 +402,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = createStringTupleDomain(Map.of("key1", "value1"));
         List<String> recordKeys = List.of("key2"); // Key not in domains
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         assertThat(result).isEmpty();
     }
@@ -410,7 +413,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = createStringTupleDomain(Map.of("key1", "value1"));
         List<String> recordKeys = List.of("key1");
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst()).isEqualTo("value1");
@@ -427,7 +430,7 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = createStringTupleDomain(keyValues);
         List<String> recordKeys = List.of("part1", "part2", "part3");
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         assertThat(result).hasSize(1);
         assertThat(result.getFirst()).isEqualTo("part1:value1,part2:value2,part3:value3");
@@ -444,13 +447,27 @@ public class HudiRecordLevelIndexSupportTest
         TupleDomain<String> recordKeyDomains = createStringTupleDomain(keyValues);
         List<String> recordKeys = List.of("part1", "part2", "part3");
 
-        List<String> result = HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys);
+        List<String> result = constructRecordKeys(recordKeyDomains, recordKeys);
 
         // Since one key is missing, should return empty list
         assertThat(result).isEmpty();
     }
 
     // Helper methods for test data creation
+
+    /**
+     * Builds the keys with the key fields typed the way their domains are: integer as int, anything else as string.
+     */
+    private static List<String> constructRecordKeys(TupleDomain<String> recordKeyDomains, List<String> recordKeys)
+    {
+        List<HoodieSchemaField> fields = recordKeyDomains.getDomains().orElse(Map.of()).entrySet().stream()
+                .map(entry -> HoodieSchemaField.of(entry.getKey(), HoodieSchema.create(
+                        entry.getValue().getType().equals(IntegerType.INTEGER) ? HoodieSchemaType.INT : HoodieSchemaType.STRING)))
+                .toList();
+        HoodieSchema tableSchema = HoodieSchema.createRecord("keys", null, null, fields);
+        return HudiRecordLevelIndexSupport.constructRecordKeys(recordKeyDomains, recordKeys, tableSchema, IndexKeyForm.RECORD_KEY);
+    }
+
     private Domain createStringDomain(String value)
     {
         return Domain.singleValue(VARCHAR, Slices.utf8Slice(value));

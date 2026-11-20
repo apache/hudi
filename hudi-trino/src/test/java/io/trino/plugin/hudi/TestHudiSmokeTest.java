@@ -1215,10 +1215,10 @@ public class TestHudiSmokeTest
                         isRtTable ? "BIGINT '1101'" : "BIGINT '1100'"),
                 // col_boolean BOOLEAN
                 ImmutableList.of("true", "false", "CAST(NULL AS BOOLEAN)"),
-                // col_tinyint TINYINT
-                ImmutableList.of("TINYINT '1'", "TINYINT '2'", "CAST(NULL AS TINYINT)"),
-                // col_smallint SMALLINT
-                ImmutableList.of("SMALLINT '100'", "SMALLINT '200'", "CAST(NULL AS SMALLINT)"),
+                // col_tinyint TINYINT: an Avro int in the table schema
+                ImmutableList.of("INTEGER '1'", "INTEGER '2'", "CAST(NULL AS INTEGER)"),
+                // col_smallint SMALLINT: an Avro int in the table schema
+                ImmutableList.of("INTEGER '100'", "INTEGER '200'", "CAST(NULL AS INTEGER)"),
                 // col_int
                 ImmutableList.of("INTEGER '1000'", "INTEGER '2000'", "CAST(NULL AS INTEGER)"),
                 // col_bigint BIGINT
@@ -1239,16 +1239,16 @@ public class TestHudiSmokeTest
                         "'string val 2'",
                         // Updates were performed on partition B values (RT table holds the updated value)
                         isRtTable ? "'updated string'" : "NULL"),
-                // col_varchar
-                ImmutableList.of("CAST('varchar val 1' AS VARCHAR(50))", "CAST('varchar val 2' AS VARCHAR(50))", "CAST(NULL AS VARCHAR(50))"),
-                // col_char
-                ImmutableList.of("CAST('charval1' AS CHAR(10))", "CAST('charval2' AS CHAR(10))", "CAST(NULL AS CHAR(10))"),
+                // col_varchar VARCHAR(50): an Avro string in the table schema
+                ImmutableList.of("CAST('varchar val 1' AS VARCHAR)", "CAST('varchar val 2' AS VARCHAR)", "CAST(NULL AS VARCHAR)"),
+                // col_char CHAR(10): an Avro string in the table schema
+                ImmutableList.of("CAST('charval1' AS VARCHAR)", "CAST('charval2' AS VARCHAR)", "CAST(NULL AS VARCHAR)"),
                 // col_binary BINARY -> VARBINARY: UTF-8 bytes of "binary1", "binary2", null
                 ImmutableList.of("X'62696e61727931'", "X'62696e61727932'", "CAST(NULL AS VARBINARY)"),
                 // col_date
                 ImmutableList.of("DATE '2025-01-15'", "DATE '2025-02-20'", "CAST(NULL AS DATE)"),
-                // col_timestamp TIMESTAMP
-                ImmutableList.of("TIMESTAMP '2025-01-15 11:30:00.000'", "TIMESTAMP '2025-02-20 12:45:00.000'", "CAST(NULL AS TIMESTAMP)"),
+                // col_timestamp TIMESTAMP: an Avro timestamp-micros, an instant
+                ImmutableList.of("TIMESTAMP '2025-01-15 11:30:00.000000 UTC'", "TIMESTAMP '2025-02-20 12:45:00.000000 UTC'", "CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE)"),
                 // col_array_int ARRAY<INT>
                 ImmutableList.of("ARRAY[1, 2, 3]", "ARRAY[4, 5]", "CAST(NULL AS ARRAY<INTEGER>)"),
                 // col_array_string ARRAY<STRING>
@@ -1278,10 +1278,10 @@ public class TestHudiSmokeTest
                         "CAST(NULL AS ARRAY<ROW(f_arr_struct_str VARCHAR, f_arr_struct_map MAP<VARCHAR, INTEGER>)>)"),
                 // col_map_struct_with_array
                 ImmutableList.of(
-                        "MAP(ARRAY['map_struct1', 'map_struct2'], ARRAY[CAST(ROW(ARRAY[true, false], TIMESTAMP '2025-01-01 01:01:01.000') AS ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(3))), CAST(ROW(ARRAY[false], TIMESTAMP '2025-02-02 02:02:02.000') AS ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(3)))])",
+                        "MAP(ARRAY['map_struct1', 'map_struct2'], ARRAY[CAST(ROW(ARRAY[true, false], TIMESTAMP '2025-01-01 01:01:01.000000 UTC') AS ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(6) WITH TIME ZONE)), CAST(ROW(ARRAY[false], TIMESTAMP '2025-02-02 02:02:02.000000 UTC') AS ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(6) WITH TIME ZONE))])",
                         // inner map is null
-                        "MAP(ARRAY['map_struct3', 'map_struct4'], ARRAY[CAST(ROW(CAST(NULL AS ARRAY<BOOLEAN>), TIMESTAMP '2025-03-03 03:03:03.000') AS ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(3))), CAST(ROW(ARRAY[true], CAST(NULL AS TIMESTAMP(3))) AS ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(3)))])",
-                        "CAST(NULL AS MAP<VARCHAR, ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(3))>)"),
+                        "MAP(ARRAY['map_struct3', 'map_struct4'], ARRAY[CAST(ROW(CAST(NULL AS ARRAY<BOOLEAN>), TIMESTAMP '2025-03-03 03:03:03.000000 UTC') AS ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(6) WITH TIME ZONE)), CAST(ROW(ARRAY[true], CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE)) AS ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(6) WITH TIME ZONE))])",
+                        "CAST(NULL AS MAP<VARCHAR, ROW(f_map_struct_arr ARRAY<BOOLEAN>, f_map_struct_ts TIMESTAMP(6) WITH TIME ZONE)>)"),
                 // col_struct_nested_struct
                 ImmutableList.of(
                         "CAST(ROW(101, CAST(ROW('inner_str_1', true) AS ROW(inner_f1 VARCHAR, inner_f2 BOOLEAN))) AS ROW(outer_f1 INTEGER, nested_struct ROW(inner_f1 VARCHAR, inner_f2 BOOLEAN)))",
@@ -1304,9 +1304,9 @@ public class TestHudiSmokeTest
                         "CAST(NULL AS MAP<VARCHAR, MAP<VARCHAR, DATE>>)"),
                 // col_struct_array_struct
                 ImmutableList.of(
-                        "CAST(ROW('outer_str_1', ARRAY[CAST(ROW(TIMESTAMP '2023-11-11 11:11:11.000', 'inner_str_1') AS ROW(inner_f3 TIMESTAMP(3), inner_f4 VARCHAR))]) AS ROW(outer_f2 VARCHAR, struct_array ARRAY<ROW(inner_f3 TIMESTAMP(3), inner_f4 VARCHAR)>))",
-                        "CAST(ROW('outer_str_2', ARRAY[CAST(ROW(TIMESTAMP '2023-12-12 12:12:12.000', 'inner_str_2') AS ROW(inner_f3 TIMESTAMP(3), inner_f4 VARCHAR))]) AS ROW(outer_f2 VARCHAR, struct_array ARRAY<ROW(inner_f3 TIMESTAMP(3), inner_f4 VARCHAR)>))",
-                        "CAST(NULL AS ROW(outer_f2 VARCHAR, struct_array ARRAY<ROW(inner_f3 TIMESTAMP(3), inner_f4 VARCHAR)>))"),
+                        "CAST(ROW('outer_str_1', ARRAY[CAST(ROW(TIMESTAMP '2023-11-11 11:11:11.000000 UTC', 'inner_str_1') AS ROW(inner_f3 TIMESTAMP(6) WITH TIME ZONE, inner_f4 VARCHAR))]) AS ROW(outer_f2 VARCHAR, struct_array ARRAY<ROW(inner_f3 TIMESTAMP(6) WITH TIME ZONE, inner_f4 VARCHAR)>))",
+                        "CAST(ROW('outer_str_2', ARRAY[CAST(ROW(TIMESTAMP '2023-12-12 12:12:12.000000 UTC', 'inner_str_2') AS ROW(inner_f3 TIMESTAMP(6) WITH TIME ZONE, inner_f4 VARCHAR))]) AS ROW(outer_f2 VARCHAR, struct_array ARRAY<ROW(inner_f3 TIMESTAMP(6) WITH TIME ZONE, inner_f4 VARCHAR)>))",
+                        "CAST(NULL AS ROW(outer_f2 VARCHAR, struct_array ARRAY<ROW(inner_f3 TIMESTAMP(6) WITH TIME ZONE, inner_f4 VARCHAR)>))"),
                 // col_struct_map (BIGINT literals don't need L)
                 ImmutableList.of(
                         "CAST(ROW(true, MAP(ARRAY['struct_map_k1', 'struct_map_k2'], ARRAY[1000, 2000])) AS ROW(outer_f3 BOOLEAN, struct_map MAP<VARCHAR, BIGINT>))",

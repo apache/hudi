@@ -13,13 +13,31 @@
  */
 package io.trino.plugin.hudi;
 
+import com.google.common.collect.ImmutableMap;
+import io.trino.Session;
 import io.trino.plugin.hudi.testing.CommitTimeOrderingHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.CompositeHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.EventTimeDeletesHudiTablesInitializer;
+import io.trino.plugin.hudi.testing.HoodieSchemaTypesHudiTablesInitializer;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
+import io.trino.spi.type.TypeOperators;
 import io.trino.testing.AbstractTestQueryFramework;
+import io.trino.testing.MaterializedResult;
 import io.trino.testing.QueryRunner;
+import org.apache.hudi.common.schema.HoodieSchemaField;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
+import static com.google.common.collect.ImmutableMap.toImmutableMap;
+import static io.trino.plugin.hudi.testing.HoodieSchemaTypesHudiTablesInitializer.TABLE_SCHEMA;
+import static java.lang.String.join;
+import static java.time.format.DateTimeFormatter.ofPattern;
+import static java.util.stream.Collectors.joining;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -35,6 +53,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>COMMIT_TIME_ORDERING: the latest write wins even with a LOWER ordering value -- the exact
  *       mirror of the event-time obsolete-update case, discriminating the two merger dispatches.</li>
  * </ul>
+ * The table written by {@link HoodieSchemaTypesHudiTablesInitializer} holds one column per HoodieSchema type, so its
+ * merge carries every type the connector maps through the HoodieSchema-driven serializer.
  */
 public class TestHudiMorMergeModeSemantics
         extends AbstractTestQueryFramework
@@ -46,7 +66,8 @@ public class TestHudiMorMergeModeSemantics
         return HudiQueryRunner.builder()
                 .setDataLoader(new CompositeHudiTablesInitializer(
                         new EventTimeDeletesHudiTablesInitializer(),
-                        new CommitTimeOrderingHudiTablesInitializer()))
+                        new CommitTimeOrderingHudiTablesInitializer(),
+                        new HoodieSchemaTypesHudiTablesInitializer()))
                 .build();
     }
 
@@ -117,27 +138,40 @@ public class TestHudiMorMergeModeSemantics
     }
 
     @Test
-    public void testCharMatchesBaseReaderOnUntouchedRow()
+    public void testSchemaStringOverridesMetastoreChar()
+    {
+        // The metastore declares code char(5) while the Hudi table schema holds a string: the column reads as
+        // varchar, so values come back unpadded
+        assertThat(columnTypes(computeActual("DESCRIBE " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME)))
+                .containsEntry("code", "varchar");
+        assertThat(columnTypes(computeActual("DESCRIBE " + CommitTimeOrderingHudiTablesInitializer.TABLE_NAME)))
+                .containsEntry("code", "varchar");
+    }
+
+    @Test
+    public void testStringMatchesBaseReaderOnUntouchedRow()
     {
         String query = "SELECT code FROM %s WHERE key = 'k3'";
         Object readOptimized = computeScalar(query.formatted(CommitTimeOrderingHudiTablesInitializer.TABLE_NAME));
-        assertThat(readOptimized).isEqualTo(" ab  ");
+        assertThat(readOptimized).isEqualTo(" ab");
         assertThat(computeScalar(query.formatted(CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME))).isEqualTo(readOptimized);
     }
 
     @Test
-    public void testCharFilterMatchesLeadingSpaceOnSnapshotRead()
+    public void testStringFilterMatchesLeadingSpaceOnSnapshotRead()
     {
         assertQuery(
-                "SELECT key FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " WHERE code = CAST(' ab' AS CHAR(5))",
+                "SELECT key FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " WHERE code = ' ab'",
                 "VALUES 'k3'");
+        assertQueryReturnsEmptyResult(
+                "SELECT key FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " WHERE code = 'ab'");
     }
 
     @Test
-    public void testCharKeepsTabsOnUpdatedRow()
+    public void testStringKeepsTabsOnUpdatedRow()
     {
         assertThat(computeScalar("SELECT code FROM " + CommitTimeOrderingHudiTablesInitializer.RT_TABLE_NAME + " WHERE key = 'k1'"))
-                .isEqualTo("\tx\t  ");
+                .isEqualTo("\tx\t");
     }
 
     @Test
@@ -176,5 +210,165 @@ public class TestHudiMorMergeModeSemantics
         assertQuery(
                 "SELECT key, value FROM " + EventTimeDeletesHudiTablesInitializer.RT_TABLE_NAME + " WHERE value > 45 ORDER BY key",
                 "VALUES ('k5', CAST(50 AS BIGINT)), ('k6', 60)");
+    }
+
+    @Test
+    public void testColumnTypesFollowTheTypeMapper()
+    {
+        TrinoTypeMapper typeMapper = new TrinoTypeMapper(new TypeOperators());
+        Map<String, String> expectedTypes = TABLE_SCHEMA.getFields().stream()
+                .collect(toImmutableMap(HoodieSchemaField::name, field -> typeMapper.toTypeSystem(field.schema()).getDisplayName()));
+        for (String table : List.of(HoodieSchemaTypesHudiTablesInitializer.TABLE_NAME, HoodieSchemaTypesHudiTablesInitializer.RT_TABLE_NAME)) {
+            // DESCRIBE resolves the schema through the table handle, information_schema from the metastore entry alone
+            assertThat(columnTypes(computeActual("DESCRIBE " + table)))
+                    .containsAllEntriesOf(expectedTypes);
+            assertThat(columnTypes(computeActual("SELECT column_name, data_type FROM information_schema.columns"
+                    + " WHERE table_schema = '" + getSession().getSchema().orElseThrow() + "' AND table_name = '" + table + "'")))
+                    .containsAllEntriesOf(expectedTypes);
+            // The metastore declares these the way Hive sync does (binary, int, bigint); the schema types replace them
+            assertThat(columnTypes(computeActual("DESCRIBE " + table)))
+                    .containsAllEntriesOf(ImmutableMap.of(
+                            "c_uuid", "uuid",
+                            "c_time_millis", "time(3)",
+                            "c_timestamp_micros", "timestamp(6) with time zone",
+                            "c_local_timestamp_micros", "timestamp(6)",
+                            "c_vector_float", "array(real)"));
+        }
+    }
+
+    @Test
+    public void testSnapshotReadMergesEveryHoodieSchemaType()
+    {
+        // k1 is rewritten with seed 8 and k2 nulled in the log file; k3 comes from the base file alone, through
+        // serialize() and back
+        assertThat(query("SELECT " + schemaColumnList() + " FROM " + HoodieSchemaTypesHudiTablesInitializer.RT_TABLE_NAME))
+                .matches("VALUES " + join(", ",
+                        populatedRow("k1", 200, 8),
+                        nullRow("k2", 200),
+                        populatedRow("k3", 100, 3)));
+    }
+
+    @Test
+    public void testReadOptimizedReadsEveryHoodieSchemaType()
+    {
+        assertThat(query("SELECT " + schemaColumnList() + " FROM " + HoodieSchemaTypesHudiTablesInitializer.TABLE_NAME))
+                .matches("VALUES " + join(", ",
+                        populatedRow("k1", 100, 1),
+                        populatedRow("k2", 100, 2),
+                        populatedRow("k3", 100, 3)));
+    }
+
+    @Test
+    public void testPredicatesOnHoodieSchemaTypes()
+    {
+        Session session = getSession();
+        String rtTable = HoodieSchemaTypesHudiTablesInitializer.RT_TABLE_NAME;
+        String roTable = HoodieSchemaTypesHudiTablesInitializer.TABLE_NAME;
+
+        // timestamp(6) with time zone is an instant: the same moment written in another zone matches too
+        assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE c_timestamp_micros = TIMESTAMP '" + timestampText(8) + ".123456 UTC'"))
+                .matches("VALUES VARCHAR 'k1'");
+        assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE c_timestamp_micros = TIMESTAMP '"
+                + timestampOf(8).plusHours(8).format(ofPattern("yyyy-MM-dd HH:mm:ss")) + ".123456 +08:00'"))
+                .matches("VALUES VARCHAR 'k1'");
+        // k1's base value was replaced in the log file: only the read-optimized table still holds it
+        assertQueryReturnsEmptyResult(session, "SELECT key FROM " + rtTable + " WHERE c_timestamp_micros = TIMESTAMP '" + timestampText(1) + ".123456 UTC'");
+        assertThat(query(session, "SELECT key FROM " + roTable + " WHERE c_timestamp_micros = TIMESTAMP '" + timestampText(1) + ".123456 UTC'"))
+                .matches("VALUES VARCHAR 'k1'");
+        // A range over timestamp(3) with time zone; k2 is null in the snapshot
+        assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE c_timestamp_millis > TIMESTAMP '" + timestampText(2) + ".123 UTC'"))
+                .matches("VALUES VARCHAR 'k1', VARCHAR 'k3'");
+        assertThat(query(session, "SELECT key FROM " + roTable + " WHERE c_timestamp_millis > TIMESTAMP '" + timestampText(2) + ".123 UTC'"))
+                .matches("VALUES VARCHAR 'k3'");
+
+        // The uuid column is stored as its text form; the read converts it, so the predicate compares uuid values
+        assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE c_uuid = UUID '" + uuid(3, 0) + "'"))
+                .matches("VALUES VARCHAR 'k3'");
+        assertQueryReturnsEmptyResult(session, "SELECT key FROM " + rtTable + " WHERE c_uuid = UUID '" + uuid(1, 0) + "'");
+        assertThat(query(session, "SELECT key FROM " + roTable + " WHERE c_uuid = UUID '" + uuid(1, 0) + "'"))
+                .matches("VALUES VARCHAR 'k1'");
+        assertThat(query(session, "SELECT key FROM " + rtTable + " WHERE c_record.id = UUID '" + uuid(8, 1) + "'"))
+                .matches("VALUES VARCHAR 'k1'");
+    }
+
+    private static Map<String, String> columnTypes(MaterializedResult result)
+    {
+        return result.getMaterializedRows().stream()
+                .collect(toImmutableMap(row -> (String) row.getField(0), row -> (String) row.getField(1)));
+    }
+
+    private static String schemaColumnList()
+    {
+        return TABLE_SCHEMA.getFields().stream()
+                .map(HoodieSchemaField::name)
+                .collect(joining(", "));
+    }
+
+    /**
+     * The SQL literals for the values HoodieSchemaTypesHudiTablesInitializer writes from {@code seed}, in
+     * {@link #schemaColumnList()} order, each typed exactly as its column so the result types are compared too.
+     */
+    private static String populatedRow(String key, long ts, int seed)
+    {
+        String timestamp = timestampText(seed);
+        String blob = seed % 2 == 1
+                ? "ROW(VARCHAR 'INLINE', X'B10B%02X', NULL)".formatted(seed)
+                : "ROW(VARCHAR 'OUT_OF_LINE', NULL, ROW(VARCHAR 'file:///blobs/blob-%s.bin', BIGINT '%s', NULL, true))".formatted(seed, 16 * seed);
+        return "(" + join(", ",
+                "VARCHAR '%s'".formatted(key),
+                "BIGINT '%s'".formatted(ts),
+                String.valueOf(seed % 2 == 0),
+                "INTEGER '%s'".formatted(100 * seed),
+                "BIGINT '%s'".formatted(10_000_000_000L * seed),
+                "REAL '%s'".formatted(seed + 0.5f),
+                "DOUBLE '%s'".formatted(seed + 0.25),
+                "VARCHAR 'string-%s'".formatted(seed),
+                "X'CAFE%02X'".formatted(seed),
+                "VARCHAR '%s'".formatted(List.of("RED", "GREEN", "BLUE").get(seed % 3)),
+                "X'DEADBE%02X'".formatted(seed),
+                "UUID '%s'".formatted(uuid(seed, 0)),
+                "CAST(DECIMAL '-%s.25' AS decimal(10, 2))".formatted(seed),
+                "CAST(DECIMAL '1234567890123456.789%s' AS decimal(20, 4))".formatted(seed),
+                "DATE '%s'".formatted(LocalDate.ofEpochDay(19_000 + seed)),
+                "TIME '%02d:02:03.456'".formatted(seed),
+                "TIME '%02d:02:03.456789'".formatted(seed),
+                "TIMESTAMP '%s.123 UTC'".formatted(timestamp),
+                "TIMESTAMP '%s.123456 UTC'".formatted(timestamp),
+                "TIMESTAMP '%s.123'".formatted(timestamp),
+                "TIMESTAMP '%s.123456'".formatted(timestamp),
+                "ARRAY[BIGINT '%s', BIGINT '%s']".formatted(seed, seed + 1),
+                "MAP(ARRAY[VARCHAR 'a', VARCHAR 'b'], ARRAY[BIGINT '%s', BIGINT '%s'])".formatted(seed, 10 * seed),
+                "CAST(ROW(VARCHAR 'record-%s', UUID '%s') AS ROW(\"name\" VARCHAR, \"id\" UUID))".formatted(seed, uuid(seed, 1)),
+                "ARRAY[REAL '%s', REAL '%s', REAL '%s']".formatted((float) seed, seed + 0.5f, (float) -seed),
+                "ARRAY[DOUBLE '%s', DOUBLE '%s']".formatted(seed + 0.25, -(seed + 0.25)),
+                "ARRAY[TINYINT '%s', TINYINT '%s', TINYINT '127', TINYINT '-128']".formatted(seed, -seed),
+                ("CAST(%s AS ROW(\"type\" VARCHAR, \"data\" VARBINARY,"
+                        + " \"reference\" ROW(\"external_path\" VARCHAR, \"offset\" BIGINT, \"length\" BIGINT, \"managed\" BOOLEAN)))").formatted(blob),
+                "CAST(ROW(X'010000', X'0C%02X') AS ROW(\"metadata\" VARBINARY, \"value\" VARBINARY))".formatted(seed)) + ")";
+    }
+
+    private static String nullRow(String key, long ts)
+    {
+        // Every column but the record key and the ordering field
+        int typedColumns = TABLE_SCHEMA.getFields().size() - 2;
+        return "(VARCHAR '%s', BIGINT '%s', %s)".formatted(key, ts, join(", ", Collections.nCopies(typedColumns, "NULL")));
+    }
+
+    /**
+     * Seed 0 is 2023-11-14 22:13:20 UTC, epoch second 1_700_000_000; each seed adds a day.
+     */
+    private static LocalDateTime timestampOf(int seed)
+    {
+        return LocalDateTime.of(2023, 11, 14, 22, 13, 20).plusDays(seed);
+    }
+
+    private static String timestampText(int seed)
+    {
+        return timestampOf(seed).format(ofPattern("yyyy-MM-dd HH:mm:ss"));
+    }
+
+    private static String uuid(int seed, int discriminator)
+    {
+        return "%08x-%04x-4000-8000-%012x".formatted(seed, discriminator, seed);
     }
 }

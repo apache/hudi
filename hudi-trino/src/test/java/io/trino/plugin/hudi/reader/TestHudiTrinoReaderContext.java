@@ -14,7 +14,9 @@
 package io.trino.plugin.hudi.reader;
 
 import io.trino.plugin.hudi.storage.TrinoStorageConfiguration;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.connector.EmptyPageSource;
+import io.trino.spi.type.TypeOperators;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaBuilder;
@@ -119,10 +121,10 @@ class TestHudiTrinoReaderContext
     {
         // These tests consume classic log records directly; no page source is read.
         HudiTrinoReaderContext readerContext = new HudiTrinoReaderContext(
-                new TrinoStorageConfiguration(), tableConfig, new EmptyPageSource(), List.of(), null,
+                new TrinoStorageConfiguration(), tableConfig, new EmptyPageSource(), List.of(),
                 (path, start, length, projection) -> {
                     throw new AssertionError("Unexpected parquet read");
-                }, props);
+                }, props, new TrinoTypeMapper(new TypeOperators()));
         TypedProperties mergeProps = ConfigUtils.getMergeProps(props, tableConfig);
         readerContext.initRecordMerger(mergeProps);
         readerContext.setHasLogFiles(false);

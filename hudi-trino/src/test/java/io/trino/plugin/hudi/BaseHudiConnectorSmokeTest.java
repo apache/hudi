@@ -44,13 +44,14 @@ public abstract class BaseHudiConnectorSmokeTest
     @Override
     public void testShowCreateTable()
     {
-        // Override because Hudi connector contains 'location' table property
+        // Override because Hudi connector contains 'location' table property, and because columns are typed
+        // from the table's HoodieSchema, whose string type has no length, so varchar(n) reads as varchar
         String schema = getSession().getSchema().orElseThrow();
         assertThat((String) computeScalar("SHOW CREATE TABLE region"))
                 .matches("\\QCREATE TABLE hudi." + schema + ".region (\n" +
                         "   regionkey bigint,\n" +
-                        "   name varchar(25),\n" +
-                        "   comment varchar(152)\n" +
+                        "   name varchar,\n" +
+                        "   comment varchar\n" +
                         ")\n" +
                         "WITH (\n" +
                         "   location = \\E'.*/region'\n\\Q" +
