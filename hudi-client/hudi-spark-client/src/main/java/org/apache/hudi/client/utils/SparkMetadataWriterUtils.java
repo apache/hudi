@@ -59,6 +59,7 @@ import org.apache.hudi.core.io.storage.HoodieFileWriterFactory;
 import org.apache.hudi.data.HoodieJavaRDD;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
+import org.apache.hudi.index.expression.ExpressionIndexTimeZone;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex;
 import org.apache.hudi.index.expression.HoodieSparkExpressionIndex.ExpressionIndexComputationMetadata;
 import org.apache.hudi.metadata.HoodieIndexVersion;
@@ -306,6 +307,11 @@ public class SparkMetadataWriterUtils {
     // Apply expression index and generate the column to index
     HoodieExpressionIndex<Column, Column> expressionIndex = new HoodieSparkExpressionIndex(indexDefinition);
     Column indexedColumn = expressionIndex.apply(Collections.singletonList(rowDataset.col(columnToIndex)));
+    // Compute in the zone recorded with the index, whatever the writer's session time zone
+    String timeZoneId = indexDefinition.getIndexOptions().get(HoodieExpressionIndex.TIME_ZONE_OPTION);
+    if (timeZoneId != null) {
+      indexedColumn = ExpressionIndexTimeZone.inTimeZone(rowDataset, indexedColumn, timeZoneId);
+    }
     rowDataset = rowDataset.withColumn(columnToIndex, indexedColumn);
 
     // Generate expression index records

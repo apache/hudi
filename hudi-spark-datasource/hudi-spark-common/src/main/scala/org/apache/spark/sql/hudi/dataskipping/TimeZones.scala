@@ -28,7 +28,8 @@ import scala.util.Try
 
 /**
  * Time zone checks shared by the rules whose ordering depends on a zone's offset: `TimeZoneShiftRule`,
- * `DateTimeFormatRule` through `DateTimeOrdering`, and `CastRule` for a timestamp's local date.
+ * `DateTimeFormatRule` through `DateTimeOrdering`, and `CastRule` for a timestamp's local date; and by
+ * [[IndexedExpression]].
  */
 object TimeZones {
 
@@ -70,4 +71,12 @@ object TimeZones {
 
   // The rules of the zone, resolved the way Spark evaluates it; None for an unknown zone
   private def rulesOf(timeZoneId: String): Option[ZoneRules] = Try(DateTimeUtils.getZoneId(timeZoneId).getRules).toOption
+
+  /**
+   * Whether the two IDs name the same zone, resolved the way Spark evaluates them: UTC, Etc/UTC and +00:00 are the
+   * same zone, and so are PST and America/Los_Angeles. An unknown zone matches none.
+   */
+  def sameZone(timeZoneId: String, otherTimeZoneId: String): Boolean =
+    Try(DateTimeUtils.getZoneId(timeZoneId).normalized() == DateTimeUtils.getZoneId(otherTimeZoneId).normalized())
+      .getOrElse(false)
 }

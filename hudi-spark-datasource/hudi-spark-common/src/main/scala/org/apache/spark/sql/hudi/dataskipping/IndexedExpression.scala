@@ -19,9 +19,9 @@ package org.apache.spark.sql.hudi.dataskipping
 
 import org.apache.hudi.common.model.HoodieIndexDefinition
 import org.apache.hudi.common.util.StringUtils
-import org.apache.hudi.core.index.expression.HoodieExpressionIndex.{DAYS_OPTION, FORMAT_OPTION, IDENTITY_TRANSFORM, LENGTH_OPTION, PATTERN_OPTION, POSITION_OPTION, REGEX_GROUP_INDEX_OPTION, REPLACEMENT_OPTION, TRIM_STRING_OPTION}
+import org.apache.hudi.core.index.expression.HoodieExpressionIndex.{DAYS_OPTION, FORMAT_OPTION, IDENTITY_TRANSFORM, LENGTH_OPTION, PATTERN_OPTION, POSITION_OPTION, REGEX_GROUP_INDEX_OPTION, REPLACEMENT_OPTION, TIME_ZONE_OPTION, TRIM_STRING_OPTION}
 
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, DateAdd, DateFormatClass, DateSub, DayOfMonth, Expression, FromUnixTime, Hour, Length, Literal, Lower, Month, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, UnixTimestamp, Upper, Year}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Cast, DateAdd, DateFormatClass, DateSub, DayOfMonth, Expression, FromUnixTime, Hour, Length, Literal, Lower, Month, ParseToDate, ParseToTimestamp, RegExpExtract, RegExpReplace, StringSplit, StringTrim, StringTrimLeft, StringTrimRight, Substring, TimeZoneAwareExpression, UnixTimestamp, Upper, Year}
 import org.apache.spark.sql.catalyst.util.TimestampFormatter
 import org.apache.spark.sql.types.{AbstractDataType, AnyDataType, DateType, TimestampType}
 
@@ -34,12 +34,16 @@ import scala.collection.JavaConverters._
  * A filter term reads the index only if [[matches]] says it is this expression: the same function, the same
  * options and the same column. Any other term, including the bare column of a non-identity index, has no
  * range in the index, so [[ExpressionIndexSource]] returns none and the file is kept.
+ *
+ * A term whose value depends on the session time zone (for ex `hour` over a timestamp, or the cast Spark adds to
+ * parse a string) also has to be evaluated in the zone the index was computed in. An index without a recorded
+ * zone, created before the zone was recorded, matches no such term.
  */
 case class IndexedExpression(function: String, sourceColumn: String, options: Map[String, String]) {
 
   def matches(term: Expression): Boolean = term.resolved && callOf.lift(term).exists { call =>
     call.function == function && call.optionsMatch && isSource(call)
-  }
+  } && inIndexTimeZone(term)
 
   /** A term read as the call the writer made: which function, on which input, with which options. */
   private case class Call(function: String, input: Expression, inputType: AbstractDataType, optionsMatch: Boolean = true)
@@ -85,6 +89,17 @@ case class IndexedExpression(function: String, sourceColumn: String, options: Ma
     case e: StringSplit =>
       Call("split", e.str, e.inputTypes.head,
         literalEquals(e.limit, Some("-1")) && literalEquals(e.regex, options.get(PATTERN_OPTION)))
+  }
+
+  /** Whether every zone dependent part of the term is evaluated in the index's zone. */
+  private def inIndexTimeZone(term: Expression): Boolean = {
+    val termZones = term.collect {
+      case cast: Cast if Cast.needsTimeZone(cast.child.dataType, cast.dataType) => cast.timeZoneId
+      case e: TimeZoneAwareExpression if !e.isInstanceOf[Cast] => e.timeZoneId
+    }
+    termZones.isEmpty || options.get(TIME_ZONE_OPTION).exists { indexZone =>
+      termZones.forall(_.exists(TimeZones.sameZone(_, indexZone)))
+    }
   }
 
   private def isSourceColumn(column: AttributeReference): Boolean = column.name == sourceColumn
