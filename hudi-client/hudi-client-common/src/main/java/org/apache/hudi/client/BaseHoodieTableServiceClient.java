@@ -58,11 +58,11 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieCompactionConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieClusteringException;
+import org.apache.hudi.exception.HoodieCompactionAlreadyRunningException;
 import org.apache.hudi.exception.HoodieCompactionException;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieHeartbeatException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.exception.HoodieLockException;
 import org.apache.hudi.exception.HoodieLogCompactException;
 import org.apache.hudi.exception.HoodieRollbackException;
 import org.apache.hudi.metadata.HoodieTableMetadata;
@@ -1488,7 +1488,7 @@ public abstract class BaseHoodieTableServiceClient<I, T, O> extends BaseHoodieCl
   private void validateHeartBeat(String instantTime) {
     try {
       if (!this.heartbeatClient.isHeartbeatExpired(instantTime)) {
-        throw new HoodieLockException("Cannot execute instant " + instantTime + " due to heartbeat by concurrent writer/job");
+        throw new HoodieCompactionAlreadyRunningException("Cannot execute instant " + instantTime + " due to heartbeat by concurrent writer/job");
       }
     } catch (IOException e) {
       throw new HoodieHeartbeatException("Error accessing heartbeat of instant to execute " + instantTime, e);
