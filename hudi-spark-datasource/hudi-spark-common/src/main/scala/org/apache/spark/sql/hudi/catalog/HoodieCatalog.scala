@@ -23,7 +23,7 @@ import org.apache.hudi.{DataSourceWriteOptions, SparkAdapterSupport}
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.config.HoodieMetadataConfig
 import org.apache.hudi.common.model.HoodieRecord
-import org.apache.hudi.common.table.HoodieTableMetaClient
+import org.apache.hudi.common.table.{HoodieTableConfig, HoodieTableMetaClient}
 import org.apache.hudi.common.table.view.FileSystemViewManager
 import org.apache.hudi.common.util.ConfigUtils
 import org.apache.hudi.exception.HoodieException
@@ -326,10 +326,12 @@ class HoodieCatalog extends DelegatingCatalogExtension
     val catalogChanges = changes.filter {
       case set: SetProperty =>
         HoodieOptionConfig.mapToTableConfig(set.property, set.value) match {
-          case Some(_) if catalogValue(set.property).contains(set.value) => false
           case Some((tableConfigKey, value)) =>
             val persisted = HoodieOptionConfig.getTableConfigValue(tableConfig, tableConfigKey)
-            if (!persisted.contains(value)) {
+            // An absent partition-fields property denotes an unpartitioned table. Do not infer other write defaults.
+            val emptyPartitionFields = tableConfigKey == HoodieTableConfig.PARTITION_FIELDS.key && persisted.isEmpty && value.isEmpty
+            // Catalog properties may be stale; even an unchanged catalog value must agree with hoodie.properties.
+            if (!persisted.contains(value) && !emptyPartitionFields) {
               throw new HoodieAnalysisException(s"Can't set ${set.property} to '${set.value}' on Hudi table " +
                 s"${table.identifier}: it is persisted in hoodie.properties as $tableConfigKey " +
                 s"(current value: ${persisted.getOrElse("unset")}) and can't be changed by altering the table.")
