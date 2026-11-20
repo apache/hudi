@@ -530,6 +530,176 @@ public class TestPreferWriterConflictResolutionStrategy extends HoodieCommonTest
   }
 
   /**
+   * An ingestion instant its writer moved to INFLIGHT before the write, marked as pending its workload profile (as a writer marks
+   * it when it starts its instant before it knows the files it writes), names no file group yet, like a .requested one. With
+   * {@code hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution} on and its heartbeat active, clustering treats it
+   * as a .requested instant: a conflict, and a TABLE_SERVICE_VS_INGESTION failure.
+   */
+  @Test
+  public void testClusterConflictingWithMarkedInflightIngestionInstantWithActiveHeartbeat() throws Exception {
+    HoodieWriteConfig writeConfig = blockingWriteConfig();
+    createCommit(WriteClientTestUtils.createNewInstantTime(), metaClient);
+    Option<HoodieInstant> lastSuccessfulInstant = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+    String currentWriterInstant = WriteClientTestUtils.createNewInstantTime();
+    createClusterRequested(currentWriterInstant, metaClient);
+    createClusterInflight(currentWriterInstant, metaClient);
+
+    String ingestionInstantTime = WriteClientTestUtils.createNewInstantTime();
+    createInflightCommitPendingWorkloadProfile(ingestionInstantTime);
+    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), (long) (1000 * 60), 5);
+    heartbeatClient.start(ingestionInstantTime);
+
+    HoodieInstant currentInstant =
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, currentWriterInstant);
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
+    try {
+      List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(
+          metaClient, currentInstant, lastSuccessfulInstant, Option.of(writeConfig)).collect(Collectors.toList());
+      Assertions.assertEquals(1, candidateInstants.size());
+      Assertions.assertEquals(ingestionInstantTime, candidateInstants.get(0).requestedTime());
+      Assertions.assertTrue(candidateInstants.get(0).isInflight());
+
+      ConcurrentOperation thisOperation = new ConcurrentOperation(currentInstant, clusteringMetadata());
+      ConcurrentOperation otherOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+      Assertions.assertTrue(otherOperation.isWorkloadProfilePending(), "the writer's marker is read from the inflight file");
+      Assertions.assertTrue(otherOperation.getMutatedPartitionAndFileIds().isEmpty(), "the marked inflight names no file group");
+
+      Assertions.assertTrue(strategy.hasConflict(thisOperation, otherOperation));
+      HoodieWriteConflictException thrown = Assertions.assertThrows(
+          HoodieWriteConflictException.class, () -> strategy.resolveConflict(null, thisOperation, otherOperation));
+      Assertions.assertEquals(HoodieWriteConflictException.ConflictCategory.TABLE_SERVICE_VS_INGESTION, thrown.getCategory().get());
+    } finally {
+      heartbeatClient.stop(ingestionInstantTime);
+      heartbeatClient.close();
+    }
+  }
+
+  /**
+   * A marked INFLIGHT ingestion instant whose writer is gone (no heartbeat) is resolved as upstream resolves an inflight: a
+   * candidate, but no conflict with clustering, since it names no file group.
+   */
+  @Test
+  public void testClusterWithBlockingEnabledAndExpiredHeartbeatMarkedInflight() throws Exception {
+    HoodieWriteConfig writeConfig = blockingWriteConfig();
+    createCommit(WriteClientTestUtils.createNewInstantTime(), metaClient);
+    Option<HoodieInstant> lastSuccessfulInstant = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+    String currentWriterInstant = WriteClientTestUtils.createNewInstantTime();
+    createClusterRequested(currentWriterInstant, metaClient);
+    createClusterInflight(currentWriterInstant, metaClient);
+
+    // a marked inflight left by a writer with no heartbeat (dead)
+    createInflightCommitPendingWorkloadProfile(WriteClientTestUtils.createNewInstantTime());
+
+    HoodieInstant currentInstant =
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, currentWriterInstant);
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(
+        metaClient, currentInstant, lastSuccessfulInstant, Option.of(writeConfig)).collect(Collectors.toList());
+    Assertions.assertEquals(1, candidateInstants.size(), candidateInstants.toString());
+    ConcurrentOperation otherOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    Assertions.assertFalse(strategy.hasConflict(new ConcurrentOperation(currentInstant, clusteringMetadata()), otherOperation));
+  }
+
+  /**
+   * An INFLIGHT ingestion instant with an empty inflight file that its writer did not mark (bulk insert, the row writer and Flink
+   * keep it empty for the whole write) is resolved as upstream resolves it, active heartbeat or not: a candidate, and no conflict
+   * with clustering, since it names no file group.
+   */
+  @Test
+  public void testClusterWithBlockingEnabledDoesNotBlockOnUnmarkedEmptyInflight() throws Exception {
+    HoodieWriteConfig writeConfig = blockingWriteConfig();
+    createCommit(WriteClientTestUtils.createNewInstantTime(), metaClient);
+    Option<HoodieInstant> lastSuccessfulInstant = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+    String currentWriterInstant = WriteClientTestUtils.createNewInstantTime();
+    createClusterRequested(currentWriterInstant, metaClient);
+    createClusterInflight(currentWriterInstant, metaClient);
+
+    String ingestionInstantTime = WriteClientTestUtils.createNewInstantTime();
+    HoodieTestTable.of(metaClient).addInflightCommit(ingestionInstantTime);
+    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), (long) (1000 * 60), 5);
+    heartbeatClient.start(ingestionInstantTime);
+
+    HoodieInstant currentInstant =
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, currentWriterInstant);
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
+    try {
+      List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(
+          metaClient, currentInstant, lastSuccessfulInstant, Option.of(writeConfig)).collect(Collectors.toList());
+      Assertions.assertEquals(1, candidateInstants.size(), candidateInstants.toString());
+      ConcurrentOperation otherOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+      Assertions.assertFalse(otherOperation.isWorkloadProfilePending());
+      Assertions.assertFalse(strategy.hasConflict(new ConcurrentOperation(currentInstant, clusteringMetadata()), otherOperation),
+          "an unmarked empty inflight does not block clustering");
+    } finally {
+      heartbeatClient.stop(ingestionInstantTime);
+      heartbeatClient.close();
+    }
+  }
+
+  /**
+   * Control: an INFLIGHT ingestion instant whose inflight file holds its workload profile is resolved as before, by the file
+   * groups it names: clustering of other file groups does not conflict with it, heartbeat or not.
+   */
+  @Test
+  public void testClusterWithBlockingEnabledResolvesInflightWithWorkloadProfileByFileGroups() throws Exception {
+    HoodieWriteConfig writeConfig = blockingWriteConfig();
+    createCommit(WriteClientTestUtils.createNewInstantTime(), metaClient);
+    Option<HoodieInstant> lastSuccessfulInstant = metaClient.getActiveTimeline().getCommitsTimeline().filterCompletedInstants().lastInstant();
+    String currentWriterInstant = WriteClientTestUtils.createNewInstantTime();
+    createClusterRequested(currentWriterInstant, metaClient);
+    createClusterInflight(currentWriterInstant, metaClient);
+
+    String ingestionInstantTime = WriteClientTestUtils.createNewInstantTime();
+    createInflightCommitWithWorkloadProfile(ingestionInstantTime, "file-not-clustered");
+
+    HoodieInstant currentInstant =
+        INSTANT_GENERATOR.createNewInstant(HoodieInstant.State.INFLIGHT, HoodieTimeline.CLUSTERING_ACTION, currentWriterInstant);
+    PreferWriterConflictResolutionStrategy strategy = new PreferWriterConflictResolutionStrategy();
+    List<HoodieInstant> candidateInstants = strategy.getCandidateInstants(
+        metaClient, currentInstant, lastSuccessfulInstant, Option.of(writeConfig)).collect(Collectors.toList());
+    Assertions.assertEquals(1, candidateInstants.size());
+
+    ConcurrentOperation thisOperation = new ConcurrentOperation(currentInstant, clusteringMetadata());
+    ConcurrentOperation otherOperation = new ConcurrentOperation(candidateInstants.get(0), metaClient);
+    Assertions.assertFalse(otherOperation.getMutatedPartitionAndFileIds().isEmpty());
+    Assertions.assertFalse(otherOperation.isWorkloadProfilePending());
+    Assertions.assertFalse(strategy.hasConflict(thisOperation, otherOperation));
+  }
+
+  private static HoodieReplaceCommitMetadata clusteringMetadata() {
+    HoodieReplaceCommitMetadata clusteringMetadata = new HoodieReplaceCommitMetadata();
+    clusteringMetadata.setOperationType(WriteOperationType.CLUSTER);
+    return clusteringMetadata;
+  }
+
+  /** An INFLIGHT commit whose inflight file carries the writer's pending-workload-profile marker, as such a writer writes it. */
+  private void createInflightCommitPendingWorkloadProfile(String instantTime) throws Exception {
+    HoodieTestTable.of(metaClient).addRequestedCommit(instantTime);
+    metaClient.getActiveTimeline().transitionRequestedToInflight(
+        INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, instantTime),
+        Option.of(ConcurrentOperation.pendingWorkloadProfileMetadata(WriteOperationType.INSERT)));
+  }
+
+  private HoodieWriteConfig blockingWriteConfig() {
+    return HoodieWriteConfig.newBuilder()
+        .withPath(basePath)
+        .withClusteringBlockForPendingIngestion(true)
+        .withHeartbeatIntervalInMs(60 * 1000)
+        .withHeartbeatTolerableMisses(2)
+        .build();
+  }
+
+  /** An INFLIGHT commit whose inflight file holds a workload profile naming {@code fileId}, as a write writes it. */
+  private void createInflightCommitWithWorkloadProfile(String instantTime, String fileId) throws Exception {
+    HoodieTestTable.of(metaClient).addRequestedCommit(instantTime);
+    metaClient.getActiveTimeline().transitionRequestedToInflight(
+        INSTANT_GENERATOR.createNewInstant(State.REQUESTED, HoodieTimeline.COMMIT_ACTION, instantTime),
+        Option.of(createCommitMetadata(instantTime, fileId)));
+  }
+
+  /**
    * Confirms that compaction (non-clustering table service) when write config is provided
    * still picks up inflight ingestion instants as candidates.
    */
