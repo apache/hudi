@@ -28,6 +28,8 @@ import java.nio.file.Files
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
+import scala.jdk.CollectionConverters._
+
 /** Real pipelines CLI against a Connect service in the test JVM, without building a bundle. */
 class TestHoodieSparkConnectPipelines extends FunSuite with BeforeAndAfterAll {
   private val python = sys.env.getOrElse("HUDI_SDP_PYTHON", "python3")
@@ -120,6 +122,74 @@ class TestHoodieSparkConnectPipelines extends FunSuite with BeforeAndAfterAll {
     }
   }
 
+  Seq("cow", "mor").foreach { tableType =>
+    test(s"$tableType streaming full refresh replays all input and resumes without duplicate commits") {
+      withPipeline { (dir, database) =>
+        write(dir, "flows.sql",
+          s"""SET spark.hoodie.datasource.write.operation=insert;
+             |CREATE STREAMING TABLE events USING hudi
+             |TBLPROPERTIES ('type'='$tableType', 'primaryKey'='id', 'preCombineField'='ts')
+             |AS SELECT * FROM STREAM input_events;
+             |""".stripMargin)
+        val oldRows = Seq.fill(2)(Row(1, 1L, "old"))
+        assertSuccess(runPipeline(dir, database))
+        assert(rows(database, "events") == oldRows)
+        write(new File(dir, "input"), "next.json", """{"id":2,"ts":2,"value":"new"}""")
+        assertSuccess(runPipeline(dir, database))
+        val expected = oldRows :+ Row(2, 2L, "new")
+        assert(rows(database, "events") == expected)
+
+        val before = completedCommits(database, "events")
+        val checkpoints = streamingCheckpoints(dir)
+        assert(before.size >= 2, before)
+        assert(checkpoints.size == 1, checkpoints)
+        assertSuccess(runPipeline(dir, database))
+        assert(rows(database, "events") == expected)
+        assert(completedCommits(database, "events") == before)
+        assert(streamingCheckpoints(dir) == checkpoints)
+
+        assertSuccess(runPipeline(dir, database, fullRefresh = true))
+        assert(rows(database, "events") == expected)
+        val refreshed = completedCommits(database, "events")
+        assert(refreshed.nonEmpty && refreshed.intersect(before).isEmpty, refreshed)
+        val freshCheckpoints = streamingCheckpoints(dir).filter { case (path, metadata) =>
+          !checkpoints.get(path).contains(metadata)
+        }
+        assert(freshCheckpoints.size == 1, freshCheckpoints)
+        assert(freshCheckpoints.values.toSet.intersect(checkpoints.values.toSet).isEmpty)
+        freshCheckpoints.keys.foreach { path =>
+          assert(new File(path, "commits/0").isFile, s"Fresh checkpoint did not commit batch 0: $path")
+        }
+        val afterRefresh = streamingCheckpoints(dir)
+        assertSuccess(runPipeline(dir, database))
+        assert(rows(database, "events") == expected)
+        assert(completedCommits(database, "events") == refreshed)
+        assert(streamingCheckpoints(dir) == afterRefresh)
+
+        write(new File(dir, "input"), "after-refresh.json", """{"id":3,"ts":3,"value":"after"}""")
+        assertSuccess(runPipeline(dir, database))
+        assert(rows(database, "events") == (expected :+ Row(3, 3L, "after")))
+        assert(completedCommits(database, "events").size > refreshed.size)
+        assert(streamingCheckpoints(dir) == afterRefresh)
+      }
+    }
+  }
+
+  test("invalid streaming table configuration fails before data commits") {
+    withPipeline { (dir, database) =>
+      write(dir, "flows.sql",
+        """CREATE STREAMING TABLE bad_config USING hudi
+          |TBLPROPERTIES ('type'='cow', 'primaryKey'='missing_key', 'preCombineField'='ts')
+          |AS SELECT * FROM STREAM input_events;
+          |""".stripMargin)
+      val (exit, output) = runPipeline(dir, database)
+      assert(exit != 0, "The missing primary-key column unexpectedly succeeded")
+      assert(output.contains("Can't find primaryKey `missing_key`"), output.takeRight(12000))
+      assert(completedCommits(database, "bad_config").isEmpty)
+      assert(spark.range(3).count() == 3)
+    }
+  }
+
   private def remote: String = s"sc://127.0.0.1:${SparkConnectService.localPort}"
 
   private def withPipeline(f: (File, String) => Unit): Unit = {
@@ -146,7 +216,7 @@ class TestHoodieSparkConnectPipelines extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  private def runPipeline(dir: File, database: String): (Int, String) = {
+  private def runPipeline(dir: File, database: String, fullRefresh: Boolean = false): (Int, String) = {
     def quoted(value: String): String = "'" + value.replace("'", "''") + "'"
     write(dir, "spark-pipeline.yml",
       s"""name: $database
@@ -162,14 +232,36 @@ class TestHoodieSparkConnectPipelines extends FunSuite with BeforeAndAfterAll {
          |  spark.sql.pipelines.maxFlowRetryAttempts: '0'
          |  spark.hoodie.metadata.enable: 'true'
          |""".stripMargin)
+    val run = s"$database-${UUID.randomUUID()}"
     Seq("source.py", "flows.sql", "spark-pipeline.yml").foreach { name =>
-      Files.copy(new File(dir, name).toPath, new File(logs, s"$database-$name").toPath)
+      Files.copy(new File(dir, name).toPath, new File(logs, s"$run-$name").toPath)
     }
     runPython(Seq("-m", "pyspark.pipelines.cli", "run",
-      "--spec", new File(dir, "spark-pipeline.yml").getAbsolutePath), database, 180)
+      "--spec", new File(dir, "spark-pipeline.yml").getAbsolutePath) ++
+      (if (fullRefresh) Seq("--full-refresh-all") else Seq.empty), run, 180)
+  }
+
+  private def completedCommits(database: String, table: String): Set[String] = {
+    val timeline = new File(root, s"warehouse/$database.db/$table/.hoodie/timeline")
+    Option(timeline.listFiles()).toSeq.flatten.map(_.getName)
+      .filter(name => Seq(".commit", ".deltacommit", ".replacecommit").exists(name.endsWith)).toSet
+  }
+
+  private def streamingCheckpoints(dir: File): Map[String, String] = {
+    val paths = Files.walk(new File(dir, "checkpoints").toPath)
+    try {
+      paths.iterator().asScala.filter(path => path.getFileName.toString == "metadata")
+        .filter(Files.isRegularFile(_)).map { path =>
+          path.getParent.toString -> new String(Files.readAllBytes(path), UTF_8)
+        }.toMap
+    } finally {
+      paths.close()
+    }
   }
 
   private def rows(database: String, table: String): Seq[Row] = {
+    // CLI writes use separate Connect sessions; invalidate this verifier's cached file listing.
+    spark.catalog.refreshTable(s"$database.$table")
     spark.table(s"$database.$table").select("id", "ts", "value").orderBy("id", "ts").collect().toSeq
   }
 
