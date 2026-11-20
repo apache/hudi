@@ -32,6 +32,7 @@
 
   <modules>
     <module>hudi-spark-common</module>
+    <module>hudi-spark-dataframe</module>
     <module>hudi-spark</module>
   </modules>
 
