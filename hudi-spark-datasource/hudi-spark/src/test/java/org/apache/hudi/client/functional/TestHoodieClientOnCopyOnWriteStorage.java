@@ -18,6 +18,8 @@
 
 package org.apache.hudi.client.functional;
 
+import org.apache.hudi.DataSourceWriteOptions;
+import org.apache.hudi.HoodieSchemaConversionUtils;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieClusteringPlan;
 import org.apache.hudi.avro.model.HoodieRequestedReplaceMetadata;
@@ -32,6 +34,7 @@ import org.apache.hudi.client.clustering.run.strategy.SparkSingleFileSortExecuti
 import org.apache.hudi.client.clustering.update.strategy.SparkAllowUpdateStrategy;
 import org.apache.hudi.client.clustering.update.strategy.SparkRejectUpdateStrategy;
 import org.apache.hudi.client.heartbeat.HoodieHeartbeatClient;
+import org.apache.hudi.client.transaction.ConcurrentOperation;
 import org.apache.hudi.client.transaction.ConflictResolutionStrategy;
 import org.apache.hudi.client.transaction.FileSystemBasedLockProviderTestClass;
 import org.apache.hudi.client.transaction.PreferWriterConflictResolutionStrategy;
@@ -39,6 +42,9 @@ import org.apache.hudi.client.transaction.SimpleConcurrentFileWritesConflictReso
 import org.apache.hudi.client.validator.SparkPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQueryEqualityPreCommitValidator;
 import org.apache.hudi.client.validator.SqlQuerySingleResultPreCommitValidator;
+import org.apache.hudi.commit.BaseDatasetBulkInsertCommitActionExecutor;
+import org.apache.hudi.commit.DatasetBulkInsertCommitActionExecutor;
+import org.apache.hudi.commit.DatasetBulkInsertOverwriteCommitActionExecutor;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.data.HoodieData;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -51,10 +57,12 @@ import org.apache.hudi.common.model.HoodieFileGroupId;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieRecordPayload;
+import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.model.TableServiceType;
 import org.apache.hudi.common.model.WriteConcurrencyMode;
 import org.apache.hudi.common.model.WriteOperationType;
+import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
@@ -67,6 +75,7 @@ import org.apache.hudi.common.testutils.FileCreateUtilsLegacy;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.testutils.HoodieTestTable;
 import org.apache.hudi.common.util.ClusteringUtils;
+import org.apache.hudi.common.util.CommitUtils;
 import org.apache.hudi.common.util.FileFormatUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.StringUtils;
@@ -82,6 +91,7 @@ import org.apache.hudi.core.transaction.lock.InProcessLockProvider;
 import org.apache.hudi.exception.HoodieClusteringException;
 import org.apache.hudi.exception.HoodieCorruptedDataException;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieInsertException;
 import org.apache.hudi.exception.HoodieUpsertException;
 import org.apache.hudi.exception.HoodieValidationException;
@@ -99,6 +109,7 @@ import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
 import org.apache.hudi.table.action.cluster.ClusteringTestUtils;
 import org.apache.hudi.table.upgrade.SparkUpgradeDowngradeHelper;
+import org.apache.hudi.testutils.DataSourceTestUtils;
 import org.apache.hudi.testutils.HoodieClientTestBase;
 import org.apache.hudi.testutils.HoodieClientTestUtils;
 import org.apache.hudi.testutils.HoodieSparkWriteableTestTable;
@@ -155,6 +166,7 @@ import static org.apache.hudi.testutils.Assertions.assertNoWriteErrors;
 import static org.apache.hudi.testutils.Assertions.assertPartitionMetadata;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -1902,10 +1914,13 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
   /**
    * Verifies that clustering fails with {@link HoodieWriteConflictException} when
    * {@code hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution} is enabled
-   * and an ingestion .requested instant with an active heartbeat exists.
+   * and an ingestion .requested instant with an active heartbeat exists, or an ingestion instant that its writer moved to
+   * INFLIGHT marked as pending its workload profile: clustering cannot commit over the file groups such an instant is about to
+   * write.
    */
-  @Test
-  public void testClusteringFailsOnPendingIngestionRequestedInstant() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  public void testClusteringFailsOnPendingIngestionRequestedInstant(boolean markedInflight) throws Exception {
     Properties properties = createOccProperties();
     HoodieCleanConfig cleanConfig = createCleanConfig(HoodieFailedWritesCleaningPolicy.LAZY, false);
     int numRecords = 200;
@@ -1915,9 +1930,15 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
         buildOccWriteConfig(properties, cleanConfig, new PreferWriterConflictResolutionStrategy()));
     seedTableWithFirstCommit(client, numRecords);
 
-    // Simulate an ingestion writer that has created a .requested commit with an active heartbeat
+    // Simulate an ingestion writer that has created a .requested commit with an active heartbeat; with markedInflight, it has
+    // also moved it to inflight marked as pending its workload profile, so the instant names no file group yet
     String ingestionRequestedTime = WriteClientTestUtils.createNewInstantTime();
     HoodieTestTable.of(metaClient).addRequestedCommit(ingestionRequestedTime);
+    if (markedInflight) {
+      metaClient.getActiveTimeline().transitionRequestedToInflight(
+          metaClient.createNewInstant(HoodieInstant.State.REQUESTED, HoodieTimeline.COMMIT_ACTION, ingestionRequestedTime),
+          Option.of(ConcurrentOperation.pendingWorkloadProfileMetadata(WriteOperationType.INSERT)));
+    }
     HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
         metaClient.getStorage(), metaClient.getBasePath().toString(),
         (long) (1000 * 60), 5);
@@ -1943,6 +1964,46 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
       assertTrue(exception.getCause() instanceof HoodieWriteConflictException);
     } finally {
       heartbeatClient.stop(ingestionRequestedTime);
+      heartbeatClient.close();
+    }
+  }
+
+  /**
+   * An ingestion instant INFLIGHT with an empty inflight file that its writer did not mark (bulk insert, the row writer and Flink
+   * keep it empty for the whole write) does not block clustering with
+   * {@code hoodie.clustering.fail.on.pending.ingestion.during.conflict.resolution} on, heartbeat active or not, as before.
+   */
+  @Test
+  public void testClusteringIsNotBlockedByAnUnmarkedEmptyInflightIngestion() throws Exception {
+    Properties properties = createOccProperties();
+    HoodieCleanConfig cleanConfig = createCleanConfig(HoodieFailedWritesCleaningPolicy.LAZY, false);
+    int numRecords = 200;
+    SparkRDDWriteClient client = getHoodieWriteClient(
+        buildOccWriteConfig(properties, cleanConfig, new PreferWriterConflictResolutionStrategy()));
+    seedTableWithFirstCommit(client, numRecords);
+
+    String ingestionInflightTime = WriteClientTestUtils.createNewInstantTime();
+    HoodieTestTable.of(metaClient).addInflightCommit(ingestionInflightTime);
+    HoodieHeartbeatClient heartbeatClient = new HoodieHeartbeatClient(
+        metaClient.getStorage(), metaClient.getBasePath().toString(), (long) (1000 * 60), 5);
+    heartbeatClient.start(ingestionInflightTime);
+    try {
+      HoodieWriteConfig clusteringWriteConfig = getConfigBuilder()
+          .withCleanConfig(cleanConfig)
+          .withClusteringConfig(createClusteringBuilder(true, 1).build())
+          .withPreCommitValidatorConfig(createPreCommitValidatorConfig(numRecords))
+          .withLockConfig(createLockConfig(new PreferWriterConflictResolutionStrategy()))
+          .withWriteConcurrencyMode(WriteConcurrencyMode.OPTIMISTIC_CONCURRENCY_CONTROL)
+          .withClusteringBlockForPendingIngestion(true)
+          .withProperties(properties)
+          .build();
+      SparkRDDWriteClient<?> clusteringWriteClient = getHoodieWriteClient(clusteringWriteConfig);
+      String clusteringCommitTime = clusteringWriteClient.scheduleClustering(Option.empty()).get();
+      clusteringWriteClient.cluster(clusteringCommitTime, true);
+      assertTrue(metaClient.reloadActiveTimeline().filterCompletedInstants().containsInstant(clusteringCommitTime),
+          "clustering commits over an unmarked empty inflight");
+    } finally {
+      heartbeatClient.stop(ingestionInflightTime);
       heartbeatClient.close();
     }
   }
@@ -2219,5 +2280,110 @@ public class TestHoodieClientOnCopyOnWriteStorage extends HoodieClientTestBase {
     Properties properties = new Properties();
     properties.setProperty("hoodie.datasource.write.row.writer.enable", String.valueOf(false));
     return properties;
+  }
+
+  /**
+   * A generic writer keeps Hudi's same-instant guard: a second bulk insert at an instant the first bulk insert already moved to
+   * INFLIGHT (with an empty inflight file, as bulk insert leaves it) is refused unless the writer opts in.
+   */
+  @Test
+  public void testSecondBulkWriteAtSameInstantRequiresOptIn() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder()
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build()).build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String instant = client.startCommit();
+      JavaRDD<HoodieRecord> first = jsc.parallelize(dataGen.generateInserts(instant, 10), 1);
+      assertNoWriteErrors(client.bulkInsert(first, instant).collect());
+      JavaRDD<HoodieRecord> second = jsc.parallelize(dataGen.generateInserts(instant, 10), 1);
+      Exception refused = assertThrows(Exception.class, () -> client.bulkInsert(second, instant).collect());
+      assertRefusedByTheInflightCreate(refused, COMMIT_ACTION, instant);
+    }
+  }
+
+  /** The control: with the existing explicit opt-in, both bulk inserts at one instant are admitted. */
+  @Test
+  public void testExplicitSameInstantOptInStillAllowsBothBulkWrites() throws Exception {
+    HoodieWriteConfig config = getConfigBuilder()
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withAllowMultiWriteOnSameInstant(true).build();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String instant = client.startCommit();
+      JavaRDD<HoodieRecord> first = jsc.parallelize(dataGen.generateInserts(instant, 10), 1);
+      assertNoWriteErrors(client.bulkInsert(first, instant).collect());
+      JavaRDD<HoodieRecord> second = jsc.parallelize(dataGen.generateInserts(instant, 10), 1);
+      assertNoWriteErrors(client.bulkInsert(second, instant).collect());
+    }
+  }
+
+  private static Stream<Arguments> rowWriterSameInstantArgs() {
+    return Stream.of(
+        Arguments.of(WriteOperationType.BULK_INSERT, false),
+        Arguments.of(WriteOperationType.BULK_INSERT, true),
+        Arguments.of(WriteOperationType.INSERT_OVERWRITE, false),
+        Arguments.of(WriteOperationType.INSERT_OVERWRITE, true));
+  }
+
+  /**
+   * The row-writer bulk insert and insert overwrite executors forward the configured allow-multi-write-on-same-instant to their
+   * requested-to-inflight transition. With the opt-in, they take an instant a writer already moved to INFLIGHT (as the streamer
+   * does before an instant-aware transformer writes for the instant), and the instant commits; without it, they keep Hudi's
+   * refusal of the write-once inflight create, and nothing commits the instant.
+   */
+  @ParameterizedTest
+  @MethodSource("rowWriterSameInstantArgs")
+  public void testRowWriterBulkInsertAtAnInflightInstantHonoursTheSameInstantOptIn(WriteOperationType operation,
+                                                                                  boolean allowMultiWriteOnSameInstant) throws Exception {
+    HoodieSchema schema = DataSourceTestUtils.getStructTypeExampleSchema();
+    Map<String, String> keys = new HashMap<>();
+    keys.put(DataSourceWriteOptions.KEYGENERATOR_CLASS_NAME().key(), "org.apache.hudi.keygen.SimpleKeyGenerator");
+    keys.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "_row_key");
+    keys.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), "partition");
+    HoodieWriteConfig config = getConfigBuilder(schema.toString()).withProps(keys)
+        .withMetadataConfig(HoodieMetadataConfig.newBuilder().enable(false).build())
+        .withAllowMultiWriteOnSameInstant(allowMultiWriteOnSameInstant).build();
+    String action = CommitUtils.getCommitActionType(operation, HoodieTableType.COPY_ON_WRITE);
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String instant = client.startCommit(action);
+      // a writer moves the instant to INFLIGHT, with an empty inflight file, before the row writer writes for it
+      metaClient.reloadActiveTimeline().transitionRequestedToInflight(
+          INSTANT_GENERATOR.createNewInstant(REQUESTED, action, instant), Option.empty());
+      Dataset<Row> rows = sqlContext.createDataFrame(DataSourceTestUtils.generateRandomRows(10),
+          HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(schema));
+      BaseDatasetBulkInsertCommitActionExecutor executor = operation == WriteOperationType.BULK_INSERT
+          ? new DatasetBulkInsertCommitActionExecutor(config, client, instant)
+          : new DatasetBulkInsertOverwriteCommitActionExecutor(config, client, instant);
+
+      if (allowMultiWriteOnSameInstant) {
+        HoodieWriteResult result = executor.execute(rows, true);
+        List<WriteStatus> statuses = result.getWriteStatuses().collect();
+        assertNoWriteErrors(statuses);
+        assertEquals(10, statuses.stream().mapToLong(status -> status.getStat().getNumWrites()).sum());
+        assertTrue(client.commit(instant, jsc.parallelize(statuses, 1), Option.empty(), action,
+            result.getPartitionToReplaceFileIds(), Option.empty()));
+        assertTrue(metaClient.reloadActiveTimeline().getCommitsTimeline().filterCompletedInstants().containsInstant(instant),
+            "the row writer took the inflight instant, and it committed");
+      } else {
+        Exception refused = assertThrows(Exception.class, () -> executor.execute(rows, true));
+        assertRefusedByTheInflightCreate(refused, action, instant);
+      }
+    }
+  }
+
+  /**
+   * {@code refused} is the write-once create of the inflight file of {@code instant} (of {@code action}) refusing a write, and
+   * nothing committed the instant.
+   */
+  private void assertRefusedByTheInflightCreate(Exception refused, String action, String instant) {
+    Throwable cause = refused;
+    while (cause != null && !(cause instanceof HoodieIOException)) {
+      cause = cause.getCause();
+    }
+    assertNotNull(cause, "refused by the write-once create of the instant's inflight file");
+    // the write-once create of the instant's inflight file (ActiveTimelineV2.transitionPendingState) refuses the second write
+    String inflightFile = INSTANT_FILE_NAME_GENERATOR.getFileName(INSTANT_GENERATOR.createNewInstant(INFLIGHT, action, instant));
+    assertTrue(cause.getMessage().endsWith("/" + inflightFile), cause.getMessage());
+    HoodieActiveTimeline timeline = metaClient.reloadActiveTimeline();
+    assertTrue(timeline.filterInflights().containsInstant(instant), "the instant stays the first write's, inflight");
+    assertFalse(timeline.getCommitsTimeline().filterCompletedInstants().containsInstant(instant), "nothing committed it");
   }
 }
