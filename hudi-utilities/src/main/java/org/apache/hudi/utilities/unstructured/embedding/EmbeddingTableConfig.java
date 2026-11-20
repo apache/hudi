@@ -584,8 +584,8 @@ public class EmbeddingTableConfig implements Serializable {
   public static final long DEFAULT_PREP_VIDEO_HEAP_FIXED_BYTES = 64L * 1024 * 1024;
 
   /**
-   * Data prep reads the next file of a task ahead, while the current one is prepared: up to this many of its leading bytes, held
-   * in memory until that file is prepared (a file no larger is read whole, and then prepared with no further storage request).
+   * Data prep caches the next whole out-of-line object when its listed size fits this bound and its preprocessor limits.
+   * Cached bytes avoid another download; source-version checks still send status requests.
    * A task holds at most two such buffers, the current file's and the next one's: a job that preps video reads ahead only when
    * they fit the executor heap beside its frame decodes (2 x this per task slot), else it reads nothing ahead, with a WARN. An
    * image is read ahead only when it is no larger than {@link #PREP_IMAGE_HEADER_MAX_BYTES}. 0 reads no file ahead. Default
@@ -596,13 +596,12 @@ public class EmbeddingTableConfig implements Serializable {
       .defaultValue(8388608L)
       .markAdvanced()
       .sinceVersion(SINCE_1_3_0)
-      .withDocumentation("Data prep reads the next file of a task ahead, while the current one is prepared: up to this many of its "
-          + "leading bytes, held in memory until that file is prepared (a file no larger is read whole, and then prepared with no "
-          + "further storage request). A task holds at most two such buffers, the current file's and the next one's: "
-          + "a job that preps video reads ahead only when they fit the executor heap beside its frame decodes (2 x this per task "
-          + "slot), else it reads nothing ahead, with a WARN. "
-          + "An image is read ahead only when it is no larger than hoodie.unstructured.embedding.prep.image.header.max.bytes. "
-          + "0 reads no file ahead. Default 8388608 (8 MiB). Changes no output rows: not style.");
+      .withDocumentation("Data prep reads the next whole out-of-line object ahead while preparing the current file, when its "
+          + "listed size fits this bound and the preprocessor's input limit. Larger objects and explicit ranges are not cached. "
+          + "An image must also fit hoodie.unstructured.embedding.prep.image.header.max.bytes. "
+          + "A task holds at most two downloaded buffers; a video task disables prefetch when its frame-heap check cannot "
+          + "admit them. Cached bytes avoid another download; source-version validation still sends status requests. "
+          + "0 disables read ahead. Default 8388608 (8 MiB). Changes no output rows: not style.");
 
   public static final long DEFAULT_PREP_PREFETCH_MAX_BYTES = 8L * 1024 * 1024;
 
@@ -1283,6 +1282,16 @@ public class EmbeddingTableConfig implements Serializable {
     return Arrays.stream(value.split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
   }
 
+  /** {@link #PREP_PREFETCH_MAX_BYTES}, in [0, {@link #MAX_PREP_PREFETCH_MAX_BYTES}]. */
+  public long prepPrefetchMaxBytes() {
+    long bytes = longValue(PREP_PREFETCH_MAX_BYTES, DEFAULT_PREP_PREFETCH_MAX_BYTES);
+    if (bytes < 0 || bytes > MAX_PREP_PREFETCH_MAX_BYTES) {
+      throw new IllegalArgumentException("Config " + PREP_PREFETCH_MAX_BYTES.key() + " must be in [0, " + MAX_PREP_PREFETCH_MAX_BYTES
+          + "] but is " + bytes);
+    }
+    return bytes;
+  }
+
   /** {@link #PREP_VIDEO_HEAP_FIXED_BYTES}, at least 0. */
   public long videoHeapFixedBytes() {
     long fixed = longValue(PREP_VIDEO_HEAP_FIXED_BYTES, DEFAULT_PREP_VIDEO_HEAP_FIXED_BYTES);
@@ -1393,14 +1402,5 @@ public class EmbeddingTableConfig implements Serializable {
           + "written");
     }
     return active.get(0);
-  }
-
-  public long prepPrefetchMaxBytes() {
-    long bytes = longValue(PREP_PREFETCH_MAX_BYTES, DEFAULT_PREP_PREFETCH_MAX_BYTES);
-    if (bytes < 0 || bytes > MAX_PREP_PREFETCH_MAX_BYTES) {
-      throw new IllegalArgumentException("Config " + PREP_PREFETCH_MAX_BYTES.key() + " must be in [0, " + MAX_PREP_PREFETCH_MAX_BYTES
-          + "] but is " + bytes);
-    }
-    return bytes;
   }
 }

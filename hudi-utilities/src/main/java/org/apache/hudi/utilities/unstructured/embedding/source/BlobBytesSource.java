@@ -233,6 +233,33 @@ public class BlobBytesSource implements Serializable {
     }, BlobBytesSource::isTransient);
   }
 
+  /** Retains the connector identity observed by checkVersion across a read-ahead cache handoff. */
+  @FunctionalInterface
+  public interface VersionCheck {
+    void check(BlobBytesSource consumer) throws IOException;
+  }
+
+  public synchronized VersionCheck checkedVersionCheck(Row blob) throws IOException {
+    SourceObjectVersion version = checkedVersion;
+    if (version == null) {
+      return consumer -> { };
+    }
+    ParsedBlob parsed = parse(blob);
+    return consumer -> consumer.recheckVersion(version, parsed);
+  }
+
+  private void recheckVersion(SourceObjectVersion version, ParsedBlob parsed) throws IOException {
+    openRetry.call("check cached blob source version " + parsed.path, () -> {
+      HoodieStorage storage = storageFor(parsed.path, parsed.absolute);
+      try {
+        version.recheck(storage);
+        return true;
+      } catch (IOException | RuntimeException failure) {
+        throw notFoundChecked(storage, parsed.path, failure);
+      }
+    }, BlobBytesSource::isTransient);
+  }
+
   private synchronized SourceObjectVersion takeCheckedVersion(StoragePath path) {
     SourceObjectVersion version = checkedVersion;
     checkedVersion = null;

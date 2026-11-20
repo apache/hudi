@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.source;
 
+import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.common.util.Option;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.utilities.unstructured.embedding.image.SeekableBlobImageInputStream;
@@ -28,6 +30,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FilterFileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.sql.Row;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -45,6 +48,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -150,6 +156,19 @@ class TestReadOptimizationFailures {
     invoke(setter, null, unsupported, 1024L);
   }
 
+  @ParameterizedTest
+  @ValueSource(ints = {0, 1, 2})
+  void prefetchPreservesWrappedJvmFailures(int form) throws Exception {
+    LinkageError fatal = new LinkageError("prefetch runtime unavailable");
+    Exception failure = wrapped(fatal, form);
+    assertSame(fatal, assertThrows(LinkageError.class, () -> takePrefetch(failure)));
+  }
+
+  @Test
+  void ordinaryPrefetchIoFailureFallsBack() throws Exception {
+    assertTrue(takePrefetch(new IOException("ordinary speculative read failure")).isEmpty());
+  }
+
   @Test
   void readaheadJvmFailureClosesTheOpenedStream() throws Exception {
     LinkageError fatal = new LinkageError("read-ahead runtime unavailable");
@@ -188,6 +207,32 @@ class TestReadOptimizationFailures {
     Method method = SourceObjectOpener.OpenFileApi.class.getDeclaredMethod("await", CompletableFuture.class, Path.class);
     method.setAccessible(true);
     return invoke(method, null, future, new Path("file:///test/object"));
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Option<byte[]> takePrefetch(Exception failure) throws Exception {
+    BlobBytesSource source = mock(BlobBytesSource.class);
+    when(source.withoutOpenRetry()).thenReturn(source);
+    when(source.open(any(Row.class), eq(1L))).thenThrow(failure);
+    Row row = mock(Row.class);
+    Row blob = mock(Row.class);
+    Row reference = mock(Row.class);
+    when(row.getAs(BlobColumns.SOURCE_MODIFICATION_TIME)).thenReturn(0L);
+    when(row.fieldIndex(BlobColumns.BLOB)).thenReturn(0);
+    when(row.getStruct(0)).thenReturn(blob);
+    when(blob.getAs(HoodieSchema.Blob.TYPE)).thenReturn(HoodieSchema.Blob.OUT_OF_LINE);
+    when(blob.getAs(HoodieSchema.Blob.EXTERNAL_REFERENCE)).thenReturn(reference);
+    Class<?> type = Class.forName("org.apache.hudi.utilities.unstructured.embedding.prep.SourcePrefetcher");
+    Constructor<?> constructor = type.getDeclaredConstructor(BlobBytesSource.class, long.class);
+    constructor.setAccessible(true);
+    try (AutoCloseable prefetch = (AutoCloseable) constructor.newInstance(source, 1024L)) {
+      Method start = type.getDeclaredMethod("start", Row.class, long.class, long.class);
+      Method take = type.getDeclaredMethod("take", Row.class);
+      start.setAccessible(true);
+      take.setAccessible(true);
+      invoke(start, prefetch, row, 1L, 1024L);
+      return (Option<byte[]>) invoke(take, prefetch, row);
+    }
   }
 
   private static Object invoke(Method method, Object receiver, Object... arguments) throws Exception {

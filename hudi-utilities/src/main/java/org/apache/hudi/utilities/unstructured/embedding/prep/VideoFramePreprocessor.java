@@ -230,6 +230,11 @@ public class VideoFramePreprocessor implements FilePreprocessor, AutoCloseable {
   }
 
   @Override
+  public long prefetchLimit(TypedProperties props, Tokenizer tokenizer) {
+    return maxBytes(props);
+  }
+
+  @Override
   public ClosableIterator<Chunk> open(BlobBytesSupplier bytes, FileMeta file, Tokenizer tokenizer, TypedProperties props)
       throws IOException {
     long maxBytes = maxBytes(props);

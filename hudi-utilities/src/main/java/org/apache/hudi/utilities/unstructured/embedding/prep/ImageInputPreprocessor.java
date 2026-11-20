@@ -121,6 +121,11 @@ public class ImageInputPreprocessor implements FilePreprocessor {
   }
 
   @Override
+  public long prefetchLimit(TypedProperties props, Tokenizer tokenizer) {
+    return Math.min(maxBytes(props), headerMaxBytes(props));
+  }
+
+  @Override
   public ClosableIterator<Chunk> open(BlobBytesSupplier bytes, FileMeta file, Tokenizer tokenizer, TypedProperties props)
       throws IOException {
     long maxBytes = maxBytes(props);
