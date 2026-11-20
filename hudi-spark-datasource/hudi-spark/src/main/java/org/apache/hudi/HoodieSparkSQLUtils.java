@@ -22,20 +22,18 @@ import org.apache.hudi.common.util.StringUtils;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.exception.HoodieException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+@Slf4j
 public class HoodieSparkSQLUtils {
-  private static final Logger LOG = LoggerFactory.getLogger(HoodieSparkSQLUtils.class);
-
   /**
    * Returns basepath of Hudi table given the table name.
    *
@@ -91,7 +89,7 @@ public class HoodieSparkSQLUtils {
       String fullTableName = null;
       try {
         fullTableName = tableRow.getString(0) + "." + tableRow.getString(1);
-        LOG.info("Table name {}", fullTableName);
+        log.info("Table name {}", fullTableName);
         List<Row> rows = sparkSession.sql(String.format("desc formatted %s", fullTableName))
             .collectAsList()
             .stream()
@@ -110,7 +108,7 @@ public class HoodieSparkSQLUtils {
           validHoodiePaths.add(Pair.of(fullTableName, basepath));
         }
       } catch (Exception e) {
-        LOG.error("Exception in fetching basepath for table {}", fullTableName, e);
+        log.error("Exception in fetching basepath for table {}", fullTableName, e);
       }
     });
     return validHoodiePaths;
