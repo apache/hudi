@@ -109,6 +109,7 @@ import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.exception.HoodieIndexException;
 import org.apache.hudi.exception.HoodieMetadataException;
 import org.apache.hudi.exception.HoodieNotSupportedException;
+import org.apache.hudi.exception.HoodieSchemaNotFoundException;
 import org.apache.hudi.metadata.model.FileAndPartitionFlag;
 import org.apache.hudi.metadata.model.FileInfo;
 import org.apache.hudi.metadata.model.FileInfoAndPartition;
@@ -1354,6 +1355,10 @@ public class HoodieTableMetadataUtil {
     return value;
   }
 
+  /**
+   * Returns the schema of the table, or empty if none can be resolved from the active timeline, e.g. when the only
+   * completed commit is an empty commit written without a schema.
+   */
   public static Option<HoodieSchema> tryResolveSchemaForTable(HoodieTableMetaClient dataTableMetaClient) {
     if (dataTableMetaClient.getCommitsTimeline().filterCompletedInstants().countInstants() == 0) {
       return Option.empty();
@@ -1361,6 +1366,8 @@ public class HoodieTableMetadataUtil {
     try {
       TableSchemaResolver schemaResolver = new TableSchemaResolver(dataTableMetaClient);
       return Option.of(schemaResolver.getTableSchema());
+    } catch (HoodieSchemaNotFoundException e) {
+      return Option.empty();
     } catch (Exception e) {
       throw new HoodieException("Failed to get latest columns for " + dataTableMetaClient.getBasePath(), e);
     }
