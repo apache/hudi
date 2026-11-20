@@ -29,10 +29,10 @@ import java.util.TreeSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** The chunk record holds exactly the contract's fields. */
-public class TestPdfChunk {
+class TestPdfChunk {
 
   @Test
-  public void fieldSet() {
+  void fieldSet() {
     Set<String> fields = new TreeSet<>();
     for (Field field : PdfChunk.class.getDeclaredFields()) {
       if (!Modifier.isStatic(field.getModifiers())) {

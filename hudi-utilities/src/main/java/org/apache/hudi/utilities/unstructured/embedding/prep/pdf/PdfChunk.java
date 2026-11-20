@@ -40,29 +40,48 @@ public final class PdfChunk {
   private final Status status;
   private final String statusDetail;
 
-  PdfChunk(String sourcePathSha, long chunkId, String text, int tokenCount, String tokenizerId, int wordCount, int overlapChars,
-           int pageStart, int pageEnd, Status status, String statusDetail) {
+  PdfChunk(String sourcePathSha, long chunkId, String text, Measures measures, Status status, String statusDetail) {
     this.sourcePathSha = sourcePathSha;
     this.chunkId = chunkId;
     this.text = text;
-    this.tokenCount = tokenCount;
-    this.tokenizerId = tokenizerId;
-    this.wordCount = wordCount;
+    this.tokenCount = measures.tokenCount;
+    this.tokenizerId = measures.tokenizerId;
+    this.wordCount = measures.wordCount;
     this.charCount = text == null ? 0 : text.length();
-    this.overlapChars = overlapChars;
-    this.pageStart = pageStart;
-    this.pageEnd = pageEnd;
+    this.overlapChars = measures.overlapChars;
+    this.pageStart = measures.pageStart;
+    this.pageEnd = measures.pageEnd;
     this.status = status;
     this.statusDetail = statusDetail;
   }
 
   static PdfChunk marker(String sourcePathSha, String tokenizerId, Status status, String detail) {
-    return new PdfChunk(sourcePathSha, 0L, null, 0, tokenizerId, 0, 0, 0, 0, status, detail);
+    return new PdfChunk(sourcePathSha, 0L, null, new Measures(0, tokenizerId, 0, 0, 0, 0), status, detail);
   }
 
   /** The same chunk carrying {@code detail} (the loss summary of the last OK chunk). */
   PdfChunk withStatusDetail(String detail) {
-    return new PdfChunk(sourcePathSha, chunkId, text, tokenCount, tokenizerId, wordCount, overlapChars, pageStart, pageEnd, status, detail);
+    return new PdfChunk(sourcePathSha, chunkId, text, new Measures(tokenCount, tokenizerId, wordCount, overlapChars, pageStart, pageEnd),
+        status, detail);
+  }
+
+  /** A chunk's token, word and overlap counts (by {@code tokenizerId}) and its first and last page. */
+  static final class Measures {
+    private final int tokenCount;
+    private final String tokenizerId;
+    private final int wordCount;
+    private final int overlapChars;
+    private final int pageStart;
+    private final int pageEnd;
+
+    Measures(int tokenCount, String tokenizerId, int wordCount, int overlapChars, int pageStart, int pageEnd) {
+      this.tokenCount = tokenCount;
+      this.tokenizerId = tokenizerId;
+      this.wordCount = wordCount;
+      this.overlapChars = overlapChars;
+      this.pageStart = pageStart;
+      this.pageEnd = pageEnd;
+    }
   }
 
   public String sourcePathSha() {

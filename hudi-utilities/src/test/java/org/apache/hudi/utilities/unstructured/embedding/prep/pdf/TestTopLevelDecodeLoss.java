@@ -117,7 +117,7 @@ class TestTopLevelDecodeLoss {
     List<PdfChunk> chunks = new ArrayList<>();
     PdfChunkerConfig config = PdfChunkerConfig.from(new TypedProperties(), new WordCountTokenizer());
     try (ClosableIterator<PdfChunk> iterator = new PdfBoxChunker().open(() -> new ByteArrayInputStream(pdf),
-        new PdfFileMeta("top-level-loss", "memory.pdf"), config)) {
+        new PdfFileMeta("top-level-loss", "memory.pdf", pdf.length), config)) {
       iterator.forEachRemaining(chunks::add);
     }
     return chunks;

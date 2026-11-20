@@ -28,8 +28,8 @@ public class PdfFileFailure extends RuntimeException {
 
   /** The text packer's failures for the PDF chunker: {@link PdfFailureCode#INTERNAL} or {@link PdfFailureCode#TOKENIZER_ERROR}. */
   public static final PackFailures PACK_FAILURES = (kind, message, cause) -> {
-    PdfFailureCode code = kind == PackFailures.Kind.INTERNAL ? PdfFailureCode.INTERNAL : PdfFailureCode.TOKENIZER_ERROR;
-    return cause == null ? new PdfFileFailure(code, message) : new PdfFileFailure(code, message, cause);
+    PdfFailureCode failureCode = kind == PackFailures.Kind.INTERNAL ? PdfFailureCode.INTERNAL : PdfFailureCode.TOKENIZER_ERROR;
+    return cause == null ? new PdfFileFailure(failureCode, message) : new PdfFileFailure(failureCode, message, cause);
   };
 
   private final PdfFailureCode code;

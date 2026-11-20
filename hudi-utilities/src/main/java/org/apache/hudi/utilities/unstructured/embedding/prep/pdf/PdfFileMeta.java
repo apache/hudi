@@ -27,14 +27,17 @@ public final class PdfFileMeta implements Serializable {
 
   private final String sourcePathSha;
   private final String sourcePath;
+  private final long fileSize;
 
   /**
    * @param sourcePathSha copied unchanged into every record
    * @param sourcePath used only in log lines
+   * @param fileSize   declared size in bytes, -1 when unknown
    */
-  public PdfFileMeta(String sourcePathSha, String sourcePath) {
+  public PdfFileMeta(String sourcePathSha, String sourcePath, long fileSize) {
     this.sourcePathSha = sourcePathSha;
     this.sourcePath = sourcePath;
+    this.fileSize = fileSize;
   }
 
   public String sourcePathSha() {
@@ -43,5 +46,9 @@ public final class PdfFileMeta implements Serializable {
 
   public String sourcePath() {
     return sourcePath;
+  }
+
+  public long fileSize() {
+    return fileSize;
   }
 }

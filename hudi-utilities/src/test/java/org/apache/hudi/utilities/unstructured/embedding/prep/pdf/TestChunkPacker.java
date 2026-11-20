@@ -49,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The packing rules, the chunk record's span and counts, the tokenizer window rule and the pull rule, on the
  * parser-free {@link ChunkPacker} fed with normalized pages.
  */
-public class TestChunkPacker {
+class TestChunkPacker {
 
   private static final Tokenizer WORDS = new WordCountTokenizer();
   private static final Tokenizer BPE = new OpenAiBpeTokenizer();
@@ -108,8 +108,7 @@ public class TestChunkPacker {
   }
 
   /** Every per-chunk packing and record invariant for one packing run. */
-  static void checkInvariants(List<String> pages, List<PackedChunk> chunks, Tokenizer tokenizer, int maxTokens, int overlap,
-                              int maxWords, int window) {
+  static void checkInvariants(List<PackedChunk> chunks, Tokenizer tokenizer, int maxTokens, int overlap, int maxWords, int window) {
     String stream = ((Packed) chunks).stream.toString();
     StringBuilder covered = new StringBuilder();
     int lastPageStart = 0;
@@ -183,7 +182,7 @@ public class TestChunkPacker {
   // ------------------------------------------------------------------ budgets, coverage, exact slices and records
 
   @Test
-  public void everyChunkFits() {
+  void everyChunkFits() {
     int[][] configs = {{256, 128, 256, 8192}, {64, 0, 256, 8192}, {512, 128, 256, 8192}, {20, 10, 16, 256}};
     for (Tokenizer tokenizer : Arrays.asList(WORDS, BPE)) {
       for (int[] cfg : configs) {
@@ -191,39 +190,39 @@ public class TestChunkPacker {
         for (int round = 0; round < 6; round++) {
           List<String> pages = randomPages(random, 1 + random.nextInt(12), 262_144);
           List<PackedChunk> chunks = pack(packer(tokenizer, cfg[0], cfg[1], cfg[2], cfg[3]), pages, 262_144, cfg[3]);
-          checkInvariants(pages, chunks, tokenizer, cfg[0], cfg[1], cfg[2], cfg[3]);
+          checkInvariants(chunks, tokenizer, cfg[0], cfg[1], cfg[2], cfg[3]);
         }
       }
     }
   }
 
   @Test
-  public void reconstructsNormalizedStream() {
+  void reconstructsNormalizedStream() {
     List<String> pages = randomPages(new Random(7), 20, 262_144);
     pages.add(3, "");                                  // an empty page contributes nothing
     List<PackedChunk> chunks = pack(packer(BPE, 256, 128, 256, 8192), pages, 262_144, 8192);
-    checkInvariants(pages, chunks, BPE, 256, 128, 256, 8192);
+    checkInvariants(chunks, BPE, 256, 128, 256, 8192);
     assertTrue(chunks.size() > 3);
   }
 
   @Test
-  public void chunkTextIsExactSlice() {
+  void chunkTextIsExactSlice() {
     List<String> pages = Arrays.asList("First sentence here.  Second one\n\nnew paragraph.", "Next page text. End");
     List<PackedChunk> chunks = pack(packer(WORDS, 4, 2, 16, 256), pages, 262_144, 256);
-    checkInvariants(pages, chunks, WORDS, 4, 2, 16, 256);
+    checkInvariants(chunks, WORDS, 4, 2, 16, 256);
     assertEquals("First sentence here.  ", chunks.get(0).text(), "nothing is trimmed: the chunk keeps its trailing spaces");
   }
 
   @Test
-  public void overlapPrefixIsPreviousSuffix() {
+  void overlapPrefixIsPreviousSuffix() {
     List<String> pages = randomPages(new Random(11), 8, 262_144);
     List<PackedChunk> chunks = pack(packer(WORDS, 30, 15, 256, 8192), pages, 262_144, 8192);
-    checkInvariants(pages, chunks, WORDS, 30, 15, 256, 8192);
+    checkInvariants(chunks, WORDS, 30, 15, 256, 8192);
     assertTrue(chunks.stream().anyMatch(c -> c.overlapChars() > 0), "the fixture exercises overlaps");
   }
 
   @Test
-  public void countsRecomputeEqual() {
+  void countsRecomputeEqual() {
     List<String> pages = randomPages(new Random(3), 6, 262_144);
     for (PackedChunk chunk : pack(packer(BPE, 64, 32, 256, 8192), pages, 262_144, 8192)) {
       assertEquals(BPE.countTokens(chunk.text()), chunk.tokenCount());
@@ -233,7 +232,7 @@ public class TestChunkPacker {
   // ------------------------------------------------------------------ paragraph and sentence cuts
 
   @Test
-  public void cutsAtParagraphWhenHalfFull() {
+  void cutsAtParagraphWhenHalfFull() {
     String page = words("a", 12, ".") + "\n\n" + words("b", 5, ".") + " " + words("c", 6, ".");
     List<PackedChunk> chunks = pack(packer(WORDS, 20, 0, 256, 256), Collections.singletonList(page), 262_144, 256);
     assertEquals(words("a", 12, ".") + "\n\n", chunks.get(0).text(), "cut at the paragraph: 12 new tokens >= (20 - 0) / 2");
@@ -241,7 +240,7 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void cutsAtSentenceOtherwise() {
+  void cutsAtSentenceOtherwise() {
     String page = words("a", 8, ".") + "\n\n" + words("b", 5, ".") + " " + words("c", 8, ".");
     List<PackedChunk> chunks = pack(packer(WORDS, 20, 0, 256, 256), Collections.singletonList(page), 262_144, 256);
     assertEquals(words("a", 8, ".") + "\n\n" + words("b", 5, ".") + " ", chunks.get(0).text(),
@@ -250,21 +249,21 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void paragraphRightAfterOverlapNotUsed() {
+  void paragraphRightAfterOverlapNotUsed() {
     // chunk 0 ends with a paragraph; its overlap (the last sentence + "\n\n") is followed by short new paragraphs: the
     // cut never falls at the end of the overlap (no new text), and every chunk has new text
     String page = words("a", 6, ".") + " " + words("b", 6, ".") + "\n\n" + words("c", 3, ".") + "\n\n" + words("d", 9, ".")
         + "\n\n" + words("e", 9, ".");
     List<String> pages = Collections.singletonList(page);
     List<PackedChunk> chunks = pack(packer(WORDS, 16, 8, 16, 256), pages, 262_144, 256);
-    checkInvariants(pages, chunks, WORDS, 16, 8, 16, 256);
+    checkInvariants(chunks, WORDS, 16, 8, 16, 256);
     for (PackedChunk chunk : chunks) {
       assertTrue(chunk.text().length() > chunk.overlapChars());
     }
   }
 
   @Test
-  public void jdkSentenceBehaviourRecorded() {
+  void jdkSentenceBehaviourRecorded() {
     String text = "Dr. Smith paid 3.5 USD. Then left.";
     BreakIterator iterator = BreakIterator.getSentenceInstance(Locale.ENGLISH);
     iterator.setText(text);
@@ -278,10 +277,10 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void unfinishedSentenceCarriedAcrossPages() {
+  void unfinishedSentenceCarriedAcrossPages() {
     List<String> pages = Arrays.asList(words("a", 30, ".") + " The quick", "brown fox jumps. " + words("b", 30, "."));
     List<PackedChunk> chunks = pack(packer(WORDS, 40, 0, 256, 256), pages, 262_144, 256);
-    checkInvariants(pages, chunks, WORDS, 40, 0, 256, 256);
+    checkInvariants(chunks, WORDS, 40, 0, 256, 256);
     PackedChunk across = chunks.stream().filter(c -> c.text().contains("The quick brown fox jumps.")).findFirst().orElse(null);
     assertNotNull(across, "the sentence split by the page break stays whole in one chunk");
     assertEquals(1, across.firstMark());
@@ -291,11 +290,11 @@ public class TestChunkPacker {
   // ------------------------------------------------------------------ forced splits
 
   @Test
-  public void giantSentenceSplitAtWords() {
+  void giantSentenceSplitAtWords() {
     List<String> pages = Collections.singletonList(words("w", 1000, ""));
     ChunkPacker packer = packer(WORDS, 50, 0, 256, 8192);
     List<PackedChunk> chunks = pack(packer, pages, 262_144, 8192);
-    checkInvariants(pages, chunks, WORDS, 50, 0, 256, 8192);
+    checkInvariants(chunks, WORDS, 50, 0, 256, 8192);
     assertEquals(20, chunks.size());
     assertTrue(packer.forcedSplits() >= 19);
     for (PackedChunk chunk : chunks) {
@@ -304,14 +303,14 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void giantWordSplitAtCodePoints() {
+  void giantWordSplitAtCodePoints() {
     StringBuilder word = new StringBuilder();
     for (int i = 0; i < 5000; i++) {
       word.append("A\uD83D\uDE00B");  // escaped non-ASCII test data
     }
     List<String> pages = Collections.singletonList(word.toString());
     List<PackedChunk> chunks = pack(packer(BPE, 64, 0, 256, 8192), pages, 262_144, 8192);
-    checkInvariants(pages, chunks, BPE, 64, 0, 256, 8192);
+    checkInvariants(chunks, BPE, 64, 0, 256, 8192);
     for (PackedChunk chunk : chunks) {
       assertFalse(Character.isHighSurrogate(chunk.text().charAt(chunk.text().length() - 1)), "a split inside a surrogate pair");
       assertFalse(Character.isLowSurrogate(chunk.text().charAt(0)));
@@ -319,7 +318,7 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void forcedSplitCounter() {
+  void forcedSplitCounter() {
     StringBuilder word = new StringBuilder();
     for (int i = 0; i < 1000; i++) {
       word.append('x');
@@ -333,14 +332,14 @@ public class TestChunkPacker {
   // ------------------------------------------------------------------ overlap
 
   @Test
-  public void overlapSentenceAligned() {
+  void overlapSentenceAligned() {
     StringBuilder page = new StringBuilder();
     for (int s = 1; s <= 10; s++) {
       page.append(words("s" + s + "w", 4, ".")).append(s < 10 ? " " : "");
     }
     List<String> pages = Collections.singletonList(page.toString());
     List<PackedChunk> chunks = pack(packer(WORDS, 20, 10, 256, 256), pages, 262_144, 256);
-    checkInvariants(pages, chunks, WORDS, 20, 10, 256, 256);
+    checkInvariants(chunks, WORDS, 20, 10, 256, 256);
     // chunk 0 = sentences 1-5 (20 words); the longest sentence-aligned suffix with <= 10 tokens is sentences 4-5
     assertTrue(chunks.get(0).text().startsWith("S1w1") && chunks.get(0).text().endsWith("s5w4. "));
     assertTrue(chunks.get(1).text().startsWith("S4w1 "), chunks.get(1).text());
@@ -348,7 +347,7 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void overlapUsesStreamBoundaries() {
+  void overlapUsesStreamBoundaries() {
     // sentences of at most 6 words: a sentence-aligned overlap within 20 tokens always exists, so every overlap must start
     // right after a sentence end recorded while packing, never at a mere word start
     Random random = new Random(5);
@@ -358,7 +357,7 @@ public class TestChunkPacker {
     }
     List<String> pages = Collections.singletonList(page.toString().trim());
     List<PackedChunk> chunks = pack(packer(WORDS, 40, 20, 256, 8192), pages, 262_144, 8192);
-    checkInvariants(pages, chunks, WORDS, 40, 20, 256, 8192);
+    checkInvariants(chunks, WORDS, 40, 20, 256, 8192);
     String stream = ((Packed) chunks).stream.toString();
     int newStart = 0;
     int overlaps = 0;
@@ -376,7 +375,7 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void pageSpansMatchCharOwnership() {
+  void pageSpansMatchCharOwnership() {
     // oracle: the page owning each stream char (a join space belongs to the page before it); page_start/page_end of every
     // chunk are the owners of its first and last char, across overlaps, forced splits and cuts at a page start
     for (int seed = 0; seed < 300; seed++) {
@@ -400,7 +399,7 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void giantSupplementaryWordSplitAtWindowEdge() {
+  void giantSupplementaryWordSplitAtWindowEdge() {
     // word-count accepts a whole window-long word, and a window of odd length ends between the halves of a pair
     StringBuilder word = new StringBuilder("AAAAAAA");
     for (int i = 0; i < 400; i++) {
@@ -409,7 +408,7 @@ public class TestChunkPacker {
     List<String> pages = Collections.singletonList(word.toString());
     for (int window : new int[] {257, 258, 301}) {
       List<PackedChunk> chunks = pack(packer(WORDS, 256, 0, 256, window), pages, 262_144, window);
-      checkInvariants(pages, chunks, WORDS, 256, 0, 256, window);
+      checkInvariants(chunks, WORDS, 256, 0, 256, window);
       for (PackedChunk chunk : chunks) {
         assertFalse(Character.isHighSurrogate(chunk.text().charAt(chunk.text().length() - 1)), "window " + window);
         assertFalse(Character.isLowSurrogate(chunk.text().charAt(0)), "window " + window);
@@ -418,26 +417,26 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void overlapFallsBackToWords() {
+  void overlapFallsBackToWords() {
     // a 30-word sentence is force-split (chunk 0 = its first 20 words); its remaining 10 words plus a short sentence fit
     // after a 5-token overlap. No sentence boundary lies inside chunk 0, so the overlap is its last 5 whole words.
     List<String> pages = Collections.singletonList(words("w", 30, ".") + " Next short one.");
     List<PackedChunk> chunks = pack(packer(WORDS, 20, 5, 256, 8192), pages, 262_144, 8192);
-    checkInvariants(pages, chunks, WORDS, 20, 5, 256, 8192);
+    checkInvariants(chunks, WORDS, 20, 5, 256, 8192);
     assertEquals(2, chunks.size());
     assertEquals("w16 w17 w18 w19 w20 ", chunks.get(1).text().substring(0, chunks.get(1).overlapChars()));
   }
 
   @Test
-  public void overlapZero() {
+  void overlapZero() {
     List<String> pages = randomPages(new Random(9), 5, 262_144);
     List<PackedChunk> chunks = pack(packer(WORDS, 30, 0, 256, 8192), pages, 262_144, 8192);
-    checkInvariants(pages, chunks, WORDS, 30, 0, 256, 8192);
+    checkInvariants(chunks, WORDS, 30, 0, 256, 8192);
     assertTrue(chunks.stream().allMatch(c -> c.overlapChars() == 0));
   }
 
   @Test
-  public void noOverlapOnlyChunk() {
+  void noOverlapOnlyChunk() {
     for (int seed = 0; seed < 20; seed++) {
       List<String> pages = randomPages(new Random(seed), 3, 262_144);
       for (PackedChunk chunk : pack(packer(WORDS, 16, 8, 16, 256), pages, 262_144, 256)) {
@@ -447,15 +446,15 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void smallMaxTokensDefaultOverlapProgresses() {
+  void smallMaxTokensDefaultOverlapProgresses() {
     List<String> pages = randomPages(new Random(13), 10, 262_144);
     List<PackedChunk> chunks = pack(packer(BPE, 20, 10, 256, 8192), pages, 262_144, 8192);
-    checkInvariants(pages, chunks, BPE, 20, 10, 256, 8192);
+    checkInvariants(chunks, BPE, 20, 10, 256, 8192);
   }
 
   @Test
   @Timeout(120)
-  public void terminatesOnAdversarialInput() {
+  void terminatesOnAdversarialInput() {
     StringBuilder dots = new StringBuilder();
     for (int i = 0; i < 20_000; i++) {
       dots.append(". ");
@@ -473,7 +472,7 @@ public class TestChunkPacker {
     for (List<String> pages : inputs) {
       for (Tokenizer tokenizer : Arrays.asList(WORDS, BPE)) {
         List<PackedChunk> chunks = pack(packer(tokenizer, 16, 8, 16, 256), pages, 262_144, 256);
-        checkInvariants(pages, chunks, tokenizer, 16, 8, 16, 256);
+        checkInvariants(chunks, tokenizer, 16, 8, 16, 256);
       }
     }
   }
@@ -481,7 +480,7 @@ public class TestChunkPacker {
   // ------------------------------------------------------------------ tokenizer window and pull bound
 
   @Test
-  public void neverCalledAboveWindow() {
+  void neverCalledAboveWindow() {
     AtomicInteger longest = new AtomicInteger();
     Tokenizer spy = new Tokenizer() {
       @Override
@@ -517,7 +516,7 @@ public class TestChunkPacker {
   }
 
   @Test
-  public void zeroPrefixTestDoubleFailsFile() {
+  void zeroPrefixTestDoubleFailsFile() {
     Tokenizer nothingFits = new Tokenizer() {
       @Override
       public int countTokens(String text) {
@@ -534,8 +533,9 @@ public class TestChunkPacker {
         return TokenUnit.MODEL_TOKENS;
       }
     };
-    PdfFileFailure failure = assertThrows(PdfFileFailure.class,
-        () -> pack(packer(nothingFits, 16, 0, 256, 256), Collections.singletonList("Hello world."), 262_144, 256));
+    ChunkPacker packer = packer(nothingFits, 16, 0, 256, 256);
+    List<String> pages = Collections.singletonList("Hello world.");
+    PdfFileFailure failure = assertThrows(PdfFileFailure.class, () -> pack(packer, pages, 262_144, 256));
     assertEquals(PdfFailureCode.TOKENIZER_ERROR, failure.code());
   }
 

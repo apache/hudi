@@ -23,13 +23,13 @@ import java.io.IOException;
 
 /**
  * The parser seam of the chunker: extracts one page at a time. Everything above it (normalization, packing, records,
- * error isolation) is parser-free; the in-JVM PDFBox implementation
+ * error isolation) is parser-free and bounded by config; the in-JVM PDFBox implementation
  * ({@link PdfBoxPageSource}) can be replaced by an out-of-process one without any caller
  * change.
  *
  * <p>{@link #open()} and {@link #next()} signal a file-level failure with {@link PdfFileFailure}. Any other exception (or
- * {@link StackOverflowError}) thrown by {@link #next()} fails only that page ({@code PAGE_ERROR}): the source has already
- * moved past it.
+ * {@link StackOverflowError}) thrown by {@link #next()} fails only that page: the source has already moved past it, and
+ * a {@link PageFailure} names the page-level code.
  */
 public interface PageSource extends Closeable {
 
@@ -39,7 +39,7 @@ public interface PageSource extends Closeable {
   /** Whether another page exists, without extracting it. */
   boolean hasMorePages();
 
-  /** Extracts the next page. */
+  /** Extracts the next page; its text is at most {@code max.page.chars} chars. */
   PageText next() throws IOException;
 
   /** Bytes staged to local disk for this file. */

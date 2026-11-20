@@ -26,6 +26,7 @@ import org.apache.pdfbox.io.RandomAccessStreamCache;
 import org.apache.pdfbox.io.RandomAccessStreamCache.StreamCacheCreateFunction;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The stream cache PDFBox keeps its scratch data in while it loads and extracts a PDF (the decrypted copy of every stream of
@@ -38,8 +39,8 @@ import java.io.IOException;
  *       PDFBox's document cannot swallow it and fall back to an unbounded heap cache, as it does for an {@link IOException};</li>
  *   <li>an {@link IOException} a cache buffer raises from beneath PDFBox (the JDK's file I/O: its top stack frame is outside
  *       PDFBox) is the local disk: {@link PrepPlatformException};</li>
- *   <li>an {@link IOException} PDFBox raises itself (e.g. a closed buffer) passes through unchanged and stays the file's
- *       failure.</li>
+ *   <li>an {@link IOException} PDFBox raises itself (its storage cap, a page past the cap or a closed buffer) passes through
+ *       unchanged: the cap is reached by what the file asks PDFBox to keep, and stays the file's failure.</li>
  * </ul>
  * The first platform failure is kept ({@link #failure()}), so the caller can fail the round even where PDFBox catches the
  * exception on its way out.
@@ -47,9 +48,11 @@ import java.io.IOException;
 final class PdfBoxScratchCache implements StreamCacheCreateFunction {
 
   private static final String PDFBOX_PACKAGE = "org.apache.pdfbox.";
+  private static final String WRITE_FAILED = "writing PDFBox's scratch failed";
+  private static final String READ_FAILED = "reading PDFBox's scratch failed";
 
   private final StreamCacheCreateFunction delegate;
-  private volatile PrepPlatformException failure;
+  private final AtomicReference<PrepPlatformException> failure = new AtomicReference<>();
 
   /** @param delegate PDFBox's own scratch cache, whose failures this one classifies */
   PdfBoxScratchCache(StreamCacheCreateFunction delegate) {
@@ -58,7 +61,7 @@ final class PdfBoxScratchCache implements StreamCacheCreateFunction {
 
   /** The first local disk failure met by the cache, or null. */
   PrepPlatformException failure() {
-    return failure;
+    return failure.get();
   }
 
   @Override
@@ -67,86 +70,93 @@ final class PdfBoxScratchCache implements StreamCacheCreateFunction {
     try {
       cache = delegate.create();
     } catch (IOException | RuntimeException e) {
-      throw record("cannot create PDFBox's scratch cache", e);
+      throw recordFailure("cannot create PDFBox's scratch cache", e);
     }
-    return new RandomAccessStreamCache() {
-      @Override
-      public RandomAccess createBuffer() throws IOException {
-        try {
-          return new Buffer(cache.createBuffer());
-        } catch (IOException e) {
-          throw classify("creating a PDFBox scratch buffer failed", e);
-        }
-      }
+    return new ClassifyingCache(cache);
+  }
 
-      @Override
-      public void close() throws IOException {
-        cache.close();
+  /** Owns {@code cache}: its buffers classify their failures, and closing it closes {@code cache}. */
+  private final class ClassifyingCache implements RandomAccessStreamCache {
+    private final RandomAccessStreamCache cache;
+
+    ClassifyingCache(RandomAccessStreamCache cache) {
+      this.cache = cache;
+    }
+
+    @Override
+    public RandomAccess createBuffer() throws IOException {
+      try {
+        return new Buffer(cache.createBuffer());
+      } catch (IOException e) {
+        throw classify("creating a PDFBox scratch buffer failed", e);
       }
-    };
+    }
+
+    @Override
+    public void close() throws IOException {
+      cache.close();
+    }
   }
 
   /**
    * Returns {@code e} for the caller to rethrow when PDFBox raised it itself; throws it as the recorded platform failure when it
    * came from beneath PDFBox. An exception with no stack trace cannot be told apart, and is the platform's; a JVM
-   * run with stack traces switched off ({@code -XX:-StackTraceInThrowable}) would so turn PDFBox's own IOExceptions into a
-   * platform failure, and is not supported.
+   * run with stack traces switched off ({@code -XX:-StackTraceInThrowable}) would so turn PDFBox's own cap into a platform
+   * failure, and is not supported.
    */
   private IOException classify(String message, IOException e) {
     StackTraceElement[] trace = e.getStackTrace();
     if (trace.length > 0 && trace[0].getClassName().startsWith(PDFBOX_PACKAGE)) {
       return e;
     }
-    throw record(message, e);
+    throw recordFailure(message, e);
   }
 
-  private PrepPlatformException record(String message, Throwable cause) {
+  private PrepPlatformException recordFailure(String message, Throwable cause) {
     PrepPlatformException platform = new PrepPlatformException("PDF chunker local scratch disk: " + message, cause);
-    if (failure == null) {
-      failure = platform;
-    }
+    failure.compareAndSet(null, platform);
     return platform;
   }
 
   /** One cache buffer, every I/O failure classified. */
   private final class Buffer implements RandomAccess {
-    private final RandomAccess buffer;
+    private final RandomAccess access;
 
-    Buffer(RandomAccess buffer) {
-      this.buffer = buffer;
+    Buffer(RandomAccess access) {
+      this.access = access;
     }
 
     @Override
     public void write(int b) throws IOException {
       try {
-        buffer.write(b);
+        access.write(b);
       } catch (IOException e) {
-        throw classify("writing PDFBox's scratch failed", e);
+        throw classify(WRITE_FAILED, e);
       }
     }
 
     @Override
     public void write(byte[] b) throws IOException {
       try {
-        buffer.write(b);
+        access.write(b);
       } catch (IOException e) {
-        throw classify("writing PDFBox's scratch failed", e);
+        throw classify(WRITE_FAILED, e);
       }
     }
 
     @Override
     public void write(byte[] b, int offset, int length) throws IOException {
       try {
-        buffer.write(b, offset, length);
+        access.write(b, offset, length);
       } catch (IOException e) {
-        throw classify("writing PDFBox's scratch failed", e);
+        throw classify(WRITE_FAILED, e);
       }
     }
 
     @Override
     public void clear() throws IOException {
       try {
-        buffer.clear();
+        access.clear();
       } catch (IOException e) {
         throw classify("clearing PDFBox's scratch failed", e);
       }
@@ -155,34 +165,34 @@ final class PdfBoxScratchCache implements StreamCacheCreateFunction {
     @Override
     public int read() throws IOException {
       try {
-        return buffer.read();
+        return access.read();
       } catch (IOException e) {
-        throw classify("reading PDFBox's scratch failed", e);
+        throw classify(READ_FAILED, e);
       }
     }
 
     @Override
     public int read(byte[] b, int offset, int length) throws IOException {
       try {
-        return buffer.read(b, offset, length);
+        return access.read(b, offset, length);
       } catch (IOException e) {
-        throw classify("reading PDFBox's scratch failed", e);
+        throw classify(READ_FAILED, e);
       }
     }
 
     @Override
     public long getPosition() throws IOException {
       try {
-        return buffer.getPosition();
+        return access.getPosition();
       } catch (IOException e) {
-        throw classify("reading PDFBox's scratch failed", e);
+        throw classify(READ_FAILED, e);
       }
     }
 
     @Override
     public void seek(long position) throws IOException {
       try {
-        buffer.seek(position);
+        access.seek(position);
       } catch (IOException e) {
         throw classify("seeking in PDFBox's scratch failed", e);
       }
@@ -191,39 +201,39 @@ final class PdfBoxScratchCache implements StreamCacheCreateFunction {
     @Override
     public long length() throws IOException {
       try {
-        return buffer.length();
+        return access.length();
       } catch (IOException e) {
-        throw classify("reading PDFBox's scratch failed", e);
+        throw classify(READ_FAILED, e);
       }
     }
 
     @Override
     public boolean isClosed() {
-      return buffer.isClosed();
+      return access.isClosed();
     }
 
     @Override
     public boolean isEOF() throws IOException {
       try {
-        return buffer.isEOF();
+        return access.isEOF();
       } catch (IOException e) {
-        throw classify("reading PDFBox's scratch failed", e);
+        throw classify(READ_FAILED, e);
       }
     }
 
     @Override
     public RandomAccessReadView createView(long startPosition, long streamLength) throws IOException {
       try {
-        return buffer.createView(startPosition, streamLength);
+        return access.createView(startPosition, streamLength);
       } catch (IOException e) {
-        throw classify("reading PDFBox's scratch failed", e);
+        throw classify(READ_FAILED, e);
       }
     }
 
     @Override
     public void close() throws IOException {
       try {
-        buffer.close();
+        access.close();
       } catch (IOException e) {
         throw classify("closing PDFBox's scratch failed", e);
       }

@@ -23,7 +23,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The production {@link PdfChunker}: the parser-free iterator over a {@link PageSource}; by default the in-JVM PDFBox
- * source. Stateless and reusable across files.
+ * source with its best-effort guard. Stateless and reusable across files.
  */
 public class PdfBoxChunker implements PdfChunker {
 
@@ -31,7 +31,7 @@ public class PdfBoxChunker implements PdfChunker {
 
   private final PageSourceFactory pageSources;
 
-  /** The in-JVM PDFBox chunker. */
+  /** The in-JVM PDFBox chunker, with the best-effort guard. */
   public PdfBoxChunker() {
     this(PdfBoxPageSource::new);
   }

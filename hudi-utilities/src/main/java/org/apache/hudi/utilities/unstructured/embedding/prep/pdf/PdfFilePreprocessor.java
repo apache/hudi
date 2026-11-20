@@ -103,7 +103,8 @@ public class PdfFilePreprocessor implements FilePreprocessor {
       // invalid props are the job's configuration error: the round fails instead of every file being quarantined
       throw new PreprocessorConfigurationException(e.getMessage(), e);
     }
-    ClosableIterator<PdfChunk> chunks = chunker.open(bytes::open, new PdfFileMeta(file.getSourcePathSha(), logPath), cfg);
+    ClosableIterator<PdfChunk> chunks = chunker.open(bytes::open, new PdfFileMeta(file.getSourcePathSha(), logPath,
+        file.getFileSize()), cfg);
     return new ChunkAdapter(chunks);
   }
 
