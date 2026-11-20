@@ -1,0 +1,3 @@
+source_path_sha	source_modification_time	source_file_size	modality	chunk_id	text	stage	error_class
+source	1234	1	text	0	a		
+source	1234	1				prep	BlobSourceChangedException

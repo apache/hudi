@@ -1,0 +1,8 @@
+# Reference words of /video/h264-aac-speech-12s.mp4: 12 s of the LibriVox reading of "The Selfish Giant" (Oscar Wilde, read by
+# Joy Chan, https://archive.org/download/hpot_librivox/hpot_03_selfish_giant.mp3, public domain), the passage the committed
+# base.en transcript (audio/transcript/selfish-giant-whisper-base-en.txt, segment 2, 60.0 s to 70.9 s) places in the clip.
+# Source: Project Gutenberg eBook #902, "The Happy Prince, and Other Tales", https://www.gutenberg.org/cache/epub/902/pg902.txt
+# (sha256 77ae1b3c7be77aea82b1f935e531e53f4df43db572cbc14af39d6cd0d5ba50da), lines 772-775, verbatim from "He had been" to
+# "was limited." Public domain in the USA.
+He had been to visit his friend the Cornish ogre, and had stayed with him for seven years. After the seven years
+were over he had said all that he had to say, for his conversation was limited.
