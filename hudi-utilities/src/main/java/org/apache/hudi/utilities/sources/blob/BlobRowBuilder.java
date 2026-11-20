@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
@@ -29,7 +30,6 @@ import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StoragePathInfo;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
-import org.apache.hudi.utilities.unstructured.SourceCauses;
 import org.apache.hudi.utilities.unstructured.embedding.source.SourceFailures;
 import org.apache.hudi.utilities.unstructured.storage.StorageReferenceRules;
 
@@ -145,7 +145,7 @@ public class BlobRowBuilder implements Serializable {
 
   private boolean isConfirmedMissing(StoragePath path, IOException failure) {
     if (SourceFailures.isCausedByAccessDenial(failure)
-        || !SourceCauses.isCausedBy(failure, FileNotFoundException.class)) {
+        || !ExceptionUtil.isCausedBy(failure, FileNotFoundException.class)) {
       return false;
     }
     try {

@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.unstructured.retry;
 
+import org.apache.hudi.exception.ExceptionUtil;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,7 +33,7 @@ import java.util.function.Predicate;
 /**
  * The in-commit retry of a transient failure: a step that fails with a failure its stage calls
  * transient is tried again, up to {@code maxAttempts} tries in all, waiting {@code backoffMs} before the second try and doubling
- * each later wait up to {@link #MAX_BACKOFF_MS}. When the last try fails too, its failure propagates, the first try's failure
+ * each later wait up to the configured maximum ({@link #MAX_BACKOFF_MS} by default). When the last try fails too, its failure propagates, the first try's failure
  * attached as suppressed: the stage fails the round, nothing is committed, and the next run resumes from the same checkpoint. A failure that
  * is not transient (bad input, a platform failure such as a 403) propagates at once, and so does an interruption (the thread's
  * interrupt flag set, or an InterruptedIOException that is not a SocketTimeoutException / a ClosedByInterruptException in the
@@ -49,6 +51,7 @@ public final class TransientRetry implements Serializable {
 
   private final int maxAttempts;
   private final long backoffMs;
+  private final long maxBackoffMs;
 
   /**
    * @param maxAttempts tries in all, at least 1
@@ -56,12 +59,21 @@ public final class TransientRetry implements Serializable {
    * @throws IllegalArgumentException for a value out of range
    */
   public TransientRetry(int maxAttempts, long backoffMs) {
+    this(maxAttempts, backoffMs, MAX_BACKOFF_MS);
+  }
+
+  /** A retry policy with a caller-selected cap on one wait; all times must be nonnegative. */
+  public TransientRetry(int maxAttempts, long backoffMs, long maxBackoffMs) {
     if (maxAttempts < 1) {
       throw new IllegalArgumentException("A retry needs at least one attempt, got " + maxAttempts);
     }
     if (backoffMs < 0) {
       throw new IllegalArgumentException("A retry backoff must not be negative, got " + backoffMs);
     }
+    if (maxBackoffMs < 0) {
+      throw new IllegalArgumentException("A retry maximum backoff must not be negative, got " + maxBackoffMs);
+    }
+    this.maxBackoffMs = maxBackoffMs;
     this.maxAttempts = maxAttempts;
     this.backoffMs = backoffMs;
   }
@@ -106,7 +118,7 @@ public final class TransientRetry implements Serializable {
     if (Thread.currentThread().isInterrupted()) {
       return true;
     }
-    for (Throwable cause = failure; cause != null; cause = cause.getCause() == cause ? null : cause.getCause()) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       // a SocketTimeoutException (and Hadoop's ConnectTimeoutException, S3A's AWSApiCallTimeoutException) is an
       // InterruptedIOException by type but a timed-out request, so transient and retried
       boolean interruptedIo = cause instanceof InterruptedIOException && !(cause instanceof SocketTimeoutException);
@@ -118,9 +130,9 @@ public final class TransientRetry implements Serializable {
   }
 
   /** The wait before try {@code attempt} (2 or more): {@link #backoffMs} doubled per earlier retry, capped. */
-  long waitBefore(int attempt) {
+  public long waitBefore(int attempt) {
     double wait = backoffMs * Math.pow(2, attempt - 2);
-    return (long) Math.min(MAX_BACKOFF_MS, wait);
+    return (long) Math.min(maxBackoffMs, wait);
   }
 
   private static void sleep(long millis, String what) throws InterruptedIOException {

@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.unstructured.embedding.video;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImageContentTypes;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImageRefusedException;
@@ -998,7 +998,7 @@ public class JcodecKeyframeVideoFrameSource implements FrameExtractionStrategy {
      * the round), anything else is the video's data, refused with the way out.
      */
     private RuntimeException failure(String what, Exception cause) {
-      for (Throwable each : SourceCauses.getCauses(cause)) {
+      for (Throwable each : ExceptionUtil.getCauses(cause)) {
         if (each instanceof BlobReadException) {
           return new UncheckedIOException(VIDEO_PREFIX + video + " " + what + ": storage failure", (BlobReadException) each);
         }

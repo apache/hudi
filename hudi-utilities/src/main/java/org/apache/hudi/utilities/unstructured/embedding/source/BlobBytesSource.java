@@ -20,12 +20,12 @@ package org.apache.hudi.utilities.unstructured.embedding.source;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.util.HoodieStorageUtils;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.io.SeekableDataInputStream;
 import org.apache.hudi.storage.HoodieStorage;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.storage.StorageSchemes;
-import org.apache.hudi.utilities.unstructured.SourceCauses;
 import org.apache.hudi.utilities.unstructured.retry.TransientRetry;
 import org.apache.hudi.utilities.unstructured.storage.StorageReferenceRules;
 
@@ -165,7 +165,7 @@ public class BlobBytesSource implements Serializable {
       return false;
     }
     boolean storageFailure = false;
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (SourceFailures.isAccessDenial(cause) || cause instanceof UnsupportedFileSystemException
           || cause instanceof ClassNotFoundException || cause instanceof NoClassDefFoundError) {
         // a 403 / KMS denial (S3A or the GCS connector), an HDFS permission check or a missing file system: a platform failure,
@@ -464,14 +464,14 @@ public class BlobBytesSource implements Serializable {
    * absence either, so that failure becomes a plain storage failure.
    */
   private static Exception notFoundCheckedImpl(HoodieStorage storage, StoragePath path, Exception failure) {
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if ("org.apache.hadoop.fs.s3a.RemoteFileChangedException".equals(cause.getClass().getName())) {
         BlobSourceChangedException changed = new BlobSourceChangedException("Source object " + path + " changed during its pinned read");
         changed.initCause(failure);
         return changed;
       }
     }
-    if (!SourceCauses.isCausedBy(failure, FileNotFoundException.class)) {
+    if (!ExceptionUtil.isCausedBy(failure, FileNotFoundException.class)) {
       return failure;
     }
     boolean present;
@@ -611,7 +611,7 @@ public class BlobBytesSource implements Serializable {
   /** Construction can reject an authority before any read; I/O failures at open/read never use this rule. */
   private boolean isMalformedStorageReference(StoragePath path, RuntimeException failure) {
     URI uri = path.toUri();
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (cause instanceof UnsupportedFileSystemException) {
         // a scheme this deployment serves whose file system is missing is a platform fault (a connector jar absent on
         // the executor), never the reference's; a scheme outside that set is the reference's own fault

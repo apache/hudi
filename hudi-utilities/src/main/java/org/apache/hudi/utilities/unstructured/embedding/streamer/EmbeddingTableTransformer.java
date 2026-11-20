@@ -19,7 +19,6 @@
 package org.apache.hudi.utilities.unstructured.embedding.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
-import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
@@ -56,7 +55,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -130,7 +128,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
   }
 
   /**
-   * The schema of the rows a round writes ({@link #roundSchema} on the table as it is), with {@code _corrupt_record} while the
+   * The schema of the rows a round writes ({@link EmbeddingTableSchema#roundSchema} on the table as it is), with {@code _corrupt_record} while the
    * error table is on. Reads the table's latest writer schema only: no Spark job and no model call.
    */
   @Override
@@ -276,21 +274,21 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
    *     empty
    */
   static Option<EmbeddingModelSpec> checkRound(EmbeddingTableConfig config, SparkSession spark, Option<StructType> table) {
-    Option<EmbeddingModelSpec> model = checkJob(config);
+    Option<EmbeddingModelSpec> model = config.computes() ? Option.of(config.activeModel()) : Option.empty();
     if (model.isPresent() && table.isPresent()) {
       checkModelColumnMatchesTable(model.get(), config.targetTablePath(), table.get());
     }
+    // Sources without a startup contract still validate properties before any preparation.
+    checkJob(config);
     PrepRound.checkNoSpeculation(spark.sparkContext().getConf());
     PreprocessorRegistry registry = new PreprocessorRegistry(config.getProps());
     try {
       if (registry.storesInputs(config)) {
-        // the input store's inline threshold against the per-task heap ceiling, before any Spark work
         EmbeddingInputConfig.checkOnDriver(config.getProps(), spark.sparkContext().getConf());
         OutOfLineWriter.checkTimelineServerMarkers(HadoopFSUtils.getStorageConf(spark.sparkContext().hadoopConfiguration()),
             config.targetTablePath(), config.getProps());
       }
       if (VideoFrameHeapCheck.prepsVideo(config, registry)) {
-        // the executor heap must hold the frame decodes of a video: refused before any Spark work
         VideoFrameHeapCheck.check(config, spark.sparkContext().getConf());
       }
     } finally {
@@ -299,13 +297,12 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     return model;
   }
 
-  /** Checks property-only mode, model and preprocessor settings before source or table construction. */
+  /** Checks property-only mode, model and preprocessor settings before the source or table is built. */
   public static Option<EmbeddingModelSpec> checkJob(EmbeddingTableConfig config) {
     TypedProperties props = config.getProps();
     Option<EmbeddingModelSpec> model = Option.empty();
     if (config.computes()) {
       model = Option.of(activeModel(config));
-
       // the declared modalities: set, sendable by the model's client, within a known model's
       ModelModalityChecks.checkDeclaration(model.get());
       // the model's client must load on the driver, so a misconfigured model fails the round before any Spark work
@@ -319,7 +316,6 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
     } else {
       checkNoModelOrComputeSettings(config);
     }
-
     PreprocessorRegistry registry = new PreprocessorRegistry(props);
     try {
       PrepRound.checkPrepFileExtensions(config, registry);
@@ -330,7 +326,6 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
       }
       EmbeddingInputConfig.inlineMaxBytes(props);
       EmbeddingInputConfig.inlineMaxHeapFraction(props);
-
     } finally {
       registry.close();
     }
@@ -345,14 +340,7 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
    * @throws IllegalArgumentException when not exactly one model is active
    */
   static EmbeddingModelSpec activeModel(EmbeddingTableConfig config) {
-    List<EmbeddingModelSpec> active = config.activeModels();
-    if (active.size() != 1) {
-      throw new IllegalArgumentException("The embedding job fills one model column, but "
-          + active.stream().map(EmbeddingModelSpec::getName).collect(Collectors.toList()) + " are active; declare one model in "
-          + EmbeddingTableConfig.MODELS.key() + " or set " + EmbeddingTableConfig.ACTIVE_MODELS.key() + " to one of them. Nothing was "
-          + "written");
-    }
-    return active.get(0);
+    return config.activeModel();
   }
 
   /**
@@ -378,48 +366,6 @@ public class EmbeddingTableTransformer implements InstantAwareTransformer {
   private static boolean isModelOrComputeKey(String key) {
     return key.equals(EmbeddingTableConfig.MODELS.key()) || key.equals(EmbeddingTableConfig.ACTIVE_MODELS.key())
         || key.startsWith(EmbeddingTableConfig.MODEL_PREFIX) || key.startsWith(COMPUTE_PREFIX);
-  }
-
-  /**
-   * The schema of the rows a round of {@code config} writes on the table whose latest writer schema is {@code table} (empty for a
-   * new table): {@link #outputSchema} with the active model under {@code prep_and_compute}, none under {@code prep_only}.
-   */
-  public static StructType roundSchema(EmbeddingTableConfig config, Option<StructType> table) {
-    return outputSchema(config, table, config.computes() ? Option.of(activeModel(config)) : Option.empty());
-  }
-
-  /**
-   * The schema of the rows the round writes: the latest writer schema of an existing table ({@code table}) without its meta
-   * fields, every column beyond the base ones nullable (prep writes null in a column it does not make), with the nullable
-   * prepared-image BLOB column added when missing and the active model's VECTOR column added under
-   * {@code prep_and_compute} when the table does not have it yet; else the configuration's
-   * ({@link EmbeddingTableSchema#build}).
-   */
-  static StructType outputSchema(EmbeddingTableConfig config, Option<StructType> table, Option<EmbeddingModelSpec> model) {
-    if (!table.isPresent()) {
-      return EmbeddingTableSchema.build(config);
-    }
-    StructType existing = table.get();
-    // Preserve nullable-image evolution for tables created before image preparation.
-    if (Arrays.stream(existing.fields()).noneMatch(field -> field.name().equalsIgnoreCase(EmbeddingTableSchema.PREPARED_IMAGE))) {
-      existing = existing.add(EmbeddingTableSchema.preparedImageField());
-    }
-    EmbeddingTableSchema.checkBaseColumns(existing);
-    // every column of the table is in the round's rows, so the write keeps the table's schema; one beyond the base columns (a path
-    // partition, a model's VECTOR, a column a customer's transformer added) is nullable, since prep writes null in a column it
-    // does not make. A customer's transformer that adds its column again in the round wins over that null (UnstructuredSchemaGuard)
-    List<StructField> fields = Arrays.stream(existing.fields())
-        .filter(field -> !HoodieRecord.HOODIE_META_COLUMNS.contains(field.name()))
-        .map(field -> EmbeddingTableSchema.BASE_COLUMNS.contains(field.name()) || field.nullable() ? field
-            : new StructField(field.name(), field.dataType(), true, field.metadata()))
-        .collect(Collectors.toList());
-    if (model.isPresent()) {
-      StructField vector = EmbeddingTableSchema.vectorField(model.get());
-      if (fields.stream().noneMatch(field -> field.name().equals(vector.name()))) {
-        fields.add(vector);
-      }
-    }
-    return DataTypes.createStructType(fields);
   }
 
   /**

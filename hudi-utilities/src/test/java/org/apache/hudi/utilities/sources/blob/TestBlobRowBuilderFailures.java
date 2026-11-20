@@ -20,10 +20,10 @@ package org.apache.hudi.utilities.sources.blob;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.schema.HoodieSchema;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectMetadata;
-import org.apache.hudi.utilities.unstructured.SourceCauses;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.Row;
@@ -151,7 +151,7 @@ class TestBlobRowBuilderFailures {
 
     HoodieException failure = assertThrows(HoodieException.class, () -> builder().buildRow(object(source, 8L)));
 
-    assertTrue(SourceCauses.isCausedBy(failure, AccessDeniedException.class), "the denial remains available to diagnose the failed round");
+    assertTrue(ExceptionUtil.isCausedBy(failure, AccessDeniedException.class), "the denial remains available to diagnose the failed round");
     assertArrayEquals(bytes(8), Files.readAllBytes(file), "a platform failure must not mutate source bytes");
   }
 

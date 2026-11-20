@@ -41,11 +41,28 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** A path partition column follows each prepared chunk into the user's embedding table partition. */
 @Tag("functional")
 public class TestEmbeddingUserPartitioning extends EmbeddingRoundTestBase {
+
+  @Test
+  public void droppingTheProducedPartitionFieldIsRefusedBeforeAnotherRound() throws Exception {
+    announce(text("region=west/a", "alpha"));
+    TypedProperties partitioned = props(table(), EmbeddingTableConfig.MODE_PREP_ONLY,
+        "hoodie.streamer.source.cloud.data.partition.fields.from.path", "region",
+        "hoodie.datasource.write.partitionpath.field", "region",
+        "hoodie.datasource.write.keygenerator.class", "org.apache.hudi.keygen.ComplexKeyGenerator");
+    Round control = round(partitioned);
+    assertTrue(control.getCommit().isPresent(), control.toString());
+    TypedProperties dropped = TypedProperties.copy(partitioned);
+    dropped.remove("hoodie.streamer.source.cloud.data.partition.fields.from.path");
+    Exception failure = assertThrows(Exception.class, () -> round(dropped));
+    assertTrue(EmbeddingStreamers.causes(failure).contains("region"));
+    assertEquals(Collections.singletonList(control.getCommit().get()), EmbeddingStreamers.commits(table(), storage()));
+  }
 
   @Test
   public void userPathPartitionColumnsPartitionTheEmbeddingTable() throws Exception {

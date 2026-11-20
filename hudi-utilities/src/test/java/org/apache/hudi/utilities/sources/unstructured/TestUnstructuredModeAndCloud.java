@@ -24,6 +24,7 @@ import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.sources.helpers.CloudObjectsSelectorCommon;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingParquetConfigInjector;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
 
@@ -112,7 +113,21 @@ public class TestUnstructuredModeAndCloud {
         () -> UnstructuredMode.EMBEDDING.validate(new TypedProperties(), source));
     assertTrue(refused.getMessage().contains(source + " requires hoodie.unstructured.embedding.mode"), refused.getMessage());
     assertDoesNotThrow(() -> UnstructuredMode.EMBEDDING.validate(props("hoodie.unstructured.embedding.mode", "prep_only"), source));
-    assertThrows(IllegalArgumentException.class, () -> UnstructuredMode.EMBEDDING.validate(props("hoodie.unstructured.embedding.mode", "prep_and_compute"), source));
+    assertThrows(IllegalArgumentException.class,
+        () -> UnstructuredMode.EMBEDDING.validate(props("hoodie.unstructured.embedding.mode", "prep_and_compute"), source));
+  }
+
+  @Test
+  void embeddingChecksPropertyOnlySettingsBeforeDataArrives() {
+    String source = "UnstructuredDataSource (mode embedding)";
+    TypedProperties invalidMode = props(EmbeddingTableConfig.MODE.key(), "compute_only");
+    assertThrows(IllegalArgumentException.class, () -> UnstructuredMode.EMBEDDING.validate(invalidMode, source));
+    TypedProperties invalidExtension = props(EmbeddingTableConfig.MODE.key(), "prep_only");
+    invalidExtension.setProperty(EmbeddingTableConfig.PREP_FILE_EXTENSIONS.key(), "unmapped_extension");
+    assertThrows(IllegalArgumentException.class, () -> UnstructuredMode.EMBEDDING.validate(invalidExtension, source));
+    TypedProperties invalidModel = props(EmbeddingTableConfig.MODE.key(), "prep_only");
+    invalidModel.setProperty(EmbeddingTableConfig.MODELS.key(), "m1");
+    assertThrows(IllegalArgumentException.class, () -> UnstructuredMode.EMBEDDING.validate(invalidModel, source));
   }
 
   @Test
