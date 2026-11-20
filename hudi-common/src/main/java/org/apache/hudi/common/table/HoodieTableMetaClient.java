@@ -1338,6 +1338,17 @@ public class HoodieTableMetaClient implements Serializable {
       return this;
     }
 
+    /**
+     * Carries arbitrary caller-owned properties into the new table. {@link #build()} applies them before the builder's own
+     * settings, so for a key that {@code build()} also writes (from a builder field, or a value it always sets such as the
+     * table version, which defaults to the current one) the builder's value is kept. The builder does not interpret their keys
+     * or values.
+     */
+    public TableBuilder setAdditionalProperties(Properties properties) {
+      this.others.putAll(properties);
+      return this;
+    }
+
     public TableBuilder fromMetaClient(HoodieTableMetaClient metaClient) {
       return setTableType(metaClient.getTableType())
           .setTableName(metaClient.getTableConfig().getTableName())

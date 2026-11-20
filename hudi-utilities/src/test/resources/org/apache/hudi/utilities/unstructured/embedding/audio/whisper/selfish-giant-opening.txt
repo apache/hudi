@@ -1,0 +1,10 @@
+# Reference words of the first 30 s of the LibriVox reading used by the whisper tests (the reader's spoken preamble before the
+# title has no text source; the WER rule leaves hypothesis words before the first reference word free).
+# Source: Project Gutenberg eBook #902, "The Happy Prince, and Other Tales" by Oscar Wilde, https://www.gutenberg.org/cache/epub/902/pg902.txt
+# (sha256 77ae1b3c7be77aea82b1f935e531e53f4df43db572cbc14af39d6cd0d5ba50da), the story's title line and first paragraph, verbatim
+# except the picture caption line, which is dropped. Public domain in the USA.
+# Cut at the end of the first paragraph (spoken at about 29.6 s).
+The Selfish Giant.
+
+EVERY afternoon, as they were coming from school, the children used to go
+and play in the Giant’s garden.
