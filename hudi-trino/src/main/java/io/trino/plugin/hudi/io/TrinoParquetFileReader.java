@@ -34,12 +34,13 @@ import io.trino.plugin.hive.HiveColumnHandle;
 import io.trino.plugin.hive.parquet.ParquetReaderConfig;
 import io.trino.plugin.hudi.HudiUtil;
 import io.trino.plugin.hudi.storage.HudiTrinoStorage;
-import io.trino.plugin.hudi.util.HudiAvroSerializer;
+import io.trino.plugin.hudi.util.HoodieSchemaAvroSerializer;
+import io.trino.plugin.hudi.util.TrinoTypeMapper;
 import io.trino.spi.Page;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.SourcePage;
 import io.trino.spi.predicate.TupleDomain;
-import io.trino.spi.type.SqlVarbinary;
+import io.trino.spi.type.TypeOperators;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.IndexedRecord;
 import org.apache.hudi.common.bloom.BloomFilter;
@@ -55,7 +56,6 @@ import org.apache.parquet.schema.MessageType;
 import org.joda.time.DateTimeZone;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +63,6 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.stream.IntStream;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.memory.context.AggregatedMemoryContext.newSimpleAggregatedMemoryContext;
@@ -78,12 +77,11 @@ import static io.trino.plugin.hive.parquet.ParquetPageSourceFactory.getParquetMe
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_BAD_DATA;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_CURSOR_ERROR;
 import static io.trino.plugin.hudi.HudiErrorCode.HUDI_SCHEMA_ERROR;
-import static io.trino.spi.type.VarbinaryType.VARBINARY;
 import static java.util.Objects.requireNonNull;
 
 /**
  * Reads an LSM archived-timeline Parquet file through Trino's {@link ParquetReader}, turning each
- * {@link Page} it produces into an Avro {@link IndexedRecord} with {@link HudiAvroSerializer}. Hudi's
+ * {@link Page} it produces into an Avro {@link IndexedRecord} with {@link HoodieSchemaAvroSerializer}. Hudi's
  * archived-timeline loader asks {@link HudiTrinoFileReaderFactory} for an Avro file reader over the
  * history files under {@code .hoodie/timeline/history}, and this is the connector's answer to that
  * request. It is not a general data-file reader: record-key, key-prefix and row-key lookups are
@@ -96,6 +94,8 @@ public class TrinoParquetFileReader
     private static final String PARQUET_AVRO_SCHEMA_KEY = "parquet.avro.schema";
     private static final DateTimeZone UTC_TIME_ZONE = DateTimeZone.UTC;
     private static final int DOMAIN_COMPACTION_THRESHOLD = 1000;
+    // hudi-common's IO factory builds this reader with no TypeManager in reach; the type operators only back map types
+    private static final TrinoTypeMapper TYPE_MAPPER = new TrinoTypeMapper(new TypeOperators());
 
     private final StoragePath path;
     private final ParquetReaderOptions readerOptions = new ParquetReaderConfig().toParquetReaderOptions();
@@ -251,16 +251,15 @@ public class TrinoParquetFileReader
     }
 
     /**
-     * One {@link HiveColumnHandle} per field of the projection, typed from the field's Avro schema the way
-     * {@link HudiUtil#toColumnHandle} types the handles of a data-file read. Handle {@code i} is built from
-     * field {@code i}, so a handle's position in the returned list is its field's position in the records this
-     * reader produces. That list position is what {@link #binaryFieldPositions} relies on, not the handle's own
-     * column index, which {@code toColumnHandle} leaves at 0.
+     * One {@link HiveColumnHandle} per field of the projection, typed by {@link TrinoTypeMapper} from the field's
+     * schema ({@link HudiUtil#toSchemaTypedColumnHandle}), which is the typing {@link HoodieSchemaAvroSerializer}
+     * converts from. The serializer then hands the loader Avro-native values, e.g. a {@code ByteBuffer} for the
+     * metadata and plan bytes that ArchivedTimelineV2 casts to.
      */
     private static List<HiveColumnHandle> buildColumnHandles(HoodieSchema projectedSchema)
     {
         return projectedSchema.getFields().stream()
-                .map(HudiUtil::toColumnHandle)
+                .map(field -> HudiUtil.toSchemaTypedColumnHandle(field, TYPE_MAPPER))
                 .toList();
     }
 
@@ -274,19 +273,6 @@ public class TrinoParquetFileReader
             columnsBuilder.add(new Column(name, parquetField));
         }
         return columnsBuilder.build();
-    }
-
-    /**
-     * Record positions of the projection's VARBINARY columns, if any. Trino hands a VARBINARY value out as a
-     * {@link SqlVarbinary}, while Avro's in-memory representation of {@code bytes} is a {@link ByteBuffer} --
-     * and that is what hudi-common casts to when it reads the {@code metadata} and {@code plan} columns of an
-     * LSM instant, so those values have to be converted before the record leaves this reader.
-     */
-    private static int[] binaryFieldPositions(List<HiveColumnHandle> columnHandles)
-    {
-        return IntStream.range(0, columnHandles.size())
-                .filter(position -> columnHandles.get(position).getType().equals(VARBINARY))
-                .toArray();
     }
 
     private static TrinoException handleException(StoragePath path, Exception exception)
@@ -304,8 +290,7 @@ public class TrinoParquetFileReader
             implements ClosableIterator<IndexedRecord>
     {
         private final ParquetReader parquetReader;
-        private final HudiAvroSerializer avroSerializer;
-        private final int[] binaryFieldPositions;
+        private final HoodieSchemaAvroSerializer avroSerializer;
         private Page currentPage;
         private int currentPosition;
         private boolean exhausted;
@@ -315,11 +300,7 @@ public class TrinoParquetFileReader
         {
             List<HiveColumnHandle> columnHandles = buildColumnHandles(projectedSchema);
             this.parquetReader = createParquetReader(columnHandles);
-            // Null prefilled values: PrefilledColumnValues answers partition and hidden metadata columns of a
-            // split, of which a timeline read has neither, and serialize() only ever reads page values. There
-            // is no split here to build one from -- create(HudiSplit) is its only factory.
-            this.avroSerializer = new HudiAvroSerializer(columnHandles, null, projectedSchema.toAvroSchema());
-            this.binaryFieldPositions = binaryFieldPositions(columnHandles);
+            this.avroSerializer = new HoodieSchemaAvroSerializer(columnHandles, projectedSchema.toAvroSchema());
         }
 
         @Override
@@ -350,11 +331,6 @@ public class TrinoParquetFileReader
                 throw new NoSuchElementException();
             }
             IndexedRecord record = avroSerializer.serialize(currentPage, currentPosition);
-            for (int fieldPosition : binaryFieldPositions) {
-                if (record.get(fieldPosition) instanceof SqlVarbinary value) {
-                    record.put(fieldPosition, ByteBuffer.wrap(value.getBytes()));
-                }
-            }
             currentPosition++;
             return record;
         }

@@ -24,7 +24,8 @@ import io.trino.plugin.hudi.testing.OmittedRankFieldHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.PayloadOnlyMergerHudiTablesInitializer;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import static io.trino.plugin.hudi.testing.NonProjectionCompatibleMergerHudiTablesInitializer.RT_TABLE_NAME;
 import static io.trino.plugin.hudi.testing.NonProjectionCompatibleMergerHudiTablesInitializer.TABLE_NAME;
@@ -52,6 +53,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * prove the merge path recovers metastore-unknown merge columns from the resolved table schema. A fourth
  * ({@link OmittedRankFieldHudiTablesInitializer}) does the same for a column only the CUSTOM merger itself
  * declares mandatory ({@code merge_rank}), proving the merge path asks the resolved merger too.
+ * <p>
+ * Every test runs with {@code schema_column_types_enabled} off and on. On, the custom-merger tables keep the Avro
+ * records ({@code HudiTrinoReaderContext}) while the payload-only and event-time tables merge Trino rows
+ * ({@code HudiTrinoRowReaderContext}).
  */
 public class TestHudiNonProjectionCompatibleMerger
         extends AbstractTestQueryFramework
@@ -73,109 +78,124 @@ public class TestHudiNonProjectionCompatibleMerger
                 .build();
     }
 
-    @Test
-    public void testReadOptimizedTableReturnsBaseFileValues()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testReadOptimizedTableReturnsBaseFileValues(boolean schemaColumnTypes)
     {
         // The read-optimized table reads base files only, so it reflects the initial insert.
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
-        assertThat(computeScalar("SELECT sum(value) FROM " + TABLE_NAME))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT sum(value) FROM " + TABLE_NAME))
                 .isEqualTo(110L);
     }
 
-    @Test
-    public void testNarrowProjectionMergesViaFullSchemaRead()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testNarrowProjectionMergesViaFullSchemaRead(boolean schemaColumnTypes)
     {
         // Neither query projects merge_rank; the merger can only see it through the full-schema read.
         //  - k1 keeps the update (99): the winning rank (7 > 5) is on the LOG record
         //  - k2 keeps the base (100): the winning rank (9 > 1) is on the BASE record, proving the base
         //    read honors the file-group reader's full-schema required schema
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, value FROM " + RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', CAST(99 AS BIGINT)), ('k2', CAST(100 AS BIGINT))");
         // 199 uniquely identifies the rank-based merge: base-only would be 110, newest-wins would be 103.
-        assertThat(computeScalar("SELECT sum(value) FROM " + RT_TABLE_NAME))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT sum(value) FROM " + RT_TABLE_NAME))
                 .isEqualTo(199L);
     }
 
-    @Test
-    public void testSelectStarMergesAllColumns()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSelectStarMergesAllColumns(boolean schemaColumnTypes)
     {
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value, merge_rank, ts FROM " + RT_TABLE_NAME + " ORDER BY key",
                 "VALUES"
                         + " ('k1', 'k1_updated', CAST(99 AS BIGINT), CAST(7 AS BIGINT), CAST(2 AS BIGINT)),"
                         + " ('k2', 'k2_base', CAST(100 AS BIGINT), CAST(9 AS BIGINT), CAST(1 AS BIGINT))");
     }
 
-    @Test
-    public void testPayloadOnlyReadOptimizedTableReturnsBaseFileValues()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testPayloadOnlyReadOptimizedTableReturnsBaseFileValues(boolean schemaColumnTypes)
     {
         assertQuery(
-                noRecordMergerImplsSession(),
+                noRecordMergerImplsSession(schemaColumnTypes),
                 "SELECT key, name, value FROM " + PayloadOnlyMergerHudiTablesInitializer.TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_base', CAST(10 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
     }
 
-    @Test
-    public void testPayloadOnlyRealtimeTableAppliesPayloadMerge()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testPayloadOnlyRealtimeTableAppliesPayloadMerge(boolean schemaColumnTypes)
     {
         // Table version 6 with nothing but a payload class in hoodie.properties: the reader infers CUSTOM
         // merge mode with the payload-based strategy, which resolves HoodieAvroRecordMerger and runs
         // RankBasedTestPayload. Both merge directions are exercised, as for the custom merger above.
         assertQuery(
-                noRecordMergerImplsSession(),
+                noRecordMergerImplsSession(schemaColumnTypes),
                 "SELECT key, name, value FROM " + PayloadOnlyMergerHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(99 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
     }
 
-    @Test
-    public void testPayloadOnlyNarrowProjectionMergesViaFullSchemaRead()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testPayloadOnlyNarrowProjectionMergesViaFullSchemaRead(boolean schemaColumnTypes)
     {
         // Projects neither key, name nor merge_rank, so 199 proves the full-schema read fed merge_rank to the
         // payload on both sides: base-only would be 110, built-in newest-wins would be 103.
         assertThat(computeScalar(
-                noRecordMergerImplsSession(),
+                noRecordMergerImplsSession(schemaColumnTypes),
                 "SELECT sum(value) FROM " + PayloadOnlyMergerHudiTablesInitializer.RT_TABLE_NAME))
                 .isEqualTo(199L);
     }
 
-    @Test
-    public void testMetastoreOmittedOrderingFieldRealtimeTableMerges()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testMetastoreOmittedOrderingFieldRealtimeTableMerges(boolean schemaColumnTypes)
     {
         // This fixture's metastore does not carry the ordering field ts its Avro schema has (the hive-sync
         // omission shape); event-time merging still needs ts on both sides, so these results only come out
         // when the merge path recovers the column from the resolved table schema.
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + OmittedOrderingFieldHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(99 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
     }
 
-    @Test
-    public void testMetastoreOmittedOrderingFieldNarrowProjectionSum()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testMetastoreOmittedOrderingFieldNarrowProjectionSum(boolean schemaColumnTypes)
     {
         // 199 discriminates event-time merging from base-only (110) and commit-time newest-wins (103).
-        assertThat(computeScalar("SELECT sum(value) FROM " + OmittedOrderingFieldHudiTablesInitializer.RT_TABLE_NAME))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT sum(value) FROM " + OmittedOrderingFieldHudiTablesInitializer.RT_TABLE_NAME))
                 .isEqualTo(199L);
     }
 
-    @Test
-    public void testMetastoreOmittedMergerMandatoryFieldRealtimeTableMerges()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testMetastoreOmittedMergerMandatoryFieldRealtimeTableMerges(boolean schemaColumnTypes)
     {
         // This fixture's metastore does not carry merge_rank, the column MaxRankRecordMerger declares
         // mandatory; only asking the resolved merger on the merge path recovers it, so these results only
         // come out when merger-declared columns are recovered from the table schema too.
         assertQuery(
+                session(schemaColumnTypes),
                 "SELECT key, name, value FROM " + OmittedRankFieldHudiTablesInitializer.RT_TABLE_NAME + " ORDER BY key",
                 "VALUES ('k1', 'k1_updated', CAST(99 AS BIGINT)), ('k2', 'k2_base', CAST(100 AS BIGINT))");
     }
 
-    @Test
-    public void testMetastoreOmittedMergerMandatoryFieldNarrowProjectionSum()
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testMetastoreOmittedMergerMandatoryFieldNarrowProjectionSum(boolean schemaColumnTypes)
     {
         // 199 discriminates the keep-max merge from base-only (110) and newest-wins (103).
-        assertThat(computeScalar("SELECT sum(value) FROM " + OmittedRankFieldHudiTablesInitializer.RT_TABLE_NAME))
+        assertThat(computeScalar(session(schemaColumnTypes), "SELECT sum(value) FROM " + OmittedRankFieldHudiTablesInitializer.RT_TABLE_NAME))
                 .isEqualTo(199L);
     }
 
@@ -183,10 +203,17 @@ public class TestHudiNonProjectionCompatibleMerger
      * The payload-only table must resolve its merger purely from hoodie.properties, so the merger impls the
      * connector is configured with for {@link NonProjectionCompatibleRankMerger} are cleared for its queries.
      */
-    private Session noRecordMergerImplsSession()
+    private Session noRecordMergerImplsSession(boolean schemaColumnTypes)
+    {
+        return SessionBuilder.from(session(schemaColumnTypes))
+                .withRecordMergerImpls()
+                .build();
+    }
+
+    private Session session(boolean schemaColumnTypes)
     {
         return SessionBuilder.from(getSession())
-                .withRecordMergerImpls()
+                .withSchemaColumnTypesEnabled(schemaColumnTypes)
                 .build();
     }
 }

@@ -14,6 +14,7 @@
 package io.trino.plugin.hudi;
 
 import com.google.common.collect.ImmutableMap;
+import io.trino.Session;
 import io.trino.plugin.hudi.testing.IncrementalCustomMergerHudiTablesInitializer;
 import io.trino.plugin.hudi.testing.MaxRankRecordMerger;
 import io.trino.testing.AbstractTestQueryFramework;
@@ -108,8 +109,17 @@ public class TestHudiCustomMergerEndToEnd
 
     private void validateRows(String table, Map<String, Object[]> expected)
     {
+        // With schema_column_types_enabled off and on; the custom merger keeps the Avro records either way
+        for (boolean schemaColumnTypes : new boolean[] {false, true}) {
+            validateRows(session(schemaColumnTypes), table, expected);
+        }
+    }
+
+    private void validateRows(Session session, String table, Map<String, Object[]> expected)
+    {
         List<String> columns = writer.dataColumnNames();
         List<MaterializedRow> rows = computeActual(
+                session,
                 "SELECT " + String.join(", ", columns) + " FROM " + table + " ORDER BY key")
                 .getMaterializedRows();
 
@@ -124,5 +134,12 @@ public class TestHudiCustomMergerEndToEnd
                         .isEqualTo(expectedRow[i]);
             }
         }
+    }
+
+    private Session session(boolean schemaColumnTypes)
+    {
+        return SessionBuilder.from(getSession())
+                .withSchemaColumnTypesEnabled(schemaColumnTypes)
+                .build();
     }
 }
