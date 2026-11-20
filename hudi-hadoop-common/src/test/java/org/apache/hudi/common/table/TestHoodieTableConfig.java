@@ -497,11 +497,23 @@ class TestHoodieTableConfig extends HoodieCommonTestHarness {
   @Test
   void testDefinedTableConfigs() {
     List<ConfigProperty<?>> configProperties = HoodieTableConfig.definedTableConfigs();
-    assertEquals(47, configProperties.size());
+    assertEquals(48, configProperties.size());
     configProperties.forEach(c -> {
       assertNotNull(c);
       assertFalse(c.doc().isEmpty());
     });
+  }
+
+  @ParameterizedTest
+  @EnumSource(HoodieTableVersion.class)
+  void testBlobLayoutVersionSurvivesConfigVersionFiltering(HoodieTableVersion version) {
+    HoodieConfig config = new HoodieConfig();
+    config.setValue(HoodieTableConfig.VERSION, String.valueOf(version.versionCode()));
+    config.getProps().setProperty("hoodie.table.blob.layout.version", "1");
+
+    HoodieTableConfig.dropInvalidConfigs(config);
+
+    assertEquals("1", config.getProps().getProperty("hoodie.table.blob.layout.version"));
   }
 
   @Test

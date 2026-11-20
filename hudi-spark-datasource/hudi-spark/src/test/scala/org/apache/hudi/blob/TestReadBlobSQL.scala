@@ -22,14 +22,22 @@ package org.apache.hudi.blob
 import org.apache.hudi.blob.BlobTestHelpers._
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.exception.HoodieIOException
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration
 import org.apache.hudi.testutils.HoodieClientTestBase
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
+import org.apache.spark.sql.execution.LeafExecNode
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.hudi.blob.BatchedBlobReadExec
 import org.apache.spark.sql.types._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
+import java.net.URI
 import java.util.Collections
 
 /**
@@ -44,6 +52,23 @@ import java.util.Collections
  * </ul>
  */
 class TestReadBlobSQL extends HoodieClientTestBase {
+
+  @Test
+  def testExecNodeByColumnNameResolvesExactlyOneChildAttribute(): Unit = {
+    val blob = AttributeReference("file_info", BlobType())()
+    val id = AttributeReference("id", IntegerType)()
+    val child = OutputOnlyExec(Seq(id, blob))
+    val conf = new HadoopStorageConfiguration(new Configuration())
+    val byName = BatchedBlobReadExec(child, 4096, conf, 8, "file_info", Seq(id, blob))
+    assertEquals(blob.exprId, byName.blobAttr.exprId)
+    assertEquals(None, byName.tableBasePath)
+    assertEquals(None, byName.tableLayoutVersion)
+    assertEquals(blob.exprId, new BatchedBlobReadExec(child, 4096, conf, 8, "file_info", Seq(id, blob)).blobAttr.exprId)
+    assertThrows(classOf[IllegalArgumentException], () => BatchedBlobReadExec(child, 4096, conf, 8, "missing", Seq(id, blob)))
+    val duplicate = AttributeReference("file_info", BlobType())()
+    val ambiguous = OutputOnlyExec(Seq(blob, duplicate))
+    assertThrows(classOf[IllegalArgumentException], () => BatchedBlobReadExec(ambiguous, 4096, conf, 8, "file_info", Seq(blob)))
+  }
 
   @Test
   def testReadOutOfLineBlobOnHudiBackedTable(): Unit = {
@@ -105,7 +130,7 @@ class TestReadBlobSQL extends HoodieClientTestBase {
 
   /**
    * The same out-of-line read, but with the blob reference on an object-store scheme while the table
-   * stays local. read_blob() reaches BatchedBlobReader through BatchedBlobReadExec and processRDD,
+   * stays local. read_blob() reaches BatchedBlobReader through BatchedBlobReadExec and processRDDAtOrdinal,
    * which is a separate call site from the readBatched path covered in TestBatchedBlobReader, so
    * storage resolved from a default file:/// URI fails here with
    * IllegalArgumentException: Wrong FS: s3a://..., expected: file:///.
@@ -116,7 +141,7 @@ class TestReadBlobSQL extends HoodieClientTestBase {
     // so the borrowed scheme has to be registered there rather than on a conf the test holds.
     withBorrowedSchemes(sparkSession.sparkContext.hadoopConfiguration, Seq("test-bucket"), "s3a") {
       val extFile = createTestFile(tempDir, "non-local-sql.bin", 10000)
-      val reference = s"s3a://test-bucket$extFile"
+      val reference = s"s3a://test-bucket${new URI(extFile).getRawPath}"
       val tablePath = s"$tempDir/hudi_blob_table_non_local"
 
       val rawDf = sparkSession.createDataFrame(Seq(
@@ -251,6 +276,33 @@ class TestReadBlobSQL extends HoodieClientTestBase {
     // Verify data content
     val data1 = rows(0).getAs[Array[Byte]]("data")
     assertBytesContent(data1)
+  }
+
+  /**
+   * A join of two blob tables whose blob columns share a name: each read_blob() call returns the bytes of its own side.
+   */
+  @Test
+  def testReadBlobOnBothSidesOfAJoinWithSameNamedColumns(): Unit = {
+    val filePath = createTestFile(tempDir, "same_name_join.bin", 10000)
+
+    def blobView(view: String, offset: Long): Unit =
+      sparkSession.createDataFrame(Seq((1, filePath, offset, 100L)))
+        .toDF("id", "external_path", "offset", "length")
+        .withColumn("file_info", blobStructCol("file_info", col("external_path"), col("offset"), col("length")))
+        .select("id", "file_info")
+        .createOrReplaceTempView(view)
+
+    blobView("blob_left", 0L)
+    blobView("blob_right", 300L)
+
+    val row = sparkSession.sql("""
+      SELECT read_blob(l.file_info) AS left_data, read_blob(r.file_info) AS right_data
+      FROM blob_left l
+      JOIN blob_right r ON l.id = r.id
+    """).collect().head
+
+    assertBytesContent(row.getAs[Array[Byte]]("left_data"), expectedOffset = 0)
+    assertBytesContent(row.getAs[Array[Byte]]("right_data"), expectedOffset = 300)
   }
 
   /**
@@ -545,7 +597,7 @@ class TestReadBlobSQL extends HoodieClientTestBase {
 
   @Test
   def testReadBlobWithMissingFile(): Unit = {
-    val missingPath = tempDir.resolve("does_not_exist.bin").toString
+    val missingPath = tempDir.resolve("does_not_exist.bin").toUri.toString
     val df = sparkSession.createDataFrame(Seq(
       (1, missingPath, 0L, 10L)
     )).toDF("id", "external_path", "offset", "length")
@@ -601,4 +653,12 @@ class TestReadBlobSQL extends HoodieClientTestBase {
       assertBytesContent(row.getAs[Array[Byte]]("data"), expectedOffset = idx * 100)
     }
   }
+}
+
+/**
+ * Leaf plan that only declares its output, so the exec node can resolve child attributes
+ * without a version-specific scan node constructor.
+ */
+private case class OutputOnlyExec(output: Seq[Attribute]) extends LeafExecNode {
+  override protected def doExecute(): RDD[InternalRow] = throw new UnsupportedOperationException("output only")
 }
