@@ -97,6 +97,7 @@ import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.table.BulkInsertPartitioner;
 import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.HoodieWriteMetadata;
+import org.apache.hudi.table.action.commit.BaseWriteHelper;
 import org.apache.hudi.table.action.commit.CommitMetadataResolverFactory;
 import org.apache.hudi.table.action.restore.RestoreUtils;
 import org.apache.hudi.table.action.savepoint.SavepointHelpers;
@@ -586,11 +587,18 @@ public abstract class BaseHoodieWriteClient<T, I, K, O> extends BaseHoodieClient
    */
   public void preWrite(String instantTime, WriteOperationType writeOperationType,
                        HoodieTableMetaClient metaClient, Option<HoodieData<HoodieRecord<T>>> recordsOpt) {
-    if (writeOperationType == WriteOperationType.UPSERT_PREPPED && config.shouldWriteUpdatesAsDeletesAndInserts()
+    if ((writeOperationType == WriteOperationType.UPSERT_PREPPED || writeOperationType == WriteOperationType.INSERT_PREPPED
+        || writeOperationType == WriteOperationType.DELETE_PREPPED) && config.shouldWriteUpdatesAsDeletesAndInserts()
         && metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
-      // Prepped records skip the write helper that splits updates, so updates would land in logs as data blocks
-      throw new HoodieNotSupportedException("Prepped upserts are not supported on merge-on-read tables when "
-          + HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is enabled");
+      // Prepped records skip the index and the write helper that splits updates, so they reach the log
+      // writer with the caller's locations: updates land in logs as data blocks and deletes lack positions
+      throw new HoodieNotSupportedException("Prepped writes (" + writeOperationType + ") are not supported on "
+          + "merge-on-read tables when " + HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key() + " is enabled");
+    }
+    if ((writeOperationType == WriteOperationType.UPSERT || writeOperationType == WriteOperationType.INSERT
+        || writeOperationType == WriteOperationType.DELETE) && config.shouldWriteUpdatesAsDeletesAndInserts()
+        && metaClient.getTableType() == HoodieTableType.MERGE_ON_READ) {
+      BaseWriteHelper.validateUpdatesAsDeletesAndInserts(config, metaClient);
     }
     setOperationType(writeOperationType);
     this.lastCompletedTxnAndMetadata = txnManager.isLockRequired()

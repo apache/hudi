@@ -27,9 +27,12 @@ import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.DeleteRecord;
 import org.apache.hudi.common.model.FileSlice;
 import org.apache.hudi.common.model.HoodieBaseFile;
+import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieLogFile;
 import org.apache.hudi.common.model.HoodieRecord;
+import org.apache.hudi.common.model.HoodieRecordLocation;
 import org.apache.hudi.common.model.HoodieTableType;
+import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableVersion;
@@ -58,11 +61,15 @@ import org.apache.avro.generic.GenericRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -70,8 +77,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.hudi.common.testutils.HoodieTestUtils.INSTANT_GENERATOR;
+import static org.apache.hudi.common.testutils.HoodieTestUtils.TIMELINE_FACTORY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -150,36 +159,7 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
 
     assertTableVersion(tableVersion);
 
-    // Every log block written by the update must be a delete block carrying valid record positions
-    // that reference the file slice's base file instant; no update record lands in a log. Version 10
-    // writes the deletes as native delete log files, earlier versions as blocks of inline log files.
-    AtomicLong deleteRecordCount = new AtomicLong();
-    forEachLatestLogBlock(config, (slice, logFile, block) -> {
-      assertTrue(slice.getBaseFile().isPresent(), "a file group with delete logs must have a base file");
-      assertEquals(tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN),
-          FSUtils.isNativeDeleteLogFile(logFile.getFileName()), "unexpected log file layout: " + logFile.getFileName());
-      assertTrue(block instanceof HoodieDeleteBlock,
-          "expected only delete blocks but got: " + block.getClass().getSimpleName() + " in " + logFile.getFileName());
-      HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) block;
-      DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
-      deleteRecordCount.addAndGet(deleteRecords.length);
-      List<Long> positions = deleteBlock.getRecordPositionList();
-      assertEquals(deleteRecords.length, positions.size(),
-          "every delete record must carry a position");
-      // The i-th position belongs to the i-th delete record: inline delete blocks store both sorted by
-      // position, and native delete log files store positions in delete-row order.
-      List<String> baseFileKeys = readRecordKeys(config, slice.getBaseFile().get());
-      for (int i = 0; i < positions.size(); i++) {
-        long position = positions.get(i);
-        assertTrue(position >= 0 && position < baseFileKeys.size(), "delete record position out of range: " + position);
-        assertEquals(deleteRecords[i].getRecordKey(), baseFileKeys.get((int) position),
-            "the base file row at a delete position must hold the deleted record key");
-      }
-      assertEquals(slice.getBaseFile().get().getCommitTime(),
-          deleteBlock.getBaseFileInstantTimeOfPositions(),
-          "positions must reference the file slice's base file");
-    });
-    assertEquals(50, deleteRecordCount.get(), "each update must produce exactly one positional delete");
+    assertEquals(50, assertOnlyPositionalDeletes(config, tableVersion), "each update must produce exactly one positional delete");
 
     // The new versions must land in new file groups of the same partitions.
     Set<String> newFileIds = new HashSet<>(collectFileIds());
@@ -234,6 +214,44 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
           .count(), "every record must be served from the latest round");
       prevCommitTime = updateTime;
     }
+    assertTableVersion(tableVersion);
+  }
+
+  /**
+   * With the SIMPLE index, an insert writes base files of new file groups only, and a delete appends
+   * positional deletes to the file groups of the deleted records.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieTableVersion.class, names = {"EIGHT", "NINE", "TEN"})
+  void testInsertsAndDeletesWithSimpleIndex(HoodieTableVersion tableVersion) throws Exception {
+    initTable(tableVersion);
+    HoodieWriteConfig config = buildConfig(true, tableVersion, 10);
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String firstInsertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, firstInsertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+    Set<String> fileIdsAfterFirstInsert = collectFileIds();
+
+    String secondInsertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, secondInsertTime, "000", 50, HoodieJavaWriteClient::insert,
+        false, false, 50, 150, 2, Option.empty(), INSTANT_GENERATOR);
+    try (SyncableFileSystemView fsView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      List<FileSlice> slices = Arrays.stream(dataGen.getPartitionPaths())
+          .flatMap(fsView::getLatestFileSlices).collect(Collectors.toList());
+      for (FileSlice slice : slices) {
+        assertFalse(slice.hasLogFiles(), "an insert must not write log files: " + slice);
+        assertEquals(fileIdsAfterFirstInsert.contains(slice.getFileId()) ? firstInsertTime : secondInsertTime,
+            slice.getBaseInstantTime(), "an insert must write new file groups only: " + slice);
+      }
+      assertTrue(slices.size() > fileIdsAfterFirstInsert.size(), "the second insert must write new file groups");
+    }
+
+    String deleteTime = WriteClientTestUtils.createNewInstantTime();
+    deleteBatch(config, client, deleteTime, secondInsertTime, "000", 30, false, false, 30, 120,
+        TIMELINE_FACTORY, INSTANT_GENERATOR);
+    assertEquals(30, assertOnlyPositionalDeletes(config, tableVersion), "each deleted key must produce one positional delete");
+    assertEquals(120, GenericRecordValidationTestUtils.getRecordsMap(config, storageConf, dataGen).size());
     assertTableVersion(tableVersion);
   }
 
@@ -356,6 +374,43 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
         "prepped upserts must be rejected in this write mode but got: " + exception);
   }
 
+  /**
+   * Prepped inserts and deletes reach the log writer with the caller's locations, which carry no base
+   * file position when built the way Spark SQL builds them, from the file name meta field only.
+   */
+  @ParameterizedTest
+  @EnumSource(value = WriteOperationType.class, names = {"INSERT_PREPPED", "DELETE_PREPPED"})
+  void testPreppedInsertAndDeleteRejectedInDeleteInsertMode(WriteOperationType operation) throws Exception {
+    HoodieWriteConfig config = buildConfig(true);
+    HoodieJavaWriteClient client = getHoodieWriteClient(config);
+
+    String insertTime = WriteClientTestUtils.createNewInstantTime();
+    insertBatch(config, client, insertTime, "000", 100, HoodieJavaWriteClient::insert,
+        false, false, 100, 100, 1, Option.empty(), INSTANT_GENERATOR);
+
+    Map<String, HoodieRecordLocation> locations = locationsWithoutPositions(config);
+    String writeTime = WriteClientTestUtils.createNewInstantTime();
+    List<HoodieRecord> records = operation == WriteOperationType.DELETE_PREPPED
+        ? dataGen.generateUniqueDeleteRecords(writeTime, 10) : dataGen.generateUniqueUpdates(writeTime, 10);
+    records.forEach(record -> {
+      record.unseal();
+      record.setCurrentLocation(locations.get(record.getRecordKey()));
+      record.seal();
+    });
+    WriteClientTestUtils.startCommitWithTime(client, writeTime);
+    client.transitionInflight(writeTime);
+    Exception exception = assertThrows(Exception.class, () -> {
+      if (operation == WriteOperationType.DELETE_PREPPED) {
+        client.deletePrepped(records, writeTime);
+      } else {
+        client.insertPreppedRecords(records, writeTime);
+      }
+    });
+    assertTrue(
+        exceptionChainContains(exception, HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()),
+        operation + " must be rejected in this write mode but got: " + exception);
+  }
+
   @Test
   public void testEventTimeOrderingRejectedInDeleteInsertMode() throws Exception {
     String eventTimeBasePath = basePath + "_event_time";
@@ -381,12 +436,20 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
     }
   }
 
+  private static Stream<Arguments> indexWithoutPositionsAndOperation() {
+    return Stream.of(HoodieIndex.IndexType.INMEMORY, HoodieIndex.IndexType.GLOBAL_SIMPLE)
+        .flatMap(indexType -> Stream.of(WriteOperationType.UPSERT, WriteOperationType.INSERT, WriteOperationType.DELETE)
+            .map(operation -> Arguments.of(indexType, operation)));
+  }
+
   /**
-   * Global indexes tag merge-on-read records through a lookup that drops the base file position.
+   * Global indexes tag merge-on-read records through a lookup that drops the base file position, and
+   * the in-memory index writes inserts to log files.
    */
   @ParameterizedTest
-  @EnumSource(value = HoodieIndex.IndexType.class, names = {"INMEMORY", "GLOBAL_SIMPLE"})
-  void testIndexWithoutPositionsRejectedInDeleteInsertMode(HoodieIndex.IndexType indexType) throws Exception {
+  @MethodSource("indexWithoutPositionsAndOperation")
+  void testIndexWithoutPositionsRejectedInDeleteInsertMode(HoodieIndex.IndexType indexType,
+                                                           WriteOperationType operation) throws Exception {
     Properties keyGenProps = new Properties();
     keyGenProps.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
     keyGenProps.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
@@ -394,7 +457,7 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
         .withProperties(keyGenProps)
         .withWriteUpdatesAsDeletesAndInserts(true)
         .build();
-    assertUpsertRejected(config, "produces record positions");
+    assertWriteRejected(config, operation, "produces record positions");
   }
 
   @Test
@@ -404,7 +467,7 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
         .withWriteRecordPositionsEnabled(false)
         .withWriteUpdatesAsDeletesAndInserts(true)
         .build();
-    assertUpsertRejected(config, HoodieWriteConfig.WRITE_RECORD_POSITIONS.key());
+    assertWriteRejected(config, WriteOperationType.UPSERT, HoodieWriteConfig.WRITE_RECORD_POSITIONS.key());
   }
 
   /**
@@ -415,20 +478,99 @@ public class TestHoodieJavaClientUpdatesAsDeletesAndInserts extends HoodieJavaCl
   @EnumSource(value = HoodieTableVersion.class, names = {"SIX", "EIGHT"})
   void testWriteTableVersionSixRejectedInDeleteInsertMode(HoodieTableVersion tableVersion) throws Exception {
     initTable(tableVersion);
-    assertUpsertRejected(buildConfig(true, HoodieTableVersion.SIX, 10), "write table version 8 or higher");
+    assertWriteRejected(buildConfig(true, HoodieTableVersion.SIX, 10), WriteOperationType.UPSERT,
+        "write table version 8 or higher");
   }
 
-  private void assertUpsertRejected(HoodieWriteConfig config, String expectedMessage) {
+  /**
+   * Asserts that the write mode rejects the operation; a delete targets records written beforehand
+   * with the write mode off.
+   */
+  private void assertWriteRejected(HoodieWriteConfig config, WriteOperationType operation, String expectedMessage) {
+    List<HoodieKey> existingKeys = operation == WriteOperationType.DELETE
+        ? insertWithoutDeleteInsertMode(config) : Collections.emptyList();
     try (HoodieJavaWriteClient client =
         new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), config)) {
       String writeTime = WriteClientTestUtils.createNewInstantTime();
       WriteClientTestUtils.startCommitWithTime(client, writeTime);
       List<HoodieRecord> records = (List<HoodieRecord>) (List<?>) dataGen.generateInserts(writeTime, 10);
-      Exception exception =
-          assertThrows(Exception.class, () -> client.upsert(records, writeTime));
+      Exception exception = assertThrows(Exception.class, () -> {
+        if (operation == WriteOperationType.UPSERT) {
+          client.upsert(records, writeTime);
+        } else if (operation == WriteOperationType.INSERT) {
+          client.insert(records, writeTime);
+        } else {
+          client.delete(existingKeys, writeTime);
+        }
+      });
       assertTrue(exceptionChainContains(exception, expectedMessage),
-          "upsert must be rejected in this write mode but got: " + exception);
+          operation + " must be rejected in this write mode but got: " + exception);
     }
+  }
+
+  private List<HoodieKey> insertWithoutDeleteInsertMode(HoodieWriteConfig config) {
+    HoodieWriteConfig insertConfig = HoodieWriteConfig.newBuilder().withProperties(config.getProps())
+        .withWriteUpdatesAsDeletesAndInserts(false).build();
+    try (HoodieJavaWriteClient client =
+        new HoodieJavaWriteClient<>(new HoodieJavaEngineContext(storageConf), insertConfig)) {
+      String insertTime = WriteClientTestUtils.createNewInstantTime();
+      WriteClientTestUtils.startCommitWithTime(client, insertTime);
+      List<HoodieRecord> records = (List<HoodieRecord>) (List<?>) dataGen.generateInserts(insertTime, 10);
+      client.commit(insertTime, client.insert(records, insertTime));
+      return records.stream().map(HoodieRecord::getKey).collect(Collectors.toList());
+    }
+  }
+
+  /**
+   * Asserts that every log block of the latest file slices is a delete block whose record positions
+   * point at the rows of the deleted keys in the slice's base file, and returns the number of deletes.
+   * Version 10 writes native delete log files, earlier versions blocks of inline log files.
+   */
+  private long assertOnlyPositionalDeletes(HoodieWriteConfig config, HoodieTableVersion tableVersion) throws Exception {
+    AtomicLong deleteRecordCount = new AtomicLong();
+    forEachLatestLogBlock(config, (slice, logFile, block) -> {
+      assertTrue(slice.getBaseFile().isPresent(), "a file group with delete logs must have a base file");
+      assertEquals(tableVersion.greaterThanOrEquals(HoodieTableVersion.TEN),
+          FSUtils.isNativeDeleteLogFile(logFile.getFileName()), "unexpected log file layout: " + logFile.getFileName());
+      assertTrue(block instanceof HoodieDeleteBlock,
+          "expected only delete blocks but got: " + block.getClass().getSimpleName() + " in " + logFile.getFileName());
+      HoodieDeleteBlock deleteBlock = (HoodieDeleteBlock) block;
+      DeleteRecord[] deleteRecords = deleteBlock.getRecordsToDelete();
+      deleteRecordCount.addAndGet(deleteRecords.length);
+      List<Long> positions = deleteBlock.getRecordPositionList();
+      assertEquals(deleteRecords.length, positions.size(),
+          "every delete record must carry a position");
+      // The i-th position belongs to the i-th delete record: inline delete blocks store both sorted by
+      // position, and native delete log files store positions in delete-row order.
+      List<String> baseFileKeys = readRecordKeys(config, slice.getBaseFile().get());
+      for (int i = 0; i < positions.size(); i++) {
+        long position = positions.get(i);
+        assertTrue(position >= 0 && position < baseFileKeys.size(), "delete record position out of range: " + position);
+        assertEquals(deleteRecords[i].getRecordKey(), baseFileKeys.get((int) position),
+            "the base file row at a delete position must hold the deleted record key");
+      }
+      assertEquals(slice.getBaseFile().get().getCommitTime(),
+          deleteBlock.getBaseFileInstantTimeOfPositions(),
+          "positions must reference the file slice's base file");
+    });
+    return deleteRecordCount.get();
+  }
+
+  /**
+   * Maps each record key to its file group the way Spark SQL tags prepped records, without a base
+   * file position.
+   */
+  private Map<String, HoodieRecordLocation> locationsWithoutPositions(HoodieWriteConfig config) throws Exception {
+    Map<String, HoodieRecordLocation> locations = new HashMap<>();
+    try (SyncableFileSystemView fsView = getFileSystemView(metaClient.reloadActiveTimeline())) {
+      for (String partition : dataGen.getPartitionPaths()) {
+        for (HoodieBaseFile baseFile : fsView.getLatestBaseFiles(partition).collect(Collectors.toList())) {
+          HoodieRecordLocation location = new HoodieRecordLocation(baseFile.getCommitTime(), baseFile.getFileId());
+          readRecordKeys(config, baseFile).forEach(key -> locations.put(key, location));
+        }
+      }
+    }
+    return locations;
   }
 
   private static boolean exceptionChainContains(Throwable throwable, String text) {

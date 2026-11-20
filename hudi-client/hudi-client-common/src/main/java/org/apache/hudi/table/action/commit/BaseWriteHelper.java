@@ -31,6 +31,7 @@ import org.apache.hudi.common.model.WriteOperationType;
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.common.schema.HoodieSchemaCache;
 import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.table.read.BufferedRecord;
 import org.apache.hudi.common.table.read.BufferedRecordMerger;
@@ -94,9 +95,10 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
   }
 
   /**
-   * Index types that tag a record with its row position in the base file, which the
-   * update-as-delete-insert write mode needs for the delete half of every update. The global
-   * variants are excluded because they tag through a global location that drops the position.
+   * Index types that tag a record with its row position in the base file and write merge-on-read
+   * inserts to base files, which the update-as-delete-insert write mode needs to keep log files to
+   * positional deletes. The global variants are excluded because they tag through a global location
+   * that drops the position.
    */
   private static final EnumSet<HoodieIndex.IndexType> POSITION_PRODUCING_INDEX_TYPES = EnumSet.of(
       HoodieIndex.IndexType.BLOOM, HoodieIndex.IndexType.SIMPLE);
@@ -110,7 +112,16 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
         || !table.getConfig().shouldWriteUpdatesAsDeletesAndInserts()) {
       return false;
     }
-    HoodieTableVersion writeVersion = table.getConfig().getWriteVersion();
+    validateUpdatesAsDeletesAndInserts(table.getConfig(), table.getMetaClient());
+    return true;
+  }
+
+  /**
+   * Validates the requirements of {@link HoodieWriteConfig#WRITE_UPDATES_AS_DELETES_AND_INSERTS} for a
+   * write that can append to the log files of a merge-on-read table.
+   */
+  public static void validateUpdatesAsDeletesAndInserts(HoodieWriteConfig config, HoodieTableMetaClient metaClient) {
+    HoodieTableVersion writeVersion = config.getWriteVersion();
     if (writeVersion.lesserThan(HoodieTableVersion.EIGHT)) {
       // Log files carry record positions only from write table version 8 on
       throw new HoodieNotSupportedException(
@@ -118,7 +129,7 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
               + " requires write table version 8 or higher to write record positions but the write table version is "
               + writeVersion.versionCode());
     }
-    RecordMergeMode mergeMode = table.getMetaClient().getTableConfig().getRecordMergeMode();
+    RecordMergeMode mergeMode = metaClient.getTableConfig().getRecordMergeMode();
     if (mergeMode != RecordMergeMode.COMMIT_TIME_ORDERING) {
       // The decomposed delete unconditionally tombstones the current version, so a late-arriving
       // update with a lower ordering value would incorrectly win under event-time ordering
@@ -126,21 +137,20 @@ public abstract class BaseWriteHelper<T, I, K, O, R> extends ParallelismHelper<I
           HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
               + " requires commit-time ordering merge semantics but the table uses " + mergeMode);
     }
-    HoodieIndex.IndexType indexType = table.getConfig().getIndexType();
+    HoodieIndex.IndexType indexType = config.getIndexType();
     if (!POSITION_PRODUCING_INDEX_TYPES.contains(indexType)) {
-      // Without a base file position the delete half cannot be represented as a positional delete,
-      // and an index that routes by key hash would append the delete and the insert to the same log
+      // Without a base file position a delete cannot be represented as a positional delete, and an
+      // index that routes by key hash or can index log files appends inserts to logs
       throw new HoodieNotSupportedException(
           HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
               + " requires an index that produces record positions " + POSITION_PRODUCING_INDEX_TYPES
               + " but the index type is " + indexType);
     }
-    if (!table.getConfig().shouldWriteRecordPositions()) {
+    if (!config.shouldWriteRecordPositions()) {
       throw new HoodieNotSupportedException(
           HoodieWriteConfig.WRITE_UPDATES_AS_DELETES_AND_INSERTS.key()
               + " requires " + HoodieWriteConfig.WRITE_RECORD_POSITIONS.key() + " to be enabled");
     }
-    return true;
   }
 
   /**

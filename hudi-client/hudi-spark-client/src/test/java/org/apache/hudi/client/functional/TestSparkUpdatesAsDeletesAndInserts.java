@@ -37,10 +37,12 @@ import org.apache.hudi.common.table.log.block.HoodieLogBlock;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.testutils.HoodieTestDataGenerator;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.core.io.storage.HoodieFileReader;
 import org.apache.hudi.core.io.storage.HoodieIOFactory;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.storage.StoragePath;
 import org.apache.hudi.testutils.SparkClientFunctionalTestHarness;
 
@@ -57,6 +59,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -155,6 +158,47 @@ public class TestSparkUpdatesAsDeletesAndInserts extends SparkClientFunctionalTe
       // Both rounds tombstone 100 records each in file groups that remain the latest slices.
       assertEquals(200, deleteRecords, "each update must produce exactly one positional delete");
     }
+  }
+
+  /**
+   * Indexes that can index log files write merge-on-read inserts to logs, and the bucket index also
+   * routes inserts into the existing file group of their bucket.
+   */
+  @ParameterizedTest
+  @EnumSource(value = HoodieIndex.IndexType.class, names = {"BUCKET", "INMEMORY"})
+  void testInsertWithIndexWritingLogsRejectedInDeleteInsertMode(HoodieIndex.IndexType indexType) throws IOException {
+    getHoodieMetaClient(HoodieTableType.MERGE_ON_READ, new Properties());
+    HoodieWriteConfig config = getConfigBuilder(true, HoodieIndex.IndexType.SIMPLE)
+        .withProperties(keyGenProps())
+        .withIndexConfig(HoodieIndexConfig.newBuilder().fromProperties(keyGenProps()).withIndexType(indexType).withBucketNum("1").build())
+        .withWriteUpdatesAsDeletesAndInserts(true)
+        .build();
+    HoodieTestDataGenerator dataGen = new HoodieTestDataGenerator();
+    try (SparkRDDWriteClient client = getHoodieWriteClient(config)) {
+      String insertTime = client.startCommit();
+      List<HoodieRecord> inserts = dataGen.generateInserts(insertTime, 10);
+      Exception exception = assertThrows(Exception.class,
+          () -> client.commit(insertTime, client.insert(jsc().parallelize(inserts, 1), insertTime)));
+      assertTrue(exceptionChainContains(exception, "produces record positions"),
+          "inserts with the " + indexType + " index must be rejected in this write mode but got: " + exception);
+    }
+  }
+
+  private static Properties keyGenProps() {
+    Properties properties = new Properties();
+    properties.setProperty(KeyGeneratorOptions.RECORDKEY_FIELD_NAME.key(), "_row_key");
+    properties.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "partition_path");
+    return properties;
+  }
+
+  private static boolean exceptionChainContains(Throwable throwable, String text) {
+    while (throwable != null) {
+      if (throwable.getMessage() != null && throwable.getMessage().contains(text)) {
+        return true;
+      }
+      throwable = throwable.getCause();
+    }
+    return false;
   }
 
   /**
