@@ -143,7 +143,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
    * The job's own properties are not changed.
    */
   @Test
-  public void blobJobRunsWithEveryRequiredSettingUnset() throws Exception {
+  void blobJobRunsWithEveryRequiredSettingUnset() throws Exception {
     announceObjects();
     TypedProperties props = job(UnstructuredMode.BLOB, INJECTOR, RECORD_KEY, CODEC, BLOOM);
     TypedProperties before = TypedProperties.copy(props);
@@ -158,7 +158,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
 
   /** The same for the embedding job: the markers, the injector and the record key are set; codec and bloom stay Hudi's. */
   @Test
-  public void embeddingJobRunsWithEveryRequiredSettingUnset() throws Exception {
+  void embeddingJobRunsWithEveryRequiredSettingUnset() throws Exception {
     announce(text("a", "alpha", "beta"));
     TypedProperties props = job(UnstructuredMode.EMBEDDING, MARKERS, ROLLBACK, INJECTOR, RECORD_KEY);
     TypedProperties before = TypedProperties.copy(props);
@@ -177,7 +177,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
    * JVM: the embedding table keeps Hudi's codec and bloom filter.
    */
   @Test
-  public void blobSettingsNeverReachTheEmbeddingJob() throws Exception {
+  void blobSettingsNeverReachTheEmbeddingJob() throws Exception {
     announceObjects();
     runBlobJob(job(UnstructuredMode.BLOB, CODEC, BLOOM, INJECTOR));
     run(UnstructuredMode.EMBEDDING, job(UnstructuredMode.EMBEDDING, CODEC, BLOOM));
@@ -188,7 +188,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
 
   /** The codec and the bloom filter are tuning defaults of the blob job: any value the job sets is kept, on either job. */
   @Test
-  public void explicitCodecAndBloomFilterAreKept() throws Exception {
+  void explicitCodecAndBloomFilterAreKept() throws Exception {
     announceObjects();
     TypedProperties blob = job(UnstructuredMode.BLOB);
     blob.setProperty(CODEC, "zstd");
@@ -204,7 +204,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
 
   /** Each required setting set by the job to the required value, in another case or with spaces, is accepted. */
   @Test
-  public void sameValueSetByTheJobIsAccepted() throws Exception {
+  void sameValueSetByTheJobIsAccepted() throws Exception {
     announceObjects();
     TypedProperties blob = job(UnstructuredMode.BLOB);
     blob.setProperty(INJECTOR, " " + BlobParquetConfigInjector.class.getName() + " ");
@@ -229,7 +229,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
       "EMBEDDING|hoodie.rollback.using.markers|false",
       "EMBEDDING|hoodie.parquet.write.config.injector.class|org.apache.hudi.utilities.sources.blob.BlobParquetConfigInjector",
       "EMBEDDING|hoodie.datasource.write.recordkey.field|source_path_sha,source_modification_time,source_file_size"})
-  public void conflictingValueIsRefusedNamingTheSource(UnstructuredMode job, String key, String value) throws Exception {
+  void conflictingValueIsRefusedNamingTheSource(UnstructuredMode job, String key, String value) throws Exception {
     announceObjects();
     TypedProperties props = job(job);
     props.setProperty(key, value);
@@ -241,7 +241,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
   /** The key generator is the job's choice between the complex and the non-partitioned one; any other is refused at start. */
   @ParameterizedTest
   @EnumSource(UnstructuredMode.class)
-  public void keyGeneratorOtherThanComplexOrNonpartitionedIsRefused(UnstructuredMode job) throws Exception {
+  void keyGeneratorOtherThanComplexOrNonpartitionedIsRefused(UnstructuredMode job) throws Exception {
     announceObjects();
     TypedProperties props = job(job);
     props.setProperty(KEY_GENERATOR, SimpleKeyGenerator.class.getName());
@@ -255,7 +255,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
    */
   @ParameterizedTest
   @CsvSource({"BLOB,false", "BLOB,true", "EMBEDDING,false", "EMBEDDING,true"})
-  public void existingTableWithAnotherRecordKeyIsRefused(UnstructuredMode job, boolean keySet) throws Exception {
+  void existingTableWithAnotherRecordKeyIsRefused(UnstructuredMode job, boolean keySet) throws Exception {
     announceObjects();
     boolean blob = job == UnstructuredMode.BLOB;
     HoodieTableMetaClient.newTableBuilder()
@@ -282,7 +282,7 @@ public class TestUnstructuredJobSettings extends EmbeddingRoundTestBase {
    * form, which the job's list matches.
    */
   @Test
-  public void jobNamingItsKeyWithSpacesRunsAgainOnItsTable() throws Exception {
+  void jobNamingItsKeyWithSpacesRunsAgainOnItsTable() throws Exception {
     announce(text("a", "alpha"));
     TypedProperties props = job(UnstructuredMode.BLOB);
     props.setProperty(RECORD_KEY, " source_path_sha , source_modification_time,source_file_size");

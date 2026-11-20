@@ -86,6 +86,7 @@ final class PostGcHeap {
       Thread sampler = new Thread(() -> {
         try {
           while (true) {
+            // by design: the sampler forces a collection every period; the sleep is the period, not a wait
             TimeUnit.MILLISECONDS.sleep(periodMs);
             System.gc();
           }
@@ -137,6 +138,7 @@ final class PostGcHeap {
           break;
         }
       }
+      // by design: a bounded (5 s) poll for notifications that arrive on the JMX thread, which has no latch to wait on
       TimeUnit.MILLISECONDS.sleep(20);
     }
     synchronized (this) {

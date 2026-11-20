@@ -42,10 +42,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the whole stream until the provider is back.
  */
 @Tag("functional")
-public class TestEmbeddingRoundProviderOutage extends EmbeddingRoundTestBase {
+class TestEmbeddingRoundProviderOutage extends EmbeddingRoundTestBase {
 
   @Test
-  public void anOutageFailsTheRoundWithNoCommitAndTheNextRoundCommitsEverything() throws Exception {
+  void anOutageFailsTheRoundWithNoCommitAndTheNextRoundCommitsEverything() throws Exception {
     announce(text("a", "alpha", "beta"));
     TypedProperties props = props(table(), EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     round(props);

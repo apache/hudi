@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Provider writer assertions on the single prep_and_compute commit over the unstructured data source on S3 and the stock checkpoint. */
 @Tag("functional")
-public class TestJinaEmbeddingComputeWriter extends RestProviderRoundTestBase {
+class TestJinaEmbeddingComputeWriter extends RestProviderRoundTestBase {
 
   private static final int DIM = 256;
   private static final String FAKE_KEY = "fake-rest-provider-key";
@@ -61,7 +61,7 @@ public class TestJinaEmbeddingComputeWriter extends RestProviderRoundTestBase {
   private Path keyFile;
 
   @BeforeEach
-  public void startEndpoint() throws Exception {
+  void startEndpoint() throws Exception {
     server = new ScriptedHttpStub();
     keyFile = secrets.resolve("fake.key");
     Files.writeString(keyFile, FAKE_KEY);
@@ -69,7 +69,7 @@ public class TestJinaEmbeddingComputeWriter extends RestProviderRoundTestBase {
   }
 
   @AfterEach
-  public void stopEndpoint() {
+  void stopEndpoint() {
     server.close();
 
   }
@@ -82,7 +82,7 @@ public class TestJinaEmbeddingComputeWriter extends RestProviderRoundTestBase {
   }
 
   @Test
-  public void testModelFillsVectors() throws Exception {
+  void testModelFillsVectors() throws Exception {
     announce(pdf("a"), pdf("b"));
     server.otherwise(JinaStubReplies.embeddings(DIM));
     ComputeRoundCounters.Counted report = ComputeRoundCounters.round(spark(), providerProps());
@@ -108,7 +108,7 @@ public class TestJinaEmbeddingComputeWriter extends RestProviderRoundTestBase {
   }
 
   @Test
-  public void testRejectedInputIsQuarantinedAndItsBatchMatesEmbed() throws Exception {
+  void testRejectedInputIsQuarantinedAndItsBatchMatesEmbed() throws Exception {
     announce(pdf("a"), pdf("b"));
     server.otherwise(request -> request.body.contains("Hudi") ? JinaStubReplies.error(400, "INPUT_TOKEN_LIMIT_EXCEEDED", "bad document chunk") : JinaStubReplies.embeddings(DIM).apply(request));
     Round report = round(providerProps());
@@ -134,7 +134,7 @@ public class TestJinaEmbeddingComputeWriter extends RestProviderRoundTestBase {
 
   @ParameterizedTest
   @ValueSource(ints = {403, 503})
-  public void testRejectedConfigurationFailsTheSyncWithNothingCommitted(int status) throws Exception {
+  void testRejectedConfigurationFailsTheSyncWithNothingCommitted(int status) throws Exception {
     server.otherwise(JinaStubReplies.embeddings(DIM));
     announce(pdf("first"));
     TypedProperties props = providerProps();

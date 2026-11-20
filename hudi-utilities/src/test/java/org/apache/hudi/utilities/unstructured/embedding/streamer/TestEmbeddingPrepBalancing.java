@@ -56,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Whole PDF objects balanced inside the single-writer prep round, with the same committed chunks as the hash strategy. */
 @Tag("functional")
-public class TestEmbeddingPrepBalancing extends EmbeddingRoundTestBase {
+class TestEmbeddingPrepBalancing extends EmbeddingRoundTestBase {
 
   private static final long PDF_BUDGET = 4096L;
 
@@ -77,7 +77,7 @@ public class TestEmbeddingPrepBalancing extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void mixedPdfSizesHaveARecordedTaskPlanAndIdenticalCommittedChunks() throws Exception {
+  void mixedPdfSizesHaveARecordedTaskPlanAndIdenticalCommittedChunks() throws Exception {
     List<FixtureFile> files = new ArrayList<>();
     for (int pages : new int[] {1, 2, 3, 4, 10, 20}) {
       files.add(object("pages-" + pages + ".pdf", PdfFixtures.text(Collections.nCopies(pages,
@@ -155,7 +155,7 @@ public class TestEmbeddingPrepBalancing extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void prepRoundKeepsBothSourceVersionsOfAPath() throws Exception {
+  void prepRoundKeepsBothSourceVersionsOfAPath() throws Exception {
     String target = table("versions");
     TypedProperties props = props(target, EmbeddingTableConfig.MODE_PREP_ONLY,
         EmbeddingTableConfig.BALANCE_STRATEGY_CLASS.key(), RecordingStrategy.class.getName());

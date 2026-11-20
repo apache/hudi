@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * {@link OutOfLineWriter#write} closes the target stream on every path and removes the file of a write that failed, as its
  * contract says ("a failed stream or close removes the file best-effort"), whatever the stream failed with.
  */
-public class TestOutOfLineWriterHandleRelease {
+class TestOutOfLineWriterHandleRelease {
 
   private static final byte[] CONTENT = {1, 2, 3, 4, 5, 6, 7, 8};
 
@@ -58,7 +58,7 @@ public class TestOutOfLineWriterHandleRelease {
   private OutOfLineWriter writer;
 
   @BeforeEach
-  public void createWriter() throws IOException {
+  void createWriter() throws IOException {
     HandleCountingFileSystem.reset();
     table = tempDir.resolve("table");
     Files.createDirectories(table);
@@ -69,12 +69,12 @@ public class TestOutOfLineWriterHandleRelease {
   }
 
   @AfterEach
-  public void resetRegistry() {
+  void resetRegistry() {
     HandleCountingFileSystem.reset();
   }
 
   @Test
-  public void mainPathClosesTheTarget() throws IOException {
+  void mainPathClosesTheTarget() throws IOException {
     String relative = writer.write("pdf", out -> out.write(CONTENT));
     assertEquals(Collections.emptyList(), HandleCountingFileSystem.unclosed(), "target streams left open by the main path");
     assertEquals(Collections.singletonList(relative), blobFiles());
@@ -82,7 +82,7 @@ public class TestOutOfLineWriterHandleRelease {
   }
 
   @Test
-  public void failedStreamClosesAndRemovesTheTarget() throws IOException {
+  void failedStreamClosesAndRemovesTheTarget() throws IOException {
     assertThrows(IOException.class, () -> writer.write("pdf", out -> {
       out.write(CONTENT);
       throw new IOException("injected stream failure");
@@ -96,7 +96,7 @@ public class TestOutOfLineWriterHandleRelease {
   }
 
   @Test
-  public void failedCloseRemovesTheTarget() throws IOException {
+  void failedCloseRemovesTheTarget() throws IOException {
     HandleCountingFileSystem.inject(table, HandleCountingFileSystem.Fault.CLOSE_WRITE, 1);
     assertThrows(IOException.class, () -> writer.write("pdf", out -> out.write(CONTENT)));
     assertEquals(Collections.emptyList(), HandleCountingFileSystem.unclosed(), "target streams left open by a failed close");
@@ -104,7 +104,7 @@ public class TestOutOfLineWriterHandleRelease {
   }
 
   @Test
-  public void errorFromTheStreamClosesTheTarget() {
+  void errorFromTheStreamClosesTheTarget() {
     assertThrows(NoClassDefFoundError.class, () -> writer.write("pdf", out -> {
       out.write(CONTENT);
       throw new NoClassDefFoundError("injected: a codec class missing on the executor");
@@ -113,7 +113,7 @@ public class TestOutOfLineWriterHandleRelease {
   }
 
   @Test
-  public void errorFromTheStreamRemovesThePartialFile() throws IOException {
+  void errorFromTheStreamRemovesThePartialFile() throws IOException {
     assertThrows(NoClassDefFoundError.class, () -> writer.write("pdf", out -> {
       out.write(CONTENT);
       throw new NoClassDefFoundError("injected: a codec class missing on the executor");

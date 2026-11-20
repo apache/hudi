@@ -131,8 +131,8 @@ public final class TransientRetry implements Serializable {
 
   /** The wait before try {@code attempt} (2 or more): {@link #backoffMs} doubled per earlier retry, capped. */
   public long waitBefore(int attempt) {
-    double wait = backoffMs * Math.pow(2, attempt - 2);
-    return (long) Math.min(maxBackoffMs, wait);
+    double wait = backoffMs * Math.pow(2, attempt - 2.0);
+    return (long) Math.min((double) maxBackoffMs, wait);
   }
 
   private static void sleep(long millis, String what) throws InterruptedIOException {

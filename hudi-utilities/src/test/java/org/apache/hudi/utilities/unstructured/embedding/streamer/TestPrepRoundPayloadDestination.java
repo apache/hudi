@@ -99,7 +99,7 @@ class TestPrepRoundPayloadDestination extends SparkClientFunctionalTestHarness {
     Row text = RowFactory.create("sha-a", 1000L, 5L, "s3a://bucket/a.txt", "a.txt", "txt",
         RowFactory.create(HoodieSchema.Blob.INLINE, "alpha|beta".getBytes(StandardCharsets.UTF_8), null));
     return PrepRound.prepare(spark(), spark().createDataFrame(Collections.singletonList(text), SOURCE), config,
-        HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()), table, output, "001", StorageLevel.MEMORY_AND_DISK());
+        HadoopFSUtils.getStorageConf(jsc().hadoopConfiguration()), output, "001", StorageLevel.MEMORY_AND_DISK());
   }
 
   @Test

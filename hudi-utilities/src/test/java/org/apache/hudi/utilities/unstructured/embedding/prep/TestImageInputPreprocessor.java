@@ -63,12 +63,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * (no decode, no resize), typed by the format the header declares; every refusal fails the file, and a storage failure that is
  * not the file's own is an interruption of the round.
  */
-public class TestImageInputPreprocessor {
+class TestImageInputPreprocessor {
 
   @ParameterizedTest
   @CsvSource({"png,png,png,image/png", "jpg,jpeg,jpeg,image/jpeg", "jpeg,jpeg,jpeg,image/jpeg", "gif,gif,gif,image/gif",
       "bmp,bmp,bmp,image/bmp", "tif,tiff,tiff,image/tiff", "tiff,tiff,tiff,image/tiff"})
-  public void oneRowPerImageCarryingItsSourceBytes(String extension, String writeFormat, String expectedFormat,
+  void oneRowPerImageCarryingItsSourceBytes(String extension, String writeFormat, String expectedFormat,
                                                     String expectedContentType) throws IOException {
     byte[] source = ImageFixtures.image(writeFormat, 97, 41);
     List<Chunk> chunks = prep(source, extension, new TypedProperties());
@@ -96,22 +96,23 @@ public class TestImageInputPreprocessor {
   }
 
   @Test
-  public void declaresThatItStoresInputs() {
+  void declaresThatItStoresInputs() {
     assertTrue(new ImageInputPreprocessor().storesInputs());
     assertEquals("image-input-v1", new ImageInputPreprocessor().name());
     assertEquals(SourceKind.IMAGE, new ImageInputPreprocessor().sourceKind());
   }
 
   @Test
-  public void webpHeaderIsReadButNotStored() {
+  void webpHeaderIsReadButNotStored() {
     // the JVM has no WebP reader: the refusal is recorded once at prep, not once per model at compute
-    PreprocessingException refused = assertThrows(PreprocessingException.class,
-        () -> prep(ImageFixtures.webpHeader(640, 480), "webp", new TypedProperties()));
+    byte[] webp = ImageFixtures.webpHeader(640, 480);
+    TypedProperties props = new TypedProperties();
+    PreprocessingException refused = assertThrows(PreprocessingException.class, () -> prep(webp, "webp", props));
     assertEquals("image webp 640x480 is not stored: the stored image types are [bmp, gif, jpeg, png, tiff]", refused.getMessage());
   }
 
   @Test
-  public void imageAboveTheByteGuardFailsBeforeAnyRead() {
+  void imageAboveTheByteGuardFailsBeforeAnyRead() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_BYTES.key(), "100");
     byte[] png = ImageFixtures.image("png", 20, 10);
@@ -120,8 +121,8 @@ public class TestImageInputPreprocessor {
     BlobBytesSupplier neverRead = () -> {
       throw new AssertionError("the byte guard reads nothing");
     };
-    PreprocessingException e = assertThrows(PreprocessingException.class,
-        () -> new ImageInputPreprocessor().open(neverRead, meta, null, props));
+    ImageInputPreprocessor preprocessor = new ImageInputPreprocessor();
+    PreprocessingException e = assertThrows(PreprocessingException.class, () -> preprocessor.open(neverRead, meta, null, props));
     assertEquals("image of " + png.length + " bytes is above " + EmbeddingTableConfig.PREP_IMAGE_MAX_BYTES.key()
         + " = 100; its source bytes are not read", e.getMessage());
     // the neighbour at the guard: exactly max.bytes is stored
@@ -134,7 +135,7 @@ public class TestImageInputPreprocessor {
    * what one array holds is one chunk whose payload is its whole file, read only at its header here.
    */
   @Test
-  public void anImageOfAnySizeIsStoredByDefault() throws IOException {
+  void anImageOfAnySizeIsStoredByDefault() throws IOException {
     byte[] png = ImageFixtures.image("png", 20, 10);
     long fileSize = 3L * 1024 * 1024 * 1024;
     FileMeta meta = new FileMeta("fid-1", "png", fileSize);
@@ -148,17 +149,18 @@ public class TestImageInputPreprocessor {
   }
 
   @Test
-  public void byteGuardConfigIsValidated() {
+  void byteGuardConfigIsValidated() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_BYTES.key(), "0");
-    assertThrows(IllegalArgumentException.class, () -> new ImageInputPreprocessor().validateConfig(props, null));
+    ImageInputPreprocessor preprocessor = new ImageInputPreprocessor();
+    assertThrows(IllegalArgumentException.class, () -> preprocessor.validateConfig(props, null));
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_BYTES.key(), "-1");
-    assertThrows(IllegalArgumentException.class, () -> new ImageInputPreprocessor().validateConfig(props, null));
+    assertThrows(IllegalArgumentException.class, () -> preprocessor.validateConfig(props, null));
     // prep reads no payload, so a limit beyond what one array holds is accepted
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_BYTES.key(), String.valueOf(8L * Integer.MAX_VALUE));
-    assertDoesNotThrow(() -> new ImageInputPreprocessor().validateConfig(props, null));
+    assertDoesNotThrow(() -> preprocessor.validateConfig(props, null));
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_BYTES.key(), "1");
-    assertDoesNotThrow(() -> new ImageInputPreprocessor().validateConfig(props, null));
+    assertDoesNotThrow(() -> preprocessor.validateConfig(props, null));
   }
 
   /**
@@ -167,34 +169,36 @@ public class TestImageInputPreprocessor {
    * a corrupt header stay content failures of the file (the neighbours).
    */
   @Test
-  public void storageFailuresOfTheSourceAreInterruptions() {
+  void storageFailuresOfTheSourceAreInterruptions() {
     FileMeta meta = new FileMeta("fid-503", "png", 1234);
-    SourceReadException atOpen = assertThrows(SourceReadException.class, () -> new ImageInputPreprocessor().open(
-        failingOpen(new IOException("503 Slow Down")), meta, null, new TypedProperties()));
+    ImageInputPreprocessor preprocessor = new ImageInputPreprocessor();
+    TypedProperties props = new TypedProperties();
+    SeekableBlobBytesSupplier slowDown = failingOpen(new IOException("503 Slow Down"));
+    SourceReadException atOpen = assertThrows(SourceReadException.class, () -> preprocessor.open(slowDown, meta, null, props));
     assertEquals("503 Slow Down", rootCause(atOpen).getMessage());
-    SourceReadException hoodieAtOpen = assertThrows(SourceReadException.class, () -> new ImageInputPreprocessor().open(
-        failingOpenUnchecked(new HoodieIOException("Exception creating input stream", new IOException("connection reset"))), meta,
-        null, new TypedProperties()));
+    SeekableBlobBytesSupplier reset = failingOpenUnchecked(new HoodieIOException("Exception creating input stream", new IOException("connection reset")));
+    SourceReadException hoodieAtOpen = assertThrows(SourceReadException.class, () -> preprocessor.open(reset, meta, null, props));
     assertEquals("connection reset", rootCause(hoodieAtOpen).getMessage());
     byte[] png = ImageFixtures.image("png", 20, 10);
-    SourceReadException atRead = assertThrows(SourceReadException.class, () -> new ImageInputPreprocessor().open(
-        failingRead(png, new IOException("connection reset by peer")), new FileMeta("fid-rst", "png", png.length), null,
-        new TypedProperties()));
+    SeekableBlobBytesSupplier resetAtRead = failingRead(png, new IOException("connection reset by peer"));
+    FileMeta rstMeta = new FileMeta("fid-rst", "png", png.length);
+    SourceReadException atRead = assertThrows(SourceReadException.class, () -> preprocessor.open(resetAtRead, rstMeta, null, props));
     assertEquals("connection reset by peer", rootCause(atRead).getMessage());
 
     // neighbours: the source is gone (at open, wrapped by the blob reader, or at a read), short, or corrupt: content failures
-    HoodieIOException gone = assertThrows(HoodieIOException.class, () -> new ImageInputPreprocessor().open(
-        failingOpenUnchecked(new HoodieIOException("Exception creating input stream", new FileNotFoundException("gone.png"))),
-        meta, null, new TypedProperties()));
+    SeekableBlobBytesSupplier goneAtOpen = failingOpenUnchecked(new HoodieIOException("Exception creating input stream", new FileNotFoundException("gone.png")));
+    HoodieIOException gone = assertThrows(HoodieIOException.class, () -> preprocessor.open(goneAtOpen, meta, null, props));
     assertFalse(gone instanceof SourceReadException, gone.toString());
-    IOException goneAtRead = assertThrows(IOException.class, () -> new ImageInputPreprocessor().open(
-        failingRead(png, new FileNotFoundException("gone.png")), new FileMeta("fid-gone", "png", png.length), null,
-        new TypedProperties()));
+    SeekableBlobBytesSupplier goneReading = failingRead(png, new FileNotFoundException("gone.png"));
+    FileMeta goneMeta = new FileMeta("fid-gone", "png", png.length);
+    IOException goneAtRead = assertThrows(IOException.class, () -> preprocessor.open(goneReading, goneMeta, null, props));
     assertTrue(goneAtRead.getCause() == null || !(goneAtRead.getCause() instanceof SourceReadException), goneAtRead.toString());
-    assertThrows(ImageHeaderException.class, () -> new ImageInputPreprocessor().open(seekable(Arrays.copyOf(png, 12)),
-        new FileMeta("fid-short", "png", 12), null, new TypedProperties()));
-    assertThrows(ImageHeaderException.class, () -> new ImageInputPreprocessor().open(seekable(ImageFixtures.garbage()),
-        new FileMeta("fid-garbage", "png", 64), null, new TypedProperties()));
+    SeekableBlobBytesSupplier shortSource = seekable(Arrays.copyOf(png, 12));
+    FileMeta shortMeta = new FileMeta("fid-short", "png", 12);
+    assertThrows(ImageHeaderException.class, () -> preprocessor.open(shortSource, shortMeta, null, props));
+    SeekableBlobBytesSupplier garbage = seekable(ImageFixtures.garbage());
+    FileMeta garbageMeta = new FileMeta("fid-garbage", "png", 64);
+    assertThrows(ImageHeaderException.class, () -> preprocessor.open(garbage, garbageMeta, null, props));
   }
 
   /**
@@ -203,13 +207,15 @@ public class TestImageInputPreprocessor {
    * every rerun would hit again.
    */
   @Test
-  public void malformedRowsAndEofAtOpenAreContentFailures() {
+  void malformedRowsAndEofAtOpenAreContentFailures() {
     FileMeta meta = new FileMeta("fid-bad", "png", 1234);
-    IOException malformed = assertThrows(IOException.class, () -> new ImageInputPreprocessor().open(
-        failingOpen(new BlobReferenceException("OUT_OF_LINE blob has null reference")), meta, null, new TypedProperties()));
+    ImageInputPreprocessor preprocessor = new ImageInputPreprocessor();
+    TypedProperties props = new TypedProperties();
+    SeekableBlobBytesSupplier nullReference = failingOpen(new BlobReferenceException("OUT_OF_LINE blob has null reference"));
+    IOException malformed = assertThrows(IOException.class, () -> preprocessor.open(nullReference, meta, null, props));
     assertTrue(malformed instanceof BlobReferenceException, malformed.toString());
-    IOException eofAtOpen = assertThrows(IOException.class, () -> new ImageInputPreprocessor().open(
-        failingOpen(new BlobTruncatedException("seek beyond EOF")), meta, null, new TypedProperties()));
+    SeekableBlobBytesSupplier beyondEof = failingOpen(new BlobTruncatedException("seek beyond EOF"));
+    IOException eofAtOpen = assertThrows(IOException.class, () -> preprocessor.open(beyondEof, meta, null, props));
     assertTrue(eofAtOpen instanceof EOFException, eofAtOpen.toString());
   }
 
@@ -295,7 +301,7 @@ public class TestImageInputPreprocessor {
   }
 
   @Test
-  public void missingSourceFailsAtTheHeaderRead() {
+  void missingSourceFailsAtTheHeaderRead() {
     // a source that cannot be opened fails its header read inside open(), a content failure of the file
     FileMeta meta = new FileMeta("fid-gone", "png", 1234);
     SeekableBlobBytesSupplier gone = new SeekableBlobBytesSupplier() {
@@ -309,47 +315,53 @@ public class TestImageInputPreprocessor {
         throw new FileNotFoundException("file:/landing/gone.png");
       }
     };
-    assertThrows(FileNotFoundException.class, () -> new ImageInputPreprocessor().open(gone, meta, null, new TypedProperties()));
+    ImageInputPreprocessor preprocessor = new ImageInputPreprocessor();
+    TypedProperties props = new TypedProperties();
+    assertThrows(FileNotFoundException.class, () -> preprocessor.open(gone, meta, null, props));
   }
 
   @Test
-  public void corruptHeaderFailsTheFile() {
-    ImageHeaderException truncated = assertThrows(ImageHeaderException.class,
-        () -> prep(ImageFixtures.truncatedPng(), "png", new TypedProperties()));
+  void corruptHeaderFailsTheFile() {
+    byte[] truncatedPng = ImageFixtures.truncatedPng();
+    TypedProperties props = new TypedProperties();
+    ImageHeaderException truncated = assertThrows(ImageHeaderException.class, () -> prep(truncatedPng, "png", props));
     assertTrue(truncated.getMessage().startsWith("corrupt png image header"), truncated.getMessage());
-    assertThrows(ImageHeaderException.class, () -> prep(ImageFixtures.garbage(), "jpg", new TypedProperties()));
+    byte[] garbage = ImageFixtures.garbage();
+    assertThrows(ImageHeaderException.class, () -> prep(garbage, "jpg", props));
   }
 
   /** A header-corrupt file of each stored type and extension fails the file at prep. */
   @ParameterizedTest
   @CsvSource({"png, png", "jpeg, jpg", "jpeg, jpeg", "gif, gif", "bmp, bmp", "tiff, tif", "tiff, tiff"})
-  public void headerCorruptFileOfEachClaimedTypeFailsTheFile(String format, String extension) {
-    ImageHeaderException e = assertThrows(ImageHeaderException.class,
-        () -> prep(ImageFixtures.headerCorrupt(format), extension, new TypedProperties()));
+  void headerCorruptFileOfEachClaimedTypeFailsTheFile(String format, String extension) {
+    byte[] corrupt = ImageFixtures.headerCorrupt(format);
+    TypedProperties props = new TypedProperties();
+    ImageHeaderException e = assertThrows(ImageHeaderException.class, () -> prep(corrupt, extension, props));
     assertTrue(e.getMessage().startsWith("corrupt " + format + " image header: "), e.getMessage());
   }
 
   @Test
-  public void imageAbovePrepPixelGuardFailsTheFile() {
+  void imageAbovePrepPixelGuardFailsTheFile() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_MAX_PIXELS.key(), "100");
-    PreprocessingException e = assertThrows(PreprocessingException.class,
-        () -> prep(ImageFixtures.image("png", 20, 10), "png", props));
+    byte[] png = ImageFixtures.image("png", 20, 10);
+    PreprocessingException e = assertThrows(PreprocessingException.class, () -> prep(png, "png", props));
     assertTrue(e.getMessage().contains("200 pixels"), e.getMessage());
     assertTrue(e.getMessage().contains(EmbeddingTableConfig.PREP_IMAGE_MAX_PIXELS.key()), e.getMessage());
   }
 
   @Test
-  public void headerBeyondTheCapFailsTheFile() {
+  void headerBeyondTheCapFailsTheFile() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREP_IMAGE_HEADER_MAX_BYTES.key(), "10");
     // the PNG reader wraps the cap's exception in its own IIOException; the cause is named in the message
-    IOException e = assertThrows(IOException.class, () -> prep(ImageFixtures.image("png", 20, 10), "png", props));
+    byte[] png = ImageFixtures.image("png", 20, 10);
+    IOException e = assertThrows(IOException.class, () -> prep(png, "png", props));
     assertTrue(e.getMessage().contains("image header not found within 10 bytes"), e.getMessage());
   }
 
   @Test
-  public void tiffWithItsDirectoryAfterTheCapIsReadThroughTheSeekableSupplier() throws IOException {
+  void tiffWithItsDirectoryAfterTheCapIsReadThroughTheSeekableSupplier() throws IOException {
     // libtiff writers put the IFD after the pixel data; a byte-offset cap fails such files, a seekable read does not
     byte[] tiff = ImageFixtures.singleStripTiff(400, 300);   // IFD at offset 360008
     TypedProperties props = new TypedProperties();
@@ -369,14 +381,15 @@ public class TestImageInputPreprocessor {
   }
 
   @Test
-  public void seekableHeaderReadIsBoundedByBytesRead() throws IOException {
+  void seekableHeaderReadIsBoundedByBytesRead() {
     // blob-table rows always come with random access, so the header budget must bound the bytes READ there too
     byte[] tiff = ImageFixtures.singleStripTiff(400, 300);
     TypedProperties tight = new TypedProperties();
     tight.setProperty(EmbeddingTableConfig.PREP_IMAGE_HEADER_MAX_BYTES.key(), "16");
     FileMeta meta = new FileMeta("fid-tif", "tif", tiff.length);
-    IOException refused = assertThrows(IOException.class,
-        () -> new ImageInputPreprocessor().open(seekable(tiff), meta, null, tight).close());
+    ImageInputPreprocessor preprocessor = new ImageInputPreprocessor();
+    SeekableBlobBytesSupplier source = seekable(tiff);
+    IOException refused = assertThrows(IOException.class, () -> preprocessor.open(source, meta, null, tight).close());
     assertTrue(refused.getMessage().contains("image header not found within 16 bytes"), refused.getMessage());
   }
 
@@ -421,6 +434,7 @@ public class TestImageInputPreprocessor {
 
           @Override
           public void close() {
+            // nothing to release: the bytes are held in memory
           }
         };
       }
@@ -428,19 +442,19 @@ public class TestImageInputPreprocessor {
   }
 
   @Test
-  public void registryMapsTheSevenImageExtensionsToTheInputPreprocessor() {
+  void registryMapsTheSevenImageExtensionsToTheInputPreprocessor() {
     PreprocessorRegistry registry = new PreprocessorRegistry(new TypedProperties());
     for (String extension : new String[] {"png", "jpg", "jpeg", "gif", "bmp", "tif", "tiff", "PNG"}) {
       assertTrue(registry.forExtension(extension).get() instanceof ImageInputPreprocessor, extension);
     }
-    assertEquals(ImageInputPreprocessor.NAME, registry.forExtension("tiff").get().name());
+    assertEquals(ImageInputPreprocessor.PREPROCESSOR_NAME, registry.forExtension("tiff").get().name());
     // pdf keeps its own default, the PDF chunker
     assertTrue(registry.forExtension("pdf").get() instanceof PdfFilePreprocessor);
   }
 
   /** A class configured for an image extension replaces its default; the other image extensions keep theirs. */
   @Test
-  public void configuredClassReplacesTheImageDefault() {
+  void configuredClassReplacesTheImageDefault() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + "tif" + EmbeddingTableConfig.PREPROCESSOR_CLASS_SUFFIX,
         TextPipePreprocessor.class.getName());
@@ -455,7 +469,7 @@ public class TestImageInputPreprocessor {
    * case.
    */
   @Test
-  public void webpHasNoDefaultPreprocessor() {
+  void webpHasNoDefaultPreprocessor() {
     PreprocessorRegistry registry = new PreprocessorRegistry(new TypedProperties());
     for (String extension : new String[] {"webp", "WEBP"}) {
       assertFalse(registry.forExtension(extension).isPresent(), extension);

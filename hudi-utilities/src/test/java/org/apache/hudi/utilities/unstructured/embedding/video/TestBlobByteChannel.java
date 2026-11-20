@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The read-only JCodec channel over a blob: positioned reads, clamped seeks, and storage failures told from the file's end. */
-public class TestBlobByteChannel {
+class TestBlobByteChannel {
 
   private static final byte[] TEN = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
 
@@ -47,7 +47,7 @@ public class TestBlobByteChannel {
   Path dir;
 
   @Test
-  public void readsAndSeeksOverTheBlob() throws IOException {
+  void readsAndSeeksOverTheBlob() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), TEN);
     try (BlobByteChannel channel = new BlobByteChannel(new VideoClips.FileBlob(file, Long.MAX_VALUE))) {
       assertEquals(10, channel.size());
@@ -78,7 +78,7 @@ public class TestBlobByteChannel {
   }
 
   @Test
-  public void positionPastEitherEndIsClampedToTheBlob() throws IOException {
+  void positionPastEitherEndIsClampedToTheBlob() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), TEN);
     try (BlobByteChannel channel = new BlobByteChannel(new VideoClips.FileBlob(file, Long.MAX_VALUE))) {
       // JCodec may position after the last box: the channel stays at the end and reads end-of-file
@@ -94,11 +94,12 @@ public class TestBlobByteChannel {
   }
 
   @Test
-  public void storageFailureIsABlobReadException() throws IOException {
+  void storageFailureIsABlobReadException() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), TEN);
     try (BlobByteChannel channel = new BlobByteChannel(new VideoClips.FileBlob(file, 4))) {
       assertEquals(4, channel.read(ByteBuffer.allocate(4)));
-      IOException failed = assertThrows(IOException.class, () -> channel.read(ByteBuffer.allocate(4)));
+      ByteBuffer next = ByteBuffer.allocate(4);
+      IOException failed = assertThrows(IOException.class, () -> channel.read(next));
       assertTrue(failed instanceof BlobReadException, failed.toString());
       assertTrue(BlobReadException.isStorageFailure(failed));
     }
@@ -119,7 +120,7 @@ public class TestBlobByteChannel {
   }
 
   @Test
-  public void truncatedFileIsTheFilesOwnEndNotStorage() throws IOException {
+  void truncatedFileIsTheFilesOwnEndNotStorage() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), TEN);
     BlobTruncatedException truncated = new BlobTruncatedException("stored file shorter than its recorded range");
     try (BlobByteChannel channel = new BlobByteChannel(new VideoClips.FileBlob(file, Long.MAX_VALUE) {
@@ -128,14 +129,15 @@ public class TestBlobByteChannel {
         throw truncated;
       }
     })) {
-      IOException failed = assertThrows(IOException.class, () -> channel.read(ByteBuffer.allocate(4)));
+      ByteBuffer next = ByteBuffer.allocate(4);
+      IOException failed = assertThrows(IOException.class, () -> channel.read(next));
       assertSame(truncated, failed, "a truncation passes as is");
       assertFalse(BlobReadException.isStorageFailure(failed));
     }
   }
 
   @Test
-  public void isReadOnlyAndClosesTheBlobOnce() throws IOException {
+  void isReadOnlyAndClosesTheBlobOnce() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), TEN);
     AtomicInteger closes = new AtomicInteger();
     BlobByteChannel channel = new BlobByteChannel(new VideoClips.FileBlob(file, Long.MAX_VALUE) {
@@ -145,7 +147,8 @@ public class TestBlobByteChannel {
         super.close();
       }
     });
-    assertThrows(NonWritableChannelException.class, () -> channel.write(ByteBuffer.allocate(1)));
+    ByteBuffer one = ByteBuffer.allocate(1);
+    assertThrows(NonWritableChannelException.class, () -> channel.write(one));
     assertThrows(NonWritableChannelException.class, () -> channel.truncate(1));
     assertTrue(channel.isOpen());
     channel.close();

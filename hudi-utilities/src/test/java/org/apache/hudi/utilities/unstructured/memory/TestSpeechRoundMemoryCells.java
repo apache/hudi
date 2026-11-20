@@ -61,6 +61,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -97,7 +98,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *   children; the live heap must not grow with the tracks' length ({@link #heapDoesNotGrowWithTrackLength}).</li>
  * </ul>
  */
-public class TestSpeechRoundMemoryCells extends EmbeddingRoundTestBase {
+class TestSpeechRoundMemoryCells extends EmbeddingRoundTestBase {
 
   static final String REFERENCE_HEAP = TestEmbeddingRoundMemoryCells.REFERENCE_HEAP;
   private static final long CELL_TIMEOUT_MINUTES = 15;
@@ -122,7 +123,7 @@ public class TestSpeechRoundMemoryCells extends EmbeddingRoundTestBase {
 
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"speech-light", "speech-long", "speech-many"})
-  public void cellPassesAtTheReferenceHeap(String cell) throws Exception {
+  void cellPassesAtTheReferenceHeap(String cell) throws Exception {
     assumeTrue(selectedCells().contains(cell), "memory cell " + cell + " not selected (-Dspeech.memory.cells)");
     int videos;
     int seconds;
@@ -182,7 +183,7 @@ public class TestSpeechRoundMemoryCells extends EmbeddingRoundTestBase {
    */
   @ParameterizedTest(name = "cell {0}")
   @ValueSource(strings = {"speech-length-light", "speech-length"})
-  public void heapDoesNotGrowWithTrackLength(String cell) throws Exception {
+  void heapDoesNotGrowWithTrackLength(String cell) throws Exception {
     assumeTrue(selectedCells().contains(cell), "memory cell " + cell + " not selected (-Dspeech.memory.cells)");
     boolean light = "speech-length-light".equals(cell);
     int shortSeconds = light ? 90 : 10 * 60;
@@ -330,7 +331,7 @@ public class TestSpeechRoundMemoryCells extends EmbeddingRoundTestBase {
     Map<String, List<Row>> speechBySha = new TreeMap<>();
     Map<String, Long> framesBySha = new TreeMap<>();
     for (Row row : rows.values()) {
-      assertTrue(vector(row) != null, "every row has its embedding: " + row);
+      assertNotNull(vector(row), "every row has its embedding: " + row);
       String sha = row.getAs(EmbeddingTableSchema.SOURCE_PATH_SHA);
       if (EmbeddingTableSchema.MODALITY_TEXT.equals(row.getAs(EmbeddingTableSchema.MODALITY))) {
         speechBySha.computeIfAbsent(sha, s -> new ArrayList<>()).add(row);

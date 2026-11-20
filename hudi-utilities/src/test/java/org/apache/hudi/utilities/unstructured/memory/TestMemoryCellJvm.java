@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link MemoryCellJvm}: the heap options make a child's heap the same whatever memory the machine has, and the G1 figures are
  * read from the child's heap log and output.
  */
-public class TestMemoryCellJvm {
+class TestMemoryCellJvm {
 
   private static final String HEAP = "576m";
   private static final long HEAP_BYTES = 576L << 20;
@@ -59,7 +59,7 @@ public class TestMemoryCellJvm {
    */
   @ParameterizedTest
   @ValueSource(strings = {"4g", "16g", "64g"})
-  public void heapOptionsFixTheHeapWhateverTheMachineMemory(String machineRam) throws Exception {
+  void heapOptionsFixTheHeapWhateverTheMachineMemory(String machineRam) throws Exception {
     Path childLog = tempDir.resolve("cell-child.log");
     List<String> command = new ArrayList<>();
     command.add(Paths.get(System.getProperty("java.home"), "bin", "java").toString());
@@ -80,7 +80,7 @@ public class TestMemoryCellJvm {
 
   /** The humongous peak is the most humongous regions at a collection's start, times the logged region size. */
   @Test
-  public void humongousPeakIsTheMostRegionsAtACollectionStart() throws IOException {
+  void humongousPeakIsTheMostRegionsAtACollectionStart() throws IOException {
     Path gcLog = write("cell-gc.log",
         "[0.004s][info][gc,init] Heap Region Size: 2M",
         "[0.105s][info][gc,heap] GC(0) Eden regions: 24->0(25)",
@@ -93,7 +93,7 @@ public class TestMemoryCellJvm {
 
   /** No collection, no humongous peak; a log without a G1 region size is not a G1 child's and fails the cell. */
   @Test
-  public void humongousPeakWithoutCollectionsAndWithoutG1() throws IOException {
+  void humongousPeakWithoutCollectionsAndWithoutG1() throws IOException {
     assertEquals(0L, MemoryCellJvm.humongousPeakBytes(write("idle-gc.log", "[0.004s][info][gc,heap] Heap region size: 1M")));
     Path serial = write("serial-gc.log", "[0.004s][info][gc] Using Serial");
     assertThrows(AssertionError.class, () -> MemoryCellJvm.humongousPeakBytes(serial));
@@ -101,7 +101,7 @@ public class TestMemoryCellJvm {
 
   /** The two fields appended to a {@code MEMORY_CELL} line, the heap after collections from the child's last such line. */
   @Test
-  public void gcFieldsAppendTheHumongousPeakAndTheHeapAfterCollections() throws IOException {
+  void gcFieldsAppendTheHumongousPeakAndTheHeapAfterCollections() throws IOException {
     write("cell-gc.log", "[0.004s][info][gc,heap] Heap region size: 1M", "[0.105s][info][gc,heap] GC(0) Humongous regions: 3->1");
     Path childLog = tempDir.resolve("cell-child.log");
     List<String> output = Arrays.asList("ROUND 1 rows=4", "HEAP_POOL_PEAKS_SUM_BYTES 900", "POST_GC_HEAP_PEAK_BYTES 400",

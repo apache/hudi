@@ -51,6 +51,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,8 +101,7 @@ public class TestUnstructuredChainPlan extends UtilitiesTestBase {
   }
 
   private static void plan(UnstructuredMode mode, TypedProperties props, Option<HoodieSchema> target, String... chain) {
-    UnstructuredSchemaContract.checkChainPlan(mode, mode.requiredTransformer(), UnstructuredSchemaGuard.class, Arrays.asList(chain),
-        jsc, sparkSession, props, target, Option.empty());
+    UnstructuredSchemaContract.checkChainPlan(mode, Arrays.asList(chain), jsc, sparkSession, props, target, Option.empty());
   }
 
   private static String refusal(UnstructuredMode mode, TypedProperties props, String... chain) {
@@ -230,10 +230,12 @@ public class TestUnstructuredChainPlan extends UtilitiesTestBase {
     StructType contract = UnstructuredSchemaContract.contract(UnstructuredMode.EMBEDDING, props, Option.empty());
     StructType table = contract.add(DataTypes.createStructField("ingest_note", DataTypes.StringType, true));
     HoodieSchema without = HoodieSchemaConversionUtils.convertStructTypeToHoodieSchema(contract, "t", "ns");
+    List<String> chain = Arrays.asList(EMBEDDING, SQL, GUARD);
+    Option<HoodieSchema> userSchema = Option.of(without);
+    Option<StructType> tableSchema = Option.of(table);
     HoodieSchemaException refused = assertThrows(HoodieSchemaException.class,
-        () -> UnstructuredSchemaContract.checkChainPlan(UnstructuredMode.EMBEDDING, EmbeddingTableTransformer.class,
-            UnstructuredSchemaGuard.class, Arrays.asList(EMBEDDING, SQL, GUARD), jsc, sparkSession, props, Option.of(without),
-            Option.of(table)));
+        () -> UnstructuredSchemaContract.checkChainPlan(UnstructuredMode.EMBEDDING, chain, jsc, sparkSession, props, userSchema,
+            tableSchema));
     assertTrue(refused.getMessage().contains("the round writes the column ingest_note as string (added by the transformer chain or kept from the table), which the target schema does not have"),
         refused.getMessage());
   }

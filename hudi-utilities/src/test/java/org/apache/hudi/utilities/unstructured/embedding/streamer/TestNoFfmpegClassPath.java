@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * The class-path filter of {@link NoFfmpegClassPath}: FFmpeg entries (under org/bytedeco, or a javacv / javacpp / ffmpeg jar) are
  * dropped and every other entry kept in order, and a manifest-only booter jar is read as its manifest's entries.
  */
-public class TestNoFfmpegClassPath {
+class TestNoFfmpegClassPath {
 
   private static final String REPO = "/home/u/.m2/repository/";
   private static final String JAVACV = REPO + "org/bytedeco/javacv/1.5.10/javacv-1.5.10.jar";
@@ -53,13 +53,13 @@ public class TestNoFfmpegClassPath {
   private static final String SPARK = REPO + "org/apache/spark/spark-core_2.12/3.5.3/spark-core_2.12-3.5.3.jar";
 
   @Test
-  public void dropsFfmpegEntriesAndKeepsTheRestInOrder() {
+  void dropsFfmpegEntriesAndKeepsTheRestInOrder() {
     List<String> entries = Arrays.asList(TEST_CLASSES, JAVACV, JCODEC, FFMPEG_NATIVE, JAVACPP_ELSEWHERE, SPARK, FFMPEG_ELSEWHERE);
     assertEquals(Arrays.asList(TEST_CLASSES, JCODEC, SPARK), NoFfmpegClassPath.withoutFfmpeg(entries));
   }
 
   @Test
-  public void namesFfmpegEntries() {
+  void namesFfmpegEntries() {
     for (String ffmpeg : Arrays.asList(JAVACV, FFMPEG_NATIVE, JAVACPP_ELSEWHERE, FFMPEG_ELSEWHERE, "C:\\m2\\org\\bytedeco\\x\\x.jar")) {
       assertTrue(NoFfmpegClassPath.isFfmpeg(ffmpeg), ffmpeg);
     }
@@ -70,7 +70,7 @@ public class TestNoFfmpegClassPath {
   }
 
   @Test
-  public void readsAManifestOnlyBooterJarAsItsClassPath(@TempDir Path dir) throws IOException {
+  void readsAManifestOnlyBooterJarAsItsClassPath(@TempDir Path dir) throws IOException {
     Path classes = Files.createDirectories(dir.resolve("test classes"));
     Path javacv = Files.createDirectories(dir.resolve("repo/org/bytedeco/javacv")).resolve("javacv-1.5.10.jar");
     Path jcodec = dir.resolve("jcodec-0.2.5.jar");
@@ -89,7 +89,7 @@ public class TestNoFfmpegClassPath {
   }
 
   @Test
-  public void keepsAClassPathOfSeveralEntriesOrAJarWithoutManifestClassPath(@TempDir Path dir) throws IOException {
+  void keepsAClassPathOfSeveralEntriesOrAJarWithoutManifestClassPath(@TempDir Path dir) throws IOException {
     List<String> several = Arrays.asList(TEST_CLASSES, JCODEC);
     assertEquals(several, NoFfmpegClassPath.expand(several));
     Path plain = dir.resolve("plain.jar");
@@ -103,7 +103,7 @@ public class TestNoFfmpegClassPath {
   }
 
   @Test
-  public void thisJvmsClassPathWithoutFfmpegKeepsTheTestClassesAndJcodec() {
+  void thisJvmsClassPathWithoutFfmpegKeepsTheTestClassesAndJcodec() {
     List<String> entries = NoFfmpegClassPath.testClassPathWithoutFfmpeg();
     assertTrue(entries.stream().noneMatch(NoFfmpegClassPath::isFfmpeg), entries.toString());
     assertTrue(entries.stream().anyMatch(entry -> entry.replace('\\', '/').endsWith("target/test-classes")), entries.toString());

@@ -291,15 +291,9 @@ class TestStoredImageOutcomes {
         file.toUri().toString(), "source.png"}, sourceSchema);
     PrepCounters counters = new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(),
         new LongAccumulator(), new LongAccumulator());
-    try (PreprocessingIterator prep = new PreprocessingIterator(
-        Collections.singletonList(source).iterator(),
-        EmbeddingTableConfig.from(props),
-        "001",
-        storedInputs(),
-        new PreprocessorRegistry(props),
-        new WordCountTokenizer(),
-        counters,
-        null)) {
+    try (PreprocessingIterator prep = PreprocessingIterator.builder(Collections.singletonList(source).iterator(),
+        EmbeddingTableConfig.from(props), "001").bytesSource(storedInputs()).registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer()).counters(counters).build()) {
       List<Row> rows = new ArrayList<>();
       prep.forEachRemaining(rows::add);
       assertEquals(1, rows.size(), prep.getSideOutputs().toString());

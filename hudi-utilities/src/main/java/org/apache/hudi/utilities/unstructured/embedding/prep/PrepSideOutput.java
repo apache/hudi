@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.prep;
 
+import org.apache.hudi.utilities.unstructured.embedding.source.FileMeta;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -47,11 +49,11 @@ public final class PrepSideOutput implements Serializable {
   private final String stage;
   private final String error;
 
-  public PrepSideOutput(String sourcePathSha, Long sourceModificationTime, Long sourceFileSize, String sourcePath, String modality,
-                        Long chunkId, String stage, String error) {
-    this.sourcePathSha = sourcePathSha;
-    this.sourceModificationTime = sourceModificationTime;
-    this.sourceFileSize = sourceFileSize;
+  /** A side output of {@code file} (its identity), read from {@code sourcePath}; {@code chunkId} null for the whole file. */
+  public PrepSideOutput(FileMeta file, String sourcePath, String modality, Long chunkId, String stage, String error) {
+    this.sourcePathSha = file.getSourcePathSha();
+    this.sourceModificationTime = file.getSourceModificationTime();
+    this.sourceFileSize = file.getFileSize();
     this.sourcePath = sourcePath;
     this.modality = modality;
     this.chunkId = chunkId;

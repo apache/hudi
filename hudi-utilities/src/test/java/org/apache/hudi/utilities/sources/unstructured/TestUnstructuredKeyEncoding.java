@@ -95,8 +95,8 @@ class TestUnstructuredKeyEncoding {
   void jobCannotOverrideTheBuildsEncoding(String mode) {
     TypedProperties props = job(mode);
     props.setProperty(VERSION, "2");
-    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-        () -> new UnstructuredSourceContract(props).prepareJob(props));
+    UnstructuredSourceContract contract = new UnstructuredSourceContract(props);
+    IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> contract.prepareJob(props));
     assertTrue(error.getMessage().contains(VERSION), error.getMessage());
     assertEquals("2", props.getProperty(VERSION));
   }

@@ -51,14 +51,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * truncation (a {@link VideoDecodeException}, the file's failure). The real FFmpeg frames and audio segment source, the stub
  * transcriber, over the truncation fixtures of the codec matrix.
  */
-public class TestTruncatedVideoSpeech {
+class TestTruncatedVideoSpeech {
 
   @TempDir
   Path dir;
 
   /** With speech on, a cut mkv's speech rows are still prepared and the file then fails on its frames' truncation. */
   @Test
-  public void speechIsPreparedBeforeTheTruncationFailsTheFile() throws IOException {
+  void speechIsPreparedBeforeTheTruncationFailsTheFile() throws IOException {
     byte[] whole;
     try (InputStream in = TestTruncatedVideoSpeech.class.getResourceAsStream("/video/codec-matrix/c08-h264-mp3.mkv")) {
       assertNotNull(in, "the clip");

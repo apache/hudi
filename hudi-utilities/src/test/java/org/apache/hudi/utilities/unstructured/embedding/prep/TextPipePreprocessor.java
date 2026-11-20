@@ -74,6 +74,7 @@ public class TextPipePreprocessor implements FilePreprocessor {
     return new ClosableIterator<Chunk>() {
       @Override
       public void close() {
+        // nothing to release
       }
 
       @Override

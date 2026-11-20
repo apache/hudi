@@ -32,47 +32,49 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Resolves an explicitly named dummy provider. */
-public class TestEmbeddingConfigRulings {
+class TestEmbeddingConfigRulings {
 
   private static final String PROVIDER_KEY = "hoodie.unstructured.embedding.model.m1.provider";
 
   @Test
-  public void dummyProviderWorksWhenNamed() {
-    List<EmbeddingModelSpec> models = EmbeddingTableConfig.from(oneModel("dummy")).models();
+  void dummyProviderWorksWhenNamed() {
+    List<EmbeddingModelSpec> models = EmbeddingTableConfig.from(oneModel("dummy")).modelSpecs();
     assertEquals(1, models.size());
     assertEquals("dummy", models.get(0).getProvider());
     assertEquals(DummyEmbeddingClient.class.getName(), EmbeddingClientFactory.clientClassName(models.get(0)));
   }
 
   @Test
-  public void invalidResolvedColumnNamesTheModelColumnKey() {
+  void invalidResolvedColumnNamesTheModelColumnKey() {
     TypedProperties props = oneModel("dummy");
     props.setProperty(EmbeddingTableConfig.MODELS.key(), "text-embedding-3-small");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "text-embedding-3-small.dimensions", "8");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "text-embedding-3-small.provider", "dummy");
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableConfig.from(props).models());
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, config::modelSpecs);
     assertTrue(refused.getMessage().contains(EmbeddingTableConfig.MODEL_PREFIX + "text-embedding-3-small.column"));
     assertTrue(refused.getMessage().contains("emb_text-embedding-3-small"));
   }
 
   @Test
-  public void modelColumnsCannotCollideIgnoringCase() {
+  void modelColumnsCannotCollideIgnoringCase() {
     TypedProperties props = oneModel("dummy");
     props.setProperty(EmbeddingTableConfig.MODELS.key(), "m1,m2");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1.column", "vec");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m2.column", "VEC");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m2.dimensions", "8");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m2.provider", "dummy");
-    HoodieException refused = assertThrows(HoodieException.class, () -> EmbeddingTableConfig.from(props).models());
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    HoodieException refused = assertThrows(HoodieException.class, config::modelSpecs);
     assertTrue(refused.getMessage().contains("m1") && refused.getMessage().contains("m2"));
   }
 
   @Test
-  public void modelColumnCannotReplaceAFixedColumn() {
+  void modelColumnCannotReplaceAFixedColumn() {
     TypedProperties props = oneModel("dummy");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1.column", "chunk_id");
-    HoodieException refused = assertThrows(HoodieException.class, () -> EmbeddingTableConfig.from(props).models());
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    HoodieException refused = assertThrows(HoodieException.class, config::modelSpecs);
     assertTrue(refused.getMessage().contains("chunk_id"));
   }
 

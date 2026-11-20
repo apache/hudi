@@ -35,11 +35,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Tests the dummy endpoint's output contract independently of its vector helper. */
-public class TestDummyEmbeddingClient {
+class TestDummyEmbeddingClient {
 
   @ParameterizedTest
   @ValueSource(ints = {1, 4, 17})
-  public void returnsFiniteUnitVectorsAtTheConfiguredDimension(int dimension) {
+  void returnsFiniteUnitVectorsAtTheConfiguredDimension(int dimension) {
     try (DummyEmbeddingClient client = client(dimension)) {
       List<EmbeddingResult> results = client.embed(Arrays.asList(input("a", 0), input("a", 1), input("b", 0)));
       assertEquals(3, results.size());
@@ -58,7 +58,7 @@ public class TestDummyEmbeddingClient {
 
   @ParameterizedTest
   @ValueSource(ints = {4, 17})
-  public void preservesInputOrderAndRepeatsAcrossClientInstances(int dimension) {
+  void preservesInputOrderAndRepeatsAcrossClientInstances(int dimension) {
     EmbeddingInput first = input("a", 0);
     EmbeddingInput second = input("a", 1);
     EmbeddingInput third = input("b", 0);

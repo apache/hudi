@@ -67,7 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * are {@code image} rows of the same shape, each carrying the table-pinned {@code prep_logic_version}; compute embeds both; the second round leaves the first round's rows as they were.
  */
 @Tag("functional")
-public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase {
+class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase {
 
   /** Spark 3.5's Parquet caps inline values at 80 KiB: the 29 KB clip and its small frames sit under it. */
   private static final long VIDEO_INLINE_MAX_BYTES = 80L * 1024;
@@ -87,7 +87,7 @@ public class TestVideoPreprocessorsShareOneTable extends EmbeddingRoundTestBase 
 
   @ParameterizedTest(name = "{0}")
   @EnumSource(HoodieTableType.class)
-  public void ffmpegAndJcodecFramesShareOneTable(HoodieTableType tableType) throws Exception {
+  void ffmpegAndJcodecFramesShareOneTable(HoodieTableType tableType) throws Exception {
     byte[] clip = Files.readAllBytes(CLIP);
     FixtureFile byFfmpeg = object("videos/by-ffmpeg.mov", clip);
     FixtureFile byJcodec = object("videos/by-jcodec.mp4", clip);

@@ -50,21 +50,27 @@ public class Chunk {
    * @param aux        modality-specific provenance (page, size, ...); never raw file bytes; copied
    */
   public Chunk(String modality, String text, Integer tokenCount, Map<String, String> aux) {
-    this(modality, text, tokenCount, aux == null ? Collections.emptyMap() : Collections.unmodifiableMap(new HashMap<>(aux)),
-        null, 0L, null, false, null);
-  }
-
-  private Chunk(String modality, String text, Integer tokenCount, Map<String, String> aux, BlobBytesSupplier payload,
-                long payloadSizeBytes, String payloadContentType, boolean payloadIsSource, Long frameIndex) {
     this.modality = modality;
     this.text = text;
     this.tokenCount = tokenCount;
-    this.aux = aux;
-    this.payload = payload;
-    this.payloadSizeBytes = payloadSizeBytes;
-    this.payloadContentType = payloadContentType;
-    this.payloadIsSource = payloadIsSource;
-    this.frameIndex = frameIndex;
+    this.aux = aux == null ? Collections.emptyMap() : Collections.unmodifiableMap(new HashMap<>(aux));
+    this.payload = null;
+    this.payloadSizeBytes = 0L;
+    this.payloadContentType = null;
+    this.payloadIsSource = false;
+    this.frameIndex = null;
+  }
+
+  private Chunk(Builder builder) {
+    this.modality = builder.modality;
+    this.text = builder.text;
+    this.tokenCount = builder.tokenCount;
+    this.aux = Collections.unmodifiableMap(new HashMap<>(builder.aux));
+    this.payload = builder.payload;
+    this.payloadSizeBytes = builder.payloadSizeBytes;
+    this.payloadContentType = builder.payloadContentType;
+    this.payloadIsSource = builder.payloadIsSource;
+    this.frameIndex = builder.frameIndex;
   }
 
   /** A builder of a chunk of {@code modality}; every other field is optional. */
@@ -192,8 +198,7 @@ public class Chunk {
     }
 
     public Chunk build() {
-      return new Chunk(modality, text, tokenCount, Collections.unmodifiableMap(new HashMap<>(aux)), payload,
-          payloadSizeBytes, payloadContentType, payloadIsSource, frameIndex);
+      return new Chunk(this);
     }
   }
 }

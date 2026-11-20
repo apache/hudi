@@ -58,24 +58,24 @@ import static org.junit.jupiter.api.Assertions.assertNull;
  */
 @Slf4j
 @Tag("functional")
-public class TestBlobTableReadBlob extends UtilitiesTestBase {
+class TestBlobTableReadBlob extends UtilitiesTestBase {
 
   @TempDir
   Path tempDir;
 
   @BeforeAll
-  public static void initClass() throws Exception {
+  static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() throws Exception {
+  static void cleanupClass() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @ParameterizedTest
   @CsvSource({"COPY_ON_WRITE,8,false", "COPY_ON_WRITE,8192,false", "MERGE_ON_READ,8,false", "MERGE_ON_READ,8192,false", "COPY_ON_WRITE,8192,true"})
-  public void readBlobResolvesTheSourceReference(String tableType, int size, boolean recompute) throws Exception {
+  void readBlobResolvesTheSourceReference(String tableType, int size, boolean recompute) throws Exception {
     BlobJobHarness harness = BlobJobHarness.under(tempDir).install(jsc.hadoopConfiguration());
     String tableBasePath = basePath + "/blob_table_read_blob";
     Map<String, byte[]> written = harness.putAndAnnounce(sparkSession, Collections.singletonMap("docs/big.pdf", size));
@@ -135,7 +135,7 @@ public class TestBlobTableReadBlob extends UtilitiesTestBase {
    * and a join of two blob tables whose blob columns share the name {@code blob}: each read returns the bytes of its own side.
    */
   @Test
-  public void readBlobResolvesSourceReferencesThroughAliasUnionAndJoins() throws Exception {
+  void readBlobResolvesSourceReferencesThroughAliasUnionAndJoins() throws Exception {
     byte[] first = syncOneObject("first", "blob_table_first", "docs/first.pdf", 8192);
     byte[] second = syncOneObject("second", "blob_table_second", "docs/second.pdf", 4096);
 

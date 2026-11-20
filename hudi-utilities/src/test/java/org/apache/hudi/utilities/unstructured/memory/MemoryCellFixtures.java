@@ -150,7 +150,7 @@ public final class MemoryCellFixtures {
       long xref = out.count;
       StringBuilder table = new StringBuilder("xref\n0 " + (bulkObject + 1) + "\n0000000000 65535 f \n");
       for (int object = 1; object <= bulkObject; object++) {
-        table.append(String.format("%010d 00000 n \n", offsets[object]));
+        table.append(String.format("%010d 00000 n ", offsets[object])).append('\n');
       }
       table.append("trailer\n<< /Size ").append(bulkObject + 1).append(" /Root 1 0 R >>\nstartxref\n").append(xref).append("\n%%EOF\n");
       out.ascii(table.toString());

@@ -170,99 +170,43 @@ public final class UnstructuredSchemaContract {
    *   beyond the new table's contract that the target schema does not have with the same type.</li>
    * </ul>
    *
-   * @param chain the composed entries ({@code <class>} or {@code <id>:<class>}), {@code required} and {@code closing} included
+   * @param chain the composed entries ({@code <class>} or {@code <id>:<class>}), the mode's required transformer and the closing
+   *     {@link UnstructuredSchemaGuard} included
    * @throws HoodieSchemaException naming the transformer or the column, the rule and the source's mode
    */
-  public static void checkChainPlan(UnstructuredMode mode, Class<? extends Transformer> required, Class<? extends Transformer> closing,
-                                    List<String> chain, JavaSparkContext jsc, SparkSession spark, TypedProperties props,
+  public static void checkChainPlan(UnstructuredMode mode, List<String> chain, JavaSparkContext jsc, SparkSession spark, TypedProperties props,
                                     Option<HoodieSchema> userTarget, Option<StructType> tableSchema) {
+    // the mode's required transformer runs first; the schema guard is the closing entry
+    Class<? extends Transformer> required = mode.requiredTransformer();
+    Class<? extends Transformer> closing = UnstructuredSchemaGuard.class;
     String source = sourceName(mode);
-    int requiredIndex = -1;
-    for (int i = 0; i < chain.size() && requiredIndex < 0; i++) {
-      if (UnstructuredTransformerChain.names(chain.get(i), required)) {
-        requiredIndex = i;
-      }
-    }
-    if (requiredIndex < 0) {
-      throw new HoodieSchemaException(source + " runs " + required.getName() + " in every round, but the chain has none: " + chain);
-    }
-    if (requiredIndex > 0) {
-      throw new HoodieSchemaException(source + " runs the job's own transformers only after " + required.getName()
-          + ": --transformer-class places " + chain.subList(0, requiredIndex) + " before it. Move them after it");
-    }
+    int requiredIndex = requiredIndex(source, required, chain);
     boolean errorTable = ConfigUtils.getBooleanWithAltKeys(props, HoodieErrorTableConfig.ERROR_TABLE_ENABLED);
     // the source's rows are the blob rows of either mode; the error-table chain gives every transformer the error column
-    StructType schema = contract(UnstructuredMode.BLOB, props, Option.empty());
-    if (errorTable) {
-      schema = schema.add(DataTypes.createStructField(CORRUPT_RECORD, DataTypes.StringType, true));
-    }
+    StructType schema = withErrorColumn(contract(UnstructuredMode.BLOB, props, Option.empty()), errorTable);
     Set<String> ids = ids(chain);
     StructType fixed = contract(mode, props, Option.empty());
-    schema = plan(mode, chain.get(requiredIndex), ids, schema, jsc, spark, props);
+    ChainPlanner planner = new ChainPlanner(mode, ids, jsc, spark, props);
+    schema = planner.plan(chain.get(requiredIndex), schema);
     StructType requiredProduced = producedByRequired(mode, props, tableSchema, fixed, schema);
+    List<String> after = chain.subList(requiredIndex + 1, chain.size());
     // the round passes each entry the rows as the previous one left them, a column added again given twice; only the closing
     // guard resolves it, so each entry is planned against the unresolved columns and the add-only rule reads the resolved ones
-    for (String entry : chain.subList(requiredIndex + 1, chain.size())) {
-      if (UnstructuredTransformerChain.names(entry, closing)) {
-        continue;
-      }
-      StructType unresolved = plan(mode, entry, ids, schema, jsc, spark, props);
-      StructType planned = lastWins(mode, fixed, unresolved, "the transformer " + entry);
-      for (StructField given : lastWins(mode, fixed, schema, "the transformer " + entry).fields()) {
-        StructField kept = field(planned, given.name());
-        if (kept == null) {
-          throw new HoodieSchemaException(source + " refuses the transformer " + entry + ": it drops the column " + given.name()
-              + (CORRUPT_RECORD.equals(given.name()) ? ", which carries the error rows to the error table; they would be written as "
-              + "good rows" : "") + ". A transformer after " + required.getSimpleName() + " may only add columns and filter rows");
-        }
-        if (!withoutNullability(given.dataType()).equals(withoutNullability(kept.dataType())) || !logicalType(given).equals(logicalType(kept))) {
-          throw new HoodieSchemaException(source + " refuses the transformer " + entry + ": it changes the column " + given.name()
-              + " from " + describe(given) + " to " + describe(kept) + ". A transformer after " + required.getSimpleName()
-              + " may only add columns and filter rows");
-        }
-      }
-      schema = unresolved;
-    }
-    List<String> partitions = Arrays.stream(ConfigUtils.getStringWithAltKeys(props, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME, "")
-        .split(",")).map(String::trim).filter(column -> !column.isEmpty()).collect(Collectors.toList());
-    if (partitions.stream().anyMatch(column -> fieldAt(fixed, column) == null)) {
-      StructType produced = requiredProduced;
-      if (errorTable) {
-        produced = produced.add(DataTypes.createStructField(CORRUPT_RECORD, DataTypes.StringType, true));
-      }
-      for (String entry : chain.subList(requiredIndex + 1, chain.size())) {
-        if (!UnstructuredTransformerChain.names(entry, closing)) {
-          produced = plan(mode, entry, ids, produced, jsc, spark, props);
-        }
-      }
-      produced = lastWins(mode, fixed, produced, "the transformer chain");
-      for (String column : partitions) {
-        if (fieldAt(produced, column) == null) {
-          throw new HoodieSchemaException(source + " refuses partition column " + column + " in "
-              + KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() + ": this job no longer produces it; configure "
-              + CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key() + " or a transformer that produces it. Nothing was written");
-        }
+    for (String entry : after) {
+      if (!UnstructuredTransformerChain.names(entry, closing)) {
+        StructType unresolved = planner.plan(entry, schema);
+        StructType planned = lastWins(mode, fixed, unresolved, "the transformer " + entry);
+        StructType given = lastWins(mode, fixed, schema, "the transformer " + entry);
+        checkAddOnly(source, required, entry, given, planned);
+        schema = unresolved;
       }
     }
+    checkPartitionColumns(source, planner, fixed, withErrorColumn(requiredProduced, errorTable), after, closing);
     schema = lastWins(mode, fixed, schema, "the transformer chain");
     StructType contract = contract(mode, props, tableSchema);
     checkOutput(mode, contract, fixed, schema, "the output of the transformer chain", errorTable);
     if (userTarget.isPresent()) {
-      StructType target = HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(userTarget.get());
-      // the round writes with the target schema: every column beyond the new table's contract, a customer's column the table
-      // already has or one a transformer overwrites in place among them, must be in it
-      for (StructField added : schema.fields()) {
-        if (field(fixed, added.name()) != null || CORRUPT_RECORD.equals(added.name())) {
-          continue;
-        }
-        StructField declared = field(target, added.name());
-        if (declared == null || !withoutNullability(declared.dataType()).equals(withoutNullability(added.dataType()))) {
-          throw new HoodieSchemaException(source + " refuses the target schema: the round writes the column " + added.name() + " as "
-              + describe(added) + " (added by the transformer chain or kept from the table), which the target schema "
-              + (declared == null ? "does not have" : "declares as " + describe(declared)) + "; the round writes with the target "
-              + "schema, so it must declare every column the round writes");
-        }
-      }
+      checkTargetSchema(source, fixed, schema, HoodieSchemaConversionUtils.convertHoodieSchemaToStructType(userTarget.get()));
     }
   }
 
@@ -278,6 +222,114 @@ public final class UnstructuredSchemaContract {
       }
     }
     return produced;
+  }
+
+  /** Plans one chain entry of the source's mode against a given schema; the arguments every entry of a chain shares. */
+  private static final class ChainPlanner {
+    private final UnstructuredMode mode;
+    private final Set<String> ids;
+    private final JavaSparkContext jsc;
+    private final SparkSession spark;
+    private final TypedProperties props;
+
+    ChainPlanner(UnstructuredMode mode, Set<String> ids, JavaSparkContext jsc, SparkSession spark, TypedProperties props) {
+      this.mode = mode;
+      this.ids = ids;
+      this.jsc = jsc;
+      this.spark = spark;
+      this.props = props;
+    }
+
+    StructType plan(String entry, StructType schema) {
+      return UnstructuredSchemaContract.plan(mode, entry, ids, schema, jsc, spark, props);
+    }
+  }
+
+  /** {@code schema} with the error-table column when the error table is on. */
+  private static StructType withErrorColumn(StructType schema, boolean errorTable) {
+    return errorTable ? schema.add(DataTypes.createStructField(CORRUPT_RECORD, DataTypes.StringType, true)) : schema;
+  }
+
+  /** The index of {@code required} in the chain, which must be its first entry. */
+  private static int requiredIndex(String source, Class<? extends Transformer> required, List<String> chain) {
+    int requiredIndex = -1;
+    for (int i = 0; i < chain.size() && requiredIndex < 0; i++) {
+      if (UnstructuredTransformerChain.names(chain.get(i), required)) {
+        requiredIndex = i;
+      }
+    }
+    if (requiredIndex < 0) {
+      throw new HoodieSchemaException(source + " runs " + required.getName() + " in every round, but the chain has none: " + chain);
+    }
+    if (requiredIndex > 0) {
+      throw new HoodieSchemaException(source + " runs the job's own transformers only after " + required.getName()
+          + ": --transformer-class places " + chain.subList(0, requiredIndex) + " before it. Move them after it");
+    }
+    return requiredIndex;
+  }
+
+  /** A transformer after {@code required} keeps every column it is given, with its type: it may only add columns and filter rows. */
+  private static void checkAddOnly(String source, Class<? extends Transformer> required, String entry, StructType given,
+                                   StructType planned) {
+    for (StructField column : given.fields()) {
+      StructField kept = field(planned, column.name());
+      if (kept == null) {
+        throw new HoodieSchemaException(source + " refuses the transformer " + entry + ": it drops the column " + column.name()
+            + (CORRUPT_RECORD.equals(column.name()) ? ", which carries the error rows to the error table; they would be written as "
+            + "good rows" : "") + ". A transformer after " + required.getSimpleName() + " may only add columns and filter rows");
+      }
+      if (!withoutNullability(column.dataType()).equals(withoutNullability(kept.dataType())) || !logicalType(column).equals(logicalType(kept))) {
+        throw new HoodieSchemaException(source + " refuses the transformer " + entry + ": it changes the column " + column.name()
+            + " from " + describe(column) + " to " + describe(kept) + ". A transformer after " + required.getSimpleName()
+            + " may only add columns and filter rows");
+      }
+    }
+  }
+
+  /**
+   * A configured partition column outside the new table's contract must be produced by the required subclass or later transformers.
+   * Replay retains unresolved extra columns until the closing guard's last-wins resolution.
+   */
+  private static void checkPartitionColumns(String source, ChainPlanner planner, StructType fixed, StructType fixedWithErrors,
+                                            List<String> after, Class<? extends Transformer> closing) {
+    List<String> partitions = Arrays.stream(ConfigUtils.getStringWithAltKeys(planner.props, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME, "")
+        .split(",")).map(String::trim).filter(column -> !column.isEmpty()).collect(Collectors.toList());
+    if (partitions.stream().noneMatch(column -> fieldAt(fixed, column) == null)) {
+      return;
+    }
+    StructType produced = fixedWithErrors;
+    for (String entry : after) {
+      if (!UnstructuredTransformerChain.names(entry, closing)) {
+        produced = planner.plan(entry, produced);
+      }
+    }
+    produced = lastWins(planner.mode, fixed, produced, "the transformer chain");
+    for (String column : partitions) {
+      if (fieldAt(produced, column) == null) {
+        throw new HoodieSchemaException(source + " refuses partition column " + column + " in "
+            + KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() + ": this job no longer produces it; configure "
+            + CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key() + " or a transformer that produces it. Nothing was written");
+      }
+    }
+  }
+
+  /**
+   * The round writes with the user's target schema: every column beyond the new table's contract, a customer's column the table
+   * already has or one a transformer overwrites in place among them, must be in it.
+   */
+  private static void checkTargetSchema(String source, StructType fixed, StructType schema, StructType target) {
+    for (StructField added : schema.fields()) {
+      if (field(fixed, added.name()) != null || CORRUPT_RECORD.equals(added.name())) {
+        continue;
+      }
+      StructField declared = field(target, added.name());
+      if (declared == null || !withoutNullability(declared.dataType()).equals(withoutNullability(added.dataType()))) {
+        throw new HoodieSchemaException(source + " refuses the target schema: the round writes the column " + added.name() + " as "
+            + describe(added) + " (added by the transformer chain or kept from the table), which the target schema "
+            + (declared == null ? "does not have" : "declares as " + describe(declared)) + "; the round writes with the target "
+            + "schema, so it must declare every column the round writes");
+      }
+    }
   }
 
   /**

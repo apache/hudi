@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Stored keys include the source version, modality and chunk; repeated keys use ordinary UPSERT. */
 @Tag("functional")
-public class TestEmbeddingRecordKey extends SparkClientFunctionalTestHarness {
+class TestEmbeddingRecordKey extends SparkClientFunctionalTestHarness {
 
   private static final String MODEL = "dummy_v1";
   private static final String SOURCE_SHA = "0123456789abcdef0123456789abcdef";
@@ -59,7 +59,7 @@ public class TestEmbeddingRecordKey extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void keyIsTheFiveFieldValuePairs() {
+  void keyIsTheFiveFieldValuePairs() {
     EmbeddingTableConfig config = EmbeddingTableConfig.from(jobProps("version_key"));
     StructType schema = EmbeddingTableSchema.build(config);
     prepWrite(config, schema, row(schema, "text", 3L, "chunk 3"));
@@ -70,7 +70,7 @@ public class TestEmbeddingRecordKey extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void twoModalitiesOfOneChunkAreTwoRows() {
+  void twoModalitiesOfOneChunkAreTwoRows() {
     EmbeddingTableConfig config = EmbeddingTableConfig.from(jobProps("modalities"));
     StructType schema = EmbeddingTableSchema.build(config);
     prepWrite(config, schema, row(schema, "text", 0L, "text input"));
@@ -83,7 +83,7 @@ public class TestEmbeddingRecordKey extends SparkClientFunctionalTestHarness {
   }
 
   @Test
-  public void anExactRepeatUpsertedAgainIsOneRow() {
+  void anExactRepeatUpsertedAgainIsOneRow() {
     EmbeddingTableConfig config = EmbeddingTableConfig.from(jobProps("repeat"));
     StructType schema = EmbeddingTableSchema.build(config);
     prepWrite(config, schema, row(schema, "text", 3L, "first"));

@@ -37,6 +37,7 @@ import javax.imageio.stream.ImageOutputStream;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -48,25 +49,26 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /** The frame JPEG encoder's failures are the platform's, never the video's (class P): no writer, or an in-memory encode that fails. */
-public class TestFrameJpegEncoder {
+class TestFrameJpegEncoder {
 
   private static final FileMeta VIDEO = new FileMeta("fid-1", "mp4", 1L);
 
   @Test
-  public void jvmWithoutAJpegWriterIsAConfigurationError() {
-    assertThrows(PreprocessorConfigurationException.class, () -> new FrameJpegEncoder(Collections.emptyIterator()));
+  void jvmWithoutAJpegWriterIsAConfigurationError() {
+    Iterator<ImageWriter> noWriter = Collections.emptyIterator();
+    assertThrows(PreprocessorConfigurationException.class, () -> new FrameJpegEncoder(noWriter));
   }
 
   @Test
-  public void anInMemoryEncodeFailureIsAPlatformFailure() throws IOException {
+  void anInMemoryEncodeFailureIsAPlatformFailure() throws IOException {
     ImageWriter real = ImageIO.getImageWritersByFormatName("jpeg").next();
     ImageWriteParam param = real.getDefaultWriteParam();
     ImageWriter failing = mock(ImageWriter.class);
     when(failing.getDefaultWriteParam()).thenReturn(param);
     doThrow(new IOException("encoder state broken")).when(failing).write(any(), any(IIOImage.class), any());
     try (FrameJpegEncoder encoder = new FrameJpegEncoder(Collections.singletonList(failing).iterator())) {
-      PrepPlatformException e = assertThrows(PrepPlatformException.class,
-          () -> encoder.encode(new BufferedImage(16, 16, BufferedImage.TYPE_3BYTE_BGR), VIDEO));
+      BufferedImage frame = new BufferedImage(16, 16, BufferedImage.TYPE_3BYTE_BGR);
+      PrepPlatformException e = assertThrows(PrepPlatformException.class, () -> encoder.encode(frame, VIDEO));
       assertTrue(e.getCause() instanceof IOException, String.valueOf(e.getCause()));
     } finally {
       real.dispose();
@@ -75,10 +77,10 @@ public class TestFrameJpegEncoder {
 
   /** A frame wider than a JPEG can hold is the video's bad input, never a platform failure failing every run. */
   @Test
-  public void frameWiderThanAJpegCanHoldIsTheVideosBadInput() {
+  void frameWiderThanAJpegCanHoldIsTheVideosBadInput() {
     try (FrameJpegEncoder encoder = new FrameJpegEncoder()) {
-      VideoDecodeException e = assertThrows(VideoDecodeException.class,
-          () -> encoder.encode(new BufferedImage(FrameJpegEncoder.MAX_JPEG_SIDE + 1, 1, BufferedImage.TYPE_3BYTE_BGR), VIDEO));
+      BufferedImage tooWide = new BufferedImage(FrameJpegEncoder.MAX_JPEG_SIDE + 1, 1, BufferedImage.TYPE_3BYTE_BGR);
+      VideoDecodeException e = assertThrows(VideoDecodeException.class, () -> encoder.encode(tooWide, VIDEO));
       assertTrue(e.getMessage().contains(String.valueOf(FrameJpegEncoder.MAX_JPEG_SIDE)), e.getMessage());
       assertTrue(encoder.encode(new BufferedImage(FrameJpegEncoder.MAX_JPEG_SIDE, 1, BufferedImage.TYPE_3BYTE_BGR), VIDEO).length > 0,
           "the largest side a JPEG holds still encodes");
@@ -86,7 +88,7 @@ public class TestFrameJpegEncoder {
   }
 
   @Test
-  public void theJvmsWriterEncodesAFrame() {
+  void theJvmsWriterEncodesAFrame() {
     try (FrameJpegEncoder encoder = new FrameJpegEncoder()) {
       assertTrue(encoder.encode(new BufferedImage(16, 16, BufferedImage.TYPE_3BYTE_BGR), VIDEO).length > 0);
     }
@@ -97,7 +99,7 @@ public class TestFrameJpegEncoder {
    * registered ahead of it, and the bytes are those it writes alone.
    */
   @Test
-  public void theJdksWriterEncodesEvenWhenAnotherIsRegisteredFirst() throws Exception {
+  void theJdksWriterEncodesEvenWhenAnotherIsRegisteredFirst() {
     BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_3BYTE_BGR);
     image.setRGB(3, 5, 0x336699);
     byte[] alone;

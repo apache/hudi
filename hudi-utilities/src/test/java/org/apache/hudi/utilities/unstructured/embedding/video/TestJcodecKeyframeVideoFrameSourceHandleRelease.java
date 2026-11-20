@@ -42,12 +42,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The one blob channel the JCodec keyframe source opens is closed on every way out. */
-public class TestJcodecKeyframeVideoFrameSourceHandleRelease {
+class TestJcodecKeyframeVideoFrameSourceHandleRelease {
 
   private static final String MATRIX = "/video/codec-matrix/";
 
   @Test
-  public void drainedVideoClosesItsBlob() throws Exception {
+  void drainedVideoClosesItsBlob() throws Exception {
     Path c01 = resource("c01-h264-aac.mp4");
     TrackedBlobSupplier bytes = new TrackedBlobSupplier(c01);
     int frames = 0;
@@ -64,7 +64,7 @@ public class TestJcodecKeyframeVideoFrameSourceHandleRelease {
   }
 
   @Test
-  public void abandonedAfterTheFirstFrameClosesItsBlob() throws Exception {
+  void abandonedAfterTheFirstFrameClosesItsBlob() throws Exception {
     Path c01 = resource("c01-h264-aac.mp4");
     TrackedBlobSupplier bytes = new TrackedBlobSupplier(c01);
     try (ClosableIterator<ExtractedFrame> it = new JcodecKeyframeVideoFrameSource().frames(bytes, meta(c01, "mp4"),
@@ -77,26 +77,30 @@ public class TestJcodecKeyframeVideoFrameSourceHandleRelease {
   }
 
   @Test
-  public void refusalWhileOpeningClosesItsBlob() throws Exception {
+  void refusalWhileOpeningClosesItsBlob() throws Exception {
     Path hevc = resource("c03-hevc-aac.mp4");
     TrackedBlobSupplier bytes = new TrackedBlobSupplier(hevc);
-    assertThrows(VideoDecodeException.class, () -> new JcodecKeyframeVideoFrameSource().frames(bytes, meta(hevc, "mp4"),
-        new TypedProperties()));
+    JcodecKeyframeVideoFrameSource source = new JcodecKeyframeVideoFrameSource();
+    FileMeta file = meta(hevc, "mp4");
+    TypedProperties props = new TypedProperties();
+    assertThrows(VideoDecodeException.class, () -> source.frames(bytes, file, props));
     assertEquals(1, bytes.opened());
     assertEquals(Collections.emptyList(), bytes.unclosed(), "unclosed handles after a refusal while opening");
   }
 
   @Test
-  public void anotherExtensionOpensNothing() throws Exception {
+  void anotherExtensionOpensNothing() throws Exception {
     Path c01 = resource("c01-h264-aac.mp4");
     TrackedBlobSupplier bytes = new TrackedBlobSupplier(c01);
-    assertThrows(VideoDecodeException.class, () -> new JcodecKeyframeVideoFrameSource().frames(bytes, meta(c01, "mov"),
-        new TypedProperties()));
+    JcodecKeyframeVideoFrameSource source = new JcodecKeyframeVideoFrameSource();
+    FileMeta file = meta(c01, "mov");
+    TypedProperties props = new TypedProperties();
+    assertThrows(VideoDecodeException.class, () -> source.frames(bytes, file, props));
     assertEquals(0, bytes.opened(), "refused before any read");
   }
 
   @Test
-  public void storageFailurePartWayClosesItsBlob() throws Exception {
+  void storageFailurePartWayClosesItsBlob() throws Exception {
     Path c01 = resource("c01-h264-aac.mp4");
     for (long failAt : new long[] {Files.size(c01) / 4, Files.size(c01) / 2, Files.size(c01) * 3 / 4}) {
       TrackedBlobSupplier bytes = new TrackedBlobSupplier(c01, failAt, n -> null);
@@ -120,7 +124,7 @@ public class TestJcodecKeyframeVideoFrameSourceHandleRelease {
    * and the dispose failure is the one close() throws.
    */
   @Test
-  public void writerThatFailsToDisposeStillClosesTheBlob() throws Exception {
+  void writerThatFailsToDisposeStillClosesTheBlob() throws Exception {
     Path c01 = resource("c01-h264-aac.mp4");
     TrackedBlobSupplier bytes = new TrackedBlobSupplier(c01);
     try (ImageProviderLeakSpies spies = ImageProviderLeakSpies.installJpeg(false, true)) {
@@ -140,7 +144,7 @@ public class TestJcodecKeyframeVideoFrameSourceHandleRelease {
    * is the one close() throws, and the blob's is suppressed into it.
    */
   @Test
-  public void writerDisposeFailureStaysTheOneThrownWhenTheBlobAlsoFailsToClose() throws Exception {
+  void writerDisposeFailureStaysTheOneThrownWhenTheBlobAlsoFailsToClose() throws Exception {
     Path c01 = resource("c01-h264-aac.mp4");
     RuntimeException blobFailure = new IllegalStateException("test: the blob failed to close");
     TrackedBlobSupplier bytes = new TrackedBlobSupplier(c01, Long.MAX_VALUE, n -> blobFailure);
@@ -159,12 +163,14 @@ public class TestJcodecKeyframeVideoFrameSourceHandleRelease {
    * the close failure suppressed into it, so how the video is sorted does not depend on the cleanup.
    */
   @Test
-  public void openFailureStaysTheOneThrownWhenTheBlobAlsoFailsToClose() throws Exception {
+  void openFailureStaysTheOneThrownWhenTheBlobAlsoFailsToClose() throws Exception {
     Path hevc = resource("c03-hevc-aac.mp4");
     RuntimeException blobFailure = new IllegalStateException("test: the blob failed to close");
     TrackedBlobSupplier bytes = new TrackedBlobSupplier(hevc, Long.MAX_VALUE, n -> blobFailure);
-    VideoDecodeException thrown = assertThrows(VideoDecodeException.class,
-        () -> new JcodecKeyframeVideoFrameSource().frames(bytes, meta(hevc, "mp4"), new TypedProperties()));
+    JcodecKeyframeVideoFrameSource source = new JcodecKeyframeVideoFrameSource();
+    FileMeta file = meta(hevc, "mp4");
+    TypedProperties props = new TypedProperties();
+    VideoDecodeException thrown = assertThrows(VideoDecodeException.class, () -> source.frames(bytes, file, props));
     assertEquals(1, thrown.getSuppressed().length, "the close failure is suppressed into the open failure");
     assertSame(blobFailure, thrown.getSuppressed()[0]);
   }

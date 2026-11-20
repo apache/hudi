@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link PreprocessorRegistry}: a file extension resolves to the preprocessor class its
  * {@code hoodie.unstructured.embedding.prep.preprocessor.<ext>.class} key names, one instance per class, closed with the registry.
  */
-public class TestPreprocessorRegistry {
+class TestPreprocessorRegistry {
 
   /** A preprocessor holding a per-task resource. */
   public static class CloseablePreprocessor implements FilePreprocessor, AutoCloseable {
@@ -81,7 +81,7 @@ public class TestPreprocessorRegistry {
   }
 
   @BeforeEach
-  public void reset() {
+  void reset() {
     CloseablePreprocessor.CLOSED.set(0);
   }
 
@@ -98,7 +98,7 @@ public class TestPreprocessorRegistry {
   }
 
   @Test
-  public void resolvesTheConfiguredClassIgnoringCase() {
+  void resolvesTheConfiguredClassIgnoringCase() {
     PreprocessorRegistry registry = new PreprocessorRegistry(props("PDF", CloseablePreprocessor.class.getName()));
 
     assertInstanceOf(CloseablePreprocessor.class, registry.forExtension("pdf").get());
@@ -106,7 +106,7 @@ public class TestPreprocessorRegistry {
   }
 
   @Test
-  public void anUnconfiguredOrMissingExtensionHasNoPreprocessor() {
+  void anUnconfiguredOrMissingExtensionHasNoPreprocessor() {
     PreprocessorRegistry registry = new PreprocessorRegistry(props("pdf", CloseablePreprocessor.class.getName()));
 
     assertFalse(registry.forExtension("txt").isPresent());
@@ -115,7 +115,7 @@ public class TestPreprocessorRegistry {
   }
 
   @Test
-  public void otherKeysUnderThePrefixAreNotExtensions() {
+  void otherKeysUnderThePrefixAreNotExtensions() {
     TypedProperties props = props("pdf", CloseablePreprocessor.class.getName());
     props.setProperty(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + "pdf.max.pages", "3");
 
@@ -126,7 +126,7 @@ public class TestPreprocessorRegistry {
   }
 
   @Test
-  public void extensionsNamingOneClassShareOneInstance() {
+  void extensionsNamingOneClassShareOneInstance() {
     PreprocessorRegistry registry = new PreprocessorRegistry(props(
         "pdf", CloseablePreprocessor.class.getName(), "pdfa", CloseablePreprocessor.class.getName()));
 
@@ -136,7 +136,7 @@ public class TestPreprocessorRegistry {
   }
 
   @Test
-  public void closeClosesEveryResolvedCloseablePreprocessorOnce() {
+  void closeClosesEveryResolvedCloseablePreprocessorOnce() {
     PreprocessorRegistry registry = new PreprocessorRegistry(props(
         "pdf", CloseablePreprocessor.class.getName(), "doc", FailingClosePreprocessor.class.getName()));
     registry.forExtension("pdf");
@@ -149,7 +149,7 @@ public class TestPreprocessorRegistry {
   }
 
   @Test
-  public void anUnresolvedPreprocessorIsNotCreatedToBeClosed() {
+  void anUnresolvedPreprocessorIsNotCreatedToBeClosed() {
     PreprocessorRegistry registry = new PreprocessorRegistry(props("pdf", CloseablePreprocessor.class.getName()));
 
     registry.close();
@@ -163,11 +163,11 @@ public class TestPreprocessorRegistry {
    * hidden, is {@code TestFfmpegAbsentClassGraph}).
    */
   @Test
-  public void videoExtensionsMapToTheFramePreprocessorByDefault() {
+  void videoExtensionsMapToTheFramePreprocessorByDefault() {
     TypedProperties props = new TypedProperties();
     PreprocessorRegistry registry = new PreprocessorRegistry(props);
 
-    assertEquals(VideoFramePreprocessor.class.getName(), EmbeddingTableConfig.DEFAULT_PREP_VIDEO_PREPROCESSOR_CLASS);
+    assertEquals(EmbeddingTableConfig.DEFAULT_PREP_VIDEO_PREPROCESSOR_CLASS, VideoFramePreprocessor.class.getName());
     for (String extension : PreprocessorRegistry.VIDEO_EXTENSIONS) {
       assertEquals(VideoFramePreprocessor.class, registry.forExtension(extension).get().getClass(), extension);
     }
@@ -176,7 +176,7 @@ public class TestPreprocessorRegistry {
   }
 
   @Test
-  public void anExtensionKeyWinsOverTheVideoKeyForItsExtension() {
+  void anExtensionKeyWinsOverTheVideoKeyForItsExtension() {
     TypedProperties props = props("mov", FailingClosePreprocessor.class.getName());
     props.setProperty(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key(), CloseablePreprocessor.class.getName());
     PreprocessorRegistry registry = new PreprocessorRegistry(props);
@@ -186,12 +186,12 @@ public class TestPreprocessorRegistry {
   }
 
   @Test
-  public void theVideoKeyMustNameAVideoPreprocessor() {
+  void theVideoKeyMustNameAVideoPreprocessor() {
     TypedProperties props = new TypedProperties();
     props.setProperty(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key(), CloseablePreprocessor.class.getName());
 
-    IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-        () -> new PreprocessorRegistry(props).validateConfig(props, null));
+    PreprocessorRegistry registry = new PreprocessorRegistry(props);
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> registry.validateConfig(props, null));
     assertTrue(e.getMessage().contains(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key() + " = "
         + CloseablePreprocessor.class.getName() + " is a DOCUMENT preprocessor; it must name a video preprocessor"), e.getMessage());
   }

@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 80 KiB, the largest binary value Spark 3.5 keeps inline.
  */
 @Tag("functional")
-public class TestLargeFramesFixture {
+class TestLargeFramesFixture {
 
   static final String FIXTURE = "/video/large-frames/large-frames-720p.mp4";
   /** Spark 3.5's inline cap for a binary value. */
@@ -55,7 +55,7 @@ public class TestLargeFramesFixture {
   Path dir;
 
   @Test
-  public void everyKeptFrameIsAJpegAboveTheInlineCap() throws IOException {
+  void everyKeptFrameIsAJpegAboveTheInlineCap() throws IOException {
     Path clip = dir.resolve("large-frames-720p.mp4");
     try (InputStream in = TestLargeFramesFixture.class.getResourceAsStream(FIXTURE)) {
       assertNotNull(in, FIXTURE);

@@ -54,6 +54,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.concurrent.Callable;
@@ -136,10 +137,13 @@ public class AudioFfmpegAbsentProbe implements Callable<String> {
     props.setProperty(EmbeddingTableConfig.MODE.key(), EmbeddingTableConfig.MODE_PREP_ONLY);
     PrepCounters counters = new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(),
         new LongAccumulator(), new LongAccumulator());
-    PreprocessingIterator iterator = new PreprocessingIterator(
-        Arrays.asList(sourceRow("sha-pdf", "pdf", pdf), sourceRow("sha-video", "mp4", NOT_A_VIDEO)).iterator(),
-        EmbeddingTableConfig.from(props), "001", new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())),
-        new PreprocessorRegistry(props), new WordCountTokenizer(), counters, null);
+    Iterator<Row> sources = Arrays.asList(sourceRow("sha-pdf", "pdf", pdf), sourceRow("sha-video", "mp4", NOT_A_VIDEO)).iterator();
+    PreprocessingIterator iterator = PreprocessingIterator.builder(sources, EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters)
+        .build();
     List<Row> rows = new ArrayList<>();
     StringBuilder report = new StringBuilder();
     try {
@@ -184,6 +188,7 @@ public class AudioFfmpegAbsentProbe implements Callable<String> {
 
             @Override
             public void close() {
+              // nothing to release: an empty iterator holds no resource
             }
           };
         }
@@ -239,6 +244,7 @@ public class AudioFfmpegAbsentProbe implements Callable<String> {
 
         @Override
         public void close() {
+          // nothing to release: the bytes are held in memory
         }
       };
     }

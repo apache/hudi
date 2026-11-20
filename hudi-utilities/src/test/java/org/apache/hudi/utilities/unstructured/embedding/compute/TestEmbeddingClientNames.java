@@ -34,7 +34,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -42,23 +43,23 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The name table the table config resolves clients by stays the providers' own ids and classes. */
-public class TestEmbeddingClientNames {
+class TestEmbeddingClientNames {
 
   @Test
-  public void namesAreTheProviderClasses() {
-    assertEquals(Arrays.stream(OpenAiProvider.values()).map(OpenAiProvider::id).collect(Collectors.toList()),
-        EmbeddingClientNames.OPENAI_PROVIDERS);
-    assertEquals(OpenAiCompatibleEmbeddingClient.class.getName(), EmbeddingClientNames.OPENAI_COMPATIBLE_CLIENT);
+  void namesAreTheProviderClasses() {
+    List<String> openAiProviders = EmbeddingClientNames.OPENAI_PROVIDERS;
+    assertEquals(Arrays.stream(OpenAiProvider.values()).map(OpenAiProvider::id).collect(Collectors.toList()), openAiProviders);
+    assertEquals(EmbeddingClientNames.OPENAI_COMPATIBLE_CLIENT, OpenAiCompatibleEmbeddingClient.class.getName());
     assertEquals(VertexMultimodalEmbeddingClient.PROVIDER, EmbeddingClientNames.VERTEX_PROVIDER);
-    assertEquals(VertexMultimodalEmbeddingClient.class.getName(), EmbeddingClientNames.VERTEX_CLIENT);
+    assertEquals(EmbeddingClientNames.VERTEX_CLIENT, VertexMultimodalEmbeddingClient.class.getName());
     assertEquals(BedrockEmbeddingClient.PROVIDER, EmbeddingClientNames.BEDROCK_PROVIDER);
     assertEquals(JinaEmbeddingClient.PROVIDER, EmbeddingClientNames.JINA_PROVIDER);
-    assertEquals(JinaEmbeddingClient.class.getName(), EmbeddingClientNames.JINA_CLIENT);
+    assertEquals(EmbeddingClientNames.JINA_CLIENT, JinaEmbeddingClient.class.getName());
   }
 
   @Test
-  public void bedrockTableIsTheModelFamilies() {
-    Map<BedrockModelFamily, String> clients = new HashMap<>();
+  void bedrockTableIsTheModelFamilies() {
+    Map<BedrockModelFamily, String> clients = new EnumMap<>(BedrockModelFamily.class);
     clients.put(BedrockModelFamily.TITAN_EMBED_TEXT_V2, BedrockTitanTextEmbeddingClient.class.getName());
     clients.put(BedrockModelFamily.COHERE_EMBED_V4, BedrockCohereEmbeddingClient.class.getName());
     clients.put(BedrockModelFamily.TITAN_EMBED_IMAGE_V1, BedrockTitanMultimodalEmbeddingClient.class.getName());
@@ -75,23 +76,25 @@ public class TestEmbeddingClientNames {
       "arn:aws:bedrock:us-east-1:123456789012:inference-profile/us.cohere.embed-v4:0",
       "arn:aws:bedrock:us-west-2:123456789012:application-inference-profile/abcdef123456", "amazon.titan-embed-text-v1",
       " cohere.embed-v4 "})
-  public void bedrockFamilyMatchesTheModelFamilyRule(String modelId) {
+  void bedrockFamilyMatchesTheModelFamilyRule(String modelId) {
     assertEquals(BedrockModelFamily.fromModelId(modelId).map(BedrockModelFamily::baseModelId).orElse(null),
         EmbeddingClientNames.bedrockFamily(modelId));
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"openai", "azure-openai", "hf-tei"})
-  public void resolvesEachOpenAiProviderWithoutAnExplicitClient(String provider) {
+  void resolvesEachOpenAiProviderWithoutAnExplicitClient(String provider) {
     assertEquals(OpenAiCompatibleEmbeddingClient.class.getName(), EmbeddingClientFactory.clientClassName(spec(provider, null)));
   }
 
   @Test
-  public void explicitCustomClientWinsOverAnUnsupportedProvider() {
+  void explicitCustomClientWinsOverAnUnsupportedProvider() {
     assertEquals(DummyEmbeddingClient.class.getName(),
         EmbeddingClientFactory.clientClassName(spec("custom", DummyEmbeddingClient.class.getName())));
-    assertThrows(IllegalArgumentException.class, () -> EmbeddingClientFactory.clientClassName(spec("openai", String.class.getName())));
-    assertThrows(UnsupportedOperationException.class, () -> EmbeddingClientFactory.clientClassName(spec("unsupported", null)));
+    EmbeddingModelSpec notAClient = spec("openai", String.class.getName());
+    assertThrows(IllegalArgumentException.class, () -> EmbeddingClientFactory.clientClassName(notAClient));
+    EmbeddingModelSpec unsupported = spec("unsupported", null);
+    assertThrows(UnsupportedOperationException.class, () -> EmbeddingClientFactory.clientClassName(unsupported));
   }
 
   private static EmbeddingModelSpec spec(String provider, String clientClass) {

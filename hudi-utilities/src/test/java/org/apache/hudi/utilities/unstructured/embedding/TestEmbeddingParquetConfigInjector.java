@@ -72,7 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * through the real writer factory stores those bytes without a dictionary (and without min/max statistics where Parquet has the
  * switch), while the table-wide settings stay the job's.
  */
-public class TestEmbeddingParquetConfigInjector {
+class TestEmbeddingParquetConfigInjector {
 
   private static final String DATA = EmbeddingTableSchema.PREPARED_IMAGE + "." + HoodieSchema.Blob.INLINE_DATA_FIELD;
   private static final String DICTIONARY_KEY = HoodieBaseParquetWriter.COLUMN_DICTIONARY_ENABLED + "#" + DATA;
@@ -83,7 +83,7 @@ public class TestEmbeddingParquetConfigInjector {
 
   /** The writer's hook applies the per-column settings, after a job's own injector, whose settings are kept. */
   @Test
-  public void theWriterHookAppliesThePerColumnSettingsAfterTheJobsInjector() {
+  void theWriterHookAppliesThePerColumnSettingsAfterTheJobsInjector() {
     TypedProperties props = embeddingJobProps();
     props.setProperty(EmbeddingParquetConfigInjector.DELEGATE_CLASS, JobInjector.class.getName());
 
@@ -109,7 +109,7 @@ public class TestEmbeddingParquetConfigInjector {
   /** Row checks override caller and delegate intervals while keeping the job's other writer settings and caller isolation. */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
-  public void pageChecksRunAfterEveryRowAfterTheDelegate(boolean statisticsSwitch) {
+  void pageChecksRunAfterEveryRowAfterTheDelegate(boolean statisticsSwitch) {
     TypedProperties props = embeddingJobProps();
     props.setProperty(EmbeddingParquetConfigInjector.DELEGATE_CLASS, JobInjector.class.getName());
     props.setProperty(HoodieStorageConfig.PARQUET_PAGE_SIZE.key(), "65536");
@@ -140,7 +140,7 @@ public class TestEmbeddingParquetConfigInjector {
 
   /** Through the real writer factory, prepared_image.data is written PLAIN; without the injector the same rows get a dictionary. */
   @Test
-  public void preparedImageBytesAreWrittenWithoutADictionary() throws Exception {
+  void preparedImageBytesAreWrittenWithoutADictionary() throws Exception {
     TypedProperties props = embeddingJobProps();
     Map<String, ColumnChunkMetaData> withInjector = write(new HoodieConfig(TypedProperties.copy(props)), "embedding");
     ColumnChunkMetaData data = withInjector.get(DATA);

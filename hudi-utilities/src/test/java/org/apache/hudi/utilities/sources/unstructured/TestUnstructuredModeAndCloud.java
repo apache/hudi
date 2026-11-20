@@ -109,12 +109,13 @@ public class TestUnstructuredModeAndCloud {
   @Test
   void embeddingRequiresEmbeddingMode() {
     String source = "UnstructuredDataSource (mode embedding)";
+    TypedProperties none = new TypedProperties();
     IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> UnstructuredMode.EMBEDDING.validate(new TypedProperties(), source));
+        () -> UnstructuredMode.EMBEDDING.validate(none, source));
     assertTrue(refused.getMessage().contains(source + " requires hoodie.unstructured.embedding.mode"), refused.getMessage());
     assertDoesNotThrow(() -> UnstructuredMode.EMBEDDING.validate(props("hoodie.unstructured.embedding.mode", "prep_only"), source));
-    assertThrows(IllegalArgumentException.class,
-        () -> UnstructuredMode.EMBEDDING.validate(props("hoodie.unstructured.embedding.mode", "prep_and_compute"), source));
+    TypedProperties oldMode = props("hoodie.unstructured.embedding.mode", "prep_and_compute");
+    assertThrows(IllegalArgumentException.class, () -> UnstructuredMode.EMBEDDING.validate(oldMode, source));
   }
 
   @Test

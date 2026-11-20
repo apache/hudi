@@ -37,6 +37,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -44,10 +45,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * data and its embedding; no committed row waits for compute.
  */
 @Tag("functional")
-public class TestEmbeddingRoundOneCommit extends EmbeddingRoundTestBase {
+class TestEmbeddingRoundOneCommit extends EmbeddingRoundTestBase {
 
   @Test
-  public void oneCommitHoldsEveryRowWithItsEmbedding() throws Exception {
+  void oneCommitHoldsEveryRowWithItsEmbedding() throws Exception {
     FixtureFile a = text("a", "alpha", "beta", "gamma");
     FixtureFile b = text("b", "delta");
     FixtureFile pdf = object("c.pdf", PdfFixtures.text("Omicron pi rho sigma.", "Tau upsilon phi chi."));
@@ -66,7 +67,7 @@ public class TestEmbeddingRoundOneCommit extends EmbeddingRoundTestBase {
       long chunk = row.getAs(EmbeddingTableSchema.CHUNK_ID);
       assertArrayEquals(DummyEmbeddingClient.vectorFor(sha, chunk, EmbeddingStreamers.MODEL_DIMENSIONS), vector(row),
           "every committed row carries its embedding: " + row);
-      assertTrue(row.<String>getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK).length() > 0, "derived data kept: " + row);
+      assertFalse(row.<String>getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK).isEmpty(), "derived data kept: " + row);
     }
     assertEquals("beta", rows.get(key(a, EmbeddingTableSchema.MODALITY_TEXT, 1)).getAs(EmbeddingTableSchema.PREPARED_TEXT_CHUNK));
     assertTrue(ScriptedEmbeddingClient.CALLS.get() > 0);
@@ -74,7 +75,7 @@ public class TestEmbeddingRoundOneCommit extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void prepAndComputeDerivesTheSameColumnsAsPrepOnly() throws Exception {
+  void prepAndComputeDerivesTheSameColumnsAsPrepOnly() throws Exception {
     announce(text("a", "alpha", "beta"), text("b", "gamma", "delta", "epsilon"));
 
     round(props(table("prep_only"), EmbeddingTableConfig.MODE_PREP_ONLY));

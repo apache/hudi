@@ -33,8 +33,10 @@ import org.apache.hudi.utilities.unstructured.embedding.FixtureFile;
 import org.apache.hudi.utilities.unstructured.embedding.prep.TextPipePreprocessor;
 import org.apache.hudi.utilities.unstructured.embedding.prep.pdf.PdfFixtures;
 
+import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -56,7 +58,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * {@link EmbeddingTableTransformer} refuses the instant-less {@code apply}: it needs the commit started before the transformer.
  */
 @Tag("functional")
-public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBase {
+class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBase {
 
   private TypedProperties prepOnly() {
     return props(table(), EmbeddingTableConfig.MODE_PREP_ONLY,
@@ -64,7 +66,7 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
   }
 
   @Test
-  public void oneCommitHoldsEveryPreparedRowWithoutAModelColumnAndTheStockCheckpoint() throws Exception {
+  void oneCommitHoldsEveryPreparedRowWithoutAModelColumnAndTheStockCheckpoint() throws Exception {
     FixtureFile a = text("a", "alpha", "beta", "gamma");
     FixtureFile b = text("b", "delta");
     FixtureFile pdf = object("c.pdf", PdfFixtures.text(
@@ -119,7 +121,7 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
   }
 
   @Test
-  public void roundWithoutNewEventsCommitsNothingAndTheNextEventsCommitIsReadOnce() throws Exception {
+  void roundWithoutNewEventsCommitsNothingAndTheNextEventsCommitIsReadOnce() throws Exception {
     FixtureFile a = text("a", "alpha", "beta");
     announce(a);
     assertTrue(round(prepOnly()).getCommit().isPresent());
@@ -137,7 +139,7 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
   }
 
   @Test
-  public void anOverwriteAddsVersionRowsAndKeepsTheOld() throws Exception {
+  void anOverwriteAddsVersionRowsAndKeepsTheOld() throws Exception {
     FixtureFile a = text("a", "alpha", "beta", "gamma");
     announce(a);
     touch(a, Instant.parse("2026-01-02T10:00:00Z"));
@@ -160,7 +162,7 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
   }
 
   @Test
-  public void rowsOfExtensionsOutsideThePrepAllowListAreDroppedWithNoErrorRecord() throws Exception {
+  void rowsOfExtensionsOutsideThePrepAllowListAreDroppedWithNoErrorRecord() throws Exception {
     FixtureFile pdf = object("c.pdf", PdfFixtures.text("Omicron pi rho sigma."));
     announce(text("a", "alpha", "beta"), pdf);
     TypedProperties props = prepOnly();
@@ -178,7 +180,7 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
   }
 
   @Test
-  public void failedFileIsAnErrorRecordAndTheOtherFilesAreCommitted() throws Exception {
+  void failedFileIsAnErrorRecordAndTheOtherFilesAreCommitted() throws Exception {
     FixtureFile good = text("good", "alpha", "beta");
     FixtureFile broken = text("broken", TextPipePreprocessor.BROKEN);
     announce(good, broken);
@@ -194,8 +196,12 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
   }
 
   @Test
-  public void theTransformerNeedsTheInstantStartedBeforeIt() {
-    assertThrows(HoodieException.class, () -> new EmbeddingTableTransformer().apply(jsc(), spark(), null, prepOnly()));
+  void theTransformerNeedsTheInstantStartedBeforeIt() {
+    EmbeddingTableTransformer transformer = new EmbeddingTableTransformer();
+    JavaSparkContext context = jsc();
+    SparkSession session = spark();
+    TypedProperties props = prepOnly();
+    assertThrows(HoodieException.class, () -> transformer.apply(context, session, null, props));
   }
 
   /** Streamer shutdown retires the final round while the caller keeps its own cache and Spark context. */
@@ -219,7 +225,7 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
 
   /** Every row the default PDF preprocessor prepares holds a positive token count no greater than chunk.max.tokens. */
   @Test
-  public void defaultPdfPreprocessorRowsStayWithinChunkMaxTokens() throws Exception {
+  void defaultPdfPreprocessorRowsStayWithinChunkMaxTokens() throws Exception {
     FixtureFile pdf = object("c.pdf", PdfFixtures.text(
         "Alpha beta gamma delta epsilon zeta. Eta theta iota kappa lambda mu. Nu xi omicron pi rho sigma.",
         "Tau upsilon phi chi psi omega. Alpha beta gamma delta epsilon zeta. Eta theta iota kappa lambda mu."));
@@ -235,7 +241,7 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
   }
 
   @Test
-  public void prepOnlyJobWithAComputeSettingIsRefusedAndWritesNothing() throws Exception {
+  void prepOnlyJobWithAComputeSettingIsRefusedAndWritesNothing() throws Exception {
     announce(text("a", "alpha"));
     TypedProperties props = prepOnly();
     props.setProperty(EmbeddingTableConfig.COMPUTE_BATCH_SIZE.key(), "8");
@@ -254,7 +260,7 @@ public class TestEmbeddingTableTransformerPrepOnly extends EmbeddingRoundTestBas
    * without video is not checked.
    */
   @Test
-  public void videoJobWhoseHeapCannotHoldItsFramesIsRefusedBeforeAnyRound() throws Exception {
+  void videoJobWhoseHeapCannotHoldItsFramesIsRefusedBeforeAnyRound() throws Exception {
     announce(text("a", "alpha"));
     TypedProperties props = prepOnly();
     // this JVM is the executor in local mode: a fixed term of its whole heap leaves no room for any frame

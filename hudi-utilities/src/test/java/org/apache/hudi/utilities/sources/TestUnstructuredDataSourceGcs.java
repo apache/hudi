@@ -76,7 +76,7 @@ import static org.mockito.Mockito.mock;
  * One round of each job, the stock selection's duplicate handling and the caught-up checkpoint.
  */
 @Tag("functional")
-public class TestUnstructuredDataSourceGcs extends UtilitiesTestBase {
+class TestUnstructuredDataSourceGcs extends UtilitiesTestBase {
 
   private static final String BUCKET = "landing";
   private static final long INLINE_MAX = 64;
@@ -85,22 +85,22 @@ public class TestUnstructuredDataSourceGcs extends UtilitiesTestBase {
   Path tempDir;
 
   @BeforeAll
-  public static void initClass() throws Exception {
+  static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() throws Exception {
+  static void cleanupClass() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @BeforeEach
-  public void installGcs() {
+  void installGcs() {
     GcsBucketFolderFileSystem.installGcs(jsc.hadoopConfiguration(), objects());
   }
 
   @AfterEach
-  public void uninstallGcs() {
+  void uninstallGcs() {
     GcsBucketFolderFileSystem.uninstallGcs(jsc.hadoopConfiguration());
   }
 
@@ -172,7 +172,7 @@ public class TestUnstructuredDataSourceGcs extends UtilitiesTestBase {
   }
 
   @Test
-  public void gcsBlobRoundWritesBlobRows() throws Exception {
+  void gcsBlobRoundWritesBlobRows() throws Exception {
     announce(put("docs/a.pdf", BlobJobHarness.fileBytes("a.pdf", 32)), put("docs/b.pdf", BlobJobHarness.fileBytes("b.pdf", 1024)));
     String table = table("blob-table");
     sync(BlobJobHarness.streamerConfig(table), blobJob());
@@ -188,7 +188,7 @@ public class TestUnstructuredDataSourceGcs extends UtilitiesTestBase {
   }
 
   @Test
-  public void gcsEmbeddingPrepOnlyRoundWritesChunks() throws Exception {
+  void gcsEmbeddingPrepOnlyRoundWritesChunks() throws Exception {
     announce(put("docs/c.pdf", PdfFixtures.text("Omicron pi rho sigma.")));
     String table = table("embedding-table");
     TypedProperties props = onGcs(EmbeddingStreamers.jobProps(table, eventsPath(), "unused", 1024 * 1024,
@@ -205,7 +205,7 @@ public class TestUnstructuredDataSourceGcs extends UtilitiesTestBase {
 
   /** GCS notifications carry no ordering token: two announcements of one object in a batch build one row, of the object as it is. */
   @Test
-  public void gcsDuplicateAnnouncementsKeepFirst() throws Exception {
+  void gcsDuplicateAnnouncementsKeepFirst() throws Exception {
     Notification same = put("docs/same.pdf", BlobJobHarness.fileBytes("same.pdf", 10));
     announce(same, same, new Notification(BUCKET, "docs/same.pdf", 11));
     Pair<Option<Dataset<Row>>, Checkpoint> batch = source(blobJob()).fetchNextBatch(Option.empty(), Long.MAX_VALUE);
@@ -221,7 +221,7 @@ public class TestUnstructuredDataSourceGcs extends UtilitiesTestBase {
    * its checkpoint is empty and keeps it, as the stock GCS source does.
    */
   @Test
-  public void gcsCaughtUpReturnsEndInstant() throws Exception {
+  void gcsCaughtUpReturnsEndInstant() throws Exception {
     HoodieTableMetaClient.newTableBuilder().setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("gcs_events")
         .setRecordKeyFields("id").initTable(HadoopFSUtils.getStorageConf(jsc.hadoopConfiguration()), eventsPath());
     TypedProperties props = blobJob();

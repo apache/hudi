@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.unstructured.embedding.source;
 
 import org.apache.hudi.common.schema.HoodieSchema;
 import org.apache.hudi.hadoop.fs.HadoopFSUtils;
+import org.apache.hudi.utilities.unstructured.retry.TransientRetry;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -37,11 +38,15 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.EOFException;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -151,5 +156,33 @@ public class TestBlobBytesSourceStorageFailures {
     assertFalse(SourceFailures.isContentFailure(failure));
     assertFalse(BlobBytesSource.isTransient(failure));
     assertTrue(failure.getMessage().contains("Cannot get storage"));
+  }
+
+  /** A JVM failure anywhere in a storage failure's cause or suppressed graph is never transient (RV3217-2, as CODE-1). */
+  @Test
+  void storageFailureCarryingAJvmFailureIsNotTransient() {
+    assertFalse(BlobBytesSource.isTransient(new IOException("read", new OutOfMemoryError("injected heap"))));
+    assertFalse(BlobBytesSource.isTransient(new UncheckedIOException(new IOException("read", new IncompatibleClassChangeError("injected")))));
+    IOException suppressed = new IOException("read");
+    suppressed.addSuppressed(new OutOfMemoryError("injected heap"));
+    assertFalse(BlobBytesSource.isTransient(suppressed));
+    // controls: ordinary storage failures stay transient
+    assertTrue(BlobBytesSource.isTransient(new IOException("read timed out")));
+    assertTrue(BlobBytesSource.isTransient(new UncheckedIOException(new IOException("connection reset"))));
+  }
+
+  /** The open retry keeps a wrapped JVM failure instead of erasing it with a later successful try (RV3217-2). */
+  @Test
+  void openRetryDoesNotEraseAWrappedJvmFailure() {
+    OutOfMemoryError fatal = new OutOfMemoryError("injected heap");
+    AtomicInteger tries = new AtomicInteger();
+    IOException thrown = assertThrows(IOException.class, () -> new TransientRetry(3, 0L).call("open (test)", () -> {
+      if (tries.incrementAndGet() == 1) {
+        throw new IOException("read", fatal);
+      }
+      return "bytes";
+    }, BlobBytesSource::isTransient));
+    assertSame(fatal, thrown.getCause());
+    assertEquals(1, tries.get(), "no retry after a JVM failure");
   }
 }

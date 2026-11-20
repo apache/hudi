@@ -68,7 +68,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * the one the streamer commits.
  */
 @Tag("functional")
-public class TestBlobSourceWithoutTargetPath extends UtilitiesTestBase {
+class TestBlobSourceWithoutTargetPath extends UtilitiesTestBase {
 
   private static String receivedInstant;
   private static List<HoodieInstant> pendingAtApply;
@@ -78,17 +78,17 @@ public class TestBlobSourceWithoutTargetPath extends UtilitiesTestBase {
   Path tempDir;
 
   @BeforeAll
-  public static void initClass() throws Exception {
+  static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() throws Exception {
+  static void cleanupClass() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @Test
-  public void newTableCommits() throws Exception {
+  void newTableCommits() throws Exception {
     BlobJobHarness harness = BlobJobHarness.under(tempDir.resolve("new")).install(jsc.hadoopConfiguration());
     String tableBasePath = tempDir.resolve("new-table").toUri().toString();
     Map<String, Integer> files = new TreeMap<>();
@@ -107,7 +107,7 @@ public class TestBlobSourceWithoutTargetPath extends UtilitiesTestBase {
 
   /** The blob source starts when the streamer target path is not set. */
   @Test
-  public void sourceStartsWithNoTargetBasePath() throws Exception {
+  void sourceStartsWithNoTargetBasePath() throws Exception {
     BlobJobHarness harness = BlobJobHarness.under(tempDir.resolve("start")).install(jsc.hadoopConfiguration());
     TypedProperties props = harness.jobProperties(THRESHOLD);
     new UnstructuredDataSource(props, jsc, sparkSession, null, new org.apache.hudi.utilities.streamer.DefaultStreamContext(null, Option.empty()));
@@ -119,7 +119,7 @@ public class TestBlobSourceWithoutTargetPath extends UtilitiesTestBase {
    * bytes compared by digest) and nothing under .hoodie/.blob, as the run without it, over the same announced objects.
    */
   @Test
-  public void unknownBlobTableKeyIsIgnored() throws Exception {
+  void unknownBlobTableKeyIsIgnored() throws Exception {
     BlobJobHarness harness = BlobJobHarness.under(tempDir.resolve("unknown-key")).install(jsc.hadoopConfiguration());
     Map<String, Integer> files = new TreeMap<>();
     files.put("docs/big.pdf", 64 * 1024);
@@ -151,7 +151,7 @@ public class TestBlobSourceWithoutTargetPath extends UtilitiesTestBase {
 
   /** The single-table streamer does not put its target path into the properties. */
   @Test
-  public void streamerDoesNotSetTheTargetBasePathProperty() {
+  void streamerDoesNotSetTheTargetBasePathProperty() {
     HoodieStreamer.Config cfg = new HoodieStreamer.Config();
     cfg.targetBasePath = "file:///data/blob_table";
     cfg.tableType = "COPY_ON_WRITE";

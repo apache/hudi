@@ -26,7 +26,7 @@ import org.apache.hudi.utilities.unstructured.embedding.text.Tokenizer;
 import org.apache.hudi.utilities.unstructured.embedding.video.JcodecKeyframeVideoFrameSource;
 
 /**
- * Data prep of a video file with JCodec, {@value #NAME}: the frame rows of {@link VideoFramePreprocessor} (same shape, same aux
+ * Data prep of a video file with JCodec, {@value #PREPROCESSOR_NAME}: the frame rows of {@link VideoFramePreprocessor} (same shape, same aux
  * keys, same storage) made by {@link JcodecKeyframeVideoFrameSource} (pure Java, H.264 in MP4 only), so a job prepares video
  * without FFmpeg's jars. Select it for every video extension with
  * {@code hoodie.unstructured.embedding.prep.video.preprocessor.class=}{@code org.apache.hudi.utilities.unstructured.embedding.prep.JcodecVideoFramePreprocessor};
@@ -38,7 +38,7 @@ import org.apache.hudi.utilities.unstructured.embedding.video.JcodecKeyframeVide
  */
 public class JcodecVideoFramePreprocessor extends VideoFramePreprocessor {
 
-  public static final String NAME = "video-frames-h264mp4-v1";
+  public static final String PREPROCESSOR_NAME = "video-frames-h264mp4-v1";
 
   public JcodecVideoFramePreprocessor() {
     super(new JcodecKeyframeVideoFrameSource());
@@ -46,13 +46,13 @@ public class JcodecVideoFramePreprocessor extends VideoFramePreprocessor {
 
   @Override
   public String name() {
-    return NAME;
+    return PREPROCESSOR_NAME;
   }
 
   /** Its frames are JCodec's: the stored input's logic is this preprocessor's name. */
   @Override
   protected String inputLogic() {
-    return NAME;
+    return PREPROCESSOR_NAME;
   }
 
   /**
@@ -63,7 +63,7 @@ public class JcodecVideoFramePreprocessor extends VideoFramePreprocessor {
   @Override
   public void validateConfig(TypedProperties props, Tokenizer tokenizer) {
     if (AudioConfig.from(props).enabled()) {
-      throw new IllegalArgumentException("Config " + AudioConfigKeys.ENABLED.key() + "=true, but video preprocessor " + NAME
+      throw new IllegalArgumentException("Config " + AudioConfigKeys.ENABLED.key() + "=true, but video preprocessor " + PREPROCESSOR_NAME
           + " (" + EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key() + ") prepares frames only: audio is not supported by "
           + "this preprocessor. Set " + AudioConfigKeys.ENABLED.key() + "=false, or prepare video with "
           + VideoFramePreprocessor.class.getName());

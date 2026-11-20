@@ -39,13 +39,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The InputStream JavaCV seeks through: mark/reset/skip are seeks, storage failures are classified and remembered. */
-public class TestSeekableBlobInputStream {
+class TestSeekableBlobInputStream {
 
   @TempDir
   Path dir;
 
   @Test
-  public void markResetAndSkipAreSeeksOverTheBlob() throws IOException {
+  void markResetAndSkipAreSeeksOverTheBlob() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), new byte[] {0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
     try (SeekableBlobInputStream in = new SeekableBlobInputStream(new VideoClips.FileBlob(file, Long.MAX_VALUE))) {
       assertTrue(in.markSupported(), "a stream without mark support would be buffered whole by JavaCV");
@@ -71,7 +71,7 @@ public class TestSeekableBlobInputStream {
   }
 
   @Test
-  public void storageFailureIsABlobReadExceptionAndIsRemembered() throws IOException {
+  void storageFailureIsABlobReadExceptionAndIsRemembered() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), new byte[10]);
     try (SeekableBlobInputStream in = new SeekableBlobInputStream(new VideoClips.FileBlob(file, 4))) {
       assertEquals(4, in.read(new byte[4], 0, 4));
@@ -84,7 +84,7 @@ public class TestSeekableBlobInputStream {
   }
 
   @Test
-  public void anEndOfFileIsDataNotStorage() throws IOException {
+  void anEndOfFileIsDataNotStorage() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), new byte[10]);
     try (SeekableBlobInputStream in = new SeekableBlobInputStream(new VideoClips.FileBlob(file, Long.MAX_VALUE) {
       @Override
@@ -92,14 +92,14 @@ public class TestSeekableBlobInputStream {
         throw new BlobTruncatedException("stored file shorter than its recorded range");
       }
     })) {
-      assertThrows(EOFException.class, () -> in.read());
+      assertThrows(EOFException.class, in::read);
       assertNull(in.storageFailure(), "a truncated file repeats on every attempt: not a storage failure");
     }
   }
 
   /** A bare EOFException of the storage client (Hadoop's report of a dropped connection) is a storage failure. */
   @Test
-  public void bareStorageEndOfFileIsAStorageFailure() throws IOException {
+  void bareStorageEndOfFileIsAStorageFailure() throws IOException {
     Path file = Files.write(dir.resolve("ten-bare.bin"), new byte[10]);
     try (SeekableBlobInputStream in = new SeekableBlobInputStream(new VideoClips.FileBlob(file, Long.MAX_VALUE) {
       @Override
@@ -107,8 +107,8 @@ public class TestSeekableBlobInputStream {
         throw new EOFException("End of File Exception between local host and the name node");
       }
     })) {
-      assertThrows(BlobReadException.class, () -> in.read());
-      assertTrue(in.storageFailure() != null, "remembered as the stream's storage failure");
+      assertThrows(BlobReadException.class, in::read);
+      assertNotNull(in.storageFailure(), "remembered as the stream's storage failure");
     }
   }
 
@@ -117,7 +117,7 @@ public class TestSeekableBlobInputStream {
    * whatever the stream throws, so the stream must remember it as its storage failure, cause chain intact, for the round to fail.
    */
   @Test
-  public void uncheckedStorageFailureIsRememberedWithItsCause() throws IOException {
+  void uncheckedStorageFailureIsRememberedWithItsCause() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), new byte[10]);
     SourceReadException read = new SourceReadException("Failed to read the blob source", new IOException("503 slow down"));
     try (SeekableBlobInputStream in = new SeekableBlobInputStream(new VideoClips.FileBlob(file, Long.MAX_VALUE) {
@@ -134,7 +134,7 @@ public class TestSeekableBlobInputStream {
   }
 
   @Test
-  public void uncheckedStorageFailureOfASeekOrPositionIsRemembered() throws IOException {
+  void uncheckedStorageFailureOfASeekOrPositionIsRemembered() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), new byte[10]);
     SourceReadException read = new SourceReadException("Failed to read the blob source", new IOException("connection reset"));
     try (SeekableBlobInputStream in = new SeekableBlobInputStream(new VideoClips.FileBlob(file, Long.MAX_VALUE) {
@@ -162,7 +162,7 @@ public class TestSeekableBlobInputStream {
    * blob once.
    */
   @Test
-  public void closingTwiceClosesTheBlobOnce() throws IOException {
+  void closingTwiceClosesTheBlobOnce() throws IOException {
     Path file = Files.write(dir.resolve("ten.bin"), new byte[10]);
     AtomicInteger closes = new AtomicInteger();
     SeekableBlobInputStream in = new SeekableBlobInputStream(new VideoClips.FileBlob(file, Long.MAX_VALUE) {

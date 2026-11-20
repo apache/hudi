@@ -177,49 +177,93 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   /** The largest image read ahead: an image is prepared from its header, read within this bound. */
 
   /**
-   * An iterator with no payload destination: a derived payload above the input store's inline threshold fails its chunk.
-   *
-   * @param instant               the prep instant; with no payload destination nothing is written under it, so this constructor
-   *                              does not read it (it keeps the same leading arguments as the one with a destination)
-   * @param sideOutputs           receives every failed or empty file as it is met; null to keep them in memory
-   *                              ({@link #getSideOutputs()})
+   * A builder of an iterator over {@code blobRows}, prepared at {@code instant} (the prep instant the rows are written at, named
+   * by every payload file; with no payload destination nothing is written under it).
    */
-  public PreprocessingIterator(Iterator<Row> blobRows, EmbeddingTableConfig config, String instant, BlobBytesSource bytesSource,
-                               PreprocessorRegistry registry, Tokenizer tokenizer, PrepCounters counters,
-                               Consumer<PrepSideOutput> sideOutputs) {
-    this(blobRows, config, instant, bytesSource, registry, tokenizer, counters, sideOutputs, null);
+  public static Builder builder(Iterator<Row> blobRows, EmbeddingTableConfig config, String instant) {
+    return new Builder(blobRows, config, instant);
   }
 
-  /**
-   * @param instant               the prep instant the rows are written at, named by every payload file
-   * @param sideOutputs           receives every failed or empty file as it is met; null to keep them in memory
-   *                              ({@link #getSideOutputs()})
-   * @param destination           where a derived payload above the input store's inline threshold is written as it is prepared;
-   *                              null for none
-   */
-  public PreprocessingIterator(Iterator<Row> blobRows, EmbeddingTableConfig config, String instant, BlobBytesSource bytesSource,
-                               PreprocessorRegistry registry, Tokenizer tokenizer, PrepCounters counters,
-                               Consumer<PrepSideOutput> sideOutputs, PayloadDestination destination) {
-    this(blobRows, config, instant, bytesSource, registry, tokenizer, counters, sideOutputs, destination, config.prepPrefetchMaxBytes());
+  /** The parts of a {@link PreprocessingIterator}; every one not set is null, the read-ahead budget the config's. */
+  public static final class Builder {
+    private final Iterator<Row> blobRows;
+    private final EmbeddingTableConfig config;
+    private final String instant;
+    private BlobBytesSource bytesSource;
+    private PreprocessorRegistry registry;
+    private Tokenizer tokenizer;
+    private PrepCounters counters;
+    private Consumer<PrepSideOutput> sideOutputs;
+    private PayloadDestination destination;
+    private Long prefetchMaxBytes;
+
+    private Builder(Iterator<Row> blobRows, EmbeddingTableConfig config, String instant) {
+      this.blobRows = blobRows;
+      this.config = config;
+      this.instant = instant;
+    }
+
+    public Builder bytesSource(BlobBytesSource bytesSource) {
+      this.bytesSource = bytesSource;
+      return this;
+    }
+
+    public Builder registry(PreprocessorRegistry registry) {
+      this.registry = registry;
+      return this;
+    }
+
+    public Builder tokenizer(Tokenizer tokenizer) {
+      this.tokenizer = tokenizer;
+      return this;
+    }
+
+    public Builder counters(PrepCounters counters) {
+      this.counters = counters;
+      return this;
+    }
+
+    /** Receives every failed or empty file as it is met; null (the default) to keep them in memory ({@link #getSideOutputs()}). */
+    public Builder sideOutputs(Consumer<PrepSideOutput> sideOutputs) {
+      this.sideOutputs = sideOutputs;
+      return this;
+    }
+
+    /**
+     * Where a derived payload above the input store's inline threshold is written as it is prepared; null (the default) for none:
+     * such a payload then fails its chunk.
+     */
+    public Builder destination(PayloadDestination destination) {
+      this.destination = destination;
+      return this;
+    }
+
+    /**
+     * Reads ahead at most {@code prefetchMaxBytes} per file (data prep passes what the video frame-heap check admits; 0 reads
+     * nothing ahead); default {@link EmbeddingTableConfig#prepPrefetchMaxBytes()}.
+     */
+    public Builder prefetchMaxBytes(long prefetchMaxBytes) {
+      this.prefetchMaxBytes = prefetchMaxBytes;
+      return this;
+    }
+
+    public PreprocessingIterator build() {
+      return new PreprocessingIterator(this);
+    }
   }
 
-  /**
-   * An iterator that reads ahead at most {@code prefetchMaxBytes} per file (data prep passes what the video frame-heap check
-   * admits; 0 reads nothing ahead).
-   */
-  public PreprocessingIterator(Iterator<Row> blobRows, EmbeddingTableConfig config, String instant, BlobBytesSource bytesSource,
-                               PreprocessorRegistry registry, Tokenizer tokenizer, PrepCounters counters,
-                               Consumer<PrepSideOutput> sideOutputs, PayloadDestination destination, long prefetchMaxBytes) {
-    this.collectedSideOutputs = sideOutputs == null ? new ArrayList<>() : null;
-    Consumer<PrepSideOutput> sink = sideOutputs == null ? collectedSideOutputs::add : sideOutputs;
+  private PreprocessingIterator(Builder builder) {
+    long prefetchMaxBytes = builder.prefetchMaxBytes != null ? builder.prefetchMaxBytes : builder.config.prepPrefetchMaxBytes();
+    this.collectedSideOutputs = builder.sideOutputs == null ? new ArrayList<>() : null;
+    Consumer<PrepSideOutput> sink = builder.sideOutputs == null ? collectedSideOutputs::add : builder.sideOutputs;
     this.sideOutputs = sideOutput -> {
       sideOutputCount++;
       sink.accept(sideOutput);
     };
-    this.blobRows = blobRows;
-    this.config = config;
-    this.bytesSource = bytesSource;
-    this.registry = registry;
+    this.blobRows = builder.blobRows;
+    this.config = builder.config;
+    this.bytesSource = builder.bytesSource;
+    this.registry = builder.registry;
     this.logicVersions = PrepLogicVersions.from(config.getProps());
     try {
       this.logicVersions.checkExecution(config.getProps());
@@ -227,13 +271,13 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
       registry.close();
       throw e;
     }
-    this.tokenizer = tokenizer;
-    this.counters = counters;
-    this.modelColumnCount = config.models().size() * EmbeddingTableSchema.COLUMNS_PER_MODEL;
+    this.tokenizer = builder.tokenizer;
+    this.counters = builder.counters;
+    this.modelColumnCount = config.modelSpecs().size() * EmbeddingTableSchema.COLUMNS_PER_MODEL;
     this.userPartitionColumns = EmbeddingTableSchema.userPartitionColumns(config.getProps());
     this.chunkIds = new SequentialChunkIdScheme();
     this.payloadInlineMaxBytes = EmbeddingInputConfig.inlineMaxBytes(config.getProps());
-    this.preparedInputs = destination == null ? null : new PreparedInputs(config.getProps(), instant, destination);
+    this.preparedInputs = builder.destination == null ? null : new PreparedInputs(config.getProps(), builder.instant, builder.destination);
     this.prefetcher = new SourcePrefetcher(bytesSource, prefetchMaxBytes);
     TaskContext taskContext = TaskContext.get();
     if (taskContext != null) {
@@ -338,6 +382,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
         }
         // the id first: a chunk whose payload cannot be stored fails alone, under its own id
         chunkId = chunkIdOf(chunk);
+        // by design: a null prepared image is legitimate, so extracting this try would need a sentinel
         try {
           preparedImage = preparedImage(chunk, chunkId);
         } catch (PreprocessingException e) {
@@ -365,6 +410,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
       rethrowInterruption(e);
       failCurrentFile(preprocessorName, modality, e);
       return;
+      // by design: closes every preprocessor on an Error and keeps the close failure as suppressed; rethrows the same Error
     } catch (Error e) {
       throw closedOn(e);
     }
@@ -495,6 +541,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
   private Error closedOn(Error e) {
     try {
       close();
+      // by design: keeps a close failure, Error included, as suppressed on the Error that closed
     } catch (RuntimeException | Error closeFailure) {
       e.addSuppressed(closeFailure);
     }
@@ -515,8 +562,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
       skippedModalities.add(modality);
     }
     String error = ErrorText.truncate(describe(cause), EmbeddingTableSchema.MAX_ERROR_CHARS);
-    sideOutputs.accept(new PrepSideOutput(currentFile.getSourcePathSha(),
-        currentFile.getSourceModificationTime(), currentFile.getFileSize(), currentSourcePath, modality, chunkId == 0L ? null : chunkId, PrepSideOutput.STAGE_PREP, error));
+    sideOutputs.accept(new PrepSideOutput(currentFile, currentSourcePath, modality, chunkId == 0L ? null : chunkId, PrepSideOutput.STAGE_PREP, error));
   }
 
   /**
@@ -566,14 +612,12 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     counters.getFilesFailed().add(1);
     String error = ErrorText.truncate(describe(cause), EmbeddingTableSchema.MAX_ERROR_CHARS);
     Long nextChunkId = nextOrdinals.getOrDefault(modality, 0L) > 0 ? nextOrdinals.get(modality) : null;
-    sideOutputs.accept(new PrepSideOutput(currentFile.getSourcePathSha(),
-        currentFile.getSourceModificationTime(), currentFile.getFileSize(), currentSourcePath, modality, nextChunkId, PrepSideOutput.STAGE_PREP, error));
+    sideOutputs.accept(new PrepSideOutput(currentFile, currentSourcePath, modality, nextChunkId, PrepSideOutput.STAGE_PREP, error));
   }
 
   /** A side output of the current file (no chunk: the whole file). */
   private PrepSideOutput sideOutput(String modality, String stage, String error) {
-    return new PrepSideOutput(currentFile.getSourcePathSha(),
-        currentFile.getSourceModificationTime(), currentFile.getFileSize(), currentSourcePath, modality, null, stage, error);
+    return new PrepSideOutput(currentFile, currentSourcePath, modality, null, stage, error);
   }
 
   /**
@@ -662,7 +706,7 @@ public class PreprocessingIterator implements Iterator<Row>, AutoCloseable {
     aux.put(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION,
         logicVersions.forRow(currentPreprocessor.sourceKind(), chunk.getModality()));
     // the Row encoder accepts only a Scala map for MapType
-    values[10] = aux == null ? null : JavaConverters.mapAsScalaMap(aux);
+    values[10] = JavaConverters.mapAsScalaMap(aux);
     for (int i = 0; i < userPartitionColumns.size(); i++) {
       String column = userPartitionColumns.get(i);
       values[EmbeddingTableSchema.BASE_COLUMN_COUNT + modelColumnCount + i] =

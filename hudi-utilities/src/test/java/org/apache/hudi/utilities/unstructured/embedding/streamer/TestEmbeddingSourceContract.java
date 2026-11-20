@@ -75,7 +75,7 @@ import static org.mockito.Mockito.times;
  * error row the error table holds.
  */
 @Tag("functional")
-public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
+class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
 
   public static class CountingValidationPreprocessor extends TextPipePreprocessor {
     static final AtomicInteger VALIDATIONS = new AtomicInteger();
@@ -87,7 +87,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void propertiesAreValidatedAtStartupAndAgainForTheRound() throws Exception {
+  void propertiesAreValidatedAtStartupAndAgainForTheRound() throws Exception {
     CountingValidationPreprocessor.VALIDATIONS.set(0);
     announce(text("a", "alpha"));
     Round result = round(prepOnly(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + TEXT_EXTENSION
@@ -97,7 +97,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void existingTableStartupValidatesTheJobAndTableOnce() throws Exception {
+  void existingTableStartupValidatesTheJobAndTableOnce() throws Exception {
     announce(text("a", "alpha"));
     Round control = round(prepOnly());
     assertTrue(control.getCommit().isPresent(), control.toString());
@@ -113,7 +113,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   private static final long INLINE_CEILING = 40;
 
   @AfterEach
-  public void clearStatuses() {
+  void clearStatuses() {
     SourceOpenHooks.clear();
   }
 
@@ -131,7 +131,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void structuredObjectsAreNeverSelectedNorRead() throws Exception {
+  void structuredObjectsAreNeverSelectedNorRead() throws Exception {
     FixtureFile parquet = object("data/a.parquet", "PAR1 not read".getBytes(StandardCharsets.UTF_8));
     FixtureFile json = object("data/b.json", "{\"not\":\"read\"}".getBytes(StandardCharsets.UTF_8));
     FixtureFile text = text("data/c", "gamma");
@@ -147,7 +147,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void theExtensionListNarrowsTheSelection() throws Exception {
+  void theExtensionListNarrowsTheSelection() throws Exception {
     FixtureFile text = text("a", "alpha");
     FixtureFile pdf = object("b.pdf", org.apache.hudi.utilities.unstructured.embedding.prep.pdf.PdfFixtures.text("Omicron pi."));
     announce(text, pdf);
@@ -164,7 +164,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
       "hoodie.streamer.source.cloud.data.datafile.format|parquet|must be empty for UnstructuredDataSource (mode embedding)",
       "hoodie.blob.table.file.extensions|parquet|Structured file extension is not supported by UnstructuredDataSource (mode embedding)",
       "hoodie.blob.table.file.extensions|txt|UnstructuredDataSource (mode embedding): unsupported unstructured file extension: txt"})
-  public void policyOutsideTheSourceContractIsRefusedWhenTheJobStarts(String key, String value, String refusal) throws Exception {
+  void policyOutsideTheSourceContractIsRefusedWhenTheJobStarts(String key, String value, String refusal) throws Exception {
     announce(text("a", "alpha"));
 
     Exception failure = assertThrows(Exception.class, () -> round(prepOnly(key, value)));
@@ -177,7 +177,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void removalEventWritesNothingAndTheRowsStay() throws Exception {
+  void removalEventWritesNothingAndTheRowsStay() throws Exception {
     FixtureFile a = text("a", "alpha", "beta");
     announce(a);
     round(prepOnly());
@@ -197,7 +197,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void anInlineObjectThatCannotBeReadFailsTheRoundInTheSource() throws Exception {
+  void anInlineObjectThatCannotBeReadFailsTheRoundInTheSource() throws Exception {
     FixtureFile a = text("a", "alpha");
     announce(a);
     SourceOpenHooks.beforeOpen(local(a), () -> {
@@ -214,7 +214,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void anOutOfLineObjectsTransientOpenFailureIsRetriedInTheRound() throws Exception {
+  void anOutOfLineObjectsTransientOpenFailureIsRetriedInTheRound() throws Exception {
     FixtureFile large = text("large", "a long first chunk of text", "a long second chunk of text");
     assertTrue(large.bytes.length > INLINE_CEILING);
     announce(large);
@@ -233,7 +233,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void anInlineObjectGoneBeforeTheReadIsQuarantinedAsGoneSinceAnnounced() throws Exception {
+  void anInlineObjectGoneBeforeTheReadIsQuarantinedAsGoneSinceAnnounced() throws Exception {
     FixtureFile a = text("a", "alpha");
     FixtureFile b = text("b", "beta");
     announce(a, b);
@@ -258,7 +258,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
 
   /** A1 on the embedding job: gone before the source's status call, the error record carries no observed version (0, the announced size). */
   @Test
-  public void anInlineObjectGoneBeforeTheStatusCallIsQuarantinedWithTheAnnouncedSize() throws Exception {
+  void anInlineObjectGoneBeforeTheStatusCallIsQuarantinedWithTheAnnouncedSize() throws Exception {
     FixtureFile a = text("a", "alpha");
     FixtureFile b = text("b", "beta");
     announce(a, b);
@@ -278,7 +278,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
 
   /** With the error table off nothing can record the gone object, so the round fails as every failed file does. */
   @Test
-  public void goneObjectWithoutAnErrorTableFailsTheRound() throws Exception {
+  void goneObjectWithoutAnErrorTableFailsTheRound() throws Exception {
     FixtureFile a = text("a", "alpha");
     announce(a);
     Files.delete(java.nio.file.Paths.get(local(a)));
@@ -290,7 +290,7 @@ public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void anOutOfLineObjectGoneBeforePrepIsAFailedFileAndTheOtherObjectsCommit() throws Exception {
+  void anOutOfLineObjectGoneBeforePrepIsAFailedFileAndTheOtherObjectsCommit() throws Exception {
     FixtureFile gone = text("gone", "a long first chunk of text", "a long second chunk of text");
     FixtureFile kept = text("kept", "delta");
     assertTrue(gone.bytes.length > INLINE_CEILING);

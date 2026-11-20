@@ -64,6 +64,7 @@ public class SegmentCountingTranscriber implements SegmentTranscriber {
 
   @Override
   public void validate(TypedProperties props) {
+    // the counting transcriber needs no configuration
   }
 
   @Override
@@ -84,13 +85,13 @@ public class SegmentCountingTranscriber implements SegmentTranscriber {
       text.append(' ').append(VOCABULARY[(int) Math.floorMod(hash >>> 33, (long) VOCABULARY.length)]);
     }
     text.append('.');
-    record();
+    countSegment();
     return ClosableIterator.wrap(Collections.singletonList(new TranscriptSegment(SpeakerLabels.FILE_SPEAKER, text.toString(),
         segment.startMs(), segment.endMs(), null)).iterator());
   }
 
   /** Counts one segment for the running task: {segments, first nanos, last nanos}. */
-  private static void record() {
+  private static void countSegment() {
     TaskContext task = TaskContext.get();
     int partition = task == null ? -1 : task.partitionId();
     long now = System.nanoTime();

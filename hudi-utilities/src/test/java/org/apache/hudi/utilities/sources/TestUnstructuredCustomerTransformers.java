@@ -87,7 +87,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * the table; a chain that would break the table's contract is refused at start, and a round whose rows break it is rolled back.
  */
 @Tag("functional")
-public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
+class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
 
   private static final String ADD_NOTE = "SELECT *, CAST('note' AS STRING) AS ingest_note FROM <SRC>";
   private static final String SQL = SqlQueryBasedTransformer.class.getName();
@@ -96,17 +96,17 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
   Path tempDir;
 
   @BeforeAll
-  public static void initClass() throws Exception {
+  static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() throws Exception {
+  static void cleanupClass() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
   @AfterEach
-  public void resetSchema() {
+  void resetSchema() {
     UserTargetSchemaProvider.target = null;
   }
 
@@ -181,7 +181,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
 
   @ParameterizedTest(name = "{0} target schema {1}")
   @CsvSource({"BLOB,false", "BLOB,true", "EMBEDDING,false", "EMBEDDING,true"})
-  public void customerColumnReachesTheTableInBothRounds(UnstructuredMode mode, boolean withTarget) throws Exception {
+  void customerColumnReachesTheTableInBothRounds(UnstructuredMode mode, boolean withTarget) throws Exception {
     BlobJobHarness harness = harness();
     String table = table(mode + "-" + withTarget);
     Job job = job(mode, harness, table, SQL);
@@ -206,7 +206,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
    * table's column, null; the blob round's rows lack it, as any structured stream's would.
    */
   @Test
-  public void embeddingRoundAfterTheCustomerTransformerIsRemovedCommits() throws Exception {
+  void embeddingRoundAfterTheCustomerTransformerIsRemovedCommits() throws Exception {
     BlobJobHarness harness = harness();
     String table = table("removed");
     Job job = job(UnstructuredMode.EMBEDDING, harness, table, SQL);
@@ -225,7 +225,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
    * carry the table's columns and the active model's.
    */
   @Test
-  public void declaredModelTheTableDoesNotHaveYetPassesTheGuard() throws Exception {
+  void declaredModelTheTableDoesNotHaveYetPassesTheGuard() throws Exception {
     BlobJobHarness harness = harness();
     String table = table("two-models");
     HoodieStreamer.Config cfg = EmbeddingStreamers.config(table);
@@ -245,7 +245,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
 
   /** A projection that drops _corrupt_record, with the error table on, is refused at start: error rows would be written as good rows. */
   @Test
-  public void projectionDroppingCorruptRecordRefusedAtStart() throws Exception {
+  void projectionDroppingCorruptRecordRefusedAtStart() throws Exception {
     BlobJobHarness harness = harness();
     String table = table("projection");
     Job job = job(UnstructuredMode.BLOB, harness, table, BlobQuarantineTransformer.class.getName(), SQL);
@@ -260,7 +260,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
 
   /** The job's own transformers run only after the required one: a filter placed before it is refused at start. */
   @Test
-  public void beforeRequiredFilterRefusedAtStart() throws Exception {
+  void beforeRequiredFilterRefusedAtStart() throws Exception {
     BlobJobHarness harness = harness();
     String table = table("before");
     Job job = job(UnstructuredMode.BLOB, harness, table, SQL, BlobQuarantineTransformer.class.getName());
@@ -276,7 +276,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
    * round's rows before its instant starts: nothing is committed and no instant is left.
    */
   @Test
-  public void guardRollsBackLyingTransformer() throws Exception {
+  void guardRollsBackLyingTransformer() throws Exception {
     BlobJobHarness harness = harness();
     String table = table("lying");
     Job job = job(UnstructuredMode.BLOB, harness, table, LyingTransformer.class.getName());
@@ -307,7 +307,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
    * prep_only round.
    */
   @Test
-  public void prepOnlyRoundPassesOnATableWithACustomerVectorColumn() throws Exception {
+  void prepOnlyRoundPassesOnATableWithACustomerVectorColumn() throws Exception {
     BlobJobHarness harness = harness();
     String table = table("customer-vector");
     Job job = job(UnstructuredMode.EMBEDDING, harness, table, AddVectorTransformer.class.getName());
@@ -326,7 +326,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
    */
   @ParameterizedTest(name = "{0}")
   @CsvSource({EmbeddingTableConfig.MODE_PREP_ONLY, EmbeddingTableConfig.MODE_PREP_AND_COMPUTE})
-  public void customerVectorAndBlobColumnsAreWrittenAndReadBack(String embeddingMode) throws Exception {
+  void customerVectorAndBlobColumnsAreWrittenAndReadBack(String embeddingMode) throws Exception {
     BlobJobHarness harness = harness();
     String table = table("customer-vector-blob-" + embeddingMode);
     Job job = job(UnstructuredMode.EMBEDDING, harness, table, FillVectorAndBlobTransformer.class.getName());
@@ -392,7 +392,7 @@ public class TestUnstructuredCustomerTransformers extends UtilitiesTestBase {
    * round keeps {@code ingest_note}, here overwritten in place by a transformer, a target schema without it is refused at start.
    */
   @Test
-  public void tableColumnTheRoundWritesMustBeInTheTargetSchema() throws Exception {
+  void tableColumnTheRoundWritesMustBeInTheTargetSchema() throws Exception {
     BlobJobHarness harness = harness();
     String table = table("overwritten");
     Job job = job(UnstructuredMode.EMBEDDING, harness, table, SQL);

@@ -332,8 +332,10 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
         counters.getBatchesOk().add(1);
         return results;
       }
-      LOG.warn("EMBED-COMPUTE-BATCH-FAILED model={} rows={} firstInput=[{}]: {}", model.getName(), inputs.size(),
-          inputs.get(0).describeIdentity(), malformed);
+      if (LOG.isWarnEnabled()) {
+        LOG.warn("EMBED-COMPUTE-BATCH-FAILED model={} rows={} firstInput=[{}]: {}", model.getName(), inputs.size(),
+            inputs.get(0).describeIdentity(), malformed);
+      }
       counters.getBatchesFailed().add(1);
       return Collections.nCopies(inputs.size(), EmbeddingResult.retryable(malformed));
     } catch (EmbeddingClientConfigException | EmbeddingComputePlatformException e) {

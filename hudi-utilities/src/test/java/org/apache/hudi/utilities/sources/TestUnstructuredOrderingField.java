@@ -65,7 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
  * unchanged object is announced again; that round writes the same rows again, and the table keeps them as they were.
  */
 @Tag("functional")
-public class TestUnstructuredOrderingField extends UtilitiesTestBase {
+class TestUnstructuredOrderingField extends UtilitiesTestBase {
 
   private static final String ORDERING_FIELD = BlobTableSchema.SOURCE_MODIFICATION_TIME;
 
@@ -73,12 +73,12 @@ public class TestUnstructuredOrderingField extends UtilitiesTestBase {
   Path tempDir;
 
   @BeforeAll
-  public static void initClass() throws Exception {
+  static void initClass() throws Exception {
     UtilitiesTestBase.initTestServices();
   }
 
   @AfterAll
-  public static void cleanupClass() throws Exception {
+  static void cleanupClass() {
     UtilitiesTestBase.cleanUpUtilitiesTestServices();
   }
 
@@ -131,7 +131,7 @@ public class TestUnstructuredOrderingField extends UtilitiesTestBase {
 
   @ParameterizedTest(name = "{0} {1}")
   @CsvSource({"blob,COPY_ON_WRITE", "blob,MERGE_ON_READ", "embedding,COPY_ON_WRITE", "embedding,MERGE_ON_READ"})
-  public void reannouncedUnchangedObjectUnderEventTimeOrdering(String mode, HoodieTableType tableType) throws Exception {
+  void reannouncedUnchangedObjectUnderEventTimeOrdering(String mode, HoodieTableType tableType) throws Exception {
     BlobJobHarness harness = BlobJobHarness.under(tempDir.resolve("src")).install(jsc.hadoopConfiguration());
     String table = tempDir.resolve(mode + "-table").toUri().toString();
     HoodieStreamer.Config cfg;

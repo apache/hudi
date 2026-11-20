@@ -61,9 +61,7 @@ import java.util.stream.Collectors;
 public class EmbeddingTableConfig implements Serializable {
 
   private static final long serialVersionUID = 1L;
-
   private static final String SINCE_1_3_0 = "1.3.0";
-
   private static final String REQUIRED = "<required>";
 
   /** Root of every unstructured-data key (embedding and chunking); never passed through to the Hudi writer. */
@@ -1006,7 +1004,7 @@ public class EmbeddingTableConfig implements Serializable {
    *
    * @throws IllegalArgumentException when it is unset or not one of the two values
    */
-  public String mode() {
+  public String embeddingMode() {
     String value = ConfigUtils.getStringWithAltKeys(props, MODE, "").trim().toLowerCase(Locale.ROOT);
     if (!MODE_PREP_ONLY.equals(value) && !MODE_PREP_AND_COMPUTE.equals(value)) {
       throw new IllegalArgumentException("Config " + MODE.key() + " must be " + MODE_PREP_ONLY + " or " + MODE_PREP_AND_COMPUTE
@@ -1017,7 +1015,7 @@ public class EmbeddingTableConfig implements Serializable {
 
   /** Whether the round computes embeddings ({@link #MODE_PREP_AND_COMPUTE}). */
   public boolean computes() {
-    return MODE_PREP_AND_COMPUTE.equals(mode());
+    return MODE_PREP_AND_COMPUTE.equals(embeddingMode());
   }
 
   /** The compute task count, {@link #COMPUTE_PARALLELISM}, else {@code defaultParallelism}. */
@@ -1173,7 +1171,7 @@ public class EmbeddingTableConfig implements Serializable {
    * @throws HoodieException if an alias is listed twice, or a model's {@link #MODEL_DIMENSIONS_SUFFIX dimensions} or
    *     {@link #MODEL_PROVIDER_SUFFIX provider} is not set
    */
-  public List<EmbeddingModelSpec> models() {
+  public List<EmbeddingModelSpec> modelSpecs() {
     List<EmbeddingModelSpec> specs = new ArrayList<>();
     List<String> names = splitList(ConfigUtils.getStringWithAltKeys(props, MODELS, ""));
     for (int i = 0; i < names.size(); i++) {
@@ -1203,7 +1201,7 @@ public class EmbeddingTableConfig implements Serializable {
           ConfigUtils.getStringWithAltKeys(props, ConfigProperty.key(keyPrefix + MODEL_NAME_SUFFIX).noDefaultValue(), name).trim(),
           modalities(keyPrefix + MODEL_MODALITIES_SUFFIX,
               ConfigUtils.getStringWithAltKeys(props, ConfigProperty.key(keyPrefix + MODEL_MODALITIES_SUFFIX).noDefaultValue(), null)));
-      if (!spec.getColumn().matches("[A-Za-z_][A-Za-z0-9_]*")) {
+      if (!spec.getColumn().matches("[A-Za-z_]\\w*")) {
         throw new IllegalArgumentException("Config " + keyPrefix + MODEL_COLUMN_SUFFIX + " resolves to '" + spec.getColumn()
             + "', which is not a valid Avro field name; set a column starting with a letter or underscore, followed by letters, digits or underscores");
       }
@@ -1262,7 +1260,7 @@ public class EmbeddingTableConfig implements Serializable {
   public List<EmbeddingModelSpec> activeModels() {
     String value = ConfigUtils.getStringWithAltKeys(props, ACTIVE_MODELS, "");
     List<String> active = splitList(value);
-    List<EmbeddingModelSpec> declared = models();
+    List<EmbeddingModelSpec> declared = modelSpecs();
     if (active.isEmpty()) {
       return declared;
     }
@@ -1276,7 +1274,7 @@ public class EmbeddingTableConfig implements Serializable {
   }
 
   public EmbeddingModelSpec model(String name) {
-    return models().stream().filter(m -> m.getName().equals(name)).findFirst()
+    return modelSpecs().stream().filter(m -> m.getName().equals(name)).findFirst()
         .orElseThrow(() -> new HoodieException("Model '" + name + "' is not declared in " + MODELS.key()));
   }
 
@@ -1386,13 +1384,6 @@ public class EmbeddingTableConfig implements Serializable {
   }
 
   private static int positive(String key, int value) {
-    if (value <= 0) {
-      throw new IllegalArgumentException("Config " + key + " must be positive but is " + value);
-    }
-    return value;
-  }
-
-  private static long positive(String key, long value) {
     if (value <= 0) {
       throw new IllegalArgumentException("Config " + key + " must be positive but is " + value);
     }

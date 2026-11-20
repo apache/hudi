@@ -130,14 +130,16 @@ public class TestEmbeddingTableSchema {
     TypedProperties notAClient = dummyModel("m1", "4");
     notAClient.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1" + EmbeddingTableConfig.MODEL_CLIENT_CLASS_SUFFIX,
         String.class.getName());
+    EmbeddingModelSpec notAClientSpec = EmbeddingTableConfig.from(notAClient).model("m1");
     IllegalArgumentException wrongType = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingClientNames.clientClassName(EmbeddingTableConfig.from(notAClient).model("m1")));
+        () -> EmbeddingClientNames.clientClassName(notAClientSpec));
     assertTrue(wrongType.getMessage().contains(String.class.getName() + ", which is not an "), wrongType.getMessage());
 
     TypedProperties otherProvider = dummyModel("m1", "4");
     otherProvider.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1.provider", "unknown");
+    EmbeddingModelSpec otherProviderSpec = EmbeddingTableConfig.from(otherProvider).model("m1");
     assertThrows(UnsupportedOperationException.class,
-        () -> EmbeddingClientNames.clientClassName(EmbeddingTableConfig.from(otherProvider).model("m1")));
+        () -> EmbeddingClientNames.clientClassName(otherProviderSpec));
   }
 
   @Test
@@ -180,7 +182,8 @@ public class TestEmbeddingTableSchema {
   void modelColumnThatIsAlsoAPartitionFieldIsRefused() {
     TypedProperties props = dummyModel("m1", "4");
     props.setProperty(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key(), "region,EMB_M1");
-    HoodieException error = assertThrows(HoodieException.class, () -> EmbeddingTableSchema.build(EmbeddingTableConfig.from(props)));
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    HoodieException error = assertThrows(HoodieException.class, () -> EmbeddingTableSchema.build(config));
     assertTrue(error.getMessage().contains("EMB_M1"), error.getMessage());
     assertTrue(error.getMessage().contains("m1 (emb_m1)"), error.getMessage());
     assertTrue(error.getMessage().contains(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key()), error.getMessage());
@@ -192,8 +195,9 @@ public class TestEmbeddingTableSchema {
     for (String fields : new String[] {"region,date,region", "region, Region"}) {
       TypedProperties props = dummyModel("m1", "4");
       props.setProperty(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key(), fields);
+      EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
       HoodieException error = assertThrows(HoodieException.class,
-          () -> EmbeddingTableSchema.build(EmbeddingTableConfig.from(props)), fields);
+          () -> EmbeddingTableSchema.build(config), fields);
       assertTrue(error.getMessage().contains("listed twice"), error.getMessage());
       assertTrue(error.getMessage().contains(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key()), error.getMessage());
     }

@@ -22,6 +22,7 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingModelSpec;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingClientFactory;
@@ -48,7 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * column and dimensions name and size the VECTOR column, and its model has a client; a round whose mode does not match the existing
  * table, or whose model's dimensions differ from the existing table's column, is refused.
  */
-public class TestEmbeddingModeConfig {
+class TestEmbeddingModeConfig {
 
   private static final String MODEL = EmbeddingTableConfig.MODEL_PREFIX + "m1";
 
@@ -64,7 +65,7 @@ public class TestEmbeddingModeConfig {
   }
 
   @Test
-  public void roundEntryRefusesPrepOnlyModelsWithoutAStartupSourceContract() {
+  void roundEntryRefusesPrepOnlyModelsWithoutAStartupSourceContract() {
     EmbeddingTableConfig config = EmbeddingTableConfig.from(props(EmbeddingTableConfig.MODE_PREP_ONLY));
     IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
         () -> EmbeddingTableTransformer.checkRound(config, null, Option.empty()));
@@ -73,7 +74,7 @@ public class TestEmbeddingModeConfig {
   }
 
   @Test
-  public void validPrepOnlyPropertiesPassTheStartupCheck() {
+  void validPrepOnlyPropertiesPassTheStartupCheck() {
     assertFalse(EmbeddingTableTransformer.checkJob(EmbeddingTableConfig.from(prepOnly())).isPresent());
   }
 
@@ -95,20 +96,20 @@ public class TestEmbeddingModeConfig {
   }
 
   @Test
-  public void theModeIsRequired() {
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableConfig.from(props(null)).mode());
+  void theModeIsRequired() {
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props(null));
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, config::embeddingMode);
     assertTrue(refused.getMessage().contains(EmbeddingTableConfig.MODE.key()) && refused.getMessage().contains("unset"),
         refused.getMessage());
   }
 
   @Test
-  public void theModeIsOneOfTwoValues() {
-    assertEquals(EmbeddingTableConfig.MODE_PREP_ONLY, EmbeddingTableConfig.from(props(" PREP_ONLY ")).mode());
+  void theModeIsOneOfTwoValues() {
+    assertEquals(EmbeddingTableConfig.MODE_PREP_ONLY, EmbeddingTableConfig.from(props(" PREP_ONLY ")).embeddingMode());
     assertFalse(EmbeddingTableConfig.from(props("prep_only")).computes());
     assertTrue(EmbeddingTableConfig.from(props("prep_and_compute")).computes());
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableConfig.from(props("compute_only")).mode());
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props("compute_only"));
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, config::embeddingMode);
     assertTrue(refused.getMessage().contains("compute_only"), refused.getMessage());
   }
 
@@ -127,55 +128,55 @@ public class TestEmbeddingModeConfig {
       "hoodie.unstructured.embedding.model.m1.column", "hoodie.unstructured.embedding.model.m1.dimensions",
       "hoodie.unstructured.embedding.model.m1.provider", "hoodie.unstructured.embedding.model.m1.name",
       "hoodie.unstructured.embedding.model.m1.client.class"})
-  public void prepOnlyJobRefusesModelAndComputeSettings(String key) {
+  void prepOnlyJobRefusesModelAndComputeSettings(String key) {
     TypedProperties props = prepOnly();
     props.setProperty(key, "1");
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(EmbeddingTableConfig.from(props)));
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(config));
     assertTrue(refused.getMessage().contains("[" + key + "]"), refused.getMessage());
     assertTrue(refused.getMessage().contains("Nothing was written"), refused.getMessage());
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"hoodie.unstructured.embedding.models", "hoodie.unstructured.embedding.active.models"})
-  public void prepOnlyJobRefusesAModelKeySetEvenToItsEmptyDefault(String key) {
+  void prepOnlyJobRefusesAModelKeySetEvenToItsEmptyDefault(String key) {
     // a set key is refused whatever its value: a prep_only job carries no model setting at all
     TypedProperties props = prepOnly();
     props.setProperty(key, "");
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(EmbeddingTableConfig.from(props)));
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(config));
     assertTrue(refused.getMessage().contains("[" + key + "]"), refused.getMessage());
   }
 
   @Test
-  public void theKeyRefusalOffersPrepAndCompute() {
+  void theKeyRefusalOffersPrepAndCompute() {
     TypedProperties props = prepOnly();
     props.setProperty(EmbeddingTableConfig.COMPUTE_BATCH_SIZE.key(), "8");
     // the same refusal whether the table exists or not: an existing table takes prep_and_compute rounds too
-    String refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(EmbeddingTableConfig.from(props))).getMessage();
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    String refused = assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(config)).getMessage();
     assertTrue(refused.contains(", or set " + EmbeddingTableConfig.MODE.key() + "=" + EmbeddingTableConfig.MODE_PREP_AND_COMPUTE),
         refused);
   }
 
   @Test
-  public void prepOnlyJobRefusesTheModelsClientSettings() {
+  void prepOnlyJobRefusesTheModelsClientSettings() {
     for (String suffix : new String[] {ProviderClientSettings.REQUEST_DEADLINE_MS_SUFFIX, ProviderClientSettings.RETRY_MAX_ATTEMPTS_SUFFIX,
         RequestRateLimiter.RATE_LIMIT_REQUESTS_PER_SECOND_SUFFIX}) {
       TypedProperties props = prepOnly();
       props.setProperty(MODEL + suffix, "5");
-      IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-          () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(EmbeddingTableConfig.from(props)), suffix);
+      EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+      IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(config), suffix);
       assertTrue(refused.getMessage().contains(MODEL + suffix), refused.getMessage());
     }
   }
 
   @Test
-  public void prepOnlyJobNamesEveryRefusedKeyAtOnce() {
+  void prepOnlyJobNamesEveryRefusedKeyAtOnce() {
     TypedProperties props = props(EmbeddingTableConfig.MODE_PREP_ONLY);
     props.setProperty(EmbeddingTableConfig.COMPUTE_BATCH_SIZE.key(), "8");
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(EmbeddingTableConfig.from(props)));
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.checkNoModelOrComputeSettings(config));
     // sorted, as the message lists them
     assertTrue(refused.getMessage().contains(Arrays.asList(EmbeddingTableConfig.COMPUTE_BATCH_SIZE.key(),
         MODEL + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX, MODEL + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX,
@@ -183,7 +184,7 @@ public class TestEmbeddingModeConfig {
   }
 
   @Test
-  public void prepOnlyJobNeedsNoModelAndItsTableHasNoVectorColumn() {
+  void prepOnlyJobNeedsNoModelAndItsTableHasNoVectorColumn() {
     EmbeddingTableConfig config = EmbeddingTableConfig.from(prepOnly());
     EmbeddingTableTransformer.checkNoModelOrComputeSettings(config);
     StructType schema = EmbeddingTableSchema.build(config);
@@ -191,40 +192,42 @@ public class TestEmbeddingModeConfig {
   }
 
   @Test
-  public void exactlyOneModelIsActive() {
+  void exactlyOneModelIsActive() {
     TypedProperties props = props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     props.setProperty(EmbeddingTableConfig.MODELS.key(), "m1,m2");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m2" + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX, "4");
     props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m2" + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, "dummy");
-    assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(props)));
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.activeModel(config));
     props.setProperty(EmbeddingTableConfig.ACTIVE_MODELS.key(), "m2");
     assertEquals("m2", EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(props)).getName());
   }
 
   @Test
-  public void anActiveModelThatIsNotDeclaredIsRefused() {
+  void anActiveModelThatIsNotDeclaredIsRefused() {
     // one valid alias next to a typo must not pass: the typo would be ignored and the job would run on the valid one alone
     TypedProperties props = props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     props.setProperty(EmbeddingTableConfig.ACTIVE_MODELS.key(), "m1,typo");
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(props)));
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.activeModel(config));
     assertTrue(refused.getMessage().contains(EmbeddingTableConfig.ACTIVE_MODELS.key() + "=m1,typo"), refused.getMessage());
     assertTrue(refused.getMessage().contains("[typo]") && refused.getMessage().contains("[m1]"), refused.getMessage());
   }
 
   @Test
-  public void prepAndComputeJobNeedsAModelWithAClient() {
+  void prepAndComputeJobNeedsAModelWithAClient() {
     TypedProperties props = props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     props.setProperty(MODEL + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX, "no-such-provider");
-    assertThrows(UnsupportedOperationException.class,
-        () -> EmbeddingClientFactory.clientClassName(EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(props))));
+    EmbeddingModelSpec model = EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(props));
+    assertThrows(UnsupportedOperationException.class, () -> EmbeddingClientFactory.clientClassName(model));
     TypedProperties noProvider = props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     noProvider.remove(MODEL + EmbeddingTableConfig.MODEL_PROVIDER_SUFFIX);
-    assertThrows(RuntimeException.class, () -> EmbeddingTableTransformer.activeModel(EmbeddingTableConfig.from(noProvider)));
+    EmbeddingTableConfig noProviderConfig = EmbeddingTableConfig.from(noProvider);
+    assertThrows(RuntimeException.class, () -> EmbeddingTableTransformer.activeModel(noProviderConfig));
   }
 
   @Test
-  public void prepOnlyTableHasTheFixedAndThePathPartitionColumnsOnly() {
+  void prepOnlyTableHasTheFixedAndThePathPartitionColumnsOnly() {
     TypedProperties props = prepOnly();
     props.setProperty(CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key(), "team,region");
     StructType schema = EmbeddingTableSchema.build(EmbeddingTableConfig.from(props));
@@ -234,7 +237,7 @@ public class TestEmbeddingModeConfig {
   }
 
   @Test
-  public void prepAndComputeRoundOnATableWithAnotherDimensionIsRefusedAtStart() {
+  void prepAndComputeRoundOnATableWithAnotherDimensionIsRefusedAtStart() {
     StructType tableAt8 = EmbeddingTableSchema.build(EmbeddingTableConfig.from(props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE)));
     TypedProperties at16 = props(EmbeddingTableConfig.MODE_PREP_AND_COMPUTE);
     at16.setProperty(MODEL + EmbeddingTableConfig.MODEL_MODALITIES_SUFFIX, EmbeddingTableSchema.MODALITY_TEXT);
@@ -243,8 +246,8 @@ public class TestEmbeddingModeConfig {
     at16.setProperty(HoodieWriteConfig.BASE_PATH.key(), "/tables/emb");
     EmbeddingTableConfig config = EmbeddingTableConfig.from(at16);
     // no SparkSession: the refusal comes before any Spark work, so no task runs and no model is called
-    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
-        () -> EmbeddingTableTransformer.checkRound(config, null, Option.of(tableAt8)));
+    Option<StructType> table = Option.of(tableAt8);
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> EmbeddingTableTransformer.checkRound(config, null, table));
     String message = refused.getMessage();
     assertTrue(message.contains("VECTOR(16)") && message.contains("VECTOR(8)") && message.contains("/tables/emb"), message);
     assertTrue(message.contains(MODEL + EmbeddingTableConfig.MODEL_DIMENSIONS_SUFFIX + "=16"), message);

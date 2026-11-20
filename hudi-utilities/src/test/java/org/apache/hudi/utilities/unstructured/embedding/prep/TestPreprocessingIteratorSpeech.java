@@ -54,6 +54,8 @@ import org.apache.spark.util.LongAccumulator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -64,13 +66,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.hudi.common.schema.HoodieSchema.Blob.INLINE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -78,7 +84,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * emit order; and an {@link Error} from the transcriber, under the real frame preprocessor with audio on, reaches the caller as
  * it is after the video's segments, the task's segment source and its transcriber are closed, once.
  */
-public class TestPreprocessingIteratorSpeech {
+class TestPreprocessingIteratorSpeech {
 
   private static final StructType BLOB = (StructType) BlobType.dataType();
   private static final StructType SOURCE_ROW = DataTypes.createStructType(new StructField[] {
@@ -97,7 +103,7 @@ public class TestPreprocessingIteratorSpeech {
   private String embeddingTable;
 
   @BeforeEach
-  public void createTable() throws IOException {
+  void createTable() throws IOException {
     embeddingTable = temp.resolve("embedding").toUri().toString();
     HoodieTableMetaClient.newTableBuilder().setAdditionalProperties(UnstructuredTableTestProperties.layoutOne())
         .setTableType(HoodieTableType.COPY_ON_WRITE).setTableName("embedding")
@@ -108,7 +114,7 @@ public class TestPreprocessingIteratorSpeech {
 
   /** No order between modalities: frames and text may interleave, each modality dense from 0 in its own emit order. */
   @Test
-  public void framesAndTextInterleaveEachDenseInItsModality() {
+  void framesAndTextInterleaveEachDenseInItsModality() {
     Chunk text = Chunk.builder(EmbeddingTableSchema.MODALITY_TEXT).text("words").tokenCount(1).build();
     ScriptedVideo.SCRIPT.addAll(Arrays.asList(frame(0), speech(0), frame(1), text));
     TypedProperties props = props();
@@ -129,7 +135,7 @@ public class TestPreprocessingIteratorSpeech {
    * the caller as it is, and the segments, the segment source and the transcriber are closed, once.
    */
   @Test
-  public void errorFromTheTranscriberClosesTheSegmentsTheSourceAndTheTranscriber() throws IOException {
+  void errorFromTheTranscriberClosesTheSegmentsTheSourceAndTheTranscriber() throws IOException {
     Path clip = VideoClips.generate(temp.resolve("clip.mp4"), 4, 10, 2, 160, 120, -1, -1);
     TypedProperties props = props();
     props.setProperty(AudioConfigKeys.ENABLED.key(), "true");
@@ -147,6 +153,25 @@ public class TestPreprocessingIteratorSpeech {
     assertAudioInstancesClosedOnce();
     iterator.close();
     assertAudioInstancesClosedOnce();
+  }
+
+  /**
+   * An {@link Error} from a preprocessor, at its open or from its chunks, closes the iterator's preprocessors before it
+   * propagates; it reaches the caller as the same Error, with a failure of that close kept as suppressed.
+   */
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void errorClosesThePreprocessorsAndKeepsTheirCloseFailureSuppressed(boolean atOpen) {
+    TypedProperties props = props();
+    props.setProperty(EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key(), ErrorThenFailingClose.class.getName());
+    ErrorThenFailingClose.AT_OPEN.set(atOpen);
+    ErrorThenFailingClose.CLOSES.set(0);
+    PreprocessingIterator iterator = iterator(props, new byte[] {1, 2, 3});
+    UnsatisfiedLinkError error = assertThrows(UnsatisfiedLinkError.class, iterator::hasNext);
+    assertSame(ErrorThenFailingClose.ERROR.get(), error, "the same Error reaches the caller");
+    assertEquals(1, ErrorThenFailingClose.CLOSES.get(), "the preprocessor is closed before the Error propagates");
+    assertEquals(1, error.getSuppressed().length, "the close failure is kept as suppressed");
+    assertEquals(ErrorThenFailingClose.CLOSE_MESSAGE, error.getSuppressed()[0].getMessage());
   }
 
   private static void assertAudioInstancesClosedOnce() {
@@ -231,6 +256,61 @@ public class TestPreprocessingIteratorSpeech {
     }
   }
 
+  /**
+   * A video preprocessor whose open, or whose first chunk, throws an Error, and whose close then throws one too; counts the
+   * closes of the instance that opened a file (the logic-version probe builds and closes its own instance, which is never used).
+   */
+  public static class ErrorThenFailingClose implements FilePreprocessor, AutoCloseable {
+    static final String CLOSE_MESSAGE = "close failed (injected)";
+    static final AtomicBoolean AT_OPEN = new AtomicBoolean();
+    static final AtomicInteger CLOSES = new AtomicInteger();
+    static final AtomicReference<UnsatisfiedLinkError> ERROR = new AtomicReference<>();
+    private boolean used;
+
+    @Override
+    public String name() {
+      return "error-then-failing-close";
+    }
+
+    @Override
+    public SourceKind sourceKind() {
+      return SourceKind.VIDEO;
+    }
+
+    @Override
+    public ClosableIterator<Chunk> open(BlobBytesSupplier bytes, FileMeta file, Tokenizer tokenizer, TypedProperties props) {
+      used = true;
+      if (AT_OPEN.get()) {
+        throw error();
+      }
+      return ClosableIterator.wrap(new Iterator<Chunk>() {
+        @Override
+        public boolean hasNext() {
+          throw error();
+        }
+
+        @Override
+        public Chunk next() {
+          throw error();
+        }
+      });
+    }
+
+    private static UnsatisfiedLinkError error() {
+      UnsatisfiedLinkError error = new UnsatisfiedLinkError("no native library (injected)");
+      ERROR.set(error);
+      return error;
+    }
+
+    @Override
+    public void close() {
+      if (used) {
+        CLOSES.incrementAndGet();
+        throw new LinkageError(CLOSE_MESSAGE);
+      }
+    }
+  }
+
   /** Replays {@link #SCRIPT} as a video preprocessor (stores inputs). Static state: these tests are Spark-free and single-threaded. */
   public static class ScriptedVideo implements FilePreprocessor {
     static final List<Chunk> SCRIPT = new ArrayList<>();
@@ -285,9 +365,12 @@ public class TestPreprocessingIteratorSpeech {
     Row source = new GenericRowWithSchema(new Object[] {"sha-video", "mp4", (long) bytes.length, 1L, blob, "s3://bucket/sha-video.mp4", "sha-video.mp4"}, SOURCE_ROW);
     PrepCounters counters = new PrepCounters(new LongAccumulator(), new LongAccumulator(), new LongAccumulator(),
         new LongAccumulator(), new LongAccumulator());
-    return new PreprocessingIterator(Collections.singletonList(source).iterator(), EmbeddingTableConfig.from(props), "001",
-        new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())), new PreprocessorRegistry(props),
-        new WordCountTokenizer(), counters, null);
+    return PreprocessingIterator.builder(Collections.singletonList(source).iterator(), EmbeddingTableConfig.from(props), "001")
+        .bytesSource(new BlobBytesSource(HadoopFSUtils.getStorageConf(new Configuration())))
+        .registry(new PreprocessorRegistry(props))
+        .tokenizer(new WordCountTokenizer())
+        .counters(counters)
+        .build();
   }
 
   private static Object column(Row row, String name) {

@@ -75,7 +75,8 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
  *
  * <p>{@link #SANITY}: a text and an image file through a round, the harness's proof that needs no video class.
  */
-public class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
+// by design: the name stays off surefire's Test* pattern, as the scenarios run only in the child JVM without FFmpeg
+class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
 
   /** The scenario method of the JCodec video round. */
   public static final String JCODEC_ROUND = "jcodecVideoBecomesFrameRowsInOneCommit";
@@ -93,7 +94,7 @@ public class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
   private final FixtureFile hevc = object("video/c03-hevc-aac.mp4", resource(MATRIX + "c03-hevc-aac.mp4"));
 
   @BeforeAll
-  public static void ffmpegIsNotOnTheClassPath() {
+  static void ffmpegIsNotOnTheClassPath() {
     for (String ffmpegClass : FFMPEG_CLASSES) {
       assumeFalse(loadable(ffmpegClass), ffmpegClass + " is loadable: the scenarios run only in a JVM without the FFmpeg jars");
     }
@@ -111,7 +112,7 @@ public class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
   @ParameterizedTest(name = "{0}, {1}")
   @CsvSource({"COPY_ON_WRITE, prep_only", "COPY_ON_WRITE, prep_and_compute",
       "MERGE_ON_READ, prep_only", "MERGE_ON_READ, prep_and_compute"})
-  public void jcodecVideoBecomesFrameRowsInOneCommit(HoodieTableType tableType, String mode) throws Exception {
+  void jcodecVideoBecomesFrameRowsInOneCommit(HoodieTableType tableType, String mode) throws Exception {
     assertTrue(h264.bytes.length <= FRAME_INLINE_MAX_BYTES, "the H.264 video is inline in its source row: " + h264.bytes.length);
     announce(h264, hevc);
     TypedProperties props = jobProps(mode, EmbeddingTableConfig.PREP_VIDEO_PREPROCESSOR_CLASS.key(), JCODEC_PREPROCESSOR);
@@ -124,12 +125,7 @@ public class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
     assertEquals(latestEventsCheckpoint(), EmbeddingStreamers.checkpoint(table(), storage(), round.getCommit().get()));
     // the HEVC video: no row, one prep error naming its codec and the preprocessor that decodes it
     assertEquals(1, round.getErrors().size(), round.toString());
-    Map<String, Object> error = round.getErrors().get(0);
-    assertEquals(hevc.sha, error.get("source_path_sha"));
-    assertEquals("prep", error.get("stage"));
-    assertEquals(EmbeddingTableSchema.MODALITY_IMAGE, error.get("modality"));
-    String message = String.valueOf(error.get("error"));
-    assertTrue(message.contains("HEVC (hvc1)") && message.contains(VideoFramePreprocessor.class.getName()), message);
+    assertHevcError(round.getErrors().get(0));
 
     Map<String, Row> rows = rows(table());
     assertTrue(rows.values().stream().noneMatch(row -> hevc.sha.equals(row.getAs(EmbeddingTableSchema.SOURCE_PATH_SHA))),
@@ -140,23 +136,7 @@ public class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
     assertEquals(frames.size(), round.getRowsWritten());
     long previousTimeMs = -1;
     for (int i = 0; i < frames.size(); i++) {
-      Row frame = frames.get(i);
-      assertEquals(EmbeddingTableSchema.MODALITY_IMAGE, frame.getAs(EmbeddingTableSchema.MODALITY));
-      assertEquals(i, (long) frame.getAs(EmbeddingTableSchema.CHUNK_ID), "chunk ids are dense from 0");
-      assertEquals(h264.sourcePath, frame.getAs(EmbeddingTableSchema.SOURCE_FILE_PATH));
-      scala.collection.Map<String, String> aux = frame.getAs(EmbeddingTableSchema.AUX);
-      assertEquals(String.valueOf(i), aux.apply(EmbeddingTableSchema.AUX_FRAME_INDEX));
-      long timeMs = Long.parseLong(aux.apply(VideoFramePreprocessor.AUX_TIMESTAMP_MS));
-      assertTrue(i == 0 ? timeMs == 0 : timeMs > previousTimeMs, "frame times rise strictly from 0: " + previousTimeMs + ", " + timeMs);
-      previousTimeMs = timeMs;
-      assertEquals(prepLogicVersion("video"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
-      assertEquals("mp4", aux.apply(VideoFramePreprocessor.AUX_EXTENSION));
-      assertEquals(String.valueOf(h264.bytes.length), aux.apply(VideoFramePreprocessor.AUX_SIZE_BYTES));
-      byte[] jpeg = inlineImage(frame);
-      BufferedImage image = ImageIO.read(new ByteArrayInputStream(jpeg));
-      assertNotNull(image, "frame " + i + " is a readable JPEG");
-      assertEquals(aux.apply(VideoFramePreprocessor.AUX_WIDTH), String.valueOf(image.getWidth()));
-      assertEquals(aux.apply(VideoFramePreprocessor.AUX_HEIGHT), String.valueOf(image.getHeight()));
+      previousTimeMs = assertFrameRow(frames.get(i), i, previousTimeMs);
     }
 
     if (EmbeddingTableConfig.MODE_PREP_ONLY.equals(mode)) {
@@ -182,8 +162,37 @@ public class JcodecVideoRoundScenarios extends EmbeddingRoundTestBase {
     assertEquals(before, describeFrames(rows(table())));
   }
 
+  /** The HEVC video's one prep error, naming its codec and the preprocessor that decodes it. */
+  private void assertHevcError(Map<String, Object> error) {
+    assertEquals(hevc.sha, error.get("source_path_sha"));
+    assertEquals("prep", error.get("stage"));
+    assertEquals(EmbeddingTableSchema.MODALITY_IMAGE, error.get("modality"));
+    String message = String.valueOf(error.get("error"));
+    assertTrue(message.contains("HEVC (hvc1)") && message.contains(VideoFramePreprocessor.class.getName()), message);
+  }
+
+  /** Frame row {@code i} of the H.264 video, whose time must follow {@code previousTimeMs}; returns its time. */
+  private long assertFrameRow(Row frame, int i, long previousTimeMs) throws IOException {
+    assertEquals(EmbeddingTableSchema.MODALITY_IMAGE, frame.getAs(EmbeddingTableSchema.MODALITY));
+    assertEquals(i, (long) frame.getAs(EmbeddingTableSchema.CHUNK_ID), "chunk ids are dense from 0");
+    assertEquals(h264.sourcePath, frame.getAs(EmbeddingTableSchema.SOURCE_FILE_PATH));
+    scala.collection.Map<String, String> aux = frame.getAs(EmbeddingTableSchema.AUX);
+    assertEquals(String.valueOf(i), aux.apply(EmbeddingTableSchema.AUX_FRAME_INDEX));
+    long timeMs = Long.parseLong(aux.apply(VideoFramePreprocessor.AUX_TIMESTAMP_MS));
+    assertTrue(i == 0 ? timeMs == 0 : timeMs > previousTimeMs, "frame times rise strictly from 0: " + previousTimeMs + ", " + timeMs);
+    assertEquals(prepLogicVersion("video"), aux.apply(EmbeddingTableSchema.AUX_PREP_LOGIC_VERSION));
+    assertEquals("mp4", aux.apply(VideoFramePreprocessor.AUX_EXTENSION));
+    assertEquals(String.valueOf(h264.bytes.length), aux.apply(VideoFramePreprocessor.AUX_SIZE_BYTES));
+    byte[] jpeg = inlineImage(frame);
+    BufferedImage image = ImageIO.read(new ByteArrayInputStream(jpeg));
+    assertNotNull(image, "frame " + i + " is a readable JPEG");
+    assertEquals(aux.apply(VideoFramePreprocessor.AUX_WIDTH), String.valueOf(image.getWidth()));
+    assertEquals(aux.apply(VideoFramePreprocessor.AUX_HEIGHT), String.valueOf(image.getHeight()));
+    return timeMs;
+  }
+
   @Test
-  public void textAndImageRoundRunsWithoutFfmpeg() throws Exception {
+  void textAndImageRoundRunsWithoutFfmpeg() throws Exception {
     FixtureFile text = text("notes", "alpha", "beta");
     FixtureFile image = object("images/small.png", ImageFixtures.image("png", 8, 6));
     announce(text, image);

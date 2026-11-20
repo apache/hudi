@@ -166,7 +166,8 @@ public class TestEmbeddingSchemaUpgrade extends EmbeddingRoundTestBase {
     Row good = preparedText(schema, "good", "alpha", customer);
     Row bad = preparedText(schema, "bad", ScriptedEmbeddingClient.PERMANENT, customer);
     Dataset<Row> embedded = ComputeRound.embed(spark(), spark().createDataFrame(Arrays.asList(good, bad), schema).javaRDD(),
-        schema, model, props, new BlobBytesSource(storage()), ComputeCounters.register(spark().sparkContext()), StorageLevel.MEMORY_AND_DISK());
+        schema, model, props, new ComputeRound.Resources(new BlobBytesSource(storage()),
+            ComputeCounters.register(spark().sparkContext()), StorageLevel.MEMORY_AND_DISK()));
     try {
       StructType output = schema.add(ComputeRound.CORRUPT_RECORD, DataTypes.StringType, true);
       List<Row> data = ComputeRound.dataRows(embedded, output).orderBy(EmbeddingTableSchema.SOURCE_PATH_SHA).collectAsList();

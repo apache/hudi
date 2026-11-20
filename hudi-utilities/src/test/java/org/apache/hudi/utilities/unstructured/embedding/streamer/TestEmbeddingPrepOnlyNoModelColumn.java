@@ -52,10 +52,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * A {@code prep_only} embedding table has no model (VECTOR) column; a round of the other mode on an existing table is not refused.
  */
 @Tag("functional")
-public class TestEmbeddingPrepOnlyNoModelColumn extends EmbeddingRoundTestBase {
+class TestEmbeddingPrepOnlyNoModelColumn extends EmbeddingRoundTestBase {
 
   @Test
-  public void newPrepOnlyTableHasNoModelColumn() throws Exception {
+  void newPrepOnlyTableHasNoModelColumn() throws Exception {
     announce(text("a", "alpha", "beta"), text("b", "gamma"));
 
     Round round = round(props(table(), EmbeddingTableConfig.MODE_PREP_ONLY));
@@ -75,7 +75,7 @@ public class TestEmbeddingPrepOnlyNoModelColumn extends EmbeddingRoundTestBase {
   }
 
   @Test
-  public void prepOnlyTableReadsBackThroughSparkSql() throws Exception {
+  void prepOnlyTableReadsBackThroughSparkSql() throws Exception {
     FixtureFile a = text("a", "alpha", "beta");
     FixtureFile b = text("b", "gamma");
     announce(a, b);
@@ -104,7 +104,7 @@ public class TestEmbeddingPrepOnlyNoModelColumn extends EmbeddingRoundTestBase {
    * the rows written in the other mode keep a null vector. One mode per table is the job's rule, not a start-time refusal.
    */
   @Test
-  public void modeSwitchOnAnExistingTableIsNotRefused() throws Exception {
+  void modeSwitchOnAnExistingTableIsNotRefused() throws Exception {
     announce(text("a", "alpha", "beta"));
     assertTrue(round(props(table(), EmbeddingTableConfig.MODE_PREP_ONLY)).getCommit().isPresent());
     announce(text("c", "delta"));
@@ -126,7 +126,7 @@ public class TestEmbeddingPrepOnlyNoModelColumn extends EmbeddingRoundTestBase {
    * the fixed columns plus that column, with no model (VECTOR) column.
    */
   @Test
-  public void prepOnlyRoundWritesPathPartitionColumnsAndNoModelColumn() throws Exception {
+  void prepOnlyRoundWritesPathPartitionColumnsAndNoModelColumn() throws Exception {
     FixtureFile blue = text("team=blue/a", "alpha", "beta");
     FixtureFile red = text("team=red/b", "gamma");
     announce(blue, red);
