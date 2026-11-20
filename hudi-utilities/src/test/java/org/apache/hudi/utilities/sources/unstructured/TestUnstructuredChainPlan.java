@@ -25,6 +25,7 @@ import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieErrorTableConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
 import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.config.SqlTransformerConfig;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
@@ -267,6 +268,116 @@ public class TestUnstructuredChainPlan extends UtilitiesTestBase {
     @Override
     public Dataset<Row> apply(JavaSparkContext jsc, SparkSession sparkSession, Dataset<Row> rows, TypedProperties props) {
       return rows.drop(props.getString(COLUMN));
+    }
+  }
+
+  /** A partition path into a struct column that the job's own transformer adds is produced, so the plan passes (RV32-3). */
+  @Test
+  void nestedPartitionPathProducedByTransformerPasses() {
+    TypedProperties props = blob("SELECT *, named_struct('region', CAST('eu' AS STRING)) AS ingest_meta FROM <SRC>");
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ingest_meta.region");
+    plan(UnstructuredMode.BLOB, props, Option.empty(), QUARANTINE, SQL, GUARD);
+  }
+
+  /** A nested partition path that no transformer produces is still refused, naming the path. */
+  @Test
+  void missingNestedPartitionPathRefused() {
+    TypedProperties props = blob("SELECT *, named_struct('region', CAST('eu' AS STRING)) AS ingest_meta FROM <SRC>");
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ingest_meta.country");
+    String refused = refusal(UnstructuredMode.BLOB, props, QUARANTINE, SQL, GUARD);
+    assertTrue(refused.contains("refuses partition column ingest_meta.country"), refused);
+  }
+
+  @Test
+  void requiredBlobSubclassProducesTopLevelPartitionField() {
+    TypedProperties props = blob(null);
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "region");
+    plan(UnstructuredMode.BLOB, props, Option.empty(), PartitionedBlobTransformer.class.getName(), GUARD);
+  }
+
+  @Test
+  void requiredBlobSubclassProducesNestedPartitionField() {
+    TypedProperties props = blob(null);
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ingest_meta.region");
+    plan(UnstructuredMode.BLOB, props, Option.empty(), PartitionedBlobTransformer.class.getName(), GUARD);
+  }
+
+  @Test
+  void requiredEmbeddingSubclassProducesPartitionFieldOnNewTable() {
+    TypedProperties props = embedding(null);
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "region");
+    plan(UnstructuredMode.EMBEDDING, props, Option.empty(), PartitionedEmbeddingTransformer.class.getName(), GUARD);
+  }
+
+  private static StructType partitionSchema(StructType schema) {
+    return schema.add("region", DataTypes.StringType, true)
+        .add("ingest_meta", new StructType().add("region", DataTypes.StringType, true), true);
+  }
+
+  private static Dataset<Row> partitionRows(Dataset<Row> rows) {
+    return rows.withColumn("region", org.apache.spark.sql.functions.lit("eu"))
+        .withColumn("ingest_meta", org.apache.spark.sql.functions.struct(org.apache.spark.sql.functions.lit("eu").alias("region")));
+  }
+
+  public static class PartitionedBlobTransformer extends BlobQuarantineTransformer {
+    @Override
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession spark, StructType incoming, TypedProperties props) {
+      return partitionSchema(super.transformedSchema(jsc, spark, incoming, props));
+    }
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession spark, Dataset<Row> rows, TypedProperties props) {
+      return partitionRows(super.apply(jsc, spark, rows, props));
+    }
+  }
+
+  public static class PartitionedEmbeddingTransformer extends EmbeddingTableTransformer {
+    @Override
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession spark, StructType incoming, TypedProperties props) {
+      return partitionSchema(super.transformedSchema(jsc, spark, incoming, props));
+    }
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession spark, Dataset<Row> rows, TypedProperties props, String instant) {
+      return partitionRows(super.apply(jsc, spark, rows, props, instant));
+    }
+  }
+
+  @Test
+  void requiredSubclassDuplicateExtraUsesItsLastPresentPartitionField() {
+    TypedProperties props = blob(null);
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ingest_meta.region");
+    props.setProperty("test.partition.first.region", "false");
+    plan(UnstructuredMode.BLOB, props, Option.empty(), DuplicatePartitionBlobTransformer.class.getName(), GUARD);
+  }
+
+  @Test
+  void requiredSubclassDuplicateExtraRefusesPartitionAbsentFromItsLastField() {
+    TypedProperties props = blob(null);
+    props.setProperty(KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key(), "ingest_meta.region");
+    props.setProperty("test.partition.first.region", "true");
+    String refused = refusal(UnstructuredMode.BLOB, props, DuplicatePartitionBlobTransformer.class.getName(), GUARD);
+    assertTrue(refused.contains("refuses partition column ingest_meta.region"), refused);
+  }
+
+  public static class DuplicatePartitionBlobTransformer extends BlobQuarantineTransformer {
+    @Override
+    public StructType transformedSchema(JavaSparkContext jsc, SparkSession spark, StructType incoming, TypedProperties props) {
+      boolean regionFirst = props.getBoolean("test.partition.first.region", true);
+      String first = regionFirst ? "region" : "country";
+      String last = regionFirst ? "country" : "region";
+      return super.transformedSchema(jsc, spark, incoming, props)
+          .add("ingest_meta", new StructType().add(first, DataTypes.StringType, true), true)
+          .add("ingest_meta", new StructType().add(last, DataTypes.StringType, true), true);
+    }
+
+    @Override
+    public Dataset<Row> apply(JavaSparkContext jsc, SparkSession spark, Dataset<Row> rows, TypedProperties props) {
+      boolean regionFirst = props.getBoolean("test.partition.first.region", true);
+      String first = regionFirst ? "region" : "country";
+      String last = regionFirst ? "country" : "region";
+      return super.apply(jsc, spark, rows, props).selectExpr("*",
+          "named_struct('" + first + "', 'eu') AS ingest_meta", "named_struct('" + last + "', 'eu') AS ingest_meta");
     }
   }
 }

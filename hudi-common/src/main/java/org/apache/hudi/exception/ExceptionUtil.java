@@ -24,6 +24,11 @@ import org.apache.hudi.common.util.StringUtils;
 import javax.annotation.Nonnull;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Util class for exception analysis.
@@ -40,12 +45,10 @@ public final class ExceptionUtil {
       return false;
     }
 
-    Throwable cause = t;
-    while (cause != null) {
+    for (Throwable cause : getCauses(t)) {
       if (cause.getMessage() != null && cause.getMessage().contains(errorMsg)) {
         return true;
       }
-      cause = cause.getCause();
     }
 
     return false;
@@ -55,15 +58,32 @@ public final class ExceptionUtil {
    * Returns true if any nested exception is an instance of the provided exception class.
    */
   public static boolean isCausedBy(@Nonnull Throwable t, @Nonnull Class<? extends Throwable> clazz) {
-    Throwable cause = t;
-    while (cause != null) {
+    for (Throwable cause : getCauses(t)) {
       if (clazz.isInstance(cause)) {
         return true;
       }
-      cause = cause.getCause();
     }
 
     return false;
+  }
+
+  /**
+   * The throwable and its causes in order, stopping before an identity repeats. Suppressed exceptions are not causes.
+   * A null throwable has no causes.
+   */
+  public static List<Throwable> getCauses(Throwable failure) {
+    List<Throwable> causes = new ArrayList<>();
+    Set<Throwable> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+    for (Throwable cause = failure; cause != null && visited.add(cause); cause = cause.getCause()) {
+      causes.add(cause);
+    }
+    return causes;
+  }
+
+  /** The innermost cause, or the last cause before an identity repeats; null for a null failure. */
+  public static Throwable getRootCause(Throwable failure) {
+    List<Throwable> causes = getCauses(failure);
+    return causes.isEmpty() ? null : causes.get(causes.size() - 1);
   }
 
   /**

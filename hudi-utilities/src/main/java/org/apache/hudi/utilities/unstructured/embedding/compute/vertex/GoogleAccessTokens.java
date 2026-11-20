@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.compute.vertex;
 
-import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingClientConfigException;
 import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingProviderUnavailableException;
 import org.apache.hudi.utilities.unstructured.embedding.compute.RequestRateLimiter;
@@ -225,7 +225,7 @@ final class GoogleAccessTokens extends VertexAccessTokens {
 
   /** The host does not resolve: the HTTP client reports it as an UnknownHostException or an UnresolvedAddressException cause. */
   private static boolean isUnknownHost(Throwable failure) {
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (cause instanceof UnknownHostException || cause instanceof UnresolvedAddressException) {
         return true;
       }

@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.compute;
 
-import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImageHeaderException;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImageRefusedException;
@@ -125,7 +125,7 @@ public final class ImageFailures {
       return false;
     }
     IOException firstIo = null;
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (cause instanceof EOFException) {
         return true;
       }
@@ -168,7 +168,7 @@ public final class ImageFailures {
 
   /** The first cause of {@code failure} (itself included) of {@code type}, or null; a cause chain that loops ends. */
   private static <T extends Throwable> T find(Throwable failure, Class<T> type) {
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (type.isInstance(cause)) {
         return type.cast(cause);
       }
@@ -182,10 +182,10 @@ public final class ImageFailures {
    * it is another throwable with a message the text does not already hold, that root cause is named too.
    */
   private static String describeTransient(Exception failure) {
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (cause instanceof BlobReadException) {
         String text = cause.getMessage();
-        Throwable root = SourceCauses.getRootCause(cause);
+        Throwable root = ExceptionUtil.getRootCause(cause);
         if (root != cause.getCause() && root.getMessage() != null && !text.contains(root.getMessage())) {
           text = text + " (root cause " + root.getClass().getSimpleName() + ": " + root.getMessage() + ")";
         }

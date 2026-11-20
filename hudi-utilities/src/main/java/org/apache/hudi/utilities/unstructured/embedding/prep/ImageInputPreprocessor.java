@@ -22,8 +22,8 @@ import org.apache.hudi.common.config.ConfigProperty;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.utilities.unstructured.SourceCauses;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImageContentTypes;
@@ -200,7 +200,7 @@ public class ImageInputPreprocessor implements FilePreprocessor {
 
   /** The storage failure the image reader wrapped while reading the header, or null when the header itself is at fault. */
   private static BlobReadException blobReadFailure(Throwable failure) {
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (cause instanceof BlobReadException) {
         return (BlobReadException) cause;
       }

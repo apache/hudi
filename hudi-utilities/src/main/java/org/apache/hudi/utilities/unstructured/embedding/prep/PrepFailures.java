@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.prep;
 
-import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.utilities.unstructured.embedding.input.EmbeddingPayloadWriteException;
 import org.apache.hudi.utilities.unstructured.embedding.source.PrepPlatformException;
 import org.apache.hudi.utilities.unstructured.embedding.source.PreprocessorConfigurationException;
@@ -126,7 +126,7 @@ public final class PrepFailures {
     if (Thread.currentThread().isInterrupted() || (task != null && task.isInterrupted())) {
       return true;
     }
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (cause instanceof java.io.InterruptedIOException || cause instanceof InterruptedException
           || cause instanceof java.nio.channels.ClosedByInterruptException) {
         return true;

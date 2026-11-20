@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.prep.pdf;
 
-import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.utilities.unstructured.embedding.prep.ErrorText;
 
 /**
@@ -43,7 +43,7 @@ public enum PdfFailureCode {
     if (cause == null) {
       return name();
     }
-    Throwable root = SourceCauses.getRootCause(cause);
+    Throwable root = ExceptionUtil.getRootCause(cause);
     if (root == null) {
       // getRootCause returns null only for a null failure, handled above
       root = cause;

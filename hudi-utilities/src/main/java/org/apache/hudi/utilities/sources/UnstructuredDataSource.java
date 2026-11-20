@@ -112,7 +112,7 @@ public class UnstructuredDataSource extends HoodieIncrSource {
 
   public UnstructuredDataSource(TypedProperties props, JavaSparkContext sparkContext, SparkSession sparkSession,
                                 HoodieIngestionMetrics metrics, StreamContext streamContext) {
-    this(validate(props), sparkContext, sparkSession, new QueryRunner(sparkSession, props),
+    this(validate(props, streamContext), sparkContext, sparkSession, new QueryRunner(sparkSession, props),
         new CloudDataFetcher(props, sparkContext, sparkSession, metrics, new CloudObjectsSelectorCommon(props),
             new UnstructuredObjectMaterializer(props, sparkContext)),
         streamContext);
@@ -154,8 +154,8 @@ public class UnstructuredDataSource extends HoodieIncrSource {
    * The job's checks ({@link UnstructuredSourceContract#validateJob}), before anything else of the source is built; the streamer has
    * already run them with the merge. Returns {@code props} unchanged.
    */
-  private static TypedProperties validate(TypedProperties props) {
-    return UnstructuredSourceContract.validateJob(props);
+  private static TypedProperties validate(TypedProperties props, StreamContext streamContext) {
+    return streamContext.getSourceContract().isPreparedJob(props) ? props : UnstructuredSourceContract.validateJob(props);
   }
 
   /** Refuses an existing table with a different record key before the writer's stock table checks. */

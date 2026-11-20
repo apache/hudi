@@ -64,6 +64,20 @@ public class TestEmbeddingModeConfig {
   }
 
   @Test
+  public void roundEntryRefusesPrepOnlyModelsWithoutAStartupSourceContract() {
+    EmbeddingTableConfig config = EmbeddingTableConfig.from(props(EmbeddingTableConfig.MODE_PREP_ONLY));
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> EmbeddingTableTransformer.checkRound(config, null, Option.empty()));
+    assertTrue(refused.getMessage().contains(EmbeddingTableConfig.MODELS.key()), refused.getMessage());
+    assertTrue(refused.getMessage().contains("Nothing was written"), refused.getMessage());
+  }
+
+  @Test
+  public void validPrepOnlyPropertiesPassTheStartupCheck() {
+    assertFalse(EmbeddingTableTransformer.checkJob(EmbeddingTableConfig.from(prepOnly())).isPresent());
+  }
+
+  @Test
   public void existingTableRequiresBaseColumnsAndEvolvesNullableImage() {
     EmbeddingTableConfig config = EmbeddingTableConfig.from(prepOnly());
     StructType full = EmbeddingTableSchema.build(config);
@@ -71,11 +85,11 @@ public class TestEmbeddingModeConfig {
       StructType missing = new StructType(Arrays.stream(full.fields())
           .filter(field -> !field.name().equals(column)).toArray(org.apache.spark.sql.types.StructField[]::new));
       if (EmbeddingTableSchema.PREPARED_IMAGE.equals(column)) {
-        assertEquals(full, EmbeddingTableTransformer.roundSchema(config, Option.of(missing)),
+        assertEquals(full, EmbeddingTableSchema.roundSchema(config, Option.of(missing)),
             "the nullable image field is restored with its original type and metadata");
       } else {
         assertThrows(IllegalArgumentException.class,
-            () -> EmbeddingTableTransformer.roundSchema(config, Option.of(missing)), column);
+            () -> EmbeddingTableSchema.roundSchema(config, Option.of(missing)), column);
       }
     }
   }

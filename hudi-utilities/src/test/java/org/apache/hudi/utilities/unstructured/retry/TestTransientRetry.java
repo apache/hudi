@@ -41,6 +41,17 @@ public class TestTransientRetry {
   }
 
   @Test
+  public void callersCanUseDifferentBackoffCaps() {
+    TransientRetry source = new TransientRetry(5, 20_000L);
+    TransientRetry compute = new TransientRetry(5, 20_000L, 60_000L);
+    assertEquals(20_000L, source.waitBefore(2));
+    assertEquals(30_000L, source.waitBefore(3));
+    assertEquals(40_000L, compute.waitBefore(3));
+    assertEquals(60_000L, compute.waitBefore(4));
+    assertThrows(IllegalArgumentException.class, () -> new TransientRetry(2, 1L, -1L));
+  }
+
+  @Test
   public void transientFailureIsRetriedUntilItSucceeds() throws IOException {
     AtomicInteger tries = new AtomicInteger();
     String value = new TransientRetry(3, 0).call("step", () -> {

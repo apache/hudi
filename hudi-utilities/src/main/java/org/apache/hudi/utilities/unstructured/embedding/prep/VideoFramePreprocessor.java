@@ -22,9 +22,9 @@ import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.ReflectionUtils;
 import org.apache.hudi.common.util.collection.ClosableIterator;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.exception.HoodieIOException;
-import org.apache.hudi.utilities.unstructured.SourceCauses;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.audio.AudioConfig;
@@ -417,10 +417,10 @@ public class VideoFramePreprocessor implements FilePreprocessor, AutoCloseable {
    * strategy saw fail), or an I/O failure opening it. A refused or undecodable video is not one.
    */
   private static boolean isStorageFailure(Exception failure) {
-    if (failure instanceof VideoDecodeException || SourceCauses.isCausedBy(failure, ImageRefusedException.class)) {
+    if (failure instanceof VideoDecodeException || ExceptionUtil.isCausedBy(failure, ImageRefusedException.class)) {
       return false;
     }
-    return SourceCauses.isCausedBy(failure, BlobReadException.class) || failure instanceof IOException || failure instanceof HoodieIOException;
+    return ExceptionUtil.isCausedBy(failure, BlobReadException.class) || failure instanceof IOException || failure instanceof HoodieIOException;
   }
 
   /** {@link EmbeddingTableConfig#PREP_VIDEO_MAX_BYTES}; its default when unset. */

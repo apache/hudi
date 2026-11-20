@@ -26,6 +26,7 @@ import org.apache.hudi.utilities.unstructured.embedding.image.ImagePreparer;
 import org.apache.hudi.utilities.unstructured.embedding.image.ImagePreprocessingSpec;
 import org.apache.hudi.utilities.unstructured.embedding.image.SeekableBlobImageInputStream;
 import org.apache.hudi.utilities.unstructured.embedding.source.BlobBytesSource;
+import org.apache.hudi.utilities.unstructured.retry.TransientRetry;
 
 import org.apache.spark.TaskContext;
 import org.apache.spark.sql.Row;
@@ -83,8 +84,8 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
   private final int batchSize;
   /** Tries of one row in this step ({@code compute.max.attempts}). */
   private final int maxAttempts;
-  /** The wait before a row's second try, in ms; doubles per try up to {@link EmbeddingTableConfig#COMPUTE_RETRY_MAX_BACKOFF_MS}. */
-  private final long backoffMs;
+  /** The shared backoff schedule, with compute's 60-second cap. */
+  private final TransientRetry retry;
   private final ComputeCounters counters;
   private final int outputWidth;
   private final int vectorIndex;
@@ -125,7 +126,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
     this.batchSize = batchSize;
     EmbeddingTableConfig config = EmbeddingTableConfig.from(props);
     this.maxAttempts = config.computeMaxAttempts();
-    this.backoffMs = config.computeRetryBackoffMs();
+    this.retry = new TransientRetry(maxAttempts, config.computeRetryBackoffMs(), EmbeddingTableConfig.COMPUTE_RETRY_MAX_BACKOFF_MS);
     this.counters = counters;
     this.outputWidth = schema.fields().length;
     this.vectorIndex = schema.fieldIndex(model.getColumn());
@@ -275,7 +276,7 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
             + "), first " + input.describeIdentity() + ": "
             + results.get(retryable.get(0)).getError());
       }
-      sleep(backoff(tries));
+      sleep(retry.waitBefore(tries + 1));
       for (int i : retryable) {
         counters.getRowsRetried().add(1);
         results.set(i, embedAlone(inputs.get(i)));
@@ -301,12 +302,6 @@ public class MicroBatchEmbeddingIterator implements Iterator<Row>, AutoCloseable
         + results.size() + " inputs of one call, of more than one file, first " + inputs.get(0).describeIdentity()
         + ", were rejected with the same error and none was embedded, so the provider "
         + "rejects the request, not an input: " + error + "; the compute commit fails and the next sync retries from the same checkpoint");
-  }
-
-  /** The wait before try {@code tries + 1}: {@link #backoffMs} doubled per earlier retry, capped. */
-  private long backoff(int tries) {
-    double wait = backoffMs * Math.pow(2, tries - 1);
-    return (long) Math.min(EmbeddingTableConfig.COMPUTE_RETRY_MAX_BACKOFF_MS, wait);
   }
 
   private void sleep(long millis) {

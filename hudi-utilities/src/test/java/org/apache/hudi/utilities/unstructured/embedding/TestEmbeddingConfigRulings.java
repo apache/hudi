@@ -19,6 +19,7 @@
 package org.apache.hudi.utilities.unstructured.embedding;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.exception.HoodieException;
 import org.apache.hudi.utilities.unstructured.embedding.compute.DummyEmbeddingClient;
 import org.apache.hudi.utilities.unstructured.embedding.compute.EmbeddingClientFactory;
 
@@ -27,6 +28,8 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Resolves an explicitly named dummy provider. */
 public class TestEmbeddingConfigRulings {
@@ -39,6 +42,38 @@ public class TestEmbeddingConfigRulings {
     assertEquals(1, models.size());
     assertEquals("dummy", models.get(0).getProvider());
     assertEquals(DummyEmbeddingClient.class.getName(), EmbeddingClientFactory.clientClassName(models.get(0)));
+  }
+
+  @Test
+  public void invalidResolvedColumnNamesTheModelColumnKey() {
+    TypedProperties props = oneModel("dummy");
+    props.setProperty(EmbeddingTableConfig.MODELS.key(), "text-embedding-3-small");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "text-embedding-3-small.dimensions", "8");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "text-embedding-3-small.provider", "dummy");
+    IllegalArgumentException refused = assertThrows(IllegalArgumentException.class,
+        () -> EmbeddingTableConfig.from(props).models());
+    assertTrue(refused.getMessage().contains(EmbeddingTableConfig.MODEL_PREFIX + "text-embedding-3-small.column"));
+    assertTrue(refused.getMessage().contains("emb_text-embedding-3-small"));
+  }
+
+  @Test
+  public void modelColumnsCannotCollideIgnoringCase() {
+    TypedProperties props = oneModel("dummy");
+    props.setProperty(EmbeddingTableConfig.MODELS.key(), "m1,m2");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1.column", "vec");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m2.column", "VEC");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m2.dimensions", "8");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m2.provider", "dummy");
+    HoodieException refused = assertThrows(HoodieException.class, () -> EmbeddingTableConfig.from(props).models());
+    assertTrue(refused.getMessage().contains("m1") && refused.getMessage().contains("m2"));
+  }
+
+  @Test
+  public void modelColumnCannotReplaceAFixedColumn() {
+    TypedProperties props = oneModel("dummy");
+    props.setProperty(EmbeddingTableConfig.MODEL_PREFIX + "m1.column", "chunk_id");
+    HoodieException refused = assertThrows(HoodieException.class, () -> EmbeddingTableConfig.from(props).models());
+    assertTrue(refused.getMessage().contains("chunk_id"));
   }
 
   private static TypedProperties oneModel(String provider) {

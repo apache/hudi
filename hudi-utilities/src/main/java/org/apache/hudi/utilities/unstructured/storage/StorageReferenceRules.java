@@ -18,9 +18,9 @@
 
 package org.apache.hudi.utilities.unstructured.storage;
 
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.storage.StorageConfiguration;
 import org.apache.hudi.storage.StoragePath;
-import org.apache.hudi.utilities.unstructured.SourceCauses;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
@@ -129,7 +129,7 @@ public final class StorageReferenceRules {
   }
 
   private static boolean hasArgumentFailure(Throwable failure) {
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (cause instanceof IllegalArgumentException) {
         return true;
       }
@@ -153,7 +153,7 @@ public final class StorageReferenceRules {
       return false;
     } catch (RuntimeException configurationFailure) {
       // A configured class that cannot be loaded is unresolvable; an unavailable configuration is still a platform failure.
-      return !SourceCauses.isCausedBy(configurationFailure, ClassNotFoundException.class);
+      return !ExceptionUtil.isCausedBy(configurationFailure, ClassNotFoundException.class);
     }
   }
 

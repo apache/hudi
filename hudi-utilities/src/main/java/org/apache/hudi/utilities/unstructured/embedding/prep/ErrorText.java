@@ -18,6 +18,8 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.prep;
 
+import org.apache.hudi.utilities.unstructured.embedding.text.Utf16;
+
 /** Cuts error text to a column's char limit. */
 public final class ErrorText {
 
@@ -35,7 +37,7 @@ public final class ErrorText {
     if (maxChars <= 0) {
       return "";
     }
-    int end = Character.isHighSurrogate(text.charAt(maxChars - 1)) ? maxChars - 1 : maxChars;
+    int end = Utf16.floor(text, maxChars, true);
     return text.substring(0, end);
   }
 }

@@ -20,7 +20,7 @@ package org.apache.hudi.utilities.unstructured.embedding.audio.ffmpeg;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.collection.ClosableIterator;
-import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.exception.ExceptionUtil;
 import org.apache.hudi.utilities.unstructured.embedding.audio.AudioConfigKeys;
 import org.apache.hudi.utilities.unstructured.embedding.audio.AudioInput;
 import org.apache.hudi.utilities.unstructured.embedding.audio.AudioSegment;
@@ -309,7 +309,7 @@ public class FfmpegAudioSegmentSource implements AudioSegmentSource {
         throw e instanceof BlobReadException || SourceFailures.isContentFailure(e) ? e : new BlobReadException(e);
       } catch (RuntimeException e) {
         if (!SourceFailures.isContentFailure(e)) {
-          for (Throwable cause : SourceCauses.getCauses(e)) {
+          for (Throwable cause : ExceptionUtil.getCauses(e)) {
             if (cause instanceof IOException) {
               throw new BlobReadException(e);
             }

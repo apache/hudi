@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.source;
 
-import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.exception.ExceptionUtil;
 
 import org.apache.hadoop.security.AccessControlException;
 
@@ -128,7 +128,7 @@ public final class SourceFailures {
 
   /** Whether {@code failure} or any of its causes is an access denial ({@link #isAccessDenial}). */
   public static boolean isCausedByAccessDenial(Throwable failure) {
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (isAccessDenial(cause)) {
         return true;
       }
@@ -144,7 +144,7 @@ public final class SourceFailures {
    */
   public static boolean isContentFailure(Throwable failure) {
     boolean content = false;
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (isAccessDenial(cause)) {
         return false;
       }

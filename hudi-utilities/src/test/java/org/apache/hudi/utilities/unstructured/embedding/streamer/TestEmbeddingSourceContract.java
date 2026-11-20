@@ -19,11 +19,15 @@
 package org.apache.hudi.utilities.unstructured.embedding.streamer;
 
 import org.apache.hudi.common.config.TypedProperties;
+import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.utilities.sources.UnstructuredDataSource;
 import org.apache.hudi.utilities.sources.blob.BlobJobHarness;
+import org.apache.hudi.utilities.sources.blob.BlobSourceSetup;
 import org.apache.hudi.utilities.sources.blob.BlobTableConfig;
 import org.apache.hudi.utilities.sources.blob.S3EventsTableFixture;
 import org.apache.hudi.utilities.sources.blob.SourceOpenHooks;
+import org.apache.hudi.utilities.sources.unstructured.UnstructuredMode;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingRoundTestBase;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingStreamers.Round;
@@ -31,12 +35,14 @@ import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 import org.apache.hudi.utilities.unstructured.embedding.FixtureFile;
 import org.apache.hudi.utilities.unstructured.embedding.prep.TextPipePreprocessor;
+import org.apache.hudi.utilities.unstructured.embedding.text.Tokenizer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.MockedStatic;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -53,17 +59,55 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 
 /**
  * The unstructured source's contract, with an embedding job's configuration: the embedding stream selects what the blob stream
  * selects and refuses what it refuses. Structured objects are never selected nor read; the extension list narrows the selection;
- * an explicit data format, a structured extension and delete handling are refused when the job starts; a removal event writes
+ * an explicit data format or a structured extension is refused when the job starts; a removal event writes
  * nothing. Reads that fail take the source's and prep's own failure paths: an inline object's read fails the round in the source, an out-of-line
  * object's transient open failure is retried in the round, and an out-of-line object gone before prep is a failed file whose
  * error row the error table holds.
  */
 @Tag("functional")
 public class TestEmbeddingSourceContract extends EmbeddingRoundTestBase {
+
+  public static class CountingValidationPreprocessor extends TextPipePreprocessor {
+    static final AtomicInteger VALIDATIONS = new AtomicInteger();
+
+    @Override
+    public void validateConfig(TypedProperties props, Tokenizer tokenizer) {
+      VALIDATIONS.incrementAndGet();
+    }
+  }
+
+  @Test
+  public void propertiesAreValidatedAtStartupAndAgainForTheRound() throws Exception {
+    CountingValidationPreprocessor.VALIDATIONS.set(0);
+    announce(text("a", "alpha"));
+    Round result = round(prepOnly(EmbeddingTableConfig.PREPROCESSOR_CLASS_PREFIX + TEXT_EXTENSION
+        + EmbeddingTableConfig.PREPROCESSOR_CLASS_SUFFIX, CountingValidationPreprocessor.class.getName()));
+    assertTrue(result.getCommit().isPresent(), result.toString());
+    assertEquals(2, CountingValidationPreprocessor.VALIDATIONS.get(), "startup and round entry each validate the properties");
+  }
+
+  @Test
+  public void existingTableStartupValidatesTheJobAndTableOnce() throws Exception {
+    announce(text("a", "alpha"));
+    Round control = round(prepOnly());
+    assertTrue(control.getCommit().isPresent(), control.toString());
+    try (MockedStatic<BlobSourceSetup> jobs = mockStatic(BlobSourceSetup.class, CALLS_REAL_METHODS);
+         MockedStatic<UnstructuredDataSource> tables = mockStatic(UnstructuredDataSource.class, CALLS_REAL_METHODS)) {
+      round(prepOnly());
+      jobs.verify(() -> BlobSourceSetup.validate(any(TypedProperties.class), eq(UnstructuredMode.EMBEDDING), anyString()), times(1));
+      tables.verify(() -> UnstructuredDataSource.validate(eq(UnstructuredMode.EMBEDDING), anyString(), any(HoodieTableConfig.class)), times(1));
+    }
+  }
 
   /** Objects above this many bytes are out of line. */
   private static final long INLINE_CEILING = 40;

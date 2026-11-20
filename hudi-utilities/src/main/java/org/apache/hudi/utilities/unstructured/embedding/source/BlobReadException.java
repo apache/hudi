@@ -18,7 +18,7 @@
 
 package org.apache.hudi.utilities.unstructured.embedding.source;
 
-import org.apache.hudi.utilities.unstructured.SourceCauses;
+import org.apache.hudi.exception.ExceptionUtil;
 
 import java.io.IOException;
 
@@ -47,7 +47,7 @@ public class BlobReadException extends IOException {
 
   /** Whether {@code failure} or any of its causes is a {@link BlobReadException}. */
   public static boolean isStorageFailure(Throwable failure) {
-    for (Throwable cause : SourceCauses.getCauses(failure)) {
+    for (Throwable cause : ExceptionUtil.getCauses(failure)) {
       if (cause instanceof BlobReadException) {
         return true;
       }

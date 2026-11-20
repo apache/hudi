@@ -26,12 +26,13 @@ import org.apache.hudi.common.schema.internal.HoodieSchemaException;
 import org.apache.hudi.common.util.ConfigUtils;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieErrorTableConfig;
+import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
+import org.apache.hudi.utilities.config.CloudSourceConfig;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.transform.ChainedTransformer;
-import org.apache.hudi.utilities.transform.ChainedTransformer.TransformerInfo;
 import org.apache.hudi.utilities.transform.Transformer;
 import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableConfig;
-import org.apache.hudi.utilities.unstructured.embedding.streamer.EmbeddingTableTransformer;
+import org.apache.hudi.utilities.unstructured.embedding.EmbeddingTableSchema;
 
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.sql.SparkSession;
@@ -45,12 +46,12 @@ import org.apache.spark.sql.types.StructType;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * The columns an unstructured table must have (its contract), and the checks of a schema against them: a user's target schema,
@@ -75,7 +76,7 @@ public final class UnstructuredSchemaContract {
    * The columns {@code mode} writes:
    * <ul>
    *   <li>blob: {@link BlobTableSchema#schema()} with the path partition columns the source adds;</li>
-   *   <li>embedding: the columns the round writes ({@link EmbeddingTableTransformer#roundSchema}): those of the configuration on a
+   *   <li>embedding: the columns the round writes ({@link EmbeddingTableSchema#roundSchema}): those of the configuration on a
    *   new table, those of the existing table ({@code tableSchema}, without meta columns) with the active model's VECTOR otherwise.</li>
    * </ul>
    */
@@ -90,7 +91,7 @@ public final class UnstructuredSchemaContract {
         }
         return blob;
       case EMBEDDING:
-        return EmbeddingTableTransformer.roundSchema(EmbeddingTableConfig.from(props), tableSchema);
+        return EmbeddingTableSchema.roundSchema(EmbeddingTableConfig.from(props), tableSchema);
       default:
         throw new UnsupportedOperationException("Unknown unstructured mode " + mode);
     }
@@ -198,6 +199,7 @@ public final class UnstructuredSchemaContract {
     Set<String> ids = ids(chain);
     StructType fixed = contract(mode, props, Option.empty());
     schema = plan(mode, chain.get(requiredIndex), ids, schema, jsc, spark, props);
+    StructType requiredProduced = producedByRequired(mode, props, tableSchema, fixed, schema);
     // the round passes each entry the rows as the previous one left them, a column added again given twice; only the closing
     // guard resolves it, so each entry is planned against the unresolved columns and the add-only rule reads the resolved ones
     for (String entry : chain.subList(requiredIndex + 1, chain.size())) {
@@ -221,6 +223,27 @@ public final class UnstructuredSchemaContract {
       }
       schema = unresolved;
     }
+    List<String> partitions = Arrays.stream(ConfigUtils.getStringWithAltKeys(props, KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME, "")
+        .split(",")).map(String::trim).filter(column -> !column.isEmpty()).collect(Collectors.toList());
+    if (partitions.stream().anyMatch(column -> fieldAt(fixed, column) == null)) {
+      StructType produced = requiredProduced;
+      if (errorTable) {
+        produced = produced.add(DataTypes.createStructField(CORRUPT_RECORD, DataTypes.StringType, true));
+      }
+      for (String entry : chain.subList(requiredIndex + 1, chain.size())) {
+        if (!UnstructuredTransformerChain.names(entry, closing)) {
+          produced = plan(mode, entry, ids, produced, jsc, spark, props);
+        }
+      }
+      produced = lastWins(mode, fixed, produced, "the transformer chain");
+      for (String column : partitions) {
+        if (fieldAt(produced, column) == null) {
+          throw new HoodieSchemaException(source + " refuses partition column " + column + " in "
+              + KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME.key() + ": this job no longer produces it; configure "
+              + CloudSourceConfig.PATH_BASED_PARTITION_FIELDS.key() + " or a transformer that produces it. Nothing was written");
+        }
+      }
+    }
     schema = lastWins(mode, fixed, schema, "the transformer chain");
     StructType contract = contract(mode, props, tableSchema);
     checkOutput(mode, contract, fixed, schema, "the output of the transformer chain", errorTable);
@@ -243,6 +266,20 @@ public final class UnstructuredSchemaContract {
     }
   }
 
+  /** Keeps required-subclass additions without treating existing embedding-table placeholders as produced columns. */
+  private static StructType producedByRequired(UnstructuredMode mode, TypedProperties props, Option<StructType> tableSchema,
+                                               StructType fixed, StructType planned) {
+    StructType stock = contract(mode, props, tableSchema);
+    StructType produced = fixed;
+    for (StructField added : planned.fields()) {
+      if (!CORRUPT_RECORD.equals(added.name()) && field(fixed, added.name()) == null
+          && (mode == UnstructuredMode.BLOB || field(stock, added.name()) == null)) {
+        produced = produced.add(added);
+      }
+    }
+    return produced;
+  }
+
   /**
    * The schema {@code entry} plans for {@code incoming}, as the streamer's chain plans each transformer (its schema made nullable),
    * with the properties the chain gives that transformer in a round: for an {@code <id>:<class>} entry, the keys suffixed with its
@@ -251,7 +288,7 @@ public final class UnstructuredSchemaContract {
   private static StructType plan(UnstructuredMode mode, String entry, Set<String> ids, StructType incoming, JavaSparkContext jsc,
                                  SparkSession spark, TypedProperties props) {
     String trimmed = entry.trim();
-    TransformerInfo info = TransformerInfo.from(trimmed);
+    ChainedTransformer.TransformerInfo info = ChainedTransformer.TransformerInfo.from(entry);
     try (Transformer transformer = info.getTransformer()) {
       TypedProperties transformerProps = info.getProperties(props, ids);
       return transformer.transformedSchema(jsc, spark, incoming, transformerProps).asNullable();
@@ -265,11 +302,8 @@ public final class UnstructuredSchemaContract {
 
   /** The ids of the chain's {@code <id>:<class>} entries. */
   private static Set<String> ids(List<String> chain) {
-    Set<String> ids = new HashSet<>();
-    for (String entry : chain) {
-      ChainedTransformer.splitTransformer(entry).getLeft().ifPresent(ids::add);
-    }
-    return ids;
+    return chain.stream().map(ChainedTransformer::splitTransformer).map(name -> name.getLeft().orElse(null))
+        .filter(java.util.Objects::nonNull).collect(Collectors.toSet());
   }
 
   /**
@@ -317,6 +351,24 @@ public final class UnstructuredSchemaContract {
 
   private static HoodieSchemaException refusal(String source, String what, String column, String expected, String found) {
     return new HoodieSchemaException(source + " refuses " + what + ": column " + column + " must be " + expected + ", found: " + found);
+  }
+
+  /** The field at a partition path: a top-level name, or a dot-separated path into struct columns; null when absent. */
+  private static StructField fieldAt(StructType schema, String path) {
+    StructField whole = field(schema, path);
+    if (whole != null || !path.contains(".")) {
+      return whole;
+    }
+    StructField found = null;
+    StructType current = schema;
+    for (String part : path.split("\\.", -1)) {
+      found = current == null ? null : field(current, part);
+      if (found == null) {
+        return null;
+      }
+      current = found.dataType() instanceof StructType ? (StructType) found.dataType() : null;
+    }
+    return found;
   }
 
   private static StructField field(StructType schema, String name) {
