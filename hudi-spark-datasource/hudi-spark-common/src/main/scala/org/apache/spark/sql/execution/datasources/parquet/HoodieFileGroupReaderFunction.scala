@@ -21,6 +21,7 @@ import org.apache.hudi.{HoodiePartitionCDCFileGroupMapping, HoodiePartitionFileS
 import org.apache.hudi.cdc.{CDCFileGroupIterator, HoodieCDCFileGroupSplit, HoodieCDCFileIndex}
 import org.apache.hudi.common.config.{HoodieReaderConfig, TypedProperties}
 import org.apache.hudi.common.fs.FSUtils
+import org.apache.hudi.common.model.HoodieRecord
 import org.apache.hudi.common.schema.HoodieSchema
 import org.apache.hudi.common.schema.internal.InternalSchema
 import org.apache.hudi.common.table.ParquetTableSchemaResolver
@@ -28,7 +29,7 @@ import org.apache.hudi.common.table.log.InstantRange
 import org.apache.hudi.common.table.read.{HoodieFileGroupReader, HoodieRecordReader, TableState}
 import org.apache.hudi.common.table.read.lsm.{HoodieLsmFileGroupReader, LsmReaderUtils}
 import org.apache.hudi.common.util.{ConfigUtils, Option => HOption}
-import org.apache.hudi.common.util.collection.ClosableIterator
+import org.apache.hudi.common.util.collection.{ClosableIterator, CloseableFilterIterator}
 import org.apache.hudi.data.CloseableIteratorListener
 import org.apache.hudi.exception.HoodieException
 import org.apache.hudi.io.storage.HoodieSparkParquetReader.ENABLE_LOGICAL_TIMESTAMP_REPAIR
@@ -45,13 +46,15 @@ import org.apache.spark.sql.HoodieCatalystExpressionUtils.generateUnsafeProjecti
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{And, AttributeReference, In, InSet, JoinedRow, Literal, Predicate, UnsafeProjection}
 import org.apache.spark.sql.execution.datasources.{PartitionedFile, SparkColumnarFileReader, SparkSchemaTransformUtils}
-import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.sources.{Filter, In => SourceIn}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.vectorized.{ColumnarBatch, ColumnarBatchUtils}
+import org.apache.spark.unsafe.types.UTF8String
 import org.apache.spark.util.{SerializableConfiguration, Utils}
 
 import java.io.Closeable
 import java.nio.ByteBuffer
+import java.util.function.{Predicate => JPredicate}
 
 import scala.collection.JavaConverters.mapAsJavaMapConverter
 import scala.reflect.ClassTag
@@ -81,7 +84,8 @@ private[parquet] class HoodieFileGroupReadState(val tableState: TableState,
                                                  val outputSchema: StructType,
                                                  val projectionInputSchema: StructType,
                                                  val baseFileReadSchemas: BaseFileReadSchemas,
-                                                 val evaluateRequiredFiltersPerRow: Boolean) extends Serializable {
+                                                 val evaluateRequiredFiltersPerRow: Boolean,
+                                                 val isIncremental: Boolean) extends Serializable {
 
   /**
    * Parquet form of the table schema for base file reads. The conversion reads Hadoop's default resources, so it is
@@ -150,11 +154,38 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
         fileSliceMapping.getSlice(fileGroupName) match {
           case Some(fileSlice) if !state.isCount && (state.requiredSchema.nonEmpty || fileSlice.getLogFiles.findAny().isPresent) =>
             val tableConfig = state.tableState.getTableConfig
+            // For an incremental read of a MOR file group that needs merging, the commit-time filter in
+            // requiredFilters must not be pushed into the file reads: it would drop the base-file row of a
+            // record whose latest version is outside the window before the merge, which breaks partial
+            // updates (unchanged columns come from the base file) and event-time ordering. The full file
+            // group is merged with inputs bounded to the window end, and the merged rows are then filtered
+            // by commit time.
+            val windowCommitTimes =
+              if (state.isIncremental && fileSlice.getLogFiles.findAny().isPresent) {
+                incrementalWindowCommitTimes(state.requiredFilters)
+              } else {
+                Set.empty[String]
+              }
+            val postMergeCommitTimeFilter =
+              if (windowCommitTimes.isEmpty) {
+                None
+              } else {
+                state.projectionInputSchema.getFieldIndex(HoodieRecord.COMMIT_TIME_METADATA_FIELD)
+                  .map(idx => commitTimeRowFilter(idx, windowCommitTimes))
+              }
+            val (readFilters, instantRangeOpt) =
+              if (postMergeCommitTimeFilter.isDefined) {
+                (Seq.empty[Filter], HOption.of(InstantRange.builder()
+                  .rangeType(InstantRange.RangeType.CLOSED_CLOSED).nullableBoundary(true)
+                  .endInstant(windowCommitTimes.max).build()))
+              } else {
+                (state.requiredFilters, state.instantRangeOpt)
+              }
             // requiredFilters preserve Spark's row-level filtering semantics, while instantRangeOpt
             // keeps out-of-range records from participating in the file-group merge itself.
             val readerContext = new SparkFileFormatInternalRowReaderContext(
-              fileGroupBaseFileReader.value, state.filters, state.requiredFilters, conf, tableConfig,
-              sparkRequiredSchema = Some(state.requiredSchema), instantRangeOpt = state.instantRangeOpt)
+              fileGroupBaseFileReader.value, state.filters, readFilters, conf, tableConfig,
+              sparkRequiredSchema = Some(state.requiredSchema), instantRangeOpt = instantRangeOpt)
             readerContext.enableLogicalTimestampFieldRepair(conf.getBoolean(ENABLE_LOGICAL_TIMESTAMP_REPAIR, true))
             // The merger factory writes the payload class into the props it is given, so each file gets its own copy
             val props = TypedProperties.copy(state.readerProps)
@@ -199,8 +230,12 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
                   .build()
               }
             // Append partition values to rows and project to output schema
+            val mergedIter: ClosableIterator[InternalRow] = postMergeCommitTimeFilter match {
+              case Some(predicate) => new CloseableFilterIterator[InternalRow](reader.getClosableIterator, predicate)
+              case None => reader.getClosableIterator
+            }
             appendPartitionAndProject(
-              reader.getClosableIterator,
+              mergedIter,
               state.projectionInputSchema,
               state.remainingPartitionSchema,
               state.outputSchema,
@@ -281,6 +316,25 @@ private[parquet] class HoodieFileGroupReaderFunction(baseFileReader: Broadcast[S
 }
 
 private[parquet] object HoodieFileGroupReaderFunction {
+
+  /**
+   * The commit times of the incremental window, taken from the `In` filter on the commit-time metadata
+   * field that the incremental relations put in `requiredFilters`. Empty when there is no such filter.
+   */
+  private def incrementalWindowCommitTimes(requiredFilters: Seq[Filter]): Set[String] =
+    requiredFilters.collect {
+      case SourceIn(attr, values) if attr == HoodieRecord.COMMIT_TIME_METADATA_FIELD =>
+        values.filter(_ != null).map(_.toString)
+    }.flatten.toSet
+
+  /** Keeps merged rows whose `_hoodie_commit_time` (at `commitTimeIdx`) is one of `commitTimes`. */
+  private def commitTimeRowFilter(commitTimeIdx: Int, commitTimes: Set[String]): JPredicate[InternalRow] = {
+    val allowed: Set[UTF8String] = commitTimes.map(UTF8String.fromString)
+    new JPredicate[InternalRow] {
+      override def test(row: InternalRow): Boolean =
+        !row.isNullAt(commitTimeIdx) && allowed.contains(row.getUTF8String(commitTimeIdx))
+    }
+  }
 
   private def appendPartitionAndProject(iter: ClosableIterator[InternalRow],
                                         inputSchema: StructType,
