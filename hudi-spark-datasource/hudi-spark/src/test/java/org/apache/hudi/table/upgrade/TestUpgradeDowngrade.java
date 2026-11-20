@@ -64,7 +64,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
-import java.net.URI;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -485,7 +484,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
     Properties props = new Properties();
     props.put(HoodieTableConfig.TYPE.key(), tableType.name());
     HoodieTableMetaClient metaClient =
-        getHoodieMetaClient(storageConf(), URI.create(basePath()).getPath(), props);
+        getHoodieMetaClient(storageConf(), basePath(), props);
 
     HoodieWriteConfig writeConfig = getConfigBuilder(true)
         .withPath(metaClient.getBasePath())
@@ -548,7 +547,7 @@ public class TestUpgradeDowngrade extends SparkClientFunctionalTestHarness {
 
   @Test
   public void testTenToNineDowngradeCompactsNativeLogsAndRemovesStorageLayout() throws Exception {
-    String tablePath = URI.create(basePath()).getPath();
+    String tablePath = basePath();
     String tableName = "ten_to_nine_native_logs";
 
     Dataset<Row> inserts = sqlContext().range(0, 100).selectExpr(
