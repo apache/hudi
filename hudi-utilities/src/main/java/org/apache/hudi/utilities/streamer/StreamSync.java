@@ -501,6 +501,7 @@ public class StreamSync implements Serializable, Closeable {
         .setUrlEncodePartitioning(props.getBoolean(URL_ENCODE_PARTITIONING.key(),
             Boolean.parseBoolean(URL_ENCODE_PARTITIONING.defaultValue())))
         .setTableFormat(props.getProperty(HoodieTableConfig.TABLE_FORMAT.key(), HoodieTableConfig.TABLE_FORMAT.defaultValue()))
+        .setTableFormatConfigs(props)
         .setRecordDeleteFieldAndMarker(props.getString(DefaultHoodieRecordPayload.DELETE_KEY, null),
             props.getString(DefaultHoodieRecordPayload.DELETE_MARKER, null))
         .initTable(storageConf, cfg.targetBasePath);
