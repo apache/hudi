@@ -34,7 +34,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static io.airlift.units.DataSize.Unit.MEGABYTE;
@@ -197,17 +199,32 @@ public class HudiTrinoStorage
     public List<StoragePathInfo> listDirectEntries(StoragePath path)
             throws IOException
     {
-        // TrinoFileSystem#listFiles lists recursively, we need to limit the result to only the direct children
         Location location = convertToLocation(path);
-        FileIterator fileIterator = fileSystem.listFiles(location);
-        List<StoragePathInfo> fileList = new ArrayList<>();
-        while (fileIterator.hasNext()) {
-            FileEntry entry = fileIterator.next();
-            if (entry.location().parentDirectory().path().equals(location.path())) {
-                fileList.add(convertToPathInfo(entry));
-            }
+        Optional<Boolean> directoryExists = fileSystem.directoryExists(location);
+        if (directoryExists.equals(Optional.of(false))) {
+            throw new FileNotFoundException("Path " + path + " does not exist");
         }
-        return fileList;
+
+        FileIterator fileIterator = fileSystem.listFiles(location);
+        Map<StoragePath, StoragePathInfo> entries = new LinkedHashMap<>();
+        while (fileIterator.hasNext()) {
+            // listFiles is recursive. Collapse descendants into their direct parent entry.
+            StoragePathInfo entry = convertToPathInfo(fileIterator.next());
+            while (!path.equals(entry.getPath().getParent())) {
+                entry = new StoragePathInfo(entry.getPath().getParent(), 0, true, (short) 0, 0, entry.getModificationTime());
+            }
+            entries.putIfAbsent(entry.getPath(), entry);
+        }
+        // Empty directories on hierarchical file systems have no descendant files.
+        for (Location directory : fileSystem.listDirectories(location)) {
+            StoragePath directoryPath = convertToPath(directory);
+            entries.putIfAbsent(directoryPath, new StoragePathInfo(directoryPath, 0, true, (short) 0, 0, 0));
+        }
+        // Object stores cannot distinguish an absent prefix from an empty directory.
+        if (entries.isEmpty() && directoryExists.isEmpty()) {
+            throw new FileNotFoundException("Path " + path + " does not exist");
+        }
+        return List.copyOf(entries.values());
     }
 
     @Override
@@ -226,18 +243,9 @@ public class HudiTrinoStorage
     public List<StoragePathInfo> listDirectEntries(StoragePath path, StoragePathFilter filter)
             throws IOException
     {
-        // TrinoFileSystem#listFiles lists recursively, we need to limit the result to only the direct children
-        Location location = convertToLocation(path);
-        FileIterator fileIterator = fileSystem.listFiles(location);
-        List<StoragePathInfo> fileList = new ArrayList<>();
-        while (fileIterator.hasNext()) {
-            FileEntry entry = fileIterator.next();
-            if (filter.accept(new StoragePath(entry.location().toString()))
-                    && entry.location().parentDirectory().path().equals(location.path())) {
-                fileList.add(convertToPathInfo(entry));
-            }
-        }
-        return fileList;
+        return listDirectEntries(path).stream()
+                .filter(entry -> filter.accept(entry.getPath()))
+                .toList();
     }
 
     @Override
