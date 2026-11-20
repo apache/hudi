@@ -62,7 +62,7 @@ public class BlobTableConfig extends HoodieConfig {
    * 80 KiB ({@link ParquetInlineCap}). The effective value is pinned in the table's properties when it is created
    * ({@link BlobPhysicalPins#INLINE_MAX_BYTES}): a job whose effective value differs (for example a Spark 3.5-created table,
    * 10 KiB, written by a Spark 4 job that leaves this key unset, 1 MiB) is refused before anything is written.
-   * Read it with {@link #inlineMaxBytes(TypedProperties)}.
+   * Bounded above by {@link BlobInlineCeiling}. Read it with {@link #inlineMaxBytes(TypedProperties)}.
    */
   public static final ConfigProperty<Long> INLINE_MAX_BYTES = ConfigProperty
       .key(PREFIX + "inline.max.bytes")
@@ -115,7 +115,7 @@ public class BlobTableConfig extends HoodieConfig {
   }
 
   /**
-   * Fraction of the per-task heap share that the inline threshold may reach. The default 1/64 keeps
+   * Fraction of the per-task heap share that the inline threshold may reach (see {@link BlobInlineCeiling}). The default 1/64 keeps
    * the modeled per-task memory of a blob round (about 112 MiB that does not depend on the threshold plus 50 times the threshold for
    * two open file writers) under the per-task share once that share is at least 511 MiB.
    */

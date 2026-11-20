@@ -58,9 +58,9 @@ import java.util.Set;
  * <ul>
  *   <li>Every contract column is present, with the same data type ignoring nullability and the same Hudi logical type
  *   ({@code BLOB}, {@code VECTOR(n)}); a non-null contract column may be nullable, a nullable one may not be non-null.</li>
- *   <li>Any other column is an extra: nullable, of any type (a Hudi {@code BLOB} or {@code VECTOR} included; only the declared
- *   models' columns are model columns), and not named like a contract column, a declared model's column among them, ignoring
- *   case, a Hudi meta column or {@code _corrupt_record}.</li>
+ *   <li>Any other column is an extra: nullable, of any type (a Hudi {@code BLOB} or {@code VECTOR} included; the blob injector
+ *   configures only the {@code blob} column, and only the declared models' columns are model columns), and not named like a
+ *   contract column, a declared model's column among them, ignoring case, a Hudi meta column or {@code _corrupt_record}.</li>
  * </ul>
  */
 public final class UnstructuredSchemaContract {

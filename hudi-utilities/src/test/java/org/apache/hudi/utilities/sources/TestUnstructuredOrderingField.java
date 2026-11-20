@@ -130,7 +130,7 @@ public class TestUnstructuredOrderingField extends UtilitiesTestBase {
   }
 
   @ParameterizedTest(name = "{0} {1}")
-  @CsvSource({"blob,COPY_ON_WRITE", "embedding,COPY_ON_WRITE", "embedding,MERGE_ON_READ"})
+  @CsvSource({"blob,COPY_ON_WRITE", "blob,MERGE_ON_READ", "embedding,COPY_ON_WRITE", "embedding,MERGE_ON_READ"})
   public void reannouncedUnchangedObjectUnderEventTimeOrdering(String mode, HoodieTableType tableType) throws Exception {
     BlobJobHarness harness = BlobJobHarness.under(tempDir.resolve("src")).install(jsc.hadoopConfiguration());
     String table = tempDir.resolve(mode + "-table").toUri().toString();

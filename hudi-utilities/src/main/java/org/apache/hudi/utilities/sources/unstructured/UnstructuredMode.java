@@ -20,6 +20,7 @@ package org.apache.hudi.utilities.sources.unstructured;
 
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.util.StringUtils;
+import org.apache.hudi.utilities.sources.blob.BlobParquetConfigInjector;
 import org.apache.hudi.utilities.sources.blob.BlobQuarantineTransformer;
 import org.apache.hudi.utilities.sources.blob.BlobTableSchema;
 import org.apache.hudi.utilities.transform.Transformer;
@@ -33,7 +34,8 @@ import java.util.Set;
 
 /**
  * The job of an unstructured data source ({@link UnstructuredSourceConfig#MODE}): which table it writes, the transformer the
- * streamer runs in every round, the transformer it refuses, and the checks of the job's own properties that belong to that job.
+ * streamer runs in every round, the transformer it refuses, the Parquet config injector the table is written with, and the checks
+ * of the job's own properties that belong to that job.
  *
  * <p>The blob table's physical write settings are job properties; the effective inline threshold, codec and bloom switch are
  * also pinned in the table's properties at creation ({@link org.apache.hudi.utilities.sources.blob.BlobPhysicalPins}) and an
@@ -45,31 +47,39 @@ import java.util.Set;
  *   <li>{@code hoodie.parquet.compression.codec=uncompressed} and {@code hoodie.parquet.bloom.filter.enabled=false}, the blob
  *       job's defaults. Bloom is off under the memory-pressure write defaults (ENG-50740). An explicit user value is kept;
  *       carry any explicit ingestion overrides into the table-service job as well;</li>
+ *   <li>{@code hoodie.parquet.write.config.injector.class=org.apache.hudi.utilities.sources.blob.BlobParquetConfigInjector},
+ *       which also supplies the per-record page checks and writer-buffer settings;</li>
  *   <li>{@code hoodie.parquet.internal.column.dictionary.enabled#blob.data=false}, and
  *       {@code hoodie.parquet.internal.column.statistics.enabled#blob.data=false} on Parquet 1.14 or later, where the per-column
- *       statistics switch is supported. They are Hudi-internal keys: an ordinary writer ignores Parquet's generic keys, as
- *       upstream.</li>
+ *       statistics switch is supported. The injector applies these per-column settings after any delegate injector. They are
+ *       Hudi-internal keys: an ordinary writer ignores Parquet's generic keys, as upstream.</li>
  * </ul>
- * Without these properties, a table-service job rewrites files with Hudi's default physical settings.
+ * Without these properties, a table-service job rewrites files with Hudi's default physical settings. A job with its own
+ * injector carries it under {@link BlobParquetConfigInjector#DELEGATE_CLASS} so the blob injector still runs.
  */
 public enum UnstructuredMode {
 
   /** Writes the blob table, through {@link BlobQuarantineTransformer}. */
-  BLOB("blob", BlobTableSchema.KEY_COLUMNS, BlobQuarantineTransformer.class, EmbeddingTableTransformer.class),
+  BLOB("blob", BlobTableSchema.KEY_COLUMNS, BlobQuarantineTransformer.class, EmbeddingTableTransformer.class,
+      BlobParquetConfigInjector.class.getName(), BlobParquetConfigInjector.DELEGATE_CLASS),
   /** Writes the embedding table, through {@link EmbeddingTableTransformer}. */
-  EMBEDDING("embedding", EmbeddingTableSchema.KEY_COLUMNS, EmbeddingTableTransformer.class, BlobQuarantineTransformer.class);
+  EMBEDDING("embedding", EmbeddingTableSchema.KEY_COLUMNS, EmbeddingTableTransformer.class, BlobQuarantineTransformer.class, null, null);
 
   private final String configValue;
   private final List<String> keyColumns;
   private final Class<? extends Transformer> requiredTransformer;
   private final Class<? extends Transformer> excludedTransformer;
+  private final String injectorClass;
+  private final String injectorDelegateKey;
 
   UnstructuredMode(String configValue, List<String> keyColumns, Class<? extends Transformer> requiredTransformer,
-                   Class<? extends Transformer> excludedTransformer) {
+                   Class<? extends Transformer> excludedTransformer, String injectorClass, String injectorDelegateKey) {
     this.configValue = configValue;
     this.keyColumns = keyColumns;
     this.requiredTransformer = requiredTransformer;
     this.excludedTransformer = excludedTransformer;
+    this.injectorClass = injectorClass;
+    this.injectorDelegateKey = injectorDelegateKey;
   }
 
   /**
@@ -99,6 +109,16 @@ public enum UnstructuredMode {
   /** The other job's transformer, which this job refuses in its chain. */
   public Set<Class<? extends Transformer>> excludedTransformers() {
     return Collections.singleton(excludedTransformer);
+  }
+
+  /** The Parquet config injector the job's table is written with; null for the embedding job, whose table takes Hudi's writer. */
+  public String injectorClass() {
+    return injectorClass;
+  }
+
+  /** The key under which a job's own Parquet config injector goes; it runs before {@link #injectorClass()}. Null for the embedding job. */
+  public String injectorDelegateKey() {
+    return injectorDelegateKey;
   }
 
   /**

@@ -31,7 +31,8 @@ import lombok.extern.slf4j.Slf4j;
  * are read whole into the row up to it; {@link #MAX_BYTES} for the embedding input store
  * ({@code hoodie.unstructured.embedding.input.inline.max.bytes}), whose payloads (encoded video frames) are already in memory,
  * so every frame up to the cap stays in its row instead of costing a file. With the switch the configured value, or the key's
- * own default, is used as is.
+ * own default, is used as is. The per-task heap-share ceiling of the blob-table and embedding-input keys ({@link InlineCeiling})
+ * applies on top of either.
  */
 @Slf4j
 public final class ParquetInlineCap {

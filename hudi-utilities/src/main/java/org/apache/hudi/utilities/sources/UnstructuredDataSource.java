@@ -78,10 +78,10 @@ import static org.apache.hudi.utilities.sources.helpers.IncrSourceHelper.getMiss
  *   S3 events source, {@code gcs} the one of the GCS events source. Only the events table's key and size columns and the selector
  *   type differ; the selection, the status call and the bytes are read the same way on both.</li>
  * </ul>
- * Small objects become inline blob rows; large objects carry pending references whose path stays null: the blob job's copy
- * transformer copies the bytes and fills it, and the embedding job's transformer reads the object from its
- * {@code source_file_path}. An object whose status cannot be read, a missing object included, or whose inline bytes cannot be
- * read fails the round.
+ * Small objects become inline blob rows; large objects are referenced where they are (an unmanaged reference to the object's
+ * own URI, nothing is copied), and the embedding job's transformer reads the object from its {@code source_file_path}. An
+ * object confirmed gone since it was announced is a row with no blob, which either transformer
+ * quarantines; any other failure to read an object's status or its inline bytes fails the round.
  *
  * <p>The job's requirements are its contract's ({@link UnstructuredSourceContract}): the settings it runs with, which the streamer
  * merges into a copy of the job's properties before anything reads them, the transformers and the schema check. The source is
@@ -201,13 +201,15 @@ public class UnstructuredDataSource extends HoodieIncrSource {
   }
 
   /**
-   * Checks the user's target schema again, as the provider gives it now, before any data is read; then selects the round's
-   * objects from the events table with the cloud's key and size columns and reads them. Caught up, the round is empty and its checkpoint is the end
+   * Checks the user's target schema again, as the provider gives it now, and refuses an inline ceiling the driver cannot hold,
+   * before any data is read; then selects the round's objects from the events
+   * table with the cloud's key and size columns and reads them. Caught up, the round is empty and its checkpoint is the end
    * instant on both clouds.
    */
   @Override
   public Pair<Option<Dataset<Row>>, Checkpoint> fetchNextBatch(Option<Checkpoint> lastCheckpoint, long sourceLimit) {
     checkUserTargetSchema();
+    BlobSourceSetup.check(props, sparkContext.getConf());
     CloudObjectIncrCheckpoint cloudObjectIncrCheckpoint = CloudObjectIncrCheckpoint.fromString(lastCheckpoint);
     HollowCommitHandling handlingMode = getHollowCommitHandleMode(props);
     QueryInfo queryInfo =

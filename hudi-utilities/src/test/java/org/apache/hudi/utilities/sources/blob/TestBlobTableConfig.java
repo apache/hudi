@@ -21,12 +21,23 @@ package org.apache.hudi.utilities.sources.blob;
 import org.apache.hudi.common.config.TypedProperties;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TestBlobTableConfig {
+
+  @Test
+  public void defaultsSelectPdfAndOneMiBInline() {
+    TypedProperties props = new TypedProperties();
+    assertEquals(hasColumnStatisticsSwitch() ? 1048576L : 10240L, BlobTableConfig.inlineMaxBytes(props));
+    assertTrue(BlobTableConfig.fileExtensions(props).contains("pdf"));
+  }
 
   @Test
   public void configuredThresholdAndSelectorsAreUsed() {
@@ -37,4 +48,29 @@ public class TestBlobTableConfig {
     assertEquals(Arrays.asList("pdf", "PDF"), BlobTableConfig.fileExtensions(props));
   }
 
+  @Test
+  public void largestByteArrayThresholdIsAccepted() {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(BlobTableConfig.INLINE_MAX_BYTES.key(), "2147483639");
+    assertEquals(2147483639L, BlobTableConfig.inlineMaxBytes(props, true));
+    assertEquals(81920L, BlobTableConfig.inlineMaxBytes(props, false));
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {2147483640L, Integer.MAX_VALUE, 4294967296L, Long.MAX_VALUE})
+  public void thresholdBeyondTheLargestByteArrayIsRefused(long threshold) {
+    TypedProperties props = new TypedProperties();
+    props.setProperty(BlobTableConfig.INLINE_MAX_BYTES.key(), String.valueOf(threshold));
+    IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> BlobTableConfig.inlineMaxBytes(props));
+    org.junit.jupiter.api.Assertions.assertTrue(e.getMessage().contains("hoodie.blob.table.inline.max.bytes"));
+  }
+
+  private static boolean hasColumnStatisticsSwitch() {
+    try {
+      org.apache.parquet.hadoop.ParquetWriter.Builder.class.getMethod("withStatisticsEnabled", String.class, boolean.class);
+      return true;
+    } catch (NoSuchMethodException e) {
+      return false;
+    }
+  }
 }
